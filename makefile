@@ -20,16 +20,22 @@ clean:
 dev: clean
 	npx vite --mode development --config config/vite.dev.ts
 
+.PHONY: build_client
+build_client:
+	npx vite build --mode production --config config/vite.prod.ts
+
+.PHONY: build_server
+build_server:
+	npx vite build --mode production --config config/vite.server.ts
+	npx vite build --mode production --config config/vite.serverEntry.ts
+
 .PHONY: build
-build: clean
-	# parallel use \n to separate inputs
-	echo -e "prod\\nserver\\nserverEntry" |\
-		parallel -j4 --tty "npx vite build --mode production --config config/vite.{}.ts"
+build: clean build_client build_server
 
 .PHONY: start
 start: build
 	node ${DIST}/server.js
 
-.PHONY: server
-server:
+.PHONY: preview
+preview:
 	node ${DIST}/server.js
