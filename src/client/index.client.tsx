@@ -4,9 +4,10 @@ import { App, prefetch } from './App';
 import { createRoutes } from './routes';
 import { createStore } from './store';
 import './styles/index.scss';
+import '@xyflow/react/dist/style.css';
 
 const container = document.getElementById('root');
-// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+
 const store = createStore();
 const routes = createRoutes();
 
@@ -22,6 +23,9 @@ if (window.__PREFETCHED_STATE__) {
   prefetch({ routes, store, req: { originalUrl: window.location.pathname } });
 }
 
-hydrateRoot(container!, <BrowserRouter>
-    <App store={store} routes={routes}/>
-  </BrowserRouter>);
+hydrateRoot(
+  container!,
+  <BrowserRouter>
+    <App store={store} routes={routes} />
+  </BrowserRouter>,
+);

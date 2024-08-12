@@ -1,15 +1,17 @@
 /* eslint-disable global-require */
 import path from 'path';
 import postcssNormalize from 'postcss-normalize';
+import postcssFlexbugsFixes from 'postcss-flexbugs-fixes';
+import postcssPresetEnv from 'postcss-preset-env';
 import react from '@vitejs/plugin-react';
 
 export const paths = {
   src: path.resolve(__dirname, '..', 'src'),
   dist: path.resolve(__dirname, '..', 'dist'),
   template: path.resolve(__dirname, '..', 'index.html'),
+  client: path.resolve(__dirname, '..', 'src/client'),
   server: path.resolve(__dirname, '..', 'src/server/index.ts'), // 服务端代码入口
-  serverEntry: path.resolve(__dirname, '..', 'src/index.server.tsx'), // 服务端同构应用入口
-  serverOutput: path.resolve(__dirname, '..', 'dist/server.js'),
+  serverEntry: path.resolve(__dirname, '..', 'src/client/index.server.tsx'), // SSR entry
 };
 
 export default ({ mode }) => ({
@@ -20,13 +22,14 @@ export default ({ mode }) => ({
   resolve: {
     alias: {
       '@': paths.src,
+      '@client': paths.client,
     },
   },
   css: {
     postcss: {
       plugins: [
-        require('postcss-flexbugs-fixes'),
-        require('postcss-preset-env')({
+        postcssFlexbugsFixes,
+        postcssPresetEnv({
           autoprefixer: {
             flexbox: 'no-2009',
           },

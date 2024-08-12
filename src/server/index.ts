@@ -1,11 +1,17 @@
+import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
-import express from 'express';
+import express, { Express } from 'express';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 // hypothesis: client assets to be in the same directory
-export const createServer = async () => {
+export const createServer = async (): Promise<Express> => {
   const server = express();
-  const { render } = require(path.join(__dirname, 'index.server.js'));
+  const { render } = await import(path.join(__dirname, 'index.server.js'));
   const template = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf-8');
 
   server.use(
@@ -28,7 +34,7 @@ export const createServer = async () => {
   return server;
 };
 
-const port = 3000;
+const port = process.env.VITE_SERVER_PORT || 3000;
 
 createServer()
   .then(server => {

@@ -28,8 +28,11 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "paths": {
-      "@/*":[
+      "@/*": [
         "src/*"
+      ],
+      "@client/*": [
+        "src/client/*"
       ]
     }
   },

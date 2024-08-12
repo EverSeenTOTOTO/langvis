@@ -9,7 +9,11 @@ export type PrefetchStore<State> = {
   dehydra(): State | undefined;
 };
 
-type PickKeys<T> = {
+type GetStore<T> = {
+  [K in keyof T]: T[K] extends PrefetchStore<infer S> ? S : never;
+};
+
+type GetKeys<T> = {
   [K in keyof T]: T[K] extends PrefetchStore<unknown> ? K : never;
 }[keyof T];
 
@@ -23,29 +27,28 @@ export class AppStore {
     this.about = new AboutStore(this);
   }
 
-  hydrate(data: Record<string, unknown>) {
+  hydrate(data: GetStore<AppStore>) {
     Object.keys(data).forEach(key => {
-      const k = key as PickKeys<AppStore>;
+      const k = key as GetKeys<AppStore>;
 
       if (import.meta.env.DEV) {
         console.info(`hydrate ${k}`);
       }
 
-      if (this[k]) this[k]?.hydrate?.(data[k] as any);
+      this[k]?.hydrate?.(data[k]);
     });
   }
 
   dehydra() {
-    type Data = Record<PickKeys<AppStore>, unknown>;
-    const data: Partial<Data> = {};
+    const data: Partial<GetStore<AppStore>> = {};
 
     Object.keys(this).forEach(key => {
-      const k = key as PickKeys<AppStore>;
+      const k = key as GetKeys<AppStore>;
 
       data[k] = this[k]?.dehydra?.();
     });
 
-    return data as Data;
+    return data;
   }
 }
 
