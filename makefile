@@ -39,3 +39,7 @@ start: build
 .PHONY: preview
 preview:
 	node ${DIST}/server.js
+
+.PHONY: test
+test:
+	npx jest --coverage
