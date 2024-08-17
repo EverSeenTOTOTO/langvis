@@ -31,9 +31,9 @@ export class AppStore {
     Object.keys(data).forEach(key => {
       const k = key as GetKeys<AppStore>;
 
-      if (import.meta.env.DEV) {
-        console.info(`hydrate ${k}`);
-      }
+      // if (import.meta.env.DEV) {
+      //   console.info(`hydrate ${k}`);
+      // }
 
       this[k]?.hydrate?.(data[k]);
     });

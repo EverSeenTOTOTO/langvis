@@ -19,11 +19,11 @@ const devMock = () => ({
   },
 });
 
+const templateHtml = fs.readFileSync(paths.template, 'utf-8');
 const devSSR = () => ({
   name: 'dev-ssr',
   configureServer(vite: ViteDevServer) {
     const { logger } = vite.config;
-    const templateHtml = fs.readFileSync(paths.template, 'utf-8');
 
     // 缺点是不能调试完整服务端代码，只能调试服务端同构应用的部分
     return () =>

@@ -12,6 +12,10 @@
       "dom",
       "dom.iterable"
     ],
+    "types": [
+      "node",
+      "jest"
+    ],
     "jsx": "react-jsx",
     "noEmit": true,
     "noUnusedLocals": true,
@@ -37,7 +41,8 @@
     }
   },
   "include": [
-    "src"
+    "src",
+    "tests"
   ],
   "exclude": []
 }
