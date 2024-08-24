@@ -1,7 +1,9 @@
-export class Slot {
-  name: string;
+import EventEmitter from 'eventemitter3';
 
-  constructor(name: string) {
+export class Slot {
+  name: string | symbol;
+
+  constructor(name: string | symbol) {
     this.name = name;
   }
 }
@@ -23,7 +25,7 @@ export class Context {
   edges: Map<string, Edge> = new Map();
   slotIndexMap: WeakMap<
     Slot,
-    { node: Node<unknown>; edges?: Map<string, Edge> }
+    { node: Node<unknown>; edges?: Map<string | symbol, Edge> }
   > = new WeakMap();
 
   get nodeCount(): number {
@@ -43,12 +45,12 @@ export class Context {
   }
 
   protected addEdge(edge: Edge): Context {
-    this.edges.set(edge.id, edge);
-
     const from = this.slotIndexMap.get(edge.from);
 
     if (!from) {
-      throw new Error(`Slot ${edge.from.name} for edge ${edge.id} not found.`);
+      throw new Error(
+        `Slot ${String(edge.from.name)} for edge ${edge.id} not found.`,
+      );
     }
 
     from.edges = from.edges || new Map();
@@ -57,11 +59,15 @@ export class Context {
     const to = this.slotIndexMap.get(edge.to);
 
     if (!to) {
-      throw new Error(`Slot ${edge.to.name} for edge ${edge.id} not found.`);
+      throw new Error(
+        `Slot ${String(edge.to.name)} for edge ${edge.id} not found.`,
+      );
     }
 
     to.edges = to.edges || new Map();
     to.edges.set(edge.id, edge);
+
+    this.edges.set(edge.id, edge);
 
     return this;
   }
@@ -134,18 +140,77 @@ export class Context {
   }
 }
 
-export abstract class Node<R = void> {
+export class Node<R = void> extends EventEmitter {
   id: string;
-  slots: Map<string, Slot> = new Map();
+  slots: Map<string | symbol, Slot> = new Map();
 
   constructor(id: string) {
+    super();
     this.id = id;
   }
 
-  defineSlot(slot: Slot): Node<R> {
-    this.slots.set(slot.name, slot);
-    return this;
+  getSlot(slotName: string | symbol) {
+    return this.slots.get(slotName);
   }
 
-  abstract onExecute(ctx: Context): Promise<R>;
+  on(
+    event: string | symbol,
+    fn: (...args: any[]) => void,
+    context?: Context,
+  ): this {
+    if (!this.slots.has(event)) {
+      throw new Error(`Slot ${event.toString()} not found.`);
+    }
+    return super.on(event, fn, context);
+  }
+
+  off(
+    event: string | symbol,
+    fn?: ((...args: any[]) => void) | undefined,
+    context?: Context,
+    once?: boolean,
+  ): this {
+    if (!this.slots.has(event)) {
+      throw new Error(`Slot ${event.toString()} not found.`);
+    }
+
+    return super.off(event, fn, context, once);
+  }
+
+  once(
+    event: string | symbol,
+    fn: (...args: any[]) => void,
+    context?: Context,
+  ): this {
+    if (!this.slots.has(event)) {
+      throw new Error(`Slot ${event.toString()} not found.`);
+    }
+
+    return super.once(event, fn, context);
+  }
+
+  addListener(
+    event: string | symbol,
+    fn: (...args: any[]) => void,
+    context?: Context,
+  ): this {
+    if (!this.slots.has(event)) {
+      throw new Error(`Slot ${event.toString()} not found.`);
+    }
+
+    return super.addListener(event, fn, context);
+  }
+
+  defineSlot(
+    slot: Slot,
+    handler?: (...args: any[]) => void,
+    ctx?: Context,
+  ): Node<R> {
+    this.slots.set(slot.name, slot);
+    if (handler) {
+      this.on(slot.name, handler, ctx);
+    }
+
+    return this;
+  }
 }

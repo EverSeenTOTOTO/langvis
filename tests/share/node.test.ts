@@ -3,33 +3,31 @@ import { Context, Node, Slot } from '@/share/node';
 
 it('test graph op', async () => {
   const fn = jest.fn();
+  const executed = new WeakSet<Node>();
 
   class TestNode extends Node {
     constructor(id: string) {
       super(id);
 
-      this.defineSlot(new Slot('slot'));
+      this.defineSlot(new Slot('slot'), () => {
+        fn(this.id);
+        executed.add(this);
+      });
     }
 
     get slot() {
       return this.slots.get('slot')!;
     }
-
-    async onExecute(_ctx: Context) {
-      fn(this.id);
-    }
   }
 
   class TestContext extends Context {
     async run(start: Node) {
-      const executed = new WeakSet<Node>();
       const queue = [start];
 
       while (queue.length > 0) {
         const top = queue.shift()!;
 
-        await top.onExecute(this);
-        executed.add(top);
+        top.emit('slot');
 
         top.slots.forEach(slot => {
           this.getEdges(slot).forEach(edge => {
@@ -47,6 +45,8 @@ it('test graph op', async () => {
   const a = new TestNode('a');
   const b = new TestNode('b');
   const c = new TestNode('c');
+
+  expect(() => a.on('demo', fn)).toThrow();
 
   const ctx = new TestContext();
 
