@@ -2,7 +2,7 @@ import { Context } from '@/share/node';
 import { action, computed, makeObservable, observable } from 'mobx';
 import type { AppStore } from '..';
 
-export class AboutStore extends Context {
+export class NodeStore extends Context {
   root: AppStore;
 
   constructor(root: AppStore) {

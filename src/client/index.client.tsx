@@ -3,8 +3,9 @@ import { BrowserRouter } from 'react-router-dom';
 import { App, prefetch } from './App';
 import { createRoutes } from './routes';
 import { createStore } from './store';
-import './styles/index.scss';
 import '@xyflow/react/dist/style.css';
+import '@radix-ui/themes/styles.css';
+import './styles/index.scss';
 
 const container = document.getElementById('root');
 

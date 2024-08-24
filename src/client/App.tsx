@@ -1,21 +1,25 @@
 import type { Request, Response } from 'express';
 import { Route, Routes } from 'react-router-dom';
 import { AppRoutes } from './routes';
-import { AppStore, RootContext } from './store';
+import { AppStore, useStore } from './store';
+import { Theme } from '@radix-ui/themes';
+import { observer } from 'mobx-react-lite';
 
-export function App({ store, routes }: { store: AppStore; routes: AppRoutes }) {
-  return (
-    <>
-      <RootContext.Provider value={store}>
+export const App = observer(
+  ({ routes }: { store: AppStore; routes: AppRoutes }) => {
+    const theme = useStore('theme');
+
+    return (
+      <Theme appearance={theme.mode} accentColor="blue">
         <Routes>
           {routes.map(({ path, component: RouteComp }) => (
             <Route key={path} path={path} element={<RouteComp />} />
           ))}
         </Routes>
-      </RootContext.Provider>
-    </>
-  );
-}
+      </Theme>
+    );
+  },
+);
 
 export type RenderContext = {
   req: Request;

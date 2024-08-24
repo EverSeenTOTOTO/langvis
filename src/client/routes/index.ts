@@ -1,9 +1,9 @@
-const pages = import.meta.glob('../pages/*.tsx', {
+const pages = import.meta.glob('../pages/*/index.tsx', {
   eager: true,
 }) as any;
 
 const routes = Object.keys(pages).map(path => {
-  const name = path.match(/\.\.\/pages\/(.*)\.tsx$/)![1];
+  const name = path.match(/\.\.\/pages\/(.*)\/index\.tsx$/)![1];
 
   return {
     name,

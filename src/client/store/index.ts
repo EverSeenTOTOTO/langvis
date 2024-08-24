@@ -1,6 +1,6 @@
-import { createContext, useContext } from 'react';
 import { HomeStore } from './modules/home';
-import { AboutStore } from './modules/about';
+import { NodeStore } from './modules/node';
+import { ThemeStore } from './modules/theme';
 
 export type PrefetchStore<State> = {
   // merge ssr prefetched data
@@ -20,11 +20,14 @@ type GetKeys<T> = {
 export class AppStore {
   home: HomeStore;
 
-  about: AboutStore;
+  node: NodeStore;
+
+  theme: ThemeStore;
 
   constructor() {
     this.home = new HomeStore(this);
-    this.about = new AboutStore(this);
+    this.node = new NodeStore(this);
+    this.theme = new ThemeStore(this);
   }
 
   hydrate(data: GetStore<AppStore>) {
@@ -35,7 +38,7 @@ export class AppStore {
       //   console.info(`hydrate ${k}`);
       // }
 
-      this[k]?.hydrate?.(data[k]);
+      this[k]?.hydrate?.(data[k] as any); // 参数类型是逆变的
     });
   }
 
@@ -45,7 +48,7 @@ export class AppStore {
     Object.keys(this).forEach(key => {
       const k = key as GetKeys<AppStore>;
 
-      data[k] = this[k]?.dehydra?.();
+      data[k] = this[k]?.dehydra?.() as any;
     });
 
     return data;
@@ -55,9 +58,5 @@ export class AppStore {
 const appStore = new AppStore();
 
 export const createStore = () => appStore;
-export const RootContext = createContext<AppStore>(appStore);
-export const useStore = <T extends keyof AppStore>(key: T): AppStore[T] => {
-  const root = useContext(RootContext);
-
-  return root[key];
-};
+export const useStore = <T extends keyof AppStore>(key: T): AppStore[T] =>
+  appStore[key];
