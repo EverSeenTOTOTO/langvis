@@ -1,9 +1,9 @@
 import EventEmitter from 'eventemitter3';
 
 export class Slot {
-  name: string | symbol;
+  name: string;
 
-  constructor(name: string | symbol) {
+  constructor(name: string) {
     this.name = name;
   }
 }
@@ -25,7 +25,7 @@ export class Context {
   edges: Map<string, Edge> = new Map();
   slotIndexMap: WeakMap<
     Slot,
-    { node: Node<unknown>; edges?: Map<string | symbol, Edge> }
+    { node: Node<unknown>; edges?: Map<string, Edge> }
   > = new WeakMap();
 
   get nodeCount(): number {
@@ -142,14 +142,14 @@ export class Context {
 
 export class Node<R = void> extends EventEmitter {
   id: string;
-  slots: Map<string | symbol, Slot> = new Map();
+  slots: Map<string, Slot> = new Map();
 
   constructor(id: string) {
     super();
     this.id = id;
   }
 
-  getSlot(slotName: string | symbol) {
+  getSlot(slotName: string) {
     return this.slots.get(slotName);
   }
 
@@ -158,7 +158,7 @@ export class Node<R = void> extends EventEmitter {
     fn: (...args: any[]) => void,
     context?: Context,
   ): this {
-    if (!this.slots.has(event)) {
+    if (!this.slots.has(String(event))) {
       throw new Error(`Slot ${event.toString()} not found.`);
     }
     return super.on(event, fn, context);
@@ -170,7 +170,7 @@ export class Node<R = void> extends EventEmitter {
     context?: Context,
     once?: boolean,
   ): this {
-    if (!this.slots.has(event)) {
+    if (!this.slots.has(String(event))) {
       throw new Error(`Slot ${event.toString()} not found.`);
     }
 
@@ -182,7 +182,7 @@ export class Node<R = void> extends EventEmitter {
     fn: (...args: any[]) => void,
     context?: Context,
   ): this {
-    if (!this.slots.has(event)) {
+    if (!this.slots.has(String(event))) {
       throw new Error(`Slot ${event.toString()} not found.`);
     }
 
@@ -194,7 +194,7 @@ export class Node<R = void> extends EventEmitter {
     fn: (...args: any[]) => void,
     context?: Context,
   ): this {
-    if (!this.slots.has(event)) {
+    if (!this.slots.has(String(event))) {
       throw new Error(`Slot ${event.toString()} not found.`);
     }
 

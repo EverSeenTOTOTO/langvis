@@ -14,13 +14,15 @@ export abstract class GUINode<Props> extends Node<Props> {
   constructor(id: string) {
     super(id);
     this.defineSlot(new Slot(UPDATE));
+    const ctx = useStore('graph');
+    ctx.addNodeType(this.id, this.FC);
   }
 
   get FC(): React.FC<Props> {
     this.fc =
       this.fc ||
       observer((initialProps: Props) => {
-        const ctx = useStore('node');
+        const ctx = useStore('graph');
         const [props, setProps] = useState<Props>(initialProps);
 
         useEffect(() => {

@@ -11,8 +11,10 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 // hypothesis: client assets to be in the same directory
 export const createServer = async (): Promise<Express> => {
   const server = express();
-  const { render } = await import(path.join(__dirname, 'index.server.js'));
-  const template = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf-8');
+  const [{ render }, template] = await Promise.all([
+    import(path.join(__dirname, 'index.server.js')),
+    fs.promises.readFile(path.join(__dirname, 'index.html'), 'utf-8'),
+  ]);
 
   server.use(
     express.static(__dirname, {

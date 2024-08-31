@@ -1,3 +1,9 @@
+html, body, #root, .radix-themes {
+  height: 100%;
+  padding: 0;
+  margin: 0;
+}
+
 :root, .light, .light-theme {
   --blue-1: #fcfdfe;
   --blue-2: #f6faff;

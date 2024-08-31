@@ -8,6 +8,6 @@
     "stylelint-scss"
   ],
   "rules": {
-    "selector-class-pattern": false
+    "selector-class-pattern": null
   }
 }

@@ -1,5 +1,5 @@
 import { HomeStore } from './modules/home';
-import { NodeStore } from './modules/node';
+import { GraphStore } from './modules/graph';
 import { ThemeStore } from './modules/theme';
 
 export type PrefetchStore<State> = {
@@ -20,13 +20,13 @@ type GetKeys<T> = {
 export class AppStore {
   home: HomeStore;
 
-  node: NodeStore;
+  graph: GraphStore;
 
   theme: ThemeStore;
 
   constructor() {
     this.home = new HomeStore(this);
-    this.node = new NodeStore(this);
+    this.graph = new GraphStore(this);
     this.theme = new ThemeStore(this);
   }
 

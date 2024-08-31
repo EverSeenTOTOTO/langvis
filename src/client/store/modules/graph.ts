@@ -1,9 +1,13 @@
+import React from 'react';
 import { Context } from '@/share/node';
 import { action, computed, makeObservable, observable } from 'mobx';
 import type { AppStore } from '..';
+import { NodeTypes } from '@xyflow/react';
 
-export class NodeStore extends Context {
+export class GraphStore extends Context {
   root: AppStore;
+
+  nodeTypes: NodeTypes = {};
 
   constructor(root: AppStore) {
     super();
@@ -12,6 +16,7 @@ export class NodeStore extends Context {
     this.edges = observable.map(this.edges, { deep: false });
 
     makeObservable(this, {
+      nodeTypes: observable,
       nodeCount: computed,
       edgeCount: computed,
       addNode: action,
@@ -19,5 +24,13 @@ export class NodeStore extends Context {
       deleteNode: action,
       deleteEdge: action,
     });
+  }
+
+  addNodeType(type: string, component: React.FC<any>) {
+    this.nodeTypes[type] = component;
+  }
+
+  deleteNodeType(type: string) {
+    delete this.nodeTypes[type];
   }
 }
