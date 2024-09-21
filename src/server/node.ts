@@ -21,12 +21,10 @@ export class Edge {
 }
 
 export class Context {
-  nodes: Map<string, Node<unknown>> = new Map();
+  nodes: Map<string, Node> = new Map();
   edges: Map<string, Edge> = new Map();
-  slotIndexMap: WeakMap<
-    Slot,
-    { node: Node<unknown>; edges?: Map<string, Edge> }
-  > = new WeakMap();
+  slotIndexMap: WeakMap<Slot, { node: Node; edges?: Map<string, Edge> }> =
+    new WeakMap();
 
   get nodeCount(): number {
     return this.nodes.size;
@@ -36,7 +34,7 @@ export class Context {
     return this.edges.size;
   }
 
-  addNode(node: Node<unknown>): Context {
+  addNode(node: Node): Context {
     this.nodes.set(node.id, node);
     node.slots.forEach(slot => {
       this.slotIndexMap.set(slot, { node });
@@ -78,7 +76,7 @@ export class Context {
     return this;
   }
 
-  deleteNode(node: Node<unknown>): Context;
+  deleteNode(node: Node): Context;
   deleteNode(nodeId: string): Context;
   deleteNode(param: any): Context {
     const nodeId = param instanceof Node ? param.id : param;
@@ -121,14 +119,14 @@ export class Context {
     return this;
   }
 
-  getNode<T = void>(slot: Slot): Node<T> | undefined;
-  getNode<T = void>(nodeId: string): Node<T> | undefined;
-  getNode<T = void>(param: any): Node<T> | undefined {
+  getNode(slot: Slot): Node | undefined;
+  getNode(nodeId: string): Node | undefined;
+  getNode(param: any): Node | undefined {
     if (param instanceof Slot) {
-      return this.slotIndexMap.get(param)?.node as Node<T>;
+      return this.slotIndexMap.get(param)?.node as Node;
     }
 
-    return this.nodes.get(param) as Node<T>;
+    return this.nodes.get(param) as Node;
   }
 
   getEdges(slot: Slot): Map<string, Edge> {
@@ -140,7 +138,7 @@ export class Context {
   }
 }
 
-export class Node<R = void> extends EventEmitter {
+export class Node extends EventEmitter {
   id: string;
   slots: Map<string, Slot> = new Map();
 
@@ -205,7 +203,7 @@ export class Node<R = void> extends EventEmitter {
     slot: Slot,
     handler?: (...args: any[]) => void,
     ctx?: Context,
-  ): Node<R> {
+  ): Node {
     this.slots.set(slot.name, slot);
     if (handler) {
       this.on(slot.name, handler, ctx);

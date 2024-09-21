@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import { Context, Node, Slot } from '@/share/node';
+import { Context, Node, Slot } from '@/server/node';
 
 it('test graph op', async () => {
   const fn = jest.fn();

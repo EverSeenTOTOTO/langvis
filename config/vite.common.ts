@@ -22,7 +22,6 @@ export default ({ mode }) => ({
   resolve: {
     alias: {
       '@': paths.src,
-      '@client': paths.client,
     },
   },
   css: {

@@ -34,9 +34,6 @@
     "paths": {
       "@/*": [
         "src/*"
-      ],
-      "@client/*": [
-        "src/client/*"
       ]
     }
   },
