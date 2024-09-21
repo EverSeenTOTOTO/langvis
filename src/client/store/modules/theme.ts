@@ -8,7 +8,7 @@ export type ThemeState = {
 };
 
 export class ThemeStore implements PrefetchStore<ThemeState> {
-  mode: ThemeMode = 'light';
+  mode: ThemeMode = 'dark';
 
   root: AppStore;
 

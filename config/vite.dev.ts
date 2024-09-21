@@ -1,21 +1,25 @@
 import fs from 'fs';
 import { defineConfig, ViteDevServer } from 'vite';
 import base, { paths } from './vite.common';
+import { createProxyMiddleware } from 'http-proxy-middleware';
+import dotenv from 'dotenv';
+import path from 'path';
 
-const devMock = () => ({
-  name: 'dev-api-mock',
+const env = dotenv.config({
+  path: path.join(__dirname, '../.env.development'),
+}).parsed;
+
+const devApiProxy = () => ({
+  name: 'dev-api-proxy',
   configureServer(vite: ViteDevServer) {
     const { logger } = vite.config;
-
-    vite.middlewares.use((req, res, next) => {
-      if (/^\/api\//.test(req.originalUrl!)) {
-        logger.info(`mock ${req.originalUrl}`);
-
-        res.end('vite dev');
-      } else {
-        next();
-      }
+    const proxy = createProxyMiddleware({
+      target: `http://localhost:${env?.PORT}/api`,
+      changeOrigin: true,
+      logger,
     });
+
+    vite.middlewares.use('/api', proxy);
   },
 });
 
@@ -53,6 +57,6 @@ export default defineConfig(c => {
     server: {
       host: 'localhost',
     },
-    plugins: [...(config.plugins || []), devMock(), devSSR()],
+    plugins: [...(config.plugins || []), devApiProxy(), devSSR()],
   };
 });
