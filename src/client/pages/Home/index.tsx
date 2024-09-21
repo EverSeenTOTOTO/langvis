@@ -1,41 +1,46 @@
 import Graph from '@/client/components/Graph';
-import { GUINode } from '@/client/components/GUINode';
-import { Button } from '@radix-ui/themes';
+import { applyEdgeChanges, applyNodeChanges, addEdge } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import './index.scss';
 
-class TestNode extends GUINode<any> {
-  render(props: any) {
-    const [count, setCount] = useState(props?.data?.count ?? 0);
-
-    return (
-      <Button
-        id="test"
-        style={{
-          width: 100,
-        }}
-        onClick={() => setCount(count + 1)}
-      >
-        {count}
-      </Button>
-    );
-  }
-}
-
-const testNode = new TestNode('test');
-
 const MenubarDemo = () => {
+  const [nodes, setNodes] = useState([
+    {
+      id: 'btn-1',
+      type: 'button',
+      position: { x: 0, y: 0 },
+      data: { children: 123 },
+    },
+    {
+      id: 'btn-2',
+      type: 'button',
+      position: { x: 100, y: 200 },
+      data: { children: 'hello' },
+    },
+  ]);
+  const [edges, setEdges] = useState([]);
+
+  const onNodesChange = useCallback(
+    changes => setNodes(nds => applyNodeChanges(changes, nds)),
+    [],
+  );
+  const onEdgesChange = useCallback(
+    changes => setEdges(eds => applyEdgeChanges(changes, eds)),
+    [],
+  );
+  const onConnect = useCallback(
+    params => setEdges(eds => addEdge(params, eds)),
+    [],
+  );
+
   return (
     <Graph
-      nodes={[
-        {
-          id: 'test',
-          type: testNode.id,
-          position: { x: 0, y: 0 },
-          data: { count: 42 },
-        },
-      ]}
+      nodes={nodes}
+      onNodesChange={onNodesChange}
+      edges={edges}
+      onEdgesChange={onEdgesChange}
+      onConnect={onConnect}
     />
   );
 };
