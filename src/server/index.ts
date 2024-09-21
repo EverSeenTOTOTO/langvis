@@ -6,15 +6,16 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-dotenv.config({ path: path.join(__dirname, '../.env') });
+dotenv.config({
+  path:
+    process.env.NODE_ENV === 'production'
+      ? path.join(__dirname, '../../.env')
+      : path.join(__dirname, '../../.env.development'),
+});
 
 // hypothesis: client assets to be in the same directory
 export const createServer = async (): Promise<Express> => {
   const server = express();
-  const [{ render }, template] = await Promise.all([
-    import(path.join(__dirname, 'index.server.js')),
-    fs.promises.readFile(path.join(__dirname, 'index.html'), 'utf-8'),
-  ]);
 
   server.use(
     express.static(__dirname, {
@@ -26,17 +27,24 @@ export const createServer = async (): Promise<Express> => {
     res.send('react and vite!');
   });
 
-  server.get('*', async (req, res) => {
-    const { html } = await render({ req, res, template });
+  if (process.env.NODE_ENV !== 'development') {
+    const [{ render }, template] = await Promise.all([
+      import(path.join(__dirname, 'index.server.js')),
+      fs.promises.readFile(path.join(__dirname, 'index.html'), 'utf-8'),
+    ]);
 
-    res.setHeader('Content-Type', 'text/html');
-    res.end(html);
-  });
+    server.get('*', async (req, res) => {
+      const { html } = await render({ req, res, template });
+
+      res.setHeader('Content-Type', 'text/html');
+      res.end(html);
+    });
+  }
 
   return server;
 };
 
-const port = process.env.VITE_SERVER_PORT || 3000;
+const port = process.env.PORT || 3000;
 
 createServer()
   .then(server => {

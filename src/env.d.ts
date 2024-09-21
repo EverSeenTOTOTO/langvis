@@ -5,7 +5,7 @@ declare interface Window {
 }
 
 interface ImportMetaEnv {
-  readonly VITE_SERVER_URL: string;
+  readonly PORT: string;
 }
 
 interface ImportMeta {

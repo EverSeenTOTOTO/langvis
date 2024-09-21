@@ -16,9 +16,13 @@ lint:
 clean:
 	-rm -r ${DIST}
 
-.PHONY: dev
-dev: clean
+.PHONY: dev\:client
+dev\:client: clean
 	npx vite --mode development --config config/vite.dev.ts
+
+.PHONY: dev\:server
+dev\:server:
+	NODE_ENV=development bun --watch src/server/index.ts
 
 .PHONY: build_client
 build_client:
