@@ -38,11 +38,7 @@ build: clean build_client build_server
 
 .PHONY: start
 start: build
-	node ${DIST}/server.js
-
-.PHONY: preview
-preview:
-	node ${DIST}/server.js
+	NODE_ENV=production node ${DIST}/server.js
 
 .PHONY: test
 test:

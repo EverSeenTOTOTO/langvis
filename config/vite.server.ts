@@ -3,10 +3,15 @@ import { paths } from './vite.common';
 import pkg from '../package.json';
 
 // use vite as cjs bundler
-export default defineConfig(({ mode }) => ({
+export default defineConfig(() => ({
+  resolve: {
+    alias: {
+      '@': paths.src,
+    },
+  },
   build: {
     ssr: true,
-    sourcemap: mode === 'development',
+    sourcemap: false,
     emptyOutDir: false,
     rollupOptions: {
       input: paths.server,
