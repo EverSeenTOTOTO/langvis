@@ -1,48 +1,41 @@
 import Graph from '@/client/components/Graph';
-import { applyEdgeChanges, applyNodeChanges, addEdge } from '@xyflow/react';
+import { useStore } from '@/client/store';
+import { Button, Flex } from '@radix-ui/themes';
+import { EdgeChange, NodeChange } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
-import { useCallback, useState } from 'react';
 import './index.scss';
 
-const MenubarDemo = () => {
-  const [nodes, setNodes] = useState([
-    {
-      id: 'btn-1',
-      type: 'button',
-      position: { x: 0, y: 0 },
-      data: { children: 123 },
-    },
-    {
-      id: 'btn-2',
-      type: 'button',
-      position: { x: 100, y: 200 },
-      data: { children: 'hello' },
-    },
-  ]);
-  const [edges, setEdges] = useState([]);
-
-  const onNodesChange = useCallback(
-    changes => setNodes(nds => applyNodeChanges(changes, nds)),
-    [],
-  );
-  const onEdgesChange = useCallback(
-    changes => setEdges(eds => applyEdgeChanges(changes, eds)),
-    [],
-  );
-  const onConnect = useCallback(
-    params => setEdges(eds => addEdge(params, eds)),
-    [],
-  );
+const Home = () => {
+  const ctx = useStore('graph');
 
   return (
-    <Graph
-      nodes={nodes}
-      onNodesChange={onNodesChange}
-      edges={edges}
-      onEdgesChange={onEdgesChange}
-      onConnect={onConnect}
-    />
+    <>
+      <Graph
+        onInit={flow => ctx.initFlow(flow)}
+        nodes={ctx.nodes}
+        onNodesChange={(changes: NodeChange[]) => ctx.updateNodes(changes)}
+        edges={ctx.edges}
+        onEdgesChange={(changes: EdgeChange[]) => ctx.updateEdges(changes)}
+        onConnect={connection => ctx.connectNode(connection)}
+      />
+      <Flex gap="4" style={{ position: 'fixed', top: 100, right: 100 }}>
+        <Button
+          onClick={() => {
+            ctx.buildGraph();
+          }}
+        >
+          Build
+        </Button>
+        <Button
+          onClick={() => {
+            ctx.executeGraph();
+          }}
+        >
+          Test
+        </Button>
+      </Flex>
+    </>
   );
 };
 
-export default observer(MenubarDemo);
+export default observer(Home);

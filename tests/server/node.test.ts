@@ -66,6 +66,8 @@ it('test graph op', async () => {
   expect(ctx.edgeCount).toBe(3);
   expect(ctx.getNode(a.slot)).toBe(a);
   expect(ctx.getEdges(a.slot).size).toBe(2);
+  expect(ctx.getOutputEdges(a.slot).length).toBe(1);
+  expect(ctx.getOutputEdges(a.slot).length).toBe(1);
 
   await ctx.run(a);
 
