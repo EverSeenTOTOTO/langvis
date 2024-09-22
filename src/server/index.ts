@@ -1,47 +1,34 @@
+import { __dirname, isProd } from '@/server/utils';
+import bodyParser from 'body-parser';
+import compression from 'compression';
 import dotenv from 'dotenv';
-import path from 'path';
-import fs from 'fs';
 import express, { Express } from 'express';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import path from 'path';
+import bindGraphController from './controller/graph';
+import bindLoggerMiddleware from './middleware/logger';
+import bindSSRMiddleware from './middleware/ssr';
 
 dotenv.config({
-  path:
-    process.env.NODE_ENV === 'production'
-      ? path.join(__dirname, '../../.env')
-      : path.join(__dirname, '../../.env.development'),
+  path: isProd
+    ? path.join(__dirname, '../../.env')
+    : path.join(__dirname, '../../.env.development'),
 });
 
 // hypothesis: client assets to be in the same directory
 export const createServer = async (): Promise<Express> => {
-  const server = express();
+  const app = express();
 
-  server.use(
-    express.static(__dirname, {
-      index: false,
-    }),
-  );
+  await bindLoggerMiddleware(app);
+  await bindSSRMiddleware(app);
 
-  server.get(/^\/api\//, (_, res) => {
-    res.send('react and vite!');
-  });
+  app.use(express.static(__dirname, { index: false }));
+  app.use(bodyParser.urlencoded({ extended: false }));
+  app.use(bodyParser.json());
+  app.use(compression());
 
-  if (process.env.NODE_ENV !== 'development') {
-    const [{ render }, template] = await Promise.all([
-      import(path.join(__dirname, 'index.server.js')),
-      fs.promises.readFile(path.join(__dirname, 'index.html'), 'utf-8'),
-    ]);
+  await bindGraphController(app);
 
-    server.get('*', async (req, res) => {
-      const { html } = await render({ req, res, template });
-
-      res.setHeader('Content-Type', 'text/html');
-      res.end(html);
-    });
-  }
-
-  return server;
+  return app;
 };
 
 const port = process.env.PORT || 3000;
@@ -49,7 +36,7 @@ const port = process.env.PORT || 3000;
 createServer()
   .then(server => {
     server.listen(port, () => {
-      console.log(`Server listening on port ${port}`);
+      server.locals.logger.info(`server started at http://localhost:${port}`);
     });
   })
   .catch(console.error);

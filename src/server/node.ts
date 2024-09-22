@@ -23,8 +23,17 @@ export class Edge {
 export class Context {
   nodes: Map<string, Node> = new Map();
   edges: Map<string, Edge> = new Map();
+
+  // slot and its related node and edges, edges are indexed by edge id
   slotIndexMap: WeakMap<Slot, { node: Node; edges?: Map<string, Edge> }> =
     new WeakMap();
+
+  reset(): Context {
+    this.nodes.clear();
+    this.edges.clear();
+    this.slotIndexMap = new WeakMap();
+    return this;
+  }
 
   get nodeCount(): number {
     return this.nodes.size;
@@ -135,6 +144,20 @@ export class Context {
 
   getEdge(edgeId: string): Edge | undefined {
     return this.edges.get(edgeId);
+  }
+
+  getOutputEdges(slot: Slot): Edge[] {
+    const edges = this.getEdges(slot);
+
+    return [...edges.values()].filter(edge => edge.from === slot);
+  }
+
+  getOutputNodes(slot: Slot): Node[] {
+    const edges = this.getEdges(slot);
+
+    return [...edges.values()]
+      .filter(edge => edge.from === slot)
+      .map(edge => this.getNode(edge.to)!);
   }
 }
 
