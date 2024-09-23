@@ -42,8 +42,5 @@ export default async (app: Express) => {
     logger.info(`${req.method} <- ${req.url}`);
   });
 
-  // dev log
-  if (!isProd) {
-    logger.warn(`start in ${process.env.NODE_ENV} mode`);
-  }
+  logger.warn(`start in ${process.env.NODE_ENV} mode`);
 };

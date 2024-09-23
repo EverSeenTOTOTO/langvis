@@ -1,12 +1,14 @@
+import { ClientNode, NodeSharedData } from '@/shared/node';
 import { Button, ButtonProps } from '@radix-ui/themes';
-import { Node, NodeProps, Handle, Position } from '@xyflow/react';
+import { Handle, HandleProps } from '@xyflow/react';
 
-export default (props: NodeProps<Node<ButtonProps>>) => {
+export default (props: ClientNode<ButtonProps & NodeSharedData>) => {
   return (
     <>
-      <Button {...props.data} />
-      <Handle id="output" type="source" position={Position.Left} />
-      <Handle id="input" type="target" position={Position.Right} />
+      <Button />
+      {props.data?.slots?.map(slot => (
+        <Handle {...(slot as unknown as HandleProps)} id={slot.name} />
+      ))}
     </>
   );
 };
