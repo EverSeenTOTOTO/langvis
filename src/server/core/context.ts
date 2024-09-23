@@ -151,14 +151,6 @@ export class Context {
 
     return [...edges.values()].filter(edge => edge.from === slot);
   }
-
-  getOutputNodes(slot: Slot): Node[] {
-    const edges = this.getEdges(slot);
-
-    return [...edges.values()]
-      .filter(edge => edge.from === slot)
-      .map(edge => this.getNode(edge.to)!);
-  }
 }
 
 export class Node extends EventEmitter {
