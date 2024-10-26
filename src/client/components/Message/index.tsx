@@ -1,16 +1,16 @@
-import * as React from 'react';
-import './index.scss';
-import { Callout, Flex } from '@radix-ui/themes';
+import useAnimationState from '@/client/hooks/useAnimationState';
+import { useStore } from '@/client/store';
 import {
   CheckCircledIcon,
   CrossCircledIcon,
   ExclamationTriangleIcon,
   InfoCircledIcon,
 } from '@radix-ui/react-icons';
-import { useMemo } from 'react';
-import { useStore } from '@/client/store';
+import { Callout, Flex } from '@radix-ui/themes';
 import { uniqueId } from 'lodash-es';
-import useAnimationState from '@/client/hooks/useAnimationState';
+import * as React from 'react';
+import { useMemo } from 'react';
+import './index.scss';
 
 type MessageProps = {
   id: string;

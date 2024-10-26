@@ -4,9 +4,9 @@ import { getOwnPropertyNames } from '../constants';
 const metaDataKey = Symbol('hydrate');
 
 export type HydrateConfig = {
-  // 目标属性水化时如何从预取数据中获取
+  // 目标属性水化时如何从预取数据中提取并还原到客户端实例
   onHydrate?(state: any): any;
-  // 目标属性脱水时如何从服务端状态实例中获取
+  // 目标属性脱水时如何从服务端实例中提取，将存放到预取数据
   onDehydra?(): any;
 };
 
