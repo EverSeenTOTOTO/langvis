@@ -1,38 +1,34 @@
 import Graph from '@/client/components/Graph';
-import { useStore } from '@/client/store';
-import { Button, Flex } from '@radix-ui/themes';
+import { getStore, useStore } from '@/client/store';
+import { Text, Flex } from '@radix-ui/themes';
 import { EdgeChange, NodeChange } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
 import './index.scss';
 
+export const prefetch = () => {
+  const home = getStore('home');
+
+  return home.test();
+};
+
 const Home = () => {
-  const ctx = useStore('graph');
+  const graph = useStore('graph');
+  const home = useStore('home');
 
   return (
     <>
       <Graph
-        onInit={flow => ctx.initFlow(flow)}
-        nodes={ctx.nodes}
-        onNodesChange={(changes: NodeChange[]) => ctx.updateNodes(changes)}
-        edges={ctx.edges}
-        onEdgesChange={(changes: EdgeChange[]) => ctx.updateEdges(changes)}
-        onConnect={connection => ctx.connectNode(connection)}
+        onInit={flow => graph.initFlow(flow)}
+        nodes={graph.nodes}
+        onNodesChange={(changes: NodeChange[]) => graph.updateNodes(changes)}
+        edges={graph.edges}
+        onEdgesChange={(changes: EdgeChange[]) => graph.updateEdges(changes)}
+        onConnect={connection => graph.connectNode(connection)}
       />
       <Flex gap="4" style={{ position: 'fixed', top: 100, right: 100 }}>
-        <Button
-          onClick={() => {
-            ctx.buildGraph();
-          }}
-        >
-          Build
-        </Button>
-        <Button
-          onClick={() => {
-            ctx.executeGraph();
-          }}
-        >
-          Test
-        </Button>
+        {home.countries.map(country => (
+          <Text key={country.id}>{country.name}</Text>
+        ))}
       </Flex>
     </>
   );

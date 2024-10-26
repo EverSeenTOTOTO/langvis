@@ -2,19 +2,13 @@ import fs from 'fs';
 import { defineConfig, ViteDevServer } from 'vite';
 import base, { paths } from './vite.common';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import dotenv from 'dotenv';
-import path from 'path';
-
-const env = dotenv.config({
-  path: path.join(__dirname, '../.env.development'),
-}).parsed;
 
 const devApiProxy = () => ({
   name: 'dev-api-proxy',
   configureServer(vite: ViteDevServer) {
     const { logger } = vite.config;
     const proxy = createProxyMiddleware({
-      target: `http://localhost:${env?.PORT}/api`,
+      target: `http://localhost:${vite.config.env?.VITE_PORT}/api`,
       changeOrigin: true,
       logger,
     });

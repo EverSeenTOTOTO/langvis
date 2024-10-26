@@ -22,7 +22,7 @@ export type ClientNode<
 > = ClientNodeType<NodeData, NodeType>;
 
 export type ServerNode<
-  NodeData extends NodeSharedData = Record<string, unknown>,
+  NodeData extends NodeSharedData = NodeSharedData,
   NodeType extends string = string,
 > = {
   toClient(): ClientNode<NodeData, NodeType>;

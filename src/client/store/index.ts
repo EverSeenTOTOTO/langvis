@@ -1,6 +1,7 @@
 import { HomeStore } from './modules/home';
 import { GraphStore } from './modules/graph';
 import { ThemeStore } from './modules/theme';
+import { SupabaseStore } from './modules/supabase';
 
 export type PrefetchStore<State> = {
   // merge ssr prefetched data
@@ -24,19 +25,18 @@ export class AppStore {
 
   theme: ThemeStore;
 
+  supabase: SupabaseStore;
+
   constructor() {
     this.home = new HomeStore(this);
     this.graph = new GraphStore(this);
     this.theme = new ThemeStore(this);
+    this.supabase = new SupabaseStore(this);
   }
 
   hydrate(data: GetStore<AppStore>) {
     Object.keys(data).forEach(key => {
       const k = key as GetKeys<AppStore>;
-
-      // if (import.meta.env.DEV) {
-      //   console.info(`hydrate ${k}`);
-      // }
 
       this[k]?.hydrate?.(data[k] as any); // 参数类型是逆变的
     });
@@ -60,3 +60,4 @@ const appStore = new AppStore();
 export const createStore = () => appStore;
 export const useStore = <T extends keyof AppStore>(key: T): AppStore[T] =>
   appStore[key];
+export const getStore = useStore;

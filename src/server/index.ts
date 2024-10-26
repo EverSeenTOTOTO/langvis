@@ -4,8 +4,6 @@ import compression from 'compression';
 import dotenv from 'dotenv';
 import express, { Express } from 'express';
 import path from 'path';
-import bindGraphController from './controller/graph';
-import bindLoggerMiddleware from './middleware/logger';
 import bindSSRMiddleware from './middleware/ssr';
 
 dotenv.config({
@@ -18,21 +16,20 @@ dotenv.config({
 export const createServer = async (): Promise<Express> => {
   const app = express();
 
-  await bindLoggerMiddleware(app);
-
   app.use(express.static(__dirname, { index: false }));
   app.use(bodyParser.urlencoded({ extended: false }));
   app.use(bodyParser.json());
   app.use(compression());
 
-  await bindGraphController(app);
+  // TODO
+  app.locals.logger = console;
   // must be last
   await bindSSRMiddleware(app);
 
   return app;
 };
 
-const port = process.env.PORT || 3000;
+const port = process.env.VITE_PORT || 3000;
 
 createServer()
   .then(server => {

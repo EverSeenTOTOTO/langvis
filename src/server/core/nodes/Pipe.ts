@@ -1,4 +1,3 @@
-import { logger } from '@/server/middleware/logger';
 import { ClientNode, NodeState, ServerNode } from '@/shared/node';
 import { Position } from '@xyflow/react';
 import { Context, Node } from '../context';
@@ -30,10 +29,6 @@ export class PipeNode extends Node implements ServerNode {
     });
 
     this.defineSlot(input, msg => {
-      logger.info(
-        `Node ${this.type} ${id.slice(0, 4)} received message: ${msg}`,
-      );
-
       const outputEdges = ctx.getOutputEdges(output);
 
       outputEdges.forEach(edge => {

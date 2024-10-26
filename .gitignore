@@ -3,5 +3,6 @@ dist
 .eslintcache
 *.log
 coverage/*
+.env
 .env.development
 *-audit.json
