@@ -1,6 +1,7 @@
 import Graph from '@/client/components/Graph';
+import MessageViewport from '@/client/components/Message';
 import { getStore, useStore } from '@/client/store';
-import { Text, Flex } from '@radix-ui/themes';
+import { Button, Flex, Text } from '@radix-ui/themes';
 import { EdgeChange, NodeChange } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
 import './index.scss';
@@ -14,9 +15,21 @@ export const prefetch = () => {
 const Home = () => {
   const graph = useStore('graph');
   const home = useStore('home');
+  const ui = useStore('ui');
 
   return (
     <>
+      <MessageViewport />
+      <Button
+        onClick={() => {
+          ui.notify({
+            type: 'error',
+            message: 'Hello world',
+          });
+        }}
+      >
+        Click me
+      </Button>
       <Graph
         onInit={flow => graph.initFlow(flow)}
         nodes={graph.nodes}

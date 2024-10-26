@@ -2,6 +2,7 @@ import { HomeStore } from './modules/home';
 import { GraphStore } from './modules/graph';
 import { ThemeStore } from './modules/theme';
 import { SupabaseStore } from './modules/supabase';
+import { UiStore } from './modules/ui';
 
 export type PrefetchStore<State> = {
   // merge ssr prefetched data
@@ -27,11 +28,14 @@ export class AppStore {
 
   supabase: SupabaseStore;
 
+  ui: UiStore;
+
   constructor() {
     this.home = new HomeStore(this);
     this.graph = new GraphStore(this);
     this.theme = new ThemeStore(this);
     this.supabase = new SupabaseStore(this);
+    this.ui = new UiStore(this);
   }
 
   hydrate(data: GetStore<AppStore>) {
