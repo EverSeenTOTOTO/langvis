@@ -1,13 +1,13 @@
+import { catchGuard } from '@/client/decorator/catchGuard';
+import { hydrate } from '@/client/decorator/hydrate';
+import { promisify } from '@/client/decorator/promisify';
 import { makeAutoObservable } from 'mobx';
-import type { AppStore, PrefetchStore } from '..';
+import type { AppStore } from '..';
 
-export type HomeState = {
-  countries: { id: string; name: string }[];
-};
-
-export class HomeStore implements PrefetchStore<HomeState> {
+export class HomeStore {
   root: AppStore;
 
+  @hydrate()
   countries: { id: string; name: string }[] = [];
 
   constructor(root: AppStore) {
@@ -15,19 +15,15 @@ export class HomeStore implements PrefetchStore<HomeState> {
     this.root = root;
   }
 
+  @promisify()
+  @catchGuard()
   async test() {
-    const { data } = await this.root.supabase.client.from('countries').select();
+    const res = await this.root.supabase.client.from('countries').select();
 
-    this.countries = data;
-  }
-
-  hydrate(state: HomeState): void {
-    this.countries = state.countries;
-  }
-
-  dehydra(): HomeState {
-    return {
-      countries: this.countries,
-    };
+    if (res.data) {
+      this.countries = res.data;
+    } else {
+      throw res.error;
+    }
   }
 }

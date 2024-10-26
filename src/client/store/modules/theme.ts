@@ -1,13 +1,11 @@
+import { hydrate } from '@/client/decorator/hydrate';
 import { makeAutoObservable } from 'mobx';
-import type { AppStore, PrefetchStore } from '..';
+import type { AppStore } from '..';
 
 type ThemeMode = 'light' | 'dark';
 
-export type ThemeState = {
-  mode: ThemeMode;
-};
-
-export class ThemeStore implements PrefetchStore<ThemeState> {
+export class ThemeStore {
+  @hydrate()
   mode: ThemeMode = 'dark';
 
   root: AppStore;
@@ -19,15 +17,5 @@ export class ThemeStore implements PrefetchStore<ThemeState> {
 
   toggleMode() {
     this.mode = this.mode === 'light' ? 'dark' : 'light';
-  }
-
-  hydrate(state: ThemeState): void {
-    this.mode = state.mode;
-  }
-
-  dehydra(): ThemeState {
-    return {
-      mode: this.mode,
-    };
   }
 }

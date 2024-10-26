@@ -3,21 +3,27 @@ import { GraphStore } from './modules/graph';
 import { ThemeStore } from './modules/theme';
 import { SupabaseStore } from './modules/supabase';
 import { UiStore } from './modules/ui';
+import composeCatchGuard from '../decorator/catchGuard';
+import composePromisify from '../decorator/promisify';
+import composeHydrate from '../decorator/hydrate';
+import { configure } from 'mobx';
+import { enableStaticRendering } from 'mobx-react-lite';
 
-export type PrefetchStore<State> = {
-  // merge ssr prefetched data
-  hydrate(state: State): void;
-  // provide ssr prefetched data
-  dehydra(): State | undefined;
+if (import.meta.env.SSR) {
+  enableStaticRendering(true);
+}
+configure({ enforceActions: 'never' });
+
+const newStore = <T, C extends Record<string, any>>(
+  Clz: new (...params: T[]) => C,
+  ...params: T[]
+) => {
+  // mobx 的Proxy wrap 会错误将异步函数包装成同步，所以需要先 promisify，不然 catchGuard 会失效
+  return [composePromisify, composeCatchGuard, composeHydrate].reduce(
+    (instance, compose) => compose(instance),
+    new Clz(...params),
+  );
 };
-
-type GetStore<T> = {
-  [K in keyof T]: T[K] extends PrefetchStore<infer S> ? S : never;
-};
-
-type GetKeys<T> = {
-  [K in keyof T]: T[K] extends PrefetchStore<unknown> ? K : never;
-}[keyof T];
 
 export class AppStore {
   home: HomeStore;
@@ -31,28 +37,32 @@ export class AppStore {
   ui: UiStore;
 
   constructor() {
-    this.home = new HomeStore(this);
-    this.graph = new GraphStore(this);
-    this.theme = new ThemeStore(this);
-    this.supabase = new SupabaseStore(this);
-    this.ui = new UiStore(this);
+    this.home = newStore(HomeStore, this);
+    this.graph = newStore(GraphStore, this);
+    this.theme = newStore(ThemeStore, this);
+    this.supabase = newStore(SupabaseStore, this);
+    this.ui = newStore(UiStore, this);
   }
 
-  hydrate(data: GetStore<AppStore>) {
+  hydrate(data: Record<string, any>) {
     Object.keys(data).forEach(key => {
-      const k = key as GetKeys<AppStore>;
+      const store = this[key as keyof AppStore] as unknown as {
+        hydrate?: (data: any) => void;
+      };
 
-      this[k]?.hydrate?.(data[k] as any); // 参数类型是逆变的
+      store?.hydrate?.(data[key]); // 参数类型是逆变的
     });
   }
 
   dehydra() {
-    const data: Partial<GetStore<AppStore>> = {};
+    const data: Record<string, any> = {};
 
     Object.keys(this).forEach(key => {
-      const k = key as GetKeys<AppStore>;
+      const store = this[key as keyof AppStore] as unknown as {
+        dehydra?: () => unknown;
+      };
 
-      data[k] = this[k]?.dehydra?.() as any;
+      data[key] = store?.dehydra?.() as any;
     });
 
     return data;

@@ -15,17 +15,13 @@ export const prefetch = () => {
 const Home = () => {
   const graph = useStore('graph');
   const home = useStore('home');
-  const ui = useStore('ui');
 
   return (
     <>
       <MessageViewport />
       <Button
         onClick={() => {
-          ui.notify({
-            type: 'error',
-            message: 'Hello world',
-          });
+          home.test();
         }}
       >
         Click me
