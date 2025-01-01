@@ -1,7 +1,6 @@
 import { ClientNode, NodeState, ServerNode } from '@/shared/node';
 import { Position } from '@xyflow/react';
-import { Graph, Node } from '../graph';
-import SlotHandle from '../slots/SlotHandle';
+import { Graph, Node, Slot } from '../graph';
 
 export class PipeNode extends Node implements ServerNode {
   state: NodeState;
@@ -19,11 +18,11 @@ export class PipeNode extends Node implements ServerNode {
     this.position = options.position;
     this.state = options.data?.state || NodeState.Idle;
 
-    const input = new SlotHandle('input', {
+    const input = new Slot('input', {
       type: 'target',
       position: Position.Left,
     });
-    const output = new SlotHandle('output', {
+    const output = new Slot('output', {
       type: 'source',
       position: Position.Right,
     });

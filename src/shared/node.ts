@@ -1,5 +1,5 @@
-import { Slot } from '@/server/core/context';
-import { Node as ClientNodeType } from '@xyflow/react';
+import { Slot } from '@/server/core/graph';
+import { Node as XyflowNode } from '@xyflow/react';
 
 export enum NodeState {
   Idle = 'idle',
@@ -19,7 +19,7 @@ export type NodeSharedData = {
 export type ClientNode<
   NodeData extends NodeSharedData = NodeSharedData,
   NodeType extends string = string,
-> = ClientNodeType<NodeData, NodeType>;
+> = XyflowNode<NodeData, NodeType>;
 
 export type ServerNode<
   NodeData extends NodeSharedData = NodeSharedData,

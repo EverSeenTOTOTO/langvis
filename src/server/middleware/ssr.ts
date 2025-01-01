@@ -5,7 +5,9 @@ import { __dirname, isProd } from '@/server/utils';
 
 export default async (app: Express) => {
   if (!isProd) {
-    app.locals.logger.warn(`ssr is disabled in ${process.env.NODE_ENV} mode`);
+    app.locals.logger.warn(
+      `Client assets are served with vite dev server in ${process.env.NODE_ENV} mode.`,
+    );
     return;
   }
 

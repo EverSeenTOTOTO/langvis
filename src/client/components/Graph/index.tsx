@@ -1,14 +1,19 @@
 import { useStore } from '@/client/store';
 import { Background, Controls, ReactFlow, ReactFlowProps } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
 import { observer } from 'mobx-react-lite';
 
 function Graph(props: ReactFlowProps) {
   const graph = useStore('graph');
+  const theme = useStore('theme');
 
   return (
     <div style={{ height: '100%' }}>
-      <ReactFlow nodeTypes={graph.nodeTypes} fitView {...props}>
+      <ReactFlow
+        fitView
+        nodeTypes={graph.nodeTypes}
+        colorMode={theme.mode}
+        {...props}
+      >
         <Background />
         <Controls />
       </ReactFlow>

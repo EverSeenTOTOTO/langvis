@@ -3,8 +3,6 @@ import { BrowserRouter } from 'react-router-dom';
 import { App, prefetch } from './App';
 import { createRoutes } from './routes';
 import { createStore } from './store';
-import '@radix-ui/themes/styles.css';
-import './styles/index.scss';
 
 const container = document.getElementById('root');
 
@@ -22,7 +20,12 @@ if (window.__PREFETCHED_STATE__) {
 
 hydrateRoot(
   container!,
-  <BrowserRouter>
+  <BrowserRouter
+    future={{
+      v7_relativeSplatPath: true,
+      v7_startTransition: true,
+    }}
+  >
     <App store={store} routes={routes} />
   </BrowserRouter>,
 );

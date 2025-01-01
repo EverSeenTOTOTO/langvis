@@ -8,6 +8,7 @@ import {
   Node,
   NodeChange,
   NodeTypes,
+  Position,
   ReactFlowInstance,
 } from '@xyflow/react';
 import { makeAutoObservable } from 'mobx';
@@ -21,14 +22,32 @@ export class GraphStore {
     {
       id: 'btn-1',
       type: 'button',
-      position: { x: 0, y: 0 },
-      data: { children: 123 },
+      position: { x: -100, y: -100 },
+      data: {
+        children: 123,
+        slots: [
+          {
+            name: 'output',
+            type: 'target',
+            position: Position.Right,
+          },
+        ],
+      },
     },
     {
       id: 'btn-2',
       type: 'button',
-      position: { x: 100, y: 200 },
-      data: { children: 'hello' },
+      position: { x: 100, y: -50 },
+      data: {
+        children: 'hello',
+        slots: [
+          {
+            name: 'input',
+            type: 'source',
+            position: Position.Left,
+          },
+        ],
+      },
     },
   ];
 
@@ -41,10 +60,22 @@ export class GraphStore {
   constructor(root: AppStore) {
     this.root = root;
 
+    const nodeTypes = import.meta.glob('@/client/components/GUINodes/*.tsx', {
+      eager: true,
+    }) as any;
+
+    Object.keys(nodeTypes).forEach(path => {
+      const type = path
+        .match(/src\/client\/components\/GUINodes\/(.*)\.tsx$/)![1]
+        .toLowerCase();
+
+      this.registerNodeType(type, nodeTypes[path].default);
+    });
+
     makeAutoObservable(this);
   }
 
-  initFlow(flow: ReactFlowInstance) {
+  setFlow(flow: ReactFlowInstance) {
     this.flow = flow;
   }
 

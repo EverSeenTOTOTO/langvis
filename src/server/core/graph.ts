@@ -1,10 +1,17 @@
+import { HandleProps, HandleType, Position } from '@xyflow/react';
 import EventEmitter from 'eventemitter3';
 
-export class Slot {
+export class Slot implements HandleProps {
   name: string;
 
-  constructor(name: string) {
+  type: HandleType;
+
+  position: Position;
+
+  constructor(name: string, options?: HandleProps) {
     this.name = name;
+    this.type = options?.type || 'target';
+    this.position = options?.position || Position.Right;
   }
 }
 

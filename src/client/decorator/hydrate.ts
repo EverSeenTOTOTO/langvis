@@ -20,7 +20,7 @@ export function wrapHydrate(
   return (state: Record<string, any>) => {
     return typeof config === 'function'
       ? config(state)
-      : prop in state
+      : state && prop in state
         ? state?.[prop]
         : /* 提取失败回退前端默认值 */ instance[prop];
   };
