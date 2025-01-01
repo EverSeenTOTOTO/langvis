@@ -1,6 +1,6 @@
 import { makeAutoObservable } from 'mobx';
 import type { AppStore } from '..';
-import { MessageConfig } from '@/client/components/Message';
+import { type MessageConfig } from '@/client/components/Message';
 
 export type UiState = {};
 

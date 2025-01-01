@@ -12,7 +12,6 @@ export function promisify(): PropertyDecorator {
   };
 }
 
-// 对 fn 进行包装
 export function wrapPromisify<T, R>(fn: (...args: T[]) => R) {
   return isAsyncFunction(fn)
     ? fn

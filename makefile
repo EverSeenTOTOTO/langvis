@@ -42,4 +42,4 @@ start: build
 
 .PHONY: test
 test:
-	npx jest --coverage
+	npx vitest run -c config/vite.common.ts --coverage

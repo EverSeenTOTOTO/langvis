@@ -3,14 +3,10 @@ import { getOwnPropertyNames } from '../constants';
 
 const metaDataKey = Symbol('hydrate');
 
-export type HydrateConfig = {
-  // 目标属性水化时如何从预取数据中提取并还原到客户端实例
-  onHydrate?(state: any): any;
-  // 目标属性脱水时如何从服务端实例中提取，将存放到预取数据
-  onDehydra?(): any;
-};
+// 目标属性水化时如何从预取数据state中提取并还原到客户端实例
+export type HydrateMethod = (state: any) => any;
 
-export function hydrate(config?: HydrateConfig) {
+export function hydrate(config?: HydrateMethod) {
   return function hydrateDecorator(target: any, propertyKey: string | symbol) {
     Reflect.defineMetadata(metaDataKey, config || true, target, propertyKey);
   };
@@ -19,47 +15,35 @@ export function hydrate(config?: HydrateConfig) {
 export function wrapHydrate(
   instance: Record<string, any>,
   prop: string,
-  config?: HydrateConfig,
+  config?: HydrateMethod,
 ) {
-  return {
-    onHydrate(state: Record<string, any>) {
-      return config?.onHydrate
-        ? config.onHydrate(state)
-        : state?.[prop] || instance[prop];
-    },
-    onDehydra() {
-      return config?.onDehydra ? config.onDehydra() : instance[prop];
-    },
+  return (state: Record<string, any>) => {
+    return typeof config === 'function'
+      ? config(state)
+      : prop in state
+        ? state?.[prop]
+        : /* 提取失败回退前端默认值 */ instance[prop];
   };
 }
 
 export default function <T extends Record<string, any>>(instance: T) {
+  const hydrateFns: HydrateMethod[] = [];
+
   getOwnPropertyNames(instance).forEach(prop => {
     const config = Reflect.getMetadata(metaDataKey, instance, prop);
 
     if (!config) return;
 
-    const { onHydrate, onDehydra } = wrapHydrate(instance, prop, config);
+    const onHydrate = wrapHydrate(instance, prop, config);
 
-    const oldHydrate = instance.hydrate
-      ? instance.hydrate.bind(instance)
-      : () => {};
-    const oldDehydra = instance.dehydra
-      ? instance.dehydra.bind(instance)
-      : () => ({});
+    hydrateFns.push(state => Reflect.set(instance, prop, onHydrate?.(state)));
 
     Reflect.set(instance, 'hydrate', (state: Record<string, any>) => {
-      oldHydrate?.(state);
-      Reflect.set(instance, prop, onHydrate(state));
-    });
-
-    Reflect.set(instance, 'dehydra', () => {
-      return {
-        ...oldDehydra?.(),
-        [prop]: onDehydra(),
-      };
+      hydrateFns.forEach(fn => fn(state));
     });
   });
 
-  return instance;
+  return instance as T & {
+    hydrate(state: Record<string, any>): void;
+  };
 }

@@ -14,10 +14,6 @@ import { makeAutoObservable } from 'mobx';
 import React from 'react';
 import type { AppStore } from '..';
 
-const nodeTypes = import.meta.glob('@/client/components/GUINodes/*.tsx', {
-  eager: true,
-}) as any;
-
 export class GraphStore {
   root: AppStore;
 
@@ -44,13 +40,6 @@ export class GraphStore {
 
   constructor(root: AppStore) {
     this.root = root;
-    Object.keys(nodeTypes).forEach(path => {
-      const type = path
-        .match(/src\/client\/components\/GUINodes\/(.*)\.tsx$/)![1]
-        .toLowerCase();
-
-      this.registerNodeType(type, nodeTypes[path].default);
-    });
 
     makeAutoObservable(this);
   }

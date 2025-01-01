@@ -12,9 +12,6 @@ const store = createStore();
 const routes = createRoutes();
 
 if (window.__PREFETCHED_STATE__) {
-  // if (import.meta.env.DEV) {
-  //   console.log('prefetched state', window.__PREFETCHED_STATE__);
-  // }
   // merge ssr prefetched data
   store.hydrate(window.__PREFETCHED_STATE__);
   delete window.__PREFETCHED_STATE__;

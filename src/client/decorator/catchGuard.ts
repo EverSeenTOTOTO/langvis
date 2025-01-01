@@ -1,12 +1,11 @@
 import 'reflect-metadata';
-import { getStore } from '../store';
 import { getOwnPropertyNames, isAsyncFunction } from '../constants';
 
 const metaDataKey = Symbol('catchGuard');
 
-export type GuardAction = 'notify';
-
-export function catchGuard(action: GuardAction = 'notify'): PropertyDecorator {
+export function catchGuard(
+  action?: (error: unknown) => void,
+): PropertyDecorator {
   return function catchGuardDecorator(
     target: any,
     propertyKey: string | symbol,
@@ -15,30 +14,12 @@ export function catchGuard(action: GuardAction = 'notify'): PropertyDecorator {
   };
 }
 
-// 对 fn 进行包装
 export function wrapCatchGuard<T, R>(
   fn: (...args: T[]) => R,
-  action: GuardAction,
+  dispatchError = (error: unknown): void => {
+    throw error;
+  },
 ) {
-  const dispatchError = (e: unknown) => {
-    const error = e as Error;
-
-    switch (action) {
-      case 'notify': {
-        const ui = getStore('ui');
-
-        ui.notify({
-          type: 'error',
-          message: error.message || 'Unknown error',
-        });
-
-        break;
-      }
-      default:
-        throw e;
-    }
-  };
-
   return isAsyncFunction(fn)
     ? async function asyncGuardFn(...args: T[]) {
         try {

@@ -7,11 +7,7 @@ import composeCatchGuard from '../decorator/catchGuard';
 import composePromisify from '../decorator/promisify';
 import composeHydrate from '../decorator/hydrate';
 import { configure } from 'mobx';
-import { enableStaticRendering } from 'mobx-react-lite';
 
-if (import.meta.env.SSR) {
-  enableStaticRendering(true);
-}
 configure({ enforceActions: 'never' });
 
 const newStore = <T, C extends Record<string, any>>(

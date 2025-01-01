@@ -4,6 +4,9 @@ import { StaticRouter } from 'react-router-dom/server';
 import { App, RenderContext, prefetch } from './App';
 import { createStore } from './store';
 import { createRoutes } from './routes';
+import { enableStaticRendering } from 'mobx-react-lite';
+
+enableStaticRendering(true);
 
 // see index.html
 const APP_HTML = '<!--app-html-->';

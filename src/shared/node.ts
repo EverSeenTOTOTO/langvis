@@ -2,7 +2,7 @@ import { Slot } from '@/server/core/context';
 import { Node as ClientNodeType } from '@xyflow/react';
 
 export enum NodeState {
-  Initial = 'initial',
+  Idle = 'idle',
   Built = 'built',
   Running = 'running',
   Error = 'error',

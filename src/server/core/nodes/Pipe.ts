@@ -15,9 +15,9 @@ export class PipeNode extends Node implements ServerNode {
 
   constructor(id: string, options: ClientNode, ctx: Context) {
     super(id);
-    this.state = NodeState.Initial;
+    this.state = NodeState.Idle;
     this.position = options.position;
-    this.state = options.data?.state || NodeState.Initial;
+    this.state = options.data?.state || NodeState.Idle;
 
     const input = new SlotHandle('input', {
       type: 'target',

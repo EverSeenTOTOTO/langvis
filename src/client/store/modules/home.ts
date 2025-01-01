@@ -2,7 +2,7 @@ import { catchGuard } from '@/client/decorator/catchGuard';
 import { hydrate } from '@/client/decorator/hydrate';
 import { promisify } from '@/client/decorator/promisify';
 import { makeAutoObservable } from 'mobx';
-import type { AppStore } from '..';
+import { getStore, type AppStore } from '..';
 
 export class HomeStore {
   root: AppStore;
@@ -16,9 +16,11 @@ export class HomeStore {
   }
 
   @promisify()
-  @catchGuard()
+  @catchGuard(error =>
+    getStore('ui').notify({ type: 'error', message: (error as Error).message }),
+  )
   async test() {
-    const res = await this.root.supabase.client.from('countries').select();
+    const res = await this.root.supabase.client!.from('countries').select();
 
     if (res.data) {
       this.countries = res.data;
