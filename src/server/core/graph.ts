@@ -20,7 +20,7 @@ export class Edge {
   }
 }
 
-export class Context {
+export class Graph {
   nodes: Map<string, Node> = new Map();
   edges: Map<string, Edge> = new Map();
 
@@ -28,7 +28,7 @@ export class Context {
   slotIndexMap: WeakMap<Slot, { node: Node; edges?: Map<string, Edge> }> =
     new WeakMap();
 
-  reset(): Context {
+  reset(): Graph {
     this.nodes.clear();
     this.edges.clear();
     this.slotIndexMap = new WeakMap();
@@ -43,7 +43,7 @@ export class Context {
     return this.edges.size;
   }
 
-  addNode(node: Node): Context {
+  addNode(node: Node): Graph {
     this.nodes.set(node.id, node);
     node.slots.forEach(slot => {
       this.slotIndexMap.set(slot, { node });
@@ -51,7 +51,7 @@ export class Context {
     return this;
   }
 
-  protected addEdge(edge: Edge): Context {
+  protected addEdge(edge: Edge): Graph {
     const from = this.slotIndexMap.get(edge.from);
 
     if (!from) {
@@ -61,7 +61,6 @@ export class Context {
     }
 
     from.edges = from.edges || new Map();
-    from.edges.set(edge.id, edge);
 
     const to = this.slotIndexMap.get(edge.to);
 
@@ -72,22 +71,23 @@ export class Context {
     }
 
     to.edges = to.edges || new Map();
-    to.edges.set(edge.id, edge);
 
+    from.edges.set(edge.id, edge);
+    to.edges.set(edge.id, edge);
     this.edges.set(edge.id, edge);
 
     return this;
   }
 
-  connect(edgeId: string, from: Slot, to: Slot): Context {
+  connect(edgeId: string, from: Slot, to: Slot): Graph {
     const edge = new Edge(edgeId, from, to);
     this.addEdge(edge);
     return this;
   }
 
-  deleteNode(node: Node): Context;
-  deleteNode(nodeId: string): Context;
-  deleteNode(param: any): Context {
+  deleteNode(node: Node): Graph;
+  deleteNode(nodeId: string): Graph;
+  deleteNode(param: any): Graph {
     const nodeId = param instanceof Node ? param.id : param;
     const node = this.nodes.get(nodeId);
 
@@ -104,9 +104,9 @@ export class Context {
     return this;
   }
 
-  deleteEdge(edge: Edge): Context;
-  deleteEdge(edgeId: string): Context;
-  deleteEdge(param: any): Context {
+  deleteEdge(edge: Edge): Graph;
+  deleteEdge(edgeId: string): Graph;
+  deleteEdge(param: any): Graph {
     const edgeId = param instanceof Edge ? param.id : param;
     const edge = this.edges.get(edgeId);
 
@@ -162,64 +162,70 @@ export class Node extends EventEmitter {
     this.id = id;
   }
 
-  getSlot(slotName: string) {
-    return this.slots.get(slotName);
+  getSlot(event: string | symbol | Slot): Slot {
+    const slot = event instanceof Slot ? event : this.slots.get(String(event));
+
+    if (!slot) {
+      throw new Error(
+        `Slot ${event.toString()} not found for Node(${this.id}).`,
+      );
+    }
+
+    return slot;
+  }
+
+  emit(event: string | symbol | Slot, ...args: any[]): boolean {
+    return super.emit(this.getSlot(event).name, ...args);
   }
 
   on(
-    event: string | symbol,
+    event: string | symbol | Slot,
     fn: (...args: any[]) => void,
-    context?: Context,
+    context?: Graph,
   ): this {
-    if (!this.slots.has(String(event))) {
-      throw new Error(`Slot ${event.toString()} not found.`);
-    }
-    return super.on(event, fn, context);
+    return super.on(this.getSlot(event).name, fn, context);
   }
 
   off(
-    event: string | symbol,
+    event: string | symbol | Slot,
     fn?: ((...args: any[]) => void) | undefined,
-    context?: Context,
+    context?: Graph,
     once?: boolean,
   ): this {
-    if (!this.slots.has(String(event))) {
-      throw new Error(`Slot ${event.toString()} not found.`);
-    }
-
-    return super.off(event, fn, context, once);
+    return super.off(this.getSlot(event).name, fn, context, once);
   }
 
-  once(
-    event: string | symbol,
-    fn: (...args: any[]) => void,
-    context?: Context,
-  ): this {
-    if (!this.slots.has(String(event))) {
-      throw new Error(`Slot ${event.toString()} not found.`);
-    }
-
-    return super.once(event, fn, context);
-  }
+  // once(
+  //   event: string | symbol | Slot,
+  //   fn: (...args: any[]) => void,
+  //   context?: Graph,
+  // ): this {
+  //   return super.once(this.getSlot(event).name, fn, context);
+  // }
 
   addListener(
-    event: string | symbol,
+    event: string | symbol | Slot,
     fn: (...args: any[]) => void,
-    context?: Context,
+    context?: Graph,
   ): this {
-    if (!this.slots.has(String(event))) {
-      throw new Error(`Slot ${event.toString()} not found.`);
-    }
+    return super.addListener(this.getSlot(event).name, fn, context);
+  }
 
-    return super.addListener(event, fn, context);
+  removeListener(
+    event: string | symbol | Slot,
+    fn: (...args: any[]) => void,
+    context?: Graph,
+  ): this {
+    return super.removeListener(this.getSlot(event).name, fn, context);
   }
 
   defineSlot(
     slot: Slot,
     handler?: (...args: any[]) => void,
-    ctx?: Context,
+    ctx?: Graph,
   ): Node {
     this.slots.set(slot.name, slot);
+
     if (handler) {
       this.on(slot.name, handler, ctx);
     }

@@ -1,7 +1,7 @@
 import { ClientNode, NodeState, ServerNode } from '@/shared/node';
 import { Position } from '@xyflow/react';
-import { Context, Node } from '../context';
-import SlotHandle from './SlotHandle';
+import { Graph, Node } from '../graph';
+import SlotHandle from '../slots/SlotHandle';
 
 export class PipeNode extends Node implements ServerNode {
   state: NodeState;
@@ -13,7 +13,7 @@ export class PipeNode extends Node implements ServerNode {
     y: number;
   };
 
-  constructor(id: string, options: ClientNode, ctx: Context) {
+  constructor(id: string, options: ClientNode, graph: Graph) {
     super(id);
     this.state = NodeState.Idle;
     this.position = options.position;
@@ -29,12 +29,12 @@ export class PipeNode extends Node implements ServerNode {
     });
 
     this.defineSlot(input, msg => {
-      const outputEdges = ctx.getOutputEdges(output);
+      const outputEdges = graph.getOutputEdges(output);
 
       outputEdges.forEach(edge => {
-        const target = ctx.getNode(edge.to);
+        const target = graph.getNode(edge.to);
 
-        target?.emit(edge.to.name, msg);
+        target?.emit(edge.to, msg);
       });
     });
     this.defineSlot(output);
