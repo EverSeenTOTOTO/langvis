@@ -8,7 +8,6 @@ import {
   Node,
   NodeChange,
   NodeTypes,
-  Position,
   ReactFlowInstance,
 } from '@xyflow/react';
 import { makeAutoObservable } from 'mobx';
@@ -18,38 +17,7 @@ import type { AppStore } from '..';
 export class GraphStore {
   root: AppStore;
 
-  nodes: Node[] = [
-    {
-      id: 'btn-1',
-      type: 'button',
-      position: { x: -100, y: -100 },
-      data: {
-        children: 123,
-        slots: [
-          {
-            name: 'output',
-            type: 'target',
-            position: Position.Right,
-          },
-        ],
-      },
-    },
-    {
-      id: 'btn-2',
-      type: 'button',
-      position: { x: 100, y: -50 },
-      data: {
-        children: 'hello',
-        slots: [
-          {
-            name: 'input',
-            type: 'source',
-            position: Position.Left,
-          },
-        ],
-      },
-    },
-  ];
+  nodes: Node[] = [];
 
   edges: Edge[] = [];
 

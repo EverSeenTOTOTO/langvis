@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import express, { Express } from 'express';
 import path from 'path';
 import bindSSRMiddleware from './middleware/ssr';
+import { ButtonNode } from './core/nodes/Button';
 
 dotenv.config({
   path: isProd
@@ -20,6 +21,27 @@ export const createServer = async (): Promise<Express> => {
   app.use(bodyParser.urlencoded({ extended: false }));
   app.use(bodyParser.json());
   app.use(compression());
+
+  app.get('/api/test', (_req, res) => {
+    const a = new ButtonNode({
+      id: 'btn-1',
+      position: { x: 0, y: 0 },
+      data: {
+        text: 'hello',
+        layout: 'horizontal',
+      },
+    });
+    const b = new ButtonNode({
+      id: 'btn-2',
+      position: { x: 100, y: 0 },
+      data: {
+        text: 'world',
+        layout: 'vertical',
+      },
+    });
+
+    res.end(JSON.stringify([a.toClient(), b.toClient()]));
+  });
 
   // TODO
   app.locals.logger = console;

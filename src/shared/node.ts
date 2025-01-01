@@ -1,4 +1,5 @@
 import { Slot } from '@/server/core/graph';
+import { ButtonProps } from '@radix-ui/themes';
 import { Node as XyflowNode } from '@xyflow/react';
 
 export enum NodeState {
@@ -10,20 +11,22 @@ export enum NodeState {
   Disabled = 'disabled',
 }
 
-export type NodeSharedData = {
-  state?: NodeState;
-  slots?: Slot[];
-  [k: string]: unknown;
+export type Layout = 'vertical' | 'horizontal';
+
+export type ClientNode<NodeData extends Record<string, unknown> = {}> =
+  XyflowNode<
+    {
+      state?: NodeState;
+      slots?: Slot[];
+    } & NodeData
+  >;
+
+export type InstrinicNodes = {
+  button: ClientNode<
+    { layout?: Layout; text: string } & Pick<ButtonProps, 'loading'>
+  >;
 };
 
-export type ClientNode<
-  NodeData extends NodeSharedData = NodeSharedData,
-  NodeType extends string = string,
-> = XyflowNode<NodeData, NodeType>;
-
-export type ServerNode<
-  NodeData extends NodeSharedData = NodeSharedData,
-  NodeType extends string = string,
-> = {
-  toClient(): ClientNode<NodeData, NodeType>;
+export type ServerNode = Pick<ClientNode, 'id' | 'type' | 'position'> & {
+  toClient(): ClientNode;
 };

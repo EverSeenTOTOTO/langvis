@@ -27,6 +27,87 @@ export class Edge {
   }
 }
 
+export class Node extends EventEmitter {
+  id: string;
+  slots: Map<string, Slot> = new Map();
+
+  constructor(id: string) {
+    super();
+    this.id = id;
+  }
+
+  getSlot(event: string | symbol | Slot): Slot {
+    const slot = event instanceof Slot ? event : this.slots.get(String(event));
+
+    if (!slot) {
+      throw new Error(
+        `Slot ${event.toString()} not found for Node(${this.id}).`,
+      );
+    }
+
+    return slot;
+  }
+
+  emit(event: string | symbol | Slot, ...args: any[]): boolean {
+    return super.emit(this.getSlot(event).name, ...args);
+  }
+
+  on(
+    event: string | symbol | Slot,
+    fn: (...args: any[]) => void,
+    context?: Graph,
+  ): this {
+    return super.on(this.getSlot(event).name, fn, context);
+  }
+
+  off(
+    event: string | symbol | Slot,
+    fn?: ((...args: any[]) => void) | undefined,
+    context?: Graph,
+    once?: boolean,
+  ): this {
+    return super.off(this.getSlot(event).name, fn, context, once);
+  }
+
+  // once(
+  //   event: string | symbol | Slot,
+  //   fn: (...args: any[]) => void,
+  //   context?: Graph,
+  // ): this {
+  //   return super.once(this.getSlot(event).name, fn, context);
+  // }
+
+  addListener(
+    event: string | symbol | Slot,
+    fn: (...args: any[]) => void,
+    context?: Graph,
+  ): this {
+    return super.addListener(this.getSlot(event).name, fn, context);
+  }
+
+  removeListener(
+    event: string | symbol | Slot,
+    fn: (...args: any[]) => void,
+    context?: Graph,
+  ): this {
+    return super.removeListener(this.getSlot(event).name, fn, context);
+  }
+
+  defineSlot(
+    slot: Slot,
+    handler?: (...args: any[]) => void,
+    ctx?: Graph,
+  ): Node {
+    this.slots.set(slot.name, slot);
+
+    if (handler) {
+      this.on(slot.name, handler, ctx);
+    }
+
+    return this;
+  }
+}
+
 export class Graph {
   nodes: Map<string, Node> = new Map();
   edges: Map<string, Edge> = new Map();
@@ -157,86 +238,5 @@ export class Graph {
     const edges = this.getEdges(slot);
 
     return [...edges.values()].filter(edge => edge.from === slot);
-  }
-}
-
-export class Node extends EventEmitter {
-  id: string;
-  slots: Map<string, Slot> = new Map();
-
-  constructor(id: string) {
-    super();
-    this.id = id;
-  }
-
-  getSlot(event: string | symbol | Slot): Slot {
-    const slot = event instanceof Slot ? event : this.slots.get(String(event));
-
-    if (!slot) {
-      throw new Error(
-        `Slot ${event.toString()} not found for Node(${this.id}).`,
-      );
-    }
-
-    return slot;
-  }
-
-  emit(event: string | symbol | Slot, ...args: any[]): boolean {
-    return super.emit(this.getSlot(event).name, ...args);
-  }
-
-  on(
-    event: string | symbol | Slot,
-    fn: (...args: any[]) => void,
-    context?: Graph,
-  ): this {
-    return super.on(this.getSlot(event).name, fn, context);
-  }
-
-  off(
-    event: string | symbol | Slot,
-    fn?: ((...args: any[]) => void) | undefined,
-    context?: Graph,
-    once?: boolean,
-  ): this {
-    return super.off(this.getSlot(event).name, fn, context, once);
-  }
-
-  // once(
-  //   event: string | symbol | Slot,
-  //   fn: (...args: any[]) => void,
-  //   context?: Graph,
-  // ): this {
-  //   return super.once(this.getSlot(event).name, fn, context);
-  // }
-
-  addListener(
-    event: string | symbol | Slot,
-    fn: (...args: any[]) => void,
-    context?: Graph,
-  ): this {
-    return super.addListener(this.getSlot(event).name, fn, context);
-  }
-
-  removeListener(
-    event: string | symbol | Slot,
-    fn: (...args: any[]) => void,
-    context?: Graph,
-  ): this {
-    return super.removeListener(this.getSlot(event).name, fn, context);
-  }
-
-  defineSlot(
-    slot: Slot,
-    handler?: (...args: any[]) => void,
-    ctx?: Graph,
-  ): Node {
-    this.slots.set(slot.name, slot);
-
-    if (handler) {
-      this.on(slot.name, handler, ctx);
-    }
-
-    return this;
   }
 }

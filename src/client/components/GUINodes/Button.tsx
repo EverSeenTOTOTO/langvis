@@ -1,14 +1,17 @@
-import { ClientNode, NodeSharedData } from '@/shared/node';
-import { Button, ButtonProps } from '@radix-ui/themes';
+import { InstrinicNodes } from '@/shared/node';
+import { Button } from '@radix-ui/themes';
 import { Handle } from '@xyflow/react';
+import { observer } from 'mobx-react-lite';
 
-export default (props: ClientNode<ButtonProps & NodeSharedData>) => {
+const ButtonNode = (props: InstrinicNodes['button']) => {
   return (
     <>
-      <Button>{props.data.children}</Button>
+      <Button loading={props.data.loading}>{props.data.text}</Button>
       {props.data?.slots?.map(slot => (
         <Handle {...slot} id={slot.name} key={slot.name} />
       ))}
     </>
   );
 };
+
+export default observer(ButtonNode);

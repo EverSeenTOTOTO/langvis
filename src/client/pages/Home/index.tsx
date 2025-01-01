@@ -4,12 +4,15 @@ import { useStore } from '@/client/store';
 import { EdgeChange, NodeChange } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
 import './index.scss';
+import { Button } from '@radix-ui/themes';
 
 const Home = () => {
   const graph = useStore('graph');
+  const home = useStore('home');
 
   return (
     <>
+      <Button onClick={() => home.test()}>Click me</Button>
       <MessageViewport />
       <Graph
         onInit={flow => graph.setFlow(flow)}
