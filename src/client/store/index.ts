@@ -1,7 +1,6 @@
 import { HomeStore } from './modules/home';
 import { GraphStore } from './modules/graph';
 import { ThemeStore } from './modules/theme';
-import { SupabaseStore } from './modules/supabase';
 import { UiStore } from './modules/ui';
 import composeCatchGuard from '../decorator/catchGuard';
 import composePromisify from '../decorator/promisify';
@@ -28,15 +27,12 @@ export class AppStore {
 
   theme: ThemeStore;
 
-  supabase: SupabaseStore;
-
   ui: UiStore;
 
   constructor() {
     this.home = newStore(HomeStore, this);
     this.graph = newStore(GraphStore, this);
     this.theme = newStore(ThemeStore, this);
-    this.supabase = newStore(SupabaseStore, this);
     this.ui = newStore(UiStore, this);
   }
 

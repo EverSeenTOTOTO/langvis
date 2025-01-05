@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import express, { Express } from 'express';
 import path from 'path';
 import bindSSRMiddleware from './middleware/ssr';
-import { ButtonNode } from './core/nodes/Button';
+import supabase from './service/supabase';
 
 dotenv.config({
   path: isProd
@@ -22,25 +22,13 @@ export const createServer = async (): Promise<Express> => {
   app.use(bodyParser.json());
   app.use(compression());
 
-  app.get('/api/test', (_req, res) => {
-    const a = new ButtonNode({
-      id: 'btn-1',
-      position: { x: 0, y: 0 },
-      data: {
-        text: 'hello',
-        layout: 'horizontal',
-      },
-    });
-    const b = new ButtonNode({
-      id: 'btn-2',
-      position: { x: 100, y: 0 },
-      data: {
-        text: 'world',
-        layout: 'vertical',
-      },
-    });
+  app.get('/api/node', async (_req, res) => {
+    const data = await supabase
+      .from('node')
+      .select()
+      .eq('graph_id', '68660e6f-bdbb-4aa2-957b-9c942c73ffef');
 
-    res.end(JSON.stringify([a.toClient(), b.toClient()]));
+    res.json(data);
   });
 
   // TODO

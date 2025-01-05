@@ -8,7 +8,14 @@ const ButtonNode = (props: InstrinicNodes['button']) => {
     <>
       <Button loading={props.data.loading}>{props.data.text}</Button>
       {props.data?.slots?.map(slot => (
-        <Handle {...slot} id={slot.name} key={slot.name} />
+        <Handle
+          {...slot}
+          id={slot.name}
+          key={slot.name}
+          style={{
+            backgroundColor: slot.type === 'source' ? 'cyan' : 'yellow',
+          }}
+        />
       ))}
     </>
   );

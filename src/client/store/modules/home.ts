@@ -9,13 +9,18 @@ export class HomeStore {
     this.root = root;
   }
 
-  test() {
-    fetch('/api/test')
-      .then(rsp => rsp.json())
-      .then(graph => {
-        console.log(graph);
+  async test() {
+    const res = await fetch('/api/node').then(res => res.json());
 
-        this.root.graph.nodes = graph;
-      });
+    if (res.data) {
+      this.root.graph.nodes = res.data.map(node => ({
+        ...node,
+        data: {
+          ...node.data,
+          text: node.name,
+        },
+        position: { x: node.x || 0, y: node.y || 0 },
+      }));
+    }
   }
 }

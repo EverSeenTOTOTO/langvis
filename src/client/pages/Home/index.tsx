@@ -3,18 +3,22 @@ import MessageViewport from '@/client/components/Message';
 import { useStore } from '@/client/store';
 import { EdgeChange, NodeChange } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
+import { useEffect } from 'react';
 import './index.scss';
-import { Button } from '@radix-ui/themes';
 
 const Home = () => {
   const graph = useStore('graph');
   const home = useStore('home');
 
+  useEffect(() => {
+    home.test();
+  }, []);
+
   return (
     <>
-      <Button onClick={() => home.test()}>Click me</Button>
       <MessageViewport />
       <Graph
+        fitView
         onInit={flow => graph.setFlow(flow)}
         nodes={graph.nodes}
         onNodesChange={(changes: NodeChange[]) => graph.updateNodes(changes)}
