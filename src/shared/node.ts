@@ -1,5 +1,5 @@
 import { Slot } from '@/server/core/graph';
-import { ButtonProps } from '@radix-ui/themes';
+import { ButtonProps } from 'antd';
 import { Node as XyflowNode } from '@xyflow/react';
 
 export enum NodeState {

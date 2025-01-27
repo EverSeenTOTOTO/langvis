@@ -44,7 +44,7 @@ const port = process.env.VITE_PORT || 3000;
 createServer()
   .then(server => {
     server.listen(port, () => {
-      server.locals.logger.info(`server started at http://localhost:${port}`);
+      server.locals.logger.info(`Server started at http://localhost:${port}`);
     });
   })
   .catch(console.error);

@@ -1,5 +1,5 @@
 import { InstrinicNodes } from '@/shared/node';
-import { Button } from '@radix-ui/themes';
+import { Button } from 'antd';
 import { Handle } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
 

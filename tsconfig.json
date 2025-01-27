@@ -7,15 +7,8 @@
     "sourceMap": true,
     "baseUrl": ".",
     "strict": true,
-    "lib": [
-      "esnext",
-      "dom",
-      "dom.iterable"
-    ],
-    "types": [
-      "node",
-      "jest"
-    ],
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "types": ["node", "jest"],
     "jsx": "react-jsx",
     "noEmit": true,
     "noUnusedLocals": true,
@@ -32,14 +25,9 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "paths": {
-      "@/*": [
-        "src/*"
-      ]
+      "@/*": ["src/*"]
     }
   },
-  "include": [
-    "src",
-    "tests"
-  ],
+  "include": ["src", "tests"],
   "exclude": []
 }

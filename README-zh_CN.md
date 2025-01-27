@@ -16,27 +16,27 @@ yarn
 
 ## Usage
 
-+ dev: `make dev`
+- dev: `make dev`
 
-+ build: `make build`
+- build: `make build`
 
 ## Q&A
 
 1. 为什么选择makefile，而不是npm脚本命令？
 
-    我觉得`yarn clean && yarn build && yarn start`非常丑陋……
+   我觉得`yarn clean && yarn build && yarn start`非常丑陋……
 
 2. 这个项目可以被用于生产环境吗？
 
-    当然，你可以继续拓展这个项目以便用于生产环境。但是注意项目中有很多实现的细节，你可能需要进一步的重构和优化。
+   当然，你可以继续拓展这个项目以便用于生产环境。但是注意项目中有很多实现的细节，你可能需要进一步的重构和优化。
 
 3. 我的git钩子不起作用？
 
-    试试`make prepare`重新安装下husky钩子。
+   试试`make prepare`重新安装下husky钩子。
 
 4. 和[vite官方的ssr demo](https://github.com/vitejs/vite/tree/main/playground/ssr-react)有什么不同？
 
-    最大的不同点在于，我们将`index.server.ts`中定义的`render`函数实现为[中间件](./config/vite.dev.ts), 然后仍然使用`ViteDevServer`做开发。而官方的例子将[server.js](https://github.com/vitejs/vite/blob/main/playground/ssr-react/server.js)也用作开发服务器，并设置`ViteDevServer`的`server.middlewareMode`来将`ViteDevServer`当作中间件使用。
+   最大的不同点在于，我们将`index.server.ts`中定义的`render`函数实现为[中间件](./config/vite.dev.ts), 然后仍然使用`ViteDevServer`做开发。而官方的例子将[server.js](https://github.com/vitejs/vite/blob/main/playground/ssr-react/server.js)也用作开发服务器，并设置`ViteDevServer`的`server.middlewareMode`来将`ViteDevServer`当作中间件使用。
 
 ## Project Detail
 

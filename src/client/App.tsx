@@ -1,11 +1,10 @@
-import { Theme } from '@radix-ui/themes';
+import { ConfigProvider, theme as antdTheme } from 'antd';
 import type { Request, Response } from 'express';
 import { observer } from 'mobx-react-lite';
 import { Route, Routes } from 'react-router-dom';
 import { AppRoutes } from './routes';
 import { AppStore, useStore } from './store';
 
-import '@radix-ui/themes/styles.css';
 import '@xyflow/react/dist/style.css';
 import './styles/index.scss';
 
@@ -14,13 +13,20 @@ export const App = observer(
     const theme = useStore('theme');
 
     return (
-      <Theme appearance={theme.mode} accentColor="blue">
+      <ConfigProvider
+        theme={{
+          algorithm:
+            theme.mode === 'dark'
+              ? antdTheme.darkAlgorithm
+              : antdTheme.defaultAlgorithm,
+        }}
+      >
         <Routes>
           {routes.map(({ path, component: RouteComp }) => (
             <Route key={path} path={path} element={<RouteComp />} />
           ))}
         </Routes>
-      </Theme>
+      </ConfigProvider>
     );
   },
 );
