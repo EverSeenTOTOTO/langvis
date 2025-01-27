@@ -1,4 +1,7 @@
-/* reset */
-button {
-  all: unset;
+.header {
+  position: fixed;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  padding: 8px 12px;
 }

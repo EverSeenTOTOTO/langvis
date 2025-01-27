@@ -1,26 +1,59 @@
-import { makeAutoObservable } from 'mobx';
+import { autorun, makeAutoObservable } from 'mobx';
 import { type AppStore } from '..';
 
 export class HomeStore {
   root: AppStore;
 
+  currentGraphId?: string;
+
+  availableGraphs: {
+    id: string;
+    name: string;
+  }[] = [];
+
+  loading?: boolean;
+
   constructor(root: AppStore) {
     makeAutoObservable(this);
     this.root = root;
+
+    autorun(() => {
+      if (this.currentGraphId) {
+        this.fetchGraphNodes(this.currentGraphId);
+      }
+    });
   }
 
-  async test() {
-    const res = await fetch('/api/node').then(res => res.json());
+  toggleGraph(id: string) {
+    this.currentGraphId = id;
+  }
+
+  async fetchAvailableGraphs() {
+    this.loading = true;
+
+    const res = await fetch('/api/graph')
+      .then(res => res.json())
+      .finally(() => {
+        this.loading = false;
+      });
 
     if (res.data) {
-      this.root.graph.nodes = res.data.map(node => ({
-        ...node,
-        data: {
-          ...node.data,
-          text: node.name,
-        },
-        position: { x: node.x || 0, y: node.y || 0 },
-      }));
+      this.availableGraphs = res.data;
+      this.currentGraphId = res.data[0]?.id;
+    }
+  }
+
+  async fetchGraphNodes(graphId: string) {
+    this.loading = true;
+
+    const res = await fetch(`/api/nodes?graphId=${graphId}`)
+      .then(res => res.json())
+      .finally(() => {
+        this.loading = false;
+      });
+
+    if (res.data) {
+      this.root.graph.nodes = res.data;
     }
   }
 }

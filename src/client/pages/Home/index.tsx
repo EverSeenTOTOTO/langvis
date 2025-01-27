@@ -1,28 +1,26 @@
 import Graph from '@/client/components/Graph';
 import { useStore } from '@/client/store';
-import { EdgeChange, NodeChange } from '@xyflow/react';
+import { EdgeChange, NodeChange, ReactFlowProvider } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
-import { useEffect } from 'react';
+import Header from './components/Header';
 import './index.scss';
 
 const Home = () => {
   const graph = useStore('graph');
-  const home = useStore('home');
-
-  useEffect(() => {
-    home.test();
-  }, []);
 
   return (
-    <Graph
-      fitView
-      onInit={flow => graph.setFlow(flow)}
-      nodes={graph.nodes}
-      onNodesChange={(changes: NodeChange[]) => graph.updateNodes(changes)}
-      edges={graph.edges}
-      onEdgesChange={(changes: EdgeChange[]) => graph.updateEdges(changes)}
-      onConnect={connection => graph.connectNode(connection)}
-    />
+    <ReactFlowProvider>
+      <Header />
+      <Graph
+        fitView
+        onInit={flow => graph.setFlow(flow)}
+        nodes={graph.nodes}
+        onNodesChange={(changes: NodeChange[]) => graph.updateNodes(changes)}
+        edges={graph.edges}
+        onEdgesChange={(changes: EdgeChange[]) => graph.updateEdges(changes)}
+        onConnect={connection => graph.connectNode(connection)}
+      />
+    </ReactFlowProvider>
   );
 };
 

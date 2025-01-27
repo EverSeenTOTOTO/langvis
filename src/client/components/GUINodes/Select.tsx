@@ -1,12 +1,12 @@
 import { InstrinicNodes } from '@/shared/node';
-import { Button } from 'antd';
+import { Select } from 'antd';
 import { Handle } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
 
-const ButtonNode = (props: InstrinicNodes['button']) => {
+const SelectNode = (props: InstrinicNodes['select']) => {
   return (
     <>
-      <Button {...props.data}>{props.data?.name}</Button>
+      <Select {...props.data} />
       {props.data?.slots?.map(slot => (
         <Handle
           {...slot}
@@ -21,4 +21,4 @@ const ButtonNode = (props: InstrinicNodes['button']) => {
   );
 };
 
-export default observer(ButtonNode);
+export default observer(SelectNode);

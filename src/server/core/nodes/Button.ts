@@ -1,51 +1,49 @@
-import { InstrinicNodes, Layout, NodeState, ServerNode } from '@/shared/node';
-import { Position } from '@xyflow/react';
+import { Layout, NodeState, ServerNode } from '@/shared/node';
 import { Node, Slot } from '../graph';
 
-export class ButtonNode extends Node implements ServerNode {
+export class Button extends Node implements ServerNode {
   type = 'button';
 
-  position: ServerNode['position'];
+  name?: string;
 
-  state: NodeState;
+  position = { x: 0, y: 0 };
 
-  layout: Layout;
+  state: NodeState = NodeState.Init;
 
-  text: string;
+  layout?: Layout;
 
-  constructor(options: InstrinicNodes['button']) {
-    super(options.id);
+  // client or database node kept the same
+  static fromJSON(record: Record<string, any>) {
+    const node = new Button(record.id);
 
-    this.position = options.position;
-    this.state = options.data?.state || NodeState.Idle;
-    this.layout = options.data?.layout || 'vertical';
-    this.text = options.data.text;
+    node.id = record.id;
+    node.name = record.data.name;
+    node.state = record.data.state || node.state;
+    node.layout = record.data.layout;
+    node.position = record.position || node.position;
 
-    this.defineSlot(
-      new Slot('input', {
-        type: 'target',
-        position: this.layout === 'horizontal' ? Position.Left : Position.Top,
-      }),
-    );
-    this.defineSlot(
-      new Slot('output', {
-        type: 'source',
-        position:
-          this.layout === 'horizontal' ? Position.Right : Position.Bottom,
-      }),
-    );
+    record.data?.slots?.map((slot: any) => {
+      node.defineSlot(
+        new Slot(slot.name, {
+          type: slot.type,
+          position: slot.position,
+        }),
+      );
+    });
+
+    return node;
   }
 
-  toClient() {
+  static toJSON(node: Button) {
     return {
-      id: this.id,
-      type: this.type,
-      position: this.position,
+      id: node.id,
+      type: node.type,
+      position: node.position,
       data: {
-        state: this.state,
-        layout: this.layout,
-        text: this.text,
-        slots: [...this.slots.values()],
+        name: node.name,
+        state: node.state,
+        layout: node.layout,
+        slots: [...node.slots.values()],
       },
     };
   }

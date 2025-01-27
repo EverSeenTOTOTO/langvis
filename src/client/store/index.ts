@@ -1,7 +1,6 @@
 import { HomeStore } from './modules/home';
 import { GraphStore } from './modules/graph';
 import { ThemeStore } from './modules/theme';
-import { UiStore } from './modules/ui';
 import composeCatchGuard from '../decorator/catchGuard';
 import composePromisify from '../decorator/promisify';
 import composeHydrate from '../decorator/hydrate';
@@ -27,13 +26,10 @@ export class AppStore {
 
   theme: ThemeStore;
 
-  ui: UiStore;
-
   constructor() {
     this.home = newStore(HomeStore, this);
     this.graph = newStore(GraphStore, this);
     this.theme = newStore(ThemeStore, this);
-    this.ui = newStore(UiStore, this);
   }
 
   hydrate(data: Record<string, any>) {
