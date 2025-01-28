@@ -22,14 +22,14 @@ export const createServer = async (): Promise<Express> => {
   app.use(bodyParser.json());
   app.use(compression());
 
-  app.get('/api/graph', async (_, res) => {
+  app.get('/api/graph/all', async (_, res) => {
     const data = await supabase.from('graph').select();
 
     res.json(data);
   });
 
-  app.get('/api/nodes', async (req, res) => {
-    const { graphId } = req.query;
+  app.get('/api/graph/detail/:graphId', async (req, res) => {
+    const graphId = req.params.graphId;
     const data = await supabase.from('node').select().eq('graph_id', graphId);
 
     res.json(data);

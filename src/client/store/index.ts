@@ -3,6 +3,7 @@ import { GraphStore } from './modules/graph';
 import { ThemeStore } from './modules/theme';
 import composeCatchGuard from '../decorator/catchGuard';
 import composePromisify from '../decorator/promisify';
+import composeApi from '../decorator/api';
 import composeHydrate from '../decorator/hydrate';
 import { configure } from 'mobx';
 
@@ -13,10 +14,12 @@ const newStore = <T, C extends Record<string, any>>(
   ...params: T[]
 ) => {
   // mobx 的Proxy wrap 会错误将异步函数包装成同步，所以需要先 promisify，不然 catchGuard 会失效
-  return [composePromisify, composeCatchGuard, composeHydrate].reduce(
-    (instance, compose) => compose(instance),
-    new Clz(...params),
-  );
+  return [
+    composeApi,
+    composePromisify,
+    composeCatchGuard,
+    composeHydrate,
+  ].reduce((instance, compose) => compose(instance), new Clz(...params));
 };
 
 export class AppStore {

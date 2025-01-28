@@ -1,15 +1,16 @@
 import { autorun, makeAutoObservable } from 'mobx';
 import { type AppStore } from '..';
+import { api, type ApiRequest, type ApiResponse } from '@/client/decorator/api';
 
 export class HomeStore {
   root: AppStore;
-
-  currentGraphId?: string;
 
   availableGraphs: {
     id: string;
     name: string;
   }[] = [];
+
+  currentGraphId?: string;
 
   loading?: boolean;
 
@@ -19,7 +20,7 @@ export class HomeStore {
 
     autorun(() => {
       if (this.currentGraphId) {
-        this.fetchGraphNodes(this.currentGraphId);
+        this.root.graph.fetchGraphNodes({ graphId: this.currentGraphId });
       }
     });
   }
@@ -28,32 +29,9 @@ export class HomeStore {
     this.currentGraphId = id;
   }
 
-  async fetchAvailableGraphs() {
-    this.loading = true;
-
-    const res = await fetch('/api/graph')
-      .then(res => res.json())
-      .finally(() => {
-        this.loading = false;
-      });
-
-    if (res.data) {
-      this.availableGraphs = res.data;
-      this.currentGraphId = res.data[0]?.id;
-    }
-  }
-
-  async fetchGraphNodes(graphId: string) {
-    this.loading = true;
-
-    const res = await fetch(`/api/nodes?graphId=${graphId}`)
-      .then(res => res.json())
-      .finally(() => {
-        this.loading = false;
-      });
-
-    if (res.data) {
-      this.root.graph.nodes = res.data;
-    }
+  @api({ path: '/api/graph/all' })
+  async fetchAvailableGraphs(_req: ApiRequest, res?: ApiResponse) {
+    this.availableGraphs = res!.data;
+    this.currentGraphId = res!.data[0]?.id;
   }
 }

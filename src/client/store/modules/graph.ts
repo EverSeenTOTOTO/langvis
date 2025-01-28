@@ -13,6 +13,7 @@ import {
 import { makeAutoObservable } from 'mobx';
 import React from 'react';
 import type { AppStore } from '..';
+import { api, type ApiRequest, type ApiResponse } from '@/client/decorator/api';
 
 export class GraphStore {
   root: AppStore;
@@ -66,5 +67,12 @@ export class GraphStore {
 
   connectNode(connection: Connection) {
     this.edges = addEdge(connection, this.edges);
+  }
+
+  @api(({ graphId }) => ({
+    path: `/api/graph/detail/${graphId}`,
+  }))
+  async fetchGraphNodes(_req: ApiRequest, res?: ApiResponse) {
+    this.nodes = res!.data;
   }
 }
