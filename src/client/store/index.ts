@@ -1,11 +1,11 @@
-import { HomeStore } from './modules/home';
-import { GraphStore } from './modules/graph';
-import { ThemeStore } from './modules/theme';
-import composeCatchGuard from '../decorator/catchGuard';
-import composePromisify from '../decorator/promisify';
-import composeApi from '../decorator/api';
-import composeHydrate from '../decorator/hydrate';
 import { configure } from 'mobx';
+import composeApi from '../decorator/api';
+import composeCatchGuard from '../decorator/catchGuard';
+import composeHydrate from '../decorator/hydrate';
+import composePromisify from '../decorator/promisify';
+import { GraphStore } from './modules/graph';
+import { HomeStore } from './modules/home';
+import { ThemeStore } from './modules/theme';
 
 configure({ enforceActions: 'never' });
 
@@ -37,7 +37,7 @@ export class AppStore {
 
   hydrate(data: Record<string, any>) {
     Object.keys(data).forEach(key => {
-      const store = this[key as keyof AppStore] as unknown as {
+      const store = this[key as keyof AppStore] as {
         hydrate?: (data: any) => void;
       };
 
@@ -49,7 +49,7 @@ export class AppStore {
     const data: Record<string, any> = {};
 
     Object.keys(this).forEach(key => {
-      const store = this[key as keyof AppStore] as unknown as {
+      const store = this[key as keyof AppStore] as {
         dehydra?: () => unknown;
       };
 

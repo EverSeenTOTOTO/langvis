@@ -1,6 +1,5 @@
 import factory, {
   api,
-  type ApiRequest,
   type ApiResponse,
   wrapApi,
 } from '@/client/decorator/api';
@@ -32,15 +31,15 @@ afterAll(() => {
 
 it('wrapApi', async () => {
   class Demo {
-    getData(_: ApiRequest, res?: ApiResponse) {
+    getData(_, res?: ApiResponse) {
       return res;
     }
 
-    modifyHeader(_: ApiRequest, res?: ApiResponse) {
+    modifyHeader(_, res?: ApiResponse) {
       return res;
     }
 
-    withParams(_: ApiRequest, res?: ApiResponse) {
+    withParams(_, res?: ApiResponse) {
       return res;
     }
   }
@@ -87,7 +86,7 @@ it('wrapApi', async () => {
 it('api', async () => {
   class Demo {
     @api({ path: 'http://localhost:3000/apiget' })
-    async getData(_: ApiRequest, res?: ApiResponse) {
+    async getData(_, res?: ApiResponse) {
       return res;
     }
 
@@ -99,14 +98,14 @@ it('api', async () => {
         },
       },
     })
-    async modifyHeader(_: ApiRequest, res?: ApiResponse) {
+    async modifyHeader(_, res?: ApiResponse) {
       return res;
     }
 
-    @api((req: ApiRequest) => ({
+    @api((req: { type: string }) => ({
       path: `http://localhost:3000/api${req.type}`,
     }))
-    async withParams(_: ApiRequest, res?: ApiResponse) {
+    async withParams(_, res?: ApiResponse) {
       return res;
     }
 
@@ -116,7 +115,7 @@ it('api', async () => {
         timeout: 1,
       },
     })
-    async error(_: ApiRequest, res?: ApiResponse) {
+    async error(_, res?: ApiResponse) {
       return res;
     }
   }

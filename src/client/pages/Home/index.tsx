@@ -1,9 +1,15 @@
 import Graph from '@/client/components/Graph';
-import { useStore } from '@/client/store';
+import { getStore, useStore } from '@/client/store';
 import { EdgeChange, NodeChange, ReactFlowProvider } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
 import Header from './components/Header';
 import './index.scss';
+
+export const prefetch = async () => {
+  const home = getStore('home');
+
+  await home.fetchAvailableGraphs();
+};
 
 const Home = () => {
   const graph = useStore('graph');

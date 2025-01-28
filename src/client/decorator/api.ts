@@ -1,10 +1,9 @@
+import { getOwnPropertyNames, isClient } from '@/shared/constants';
 import { message } from 'antd';
 import 'reflect-metadata';
-import { getOwnPropertyNames, isClient } from '../constants';
 
-const metaDataKey = Symbol('promisify');
+const metaDataKey = Symbol('api');
 
-export type ApiRequest = Record<string, any>;
 export type ApiResponse = {
   error?: any;
   data?: any;
@@ -18,23 +17,34 @@ type ApiConfigBase = {
   options?: RequestInit & { timeout?: number };
 };
 
-export type ApiConfig = ApiConfigBase | ((req: ApiRequest) => ApiConfigBase);
+export type ApiConfig<P> = ApiConfigBase | ((req: P) => ApiConfigBase);
 
-export function api(config: ApiConfig): PropertyDecorator {
+export function api<P>(config: ApiConfig<P>): PropertyDecorator {
   return function apiDecorator(target: any, propertyKey: string | symbol) {
     Reflect.defineMetadata(metaDataKey, config, target, propertyKey);
   };
 }
 
-export function wrapApi<R>(
-  fn: (req: ApiRequest, res?: ApiResponse) => R,
-  config: ApiConfig,
+const errorLog = (error: any) => {
+  if (isClient()) {
+    message.error(error.message);
+  } else {
+    console.error(error.stack || error.message);
+  }
+};
+
+export function wrapApi<P, R>(
+  fn: (req: P, res?: ApiResponse) => R,
+  config: ApiConfig<P>,
 ) {
-  return async (req: ApiRequest) => {
+  return async (req: P) => {
     try {
       const { path, options } =
         typeof config === 'function' ? config(req) : config;
-      const url = typeof path === 'function' ? path : path;
+      const url =
+        path.startsWith('/') && !isClient()
+          ? `http://localhost:${import.meta.env.VITE_PORT}${path}`
+          : path;
       const timeout = options?.timeout || 10_000;
 
       const rsp = await Promise.race([
@@ -48,22 +58,19 @@ export function wrapApi<R>(
       ]);
 
       if (rsp instanceof Error) {
-        if (isClient()) message.error(rsp.message);
+        errorLog(rsp);
 
         return fn(req, { status: 0, error: rsp });
       }
 
       if (rsp.status < 200 || rsp.status >= 300) {
-        if (isClient()) {
-          message.error(`Response error: ${url}. ${rsp.error?.message}`);
-        }
+        errorLog(new Error(`Response error: ${url}. ${rsp.error?.message}`));
       }
 
       return fn(req, rsp);
     } catch (error) {
-      if (isClient()) {
-        message.error(`Request error. ${(error as Error)?.message}`);
-      }
+      errorLog(new Error(`Request error. ${(error as Error)?.message}`));
+
       return fn(req, { status: 0, error });
     }
   };

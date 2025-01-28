@@ -1,19 +1,19 @@
+import { api, type ApiResponse } from '@/client/decorator/api';
 import {
-  addEdge,
-  applyEdgeChanges,
-  applyNodeChanges,
-  Connection,
-  Edge,
-  EdgeChange,
-  Node,
-  NodeChange,
-  NodeTypes,
-  ReactFlowInstance,
+    addEdge,
+    applyEdgeChanges,
+    applyNodeChanges,
+    Connection,
+    Edge,
+    EdgeChange,
+    Node,
+    NodeChange,
+    type NodeTypes,
+    ReactFlowInstance,
 } from '@xyflow/react';
 import { makeAutoObservable } from 'mobx';
 import React from 'react';
 import type { AppStore } from '..';
-import { api, type ApiRequest, type ApiResponse } from '@/client/decorator/api';
 
 export class GraphStore {
   root: AppStore;
@@ -69,10 +69,10 @@ export class GraphStore {
     this.edges = addEdge(connection, this.edges);
   }
 
-  @api(({ graphId }) => ({
+  @api<{ graphId?: string }>(({ graphId }) => ({
     path: `/api/graph/detail/${graphId}`,
   }))
-  async fetchGraphNodes(_req: ApiRequest, res?: ApiResponse) {
+  async fetchGraphNodes(_req: { graphId?: string }, res?: ApiResponse) {
     this.nodes = res!.data;
   }
 }

@@ -6,7 +6,7 @@ import { AppRoutes } from './routes';
 import { AppStore, useStore } from './store';
 
 import '@xyflow/react/dist/style.css';
-import './styles/index.scss';
+import './index.scss';
 
 export const App = observer(
   ({ routes }: { store: AppStore; routes: AppRoutes }) => {

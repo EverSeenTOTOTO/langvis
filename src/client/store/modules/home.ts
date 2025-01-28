@@ -1,15 +1,18 @@
+import { api, type ApiResponse } from '@/client/decorator/api';
+import { hydrate } from '@/client/decorator/hydrate';
 import { autorun, makeAutoObservable } from 'mobx';
 import { type AppStore } from '..';
-import { api, type ApiRequest, type ApiResponse } from '@/client/decorator/api';
 
 export class HomeStore {
   root: AppStore;
 
+  @hydrate()
   availableGraphs: {
     id: string;
     name: string;
   }[] = [];
 
+  @hydrate()
   currentGraphId?: string;
 
   loading?: boolean;
@@ -30,8 +33,8 @@ export class HomeStore {
   }
 
   @api({ path: '/api/graph/all' })
-  async fetchAvailableGraphs(_req: ApiRequest, res?: ApiResponse) {
+  async fetchAvailableGraphs(_req: void, res?: ApiResponse) {
     this.availableGraphs = res!.data;
-    this.currentGraphId = res!.data[0]?.id;
+    this.currentGraphId = res!.data?.[0]?.id;
   }
 }

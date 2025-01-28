@@ -1,5 +1,5 @@
+import { getOwnPropertyNames } from '@/shared/constants';
 import 'reflect-metadata';
-import { getOwnPropertyNames } from '../constants';
 
 const metaDataKey = Symbol('hydrate');
 
@@ -28,6 +28,7 @@ export function wrapHydrate(
 
 export default function <T extends Record<string, any>>(instance: T) {
   const hydrateFns: HydrateMethod[] = [];
+  const dehydraProps: (string | symbol)[] = [];
 
   getOwnPropertyNames(instance).forEach(prop => {
     const config = Reflect.getMetadata(metaDataKey, instance, prop);
@@ -37,13 +38,28 @@ export default function <T extends Record<string, any>>(instance: T) {
     const onHydrate = wrapHydrate(instance, prop, config);
 
     hydrateFns.push(state => Reflect.set(instance, prop, onHydrate?.(state)));
+    dehydraProps.push(prop);
+  });
 
-    Reflect.set(instance, 'hydrate', (state: Record<string, any>) => {
-      hydrateFns.forEach(fn => fn(state));
-    });
+  Reflect.set(instance, 'hydrate', (state: Record<string, any>) => {
+    // 逐个属性水化
+    hydrateFns.forEach(fn => fn(state));
+  });
+  Reflect.set(instance, 'dehydra', () => {
+    // 逐个属性脱水
+    return dehydraProps.reduce(
+      (data, prop) => {
+        return {
+          ...data,
+          [prop]: Reflect.get(instance, prop),
+        };
+      },
+      {} as Record<string, any>,
+    );
   });
 
   return instance as T & {
     hydrate(state: Record<string, any>): void;
+    dehydra(): Record<string, any>;
   };
 }

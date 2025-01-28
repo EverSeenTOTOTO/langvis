@@ -1,11 +1,11 @@
-import serializeJavascript from 'serialize-javascript';
+import { createCache, extractStyle } from '@ant-design/cssinjs';
+import { enableStaticRendering } from 'mobx-react-lite';
 import ReactDOMServer from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom/server';
+import serializeJavascript from 'serialize-javascript';
 import { App, RenderContext, prefetch } from './App';
-import { createStore } from './store';
 import { createRoutes } from './routes';
-import { enableStaticRendering } from 'mobx-react-lite';
-import { createCache, extractStyle } from '@ant-design/cssinjs';
+import { createStore } from './store';
 
 enableStaticRendering(true);
 
@@ -49,8 +49,6 @@ export async function render(context: RenderContext) {
     .replace(APP_HTML, html)
     .replace(APP_STYLE, styleText)
     .replace(APP_STATE, serialize(state));
-
-  console.log(state);
 
   return ctx;
 }
