@@ -24,7 +24,7 @@ export class HomeStore {
     });
   }
 
-  toggleGraph(id: number) {
+  toggleGraph(id: string) {
     this.currentGraphId = id;
   }
 

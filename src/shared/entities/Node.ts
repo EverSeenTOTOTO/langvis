@@ -10,15 +10,15 @@ import { NodeType } from './NodeMeta';
 
 @Entity()
 export class NodeEntity {
-  @PrimaryGeneratedColumn()
-  id!: number;
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
 
   @ManyToOne(() => GraphEntity)
   @JoinColumn({ name: 'graphId' })
   graph!: GraphEntity;
 
-  @Column()
-  graphId!: number;
+  @Column('uuid')
+  graphId!: string;
 
   @Column({
     type: 'enum',
@@ -27,10 +27,11 @@ export class NodeEntity {
   })
   type!: NodeType;
 
-  @Column()
+  @Column('varchar')
   name!: string;
 
   @Column({
+    type: 'varchar',
     nullable: true,
   })
   description!: string;

@@ -12,7 +12,7 @@ export class NodeController {
 
   @api('/update/:id', { method: 'post' })
   async updateNode(req: Request, res: Response) {
-    const id = Number(req.params.id);
+    const id = req.params.id;
 
     await this.pg!.createQueryBuilder()
       .update(NodeEntity)

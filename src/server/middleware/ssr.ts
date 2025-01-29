@@ -1,7 +1,7 @@
-import path from 'path';
-import fs from 'fs';
-import { Express } from 'express';
 import { __dirname, isProd } from '@/server/utils';
+import { Express } from 'express';
+import fs from 'fs';
+import path from 'path';
 
 export default async (app: Express) => {
   if (!isProd) {
@@ -18,13 +18,7 @@ export default async (app: Express) => {
   ]);
 
   app.get('*', async (req, res) => {
-    const start = Date.now();
-
-    app.locals.logger.debug(`rendering ${req.url}`);
-
     const { html } = await render({ req, res, template });
-
-    app.locals.logger.debug(`render cost ${req.url}: ${Date.now() - start}ms`);
 
     res.setHeader('Content-Type', 'text/html');
     res.end(html);

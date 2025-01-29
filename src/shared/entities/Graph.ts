@@ -9,10 +9,10 @@ import { GraphCategory } from './NodeMeta';
 
 @Entity()
 export class GraphEntity {
-  @PrimaryGeneratedColumn()
-  id!: number;
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
 
-  @Column()
+  @Column('varchar')
   name!: string;
 
   @Column({
@@ -23,6 +23,7 @@ export class GraphEntity {
   category!: GraphCategory;
 
   @Column({
+    type: 'varchar',
     nullable: true,
   })
   description!: string;

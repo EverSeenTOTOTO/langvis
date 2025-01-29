@@ -19,7 +19,7 @@ const ButtonNode = (props: InstrinicNodes['button']) => {
           await form.validateFields();
 
           await graph.updateNode({
-            id: Number(props.id),
+            id: props.id,
             name: form.getFieldValue('name'),
           });
 

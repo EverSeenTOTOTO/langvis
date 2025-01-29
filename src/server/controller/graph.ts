@@ -22,7 +22,7 @@ export class GraphController {
   @api('/detail/:graphId')
   async getGraphDetail(req: Request, res: Response) {
     const graphRepo = this.pg!.getRepository(GraphEntity);
-    const graphId = Number(req.params.graphId);
+    const graphId = req.params.graphId;
     const graph = await graphRepo.findOneBy({
       id: graphId,
     });

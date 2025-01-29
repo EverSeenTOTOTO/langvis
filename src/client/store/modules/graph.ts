@@ -72,12 +72,11 @@ export class GraphStore {
 
   @api(({ graphId }) => `/api/graph/detail/${graphId}`)
   async fetchGraphDetail(
-    _req: { graphId?: number },
+    _req: { graphId?: string },
     res?: ApiResponse<{ nodes: NodeEntity[] }>,
   ) {
     const nodes = res!.data?.nodes.map(n => ({
       ...n,
-      id: String(n.id),
       data: {
         ...n.data,
         name: n.name,
