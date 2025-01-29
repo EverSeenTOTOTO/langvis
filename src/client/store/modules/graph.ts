@@ -1,15 +1,16 @@
 import { api, type ApiResponse } from '@/client/decorator/api';
+import { NodeEntity } from '@/shared/entities/Node';
 import {
-    addEdge,
-    applyEdgeChanges,
-    applyNodeChanges,
-    Connection,
-    Edge,
-    EdgeChange,
-    Node,
-    NodeChange,
-    type NodeTypes,
-    ReactFlowInstance,
+  addEdge,
+  applyEdgeChanges,
+  applyNodeChanges,
+  Connection,
+  Edge,
+  EdgeChange,
+  Node,
+  NodeChange,
+  type NodeTypes,
+  ReactFlowInstance,
 } from '@xyflow/react';
 import { makeAutoObservable } from 'mobx';
 import React from 'react';
@@ -29,13 +30,13 @@ export class GraphStore {
   constructor(root: AppStore) {
     this.root = root;
 
-    const nodeTypes = import.meta.glob('@/client/components/GUINodes/*.tsx', {
+    const nodeTypes = import.meta.glob('@/client/components/Nodes/*.tsx', {
       eager: true,
     }) as any;
 
     Object.keys(nodeTypes).forEach(path => {
       const type = path
-        .match(/src\/client\/components\/GUINodes\/(.*)\.tsx$/)![1]
+        .match(/src\/client\/components\/Nodes\/(.*)\.tsx$/)![1]
         .toLowerCase();
 
       this.registerNodeType(type, nodeTypes[path].default);
@@ -70,7 +71,21 @@ export class GraphStore {
   }
 
   @api(({ graphId }) => `/api/graph/detail/${graphId}`)
-  async fetchGraphNodes(_req: { graphId?: string }, res?: ApiResponse) {
-    this.nodes = res!.data;
+  async fetchGraphDetail(
+    _req: { graphId?: number },
+    res?: ApiResponse<{ nodes: NodeEntity[] }>,
+  ) {
+    const nodes = res!.data?.nodes.map(n => ({
+      ...n,
+      id: String(n.id),
+      data: {
+        ...n.data,
+        name: n.name,
+      },
+    }));
+
+    if (nodes) {
+      this.nodes = nodes;
+    }
   }
 }

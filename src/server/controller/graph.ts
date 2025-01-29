@@ -1,4 +1,5 @@
 import { GraphEntity } from '@/shared/entities/Graph';
+import { NodeEntity } from '@/shared/entities/Node';
 import type { Request, Response } from 'express';
 import { DataSource } from 'typeorm';
 import { api } from '../decorator/api';
@@ -15,17 +16,27 @@ export class GraphController {
     const repo = this.pg!.getRepository(GraphEntity);
     const data = await repo.find();
 
-    return res.json(data);
+    return res.json({ data });
   }
 
   @api('/detail/:graphId')
   async getGraphDetail(req: Request, res: Response) {
-    const repo = this.pg!.getRepository(GraphEntity);
-    const graphId = req.params.graphId;
-    const data = await repo.findOneBy({
-      id: Number(graphId),
+    const graphRepo = this.pg!.getRepository(GraphEntity);
+    const graphId = Number(req.params.graphId);
+    const graph = await graphRepo.findOneBy({
+      id: graphId,
     });
 
-    return res.json(data);
+    const nodeRepo = this.pg!.getRepository(NodeEntity);
+    const nodes = await nodeRepo.findBy({
+      graphId,
+    });
+
+    return res.json({
+      data: {
+        ...graph,
+        nodes,
+      },
+    });
   }
 }

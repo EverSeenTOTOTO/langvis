@@ -3,11 +3,16 @@ import { getOwnPropertyNames } from '@/shared/constants';
 const metaDataKey = Symbol('hydrate');
 
 // 目标属性水化时如何从预取数据state中提取并还原到客户端实例
-export type HydrateMethod = (state: any) => any;
+export type HydrateMethod = string | ((state: any) => any);
 
 export function hydrate(config?: HydrateMethod) {
   return function hydrateDecorator(target: any, propertyKey: string | symbol) {
-    Reflect.defineMetadata(metaDataKey, config || true, target, propertyKey);
+    Reflect.defineMetadata(
+      metaDataKey,
+      config || propertyKey,
+      target,
+      propertyKey,
+    );
   };
 }
 
@@ -17,16 +22,22 @@ export function wrapHydrate(
   config?: HydrateMethod,
 ) {
   return (state: Record<string, any>) => {
-    return typeof config === 'function'
-      ? config(state)
-      : state && prop in state
-        ? state?.[prop]
-        : /* 提取失败回退前端默认值 */ instance[prop];
+    if (typeof config === 'function') {
+      return config(state);
+    }
+
+    if (config && config in state) {
+      return state[config];
+    }
+
+    return prop in state
+      ? state[prop]
+      : /* 提取失败回退前端默认值 */ instance[prop];
   };
 }
 
 export default function <T extends Record<string, any>>(instance: T) {
-  const hydrateFns: HydrateMethod[] = [];
+  const hydrateFns: ((state: any) => any)[] = [];
   const dehydraProps: (string | symbol)[] = [];
 
   getOwnPropertyNames(instance).forEach(prop => {

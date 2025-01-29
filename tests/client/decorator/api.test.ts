@@ -1,9 +1,9 @@
 import 'reflect-metadata';
 
 import factory, {
-    api,
-    type ApiResponse,
-    wrapApi,
+  api,
+  type ApiResponse,
+  wrapApi,
 } from '@/client/decorator/api';
 import http from 'node:http';
 import { afterAll, beforeAll, expect, it } from 'vitest';
@@ -76,8 +76,7 @@ it('wrapApi', async () => {
   });
 
   expect(await apiError({})).toEqual({
-    status: 0,
-    error: new Error(`Request timeout: http://localhost:${port}/apierror`),
+    error: `Request timeout: http://localhost:${port}/apierror`,
   });
 
   const apiParam = wrapApi(
@@ -130,8 +129,7 @@ it('api', async () => {
     data: 'test',
   });
   expect(await demo.error()).toEqual({
-    status: 0,
-    error: new Error(`Request timeout: http://localhost:${port}/apierror`),
+    error: `Request timeout: http://localhost:${port}/apierror`,
   });
   expect(await demo.withParams({ type: 'get' })).toEqual({ data: 'GET' });
 });

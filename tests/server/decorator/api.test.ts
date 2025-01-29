@@ -21,6 +21,11 @@ it('api', async () => {
     async getHeader(req: Request, res: Response) {
       res.json({ data: req.headers['x-test'] });
     }
+
+    @api('/error')
+    async throwError() {
+      throw new Error('error');
+    }
   }
 
   const app = express();
@@ -53,6 +58,13 @@ it('api', async () => {
         }).then(rsp => rsp.json());
 
         expect(getHeader).toEqual({ data: 'hello' });
+
+        const error = await fetch(`http://localhost:${port}/error`).then(rsp =>
+          rsp.json(),
+        );
+
+        expect(error).toEqual({ error: 'Api handle error: /error: error' });
+
         resolve();
       } catch (error) {
         reject(error);

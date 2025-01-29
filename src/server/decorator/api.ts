@@ -22,10 +22,19 @@ export default function <T extends Record<string, any>>(
 
     if (config) {
       const handle = instance[prop].bind(instance);
+      const path = `${namespace}${config.path}`;
 
       app[(config.options?.method as 'get') || 'get'](
-        `${namespace}${config.path}`,
-        handle,
+        path,
+        async (req, res) => {
+          try {
+            await handle(req, res);
+          } catch (e) {
+            res.status(500).json({
+              error: `Api handle error: ${path}: ${(e as Error)?.message}`,
+            });
+          }
+        },
       );
     }
   });

@@ -1,6 +1,7 @@
 import { Slot } from '@/server/core/graph';
-import { ButtonProps, SelectProps } from 'antd';
 import { Node as XyflowNode } from '@xyflow/react';
+import { ButtonProps, SelectProps } from 'antd';
+import { NodeEntity } from './entities/Node';
 
 export enum NodeState {
   Init = 'init',
@@ -17,15 +18,18 @@ export type Layout = 'vertical' | 'horizontal';
 
 export type ClientNode<NodeData extends Record<string, unknown> = {}> =
   XyflowNode<
-    {
-      name?: string;
+    NodeData & {
       state?: NodeState;
       slots?: Slot[];
       layout?: Layout;
-    } & NodeData
+    }
   >;
 
-export type ServerNode = Omit<ClientNode, 'data'>;
+export type ServerNode = {
+  entity: NodeEntity;
+  state?: NodeState;
+  layout?: Layout;
+};
 
 export type InstrinicNodes = {
   button: ClientNode<Partial<ButtonProps>>;

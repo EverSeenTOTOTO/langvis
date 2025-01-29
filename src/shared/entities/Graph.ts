@@ -1,4 +1,11 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { GraphCategory } from './NodeMeta';
 
 @Entity()
 export class GraphEntity {
@@ -8,12 +15,21 @@ export class GraphEntity {
   @Column()
   name!: string;
 
-  @Column()
+  @Column({
+    type: 'enum',
+    enum: GraphCategory,
+    default: GraphCategory.DEFAULT,
+  })
+  category!: GraphCategory;
+
+  @Column({
+    nullable: true,
+  })
   description!: string;
 
-  @Column('timestamp')
+  @CreateDateColumn()
   createdAt!: Date;
 
-  @Column('timestamp')
+  @UpdateDateColumn()
   updatedAt!: Date;
 }

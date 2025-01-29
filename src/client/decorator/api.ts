@@ -3,10 +3,9 @@ import { message } from 'antd';
 
 const metaDataKey = Symbol('client_api');
 
-export type ApiResponse = {
+export type ApiResponse<T extends Record<string, any> = {}> = {
   error?: any;
-  data?: any;
-  status: number;
+  data?: T;
 
   [k: string]: any;
 };
@@ -38,8 +37,8 @@ const logError = (error: any) => {
   }
 };
 
-export function wrapApi<P, R>(
-  fn: (req: P, res?: ApiResponse) => R,
+export function wrapApi<P, T extends Record<string, any>, R>(
+  fn: (req: P, res?: ApiResponse<T>) => R,
   config: string | ApiOptions<P>,
 ) {
   return async (req: P) => {
@@ -61,8 +60,8 @@ export function wrapApi<P, R>(
           : path;
       const timeout = options?.timeout || 10_000;
 
-      const rsp = await Promise.race([
-        fetch(url, options).then(res => res.json()),
+      const res = await Promise.race([
+        fetch(url, options),
         new Promise<Error>(resolve => {
           setTimeout(
             () => resolve(new Error(`Request timeout: ${url}`)),
@@ -71,21 +70,23 @@ export function wrapApi<P, R>(
         }),
       ]);
 
-      if (rsp instanceof Error) {
-        logError(rsp);
+      if (res instanceof Error) {
+        logError(res);
 
-        return fn(req, { status: 0, error: rsp });
+        return fn(req, { error: res.message });
       }
 
-      if (rsp.status < 200 || rsp.status >= 300) {
-        logError(new Error(`Response error: ${url}. ${rsp.error?.message}`));
+      const rsp = await res.json();
+
+      if (res.status < 200 || res.status >= 300) {
+        logError(new Error(`Response error: ${url}: ${rsp?.error}`));
       }
 
       return fn(req, rsp);
     } catch (error) {
       logError(new Error(`Request error. ${(error as Error)?.message}`));
 
-      return fn(req, { status: 0, error });
+      return fn(req, { error: (error as Error)?.message });
     }
   };
 }
