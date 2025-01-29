@@ -2,7 +2,7 @@ import { getOwnPropertyNames, isClient } from '@/shared/constants';
 import { message } from 'antd';
 import 'reflect-metadata';
 
-const metaDataKey = Symbol('api');
+const metaDataKey = Symbol('client_api');
 
 export type ApiResponse = {
   error?: any;
@@ -12,20 +12,26 @@ export type ApiResponse = {
   [k: string]: any;
 };
 
-type ApiConfigBase = {
+type Config = {
   path: string;
   options?: RequestInit & { timeout?: number };
 };
 
-export type ApiConfig<P> = ApiConfigBase | ((req: P) => ApiConfigBase);
+export type ApiOptions<P> =
+  | string
+  | ((req: P) => string)
+  | Config
+  | ((req: P) => Config);
 
-export function api<P>(config: ApiConfig<P>): PropertyDecorator {
+export function api<P = Record<string, any>>(
+  config: ApiOptions<P>,
+): PropertyDecorator {
   return function apiDecorator(target: any, propertyKey: string | symbol) {
     Reflect.defineMetadata(metaDataKey, config, target, propertyKey);
   };
 }
 
-const errorLog = (error: any) => {
+const logError = (error: any) => {
   if (isClient()) {
     message.error(error.message);
   } else {
@@ -35,12 +41,21 @@ const errorLog = (error: any) => {
 
 export function wrapApi<P, R>(
   fn: (req: P, res?: ApiResponse) => R,
-  config: ApiConfig<P>,
+  config: string | ApiOptions<P>,
 ) {
   return async (req: P) => {
     try {
       const { path, options } =
-        typeof config === 'function' ? config(req) : config;
+        typeof config === 'string'
+          ? { path: config }
+          : typeof config === 'function'
+            ? (() => {
+                const path = config(req);
+
+                return typeof path === 'string' ? { path } : path;
+              })()
+            : config;
+
       const url =
         path.startsWith('/') && !isClient()
           ? `http://localhost:${import.meta.env.VITE_PORT}${path}`
@@ -58,18 +73,18 @@ export function wrapApi<P, R>(
       ]);
 
       if (rsp instanceof Error) {
-        errorLog(rsp);
+        logError(rsp);
 
         return fn(req, { status: 0, error: rsp });
       }
 
       if (rsp.status < 200 || rsp.status >= 300) {
-        errorLog(new Error(`Response error: ${url}. ${rsp.error?.message}`));
+        logError(new Error(`Response error: ${url}. ${rsp.error?.message}`));
       }
 
       return fn(req, rsp);
     } catch (error) {
-      errorLog(new Error(`Request error. ${(error as Error)?.message}`));
+      logError(new Error(`Request error. ${(error as Error)?.message}`));
 
       return fn(req, { status: 0, error });
     }

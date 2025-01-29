@@ -1,11 +1,12 @@
 import factory, {
-  api,
-  type ApiResponse,
-  wrapApi,
+    api,
+    type ApiResponse,
+    wrapApi,
 } from '@/client/decorator/api';
-import { beforeAll, afterAll, expect, it } from 'vitest';
 import http from 'node:http';
+import { afterAll, beforeAll, expect, it } from 'vitest';
 
+const port = 3002;
 let server: http.Server;
 
 beforeAll(() => {
@@ -22,7 +23,7 @@ beforeAll(() => {
       return;
     }
   });
-  server.listen(3000);
+  server.listen(port);
 });
 
 afterAll(() => {
@@ -31,28 +32,29 @@ afterAll(() => {
 
 it('wrapApi', async () => {
   class Demo {
-    getData(_, res?: ApiResponse) {
+    getData(_: any, res?: ApiResponse) {
       return res;
     }
 
-    modifyHeader(_, res?: ApiResponse) {
+    modifyHeader(_: any, res?: ApiResponse) {
       return res;
     }
 
-    withParams(_, res?: ApiResponse) {
+    withParams(_: any, res?: ApiResponse) {
       return res;
     }
   }
 
   const demo = new Demo();
-  const apiget = wrapApi(demo.getData.bind(demo), {
-    path: 'http://localhost:3000/apiget',
-  });
+  const apiget = wrapApi(
+    demo.getData.bind(demo),
+    `http://localhost:${port}/apiget`,
+  );
 
   expect(await apiget({})).toEqual({ data: 'GET' });
 
   const apiHeader = wrapApi(demo.modifyHeader.bind(demo), {
-    path: 'http://localhost:3000/apiheader',
+    path: `http://localhost:${port}/apiheader`,
     options: {
       headers: {
         'x-test': 'test',
@@ -65,7 +67,7 @@ it('wrapApi', async () => {
   });
 
   const apiError = wrapApi(demo.modifyHeader.bind(demo), {
-    path: 'http://localhost:3000/apierror',
+    path: `http://localhost:${port}/apierror`,
     options: {
       timeout: 1,
     },
@@ -73,49 +75,48 @@ it('wrapApi', async () => {
 
   expect(await apiError({})).toEqual({
     status: 0,
-    error: new Error(`Request timeout: http://localhost:3000/apierror`),
+    error: new Error(`Request timeout: http://localhost:${port}/apierror`),
   });
 
-  const apiParam = wrapApi(demo.withParams.bind(demo), (req: ApiRequest) => ({
-    path: `http://localhost:3000/api${req.type}`,
-  }));
+  const apiParam = wrapApi(
+    demo.withParams.bind(demo),
+    (req: any) => `http://localhost:${port}/api${req.type}`,
+  );
 
   expect(await apiParam({ type: 'get' })).toEqual({ data: 'GET' });
 });
 
 it('api', async () => {
   class Demo {
-    @api({ path: 'http://localhost:3000/apiget' })
-    async getData(_, res?: ApiResponse) {
+    @api(`http://localhost:${port}/apiget`)
+    async getData(_: any, res?: ApiResponse) {
       return res;
     }
 
     @api({
-      path: 'http://localhost:3000/apiheader',
+      path: `http://localhost:${port}/apiheader`,
       options: {
         headers: {
           'x-test': 'test',
         },
       },
     })
-    async modifyHeader(_, res?: ApiResponse) {
+    async modifyHeader(_: any, res?: ApiResponse) {
       return res;
     }
 
-    @api((req: { type: string }) => ({
-      path: `http://localhost:3000/api${req.type}`,
-    }))
-    async withParams(_, res?: ApiResponse) {
+    @api((req: { type: string }) => `http://localhost:${port}/api${req.type}`)
+    async withParams(_: any, res?: ApiResponse) {
       return res;
     }
 
     @api({
-      path: 'http://localhost:3000/apierror',
+      path: `http://localhost:${port}/apierror`,
       options: {
         timeout: 1,
       },
     })
-    async error(_, res?: ApiResponse) {
+    async error(_: void, res?: ApiResponse) {
       return res;
     }
   }
@@ -126,9 +127,9 @@ it('api', async () => {
   expect(await demo.modifyHeader({})).toEqual({
     data: 'test',
   });
-  expect(await demo.error({})).toEqual({
+  expect(await demo.error()).toEqual({
     status: 0,
-    error: new Error(`Request timeout: http://localhost:3000/apierror`),
+    error: new Error(`Request timeout: http://localhost:${port}/apierror`),
   });
   expect(await demo.withParams({ type: 'get' })).toEqual({ data: 'GET' });
 });

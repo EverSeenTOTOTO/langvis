@@ -69,9 +69,7 @@ export class GraphStore {
     this.edges = addEdge(connection, this.edges);
   }
 
-  @api<{ graphId?: string }>(({ graphId }) => ({
-    path: `/api/graph/detail/${graphId}`,
-  }))
+  @api(({ graphId }) => `/api/graph/detail/${graphId}`)
   async fetchGraphNodes(_req: { graphId?: string }, res?: ApiResponse) {
     this.nodes = res!.data;
   }

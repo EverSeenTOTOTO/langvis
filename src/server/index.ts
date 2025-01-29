@@ -4,8 +4,8 @@ import compression from 'compression';
 import dotenv from 'dotenv';
 import express, { Express } from 'express';
 import path from 'path';
+import bindControllers from './controller';
 import bindSSRMiddleware from './middleware/ssr';
-import supabase from './service/supabase';
 
 dotenv.config({
   path: isProd
@@ -22,21 +22,10 @@ export const createServer = async (): Promise<Express> => {
   app.use(bodyParser.json());
   app.use(compression());
 
-  app.get('/api/graph/all', async (_, res) => {
-    const data = await supabase.from('graph').select();
-
-    res.json(data);
-  });
-
-  app.get('/api/graph/detail/:graphId', async (req, res) => {
-    const graphId = req.params.graphId;
-    const data = await supabase.from('node').select().eq('graph_id', graphId);
-
-    res.json(data);
-  });
-
   // TODO
   app.locals.logger = console;
+
+  await bindControllers(app);
   // must be last
   await bindSSRMiddleware(app);
 

@@ -32,7 +32,7 @@ export class HomeStore {
     this.currentGraphId = id;
   }
 
-  @api({ path: '/api/graph/all' })
+  @api('/api/graph/all')
   async fetchAvailableGraphs(_req: void, res?: ApiResponse) {
     this.availableGraphs = res!.data;
     this.currentGraphId = res!.data?.[0]?.id;
