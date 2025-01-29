@@ -63,7 +63,7 @@ it('api', async () => {
           rsp.json(),
         );
 
-        expect(error).toEqual({ error: 'Api handle error: /error: error' });
+        expect(error).toEqual({ error: 'error' });
 
         resolve();
       } catch (error) {

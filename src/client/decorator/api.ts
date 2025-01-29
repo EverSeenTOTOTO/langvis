@@ -1,5 +1,6 @@
 import { getOwnPropertyNames, isClient } from '@/shared/constants';
 import { message } from 'antd';
+import { merge } from 'lodash-es';
 
 const metaDataKey = Symbol('client_api');
 
@@ -23,9 +24,15 @@ export type ApiOptions<P> =
 
 export function api<P = Record<string, any>>(
   config: ApiOptions<P>,
+  options?: Config['options'],
 ): PropertyDecorator {
   return function apiDecorator(target: any, propertyKey: string | symbol) {
-    Reflect.defineMetadata(metaDataKey, config, target, propertyKey);
+    Reflect.defineMetadata(
+      metaDataKey,
+      { config, options },
+      target,
+      propertyKey,
+    );
   };
 }
 
@@ -37,31 +44,57 @@ const logError = (error: any) => {
   }
 };
 
+const getApiOptions = <P>(
+  req: P,
+  {
+    config,
+    options,
+  }: {
+    config: ApiOptions<P>;
+    options?: Config['options'];
+  },
+) => {
+  if (typeof config === 'string') {
+    return { path: config, options };
+  }
+
+  if (typeof config === 'function') {
+    const path = config(req);
+
+    if (typeof path === 'string') {
+      return { path, options };
+    }
+    return path;
+  }
+
+  return config;
+};
+
 export function wrapApi<P, T extends Record<string, any>, R>(
   fn: (req: P, res?: ApiResponse<T>) => R,
-  config: string | ApiOptions<P>,
+  config: {
+    config: ApiOptions<P>;
+    options?: Config['options'];
+  },
 ) {
   return async (req: P) => {
     try {
-      const { path, options } =
-        typeof config === 'string'
-          ? { path: config }
-          : typeof config === 'function'
-            ? (() => {
-                const path = config(req);
-
-                return typeof path === 'string' ? { path } : path;
-              })()
-            : config;
+      const { path, options } = getApiOptions(req, config);
 
       const url =
         path.startsWith('/') && !isClient()
           ? `http://localhost:${import.meta.env.VITE_PORT}${path}`
           : path;
+      const extraOptions = ['post'].includes(options?.method || 'get')
+        ? {
+            body: JSON.stringify(req),
+            headers: { 'Content-Type': 'application/json' },
+          }
+        : undefined;
       const timeout = options?.timeout || 10_000;
 
       const res = await Promise.race([
-        fetch(url, options),
+        fetch(url, merge(options, extraOptions)),
         new Promise<Error>(resolve => {
           setTimeout(
             () => resolve(new Error(`Request timeout: ${url}`)),

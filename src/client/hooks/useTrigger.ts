@@ -15,8 +15,6 @@ export const useTrigger = ({
   onOpenChange,
   disabled,
 }: UseTriggerProps) => {
-  if (!trigger) return null;
-
   const createEventHandlers = (props: any) => {
     const handlers: Record<string, (e: React.MouseEvent) => void> = {};
     const actions = triggerActions ?? ['click'];
@@ -53,11 +51,15 @@ export const useTrigger = ({
     return handlers;
   };
 
-  const triggerElement = React.Children.only(trigger);
+  return React.useMemo(() => {
+    if (!trigger) return null;
 
-  return React.cloneElement(triggerElement, {
-    ...triggerElement.props,
-    ...createEventHandlers(triggerElement.props),
-    disabled,
-  });
+    const triggerElement = React.Children.only(trigger);
+
+    return React.cloneElement(triggerElement, {
+      ...triggerElement.props,
+      ...createEventHandlers(triggerElement.props),
+      disabled,
+    });
+  }, [trigger, disabled]);
 };

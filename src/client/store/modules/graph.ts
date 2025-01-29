@@ -88,4 +88,12 @@ export class GraphStore {
       this.nodes = nodes;
     }
   }
+
+  @api((node?: Partial<NodeEntity>) => `/api/node/update/${node?.id}`, {
+    method: 'post',
+  })
+  async updateNode(node?: Partial<NodeEntity>) {
+    console.log(node);
+    this.fetchGraphDetail({ graphId: this.root.home.currentGraphId });
+  }
 }

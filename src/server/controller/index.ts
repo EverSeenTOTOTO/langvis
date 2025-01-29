@@ -1,7 +1,8 @@
 import bindController from '@/server/decorator/controller';
 import type { Express } from 'express';
 import pg from '../service/pg';
-import { GraphController } from "./graph";
+import { GraphController } from './graph';
+import { NodeController } from './node';
 
 export default async (app: Express) => {
   if (!pg.isInitialized) {
@@ -11,4 +12,5 @@ export default async (app: Express) => {
   const pool = { pg };
 
   bindController(GraphController, app, pool);
+  bindController(NodeController, app, pool);
 };

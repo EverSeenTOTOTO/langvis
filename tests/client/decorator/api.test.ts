@@ -19,6 +19,19 @@ beforeAll(() => {
       return;
     }
 
+    if (/apipost/.test(req.url!)) {
+      let data = '';
+
+      req.on('data', chunk => {
+        data += chunk;
+      });
+      req.on('end', () => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(data);
+      });
+      return;
+    }
+
     if (/apiheader/.test(req.url!)) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ data: req.headers['x-test'] }));
@@ -38,6 +51,10 @@ it('wrapApi', async () => {
       return res;
     }
 
+    postData(_: any, res?: ApiResponse) {
+      return res;
+    }
+
     modifyHeader(_: any, res?: ApiResponse) {
       return res;
     }
@@ -48,18 +65,28 @@ it('wrapApi', async () => {
   }
 
   const demo = new Demo();
-  const apiget = wrapApi(
-    demo.getData.bind(demo),
-    `http://localhost:${port}/apiget`,
-  );
+  const apiget = wrapApi(demo.getData.bind(demo), {
+    config: `http://localhost:${port}/apiget`,
+  });
 
   expect(await apiget({})).toEqual({ data: 'GET' });
 
-  const apiHeader = wrapApi(demo.modifyHeader.bind(demo), {
-    path: `http://localhost:${port}/apiheader`,
+  const apiPost = wrapApi(demo.postData.bind(demo), {
+    config: `http://localhost:${port}/apipost`,
     options: {
-      headers: {
-        'x-test': 'test',
+      method: 'post',
+    },
+  });
+
+  expect(await apiPost('POST')).toEqual('POST');
+
+  const apiHeader = wrapApi(demo.modifyHeader.bind(demo), {
+    config: {
+      path: `http://localhost:${port}/apiheader`,
+      options: {
+        headers: {
+          'x-test': 'test',
+        },
       },
     },
   });
@@ -69,9 +96,11 @@ it('wrapApi', async () => {
   });
 
   const apiError = wrapApi(demo.modifyHeader.bind(demo), {
-    path: `http://localhost:${port}/apierror`,
-    options: {
-      timeout: 1,
+    config: {
+      path: `http://localhost:${port}/apierror`,
+      options: {
+        timeout: 1,
+      },
     },
   });
 
@@ -79,10 +108,9 @@ it('wrapApi', async () => {
     error: `Request timeout: http://localhost:${port}/apierror`,
   });
 
-  const apiParam = wrapApi(
-    demo.withParams.bind(demo),
-    (req: any) => `http://localhost:${port}/api${req.type}`,
-  );
+  const apiParam = wrapApi(demo.withParams.bind(demo), {
+    config: (req: any) => `http://localhost:${port}/api${req.type}`,
+  });
 
   expect(await apiParam({ type: 'get' })).toEqual({ data: 'GET' });
 });
@@ -91,6 +119,13 @@ it('api', async () => {
   class Demo {
     @api(`http://localhost:${port}/apiget`)
     async getData(_: any, res?: ApiResponse) {
+      return res;
+    }
+
+    @api(`http://localhost:${port}/apipost`, {
+      method: 'post',
+    })
+    async postData(_: any, res?: ApiResponse) {
       return res;
     }
 
@@ -125,6 +160,7 @@ it('api', async () => {
   const demo = factory(new Demo());
 
   expect(await demo.getData({})).toEqual({ data: 'GET' });
+  expect(await demo.postData('POST')).toEqual('POST');
   expect(await demo.modifyHeader({})).toEqual({
     data: 'test',
   });

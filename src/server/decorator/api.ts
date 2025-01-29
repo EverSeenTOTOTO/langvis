@@ -31,7 +31,7 @@ export default function <T extends Record<string, any>>(
             await handle(req, res);
           } catch (e) {
             res.status(500).json({
-              error: `Api handle error: ${path}: ${(e as Error)?.message}`,
+              error: (e as Error)?.message,
             });
           }
         },

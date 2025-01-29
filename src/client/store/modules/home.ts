@@ -13,8 +13,6 @@ export class HomeStore {
   @hydrate()
   currentGraphId?: GraphEntity['id'];
 
-  loading?: boolean;
-
   constructor(root: AppStore) {
     makeAutoObservable(this);
     this.root = root;
