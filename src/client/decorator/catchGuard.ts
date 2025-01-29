@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import { getOwnPropertyNames, isAsyncFunction } from '@/shared/constants';
 
 const metaDataKey = Symbol('catchGuard');

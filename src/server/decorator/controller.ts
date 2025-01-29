@@ -1,6 +1,5 @@
 import { getOwnPropertyNames } from '@/shared/constants';
 import type { Express } from 'express';
-import 'reflect-metadata';
 import bindApi from './api';
 import { injectKey } from './inject';
 

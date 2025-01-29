@@ -1,3 +1,5 @@
+import 'reflect-metadata';
+
 import factory, {
     api,
     type ApiResponse,

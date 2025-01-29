@@ -1,3 +1,5 @@
+import 'reflect-metadata';
+
 import { it, expect, vi } from 'vitest';
 import factory, {
   wrapCatchGuard,

@@ -1,6 +1,5 @@
 import { getOwnPropertyNames } from '@/shared/constants';
 import { Express } from 'express';
-import 'reflect-metadata';
 
 const metaDataKey = Symbol('server_api');
 

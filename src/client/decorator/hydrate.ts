@@ -1,5 +1,4 @@
 import { getOwnPropertyNames } from '@/shared/constants';
-import 'reflect-metadata';
 
 const metaDataKey = Symbol('hydrate');
 

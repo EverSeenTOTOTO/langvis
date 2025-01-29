@@ -1,3 +1,5 @@
+import 'reflect-metadata';
+
 import { api } from '@/server/decorator/api';
 import bindController, { controller } from '@/server/decorator/controller';
 import { inject } from '@/server/decorator/inject';

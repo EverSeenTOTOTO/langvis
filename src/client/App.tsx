@@ -15,9 +15,6 @@ export const App = observer(
     return (
       <ConfigProvider
         theme={{
-          token: {
-            colorPrimary: '#1677ff',
-          },
           algorithm:
             theme.mode === 'dark'
               ? antdTheme.darkAlgorithm

@@ -1,6 +1,5 @@
 import { getOwnPropertyNames, isClient } from '@/shared/constants';
 import { message } from 'antd';
-import 'reflect-metadata';
 
 const metaDataKey = Symbol('client_api');
 

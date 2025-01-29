@@ -1,4 +1,5 @@
 import { configure } from 'mobx';
+import 'reflect-metadata';
 import composeApi from '../decorator/api';
 import composeCatchGuard from '../decorator/catchGuard';
 import composeHydrate from '../decorator/hydrate';
@@ -41,7 +42,7 @@ export class AppStore {
         hydrate?: (data: any) => void;
       };
 
-      store?.hydrate?.(data[key]); // 参数类型是逆变的
+      store?.hydrate?.(data[key]);
     });
   }
 

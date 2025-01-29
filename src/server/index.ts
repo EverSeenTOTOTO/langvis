@@ -4,6 +4,7 @@ import compression from 'compression';
 import dotenv from 'dotenv';
 import express, { Express } from 'express';
 import path from 'path';
+import 'reflect-metadata';
 import bindControllers from './controller';
 import bindSSRMiddleware from './middleware/ssr';
 

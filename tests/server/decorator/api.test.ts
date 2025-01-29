@@ -1,3 +1,5 @@
+import 'reflect-metadata';
+
 import bindApi, { api } from '@/server/decorator/api';
 import bodyParser from 'body-parser';
 import express, { type Request, type Response } from 'express';

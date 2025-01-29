@@ -7,17 +7,15 @@ function Graph(props: ReactFlowProps) {
   const theme = useStore('theme');
 
   return (
-    <div style={{ height: '100%' }}>
-      <ReactFlow
-        fitView
-        nodeTypes={graph.nodeTypes}
-        colorMode={theme.mode}
-        {...props}
-      >
-        <Background />
-        <Controls />
-      </ReactFlow>
-    </div>
+    <ReactFlow
+      fitView
+      nodeTypes={graph.nodeTypes}
+      colorMode={theme.mode}
+      {...props}
+    >
+      <Background />
+      <Controls />
+    </ReactFlow>
   );
 }
 

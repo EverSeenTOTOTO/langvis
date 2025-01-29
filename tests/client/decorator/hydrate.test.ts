@@ -1,3 +1,5 @@
+import 'reflect-metadata';
+
 import factory, { hydrate, wrapHydrate } from '@/client/decorator/hydrate';
 import { expect, it } from 'vitest';
 
