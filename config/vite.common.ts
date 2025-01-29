@@ -1,4 +1,4 @@
-/* eslint-disable global-require */
+ 
 import path from 'path';
 import postcssNormalize from 'postcss-normalize';
 import postcssFlexbugsFixes from 'postcss-flexbugs-fixes';
