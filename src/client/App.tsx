@@ -6,24 +6,30 @@ import { AppRoutes } from './routes';
 import { AppStore, useStore } from './store';
 
 import '@xyflow/react/dist/style.css';
+import useI18n from './hooks/useI18n';
+import useThemeClassname from './hooks/useThemeClassname';
 import './index.scss';
 
 export const App = observer(
   ({ routes }: { store: AppStore; routes: AppRoutes }) => {
-    const theme = useStore('theme');
+    const setting = useStore('setting');
+    const { locale } = useI18n();
+
+    useThemeClassname();
 
     return (
       <ConfigProvider
         theme={{
           algorithm:
-            theme.mode === 'dark'
+            setting.mode === 'dark'
               ? antdTheme.darkAlgorithm
               : antdTheme.defaultAlgorithm,
         }}
+        locale={locale}
       >
         <Routes>
-          {routes.map(({ path, component: RouteComp }) => (
-            <Route key={path} path={path} element={<RouteComp />} />
+          {routes.map(({ path, component: RouteComponent }) => (
+            <Route key={path} path={path} element={<RouteComponent />} />
           ))}
         </Routes>
       </ConfigProvider>

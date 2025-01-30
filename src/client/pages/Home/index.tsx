@@ -3,6 +3,7 @@ import { getStore, useStore } from '@/client/store';
 import { EdgeChange, NodeChange, ReactFlowProvider } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
 import Header from './components/Header';
+import NodeMenu from './components/NodeMenu';
 import './index.scss';
 
 export const prefetch = async () => {
@@ -17,6 +18,7 @@ const Home = () => {
   return (
     <ReactFlowProvider>
       <Header />
+      <NodeMenu />
       <Graph
         fitView
         onInit={flow => graph.setFlow(flow)}

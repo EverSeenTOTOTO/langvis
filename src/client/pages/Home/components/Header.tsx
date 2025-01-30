@@ -1,15 +1,21 @@
-import { Col, Row } from 'antd';
+import { Col, Divider, Row, Typography } from 'antd';
 import GraphSelect from './GraphSelect';
-import ThemeToggle from './ThemeToggle';
+import Settings from './Settings';
 
 const Header = () => {
   return (
     <Row wrap={false} align="middle" className="header">
-      <Col span={4}>
-        <GraphSelect style={{ width: '100%' }} />
+      <Col className="logo">
+        <Typography.Title level={3}>Langvis</Typography.Title>
       </Col>
-      <Col style={{ marginInlineStart: 'auto' }}>
-        <ThemeToggle />
+      <Divider type="vertical" />
+      <Col span={4} className="graph-select">
+        <GraphSelect />
+      </Col>
+      <Col flex={1} />
+      <Divider type="vertical" />
+      <Col>
+        <Settings />
       </Col>
     </Row>
   );

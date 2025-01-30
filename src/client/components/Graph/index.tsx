@@ -4,17 +4,17 @@ import { observer } from 'mobx-react-lite';
 
 function Graph(props: ReactFlowProps) {
   const graph = useStore('graph');
-  const theme = useStore('theme');
+  const setting = useStore('setting');
 
   return (
     <ReactFlow
       fitView
       nodeTypes={graph.nodeTypes}
-      colorMode={theme.mode}
+      colorMode={setting.mode}
       {...props}
     >
       <Background />
-      <Controls />
+      <Controls position="bottom-right" />
     </ReactFlow>
   );
 }

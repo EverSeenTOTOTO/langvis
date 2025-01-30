@@ -32,8 +32,6 @@ const Modal: React.FC<ModalProps> = ({
   return (
     <>
       <AntdModal
-        okText="确定"
-        cancelText="取消"
         open={innerOpen}
         onOk={async e => {
           if (onOk) {

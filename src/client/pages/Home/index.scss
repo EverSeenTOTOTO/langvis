@@ -2,6 +2,83 @@
   position: fixed;
   right: 0;
   left: 0;
-  z-index: 1;
-  padding: 8px 12px;
+  z-index: 2;
+  padding: 8px 6px;
+
+  .logo {
+    .ant-typography {
+      margin: 0;
+    }
+  }
+
+  .graph-select {
+    .ant-select {
+      width: 100%;
+    }
+  }
+}
+
+.setting-content {
+  width: 180px;
+
+  .ant-form-item {
+    margin-bottom: 8px;
+  }
+
+  .ant-form-item:first-child {
+    .ant-form-item-control-input {
+      text-align: right;
+    }
+  }
+}
+
+.node-menu {
+  position: fixed;
+  top: 72px;
+  bottom: 24px;
+  left: 0;
+  z-index: 2;
+  width: var(--menu-width);
+  padding: 8px 6px;
+  border-radius: 0 8px 8px 0;
+}
+
+.root-dark {
+  .header {
+    background-color: #141414;
+    border-bottom: 1px solid rgb(253 253 253 / 12%);
+
+    .graph-select {
+      width: 100%;
+
+      .ant-select-selector {
+        border: 1px solid rgb(253 253 253 / 12%);
+      }
+    }
+  }
+
+  .node-menu {
+    background-color: #141414;
+    border: 1px solid #424242;
+  }
+}
+
+.root-light {
+  .header {
+    background-color: #fff;
+    border-bottom: 1px solid rgb(5 5 5 / 6%);
+
+    .graph-select {
+      width: 100%;
+
+      .ant-select-selector {
+        border: 1px solid rgb(5 5 5 / 6%);
+      }
+    }
+  }
+
+  .node-menu {
+    background-color: #fff;
+    border: 1px solid #d9d9d9;
+  }
 }

@@ -6,7 +6,7 @@ import composeHydrate from '../decorator/hydrate';
 import composePromisify from '../decorator/promisify';
 import { GraphStore } from './modules/graph';
 import { HomeStore } from './modules/home';
-import { ThemeStore } from './modules/theme';
+import { SettingStore } from './modules/setting';
 
 configure({ enforceActions: 'never' });
 
@@ -28,12 +28,12 @@ export class AppStore {
 
   graph: GraphStore;
 
-  theme: ThemeStore;
+  setting: SettingStore;
 
   constructor() {
     this.home = newStore(HomeStore, this);
     this.graph = newStore(GraphStore, this);
-    this.theme = newStore(ThemeStore, this);
+    this.setting = newStore(SettingStore, this);
   }
 
   hydrate(data: Record<string, any>) {

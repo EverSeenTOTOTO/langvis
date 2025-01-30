@@ -7,7 +7,6 @@ const GraphSelectNode = (props: SelectProps) => {
 
   return (
     <Select
-      loading={home.loading}
       placeholder="请选择图"
       fieldNames={{
         label: 'name',
