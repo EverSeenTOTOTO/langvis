@@ -2,7 +2,7 @@ import useApi from '@/client/hooks/useApi';
 import { useStore } from '@/client/store';
 import { InstrinicNodes } from '@/shared/node';
 import { Handle } from '@xyflow/react';
-import { Button, Form, Input } from 'antd';
+import { Button, Col, Form, Input, Popconfirm, Row } from 'antd';
 import { observer } from 'mobx-react-lite';
 import Modal, { ModalProps } from '../Modal';
 
@@ -15,17 +15,15 @@ const ButtonEditModal = ({
   node: InstrinicNodes['button'];
 }) => {
   const [form] = Form.useForm();
-  const graph = useStore('graph');
+  const home = useStore('home');
   const setting = useStore('setting');
-  const updateNodeApi = useApi(graph.updateNode.bind(graph));
+  const updateNodeApi = useApi(home.updateNode.bind(home));
+  const deleteNodeApi = useApi(home.deleteNode.bind(home));
 
   return (
     <Modal
       width={460}
       title={setting.tr('Node Properties')}
-      okButtonProps={{
-        loading: updateNodeApi.loading,
-      }}
       onOk={async () => {
         await form.validateFields();
 
@@ -36,8 +34,34 @@ const ButtonEditModal = ({
 
         return true;
       }}
-      {...props}
       trigger={children}
+      footer={({ submit, cancel }) => {
+        return (
+          <Row gutter={12} justify="end">
+            <Col>
+              <Popconfirm
+                title={setting.tr('Sure to delete?')}
+                onConfirm={async () => {
+                  await deleteNodeApi.run({ id: node.id });
+                  cancel();
+                }}
+              >
+                <Button danger>{setting.tr('Delete')}</Button>
+              </Popconfirm>
+            </Col>
+            <Col>
+              <Button
+                type="primary"
+                onClick={submit}
+                loading={updateNodeApi.loading}
+              >
+                {setting.tr('Update')}
+              </Button>
+            </Col>
+          </Row>
+        );
+      }}
+      {...props}
     >
       <Form layout="vertical" form={form} initialValues={node.data}>
         <Form.Item

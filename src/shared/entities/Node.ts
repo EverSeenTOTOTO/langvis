@@ -6,7 +6,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { GraphEntity } from './Graph';
-import { NodeName } from './NodeMeta';
+import { NodeMetaName } from './NodeMeta';
 
 @Entity()
 export class NodeEntity {
@@ -22,10 +22,10 @@ export class NodeEntity {
 
   @Column({
     type: 'enum',
-    enum: NodeName,
-    default: NodeName.DEFAULT,
+    enum: NodeMetaName,
+    default: NodeMetaName.DEFAULT,
   })
-  type!: NodeName;
+  type!: NodeMetaName;
 
   @Column('varchar')
   name!: string;

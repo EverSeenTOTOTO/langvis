@@ -10,6 +10,19 @@ export class NodeController {
   @inject()
   pg?: DataSource = undefined;
 
+  @api('/create', { method: 'post' })
+  async createNode(req: Request, res: Response) {
+    const node = await this.pg!.getRepository(NodeEntity).save(req.body);
+    return res.json({ data: node });
+  }
+
+  @api('/delete/:id', { method: 'post' })
+  async deleteNode(req: Request, res: Response) {
+    const id = req.params.id;
+    await this.pg!.getRepository(NodeEntity).delete(id);
+    return res.json({ data: id });
+  }
+
   @api('/update/:id', { method: 'post' })
   async updateNode(req: Request, res: Response) {
     const id = req.params.id;

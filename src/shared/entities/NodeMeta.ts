@@ -1,11 +1,11 @@
 import { Column, Entity, PrimaryColumn } from 'typeorm';
 import { GraphCategory } from './Graph';
 
-export enum NodeName {
+export enum NodeMetaName {
   DEFAULT = 'default',
   BUTTON = 'button',
-  INPUT = 'input',
   SELECT = 'select',
+  IMAGE = 'image',
 }
 
 export enum NodeType {
@@ -17,10 +17,10 @@ export enum NodeType {
 export class NodeMetaEntity {
   @PrimaryColumn({
     type: 'enum',
-    enum: NodeName,
-    default: NodeName.DEFAULT,
+    enum: NodeMetaName,
+    default: NodeMetaName.DEFAULT,
   })
-  name!: NodeName;
+  name!: NodeMetaName;
 
   @Column({
     type: 'enum',

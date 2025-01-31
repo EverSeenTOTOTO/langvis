@@ -23,11 +23,16 @@ export default () => {
           en_US: {},
           zh_CN: {
             translation: {
+              display: '展示',
               interaction: '交互',
+              Delete: '删除',
+              Update: '更新',
+              'Sure to delete?': '确定要删除吗？',
               Language: '语言',
               'Node name': '节点名称',
               'Node Properties': '节点属性',
               'Search nodes': '搜索节点',
+              'Graph not initialized': '图尚未准备好！',
               Theme: '颜色主题',
             },
           },

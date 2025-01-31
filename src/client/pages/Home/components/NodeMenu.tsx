@@ -33,9 +33,9 @@ const DraggableNode = (props: NodeMetaEntity) => {
 
 const NodeMenu = () => {
   const setting = useStore('setting');
-  const graph = useStore('graph');
+  const home = useStore('home');
 
-  const groupedByType = groupBy(graph.availableNodemetas, each => each.type);
+  const groupedByType = groupBy(home.availableNodemetas, each => each.type);
 
   return (
     <div className="node-menu">

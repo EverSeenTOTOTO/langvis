@@ -1,5 +1,5 @@
 import { useStore } from '@/client/store';
-import { NodeName } from '@/shared/entities/NodeMeta';
+import { NodeMetaEntity, NodeMetaName } from '@/shared/entities/NodeMeta';
 import {
   Background,
   Controls,
@@ -9,6 +9,7 @@ import {
   ReactFlow,
   ReactFlowProps,
 } from '@xyflow/react';
+import { message } from 'antd';
 import { observer } from 'mobx-react-lite';
 import { useDrop } from 'react-dnd';
 
@@ -29,11 +30,28 @@ const nodeTypes = Object.keys(nodeComponents).reduce((acc, path) => {
 
 function Graph(props: ReactFlowProps) {
   const setting = useStore('setting');
+  const home = useStore('home');
   const graph = useStore('graph');
 
   const [, drop] = useDrop(() => ({
-    accept: Object.values(NodeName),
-    drop: () => ({ name: 'Dustbin' }),
+    accept: Object.values(NodeMetaName),
+    drop: (item: NodeMetaEntity, monitor) => {
+      if (!graph.flow) {
+        message.warning(setting.tr('Graph not initialized'));
+        return;
+      }
+
+      const clientOffset = monitor.getClientOffset();
+      const flowPosition = graph.flow!.screenToFlowPosition(clientOffset!);
+
+      home.createNode({
+        name: item.name,
+        type: item.name,
+        position: flowPosition,
+        graphId: home.currentGraphId!,
+        data: {},
+      });
+    },
     collect: monitor => ({
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(),
