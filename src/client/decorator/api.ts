@@ -1,10 +1,11 @@
 import { getOwnPropertyNames, isClient } from '@/shared/constants';
 import { message } from 'antd';
 import { merge } from 'lodash-es';
+import { compile } from 'path-to-regexp';
 
 const metaDataKey = Symbol('client_api');
 
-export type ApiResponse<T extends Record<string, any> = {}> = {
+export type ApiResponse<T = Record<string, any>> = {
   error?: any;
   data?: T;
 
@@ -16,11 +17,7 @@ type Config = {
   options?: RequestInit & { timeout?: number };
 };
 
-export type ApiOptions<P> =
-  | string
-  | ((req: P) => string)
-  | Config
-  | ((req: P) => Config);
+export type ApiOptions<P> = string | Config | ((req: P) => Config);
 
 export function api<P = Record<string, any>>(
   config: ApiOptions<P>,
@@ -44,7 +41,21 @@ const logError = (error: any) => {
   }
 };
 
-const getApiOptions = <P>(
+const isFullPath = (path: string) => /^https?:\/\//.test(path);
+
+const compilePath = <P extends Record<string, any>>(path: string, req: P) => {
+  if (isFullPath(path)) {
+    const url = new URL(path);
+
+    url.pathname = compile(url.pathname)(req);
+
+    return url.toString();
+  }
+
+  return compile(path)(req);
+};
+
+const getApiOptions = <P extends Record<string, any>>(
   req: P,
   {
     config,
@@ -55,22 +66,31 @@ const getApiOptions = <P>(
   },
 ) => {
   if (typeof config === 'string') {
-    return { path: config, options };
+    return { path: compilePath(config, req), options };
   }
 
   if (typeof config === 'function') {
-    const path = config(req);
+    const { path, options } = config(req);
 
-    if (typeof path === 'string') {
-      return { path, options };
-    }
-    return path;
+    return {
+      path: compilePath(path, req),
+      options,
+    };
   }
 
-  return config;
+  const { path } = config;
+
+  return {
+    path: compilePath(path, req),
+    options: config.options,
+  };
 };
 
-export function wrapApi<P, T extends Record<string, any>, R>(
+export function wrapApi<
+  P extends Record<string, any>,
+  T extends Record<string, any>,
+  R,
+>(
   fn: (req: P, res?: ApiResponse<T>) => R,
   config: {
     config: ApiOptions<P>;
@@ -109,11 +129,15 @@ export function wrapApi<P, T extends Record<string, any>, R>(
         return fn(req, { error: res.message });
       }
 
-      const rsp = await res.json();
-
       if (res.status < 200 || res.status >= 300) {
-        logError(new Error(`Response error: ${url}: ${rsp?.error}`));
+        const e = new Error(`Response error: ${url}`);
+
+        logError(e);
+
+        return fn(req, { error: e.message });
       }
+
+      const rsp = await res.json();
 
       return fn(req, rsp);
     } catch (error) {

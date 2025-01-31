@@ -52,7 +52,7 @@ export class GraphStore {
     this.edges = addEdge(connection, this.edges);
   }
 
-  @api(({ graphId }) => `/api/graph/detail/${graphId}`)
+  @api('/api/graph/detail/:graphId')
   async fetchGraphDetail(
     _req: { graphId?: string },
     res?: ApiResponse<GraphEntity & { nodes: NodeEntity[] }>,
@@ -72,22 +72,18 @@ export class GraphStore {
     this.fetchAvailableNodemetas({ graphCategory: res!.data!.category });
   }
 
-  @api(
-    (req: { graphCategory: string }) =>
-      `/api/nodemeta/get/${req.graphCategory}`,
-  )
+  @api('/api/nodemeta/get/:graphCategory')
   async fetchAvailableNodemetas(
-    _req: any,
+    _req: { graphCategory: string },
     res?: ApiResponse<NodeMetaEntity[]>,
   ) {
     this.availableNodemetas = res!.data || [];
   }
 
-  @api((req?: Partial<NodeEntity>) => `/api/node/update/${req?.id}`, {
-    method: 'post',
-  })
-  async updateNode(_req?: Partial<NodeEntity>) {
-    console.log(_req);
-    this.fetchGraphDetail({ graphId: this.root.home.currentGraphId });
+  @api('/api/node/update/:nodeId', { method: 'post' })
+  async updateNode(req: { nodeId: string }, res?: ApiResponse<string>) {
+    if (res!.data === req?.nodeId) {
+      this.fetchGraphDetail({ graphId: this.root.home.currentGraphId });
+    }
   }
 }

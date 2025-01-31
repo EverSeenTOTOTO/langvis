@@ -13,7 +13,7 @@ let server: http.Server;
 
 beforeAll(() => {
   server = http.createServer((req, res) => {
-    if (/apiget/.test(req.url!)) {
+    if (/api\/?get/.test(req.url!)) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ data: 'GET' }));
       return;
@@ -35,6 +35,12 @@ beforeAll(() => {
     if (/apiheader/.test(req.url!)) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ data: req.headers['x-test'] }));
+      return;
+    }
+
+    if (/apierror/.test(req.url!)) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end();
       return;
     }
   });
@@ -81,14 +87,14 @@ it('wrapApi', async () => {
   expect(await apiPost('POST')).toEqual('POST');
 
   const apiHeader = wrapApi(demo.modifyHeader.bind(demo), {
-    config: {
+    config: () => ({
       path: `http://localhost:${port}/apiheader`,
       options: {
         headers: {
           'x-test': 'test',
         },
       },
-    },
+    }),
   });
 
   expect(await apiHeader({})).toEqual({
@@ -97,7 +103,7 @@ it('wrapApi', async () => {
 
   const apiError = wrapApi(demo.modifyHeader.bind(demo), {
     config: {
-      path: `http://localhost:${port}/apierror`,
+      path: `http://localhost:${port}/apitimeout`,
       options: {
         timeout: 1,
       },
@@ -105,11 +111,11 @@ it('wrapApi', async () => {
   });
 
   expect(await apiError({})).toEqual({
-    error: `Request timeout: http://localhost:${port}/apierror`,
+    error: `Request timeout: http://localhost:${port}/apitimeout`,
   });
 
   const apiParam = wrapApi(demo.withParams.bind(demo), {
-    config: (req: any) => `http://localhost:${port}/api${req.type}`,
+    config: `http://localhost:${port}/api/:type`,
   });
 
   expect(await apiParam({ type: 'get' })).toEqual({ data: 'GET' });
@@ -141,18 +147,30 @@ it('api', async () => {
       return res;
     }
 
-    @api((req: { type: string }) => `http://localhost:${port}/api${req.type}`)
+    @api(`http://localhost:${port}/api/:type`)
     async withParams(_: any, res?: ApiResponse) {
       return res;
     }
 
     @api({
-      path: `http://localhost:${port}/apierror`,
+      path: `http://localhost:${port}/apitimeout`,
       options: {
         timeout: 1,
       },
     })
     async error(_: void, res?: ApiResponse) {
+      return res;
+    }
+
+    @api(() => {
+      throw new Error('test');
+    })
+    async error2(_: void, res?: ApiResponse) {
+      return res;
+    }
+
+    @api(`http://localhost:${port}/apierror`)
+    async error3(_: void, res?: ApiResponse) {
       return res;
     }
   }
@@ -165,7 +183,13 @@ it('api', async () => {
     data: 'test',
   });
   expect(await demo.error()).toEqual({
-    error: `Request timeout: http://localhost:${port}/apierror`,
+    error: `Request timeout: http://localhost:${port}/apitimeout`,
+  });
+  expect(await demo.error2()).toEqual({
+    error: 'test',
+  });
+  expect(await demo.error3()).toEqual({
+    error: `Response error: http://localhost:${port}/apierror`,
   });
   expect(await demo.withParams({ type: 'get' })).toEqual({ data: 'GET' });
 });

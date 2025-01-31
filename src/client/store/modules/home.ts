@@ -1,6 +1,7 @@
 import { api, type ApiResponse } from '@/client/decorator/api';
 import { hydrate } from '@/client/decorator/hydrate';
 import { GraphEntity } from '@/shared/entities/Graph';
+import { NodeMetaEntity } from '@/shared/entities/NodeMeta';
 import { autorun, makeAutoObservable } from 'mobx';
 import { type AppStore } from '..';
 
@@ -9,6 +10,9 @@ export class HomeStore {
 
   @hydrate()
   availableGraphs: GraphEntity[] = [];
+
+  @hydrate()
+  availableNodemetas: NodeMetaEntity[] = [];
 
   @hydrate()
   currentGraphId?: GraphEntity['id'];

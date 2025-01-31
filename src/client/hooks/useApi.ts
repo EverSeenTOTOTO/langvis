@@ -1,12 +1,16 @@
 import { useCallback, useState } from 'react';
 
-export default <P, R extends Promise<unknown>>(api: (...args: P[]) => R) => {
+export default <P, R>(api: (...args: P[]) => Promise<R>) => {
   const [loading, setLoading] = useState(false);
 
   const run = useCallback(
-    (...args: P[]) => {
+    async (...args: P[]) => {
       setLoading(true);
-      return api(...args).finally(() => setLoading(false));
+      try {
+        return await api(...args);
+      } finally {
+        setLoading(false);
+      }
     },
     [api],
   );
