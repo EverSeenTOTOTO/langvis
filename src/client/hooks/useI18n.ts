@@ -23,12 +23,12 @@ export default () => {
           en_US: {},
           zh_CN: {
             translation: {
-              default: '默认',
-              Theme: '颜色主题',
+              interaction: '交互',
               Language: '语言',
-              'Search nodes': '搜索节点',
-              'Node Properties': '节点属性',
               'Node name': '节点名称',
+              'Node Properties': '节点属性',
+              'Search nodes': '搜索节点',
+              Theme: '颜色主题',
             },
           },
         },

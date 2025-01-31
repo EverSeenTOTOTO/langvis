@@ -41,6 +41,10 @@
   width: var(--menu-width);
   padding: 8px 6px;
   border-radius: 0 8px 8px 0;
+
+  .node-category {
+    padding-inline: 12px;
+  }
 }
 
 .root-dark {

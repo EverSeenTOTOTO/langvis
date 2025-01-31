@@ -1,29 +1,43 @@
 import { Column, Entity, PrimaryColumn } from 'typeorm';
+import { GraphCategory } from './Graph';
 
-export enum NodeType {
+export enum NodeName {
   DEFAULT = 'default',
   BUTTON = 'button',
   INPUT = 'input',
   SELECT = 'select',
 }
 
-export enum GraphCategory {
-  DEFAULT = 'default',
+export enum NodeType {
+  INTERACTION = 'interaction',
+  DISPLAY = 'display',
 }
 
 @Entity()
 export class NodeMetaEntity {
   @PrimaryColumn({
     type: 'enum',
+    enum: NodeName,
+    default: NodeName.DEFAULT,
+  })
+  name!: NodeName;
+
+  @Column({
+    type: 'enum',
     enum: NodeType,
-    default: NodeType.DEFAULT,
+    default: NodeType.INTERACTION,
   })
   type!: NodeType;
 
   @Column({
-    type: 'enum',
-    enum: GraphCategory,
-    default: GraphCategory.DEFAULT,
+    type: 'json',
+    default: JSON.stringify(Object.values(GraphCategory)),
   })
-  category!: GraphCategory;
+  supportCategories!: string;
+
+  @Column({
+    type: 'text',
+    nullable: true,
+  })
+  description?: string;
 }

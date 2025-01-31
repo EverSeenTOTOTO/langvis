@@ -5,7 +5,10 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { GraphCategory } from './NodeMeta';
+
+export enum GraphCategory {
+  DEFAULT = 'default',
+}
 
 @Entity()
 export class GraphEntity {

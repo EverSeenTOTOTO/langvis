@@ -1,5 +1,8 @@
 import { api, type ApiResponse } from '@/client/decorator/api';
+import { hydrate } from '@/client/decorator/hydrate';
+import { GraphEntity } from '@/shared/entities/Graph';
 import { NodeEntity } from '@/shared/entities/Node';
+import { NodeMetaEntity } from '@/shared/entities/NodeMeta';
 import {
   addEdge,
   applyEdgeChanges,
@@ -9,11 +12,9 @@ import {
   EdgeChange,
   Node,
   NodeChange,
-  type NodeTypes,
   ReactFlowInstance,
 } from '@xyflow/react';
 import { makeAutoObservable } from 'mobx';
-import React from 'react';
 import type { AppStore } from '..';
 
 export class GraphStore {
@@ -23,38 +24,19 @@ export class GraphStore {
 
   edges: Edge[] = [];
 
-  nodeTypes: NodeTypes = {};
-
   flow?: ReactFlowInstance;
+
+  @hydrate()
+  availableNodemetas: NodeMetaEntity[] = [];
 
   constructor(root: AppStore) {
     this.root = root;
-
-    const nodeTypes = import.meta.glob('@/client/components/Nodes/*.tsx', {
-      eager: true,
-    }) as any;
-
-    Object.keys(nodeTypes).forEach(path => {
-      const type = path
-        .match(/src\/client\/components\/Nodes\/(.*)\.tsx$/)![1]
-        .toLowerCase();
-
-      this.registerNodeType(type, nodeTypes[path].default);
-    });
 
     makeAutoObservable(this);
   }
 
   setFlow(flow: ReactFlowInstance) {
     this.flow = flow;
-  }
-
-  registerNodeType(type: string, component: React.FC<any>) {
-    this.nodeTypes[type] = component;
-  }
-
-  unregisterNodeType(type: string) {
-    delete this.nodeTypes[type];
   }
 
   // sync graph state with app state
@@ -73,7 +55,7 @@ export class GraphStore {
   @api(({ graphId }) => `/api/graph/detail/${graphId}`)
   async fetchGraphDetail(
     _req: { graphId?: string },
-    res?: ApiResponse<{ nodes: NodeEntity[] }>,
+    res?: ApiResponse<GraphEntity & { nodes: NodeEntity[] }>,
   ) {
     const nodes = res!.data?.nodes.map(n => ({
       ...n,
@@ -86,13 +68,26 @@ export class GraphStore {
     if (nodes) {
       this.nodes = nodes;
     }
+
+    this.fetchAvailableNodemetas({ graphCategory: res!.data!.category });
   }
 
-  @api((node?: Partial<NodeEntity>) => `/api/node/update/${node?.id}`, {
+  @api(
+    (req: { graphCategory: string }) =>
+      `/api/nodemeta/get/${req.graphCategory}`,
+  )
+  async fetchAvailableNodemetas(
+    _req: any,
+    res?: ApiResponse<NodeMetaEntity[]>,
+  ) {
+    this.availableNodemetas = res!.data || [];
+  }
+
+  @api((req?: Partial<NodeEntity>) => `/api/node/update/${req?.id}`, {
     method: 'post',
   })
-  async updateNode(node?: Partial<NodeEntity>) {
-    console.log(node);
+  async updateNode(_req?: Partial<NodeEntity>) {
+    console.log(_req);
     this.fetchGraphDetail({ graphId: this.root.home.currentGraphId });
   }
 }
