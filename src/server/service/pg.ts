@@ -2,7 +2,6 @@ import { GraphEntity } from '@/shared/entities/Graph';
 import { NodeEntity } from '@/shared/entities/Node';
 import { NodeMetaEntity } from '@/shared/entities/NodeMeta';
 import { DataSource } from 'typeorm';
-import { isDev } from '../utils';
 
 export default new DataSource({
   type: 'postgres',
@@ -12,6 +11,6 @@ export default new DataSource({
   password: import.meta.env.VITE_PG_PASSWORD,
   database: import.meta.env.VITE_PG_DATABASE,
   synchronize: true,
-  logging: isDev,
+  logging: false,
   entities: [GraphEntity, NodeMetaEntity, NodeEntity],
 });

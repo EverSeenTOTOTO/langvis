@@ -36,8 +36,14 @@ export class Node extends EventEmitter {
     this.id = id;
   }
 
-  getSlot(event: string | symbol | Slot): Slot {
+  findSlot(event: string | symbol | Slot): Slot | undefined {
     const slot = event instanceof Slot ? event : this.slots.get(String(event));
+
+    return slot;
+  }
+
+  getSlot(event: string | symbol | Slot): Slot {
+    const slot = this.findSlot(event);
 
     if (!slot) {
       throw new Error(
@@ -46,6 +52,30 @@ export class Node extends EventEmitter {
     }
 
     return slot;
+  }
+
+  deleteSlot(slot: Slot): boolean;
+  deleteSlot(slotName: string): boolean;
+  deleteSlot(param: any): boolean {
+    if (param instanceof Slot) {
+      return this.slots.delete(param.name);
+    }
+
+    return this.slots.delete(param);
+  }
+
+  defineSlot(
+    slot: Slot,
+    handler?: (...args: any[]) => void,
+    ctx?: Graph,
+  ): Node {
+    this.slots.set(slot.name, slot);
+
+    if (handler) {
+      this.on(slot.name, handler, ctx);
+    }
+
+    return this;
   }
 
   emit(event: string | symbol | Slot, ...args: any[]): boolean {
@@ -91,20 +121,6 @@ export class Node extends EventEmitter {
     context?: Graph,
   ): this {
     return super.removeListener(this.getSlot(event).name, fn, context);
-  }
-
-  defineSlot(
-    slot: Slot,
-    handler?: (...args: any[]) => void,
-    ctx?: Graph,
-  ): Node {
-    this.slots.set(slot.name, slot);
-
-    if (handler) {
-      this.on(slot.name, handler, ctx);
-    }
-
-    return this;
   }
 }
 
@@ -213,6 +229,19 @@ export class Graph {
     }
 
     this.edges.delete(edgeId);
+    return this;
+  }
+
+  deleteSlot(slot: Slot): Graph {
+    const { edges } = this.slotIndexMap.get(slot) || {};
+
+    if (edges) {
+      const toDeleteEdges = [...edges.values()];
+
+      toDeleteEdges.forEach(edge => this.deleteEdge(edge));
+    }
+
+    this.getNode(slot)?.deleteSlot(slot);
     return this;
   }
 

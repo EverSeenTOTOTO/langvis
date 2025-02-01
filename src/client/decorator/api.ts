@@ -129,15 +129,15 @@ export function wrapApi<
         return fn(req, { error: res.message });
       }
 
+      const rsp = await res.json();
+
       if (res.status < 200 || res.status >= 300) {
-        const e = new Error(`Response error: ${url}`);
+        const e = new Error(rsp?.error ?? `Response error: ${url}`);
 
         logError(e);
 
         return fn(req, { error: e.message });
       }
-
-      const rsp = await res.json();
 
       return fn(req, rsp);
     } catch (error) {

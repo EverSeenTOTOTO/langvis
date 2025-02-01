@@ -1,5 +1,6 @@
 import useApi from '@/client/hooks/useApi';
 import { useStore } from '@/client/store';
+import { NodeInitialData } from '@/shared/entities/NodeMeta';
 import { InstrinicNodes } from '@/shared/types';
 import { BoldOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { Handle } from '@xyflow/react';
@@ -18,7 +19,6 @@ import {
 import { observer } from 'mobx-react-lite';
 import DropdownMenu from '../Dropdown';
 import Modal, { ModalProps } from '../Modal';
-import { NodeInitialData } from '@/shared/entities/NodeMeta';
 
 const EditModal = ({
   node,
@@ -45,9 +45,7 @@ const EditModal = ({
 
         await updateNodeApi.run({
           id: node.id,
-          name: values.name,
           data: {
-            ...node.data,
             ...values.data,
             slots: NodeInitialData[node.type!].slots.filter(
               (slot: { type: string }) => values.slots?.includes(slot.type),
@@ -63,13 +61,12 @@ const EditModal = ({
         layout="vertical"
         form={form}
         initialValues={{
-          name: node.data?.name,
           data: node.data,
           slots: node.data?.slots?.map(slot => slot.type),
         }}
       >
         <Form.Item
-          name="name"
+          name={['data', 'name']}
           label={setting.tr('Node name')}
           rules={[{ required: true }]}
         >
@@ -115,13 +112,21 @@ const EditModal = ({
               <Checkbox.Group
                 options={[
                   {
-                    label: 'source',
-                    value: 'source',
-                  },
-                  {
-                    label: 'target',
+                    label: (
+                      <Tooltip title={setting.tr('Edge starts from here')}>
+                        <span>Target</span>
+                      </Tooltip>
+                    ),
                     value: 'target',
                     disabled: true,
+                  },
+                  {
+                    label: (
+                      <Tooltip title={setting.tr('Edge ends here')}>
+                        <span>Source</span>
+                      </Tooltip>
+                    ),
+                    value: 'source',
                   },
                 ]}
               />
@@ -181,13 +186,15 @@ const ButtonNode = (props: InstrinicNodes['button']) => {
           { type: 'divider', key: 'div' },
           {
             label: setting.tr('Add breakpoint'),
-            key: 'add brk',
+            key: 'brk',
             icon: <BoldOutlined />,
             disabled: true,
           },
         ]}
       >
-        <Button {...props.data}>{props.data.name}</Button>
+        <Tooltip title={props.data.description}>
+          <Button {...props.data}>{props.data.name}</Button>
+        </Tooltip>
       </DropdownMenu>
       {props.data?.slots?.map(slot => (
         <Tooltip
@@ -200,10 +207,9 @@ const ButtonNode = (props: InstrinicNodes['button']) => {
         >
           <Handle
             {...slot}
-            id={slot.name}
-            style={{
-              backgroundColor: slot.type === 'source' ? 'cyan' : 'yellow',
-            }}
+            className={
+              slot.type === 'source' ? 'source-handle' : 'target-handle'
+            }
           />
         </Tooltip>
       ))}

@@ -16,17 +16,18 @@ export enum NodeType {
 export const NodeInitialData: Record<string, any> = {
   [NodeMetaName.DEFAULT]: {},
   [NodeMetaName.BUTTON]: {
+    name: 'Button',
     type: 'default',
     slots: [
       {
         name: 'source',
         type: 'source',
-        position: 'left',
+        position: 'right',
       },
       {
         name: 'target',
         type: 'target',
-        position: 'right',
+        position: 'left',
       },
     ],
   },

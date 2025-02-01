@@ -1,4 +1,3 @@
-import { message } from 'antd';
 import { Locale } from 'antd/es/locale';
 import enUS from 'antd/locale/en_US';
 import zhCN from 'antd/locale/zh_CN';
@@ -11,43 +10,38 @@ export const SUPPORTED_LOCALES = {
   en_US: 'English',
 };
 
+if (!i18next.isInitialized) {
+  i18next.init({
+    lng: 'zh_CN',
+    debug: false,
+    resources: {
+      en_US: {},
+      zh_CN: {
+        translation: {
+          'Add breakpoint': '添加断点',
+          'Delete node': '删除节点',
+          display: '展示',
+          'Edge ends here': '边在这里结束',
+          'Edge starts from here': '边从这里开始',
+          'Edit node': '编辑节点',
+          'Graph not initialized': '图尚未准备好！',
+          interaction: '交互',
+          Language: '语言',
+          'Node name': '节点名称',
+          'Node Properties': '节点属性',
+          'Node slots': '节点插槽',
+          'Node type': '节点类型',
+          'Search nodes': '搜索节点',
+          'Sure to delete?': '确定要删除吗？',
+          Theme: '颜色主题',
+        },
+      },
+    },
+  });
+}
+
 export default () => {
   const setting = useStore('setting');
-
-  useEffect(() => {
-    i18next
-      .init({
-        lng: 'zh_CN',
-        debug: true,
-        resources: {
-          en_US: {},
-          zh_CN: {
-            translation: {
-              'Add breakpoint': '添加断点',
-              'Delete node': '删除节点',
-              display: '展示',
-              'Edge ends here': '边在这里结束',
-              'Edge starts from here': '边从这里开始',
-              'Edit node': '编辑节点',
-              'Graph not initialized': '图尚未准备好！',
-              interaction: '交互',
-              Language: '语言',
-              'Node name': '节点名称',
-              'Node Properties': '节点属性',
-              'Node slots': '节点插槽',
-              'Node type': '节点类型',
-              'Search nodes': '搜索节点',
-              'Sure to delete?': '确定要删除吗？',
-              Theme: '颜色主题',
-            },
-          },
-        },
-      })
-      .catch(e => {
-        message.error(e.message);
-      });
-  }, []);
-
   const [locale, setLocale] = useState<Locale | undefined>(undefined);
 
   useEffect(() => {

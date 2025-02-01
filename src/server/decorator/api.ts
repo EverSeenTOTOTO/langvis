@@ -30,6 +30,7 @@ export default function <T extends Record<string, any>>(
           try {
             await handle(req, res);
           } catch (e) {
+            console.error(e);
             res.status(500).json({
               error: (e as Error)?.message,
             });

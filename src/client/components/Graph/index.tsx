@@ -16,6 +16,7 @@ import {
 import { message } from 'antd';
 import { observer } from 'mobx-react-lite';
 import { useDrop } from 'react-dnd';
+import './index.scss';
 
 const nodeComponents = import.meta.glob('@/client/components/Nodes/*.tsx', {
   eager: true,
@@ -46,14 +47,15 @@ function Graph(props: ReactFlowProps) {
       }
 
       const clientOffset = monitor.getClientOffset();
-      const flowPosition = graph.flow!.screenToFlowPosition(clientOffset!);
+      const flowPosition = graph.flow.screenToFlowPosition(clientOffset!);
 
       home.createNode({
-        name: item.name,
         type: item.name,
         position: flowPosition,
-        graphId: home.currentGraphId!,
-        data: NodeInitialData[item.name] || {},
+        data: {
+          ...NodeInitialData[item.name],
+          graphId: home.currentGraphId!,
+        },
       });
     },
     collect: monitor => ({

@@ -40,7 +40,7 @@ beforeAll(() => {
 
     if (/apierror/.test(req.url!)) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end();
+      res.end(JSON.stringify({ error: 'test' }));
       return;
     }
   });
@@ -189,7 +189,7 @@ it('api', async () => {
     error: 'test',
   });
   expect(await demo.error3()).toEqual({
-    error: `Response error: http://localhost:${port}/apierror`,
+    error: 'test',
   });
   expect(await demo.withParams({ type: 'get' })).toEqual({ data: 'GET' });
 });

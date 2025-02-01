@@ -43,4 +43,20 @@ export class GraphStore {
   connectNode(connection: Connection) {
     this.edges = addEdge(connection, this.edges);
   }
+
+  createNode(node: Node) {
+    this.nodes = [...this.nodes, node];
+  }
+
+  updateNode(node: Node) {
+    this.nodes = this.nodes.map(each => {
+      if (each.id !== node.id) return each;
+
+      return node;
+    });
+  }
+
+  deleteNode(nodeId: string) {
+    this.nodes = this.nodes.filter(each => each.id !== nodeId);
+  }
 }

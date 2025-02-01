@@ -1,8 +1,8 @@
 import { api, type ApiResponse } from '@/client/decorator/api';
 import { hydrate } from '@/client/decorator/hydrate';
 import { GraphEntity } from '@/shared/entities/Graph';
-import { NodeEntity } from '@/shared/entities/Node';
 import { NodeMetaEntity } from '@/shared/entities/NodeMeta';
+import { type ClientNode } from '@/shared/types';
 import { autorun, makeAutoObservable } from 'mobx';
 import { type AppStore } from '..';
 
@@ -42,15 +42,9 @@ export class HomeStore {
   @api('/api/graph/detail/:graphId')
   async fetchGraphDetail(
     _req: { graphId?: string },
-    res?: ApiResponse<GraphEntity & { nodes: NodeEntity[] }>,
+    res?: ApiResponse<GraphEntity & { nodes: ClientNode[] }>,
   ) {
-    const nodes = res!.data?.nodes.map(n => ({
-      ...n,
-      data: {
-        ...n.data,
-        name: n.name,
-      },
-    }));
+    const nodes = res!.data?.nodes;
 
     if (nodes) {
       this.root.graph.nodes = nodes;
@@ -68,23 +62,23 @@ export class HomeStore {
   }
 
   @api('/api/node/create', { method: 'post' })
-  async createNode(_req: Partial<NodeEntity>, res?: ApiResponse<NodeEntity>) {
+  async createNode(_req: Partial<ClientNode>, res?: ApiResponse<ClientNode>) {
     if (res!.data) {
-      this.fetchGraphDetail({ graphId: this.root.home.currentGraphId });
+      this.root.graph.createNode(res!.data);
     }
   }
 
   @api('/api/node/delete/:id', { method: 'post' })
   async deleteNode(req: { id: string }, res?: ApiResponse<string>) {
     if (res!.data === req.id) {
-      this.fetchGraphDetail({ graphId: this.root.home.currentGraphId });
+      this.root.graph.deleteNode(req.id);
     }
   }
 
   @api('/api/node/update/:id', { method: 'post' })
-  async updateNode(req: Partial<NodeEntity>, res?: ApiResponse<string>) {
-    if (res!.data === req?.id) {
-      this.fetchGraphDetail({ graphId: this.root.home.currentGraphId });
+  async updateNode(req: Partial<ClientNode>, res?: ApiResponse<ClientNode>) {
+    if (res!.data && res!.data.id === req?.id) {
+      this.root.graph.updateNode(res!.data);
     }
   }
 }
