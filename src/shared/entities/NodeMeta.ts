@@ -13,6 +13,25 @@ export enum NodeType {
   DISPLAY = 'display',
 }
 
+export const NodeInitialData: Record<string, any> = {
+  [NodeMetaName.DEFAULT]: {},
+  [NodeMetaName.BUTTON]: {
+    type: 'default',
+    slots: [
+      {
+        name: 'source',
+        type: 'source',
+        position: 'left',
+      },
+      {
+        name: 'target',
+        type: 'target',
+        position: 'right',
+      },
+    ],
+  },
+};
+
 @Entity()
 export class NodeMetaEntity {
   @PrimaryColumn({

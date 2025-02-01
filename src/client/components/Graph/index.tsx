@@ -1,5 +1,9 @@
 import { useStore } from '@/client/store';
-import { NodeMetaEntity, NodeMetaName } from '@/shared/entities/NodeMeta';
+import {
+  NodeInitialData,
+  NodeMetaEntity,
+  NodeMetaName,
+} from '@/shared/entities/NodeMeta';
 import {
   Background,
   Controls,
@@ -49,7 +53,7 @@ function Graph(props: ReactFlowProps) {
         type: item.name,
         position: flowPosition,
         graphId: home.currentGraphId!,
-        data: {},
+        data: NodeInitialData[item.name] || {},
       });
     },
     collect: monitor => ({

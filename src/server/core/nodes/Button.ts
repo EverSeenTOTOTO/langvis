@@ -1,5 +1,5 @@
 import { NodeEntity } from '@/shared/entities/Node';
-import { Layout, NodeState, ServerNode } from '@/shared/node';
+import { Layout, NodeState, ServerNode } from '@/shared/types';
 import { Node, Slot } from '../graph';
 
 export class Button extends Node implements ServerNode {

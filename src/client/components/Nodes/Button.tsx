@@ -1,12 +1,24 @@
 import useApi from '@/client/hooks/useApi';
 import { useStore } from '@/client/store';
-import { InstrinicNodes } from '@/shared/node';
+import { InstrinicNodes } from '@/shared/types';
 import { BoldOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { Handle } from '@xyflow/react';
-import { Button, Form, Input, Popconfirm } from 'antd';
+import {
+  Button,
+  Checkbox,
+  Col,
+  Form,
+  Input,
+  Popconfirm,
+  Row,
+  Select,
+  Switch,
+  Tooltip,
+} from 'antd';
 import { observer } from 'mobx-react-lite';
 import DropdownMenu from '../Dropdown';
 import Modal, { ModalProps } from '../Modal';
+import { NodeInitialData } from '@/shared/entities/NodeMeta';
 
 const EditModal = ({
   node,
@@ -22,23 +34,40 @@ const EditModal = ({
   return (
     <Modal
       width={460}
-      title={setting.tr('Node Properties')}
+      title={`${setting.tr('Node Properties')} ${node.data.name}`}
       okButtonProps={{
         loading: updateNodeApi.loading,
       }}
       onOk={async () => {
         await form.validateFields();
 
+        const values = form.getFieldsValue(true);
+
         await updateNodeApi.run({
           id: node.id,
-          name: form.getFieldValue('name'),
+          name: values.name,
+          data: {
+            ...node.data,
+            ...values.data,
+            slots: NodeInitialData[node.type!].slots.filter(
+              (slot: { type: string }) => values.slots?.includes(slot.type),
+            ),
+          },
         });
 
         return true;
       }}
       {...props}
     >
-      <Form layout="vertical" form={form} initialValues={node.data}>
+      <Form
+        layout="vertical"
+        form={form}
+        initialValues={{
+          name: node.data?.name,
+          data: node.data,
+          slots: node.data?.slots?.map(slot => slot.type),
+        }}
+      >
         <Form.Item
           name="name"
           label={setting.tr('Node name')}
@@ -46,6 +75,64 @@ const EditModal = ({
         >
           <Input allowClear />
         </Form.Item>
+        <Form.Item
+          name={['data', 'type']}
+          label={setting.tr('Node type')}
+          rules={[{ required: true }]}
+        >
+          <Select
+            options={[
+              {
+                label: 'Default',
+                value: 'default',
+              },
+              {
+                label: 'Primary',
+                value: 'primary',
+              },
+              {
+                label: 'Dashed',
+                value: 'dashed',
+              },
+              {
+                label: 'Text',
+                value: 'text',
+              },
+              {
+                label: 'Link',
+                value: 'link',
+              },
+            ]}
+          />
+        </Form.Item>
+        <Row>
+          <Col span={12}>
+            <Form.Item
+              name="slots"
+              label={setting.tr('Node slots')}
+              rules={[{ required: true }]}
+            >
+              <Checkbox.Group
+                options={[
+                  {
+                    label: 'source',
+                    value: 'source',
+                  },
+                  {
+                    label: 'target',
+                    value: 'target',
+                    disabled: true,
+                  },
+                ]}
+              />
+            </Form.Item>
+          </Col>
+          <Col>
+            <Form.Item name={['data', 'danger']} label="Danger">
+              <Switch />
+            </Form.Item>
+          </Col>
+        </Row>
       </Form>
     </Modal>
   );
@@ -91,7 +178,7 @@ const ButtonNode = (props: InstrinicNodes['button']) => {
               );
             },
           },
-          { type: 'divider' },
+          { type: 'divider', key: 'div' },
           {
             label: setting.tr('Add breakpoint'),
             key: 'add brk',
@@ -103,14 +190,22 @@ const ButtonNode = (props: InstrinicNodes['button']) => {
         <Button {...props.data}>{props.data.name}</Button>
       </DropdownMenu>
       {props.data?.slots?.map(slot => (
-        <Handle
-          {...slot}
-          id={slot.name}
+        <Tooltip
           key={slot.name}
-          style={{
-            backgroundColor: slot.type === 'source' ? 'cyan' : 'yellow',
-          }}
-        />
+          title={
+            slot.type === 'source'
+              ? setting.tr('Edge starts from here')
+              : setting.tr('Edge ends here')
+          }
+        >
+          <Handle
+            {...slot}
+            id={slot.name}
+            style={{
+              backgroundColor: slot.type === 'source' ? 'cyan' : 'yellow',
+            }}
+          />
+        </Tooltip>
       ))}
     </>
   );

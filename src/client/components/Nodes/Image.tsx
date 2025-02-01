@@ -1,12 +1,16 @@
 import { InstrinicNodes } from '@/shared/types';
-import { Select } from 'antd';
+import { Image } from 'antd';
 import { Handle } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
 
-const SelectNode = (props: InstrinicNodes['select']) => {
+const ImagePreview = (props: InstrinicNodes['image']) => {
   return (
     <>
-      <Select {...props.data} />
+      <Image
+        width={64}
+        src="https://zos.alipayobjects.com/rmsportal/jkjgkEfvpUPVyRjUImniVslZfWPnJuuZ.png"
+        {...props.data}
+      />
       {props.data?.slots?.map(slot => (
         <Handle
           {...slot}
@@ -21,4 +25,4 @@ const SelectNode = (props: InstrinicNodes['select']) => {
   );
 };
 
-export default observer(SelectNode);
+export default observer(ImagePreview);

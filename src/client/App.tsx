@@ -20,11 +20,11 @@ export const App = observer(
     return (
       <ConfigProvider
         theme={{
-          cssVar: true,
           algorithm:
             setting.mode === 'dark'
               ? antdTheme.darkAlgorithm
               : antdTheme.defaultAlgorithm,
+          cssVar: true,
         }}
         locale={locale}
       >

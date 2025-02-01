@@ -7,6 +7,7 @@ import {
   Space,
 } from 'antd';
 import clsx from 'clsx';
+import { Fragment } from 'react/jsx-runtime';
 
 import './index.scss';
 
@@ -41,7 +42,11 @@ const DropdownMenu = ({ items, classNames, ...props }: DropdownProps) => {
             if (item.type === 'divider') {
               const dom = <Divider key={item.key} />;
 
-              return item.render ? item.render({ item, dom }) : dom;
+              return (
+                <Fragment key={item.key}>
+                  {item.render ? item.render({ item, dom }) : dom}
+                </Fragment>
+              );
             }
 
             if (item.type === 'group') {
@@ -49,15 +54,20 @@ const DropdownMenu = ({ items, classNames, ...props }: DropdownProps) => {
               return null;
             }
 
+            const { key, render, ...btnProps } = item;
             const dom = (
-              <Space key={item.key}>
-                <Button {...item} type="text">
+              <Space key={key}>
+                <Button {...btnProps} type="text">
                   {item.label}
                 </Button>
               </Space>
             );
 
-            return item.render ? item.render({ item, dom }) : dom;
+            return (
+              <Fragment key={item.key}>
+                {render ? render({ item, dom }) : dom}
+              </Fragment>
+            );
           })}
         </>
       }

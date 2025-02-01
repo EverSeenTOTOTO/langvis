@@ -1,6 +1,6 @@
 import { useStore } from '@/client/store';
 import { NodeMetaEntity } from '@/shared/entities/NodeMeta';
-import { Avatar, Col, Divider, Input, Row, Tooltip } from 'antd';
+import { Avatar, Col, Divider, Input, Row, Space, Tooltip } from 'antd';
 import { groupBy } from 'lodash-es';
 import { observer } from 'mobx-react-lite';
 import { useDrag } from 'react-dnd';
@@ -38,12 +38,14 @@ const NodeMenu = () => {
   const groupedByType = groupBy(home.availableNodemetas, each => each.type);
 
   return (
-    <div className="node-menu">
+    <Space direction="vertical" className="node-menu">
       <Input.Search placeholder={setting.tr('Search nodes')} />
       {Object.keys(groupedByType).map(type => {
         return (
           <div key={type} className="node-category">
-            <Divider orientationMargin="8">{setting.tr(type)}</Divider>
+            <Divider orientationMargin="8">
+              {setting.tr(type).toUpperCase()}
+            </Divider>
             <Row gutter={12}>
               {groupedByType[type].map(meta => {
                 return <DraggableNode {...meta} key={meta.name} />;
@@ -52,7 +54,7 @@ const NodeMenu = () => {
           </div>
         );
       })}
-    </div>
+    </Space>
   );
 };
 
