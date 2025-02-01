@@ -20,6 +20,7 @@ export const App = observer(
     return (
       <ConfigProvider
         theme={{
+          cssVar: true,
           algorithm:
             setting.mode === 'dark'
               ? antdTheme.darkAlgorithm

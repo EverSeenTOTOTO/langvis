@@ -1,29 +1,31 @@
 import useApi from '@/client/hooks/useApi';
 import { useStore } from '@/client/store';
 import { InstrinicNodes } from '@/shared/node';
+import { BoldOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { Handle } from '@xyflow/react';
-import { Button, Col, Form, Input, Popconfirm, Row } from 'antd';
+import { Button, Form, Input, Popconfirm } from 'antd';
 import { observer } from 'mobx-react-lite';
+import DropdownMenu from '../Dropdown';
 import Modal, { ModalProps } from '../Modal';
 
-const ButtonEditModal = ({
+const EditModal = ({
   node,
-  children,
   ...props
-}: Omit<ModalProps, 'children'> & {
-  children?: React.ReactElement;
+}: ModalProps & {
   node: InstrinicNodes['button'];
 }) => {
   const [form] = Form.useForm();
   const home = useStore('home');
   const setting = useStore('setting');
   const updateNodeApi = useApi(home.updateNode.bind(home));
-  const deleteNodeApi = useApi(home.deleteNode.bind(home));
 
   return (
     <Modal
       width={460}
       title={setting.tr('Node Properties')}
+      okButtonProps={{
+        loading: updateNodeApi.loading,
+      }}
       onOk={async () => {
         await form.validateFields();
 
@@ -33,33 +35,6 @@ const ButtonEditModal = ({
         });
 
         return true;
-      }}
-      trigger={children}
-      footer={({ submit, cancel }) => {
-        return (
-          <Row gutter={12} justify="end">
-            <Col>
-              <Popconfirm
-                title={setting.tr('Sure to delete?')}
-                onConfirm={async () => {
-                  await deleteNodeApi.run({ id: node.id });
-                  cancel();
-                }}
-              >
-                <Button danger>{setting.tr('Delete')}</Button>
-              </Popconfirm>
-            </Col>
-            <Col>
-              <Button
-                type="primary"
-                onClick={submit}
-                loading={updateNodeApi.loading}
-              >
-                {setting.tr('Update')}
-              </Button>
-            </Col>
-          </Row>
-        );
       }}
       {...props}
     >
@@ -77,11 +52,56 @@ const ButtonEditModal = ({
 };
 
 const ButtonNode = (props: InstrinicNodes['button']) => {
+  const setting = useStore('setting');
+  const home = useStore('home');
+  const deleteNodeApi = useApi(home.deleteNode.bind(home));
+
   return (
     <>
-      <ButtonEditModal node={props}>
+      <DropdownMenu
+        trigger={['contextMenu']}
+        placement="rightTop"
+        items={[
+          {
+            label: setting.tr('Edit node'),
+            key: 'edit',
+            icon: <EditOutlined />,
+            render: ({ dom }) => {
+              return (
+                <EditModal node={props} trigger={dom as React.ReactElement} />
+              );
+            },
+          },
+          {
+            label: setting.tr('Delete node'),
+            danger: true,
+            key: 'delete',
+            icon: <DeleteOutlined />,
+            render: ({ dom }) => {
+              return (
+                <Popconfirm
+                  title={setting.tr('Sure to delete?')}
+                  placement="rightTop"
+                  onConfirm={async () => {
+                    await deleteNodeApi.run({ id: props.id });
+                  }}
+                >
+                  <span onClick={e => e.stopPropagation()}>{dom}</span>
+                </Popconfirm>
+              );
+            },
+          },
+          { type: 'divider' },
+          {
+            label: setting.tr('Add breakpoint'),
+            key: 'add brk',
+            icon: <BoldOutlined />,
+            disabled: true,
+          },
+        ]}
+      >
         <Button {...props.data}>{props.data.name}</Button>
-      </ButtonEditModal>
+      </DropdownMenu>
       {props.data?.slots?.map(slot => (
         <Handle
           {...slot}

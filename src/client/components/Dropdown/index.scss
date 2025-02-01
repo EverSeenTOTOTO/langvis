@@ -1,0 +1,14 @@
+.dropdownmenu {
+  .ant-popover-inner {
+    padding: 4px;
+
+    .ant-popover-inner-content {
+      display: flex;
+      flex-direction: column;
+
+      .ant-divider {
+        margin: 8px 0;
+      }
+    }
+  }
+}
