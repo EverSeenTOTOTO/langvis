@@ -39,7 +39,7 @@ export class HomeStore {
     this.currentGraphId = res!.data?.[0]?.id;
   }
 
-  @api('/api/graph/detail/:graphId')
+  @api('/api/graph/init/:graphId')
   async fetchGraphDetail(
     _req: { graphId?: string },
     res?: ApiResponse<GraphEntity & { nodes: ClientNode[] }>,

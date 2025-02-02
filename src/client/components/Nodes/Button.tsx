@@ -19,6 +19,7 @@ import {
 import { observer } from 'mobx-react-lite';
 import DropdownMenu from '../Dropdown';
 import Modal, { ModalProps } from '../Modal';
+import { omit } from 'lodash-es';
 
 const EditModal = ({
   node,
@@ -193,7 +194,9 @@ const ButtonNode = (props: InstrinicNodes['button']) => {
         ]}
       >
         <Tooltip title={props.data.description}>
-          <Button {...props.data}>{props.data.name}</Button>
+          <Button {...omit(props.data, 'graphId', 'name', 'description')}>
+            {props.data.name}
+          </Button>
         </Tooltip>
       </DropdownMenu>
       {props.data?.slots?.map(slot => (

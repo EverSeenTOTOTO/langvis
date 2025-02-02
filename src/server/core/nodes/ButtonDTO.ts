@@ -1,15 +1,15 @@
 import { NodeEntity } from '@/shared/entities/Node';
 import { ClientNode, NodeState, ServerNode } from '@/shared/types';
 import { ButtonProps } from 'antd';
-import { Graph, Slot } from '../graph';
+import { Slot } from '../graph';
 
 export class ButtonDTO extends ServerNode<Partial<ButtonProps>> {
-  entity?: NodeEntity;
+  entity!: NodeEntity;
 
   state: NodeState = NodeState.Init;
 
   fromDatabase(entity: NodeEntity) {
-    this.id = entity.id;
+    this.id = entity.id; // newly created
     this.entity = entity;
     entity.data?.slots?.map((slot: any) => {
       this.defineSlot(
@@ -23,27 +23,7 @@ export class ButtonDTO extends ServerNode<Partial<ButtonProps>> {
     return this;
   }
 
-  fromClient(node: ClientNode, ctx: Graph) {
-    if (node.id && node.data?.slots) {
-      // update
-      node.data.slots.forEach((slot: Slot) => {
-        if (!this.findSlot(slot.name)) {
-          this.defineSlot(
-            new Slot(slot.name, {
-              type: slot.type,
-              position: slot.position,
-            }),
-          );
-        }
-      });
-
-      this.entity?.data.slots.forEach((slot: Slot) => {
-        if (!node.data.slots!.find((s: Slot) => s.name === slot.name)) {
-          ctx.deleteSlot(slot);
-        }
-      });
-    }
-
+  fromClient(node: ClientNode) {
     this.entity = {
       ...this.entity!,
       ...node,
@@ -58,12 +38,17 @@ export class ButtonDTO extends ServerNode<Partial<ButtonProps>> {
 
   toClient() {
     return {
-      ...this.entity!,
+      ...this.entity,
+      name: undefined,
+      description: undefined,
+      graphId: undefined,
       data: {
-        ...this.entity?.data,
-        name: this.entity?.name,
-        description: this.entity?.description,
+        ...this.entity.data,
+        name: this.entity.name,
+        description: this.entity.description,
+        graphId: this.entity.graphId,
         state: this.state,
+        slots: this.entity.data?.slots ?? [],
       },
     };
   }

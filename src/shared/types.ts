@@ -1,4 +1,4 @@
-import { Graph, Node, Slot } from '@/server/core/graph';
+import { Node, Slot } from '@/server/core/graph';
 import { Node as XyflowNode } from '@xyflow/react';
 import { ButtonProps, ImageProps, SelectProps } from 'antd';
 import { NodeEntity } from './entities/Node';
@@ -18,12 +18,10 @@ export enum NodeState {
 export type ClientNode<NodeData extends Record<string, unknown> = {}> = Omit<
   XyflowNode<
     NodeData &
-      Partial<
-        NodeEntity & {
-          state?: NodeState;
-          slots?: Slot[];
-        }
-      >
+      Pick<NodeEntity, 'name' | 'description' | 'graphId'> & {
+        state: NodeState;
+        slots: Slot[];
+      }
   >,
   'type'
 > & { type?: NodeMetaName };
@@ -32,7 +30,7 @@ export abstract class ServerNode<
   NodeData extends Record<string, unknown> = {},
 > extends Node {
   abstract fromDatabase(entity: NodeEntity): this;
-  abstract fromClient(node: ClientNode<NodeData>, ctx: Graph): this;
+  abstract fromClient(node: ClientNode<NodeData>): this;
   abstract toClient(): ClientNode<NodeData>;
   abstract toDatabase(): NodeEntity;
 }

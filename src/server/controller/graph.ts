@@ -5,9 +5,8 @@ import { DataSource } from 'typeorm';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { inject } from '../decorator/inject';
-import { Graph } from '../core/graph';
-import { ButtonDTO } from '../core/nodes/Button';
-import { mapNodeDTOFromDB } from '../core/mapDTO';
+import { GraphService } from '../service/GraphService';
+import { NodeService } from '../service/NodeService';
 
 @controller('/api/graph')
 export class GraphController {
@@ -15,7 +14,10 @@ export class GraphController {
   pg?: DataSource = undefined;
 
   @inject()
-  graphs?: Map<string, Graph> = undefined;
+  graphService?: GraphService = undefined;
+
+  @inject()
+  nodeService?: NodeService = undefined;
 
   @api('/all')
   async getAllGraphs(_req: Request, res: Response) {
@@ -25,8 +27,8 @@ export class GraphController {
     return res.json({ data });
   }
 
-  @api('/detail/:graphId')
-  async getGraphDetail(req: Request, res: Response) {
+  @api('/init/:graphId')
+  async initGraph(req: Request, res: Response) {
     const graphRepo = this.pg!.getRepository(GraphEntity);
     const graphId = req.params.graphId;
     const graph = await graphRepo.findOneBy({
@@ -34,31 +36,20 @@ export class GraphController {
     });
 
     const nodeRepo = this.pg!.getRepository(NodeEntity);
-    const nodes = (
-      await nodeRepo.findBy({
-        graphId,
-      })
-    ).map(mapNodeDTOFromDB);
+    const nodes = await nodeRepo.findBy({
+      graphId,
+    });
+    const nodeDtos = nodes.map(n => this.nodeService!.createNodeDTOFromDB(n));
 
-    this.initGraphRuntime({
-      nodes,
-      key: req.session!.id,
+    this.graphService!.initGraph(req.session!.id, {
+      nodes: nodeDtos,
     });
 
     return res.json({
       data: {
         ...graph,
-        nodes: nodes.map(each => each.toClient()),
+        nodes: nodeDtos.map(each => each.toClient()),
       },
     });
-  }
-
-  initGraphRuntime({ nodes, key }: { nodes: ButtonDTO[]; key: string }) {
-    if (this.graphs!.has(key)) return;
-
-    const graph = new Graph();
-
-    nodes.forEach(node => graph.addNode(node));
-    this.graphs!.set(key, graph);
   }
 }
