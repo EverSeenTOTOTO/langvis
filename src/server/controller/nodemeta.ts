@@ -1,15 +1,15 @@
 import { GraphCategory } from '@/shared/entities/Graph';
 import { NodeMetaEntity } from '@/shared/entities/NodeMeta';
 import type { Request, Response } from 'express';
+import { inject, injectable } from 'tsyringe';
 import { DataSource } from 'typeorm';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
-import { inject } from '../decorator/inject';
 
+@injectable()
 @controller('/api/nodemeta')
 export class NodeMetaController {
-  @inject()
-  pg?: DataSource = undefined;
+  constructor(@inject(DataSource) private pg?: DataSource) {}
 
   @api('/get/:graphCategory')
   async getAllNodeTypes(req: Request, res: Response) {

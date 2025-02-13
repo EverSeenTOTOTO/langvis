@@ -25,21 +25,21 @@ dev\:client: clean
 dev\:server:
 	NODE_ENV=development bun --watch src/server/index.ts
 
-.PHONY: build_client
-build_client:
+.PHONY: build\:client
+build\:client:
 	npx vite build --mode production --config config/vite.prod.ts
 
-.PHONY: build_server
-build_server:
+.PHONY: build\:server
+build\:server:
 	npx vite build --mode production --config config/vite.server.ts
 	npx vite build --mode production --config config/vite.serverEntry.ts
 
 .PHONY: build
-build: clean build_client build_server
+build: clean build\:client build\:server
 
 .PHONY: start
 start: build
-	NODE_ENV=production node ${DIST}/server.js
+	NODE_ENV=production bun ${DIST}/server.js
 
 .PHONY: test
 test:

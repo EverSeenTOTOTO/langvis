@@ -1,7 +1,7 @@
 import bindController from '@/server/decorator/controller';
 import type { Express } from 'express';
-import { GraphService } from '../service/GraphService';
-import { NodeService } from '../service/NodeService';
+import { container } from 'tsyringe';
+import { DataSource } from 'typeorm';
 import pg from '../service/pg';
 import { GraphController } from './graph';
 import { NodeController } from './node';
@@ -12,16 +12,9 @@ export default async (app: Express) => {
     await pg.initialize();
   }
 
-  const nodeService = new NodeService();
-  const graphService = new GraphService(nodeService);
+  container.register<DataSource>(DataSource, { useValue: pg });
 
-  const pool = {
-    pg,
-    nodeService,
-    graphService,
-  };
-
-  bindController(GraphController, app, pool);
-  bindController(NodeController, app, pool);
-  bindController(NodeMetaController, app, pool);
+  bindController(GraphController, app);
+  bindController(NodeController, app);
+  bindController(NodeMetaController, app);
 };

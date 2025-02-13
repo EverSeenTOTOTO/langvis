@@ -2,19 +2,19 @@ import 'reflect-metadata';
 
 import { api } from '@/server/decorator/api';
 import bindController, { controller } from '@/server/decorator/controller';
-import { inject } from '@/server/decorator/inject';
 import bodyParser from 'body-parser';
 import express, { type Request, type Response } from 'express';
+import { container, inject, injectable } from 'tsyringe';
 import { expect, it } from 'vitest';
 
 it('controller', async () => {
+  @injectable()
   @controller('/ns')
   class Demo {
-    @inject()
-    foo?: string;
-
-    @inject('baz')
-    bar?: string;
+    constructor(
+      @inject('foo') private foo?: string,
+      @inject('baz') private bar?: string,
+    ) {}
 
     @api('/get')
     async getData(req: Request, res: Response) {
@@ -27,10 +27,10 @@ it('controller', async () => {
   app.use(bodyParser.urlencoded({ extended: false }));
   app.use(bodyParser.json());
 
-  bindController(Demo, app, {
-    foo: 'hello',
-    baz: 'world',
-  });
+  container.register('foo', { useValue: 'hello' });
+  container.register('baz', { useValue: 'world' });
+
+  bindController(Demo, app);
 
   await new Promise<void>((resolve, reject) => {
     const port = 3003;

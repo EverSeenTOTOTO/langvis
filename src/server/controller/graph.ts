@@ -1,23 +1,21 @@
+import { injectable, inject } from 'tsyringe';
 import { GraphEntity } from '@/shared/entities/Graph';
 import { NodeEntity } from '@/shared/entities/Node';
 import type { Request, Response } from 'express';
 import { DataSource } from 'typeorm';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
-import { inject } from '../decorator/inject';
 import { GraphService } from '../service/GraphService';
 import { NodeService } from '../service/NodeService';
 
+@injectable()
 @controller('/api/graph')
 export class GraphController {
-  @inject()
-  pg?: DataSource = undefined;
-
-  @inject()
-  graphService?: GraphService = undefined;
-
-  @inject()
-  nodeService?: NodeService = undefined;
+  constructor(
+    @inject(DataSource) private pg?: DataSource,
+    @inject(GraphService) private graphService?: GraphService,
+    @inject(NodeService) private nodeService?: NodeService,
+  ) {}
 
   @api('/all')
   async getAllGraphs(_req: Request, res: Response) {

@@ -1,15 +1,13 @@
 import { ClientNode, ServerNode } from '@/shared/types';
 import { Edge, Graph, Slot } from '../core/graph';
+import { injectable, inject } from 'tsyringe';
 import { NodeService } from './NodeService';
 
+@injectable()
 export class GraphService {
-  nodeService: NodeService;
-
   graphs: Map<string, Graph> = new Map();
 
-  constructor(nodeService: NodeService) {
-    this.nodeService = nodeService;
-  }
+  constructor(@inject(NodeService) private nodeService?: NodeService) {}
 
   protected getGraph(key: string) {
     const graph = this.graphs.get(key);

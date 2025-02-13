@@ -1,7 +1,6 @@
-import { getOwnPropertyNames } from '@/shared/constants';
+import { container } from 'tsyringe';
 import type { Express } from 'express';
 import bindApi from './api';
-import { injectKey } from './inject';
 
 const metaDataKey = Symbol('controller');
 
@@ -11,21 +10,12 @@ export function controller(namespace = ''): ClassDecorator {
   };
 }
 
-export default <T, C extends Record<string, any>>(
-  Clz: new (...params: T[]) => C,
+export default <C extends Record<string, any>>(
+  Clz: new (...params: any[]) => C,
   app: Express,
-  pool: Record<string, any>,
 ) => {
-  const instance = new Clz();
+  const instance = container.resolve(Clz);
   const { namespace } = Reflect.getMetadata(metaDataKey, Clz);
-
-  getOwnPropertyNames(instance).forEach(prop => {
-    const injectPropName = Reflect.getMetadata(injectKey, instance, prop);
-
-    if (injectPropName) {
-      Reflect.set(instance, prop, pool[injectPropName]);
-    }
-  });
 
   bindApi(instance, namespace, app);
 

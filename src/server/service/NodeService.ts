@@ -1,7 +1,9 @@
 import { NodeEntity } from '@/shared/entities/Node';
 import { ClientNode, ServerNode } from '@/shared/types';
 import { ButtonDTO } from '../core/nodes/ButtonDTO';
+import { injectable } from 'tsyringe';
 
+@injectable()
 export class NodeService {
   createNodeDTOFromDB(node: NodeEntity): ServerNode {
     switch (node.type) {

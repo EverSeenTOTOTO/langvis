@@ -1,22 +1,20 @@
+import { injectable, inject } from 'tsyringe';
 import { NodeEntity } from '@/shared/entities/Node';
 import type { Request, Response } from 'express';
 import { DataSource } from 'typeorm';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
-import { inject } from '../decorator/inject';
 import { GraphService } from '../service/GraphService';
 import { NodeService } from '../service/NodeService';
 
+@injectable()
 @controller('/api/node')
 export class NodeController {
-  @inject()
-  pg?: DataSource = undefined;
-
-  @inject()
-  nodeService?: NodeService = undefined;
-
-  @inject()
-  graphService?: GraphService = undefined;
+  constructor(
+    @inject(DataSource) private pg?: DataSource,
+    @inject(NodeService) private nodeService?: NodeService,
+    @inject(GraphService) private graphService?: GraphService,
+  ) {}
 
   @api('/create', { method: 'post' })
   async createNode(req: Request, res: Response) {

@@ -1,14 +1,14 @@
 import { __dirname, isProd } from '@/server/utils';
 import bodyParser from 'body-parser';
-import cookieParser from 'cookie-parser';
 import compression from 'compression';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import express, { Express } from 'express';
 import path from 'path';
 import 'reflect-metadata';
 import bindControllers from './controller';
-import bindSSRMiddleware from './middleware/ssr';
 import bindSessionMiddleware from './middleware/session';
+import bindSSRMiddleware from './middleware/ssr';
 
 dotenv.config({
   path: isProd
