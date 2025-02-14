@@ -8,7 +8,7 @@ export default async (app: Express) => {
       name: 'session',
       keys: [process.env.VITE_SESSION_SECRET!],
       maxAge: 24 * 60 * 60 * 1000,
-      signed: false,
+      signed: false, // TODO
     }),
   );
 

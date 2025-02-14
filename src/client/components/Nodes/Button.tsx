@@ -16,10 +16,10 @@ import {
   Switch,
   Tooltip,
 } from 'antd';
+import { omit } from 'lodash-es';
 import { observer } from 'mobx-react-lite';
 import DropdownMenu from '../Dropdown';
 import Modal, { ModalProps } from '../Modal';
-import { omit } from 'lodash-es';
 
 const EditModal = ({
   node,
@@ -46,6 +46,7 @@ const EditModal = ({
 
         await updateNodeApi.run({
           id: node.id,
+          type: node.type,
           data: {
             ...values.data,
             slots: NodeInitialData[node.type!].slots.filter(

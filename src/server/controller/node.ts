@@ -20,13 +20,13 @@ export class NodeController {
   async createNode(req: Request, res: Response) {
     const node = this.nodeService!.createNodeDTOFromClient(req.body);
     const dbNode = await this.pg!.getRepository(NodeEntity).save(
-      node.toDatabase(),
+      this.nodeService!.toDatabaseNode(node),
     );
 
     this.nodeService!.updateNodeDTOFromDB(node, dbNode);
     this.graphService!.addNode(req.session!.id, node);
 
-    return res.json({ data: node.toClient() });
+    return res.json({ data: this.nodeService!.toClientNode(node) });
   }
 
   @api('/delete/:id', { method: 'post' })
@@ -46,10 +46,10 @@ export class NodeController {
 
     await this.pg!.createQueryBuilder()
       .update(NodeEntity)
-      .set(node.toDatabase())
+      .set(this.nodeService!.toDatabaseNode(node))
       .where('id = :id', { id })
       .execute();
 
-    return res.json({ data: node.toClient() });
+    return res.json({ data: this.nodeService!.toClientNode(node) });
   }
 }

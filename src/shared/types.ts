@@ -24,15 +24,10 @@ export type ClientNode<NodeData extends Record<string, unknown> = {}> = Omit<
       }
   >,
   'type'
-> & { type?: NodeMetaName };
+> & { type: NodeMetaName };
 
-export abstract class ServerNode<
-  NodeData extends Record<string, unknown> = {},
-> extends Node {
-  abstract fromDatabase(entity: NodeEntity): this;
-  abstract fromClient(node: ClientNode<NodeData>): this;
-  abstract toClient(): ClientNode<NodeData>;
-  abstract toDatabase(): NodeEntity;
+export abstract class ServerNode extends Node {
+  type: NodeMetaName = NodeMetaName.DEFAULT;
 }
 
 export type InstrinicNodes = {

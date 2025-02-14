@@ -46,7 +46,7 @@ export class GraphController {
     return res.json({
       data: {
         ...graph,
-        nodes: nodeDtos.map(each => each.toClient()),
+        nodes: nodeDtos.map(each => this.nodeService!.toClientNode(each)),
       },
     });
   }
