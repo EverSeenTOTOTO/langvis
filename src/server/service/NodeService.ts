@@ -1,7 +1,7 @@
 import { NodeEntity } from '@/shared/entities/Node';
 import { ClientNode, ServerNode } from '@/shared/types';
-import { ButtonDTO } from '../core/nodes/ButtonDTO';
 import { injectable } from 'tsyringe';
+import { ButtonDTO } from '../core/nodes/ButtonDTO';
 
 @injectable()
 export class NodeService {
@@ -11,7 +11,7 @@ export class NodeService {
         return new ButtonDTO(node.id).fromDatabase(node);
       default:
         throw new Error(
-          `Failed to create DTO from database, not implemented. Node type: ${node.type}`,
+          `Failed to create DTO from database: not implemented. Node type: ${node.type}`,
         );
     }
   }
@@ -22,7 +22,7 @@ export class NodeService {
         return new ButtonDTO(node.id).fromClient(node);
       default:
         throw new Error(
-          `Failed to create DTO from client, not implemented. Node type: ${node.type}`,
+          `Failed to create DTO from client: not implemented. Node type: ${node.type}`,
         );
     }
   }

@@ -1,40 +1,30 @@
 import { configure } from 'mobx';
 import 'reflect-metadata';
+import { container } from 'tsyringe';
 import composeApi from '../decorator/api';
-import composeCatchGuard from '../decorator/catchGuard';
 import composeHydrate from '../decorator/hydrate';
-import composePromisify from '../decorator/promisify';
 import { GraphStore } from './modules/graph';
 import { HomeStore } from './modules/home';
 import { SettingStore } from './modules/setting';
 
 configure({ enforceActions: 'never' });
 
-const newStore = <T, C extends Record<string, any>>(
+const bindStore = <T, C extends Record<string, any>>(
   Clz: new (...params: T[]) => C,
-  ...params: T[]
 ) => {
   // mobx 的Proxy wrap 会错误将异步函数包装成同步，所以需要先 promisify，不然 catchGuard 会失效
-  return [
-    composeApi,
-    composePromisify,
-    composeCatchGuard,
-    composeHydrate,
-  ].reduce((instance, compose) => compose(instance), new Clz(...params));
+  return [composeApi, composeHydrate].reduce(
+    (instance, compose) => compose(instance),
+    container.resolve(Clz),
+  );
 };
 
 export class AppStore {
-  home: HomeStore;
+  home = bindStore(HomeStore);
 
-  graph: GraphStore;
+  graph = bindStore(GraphStore);
 
-  setting: SettingStore;
-
-  constructor() {
-    this.home = newStore(HomeStore, this);
-    this.graph = newStore(GraphStore, this);
-    this.setting = newStore(SettingStore, this);
-  }
+  setting = bindStore(SettingStore);
 
   hydrate(data: Record<string, any>) {
     Object.keys(data).forEach(key => {

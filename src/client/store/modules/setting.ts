@@ -1,10 +1,11 @@
 import { hydrate } from '@/client/decorator/hydrate';
 import i18next from 'i18next';
 import { makeAutoObservable } from 'mobx';
-import type { AppStore } from '..';
+import { singleton } from 'tsyringe';
 
 type ThemeMode = 'light' | 'dark';
 
+@singleton()
 export class SettingStore {
   @hydrate()
   mode: ThemeMode = 'dark';
@@ -14,11 +15,8 @@ export class SettingStore {
 
   tr = i18next.t;
 
-  root: AppStore;
-
-  constructor(root: AppStore) {
+  constructor() {
     makeAutoObservable(this);
-    this.root = root;
   }
 
   toggleMode() {

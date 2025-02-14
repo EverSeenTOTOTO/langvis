@@ -1,34 +1,35 @@
 import {
-  addEdge,
-  applyEdgeChanges,
-  applyNodeChanges,
-  Connection,
-  Edge,
-  EdgeChange,
-  Node,
-  NodeChange,
-  ReactFlowInstance,
+    addEdge,
+    applyEdgeChanges,
+    applyNodeChanges,
+    Connection,
+    Edge,
+    EdgeChange,
+    Node,
+    NodeChange,
+    ReactFlowInstance,
 } from '@xyflow/react';
 import { makeAutoObservable } from 'mobx';
-import type { AppStore } from '..';
+import { singleton } from 'tsyringe';
 
+@singleton()
 export class GraphStore {
-  root: AppStore;
-
   nodes: Node[] = [];
 
   edges: Edge[] = [];
 
   flow?: ReactFlowInstance;
 
-  constructor(root: AppStore) {
-    this.root = root;
-
+  constructor() {
     makeAutoObservable(this);
   }
 
   setFlow(flow: ReactFlowInstance) {
     this.flow = flow;
+  }
+
+  setNodes(nodes: Node[]) {
+    this.nodes = nodes;
   }
 
   // sync graph state with app state

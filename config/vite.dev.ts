@@ -1,7 +1,7 @@
 import fs from 'fs';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 import { defineConfig, ViteDevServer } from 'vite';
 import base, { paths } from './vite.common';
-import { createProxyMiddleware } from 'http-proxy-middleware';
 
 const devApiProxy = () => ({
   name: 'dev-api-proxy',
@@ -50,6 +50,9 @@ export default defineConfig(c => {
     ...config,
     server: {
       host: 'localhost',
+    },
+    ssr: {
+      noExternal: ['tsyringe'],
     },
     plugins: [...(config.plugins || []), devApiProxy(), devSSR()],
   };
