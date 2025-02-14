@@ -1,14 +1,14 @@
-import { injectable, inject } from 'tsyringe';
 import { GraphEntity } from '@/shared/entities/Graph';
 import { NodeEntity } from '@/shared/entities/Node';
 import type { Request, Response } from 'express';
+import { inject, singleton } from 'tsyringe';
 import { DataSource } from 'typeorm';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { GraphService } from '../service/GraphService';
 import { NodeService } from '../service/NodeService';
 
-@injectable()
+@singleton()
 @controller('/api/graph')
 export class GraphController {
   constructor(

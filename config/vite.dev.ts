@@ -11,6 +11,11 @@ const devApiProxy = () => ({
       target: `http://localhost:${vite.config.env?.VITE_PORT}/api`,
       changeOrigin: true,
       logger,
+      // on: {
+      //   proxyRes(proxyRes) {
+      //     logger.info(proxyRes.headers['set-cookie']);
+      //   },
+      // },
     });
 
     vite.middlewares.use('/api', proxy);

@@ -1,7 +1,6 @@
 import { __dirname, isProd } from '@/server/utils';
 import bodyParser from 'body-parser';
 import compression from 'compression';
-import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import express, { Express } from 'express';
 import path from 'path';
@@ -23,13 +22,12 @@ export const createServer = async (): Promise<Express> => {
   app.use(express.static(__dirname, { index: false }));
   app.use(bodyParser.urlencoded({ extended: false }));
   app.use(bodyParser.json());
-  app.use(cookieParser());
   app.use(compression());
-
-  await bindSessionMiddleware(app);
 
   // TODO
   app.locals.logger = console;
+
+  await bindSessionMiddleware(app);
 
   await bindControllers(app);
   // must be last

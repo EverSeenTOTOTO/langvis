@@ -1,5 +1,6 @@
 import { getOwnPropertyNames, isClient } from '@/shared/constants';
 import { message } from 'antd';
+import fetchCookie from 'fetch-cookie';
 import { merge } from 'lodash-es';
 import { compile } from 'path-to-regexp';
 
@@ -112,9 +113,10 @@ export function wrapApi<
           }
         : undefined;
       const timeout = options?.timeout || 10_000;
+      const fetchApi = isClient() ? fetch : fetchCookie(fetch);
 
       const res = await Promise.race([
-        fetch(url, merge(options, extraOptions)),
+        fetchApi(url, merge(options, extraOptions)),
         new Promise<Error>(resolve => {
           setTimeout(
             () => resolve(new Error(`Request timeout: ${url}`)),

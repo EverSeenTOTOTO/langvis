@@ -35,7 +35,7 @@ const EditModal = ({
   return (
     <Modal
       width={460}
-      title={`${setting.tr('Node Properties')} ${node.data.name}`}
+      title={`${node.data.name} ${setting.tr('Node Properties')}`}
       okButtonProps={{
         loading: updateNodeApi.loading,
       }}

@@ -1,9 +1,9 @@
 import { ClientNode, ServerNode } from '@/shared/types';
+import { inject, singleton } from 'tsyringe';
 import { Edge, Graph, Slot } from '../core/graph';
-import { injectable, inject } from 'tsyringe';
 import { NodeService } from './NodeService';
 
-@injectable()
+@singleton()
 export class GraphService {
   graphs: Map<string, Graph> = new Map();
 

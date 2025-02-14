@@ -1,13 +1,13 @@
 import {
-    addEdge,
-    applyEdgeChanges,
-    applyNodeChanges,
-    Connection,
-    Edge,
-    EdgeChange,
-    Node,
-    NodeChange,
-    ReactFlowInstance,
+  addEdge,
+  applyEdgeChanges,
+  applyNodeChanges,
+  Connection,
+  Edge,
+  EdgeChange,
+  Node,
+  NodeChange,
+  ReactFlowInstance,
 } from '@xyflow/react';
 import { makeAutoObservable } from 'mobx';
 import { singleton } from 'tsyringe';

@@ -1,17 +1,17 @@
 import { useStore } from '@/client/store';
 import {
-    NodeInitialData,
-    NodeMetaEntity,
-    NodeMetaName,
+  NodeInitialData,
+  NodeMetaEntity,
+  NodeMetaName,
 } from '@/shared/entities/NodeMeta';
 import {
-    Background,
-    Controls,
-    EdgeChange,
-    NodeChange,
-    NodeTypes,
-    ReactFlow,
-    ReactFlowProps,
+  Background,
+  Controls,
+  EdgeChange,
+  NodeChange,
+  NodeTypes,
+  ReactFlow,
+  ReactFlowProps,
 } from '@xyflow/react';
 import { message } from 'antd';
 import { observer } from 'mobx-react-lite';
@@ -63,7 +63,6 @@ function Graph(props: ReactFlowProps) {
       canDrop: monitor.canDrop(),
     }),
   }));
-
 
   return (
     <ReactFlow
