@@ -12,9 +12,13 @@ const port = 3002;
 let server: http.Server;
 
 beforeAll(() => {
-  server = http.createServer((req, res) => {
+  server = http.createServer(async (req, res) => {
     if (/api\/?get/.test(req.url!)) {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Set-Cookie':
+          'session=eyJpZCI6Ijc3MWY5ZDdjLTEwNzUtNDljNC05YzZlLWJiNDI0ZDQ3MThkNSJ9',
+      });
       res.end(JSON.stringify({ data: 'GET' }));
       return;
     }
@@ -43,6 +47,17 @@ beforeAll(() => {
       res.end(JSON.stringify({ error: 'test' }));
       return;
     }
+
+    if (/apicookie/.test(req.url!)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ cookie: req.headers.cookie }));
+      return;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    res.writeHead(404);
+    res.end({});
   });
   server.listen(port);
 });
@@ -173,6 +188,11 @@ it('api', async () => {
     async error3(_: void, res?: ApiResponse) {
       return res;
     }
+
+    @api(`http://localhost:${port}/apicookie`)
+    async cookie(_: void, res?: ApiResponse) {
+      return res;
+    }
   }
 
   const demo = factory(new Demo());
@@ -192,4 +212,8 @@ it('api', async () => {
     error: 'test',
   });
   expect(await demo.withParams({ type: 'get' })).toEqual({ data: 'GET' });
+  expect(await demo.cookie()).toEqual({
+    cookie:
+      'session=eyJpZCI6Ijc3MWY5ZDdjLTEwNzUtNDljNC05YzZlLWJiNDI0ZDQ3MThkNSJ9',
+  });
 });

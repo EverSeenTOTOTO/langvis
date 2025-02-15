@@ -8,7 +8,7 @@ export class Slot implements HandleProps {
 
   position: Position;
 
-  constructor(name: string, options?: HandleProps) {
+  constructor(name: string, options?: Partial<HandleProps>) {
     this.name = name;
     this.type = options?.type || 'target';
     this.position = options?.position || Position.Right;
@@ -21,6 +21,12 @@ export class Edge {
   to: Slot;
 
   constructor(id: string, from: Slot, to: Slot) {
+    if (from.type !== 'source' || to.type !== 'target') {
+      throw new Error(
+        `Edge must connect a source slot to a target slot, edgeId: ${id}.`,
+      );
+    }
+
     this.id = id;
     this.from = from;
     this.to = to;
@@ -155,7 +161,7 @@ export class Graph {
     return this;
   }
 
-  protected addEdge(edge: Edge): Graph {
+  connect(edge: Edge): Graph {
     const from = this.slotIndexMap.get(edge.from);
 
     if (!from) {
@@ -180,12 +186,6 @@ export class Graph {
     to.edges.set(edge.id, edge);
     this.edges.set(edge.id, edge);
 
-    return this;
-  }
-
-  connect(edgeId: string, from: Slot, to: Slot): Graph {
-    const edge = new Edge(edgeId, from, to);
-    this.addEdge(edge);
     return this;
   }
 
@@ -233,12 +233,20 @@ export class Graph {
   }
 
   deleteSlot(slot: Slot): Graph {
-    const { edges } = this.slotIndexMap.get(slot) || {};
+    const map = this.slotIndexMap.get(slot);
 
-    if (edges) {
-      const toDeleteEdges = [...edges.values()];
-
-      toDeleteEdges.forEach(edge => this.deleteEdge(edge));
+    if (map?.edges) {
+      if (slot.type === 'source') {
+        [...map.edges.values()].forEach(edge => {
+          this.slotIndexMap.get(edge.to)?.edges?.delete(edge.id);
+          this.edges.delete(edge.id);
+        });
+      } else {
+        [...map.edges.values()].forEach(edge => {
+          this.slotIndexMap.get(edge.from)?.edges?.delete(edge.id);
+          this.edges.delete(edge.id);
+        });
+      }
     }
 
     this.getNode(slot)?.deleteSlot(slot);
@@ -261,11 +269,5 @@ export class Graph {
 
   getEdge(edgeId: string): Edge | undefined {
     return this.edges.get(edgeId);
-  }
-
-  getOutputEdges(slot: Slot): Edge[] {
-    const edges = this.getEdges(slot);
-
-    return [...edges.values()].filter(edge => edge.from === slot);
   }
 }

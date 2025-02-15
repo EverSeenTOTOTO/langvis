@@ -1,10 +1,11 @@
-import { getOwnPropertyNames, isClient } from '@/shared/constants';
+import { getOwnPropertyNames, isClient, isTest } from '@/shared/constants';
 import { message } from 'antd';
 import fetchCookie from 'fetch-cookie';
 import { merge } from 'lodash-es';
 import { compile } from 'path-to-regexp';
 
 const metaDataKey = Symbol('client_api');
+const serverFetch = fetchCookie(fetch);
 
 export type ApiResponse<T = Record<string, any>> = {
   error?: any;
@@ -35,6 +36,7 @@ export function api<P = Record<string, any>>(
 }
 
 const logError = (error: any) => {
+  if (isTest()) return;
   if (isClient()) {
     message.error(error.message);
   } else {
@@ -113,7 +115,8 @@ export function wrapApi<
           }
         : undefined;
       const timeout = options?.timeout || 10_000;
-      const fetchApi = isClient() ? fetch : fetchCookie(fetch);
+
+      const fetchApi = isClient() ? fetch : serverFetch;
 
       const res = await Promise.race([
         fetchApi(url, merge(options, extraOptions)),
@@ -134,7 +137,9 @@ export function wrapApi<
       const rsp = await res.json();
 
       if (res.status < 200 || res.status >= 300) {
-        const e = new Error(rsp?.error ?? `Response error: ${url}`);
+        const e = new Error(
+          rsp?.error ?? `Response error: ${url} ${res.status}`,
+        );
 
         logError(e);
 

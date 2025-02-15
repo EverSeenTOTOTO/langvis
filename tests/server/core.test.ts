@@ -1,16 +1,30 @@
-import { it, expect, vi } from 'vitest';
+import { Edge, Graph, Node, Slot } from '@/server/core/graph';
 import { v4 as uuid } from 'uuid';
-import { Graph, Node, Slot } from '@/server/core/graph';
+import { expect, it, vi } from 'vitest';
 
 class TestNode extends Node {
   constructor(id: string, callback: () => void) {
     super(id);
 
-    this.defineSlot(new Slot('slot'), callback);
+    this.defineSlot(
+      new Slot('from', {
+        type: 'target',
+      }),
+      callback,
+    );
+    this.defineSlot(
+      new Slot('to', {
+        type: 'source',
+      }),
+    );
   }
 
-  get slot() {
-    return this.slots.get('slot')!;
+  get from() {
+    return this.slots.get('from')!;
+  }
+
+  get to() {
+    return this.slots.get('to')!;
   }
 }
 
@@ -20,28 +34,34 @@ it('test node methods', () => {
   const node = new TestNode(id, fn);
 
   expect(node.id).toBe(id);
-  expect(node.getSlot('slot')).toBe(node.slot);
-  expect(node.getSlot(node.slot)).toBe(node.slot);
+  expect(node.slots.size).toBe(2);
+  expect(node.getSlot('from')).toBe(node.from);
+  expect(node.getSlot(node.from)).toBe(node.from);
 
-  node.emit('slot', 42);
+  node.emit('from', 42);
   expect(fn).toHaveBeenCalledWith(42);
 
-  node.off('slot', fn);
-  node.addListener('slot', fn);
-  node.emit(node.slot, 24);
+  node.off('from', fn);
+  node.addListener('from', fn);
+  node.emit(node.from, 24);
   expect(fn).toHaveBeenCalledWith(24);
 
-  node.removeListener(node.slot, fn);
-  node.emit('slot', 42);
-  node.emit('slot', 42);
-  node.emit('slot', 42);
-  node.emit('slot', 42);
-  node.emit(node.slot, 24);
-  node.emit(node.slot, 24);
-  node.emit(node.slot, 24);
-  node.emit(node.slot, 24);
+  node.removeListener(node.from, fn);
+  node.emit('from', 42);
+  node.emit('from', 42);
+  node.emit('from', 42);
+  node.emit('from', 42);
+  node.emit(node.from, 24);
+  node.emit(node.from, 24);
+  node.emit(node.from, 24);
+  node.emit(node.from, 24);
 
   expect(fn).toHaveBeenCalledTimes(2);
+
+  node.deleteSlot('from');
+  expect(node.slots.size).toBe(1);
+  node.deleteSlot(node.to);
+  expect(node.slots.size).toBe(0);
 });
 
 const executed = new WeakSet<Node>();
@@ -51,24 +71,21 @@ class TestGraph extends Graph {
     const queue = [start];
 
     while (queue.length > 0) {
-      const top = queue.shift()!;
+      const top = queue.shift()! as TestNode;
 
-      top.emit('slot');
+      top.emit(top.from);
+      this.getEdges(top.to).forEach(edge => {
+        const to = this.getNode(edge.to);
 
-      top.slots.forEach(slot => {
-        this.getEdges(slot).forEach(edge => {
-          const to = this.getNode(edge.to);
-
-          if (to && !executed.has(to)) {
-            queue.push(to);
-          }
-        });
+        if (to && !executed.has(to)) {
+          queue.push(to);
+        }
       });
     }
   }
 }
 
-it('test graph methods', () => {
+it('test graph methods deleteSlot', () => {
   const graph = new TestGraph();
 
   const a = new TestNode('a', () => {});
@@ -80,34 +97,82 @@ it('test graph methods', () => {
   expect(graph.getNode(uuid())).toBeUndefined();
   expect(graph.nodeCount).toBe(2);
 
-  expect(() => graph.connect(uuid(), a.slot, new Slot('demo'))).toThrow();
-  expect(() => graph.connect(uuid(), new Slot('demo'), b.slot)).toThrow();
+  expect(() =>
+    graph.connect(
+      new Edge(
+        uuid(),
+        a.to,
+        new Slot('demo', {
+          type: 'target',
+        }),
+      ),
+    ),
+  ).toThrow();
+  expect(() =>
+    graph.connect(
+      new Edge(uuid(), new Slot('demo', { type: 'source' }), b.from),
+    ),
+  ).toThrow();
 
-  graph.connect(uuid(), a.slot, b.slot);
+  expect(() => graph.connect(new Edge(uuid(), a.from, b.from))).toThrow();
+  expect(() => graph.connect(new Edge(uuid(), a.to, b.to))).toThrow();
+
+  graph.connect(new Edge(uuid(), a.to, b.from));
+  graph.connect(new Edge(uuid(), b.to, a.from));
+
+  expect(graph.edgeCount).toBe(2);
+
+  graph.deleteSlot(a.from);
 
   expect(graph.edgeCount).toBe(1);
 
-  graph.connect(uuid(), a.slot, b.slot);
-  graph.connect(uuid(), b.slot, a.slot);
+  graph.deleteSlot(a.to);
 
-  expect(graph.edgeCount).toBe(3);
-
-  const outputEdges = graph.getOutputEdges(b.slot);
-
-  expect(outputEdges.length).toBe(1);
-  expect(graph.getEdge(outputEdges[0].id)).toBe(outputEdges[0]);
-  graph.deleteEdge(outputEdges[0]);
-  expect(graph.edgeCount).toBe(2);
-
-  graph.deleteNode(a);
-  expect(graph.nodeCount).toBe(1);
   expect(graph.edgeCount).toBe(0);
+  expect(a.from).toBeUndefined();
+});
+
+it('test graph methods deleteEdge', () => {
+  const graph = new TestGraph();
+
+  const a = new TestNode('a', () => {});
+  const b = new TestNode('b', () => {});
+
+  graph.addNode(a).addNode(b);
+  const e = uuid();
+  graph.connect(new Edge(e, a.to, b.from));
+  graph.connect(new Edge(uuid(), b.to, a.from));
+
+  graph.deleteEdge(graph.getEdge(e)!);
+
+  expect(graph.edgeCount).toBe(1);
+  expect(graph.getEdges(a.to).size).toBe(0);
+  expect(graph.getEdges(b.from).size).toBe(0);
 
   graph.reset();
+
   expect(graph.nodeCount).toBe(0);
 });
 
-it('test graph op', async () => {
+it('test graph methods deleteNode', () => {
+  const graph = new TestGraph();
+
+  const a = new TestNode('a', () => {});
+  const b = new TestNode('b', () => {});
+
+  graph.addNode(a).addNode(b);
+  graph.connect(new Edge(uuid(), a.to, b.from));
+  graph.connect(new Edge(uuid(), b.to, a.from));
+
+  graph.deleteNode(a);
+
+  expect(graph.edgeCount).toBe(0);
+  expect(graph.nodeCount).toBe(1);
+  expect(graph.slotIndexMap.get(a.from)).toBeUndefined();
+  expect(graph.slotIndexMap.get(a.to)).toBeUndefined();
+});
+
+it('test graph runtime', async () => {
   const fn = vi.fn();
 
   const a = new TestNode('a', () => {
@@ -128,10 +193,9 @@ it('test graph op', async () => {
   const graph = new TestGraph();
 
   graph.addNode(a).addNode(b).addNode(c);
-  graph.connect(uuid(), a.slot, b.slot);
-  graph.connect(uuid(), b.slot, c.slot);
-  const ac = uuid();
-  graph.connect(ac, c.slot, a.slot);
+  graph.connect(new Edge(uuid(), a.to, b.from));
+  graph.connect(new Edge(uuid(), b.to, c.from));
+  graph.connect(new Edge(uuid(), c.to, a.from));
 
   await graph.run(a);
 

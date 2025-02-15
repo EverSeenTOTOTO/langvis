@@ -5,6 +5,8 @@ DIST ?= dist
 .PHONY: prepare
 prepare:
 	npx husky install
+	# https://github.com/oven-sh/bun/issues/4677#issuecomment-1713522789
+	jq '.main = .module' node_modules/tsyringe/package.json > tmp.json && mv tmp.json node_modules/tsyringe/package.json
 
 .PHONY: lint
 lint:
