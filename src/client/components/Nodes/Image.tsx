@@ -1,9 +1,9 @@
-import { InstrinicNodes } from '@/shared/types';
+import { InstrinicNodeProps } from '@/shared/types';
 import { Image } from 'antd';
 import { Handle } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
 
-const ImagePreview = (props: InstrinicNodes['image']) => {
+const ImagePreview = (props: InstrinicNodeProps['image']) => {
   return (
     <>
       <Image

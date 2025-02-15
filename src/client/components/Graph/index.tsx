@@ -53,7 +53,7 @@ function Graph(props: ReactFlowProps) {
         type: item.name,
         position: flowPosition,
         data: {
-          ...NodeInitialData[item.name],
+          ...(NodeInitialData[item.name] as any),
           graphId: home.currentGraphId!,
         },
       });

@@ -1,4 +1,6 @@
+import { Position } from '@xyflow/react';
 import { Column, Entity, PrimaryColumn } from 'typeorm';
+import { ClientNodeProps } from '../types';
 import { GraphCategory } from './Graph';
 
 export enum NodeMetaName {
@@ -13,21 +15,23 @@ export enum NodeType {
   DISPLAY = 'display',
 }
 
-export const NodeInitialData: Record<string, any> = {
+export const NodeInitialData: Record<
+  string,
+  Partial<ClientNodeProps['data']>
+> = {
   [NodeMetaName.DEFAULT]: {},
   [NodeMetaName.BUTTON]: {
     name: 'Button',
-    type: 'default',
     slots: [
       {
         name: 'source',
         type: 'source',
-        position: 'right',
+        position: Position.Left,
       },
       {
         name: 'target',
         type: 'target',
-        position: 'left',
+        position: Position.Right,
       },
     ],
   },

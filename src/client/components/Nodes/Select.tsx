@@ -1,9 +1,9 @@
-import { InstrinicNodes } from '@/shared/types';
+import { InstrinicNodeProps } from '@/shared/types';
 import { Select } from 'antd';
 import { Handle } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
 
-const SelectNode = (props: InstrinicNodes['select']) => {
+const SelectNode = (props: InstrinicNodeProps['select']) => {
   return (
     <>
       <Select {...props.data} />

@@ -1,7 +1,7 @@
 import useApi from '@/client/hooks/useApi';
 import { useStore } from '@/client/store';
 import { NodeInitialData } from '@/shared/entities/NodeMeta';
-import { InstrinicNodes } from '@/shared/types';
+import { InstrinicNodeProps } from '@/shared/types';
 import { BoldOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { Handle } from '@xyflow/react';
 import {
@@ -25,7 +25,7 @@ const EditModal = ({
   node,
   ...props
 }: ModalProps & {
-  node: InstrinicNodes['button'];
+  node: InstrinicNodeProps['button'];
 }) => {
   const [form] = Form.useForm();
   const home = useStore('home');
@@ -49,7 +49,7 @@ const EditModal = ({
           type: node.type,
           data: {
             ...values.data,
-            slots: NodeInitialData[node.type!].slots.filter(
+            slots: NodeInitialData[node.type as string].slots!.filter(
               (slot: { type: string }) => values.slots?.includes(slot.type),
             ),
           },
@@ -63,7 +63,7 @@ const EditModal = ({
         layout="vertical"
         form={form}
         initialValues={{
-          data: node.data,
+          data: { ...node.data, type: node.data?.type ?? 'default' },
           slots: node.data?.slots?.map(slot => slot.type),
         }}
       >
@@ -115,7 +115,7 @@ const EditModal = ({
                 options={[
                   {
                     label: (
-                      <Tooltip title={setting.tr('Edge starts from here')}>
+                      <Tooltip title={setting.tr('Edge ends here')}>
                         <span>Target</span>
                       </Tooltip>
                     ),
@@ -124,7 +124,7 @@ const EditModal = ({
                   },
                   {
                     label: (
-                      <Tooltip title={setting.tr('Edge ends here')}>
+                      <Tooltip title={setting.tr('Edge starts from here')}>
                         <span>Source</span>
                       </Tooltip>
                     ),
@@ -145,7 +145,7 @@ const EditModal = ({
   );
 };
 
-const ButtonNode = (props: InstrinicNodes['button']) => {
+const ButtonNode = (props: InstrinicNodeProps['button']) => {
   const setting = useStore('setting');
   const home = useStore('home');
   const deleteNodeApi = useApi(home.deleteNode.bind(home));

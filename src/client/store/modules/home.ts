@@ -2,7 +2,7 @@ import { api, type ApiResponse } from '@/client/decorator/api';
 import { hydrate } from '@/client/decorator/hydrate';
 import { GraphEntity } from '@/shared/entities/Graph';
 import { NodeMetaEntity } from '@/shared/entities/NodeMeta';
-import { type ClientNode } from '@/shared/types';
+import { ClientNode } from '@/shared/types';
 import { autorun, makeAutoObservable } from 'mobx';
 import { inject, singleton } from 'tsyringe';
 import { GraphStore } from './graph';

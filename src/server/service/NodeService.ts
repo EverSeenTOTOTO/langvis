@@ -1,6 +1,6 @@
 import { NodeEntity } from '@/shared/entities/Node';
 import { NodeMetaName } from '@/shared/entities/NodeMeta';
-import { ClientNode, ServerNode } from '@/shared/types';
+import { ClientNode, InstrinicNode, ServerNode } from '@/shared/types';
 import { singleton } from 'tsyringe';
 import { Button } from '../core/nodes/Button';
 
@@ -20,7 +20,7 @@ export class NodeService {
   createNodeDTOFromClient(node: ClientNode): ServerNode {
     switch (node.type) {
       case NodeMetaName.BUTTON:
-        return Button.fromClient(node);
+        return Button.fromClient(node as InstrinicNode['button']);
       default:
         throw new Error(
           `Failed to create DTO from client: not implemented. Node type: ${node.type}`,
@@ -31,7 +31,10 @@ export class NodeService {
   updateNodeDTOFromClient(node: ServerNode, data: ClientNode): ServerNode {
     switch (data.type) {
       case NodeMetaName.BUTTON:
-        return Button.fromClient(data, node as Button);
+        return Button.fromClient(
+          data as InstrinicNode['button'],
+          node as Button,
+        );
       default:
         throw new Error(
           `Failed to update DTO from client: not implemented. Node type: ${data.type}`,
@@ -50,7 +53,7 @@ export class NodeService {
     }
   }
 
-  toClientNode(node: ServerNode): ClientNode {
+  toClientNode(node: ServerNode): Partial<ClientNode> {
     switch (node.type) {
       case NodeMetaName.BUTTON:
         return Button.toClient(node as Button);

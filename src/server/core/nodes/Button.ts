@@ -1,7 +1,9 @@
 import { NodeEntity } from '@/shared/entities/Node';
 import { NodeMetaName } from '@/shared/entities/NodeMeta';
-import { ClientNode, NodeState, ServerNode } from '@/shared/types';
+import { InstrinicNode, NodeState, ServerNode } from '@/shared/types';
 import { Slot } from '../graph';
+
+type ClientButton = Partial<InstrinicNode['button']>;
 
 export class Button extends ServerNode {
   type = NodeMetaName.BUTTON;
@@ -26,25 +28,23 @@ export class Button extends ServerNode {
     return btn;
   }
 
-  static fromClient(node: ClientNode, btn = new Button(node.id)) {
+  // TODO: validate
+  static fromClient(node: ClientButton, btn = new Button(node.id!)) {
     btn.entity = {
       ...btn.entity!,
       ...node,
-      graphId: node.data.graphId!,
-      name: node.data.name!,
-      description: node.data.description!,
+      graphId: node.data!.graphId!,
+      name: node.data!.name!,
+      description: node.data!.description!,
     };
-    btn.state = node.data.state || btn.state;
+    btn.state = node.data!.state || btn.state;
 
     return btn;
   }
 
-  static toClient(node: Button) {
+  static toClient(node: Button): ClientButton {
     return {
       ...node.entity,
-      name: undefined,
-      description: undefined,
-      graphId: undefined,
       data: {
         ...node.entity.data,
         name: node.entity.name,
