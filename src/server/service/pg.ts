@@ -1,3 +1,4 @@
+import { EdgeEntity } from '@/shared/entities/Edge';
 import { GraphEntity } from '@/shared/entities/Graph';
 import { NodeEntity } from '@/shared/entities/Node';
 import { NodeMetaEntity } from '@/shared/entities/NodeMeta';
@@ -12,5 +13,5 @@ export default new DataSource({
   database: import.meta.env.VITE_PG_DATABASE,
   synchronize: true,
   logging: false,
-  entities: [GraphEntity, NodeMetaEntity, NodeEntity],
+  entities: [GraphEntity, NodeMetaEntity, NodeEntity, EdgeEntity],
 });

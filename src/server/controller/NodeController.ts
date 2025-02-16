@@ -6,6 +6,7 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { GraphService } from '../service/GraphService';
 import { NodeService } from '../service/NodeService';
+import { EdgeEntity } from '@/shared/entities/Edge';
 
 @singleton()
 @controller('/api/node')
@@ -18,15 +19,15 @@ export class NodeController {
 
   @api('/create', { method: 'post' })
   async createNode(req: Request, res: Response) {
-    const node = this.nodeService!.createNodeDTOFromClient(req.body);
+    const node = this.nodeService!.createFromClient(req.body);
     const dbNode = await this.pg!.getRepository(NodeEntity).save(
-      this.nodeService!.toDatabaseNode(node),
+      this.nodeService!.toDatabase(node),
     );
 
-    this.nodeService!.updateNodeDTOFromDB(node, dbNode);
+    this.nodeService!.updateFromDB(node, dbNode);
     this.graphService!.addNode(req.session!.id, node);
 
-    return res.json({ data: this.nodeService!.toClientNode(node) });
+    return res.json({ data: this.nodeService!.toClient(node) });
   }
 
   @api('/delete/:id', { method: 'post' })
@@ -34,7 +35,12 @@ export class NodeController {
     const id = req.params.id;
 
     await this.pg!.getRepository(NodeEntity).delete(id);
-    this.graphService!.deleteNode(req.session!.id, id);
+
+    const { edges } = this.graphService!.deleteNode(req.session!.id, id);
+
+    await Promise.all(
+      edges.map(e => this.pg!.getRepository(EdgeEntity).delete(e.id)),
+    );
 
     return res.json({ data: id });
   }
@@ -42,14 +48,23 @@ export class NodeController {
   @api('/update/:id', { method: 'post' })
   async updateNode(req: Request, res: Response) {
     const id = req.params.id;
-    const node = this.graphService!.updateNode(req.session!.id, req.body);
+
+    const { node, edges } = this.graphService!.updateNode(
+      req.session!.id,
+      req.body,
+    );
+
+    this.nodeService!.updateFromClient(node, req.body);
 
     await this.pg!.createQueryBuilder()
       .update(NodeEntity)
-      .set(this.nodeService!.toDatabaseNode(node))
+      .set(this.nodeService!.toDatabase(node))
       .where('id = :id', { id })
       .execute();
+    await Promise.all(
+      edges.map(e => this.pg!.getRepository(EdgeEntity).delete(e.id)),
+    );
 
-    return res.json({ data: this.nodeService!.toClientNode(node) });
+    return res.json({ data: this.nodeService!.toClient(node) });
   }
 }

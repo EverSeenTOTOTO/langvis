@@ -189,28 +189,30 @@ export class Graph {
     return this;
   }
 
-  deleteNode(node: Node): Graph;
-  deleteNode(nodeId: string): Graph;
-  deleteNode(param: any): Graph {
+  deleteNode(node: Node): { node: Node; edges: Edge[] };
+  deleteNode(nodeId: string): { node: Node; edges: Edge[] };
+  deleteNode(param: any) {
     const nodeId = param instanceof Node ? param.id : param;
     const node = this.nodes.get(nodeId);
+    const collect: Edge[] = [];
 
     node?.slots.forEach(slot => {
       const { edges } = this.slotIndexMap.get(slot) || {};
 
       edges?.forEach(edge => {
+        collect.push(edge);
         this.edges.delete(edge.id);
       });
       this.slotIndexMap.delete(slot);
     });
     this.nodes.delete(nodeId);
 
-    return this;
+    return { node, edges: collect };
   }
 
-  deleteEdge(edge: Edge): Graph;
-  deleteEdge(edgeId: string): Graph;
-  deleteEdge(param: any): Graph {
+  deleteEdge(edge: Edge): Edge;
+  deleteEdge(edgeId: string): Edge;
+  deleteEdge(param: any): Edge {
     const edgeId = param instanceof Edge ? param.id : param;
     const edge = this.edges.get(edgeId);
 
@@ -229,28 +231,27 @@ export class Graph {
     }
 
     this.edges.delete(edgeId);
-    return this;
+    return edge!;
   }
 
-  deleteSlot(slot: Slot): Graph {
+  deleteSlot(slot: Slot): Edge[] {
     const map = this.slotIndexMap.get(slot);
+    const edges = [...(map?.edges?.values() || [])];
 
-    if (map?.edges) {
-      if (slot.type === 'source') {
-        [...map.edges.values()].forEach(edge => {
-          this.slotIndexMap.get(edge.to)?.edges?.delete(edge.id);
-          this.edges.delete(edge.id);
-        });
-      } else {
-        [...map.edges.values()].forEach(edge => {
-          this.slotIndexMap.get(edge.from)?.edges?.delete(edge.id);
-          this.edges.delete(edge.id);
-        });
-      }
+    if (slot.type === 'source') {
+      edges.forEach(edge => {
+        this.slotIndexMap.get(edge.to)?.edges?.delete(edge.id);
+        this.edges.delete(edge.id);
+      });
+    } else {
+      edges.forEach(edge => {
+        this.slotIndexMap.get(edge.from)?.edges?.delete(edge.id);
+        this.edges.delete(edge.id);
+      });
     }
 
     this.getNode(slot)?.deleteSlot(slot);
-    return this;
+    return edges;
   }
 
   getNode(slot: Slot): Node | undefined;

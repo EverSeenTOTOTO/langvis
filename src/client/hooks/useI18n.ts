@@ -20,6 +20,7 @@ if (!i18next.isInitialized) {
         translation: {
           'Add breakpoint': '添加断点',
           'Delete node': '删除节点',
+          'Delete edge': '删除边',
           display: '展示',
           'Edge ends here': '边在这里结束',
           'Edge starts from here': '边从这里开始',

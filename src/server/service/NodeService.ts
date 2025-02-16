@@ -1,12 +1,13 @@
 import { NodeEntity } from '@/shared/entities/Node';
 import { NodeMetaName } from '@/shared/entities/NodeMeta';
-import { ClientNode, InstrinicNode, ServerNode } from '@/shared/types';
+import { ClientNode, InstrinicNode } from '@/shared/types';
 import { singleton } from 'tsyringe';
 import { Button } from '../core/nodes/Button';
+import { ServerNode } from '../core/server-node';
 
 @singleton()
 export class NodeService {
-  createNodeDTOFromDB(node: NodeEntity): ServerNode {
+  createFromDB(node: NodeEntity): ServerNode {
     switch (node.type) {
       case NodeMetaName.BUTTON:
         return Button.fromDatabase(node);
@@ -17,7 +18,7 @@ export class NodeService {
     }
   }
 
-  createNodeDTOFromClient(node: ClientNode): ServerNode {
+  createFromClient(node: ClientNode): ServerNode {
     switch (node.type) {
       case NodeMetaName.BUTTON:
         return Button.fromClient(node as InstrinicNode['button']);
@@ -28,7 +29,7 @@ export class NodeService {
     }
   }
 
-  updateNodeDTOFromClient(node: ServerNode, data: ClientNode): ServerNode {
+  updateFromClient(node: ServerNode, data: ClientNode): ServerNode {
     switch (data.type) {
       case NodeMetaName.BUTTON:
         return Button.fromClient(
@@ -42,7 +43,7 @@ export class NodeService {
     }
   }
 
-  updateNodeDTOFromDB(node: ServerNode, data: NodeEntity): ServerNode {
+  updateFromDB(node: ServerNode, data: NodeEntity): ServerNode {
     switch (data.type) {
       case NodeMetaName.BUTTON:
         return Button.fromDatabase(data, node as Button);
@@ -53,7 +54,7 @@ export class NodeService {
     }
   }
 
-  toClientNode(node: ServerNode): Partial<ClientNode> {
+  toClient(node: ServerNode): Partial<ClientNode> {
     switch (node.type) {
       case NodeMetaName.BUTTON:
         return Button.toClient(node as Button);
@@ -64,7 +65,7 @@ export class NodeService {
     }
   }
 
-  toDatabaseNode(node: ServerNode): NodeEntity {
+  toDatabase(node: ServerNode): Partial<NodeEntity> {
     switch (node.type) {
       case NodeMetaName.BUTTON:
         return Button.toDatabase(node as Button);

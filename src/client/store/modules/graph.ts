@@ -32,6 +32,10 @@ export class GraphStore {
     this.nodes = nodes;
   }
 
+  setEdges(edges: Edge[]) {
+    this.edges = edges;
+  }
+
   // sync graph state with app state
   updateNodes(changes: NodeChange<Node>[]) {
     this.nodes = applyNodeChanges(changes, this.nodes);
@@ -42,22 +46,6 @@ export class GraphStore {
   }
 
   connectNode(connection: Connection) {
-    this.edges = addEdge(connection, this.edges);
-  }
-
-  createNode(node: Node) {
-    this.nodes = [...this.nodes, node];
-  }
-
-  updateNode(node: Node) {
-    this.nodes = this.nodes.map(each => {
-      if (each.id !== node.id) return each;
-
-      return node;
-    });
-  }
-
-  deleteNode(nodeId: string) {
-    this.nodes = this.nodes.filter(each => each.id !== nodeId);
+    this.edges = addEdge({ ...connection, type: 'bezier' }, this.edges);
   }
 }

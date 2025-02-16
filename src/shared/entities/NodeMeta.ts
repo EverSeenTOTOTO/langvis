@@ -26,12 +26,12 @@ export const NodeInitialData: Record<
       {
         name: 'source',
         type: 'source',
-        position: Position.Left,
+        position: Position.Right,
       },
       {
         name: 'target',
         type: 'target',
-        position: Position.Right,
+        position: Position.Left,
       },
     ],
   },

@@ -1,15 +1,14 @@
-import { ClientNode, ServerNode } from '@/shared/types';
-import { inject, singleton } from 'tsyringe';
+import { ClientNode } from '@/shared/types';
+import { singleton } from 'tsyringe';
 import { Graph, Slot } from '../core/graph';
-import { NodeService } from './NodeService';
+import { ServerNode } from '../core/server-node';
+import { ServerEdge } from '../core/server-edge';
 
 @singleton()
 export class GraphService {
   graphs: Map<string, Graph> = new Map();
 
-  constructor(@inject(NodeService) private nodeService?: NodeService) {}
-
-  protected getGraph(key: string) {
+  getGraph(key: string) {
     const graph = this.graphs.get(key);
 
     if (!graph) {
@@ -29,19 +28,19 @@ export class GraphService {
   addNode(key: string, node: ServerNode) {
     const graph = this.getGraph(key);
 
-    graph.addNode(node);
+    return graph.addNode(node);
   }
 
   deleteNode(key: string, id: string) {
     const graph = this.getGraph(key);
 
-    graph.deleteNode(id);
+    return graph.deleteNode(id);
   }
 
   getNode(key: string, id: string) {
     const graph = this.getGraph(key);
 
-    return graph.getNode(id);
+    return graph.getNode(id) as ServerNode;
   }
 
   updateNode(key: string, clientNode: ClientNode) {
@@ -67,12 +66,26 @@ export class GraphService {
       );
     }
 
+    const edges: ServerEdge[] = []; // collect edges to delete
+
     if (toDel.length > 0) {
-      toDel.forEach(each => graph.deleteSlot(each));
+      toDel.forEach(each => {
+        edges.push(...(graph.deleteSlot(each) as ServerEdge[]));
+      });
     }
 
-    this.nodeService!.updateNodeDTOFromClient(node, clientNode);
+    return { node, edges };
+  }
 
-    return node;
+  addEdge(key: string, edge: ServerEdge) {
+    const graph = this.getGraph(key);
+
+    return graph.connect(edge);
+  }
+
+  deleteEdge(key: string, id: string) {
+    const graph = this.getGraph(key);
+
+    return graph.deleteEdge(id);
   }
 }

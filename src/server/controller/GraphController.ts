@@ -7,6 +7,8 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { GraphService } from '../service/GraphService';
 import { NodeService } from '../service/NodeService';
+import { EdgeEntity } from '@/shared/entities/Edge';
+import { EdgeService } from '../service/EdgeService';
 
 @singleton()
 @controller('/api/graph')
@@ -15,6 +17,7 @@ export class GraphController {
     @inject(DataSource) private pg?: DataSource,
     @inject(GraphService) private graphService?: GraphService,
     @inject(NodeService) private nodeService?: NodeService,
+    @inject(EdgeService) private edgeService?: EdgeService,
   ) {}
 
   @api('/all')
@@ -34,19 +37,30 @@ export class GraphController {
     });
 
     const nodeRepo = this.pg!.getRepository(NodeEntity);
-    const nodes = await nodeRepo.findBy({
+    const dbNodes = await nodeRepo.findBy({
       graphId,
     });
-    const nodeDtos = nodes.map(n => this.nodeService!.createNodeDTOFromDB(n));
-
-    this.graphService!.initGraph(req.session!.id, {
-      nodes: nodeDtos,
+    const nodes = dbNodes.map(n => this.nodeService!.createFromDB(n));
+    const edgeRepo = this.pg!.getRepository(EdgeEntity);
+    const dbEdges = await edgeRepo.findBy({
+      graphId,
     });
+
+    this.graphService!.initGraph(req.session!.id, { nodes });
+
+    const edges = dbEdges.map(e =>
+      this.edgeService!.createFromDB(req.session!.id, e),
+    );
+
+    edges.forEach(e => this.graphService!.addEdge(req.session!.id, e));
 
     return res.json({
       data: {
         ...graph,
-        nodes: nodeDtos.map(each => this.nodeService!.toClientNode(each)),
+        nodes: nodes.map(each => this.nodeService!.toClient(each)),
+        edges: edges.map(each =>
+          this.edgeService!.toClient(req.session!.id, each),
+        ),
       },
     });
   }

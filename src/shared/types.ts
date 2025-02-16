@@ -1,13 +1,13 @@
-import { Edge, Node, Slot } from '@/server/core/graph';
+import { Slot } from '@/server/core/graph';
 import {
-  Node as XyflowNode,
   Edge as XyflowEdge,
-  NodeProps as XyflowNodeProps,
   EdgeProps as XyflowEdgeProps,
+  Node as XyflowNode,
+  NodeProps as XyflowNodeProps,
   XYPosition,
 } from '@xyflow/react';
 import { ButtonProps, ImageProps, SelectProps } from 'antd';
-import { EdgeMetaName } from './entities/EdgeMeta';
+import { EdgeEntity, EdgeMetaName } from './entities/Edge';
 import { NodeEntity } from './entities/Node';
 import { NodeMetaName } from './entities/NodeMeta';
 
@@ -22,15 +22,16 @@ export enum NodeState {
   Disabled = 'disabled',
 }
 
-type NodeProps<T extends Record<string, any>> = XyflowNodeProps<{
+type NodeProps<T> = XyflowNodeProps<{
   id: string;
   position: XYPosition;
   type?: NodeMetaName;
   data: T &
+    Record<string, any> &
     Pick<NodeEntity, 'name' | 'description' | 'graphId'> & {
       state: NodeState;
       slots: Slot[];
-    } & Record<string, any>;
+    };
 }>;
 
 export type InstrinicNodeProps = {
@@ -39,13 +40,14 @@ export type InstrinicNodeProps = {
   image: NodeProps<ImageProps>;
 };
 
-type NodeBase<T extends Record<string, any>> = Omit<
+type NodeBase<T> = Omit<
   XyflowNode<
     T &
+      Record<string, any> &
       Pick<NodeEntity, 'name' | 'description' | 'graphId'> & {
         state: NodeState;
         slots: Slot[];
-      } & Record<string, any>
+      }
   >,
   'type'
 > & { type?: NodeMetaName };
@@ -58,10 +60,6 @@ export type InstrinicNode = {
 
 export type ClientNodeProps = InstrinicNodeProps[keyof InstrinicNodeProps];
 export type ClientNode = InstrinicNode[keyof InstrinicNode];
-
-export abstract class ServerNode extends Node {
-  type: NodeMetaName = NodeMetaName.DEFAULT;
-}
 
 type EdgeProps<T> = XyflowEdgeProps<{
   id: string;
@@ -79,12 +77,8 @@ type EdgeBase<T> = Omit<XyflowEdge<T & Record<string, any>>, 'type'> & {
 };
 
 export type InstrinicEdge = {
-  bezier: EdgeBase<{}>;
+  bezier: EdgeBase<Pick<EdgeEntity, 'graphId'>>;
 };
 
 export type ClientEdgeProps = InstrinicEdgeProps[keyof InstrinicEdgeProps];
 export type ClientEdge = InstrinicEdge[keyof InstrinicEdge];
-
-export abstract class ServerEdge extends Edge {
-  type: EdgeMetaName = EdgeMetaName.BEZIER;
-}

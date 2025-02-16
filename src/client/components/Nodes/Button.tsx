@@ -120,7 +120,6 @@ const EditModal = ({
                       </Tooltip>
                     ),
                     value: 'target',
-                    disabled: true,
                   },
                   {
                     label: (
@@ -129,6 +128,7 @@ const EditModal = ({
                       </Tooltip>
                     ),
                     value: 'source',
+                    disabled: true,
                   },
                 ]}
               />
@@ -153,7 +153,6 @@ const ButtonNode = (props: InstrinicNodeProps['button']) => {
   return (
     <>
       <DropdownMenu
-        trigger={['contextMenu']}
         placement="rightTop"
         items={[
           {
@@ -209,12 +208,7 @@ const ButtonNode = (props: InstrinicNodeProps['button']) => {
               : setting.tr('Edge ends here')
           }
         >
-          <Handle
-            {...slot}
-            className={
-              slot.type === 'source' ? 'source-handle' : 'target-handle'
-            }
-          />
+          <Handle {...slot} className={`${slot.type}-handle`} />
         </Tooltip>
       ))}
     </>

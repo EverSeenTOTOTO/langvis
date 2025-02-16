@@ -2,7 +2,7 @@ import { api, type ApiResponse } from '@/client/decorator/api';
 import { hydrate } from '@/client/decorator/hydrate';
 import { GraphEntity } from '@/shared/entities/Graph';
 import { NodeMetaEntity } from '@/shared/entities/NodeMeta';
-import { ClientNode } from '@/shared/types';
+import { ClientEdge, ClientNode } from '@/shared/types';
 import { autorun, makeAutoObservable } from 'mobx';
 import { inject, singleton } from 'tsyringe';
 import { GraphStore } from './graph';
@@ -41,15 +41,17 @@ export class HomeStore {
   @api('/api/graph/init/:graphId')
   async fetchGraphDetail(
     _req: { graphId?: string },
-    res?: ApiResponse<GraphEntity & { nodes: ClientNode[] }>,
+    res?: ApiResponse<
+      GraphEntity & { nodes: ClientNode[]; edges: ClientEdge[] }
+    >,
   ) {
-    const nodes = res!.data?.nodes;
+    const nodes = res!.data?.nodes || [];
+    const edges = res!.data?.edges || [];
 
-    if (nodes && this.graph) {
-      this.graph.setNodes(nodes);
-    }
+    this.graph?.setNodes(nodes);
+    this.graph?.setEdges(edges);
 
-    this.fetchAvailableNodemetas({ graphCategory: res!.data!.category });
+    await this.fetchAvailableNodemetas({ graphCategory: res!.data!.category });
   }
 
   @api('/api/nodemeta/get/:graphCategory')
@@ -63,21 +65,35 @@ export class HomeStore {
   @api('/api/node/create', { method: 'post' })
   async createNode(_req: Partial<ClientNode>, res?: ApiResponse<ClientNode>) {
     if (res!.data) {
-      this.graph?.createNode(res!.data);
+      await this.fetchGraphDetail({ graphId: this.currentGraphId });
     }
   }
 
   @api('/api/node/delete/:id', { method: 'post' })
   async deleteNode(req: { id: string }, res?: ApiResponse<string>) {
     if (res!.data === req.id) {
-      this.graph?.deleteNode(req.id);
+      await this.fetchGraphDetail({ graphId: this.currentGraphId });
     }
   }
 
   @api('/api/node/update/:id', { method: 'post' })
   async updateNode(req: Partial<ClientNode>, res?: ApiResponse<ClientNode>) {
-    if (res!.data && res!.data.id === req?.id) {
-      this.graph?.updateNode(res!.data);
+    if (res?.data && res.data.id === req?.id) {
+      await this.fetchGraphDetail({ graphId: this.currentGraphId });
+    }
+  }
+
+  @api('/api/edge/connect', { method: 'post' })
+  async addEdge(_req: Partial<ClientEdge>, res?: ApiResponse<ClientEdge>) {
+    if (res!.data) {
+      await this.fetchGraphDetail({ graphId: this.currentGraphId });
+    }
+  }
+
+  @api('/api/edge/delete/:id', { method: 'post' })
+  async deleteEdge(req: { id: string }, res?: ApiResponse<string>) {
+    if (res!.data === req.id) {
+      await this.fetchGraphDetail({ graphId: this.currentGraphId });
     }
   }
 }
