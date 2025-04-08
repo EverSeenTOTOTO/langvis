@@ -19,14 +19,19 @@ import { useDrop } from 'react-dnd';
 import './index.scss';
 import { EdgeMetaName } from '@/shared/entities/Edge';
 
-const nodeComponents = import.meta.glob('@/client/components/Nodes/*.tsx', {
-  eager: true,
-}) as any;
+const nodeComponents = import.meta.glob(
+  '@/client/components/Nodes/**/index.tsx',
+  {
+    eager: true,
+  },
+) as any;
 
 const nodeTypes = Object.keys(nodeComponents).reduce((acc, path) => {
-  const type = path
-    .match(/src\/client\/components\/Nodes\/(.*)\.tsx$/)![1]
-    .toLowerCase();
+  // 提取文件夹名称或文件名
+  const match = path.match(
+    /src\/client\/components\/Nodes\/(.*?)(\/index)?\.tsx$/,
+  );
+  const type = match ? match[1].toLowerCase() : '';
 
   return {
     ...acc,
@@ -64,12 +69,13 @@ function Graph(props: ReactFlowProps) {
 
       const clientOffset = monitor.getClientOffset();
       const flowPosition = graph.flow.screenToFlowPosition(clientOffset!);
+      const initialData = NodeInitialData[item.name] as any;
 
       home.createNode({
         type: item.name,
         position: flowPosition,
         data: {
-          ...(NodeInitialData[item.name] as any),
+          ...initialData,
           graphId: home.currentGraphId!,
         },
       });
