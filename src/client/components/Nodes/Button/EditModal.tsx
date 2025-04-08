@@ -1,5 +1,4 @@
 import Modal, { ModalProps } from '@/client/components/Modal';
-import useApi from '@/client/hooks/useApi';
 import { useStore } from '@/client/store';
 import { Slot } from '@/server/core/graph';
 import { NodeInitialData } from '@/shared/entities/NodeMeta';
@@ -15,6 +14,7 @@ import {
   Switch,
   Tooltip,
 } from 'antd';
+import useAsyncFn from 'react-use/lib/useAsyncFn';
 
 const SlotCheckbox: React.FC<
   Omit<CheckboxProps, 'value' | 'onChange'> & {
@@ -68,21 +68,21 @@ const EditModal = ({
   const [form] = Form.useForm();
   const home = useStore('home');
   const setting = useStore('setting');
-  const updateNodeApi = useApi(home.updateNode.bind(home));
+  const updateNodeApi = useAsyncFn(home.updateNode.bind(home));
 
   return (
     <Modal
       width={460}
       title={`${node.data.name} ${setting.tr('Node Properties')}`}
       okButtonProps={{
-        loading: updateNodeApi.loading,
+        loading: updateNodeApi[0].loading,
       }}
       onOk={async () => {
         await form.validateFields();
 
         const values = form.getFieldsValue(true);
 
-        await updateNodeApi.run({
+        await updateNodeApi[1]({
           id: node.id,
           type: node.type,
           data: values,

@@ -1,5 +1,4 @@
 import DropdownMenu from '@/client/components/Dropdown';
-import useApi from '@/client/hooks/useApi';
 import { useStore } from '@/client/store';
 import { InstrinicNodeProps } from '@/shared/types';
 import { BoldOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
@@ -8,11 +7,12 @@ import { Button, Popconfirm, Tooltip } from 'antd';
 import { omit } from 'lodash-es';
 import { observer } from 'mobx-react-lite';
 import EditModal from './EditModal';
+import useAsyncFn from 'react-use/lib/useAsyncFn';
 
 const ButtonNode = (props: InstrinicNodeProps['button']) => {
   const setting = useStore('setting');
   const home = useStore('home');
-  const deleteNodeApi = useApi(home.deleteNode.bind(home));
+  const deleteNodeApi = useAsyncFn(home.deleteNode.bind(home));
 
   return (
     <>
@@ -40,7 +40,7 @@ const ButtonNode = (props: InstrinicNodeProps['button']) => {
                   title={setting.tr('Sure to delete?')}
                   placement="rightTop"
                   onConfirm={async () => {
-                    await deleteNodeApi.run({ id: props.id });
+                    await deleteNodeApi[1]({ id: props.id });
                   }}
                 >
                   <span onClick={e => e.stopPropagation()}>{dom}</span>
