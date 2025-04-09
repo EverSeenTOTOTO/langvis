@@ -1,19 +1,22 @@
 import bindController from '@/server/decorator/controller';
 import type { Express } from 'express';
-import { container } from 'tsyringe';
-import { DataSource } from 'typeorm';
-import pg from '../service/pg';
+import pg, { pgInjectToken } from '../service/pg';
+import redis, { redisInjectToken } from '../service/redis';
+import { EdgeController } from './EdgeController';
 import { GraphController } from './GraphController';
 import { NodeController } from './NodeController';
 import { NodeMetaController } from './NodemetaController';
-import { EdgeController } from './EdgeController';
+import { container } from 'tsyringe';
+import { DataSource } from 'typeorm';
 
 export default async (app: Express) => {
-  if (!pg.isInitialized) {
-    await pg.initialize();
-  }
+  await Promise.all([
+    pg.isInitialized || pg.initialize(),
+    redis.isReady || redis.connect(),
+  ]);
 
-  container.register<DataSource>(DataSource, { useValue: pg });
+  container.register<DataSource>(pgInjectToken, { useValue: pg });
+  container.register<typeof redis>(redisInjectToken, { useValue: redis });
 
   bindController(GraphController, app);
   bindController(NodeController, app);

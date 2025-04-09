@@ -1,8 +1,7 @@
 import Modal, { ModalProps } from '@/client/components/Modal';
 import { useStore } from '@/client/store';
-import { Slot } from '@/server/core/graph';
 import { NodeInitialData } from '@/shared/entities/NodeMeta';
-import { InstrinicNodeProps } from '@/shared/types';
+import { InstrinicNodeProps, Slot } from '@/shared/types';
 import {
   Checkbox,
   CheckboxProps,

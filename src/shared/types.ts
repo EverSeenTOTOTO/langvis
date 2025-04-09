@@ -1,5 +1,5 @@
-import { Slot } from '@/server/core/graph';
 import {
+  Handle,
   Edge as XyflowEdge,
   EdgeProps as XyflowEdgeProps,
   Node as XyflowNode,
@@ -17,11 +17,15 @@ export enum NodeState {
   Built = 'built',
   Idle = 'idle',
   Running = 'running',
+  Pause = 'pause',
   Error = 'error',
   Finished = 'finished',
   Disabled = 'disabled',
 }
 
+export type Slot = Pick<Handle, 'position' | 'type'> & { name: string };
+
+// client component props
 type NodeProps<T> = XyflowNodeProps<{
   id: string;
   position: XYPosition;
@@ -40,6 +44,7 @@ export type InstrinicNodeProps = {
   image: NodeProps<ImageProps>;
 };
 
+// client node
 type NodeBase<T> = Omit<
   XyflowNode<
     T &
@@ -61,6 +66,7 @@ export type InstrinicNode = {
 export type ClientNodeProps = InstrinicNodeProps[keyof InstrinicNodeProps];
 export type ClientNode = InstrinicNode[keyof InstrinicNode];
 
+// client props
 type EdgeProps<T> = XyflowEdgeProps<{
   id: string;
   source: string;
@@ -72,6 +78,7 @@ export type InstrinicEdgeProps = {
   bezier: EdgeProps<{}>;
 };
 
+// client edge
 type EdgeBase<T> = Omit<XyflowEdge<T & Record<string, any>>, 'type'> & {
   type?: EdgeMetaName;
 };

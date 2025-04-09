@@ -1,51 +1,13 @@
 import { NodeEntity } from '@/shared/entities/Node';
 import { NodeMetaName } from '@/shared/entities/NodeMeta';
-import { InstrinicNode } from '@/shared/types';
-import { Slot } from '../graph';
-import { ServerNode } from '../server-node';
+import { InstrinicNode, NodeState } from '@/shared/types';
 
 type ClientButton = InstrinicNode['button'];
 
-export class Button extends ServerNode {
+export class Button {
   type = NodeMetaName.BUTTON;
 
-  static fromDatabase(entity: NodeEntity, node?: Button) {
-    const btn =
-      node ||
-      new Button(
-        entity.id,
-        entity.position,
-        entity.data as ClientButton['data'],
-      );
-
-    // clientNode() -> serverNode() -> dbNode(id) -> serverNode(+++ id)
-    btn.id = entity.id;
-
-    entity.data?.slots?.map((slot: any) => {
-      btn.defineSlot(
-        new Slot(slot.name, {
-          type: slot.type,
-          position: slot.position,
-        }),
-      );
-    });
-
-    return btn;
-  }
-
-  // TODO: validate
-  static fromClient(clientNode: ClientButton, node?: Button) {
-    const btn =
-      node ||
-      new Button(clientNode.id!, clientNode!.position!, clientNode.data!);
-
-    btn.position = clientNode.position;
-    btn.data = clientNode.data;
-
-    return btn;
-  }
-
-  static toClient(node: Button): ClientButton {
+  static toClient(node: NodeEntity): ClientButton {
     return {
       id: node.id,
       type: node.type,
@@ -55,13 +17,13 @@ export class Button extends ServerNode {
         name: node.data?.name,
         description: node.data?.description,
         graphId: node.data?.graphId,
-        state: node.state,
+        state: NodeState.Idle, // TODO
         slots: node.data?.slots ?? [],
       },
     };
   }
 
-  static toDatabase(node: Button): Partial<NodeEntity> {
+  static toDatabase(node: ClientButton): Partial<NodeEntity> {
     return {
       id: node.id,
       type: node.type,

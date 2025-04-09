@@ -1,63 +1,49 @@
 import { EdgeEntity } from '@/shared/entities/Edge';
 import { ClientEdge } from '@/shared/types';
 import { inject, singleton } from 'tsyringe';
-import { ServerEdge } from '../core/server-edge';
-import { GraphService } from './GraphService';
+import { DataSource } from 'typeorm';
+import { pgInjectToken } from './pg';
 
 @singleton()
 export class EdgeService {
-  constructor(@inject(GraphService) private graphService?: GraphService) {}
+  constructor(@inject(pgInjectToken) private pg?: DataSource) {}
 
-  createFromClient(key: string, edge: ClientEdge): ServerEdge {
-    const graph = this.graphService!.getGraph(key);
-    const source = graph.getNode(edge.source)!.getSlot('source')!;
-    const target = graph.getNode(edge.target)!.getSlot('target')!;
-
-    return new ServerEdge(edge.id, source, target, edge.data);
-  }
-
-  createFromDB(key: string, edge: EdgeEntity): ServerEdge {
-    const graph = this.graphService!.getGraph(key);
-    const source = graph.getNode(edge.source)!.getSlot('source')!;
-    const target = graph.getNode(edge.target)!.getSlot('target')!;
-
-    return new ServerEdge(
-      edge.id,
-      source,
-      target,
-      edge.data as ServerEdge['data'],
-    );
-  }
-
-  updateFromDB(edge: ServerEdge, data: EdgeEntity): ServerEdge {
-    edge.id = data.id;
-    return edge;
-  }
-
-  toClient(key: string, edge: ServerEdge): Partial<ClientEdge> {
-    const graph = this.graphService!.getGraph(key);
-    const source = graph.getNode(edge.from);
-    const target = graph.getNode(edge.to);
-
-    return {
-      id: edge.id,
-      type: edge.type,
-      source: source?.id,
-      target: target?.id,
-      data: edge.data,
-    };
-  }
-
-  toDatabase(key: string, edge: ServerEdge): Partial<EdgeEntity> {
-    const graph = this.graphService!.getGraph(key);
-    const source = graph.getNode(edge.from)!;
-    const target = graph.getNode(edge.to)!;
-
-    return {
+  async create(edge: ClientEdge) {
+    return this.pg!.getRepository(EdgeEntity).save({
       ...edge,
-      source: source.id,
-      target: target.id,
       graphId: edge.data!.graphId,
-    };
+    });
+  }
+
+  delete(id: string) {
+    return this.pg!.getRepository(EdgeEntity).delete(id);
+  }
+
+  findByGraphId(graphId: string) {
+    return this.pg!.getRepository(EdgeEntity).findBy({
+      graphId,
+    });
+  }
+
+  findByNodeId(nodeId: string) {
+    return this.pg!.getRepository(EdgeEntity)
+      .createQueryBuilder('edge')
+      .where('edge.source = :nodeId', { nodeId })
+      .orWhere('edge.target = :nodeId', { nodeId })
+      .getMany();
+  }
+
+  findBySourceNodeId(nodeId: string) {
+    return this.pg!.getRepository(EdgeEntity)
+      .createQueryBuilder('edge')
+      .where('edge.source = :nodeId', { nodeId })
+      .getMany();
+  }
+
+  findByTargetNodeId(nodeId: string) {
+    return this.pg!.getRepository(EdgeEntity)
+      .createQueryBuilder('edge')
+      .where('edge.target = :nodeId', { nodeId })
+      .getMany();
   }
 }

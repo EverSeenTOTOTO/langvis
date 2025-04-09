@@ -5,11 +5,12 @@ import { inject, singleton } from 'tsyringe';
 import { DataSource } from 'typeorm';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
+import { pgInjectToken } from '../service/pg';
 
 @singleton()
 @controller('/api/nodemeta')
 export class NodeMetaController {
-  constructor(@inject(DataSource) private pg?: DataSource) {}
+  constructor(@inject(pgInjectToken) private pg?: DataSource) {}
 
   @api('/get/:graphCategory')
   async getAllNodeTypes(req: Request, res: Response) {
