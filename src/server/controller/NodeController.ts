@@ -33,15 +33,17 @@ export class NodeController {
   @api('/delete/:id', { method: 'post' })
   async deleteNode(req: Request, res: Response) {
     const id = req.params.id;
+    await this.pg!.transaction(async transactionalEntityManager => {
+      await transactionalEntityManager.getRepository(NodeEntity).delete(id);
 
-    await this.pg!.getRepository(NodeEntity).delete(id);
+      const { edges } = this.graphService!.deleteNode(req.session!.id, id);
 
-    const { edges } = this.graphService!.deleteNode(req.session!.id, id);
-
-    await Promise.all(
-      edges.map(e => this.pg!.getRepository(EdgeEntity).delete(e.id)),
-    );
-
+      await Promise.all(
+        edges.map(e =>
+          transactionalEntityManager.getRepository(EdgeEntity).delete(e.id),
+        ),
+      );
+    });
     return res.json({ data: id });
   }
 
@@ -56,14 +58,19 @@ export class NodeController {
 
     this.nodeService!.updateFromClient(node, req.body);
 
-    await this.pg!.createQueryBuilder()
-      .update(NodeEntity)
-      .set(this.nodeService!.toDatabase(node))
-      .where('id = :id', { id })
-      .execute();
-    await Promise.all(
-      edges.map(e => this.pg!.getRepository(EdgeEntity).delete(e.id)),
-    );
+    await this.pg!.transaction(async transactionalEntityManager => {
+      await transactionalEntityManager
+        .createQueryBuilder()
+        .update(NodeEntity)
+        .set(this.nodeService!.toDatabase(node))
+        .where('id = :id', { id })
+        .execute();
+      await Promise.all(
+        edges.map(e =>
+          transactionalEntityManager.getRepository(EdgeEntity).delete(e.id),
+        ),
+      );
+    });
 
     return res.json({ data: this.nodeService!.toClient(node) });
   }

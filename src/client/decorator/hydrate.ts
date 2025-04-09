@@ -1,4 +1,5 @@
 import { getOwnPropertyNames } from '@/shared/constants';
+import { action } from 'mobx';
 
 const metaDataKey = Symbol('hydrate');
 
@@ -51,10 +52,14 @@ export default function <T extends Record<string, any>>(instance: T) {
     dehydraProps.push(prop);
   });
 
-  Reflect.set(instance, 'hydrate', (state: Record<string, any>) => {
-    // 逐个属性水化
-    hydrateFns.forEach(fn => fn(state));
-  });
+  Reflect.set(
+    instance,
+    'hydrate',
+    action((state: Record<string, any>) => {
+      // 逐个属性水化
+      hydrateFns.forEach(fn => fn(state));
+    }),
+  );
   Reflect.set(instance, 'dehydra', () => {
     // 逐个属性脱水
     return dehydraProps.reduce(
