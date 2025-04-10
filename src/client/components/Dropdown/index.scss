@@ -1,29 +1,21 @@
 .dropdownmenu {
-  .ant-popover-inner {
-    padding: 4px;
+  width: 100%;
+  margin-block-end: 4px;
+  background-color: var(--ant-color-bg-container);
 
-    .ant-popover-inner-content {
+  .ant-space-item {
+    width: 100%;
+
+    .ant-btn {
       display: flex;
-      flex-direction: column;
-
-      .ant-space {
-        width: 100%;
-        margin-block-end: 4px;
-
-        .ant-space-item {
-          width: 100%;
-
-          .ant-btn {
-            display: flex;
-            justify-content: flex-start;
-            width: 100%;
-          }
-        }
-      }
-
-      .ant-divider {
-        margin: 6px 0;
-      }
+      justify-content: flex-start;
+      width: 100%;
     }
   }
+
+  .ant-divider {
+    margin: 6px 0;
+    font-size: 12px;
+  }
 }
+

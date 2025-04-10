@@ -17,9 +17,10 @@ const ButtonNode = (props: InstrinicNodeProps['button']) => {
   return (
     <>
       <DropdownMenu
-        placement="rightTop"
+        placement="topRight"
         items={[
           {
+            type: 'item',
             label: setting.tr('Edit node'),
             key: 'edit',
             icon: <EditOutlined />,
@@ -30,6 +31,7 @@ const ButtonNode = (props: InstrinicNodeProps['button']) => {
             },
           },
           {
+            type: 'item',
             label: setting.tr('Delete node'),
             danger: true,
             key: 'delete',
@@ -50,6 +52,7 @@ const ButtonNode = (props: InstrinicNodeProps['button']) => {
           },
           { type: 'divider', key: 'div' },
           {
+            type: 'item',
             label: setting.tr('Add breakpoint'),
             key: 'brk',
             icon: <BoldOutlined />,
@@ -80,3 +83,4 @@ const ButtonNode = (props: InstrinicNodeProps['button']) => {
 };
 
 export default observer(ButtonNode);
+

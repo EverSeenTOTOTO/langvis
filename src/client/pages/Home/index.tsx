@@ -2,11 +2,9 @@ import Graph from '@/client/components/Graph';
 import { getStore } from '@/client/store';
 import { ReactFlowProvider } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
-import { DndProvider } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
 import Header from './components/Header';
-import NodeMenu from './components/NodeMenu';
 import './index.scss';
+import NodeMenuDropDown from './components/NodeMenu';
 
 export const prefetch = async () => {
   const home = getStore('home');
@@ -17,13 +15,13 @@ export const prefetch = async () => {
 const Home = () => {
   return (
     <ReactFlowProvider>
-      <DndProvider backend={HTML5Backend}>
-        <Header />
-        <NodeMenu />
+      <Header />
+      <NodeMenuDropDown trigger={['contextMenu']}>
         <Graph />
-      </DndProvider>
+      </NodeMenuDropDown>
     </ReactFlowProvider>
   );
 };
 
 export default observer(Home);
+

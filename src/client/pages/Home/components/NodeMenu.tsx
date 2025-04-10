@@ -1,61 +1,66 @@
+import DropdownMenu, {
+  DropdownMenuItem,
+  DropdownProps,
+} from '@/client/components/Dropdown';
 import { useStore } from '@/client/store';
-import { NodeMetaEntity } from '@/shared/entities/NodeMeta';
-import { Avatar, Col, Divider, Input, Row, Space, Tooltip } from 'antd';
+import { NodeInitialData } from '@/shared/entities/NodeMeta';
+import { message } from 'antd';
 import { groupBy } from 'lodash-es';
 import { observer } from 'mobx-react-lite';
-import { useDrag } from 'react-dnd';
+import { useMemo } from 'react';
 
-const DraggableNode = (props: NodeMetaEntity) => {
-  const [{ isDragging }, drag] = useDrag(() => ({
-    type: props.name,
-    item: props,
-    collect: monitor => ({
-      isDragging: monitor.isDragging(),
-      handlerId: monitor.getHandlerId(),
-    }),
-  }));
-
-  const opacity = isDragging ? 0.4 : 1;
-  return (
-    <Col
-      ref={drag}
-      style={{
-        cursor: 'pointer',
-        opacity,
-      }}
-    >
-      <Tooltip title={props.description || props.name} placement="bottomLeft">
-        <Avatar size="large">{props.name}</Avatar>
-      </Tooltip>
-    </Col>
-  );
-};
-
-const NodeMenu = () => {
+const NodeMenuDropDown: React.FC<Omit<DropdownProps, 'items'>> = props => {
   const setting = useStore('setting');
   const home = useStore('home');
+  const graph = useStore('graph');
 
-  const groupedByType = groupBy(home.availableNodemetas, each => each.type);
+  const items = useMemo(() => {
+    const groupedByType = groupBy(home.availableNodemetas, each => each.type);
+    const result: DropdownMenuItem[] = [];
 
-  return (
-    <Space direction="vertical" className="node-menu">
-      <Input.Search placeholder={setting.tr('Search nodes')} />
-      {Object.keys(groupedByType).map(type => {
-        return (
-          <div key={type} className="node-category">
-            <Divider orientationMargin="8">
-              {setting.tr(type).toUpperCase()}
-            </Divider>
-            <Row gutter={12}>
-              {groupedByType[type].map(meta => {
-                return <DraggableNode {...meta} key={meta.name} />;
-              })}
-            </Row>
-          </div>
-        );
-      })}
-    </Space>
-  );
+    Object.keys(groupedByType).forEach(type => {
+      result.push({
+        type: 'divider',
+        key: 'div',
+        orientationMargin: 8,
+        children: <span>{setting.tr(type).toUpperCase()}</span>,
+      });
+
+      groupedByType[type].forEach(meta => {
+        result.push({
+          type: 'item',
+          key: meta.name,
+          label: meta.name,
+          onClick(e) {
+            if (!graph.flow) {
+              message.warning(setting.tr('Graph not initialized'));
+              return;
+            }
+
+            const flowPosition = graph.flow.screenToFlowPosition({
+              x: e.clientX,
+              y: e.clientY,
+            });
+            const initialData = NodeInitialData[meta.name] as any;
+
+            home.createNode({
+              type: meta.name,
+              position: flowPosition,
+              data: {
+                ...initialData,
+                graphId: home.currentGraphId!,
+              },
+            });
+          },
+        });
+      });
+    });
+
+    return result;
+  }, [home.availableNodemetas]);
+
+  return <DropdownMenu {...props} items={items} />;
 };
 
-export default observer(NodeMenu);
+export default observer(NodeMenuDropDown);
+

@@ -1,66 +1,60 @@
 import {
+  DropdownProps as AntdDropdownProps,
   Button,
   ButtonProps,
   Divider,
-  Popover,
-  PopoverProps,
+  DividerProps,
+  Dropdown,
   Space,
 } from 'antd';
-import clsx from 'clsx';
 import { Fragment } from 'react/jsx-runtime';
 
+import { omit } from 'lodash-es';
 import './index.scss';
 
-export type DropdownMenuItem = Omit<ButtonProps, 'type' | 'children'> & {
-  key: string;
-  label?: React.ReactNode;
-  type?: 'divider' | 'group' | 'item';
-  children?: DropdownMenuItem[];
-  render?({
-    item,
-    dom,
-  }: {
-    item: DropdownMenuItem;
-    dom: React.ReactNode;
-  }): React.ReactNode;
-};
-export type DropdownProps = PopoverProps & {
+export type DropdownMenuItem =
+  | (Omit<DividerProps, 'type'> & {
+      key: string;
+      label?: React.ReactNode;
+      type: 'divider';
+    })
+  | (Omit<ButtonProps, 'type' | 'children'> & {
+      key: string;
+      label?: React.ReactNode;
+      type: 'item';
+      render?({
+        item,
+        dom,
+      }: {
+        item: DropdownMenuItem;
+        dom: React.ReactNode;
+      }): React.ReactNode;
+    });
+
+export type DropdownProps = Omit<AntdDropdownProps, 'menu'> & {
   items: DropdownMenuItem[];
 };
 
-const DropdownMenu = ({ items, classNames, ...props }: DropdownProps) => {
+const DropdownMenu = ({ items, ...props }: DropdownProps) => {
   return (
-    <Popover
+    <Dropdown
       {...props}
-      classNames={{
-        ...classNames,
-        root: clsx('dropdownmenu', classNames?.root),
-      }}
-      content={
-        <>
+      dropdownRender={() => (
+        <Space direction="vertical" size="small" className="dropdownmenu">
           {items?.map(item => {
             if (item.type === 'divider') {
-              const dom = <Divider key={item.key} />;
-
               return (
                 <Fragment key={item.key}>
-                  {item.render ? item.render({ item, dom }) : dom}
+                  <Divider {...omit(item, 'type')} />
                 </Fragment>
               );
             }
 
-            if (item.type === 'group') {
-              // TODO
-              return null;
-            }
-
-            const { key, render, ...btnProps } = item;
+            const { render, ...btnProps } = item;
             const dom = (
-              <Space key={key}>
-                <Button {...btnProps} type="text">
-                  {item.label}
-                </Button>
-              </Space>
+              <Button {...btnProps} type="text">
+                {item.label}
+              </Button>
             );
 
             return (
@@ -69,10 +63,11 @@ const DropdownMenu = ({ items, classNames, ...props }: DropdownProps) => {
               </Fragment>
             );
           })}
-        </>
-      }
+        </Space>
+      )}
     />
   );
 };
 
 export default DropdownMenu;
+

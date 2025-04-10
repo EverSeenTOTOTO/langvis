@@ -1,9 +1,5 @@
 import { useStore } from '@/client/store';
-import {
-  NodeInitialData,
-  NodeMetaEntity,
-  NodeMetaName,
-} from '@/shared/entities/NodeMeta';
+import { EdgeMetaName } from '@/shared/entities/Edge';
 import {
   Background,
   Controls,
@@ -12,12 +8,9 @@ import {
   ReactFlow,
   ReactFlowProps,
 } from '@xyflow/react';
-import { message } from 'antd';
 import { pick } from 'lodash-es';
 import { observer } from 'mobx-react-lite';
-import { useDrop } from 'react-dnd';
 import './index.scss';
-import { EdgeMetaName } from '@/shared/entities/Edge';
 
 const nodeComponents = import.meta.glob(
   '@/client/components/Nodes/**/index.tsx',
@@ -59,36 +52,8 @@ function Graph(props: ReactFlowProps) {
   const home = useStore('home');
   const graph = useStore('graph');
 
-  const [, drop] = useDrop(() => ({
-    accept: Object.values(NodeMetaName),
-    drop: (item: NodeMetaEntity, monitor) => {
-      if (!graph.flow) {
-        message.warning(setting.tr('Graph not initialized'));
-        return;
-      }
-
-      const clientOffset = monitor.getClientOffset();
-      const flowPosition = graph.flow.screenToFlowPosition(clientOffset!);
-      const initialData = NodeInitialData[item.name] as any;
-
-      home.createNode({
-        type: item.name,
-        position: flowPosition,
-        data: {
-          ...initialData,
-          graphId: home.currentGraphId!,
-        },
-      });
-    },
-    collect: monitor => ({
-      isOver: monitor.isOver(),
-      canDrop: monitor.canDrop(),
-    }),
-  }));
-
   return (
     <ReactFlow
-      ref={drop}
       fitView
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
@@ -117,3 +82,4 @@ function Graph(props: ReactFlowProps) {
 }
 
 export default observer(Graph);
+

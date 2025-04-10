@@ -29,6 +29,7 @@ const BasicEdge = (edge: ClientEdgeProps) => {
           placement="rightTop"
           items={[
             {
+              type: 'item',
               label: setting.tr('Delete edge'),
               danger: true,
               key: 'delete',
@@ -49,6 +50,7 @@ const BasicEdge = (edge: ClientEdgeProps) => {
             },
             { type: 'divider', key: 'div' },
             {
+              type: 'item',
               label: setting.tr('Add breakpoint'),
               key: 'brk',
               icon: <BoldOutlined />,
@@ -74,3 +76,4 @@ const BasicEdge = (edge: ClientEdgeProps) => {
 };
 
 export default BasicEdge;
+
