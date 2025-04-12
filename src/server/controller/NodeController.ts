@@ -18,9 +18,9 @@ export class NodeController {
 
   @api('/delete/:id', { method: 'post' })
   async deleteNode(req: Request, res: Response) {
-    const data = await this.nodeService!.delete(req.params.id);
+    await this.nodeService!.delete(req.params.id);
 
-    return res.json({ data });
+    return res.json({ data: req.params.id });
   }
 
   @api('/update/:id', { method: 'post' })

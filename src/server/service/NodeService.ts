@@ -60,11 +60,12 @@ export class NodeService {
         .getRepository(NodeEntity)
         .findOne({ where: { id: node.id } });
 
-      const deletedHandles = old!.data?.handles?.filter((handle: Handle) => {
-        return !newNode!.data?.handles?.some(
-          (h: Handle) => h.type === handle.type,
-        );
-      });
+      const deletedHandles =
+        old!.data?.handles?.filter((handle: Handle) => {
+          return !newNode!.data?.handles?.some(
+            (h: Handle) => h.type === handle.type,
+          );
+        }) || [];
 
       if (deletedHandles.length > 0) {
         const edges = await Promise.all(

@@ -57,7 +57,7 @@ export default defineConfig(c => {
       host: 'localhost',
     },
     ssr: {
-      noExternal: ['tsyringe'],
+      noExternal: ['tsyringe', 'react-use'],
     },
     plugins: [...(config.plugins || []), devApiProxy(), devSSR()],
   };

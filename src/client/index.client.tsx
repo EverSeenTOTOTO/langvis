@@ -29,4 +29,3 @@ hydrateRoot(
     <App store={store} routes={routes} />
   </BrowserRouter>,
 );
-

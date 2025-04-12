@@ -26,7 +26,7 @@ const BasicEdge = (edge: ClientEdgeProps) => {
       <BaseEdge id={id} path={edgePath} />
       <EdgeLabelRenderer>
         <DropdownMenu
-          placement="rightTop"
+          trigger={['click']}
           items={[
             {
               type: 'item',

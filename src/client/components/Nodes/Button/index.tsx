@@ -7,7 +7,7 @@ import { Button, Popconfirm, Tooltip } from 'antd';
 import { omit } from 'lodash-es';
 import { observer } from 'mobx-react-lite';
 import EditModal from './EditModal';
-import useAsyncFn from 'react-use/lib/useAsyncFn';
+import { useAsyncFn } from 'react-use';
 
 const ButtonNode = (props: InstrinicNodeProps['button']) => {
   const setting = useStore('setting');
@@ -17,7 +17,9 @@ const ButtonNode = (props: InstrinicNodeProps['button']) => {
   return (
     <>
       <DropdownMenu
-        placement="topRight"
+        trigger={['click']}
+        placement="bottomRight"
+        overlayStyle={{ minWidth: 120 }}
         items={[
           {
             type: 'item',

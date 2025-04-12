@@ -7,9 +7,10 @@ import {
   Dropdown,
   Space,
 } from 'antd';
-import { Fragment } from 'react/jsx-runtime';
-
 import { omit } from 'lodash-es';
+import { useMergedState } from 'rc-util';
+import React from 'react';
+import { Fragment } from 'react/jsx-runtime';
 import './index.scss';
 
 export type DropdownMenuItem =
@@ -25,9 +26,11 @@ export type DropdownMenuItem =
       render?({
         item,
         dom,
+        setOpen,
       }: {
         item: DropdownMenuItem;
         dom: React.ReactNode;
+        setOpen: (open: boolean) => void;
       }): React.ReactNode;
     });
 
@@ -36,30 +39,39 @@ export type DropdownProps = Omit<AntdDropdownProps, 'menu'> & {
 };
 
 const DropdownMenu = ({ items, ...props }: DropdownProps) => {
+  const [open, setOpen] = useMergedState(false, {
+    onChange: open => props.onOpenChange?.(open, { source: 'menu' }),
+  });
+
   return (
     <Dropdown
       {...props}
+      open={open}
+      onOpenChange={open => setOpen(open)}
       dropdownRender={() => (
         <Space direction="vertical" size="small" className="dropdownmenu">
           {items?.map(item => {
             if (item.type === 'divider') {
-              return (
-                <Fragment key={item.key}>
-                  <Divider {...omit(item, 'type')} />
-                </Fragment>
-              );
+              return <Divider {...omit(item, 'type', 'key')} key={item.key} />;
             }
 
-            const { render, ...btnProps } = item;
+            const { render, key, ...btnProps } = item;
             const dom = (
-              <Button {...btnProps} type="text">
+              <Button
+                {...btnProps}
+                type="text"
+                onClick={e => {
+                  btnProps?.onClick?.(e);
+                  setOpen(false);
+                }}
+              >
                 {item.label}
               </Button>
             );
 
             return (
-              <Fragment key={item.key}>
-                {render ? render({ item, dom }) : dom}
+              <Fragment key={key}>
+                {render ? render({ item, dom, setOpen }) : dom}
               </Fragment>
             );
           })}

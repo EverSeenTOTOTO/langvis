@@ -86,7 +86,7 @@ export class HomeStore {
     }
   }
 
-  @api('/api/edge/connect', { method: 'post' })
+  @api('/api/edge/create', { method: 'post' })
   async addEdge(_req: Partial<ClientEdge>, res?: ApiResponse<ClientEdge>) {
     if (res!.data) {
       await this.fetchGraphDetail({ graphId: this.currentGraphId });
@@ -100,4 +100,3 @@ export class HomeStore {
     }
   }
 }
-

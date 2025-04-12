@@ -50,4 +50,3 @@ export class GraphStore {
     this.edges = addEdge({ ...connection, type: 'bezier' }, this.edges);
   }
 }
-

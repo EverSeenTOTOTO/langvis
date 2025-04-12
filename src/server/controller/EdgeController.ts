@@ -9,7 +9,7 @@ import { EdgeService } from '../service/EdgeService';
 export class EdgeController {
   constructor(@inject(EdgeService) private edgeService?: EdgeService) {}
 
-  @api('/connect', { method: 'post' })
+  @api('/create', { method: 'post' })
   async connect(req: Request, res: Response) {
     const data = this.edgeService!.create(req.body);
 
@@ -18,10 +18,8 @@ export class EdgeController {
 
   @api('/delete/:id', { method: 'post' })
   async deleteEdge(req: Request, res: Response) {
-    const id = req.params.id;
+    await this.edgeService!.delete(req.params.id);
 
-    const data = await this.edgeService!.delete(id);
-
-    res.json({ data });
+    res.json({ data: req.params.id });
   }
 }

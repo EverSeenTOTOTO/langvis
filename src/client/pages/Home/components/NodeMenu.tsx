@@ -4,34 +4,37 @@ import DropdownMenu, {
 } from '@/client/components/Dropdown';
 import { useStore } from '@/client/store';
 import { NodeInitialData } from '@/shared/entities/NodeMeta';
-import { message } from 'antd';
-import { groupBy } from 'lodash-es';
+import { message, Tooltip } from 'antd';
+import { groupBy, sortBy } from 'lodash-es';
+import { computed } from 'mobx';
 import { observer } from 'mobx-react-lite';
-import { useMemo } from 'react';
+import { useAsyncFn } from 'react-use';
 
-const NodeMenuDropDown: React.FC<Omit<DropdownProps, 'items'>> = props => {
+const NodeMenu: React.FC<Omit<DropdownProps, 'items'>> = props => {
   const setting = useStore('setting');
   const home = useStore('home');
   const graph = useStore('graph');
 
-  const items = useMemo(() => {
+  const createNodeApi = useAsyncFn(home.createNode.bind(home));
+
+  const items = computed(() => {
     const groupedByType = groupBy(home.availableNodemetas, each => each.type);
     const result: DropdownMenuItem[] = [];
 
     Object.keys(groupedByType).forEach(type => {
       result.push({
         type: 'divider',
-        key: 'div',
+        key: type,
         orientationMargin: 8,
         children: <span>{setting.tr(type).toUpperCase()}</span>,
       });
 
-      groupedByType[type].forEach(meta => {
+      sortBy(groupedByType[type], x => x.name).forEach(meta => {
         result.push({
           type: 'item',
           key: meta.name,
-          label: meta.name,
-          onClick(e) {
+          label: `${meta.name.charAt(0).toUpperCase()}${meta.name.slice(1)}`,
+          async onClick(e) {
             if (!graph.flow) {
               message.warning(setting.tr('Graph not initialized'));
               return;
@@ -43,7 +46,7 @@ const NodeMenuDropDown: React.FC<Omit<DropdownProps, 'items'>> = props => {
             });
             const initialData = NodeInitialData[meta.name] as any;
 
-            home.createNode({
+            await createNodeApi[1]({
               type: meta.name,
               position: flowPosition,
               data: {
@@ -52,15 +55,32 @@ const NodeMenuDropDown: React.FC<Omit<DropdownProps, 'items'>> = props => {
               },
             });
           },
+          render({ dom }) {
+            return (
+              <Tooltip title={meta.description || meta.name} placement="right">
+                {dom}
+              </Tooltip>
+            );
+          },
         });
       });
     });
 
     return result;
-  }, [home.availableNodemetas]);
+  });
 
-  return <DropdownMenu {...props} items={items} />;
+  return (
+    <DropdownMenu
+      trigger={['contextMenu']}
+      overlayStyle={{
+        border: '1px solid var(--ant-color-border)',
+        minWidth: 120,
+      }}
+      {...props}
+      items={items.get()}
+    />
+  );
 };
 
-export default observer(NodeMenuDropDown);
+export default observer(NodeMenu);
 

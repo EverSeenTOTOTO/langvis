@@ -32,7 +32,7 @@ export default function <T extends Record<string, any>>(
           } catch (e) {
             console.error(e);
             res.status(500).json({
-              error: 'Internal server error',
+              error: (e as Error).message || 'Internal Server Error',
             });
           }
         },

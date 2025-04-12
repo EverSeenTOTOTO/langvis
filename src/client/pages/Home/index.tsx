@@ -3,8 +3,8 @@ import { getStore } from '@/client/store';
 import { ReactFlowProvider } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
 import Header from './components/Header';
+import NodeMenu from './components/NodeMenu';
 import './index.scss';
-import NodeMenuDropDown from './components/NodeMenu';
 
 export const prefetch = async () => {
   const home = getStore('home');
@@ -16,12 +16,11 @@ const Home = () => {
   return (
     <ReactFlowProvider>
       <Header />
-      <NodeMenuDropDown trigger={['contextMenu']}>
+      <NodeMenu>
         <Graph />
-      </NodeMenuDropDown>
+      </NodeMenu>
     </ReactFlowProvider>
   );
 };
 
 export default observer(Home);
-

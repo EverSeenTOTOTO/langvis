@@ -13,7 +13,7 @@ import {
   Switch,
   Tooltip,
 } from 'antd';
-import useAsyncFn from 'react-use/lib/useAsyncFn';
+import { useAsyncFn } from 'react-use';
 
 const SlotCheckbox: React.FC<
   Omit<CheckboxProps, 'value' | 'onChange'> & {
@@ -103,6 +103,7 @@ const EditModal = ({
           name="type"
           label={setting.tr('Node type')}
           rules={[{ required: true }]}
+          initialValue="default"
         >
           <Select
             options={[
