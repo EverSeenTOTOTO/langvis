@@ -54,7 +54,11 @@ export class HomeStore {
     this.graph?.setNodes(nodes);
     this.graph?.setEdges(edges);
 
-    await this.fetchAvailableNodemetas({ graphCategory: res!.data!.category });
+    if (res!.data?.category) {
+      await this.fetchAvailableNodemetas({
+        graphCategory: res!.data!.category,
+      });
+    }
   }
 
   @api('/api/nodemeta/get/:graphCategory')
@@ -100,3 +104,4 @@ export class HomeStore {
     }
   }
 }
+

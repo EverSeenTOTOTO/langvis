@@ -4,6 +4,9 @@ import { DataSource } from 'typeorm';
 import { EdgeService } from './EdgeService';
 import { NodeService } from './NodeService';
 import { pgInjectToken } from './pg';
+import type { RedisClientType } from 'redis';
+import { ClientEdge, ClientNode } from '@/shared/types';
+import { redisInjectToken } from './redis';
 
 @singleton()
 export class GraphService {
@@ -11,6 +14,7 @@ export class GraphService {
     @inject(NodeService) private nodeService?: NodeService,
     @inject(EdgeService) private edgeService?: EdgeService,
     @inject(pgInjectToken) private pg?: DataSource,
+    @inject(redisInjectToken) private redis?: RedisClientType<any>,
   ) {}
 
   findAll() {
@@ -26,10 +30,37 @@ export class GraphService {
     const nodes = await this.nodeService!.findByGraphId(graphId);
     const edges = await this.edgeService!.findByGraphId(graphId);
 
-    return {
+    const data = {
       ...graph,
       nodes,
       edges,
     };
+
+    return data;
+  }
+
+  async getCache(sessionId: string, graphId: string) {
+    const cache = await this.redis!.hGet(sessionId, graphId);
+
+    if (cache) {
+      return JSON.parse(cache) as GraphEntity & {
+        nodes: ClientNode[];
+        edges: ClientEdge[];
+      };
+    }
+
+    return null;
+  }
+
+  async cleanCache(sessionId: string, graphId: string) {
+    await this.redis!.hDel(sessionId, graphId);
+  }
+
+  async refreshCache(sessionId: string, graphId: string) {
+    const data = await this.findByGraphId(graphId);
+    const encodedData = JSON.stringify(data);
+    await this.redis!.hSet(sessionId, graphId, encodedData);
+    return data;
   }
 }
+

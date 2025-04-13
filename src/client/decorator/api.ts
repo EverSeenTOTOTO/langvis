@@ -5,7 +5,10 @@ import { merge } from 'lodash-es';
 import { compile } from 'path-to-regexp';
 
 const metaDataKey = Symbol('client_api');
-const serverFetch = fetchCookie(fetch);
+
+export const serverFetch = fetchCookie(fetch);
+export const getPrefetchPath = (path: string) =>
+  `http://localhost:${import.meta.env.VITE_PORT}${path}`;
 
 export type ApiResponse<T = Record<string, any>> = {
   error?: any;
@@ -105,9 +108,7 @@ export function wrapApi<
       const { path, options } = getApiOptions(req, config);
 
       const url =
-        path.startsWith('/') && !isClient()
-          ? `http://localhost:${import.meta.env.VITE_PORT}${path}`
-          : path;
+        path.startsWith('/') && !isClient() ? getPrefetchPath(path) : path;
       const extraOptions = ['post'].includes(options?.method || 'get')
         ? {
             body: JSON.stringify(req),
@@ -117,6 +118,12 @@ export function wrapApi<
       const timeout = options?.timeout || 10_000;
 
       const fetchApi = isClient() ? fetch : serverFetch;
+
+      console.log(
+        isClient()
+          ? `Client fetch cookie: ${document.cookie}`
+          : `Server prefetch cookie: ${await serverFetch.cookieJar.getCookieString(url)}`,
+      );
 
       const res = await Promise.race([
         fetchApi(url, merge(options, extraOptions)),
@@ -170,3 +177,4 @@ export default function <T extends Record<string, any>>(instance: T) {
 
   return instance;
 }
+

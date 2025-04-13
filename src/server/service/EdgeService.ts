@@ -19,6 +19,12 @@ export class EdgeService {
     return this.pg!.getRepository(EdgeEntity).delete(id);
   }
 
+  findById(edgeId: string) {
+    return this.pg!.getRepository(EdgeEntity).findOneBy({
+      id: edgeId,
+    });
+  }
+
   findByGraphId(graphId: string) {
     return this.pg!.getRepository(EdgeEntity).findBy({
       graphId,
@@ -47,3 +53,4 @@ export class EdgeService {
       .getMany();
   }
 }
+

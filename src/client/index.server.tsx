@@ -6,6 +6,8 @@ import serializeJavascript from 'serialize-javascript';
 import { App, RenderContext, prefetch } from './App';
 import { createRoutes } from './routes';
 import { createStore } from './store';
+import { getPrefetchPath, serverFetch } from './decorator/api';
+import { isEmpty } from 'lodash-es';
 
 enableStaticRendering(true);
 
@@ -28,6 +30,18 @@ export async function render(context: RenderContext) {
 
   ctx.store = store;
   ctx.routes = routes;
+
+  if (!isEmpty(req.cookies)) {
+    // sync client cookie to server prefetch env
+    const fullUrl = getPrefetchPath(req.originalUrl);
+    const cookieStr = Object.entries(req.cookies)
+      .map(([key, value]) => `${key}=${value}`)
+      .join('; ');
+
+    serverFetch.cookieJar.setCookie(cookieStr, fullUrl, {
+      ignoreError: false,
+    });
+  }
 
   const success = await prefetch(ctx).catch(e => {
     console.error(e);
@@ -52,3 +66,4 @@ export async function render(context: RenderContext) {
 
   return ctx;
 }
+

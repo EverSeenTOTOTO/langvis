@@ -8,6 +8,7 @@ import 'reflect-metadata';
 import bindControllers from './controller';
 import bindSessionMiddleware from './middleware/session';
 import bindSSRMiddleware from './middleware/ssr';
+import cookieParser from 'cookie-parser';
 
 dotenv.config({
   path: isProd
@@ -22,8 +23,9 @@ export const createServer = async (): Promise<Express> => {
   app.use(express.static(__dirname, { index: false }));
   app.use(bodyParser.urlencoded({ extended: false }));
   app.use(bodyParser.json());
-  app.use(compression());
 
+  app.use(cookieParser());
+  app.use(compression());
   // TODO
   app.locals.logger = console;
 
@@ -45,3 +47,4 @@ createServer()
     });
   })
   .catch(console.error);
+

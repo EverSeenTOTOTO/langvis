@@ -7,8 +7,6 @@ import react from '@vitejs/plugin-react';
 export const paths = {
   src: path.resolve(__dirname, '..', 'src'),
   dist: path.resolve(__dirname, '..', 'dist'),
-  template: path.resolve(__dirname, '..', 'index.html'),
-  client: path.resolve(__dirname, '..', 'src/client'),
   server: path.resolve(__dirname, '..', 'src/server/index.ts'), // 服务端代码入口
   serverEntry: path.resolve(__dirname, '..', 'src/client/index.server.tsx'), // SSR entry
 };
@@ -38,5 +36,9 @@ export default ({ mode }) => ({
     },
     devSourcemap: mode === 'development',
   },
+  ssr: {
+    noExternal: ['tsyringe', 'react-use'],
+  },
   plugins: [react()],
 });
+

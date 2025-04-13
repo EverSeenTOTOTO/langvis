@@ -5,14 +5,15 @@ import redis from '../service/redis';
 export default async (app: Express) => {
   app.use(async (req, res, next) => {
     try {
-      const token = req.cookies?.token;
+      let token = req.cookies?.token || '';
 
       if (!token) {
-        const newToken = uuid();
-        await redis.sendCommand(['SET', newToken, 'true', 'EX', '3600', 'NX']);
-        res.cookie('token', newToken, { httpOnly: true });
+        token = uuid();
+
+        await redis.hSet(token, 'valid', 'true');
+        await redis.expire(token, 3600);
       } else {
-        const isValid = await redis.get(token);
+        const isValid = await redis.hGet(token, 'valid');
 
         if (!isValid) {
           res.status(401).json({ error: 'Unauthorized' });
@@ -20,6 +21,7 @@ export default async (app: Express) => {
         }
       }
 
+      res.cookie('token', token, { httpOnly: true });
       next();
     } catch (error) {
       console.error('Session middleware error:', error);
@@ -27,3 +29,4 @@ export default async (app: Express) => {
     }
   });
 };
+
