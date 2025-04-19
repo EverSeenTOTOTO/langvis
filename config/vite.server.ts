@@ -16,7 +16,7 @@ export default defineConfig(() => ({
     rollupOptions: {
       input: paths.server,
       output: {
-        dir: paths.dist, // must leave undefined explicitly
+        dir: paths.dist,
         entryFileNames: 'server.js',
       },
     },
@@ -25,3 +25,4 @@ export default defineConfig(() => ({
     external: Object.keys(pkg.dependencies),
   },
 }));
+

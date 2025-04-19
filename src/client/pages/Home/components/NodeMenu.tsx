@@ -10,7 +10,7 @@ import { computed } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import { useAsyncFn } from 'react-use';
 
-const NodeMenu: React.FC<Omit<DropdownProps, 'items'>> = props => {
+const ContextMenu: React.FC<Omit<DropdownProps, 'items'>> = props => {
   const setting = useStore('setting');
   const home = useStore('home');
   const graph = useStore('graph');
@@ -82,5 +82,4 @@ const NodeMenu: React.FC<Omit<DropdownProps, 'items'>> = props => {
   );
 };
 
-export default observer(NodeMenu);
-
+export default observer(ContextMenu);

@@ -63,6 +63,7 @@ const BasicEdge = (edge: ClientEdgeProps) => {
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px) scale(0.6)`,
               pointerEvents: 'all',
+              fontSize: 12,
             }}
             className="nodrag nopan"
             shape="circle"
@@ -76,4 +77,3 @@ const BasicEdge = (edge: ClientEdgeProps) => {
 };
 
 export default BasicEdge;
-

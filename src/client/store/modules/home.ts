@@ -1,4 +1,4 @@
-import { api, type ApiResponse } from '@/client/decorator/api';
+import { api, ApiRequest } from '@/client/decorator/api';
 import { hydrate } from '@/client/decorator/hydrate';
 import { GraphEntity } from '@/shared/entities/Graph';
 import { NodeMetaEntity } from '@/shared/entities/NodeMeta';
@@ -6,6 +6,7 @@ import { ClientEdge, ClientNode } from '@/shared/types';
 import { autorun, makeAutoObservable, observable } from 'mobx';
 import { inject, singleton } from 'tsyringe';
 import { GraphStore } from './graph';
+import { SSEStore } from './sse';
 
 @singleton()
 export class HomeStore {
@@ -18,7 +19,12 @@ export class HomeStore {
   @hydrate()
   currentGraphId?: GraphEntity['id'];
 
-  constructor(@inject(GraphStore) private graph?: GraphStore) {
+  graphState?: 'BUILD' | 'VIEW' | 'RUNNING' = 'BUILD';
+
+  constructor(
+    @inject(GraphStore) private graph?: GraphStore,
+    @inject(SSEStore) private sse?: SSEStore,
+  ) {
     makeAutoObservable(this, {
       availableGraphs: observable.shallow,
       availableNodemetas: observable.shallow,
@@ -36,72 +42,89 @@ export class HomeStore {
   }
 
   @api('/api/graph/all')
-  async fetchAvailableGraphs(_req: void, res?: ApiResponse<GraphEntity[]>) {
-    this.availableGraphs = res!.data || [];
-    this.currentGraphId = res!.data?.[0]?.id;
+  async runCurrentGraph(_params?: any, req?: ApiRequest) {
+    await this.sse?.connect();
+    this.sse?.register(`graph:${this.currentGraphId}`, console.log);
+
+    const res = await req!.send();
+
+    console.log(res);
+  }
+
+  @api('/api/graph/all')
+  async fetchAvailableGraphs(_params?: any, req?: ApiRequest) {
+    const res = await req!.send();
+    this.availableGraphs = res.data || [];
+    this.currentGraphId = res.data?.[0]?.id;
   }
 
   @api('/api/graph/get/:graphId')
-  async fetchGraphDetail(
-    _req: { graphId?: string },
-    res?: ApiResponse<
-      GraphEntity & { nodes: ClientNode[]; edges: ClientEdge[] }
-    >,
-  ) {
-    const nodes = res!.data?.nodes || [];
-    const edges = res!.data?.edges || [];
+  async fetchGraphDetail(_params: { graphId: string }, req?: ApiRequest) {
+    const res = await req!.send();
+    const nodes = res.data?.nodes || [];
+    const edges = res.data?.edges || [];
 
     this.graph?.setNodes(nodes);
     this.graph?.setEdges(edges);
 
-    if (res!.data?.category) {
+    if (res.data?.category) {
       await this.fetchAvailableNodemetas({
-        graphCategory: res!.data!.category,
+        graphCategory: res.data.category,
       });
     }
   }
 
   @api('/api/nodemeta/get/:graphCategory')
   async fetchAvailableNodemetas(
-    _req: { graphCategory: string },
-    res?: ApiResponse<NodeMetaEntity[]>,
+    _params: { graphCategory: string },
+    req?: ApiRequest,
   ) {
-    this.availableNodemetas = res!.data || [];
+    const res = await req!.send();
+    this.availableNodemetas = res.data || [];
   }
 
   @api('/api/node/create', { method: 'post' })
-  async createNode(_req: Partial<ClientNode>, res?: ApiResponse<ClientNode>) {
-    if (res!.data) {
-      await this.fetchGraphDetail({ graphId: this.currentGraphId });
+  async createNode(_params: Partial<ClientNode>, req?: ApiRequest) {
+    const res = await req!.send();
+
+    if (res.data) {
+      await this.fetchGraphDetail({ graphId: this.currentGraphId! });
     }
   }
 
   @api('/api/node/delete/:id', { method: 'post' })
-  async deleteNode(req: { id: string }, res?: ApiResponse<string>) {
-    if (res!.data === req.id) {
-      await this.fetchGraphDetail({ graphId: this.currentGraphId });
+  async deleteNode(params: { id: string }, req?: ApiRequest) {
+    const res = await req!.send();
+
+    if (res.data === params.id) {
+      await this.fetchGraphDetail({ graphId: this.currentGraphId! });
     }
   }
 
   @api('/api/node/update/:id', { method: 'post' })
-  async updateNode(req: Partial<ClientNode>, res?: ApiResponse<ClientNode>) {
-    if (res?.data && res.data.id === req?.id) {
-      await this.fetchGraphDetail({ graphId: this.currentGraphId });
+  async updateNode(params: Partial<ClientNode>, req?: ApiRequest) {
+    const res = await req!.send();
+
+    if (res.data && res.data.id === params.id) {
+      await this.fetchGraphDetail({ graphId: this.currentGraphId! });
     }
   }
 
   @api('/api/edge/create', { method: 'post' })
-  async addEdge(_req: Partial<ClientEdge>, res?: ApiResponse<ClientEdge>) {
-    if (res!.data) {
-      await this.fetchGraphDetail({ graphId: this.currentGraphId });
+  async addEdge(_params: Partial<ClientEdge>, req?: ApiRequest) {
+    const res = await req!.send();
+
+    if (res.data) {
+      await this.fetchGraphDetail({ graphId: this.currentGraphId! });
     }
   }
 
   @api('/api/edge/delete/:id', { method: 'post' })
-  async deleteEdge(req: { id: string }, res?: ApiResponse<string>) {
-    if (res!.data === req.id) {
-      await this.fetchGraphDetail({ graphId: this.currentGraphId });
+  async deleteEdge(params: { id: string }, req?: ApiRequest) {
+    const res = await req!.send();
+
+    if (res.data === params.id) {
+      await this.fetchGraphDetail({ graphId: this.currentGraphId! });
     }
   }
 }
-

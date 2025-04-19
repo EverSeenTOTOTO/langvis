@@ -6,13 +6,13 @@ import composeHydrate from '../decorator/hydrate';
 import { GraphStore } from './modules/graph';
 import { HomeStore } from './modules/home';
 import { SettingStore } from './modules/setting';
+import { SSEStore } from './modules/sse';
 
 configure({ enforceActions: 'never' });
 
-const bindStore = <T, C extends Record<string, any>>(
-  Clz: new (...params: T[]) => C,
+const bindStore = <C extends Record<string, any>>(
+  Clz: new (...params: any[]) => C,
 ) => {
-  // mobx 的Proxy wrap 会错误将异步函数包装成同步，所以需要先 promisify，不然 catchGuard 会失效
   return [composeApi, composeHydrate].reduce(
     (instance, compose) => compose(instance),
     container.resolve(Clz),
@@ -25,6 +25,8 @@ export class AppStore {
   graph = bindStore(GraphStore);
 
   setting = bindStore(SettingStore);
+
+  sse = bindStore(SSEStore);
 
   hydrate(data: Record<string, any>) {
     Object.keys(data).forEach(key => {

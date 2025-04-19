@@ -10,40 +10,20 @@ export const serverFetch = fetchCookie(fetch);
 export const getPrefetchPath = (path: string) =>
   `http://localhost:${import.meta.env.VITE_PORT}${path}`;
 
-export type ApiResponse<T = Record<string, any>> = {
-  error?: any;
-  data?: T;
-
-  [k: string]: any;
-};
-
-type Config = {
+type ApiConfig = {
   path: string;
   options?: RequestInit & { timeout?: number };
 };
 
-export type ApiOptions<P> = string | Config | ((req: P) => Config);
+export type ApiOptions<P> = string | ApiConfig | ((req: P) => ApiConfig);
 
-export function api<P = Record<string, any>>(
-  config: ApiOptions<P>,
-  options?: Config['options'],
-): PropertyDecorator {
-  return function apiDecorator(target: any, propertyKey: string | symbol) {
-    Reflect.defineMetadata(
-      metaDataKey,
-      { config, options },
-      target,
-      propertyKey,
-    );
-  };
-}
-
-const logError = (error: any) => {
+const logError = (msg: any) => {
   if (isTest()) return;
+
+  console.error(msg);
+
   if (isClient()) {
-    message.error(error.message);
-  } else {
-    console.error(error.stack || error.message);
+    message.error(msg instanceof Error ? msg.message : String(msg));
   }
 };
 
@@ -66,10 +46,7 @@ const getApiOptions = <P extends Record<string, any>>(
   {
     config,
     options,
-  }: {
-    config: ApiOptions<P>;
-    options?: Config['options'];
-  },
+  }: { config: ApiOptions<P>; options?: ApiConfig['options'] },
 ) => {
   if (typeof config === 'string') {
     return { path: compilePath(config, req), options };
@@ -92,72 +69,98 @@ const getApiOptions = <P extends Record<string, any>>(
   };
 };
 
-export function wrapApi<
-  P extends Record<string, any>,
-  T extends Record<string, any>,
-  R,
->(
-  fn: (req: P, res?: ApiResponse<T>) => R,
+export class ApiRequest<P extends Record<string, any> = {}> extends Request {
+  readonly timeout?: number;
+
+  constructor(
+    req: P,
+    config: {
+      config: ApiOptions<P>;
+      options?: ApiConfig['options'];
+    },
+  ) {
+    const { path, options } = getApiOptions(req, config);
+    const url =
+      path.startsWith('/') && !isClient() ? getPrefetchPath(path) : path;
+    const extraOptions = ['post'].includes(options?.method || 'get')
+      ? {
+          body: JSON.stringify(req),
+          headers: { 'Content-Type': 'application/json' },
+        }
+      : undefined;
+
+    super(url, merge(options, extraOptions));
+
+    this.timeout = options?.timeout || 10_000;
+  }
+
+  async send() {
+    const fetchApi = isClient() ? fetch : serverFetch;
+
+    if (!isClient() && !isTest()) {
+      console.log(
+        `Server prefetch cookie: ${await serverFetch.cookieJar.getCookieString(this.url)}`,
+      );
+    }
+
+    const res = await Promise.race([
+      fetchApi(this),
+      new Promise<Error>(resolve => {
+        setTimeout(
+          () => resolve(new Error(`Request timeout: ${this.url}`)),
+          this.timeout,
+        );
+      }),
+    ]);
+
+    if (res instanceof Error) {
+      logError(res);
+
+      return { error: res.message };
+    }
+
+    const rsp = await res.json();
+
+    if (res.status < 200 || res.status >= 300) {
+      const e = new Error(
+        rsp?.error ?? `Response error: ${this.url} ${res.status}`,
+      );
+
+      logError(e);
+
+      return { error: e.message };
+    }
+
+    return rsp;
+  }
+}
+
+export function api<P extends Record<string, any> = {}>(
+  config: ApiOptions<P>,
+  options?: ApiConfig['options'],
+): PropertyDecorator {
+  return function apiDecorator(target: any, propertyKey: string | symbol) {
+    Reflect.defineMetadata(
+      metaDataKey,
+      { config, options },
+      target,
+      propertyKey,
+    );
+  };
+}
+
+export function wrapApi<P extends Record<string, any>, R>(
+  fn: (params: P, req: ApiRequest<P>) => R,
   config: {
     config: ApiOptions<P>;
-    options?: Config['options'];
+    options?: ApiConfig['options'];
   },
 ) {
   return async (req: P) => {
     try {
-      const { path, options } = getApiOptions(req, config);
-
-      const url =
-        path.startsWith('/') && !isClient() ? getPrefetchPath(path) : path;
-      const extraOptions = ['post'].includes(options?.method || 'get')
-        ? {
-            body: JSON.stringify(req),
-            headers: { 'Content-Type': 'application/json' },
-          }
-        : undefined;
-      const timeout = options?.timeout || 10_000;
-
-      const fetchApi = isClient() ? fetch : serverFetch;
-
-      console.log(
-        isClient()
-          ? `Client fetch cookie: ${document.cookie}`
-          : `Server prefetch cookie: ${await serverFetch.cookieJar.getCookieString(url)}`,
-      );
-
-      const res = await Promise.race([
-        fetchApi(url, merge(options, extraOptions)),
-        new Promise<Error>(resolve => {
-          setTimeout(
-            () => resolve(new Error(`Request timeout: ${url}`)),
-            timeout,
-          );
-        }),
-      ]);
-
-      if (res instanceof Error) {
-        logError(res);
-
-        return fn(req, { error: res.message });
-      }
-
-      const rsp = await res.json();
-
-      if (res.status < 200 || res.status >= 300) {
-        const e = new Error(
-          rsp?.error ?? `Response error: ${url} ${res.status}`,
-        );
-
-        logError(e);
-
-        return fn(req, { error: e.message });
-      }
-
-      return fn(req, rsp);
-    } catch (error) {
-      logError(new Error(`Request error. ${(error as Error)?.message}`));
-
-      return fn(req, { error: (error as Error)?.message });
+      return await fn(req, new ApiRequest(req, config));
+    } catch (e) {
+      return { error: (e as Error).message };
     }
   };
 }
@@ -177,4 +180,3 @@ export default function <T extends Record<string, any>>(instance: T) {
 
   return instance;
 }
-

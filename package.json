@@ -65,8 +65,7 @@
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-react": "^7.37.4",
     "globals": "^15.14.0",
-    "husky": "^8.0.3",
-    "lint-staged": "^15.3.0",
+    "husky": "^9.1.7",
     "postcss": "^8.4.49",
     "postcss-flexbugs-fixes": "^5.0.2",
     "postcss-normalize": "^10.0.1",
@@ -82,9 +81,8 @@
     "vite": "^6.0.6",
     "vitest": "^2.1.8"
   },
-  "lint-staged": {
-    "*.{vue,js,ts,jsx,tsx}": "eslint --cache --fix",
-    "*.{css,scss}": "stylelint --fix"
-  },
-  "packageManager": "pnpm@8.15.6+sha1.8105075ad0aa306138be128c017e9c41e28ecffa"
+  "packageManager": "pnpm@8.15.6+sha1.8105075ad0aa306138be128c017e9c41e28ecffa",
+  "scripts": {
+    "prepare": "husky"
+  }
 }

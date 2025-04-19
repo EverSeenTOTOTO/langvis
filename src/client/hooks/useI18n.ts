@@ -32,6 +32,8 @@ if (!i18next.isInitialized) {
           'Node Properties': '节点属性',
           'Node slots': '节点插槽',
           'Node type': '节点类型',
+          Run: '运行',
+          Running: '运行中',
           'Search nodes': '搜索节点',
           'Sure to delete?': '确定要删除吗？',
           Theme: '颜色主题',

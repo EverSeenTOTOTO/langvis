@@ -1,10 +1,6 @@
 import 'reflect-metadata';
 
-import factory, {
-  api,
-  type ApiResponse,
-  wrapApi,
-} from '@/client/decorator/api';
+import factory, { api, ApiRequest, wrapApi } from '@/client/decorator/api';
 import http from 'node:http';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 
@@ -68,20 +64,20 @@ afterAll(() => {
 
 it('wrapApi', async () => {
   class Demo {
-    getData(_: any, res?: ApiResponse) {
-      return res;
+    getData(_: any, req?: ApiRequest) {
+      return req!.send();
     }
 
-    postData(_: any, res?: ApiResponse) {
-      return res;
+    postData(_: any, req?: ApiRequest) {
+      return req!.send();
     }
 
-    modifyHeader(_: any, res?: ApiResponse) {
-      return res;
+    modifyHeader(_: any, req?: ApiRequest) {
+      return req!.send();
     }
 
-    withParams(_: any, res?: ApiResponse) {
-      return res;
+    withParams(_: any, req?: ApiRequest) {
+      return req!.send();
     }
   }
 
@@ -139,15 +135,15 @@ it('wrapApi', async () => {
 it('api', async () => {
   class Demo {
     @api(`http://localhost:${port}/apiget`)
-    async getData(_: any, res?: ApiResponse) {
-      return res;
+    getData(_: any, req?: ApiRequest) {
+      return req!.send();
     }
 
     @api(`http://localhost:${port}/apipost`, {
       method: 'post',
     })
-    async postData(_: any, res?: ApiResponse) {
-      return res;
+    postData(_: any, req?: ApiRequest) {
+      return req!.send();
     }
 
     @api({
@@ -158,13 +154,13 @@ it('api', async () => {
         },
       },
     })
-    async modifyHeader(_: any, res?: ApiResponse) {
-      return res;
+    modifyHeader(_: any, req?: ApiRequest) {
+      return req!.send();
     }
 
     @api(`http://localhost:${port}/api/:type`)
-    async withParams(_: any, res?: ApiResponse) {
-      return res;
+    withParams(_: any, req?: ApiRequest) {
+      return req!.send();
     }
 
     @api({
@@ -173,25 +169,25 @@ it('api', async () => {
         timeout: 1,
       },
     })
-    async error(_: void, res?: ApiResponse) {
-      return res;
+    error(_: any, req?: ApiRequest) {
+      return req!.send();
     }
 
     @api(() => {
       throw new Error('test');
     })
-    async error2(_: void, res?: ApiResponse) {
-      return res;
+    error2(_: any, req?: ApiRequest) {
+      return req!.send();
     }
 
     @api(`http://localhost:${port}/apierror`)
-    async error3(_: void, res?: ApiResponse) {
-      return res;
+    error3(_: any, req?: ApiRequest) {
+      return req!.send();
     }
 
     @api(`http://localhost:${port}/apicookie`)
-    async cookie(_: void, res?: ApiResponse) {
-      return res;
+    cookie(_: any, req?: ApiRequest) {
+      return req!.send();
     }
   }
 
@@ -202,18 +198,19 @@ it('api', async () => {
   expect(await demo.modifyHeader({})).toEqual({
     data: 'test',
   });
-  expect(await demo.error()).toEqual({
+  expect(await demo.error({})).toEqual({
     error: `Request timeout: http://localhost:${port}/apitimeout`,
   });
-  expect(await demo.error2()).toEqual({
+  expect(await demo.error2({})).toEqual({
     error: 'test',
   });
-  expect(await demo.error3()).toEqual({
+  expect(await demo.error3({})).toEqual({
     error: 'test',
   });
   expect(await demo.withParams({ type: 'get' })).toEqual({ data: 'GET' });
-  expect(await demo.cookie()).toEqual({
+  expect(await demo.cookie({})).toEqual({
     cookie:
       'session=eyJpZCI6Ijc3MWY5ZDdjLTEwNzUtNDljNC05YzZlLWJiNDI0ZDQ3MThkNSJ9',
   });
 });
+

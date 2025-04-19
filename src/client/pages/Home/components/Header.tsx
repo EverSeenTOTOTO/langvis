@@ -1,6 +1,7 @@
 import { Col, Divider, Row, Typography } from 'antd';
 import GraphSelect from './GraphSelect';
 import Settings from './Settings';
+import Control from './Control';
 
 const Header = () => {
   return (
@@ -11,6 +12,11 @@ const Header = () => {
       <Divider type="vertical" />
       <Col span={4} className="graph-select">
         <GraphSelect />
+      </Col>
+      <Col flex={1} />
+      <Divider type="vertical" />
+      <Col>
+        <Control />
       </Col>
       <Col flex={1} />
       <Divider type="vertical" />
