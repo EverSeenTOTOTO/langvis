@@ -7,6 +7,7 @@ import { pgInjectToken } from './pg';
 import type { RedisClientType } from 'redis';
 import { ClientEdge, ClientNode } from '@/shared/types';
 import { redisInjectToken } from './redis';
+import { SSEService } from './SSEService';
 
 @singleton()
 export class GraphService {
@@ -15,6 +16,7 @@ export class GraphService {
     @inject(EdgeService) private edgeService?: EdgeService,
     @inject(pgInjectToken) private pg?: DataSource,
     @inject(redisInjectToken) private redis?: RedisClientType<any>,
+    @inject(SSEService) private sseService?: SSEService,
   ) {}
 
   findAll() {
@@ -30,11 +32,7 @@ export class GraphService {
     const nodes = await this.nodeService!.findByGraphId(graphId);
     const edges = await this.edgeService!.findByGraphId(graphId);
 
-    const data = {
-      ...graph,
-      nodes,
-      edges,
-    };
+    const data = { ...graph, nodes, edges };
 
     return data;
   }
@@ -62,5 +60,17 @@ export class GraphService {
     await this.redis!.hSet(sessionId, graphId, encodedData);
     return data;
   }
-}
 
+  async getOrRefreshCache(sessionId: string, graphId: string) {
+    const cache = await this.getCache(sessionId, graphId);
+
+    if (cache) return cache;
+
+    return this.refreshCache(sessionId, graphId);
+  }
+
+  async runGraph(sessionId: string, graphId: string) {
+    await this.getOrRefreshCache(sessionId, graphId);
+    this.sseService!.sendMessage(`graph:${graphId}`, true);
+  }
+}

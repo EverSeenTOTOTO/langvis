@@ -53,4 +53,3 @@ export class EdgeService {
       .getMany();
   }
 }
-

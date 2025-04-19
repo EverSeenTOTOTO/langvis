@@ -35,4 +35,3 @@ export class EdgeController {
     res.json({ data: req.params.id });
   }
 }
-

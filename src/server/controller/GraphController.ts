@@ -27,15 +27,19 @@ export class GraphController {
   async getOne(req: Request, res: Response) {
     const graphId = req.params.graphId;
     const sessionId = req.cookies!.token;
-    const cache = await this.graphService!.getCache(sessionId, graphId);
 
-    if (cache) {
-      return res.json({ data: cache });
-    }
-
-    const data = await this.graphService!.refreshCache(sessionId, graphId);
+    const data = await this.graphService!.getOrRefreshCache(sessionId, graphId);
 
     return res.json({ data });
   }
-}
 
+  @api('/run/:graphId')
+  async run(req: Request, res: Response) {
+    const graphId = req.params.graphId;
+    const sessionId = req.cookies!.token;
+
+    await this.graphService!.runGraph(graphId, sessionId);
+
+    return res.json({ data: graphId });
+  }
+}

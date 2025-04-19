@@ -51,4 +51,3 @@ export default async (app: Express) => {
     res.end(html);
   });
 };
-

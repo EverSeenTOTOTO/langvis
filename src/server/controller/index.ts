@@ -8,6 +8,7 @@ import { NodeController } from './NodeController';
 import { NodeMetaController } from './NodemetaController';
 import { container } from 'tsyringe';
 import { DataSource } from 'typeorm';
+import { SSEController } from './SSEController';
 
 export default async (app: Express) => {
   await Promise.all([
@@ -22,4 +23,5 @@ export default async (app: Express) => {
   bindController(NodeController, app);
   bindController(NodeMetaController, app);
   bindController(EdgeController, app);
+  bindController(SSEController, app);
 };

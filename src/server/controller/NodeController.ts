@@ -45,4 +45,3 @@ export class NodeController {
     return res.json({ data: node });
   }
 }
-
