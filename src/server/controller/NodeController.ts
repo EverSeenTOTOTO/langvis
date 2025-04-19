@@ -17,7 +17,10 @@ export class NodeController {
   async createNode(req: Request, res: Response) {
     const node = await this.nodeService!.create(req.body);
 
-    await this.graphService!.cleanCache(req.cookies!.token, node.data!.graphId);
+    await this.graphService!.cleanCache({
+      sessionId: req.cookies!.token,
+      graphId: node.data!.graphId,
+    });
 
     return res.json({ data: node });
   }
@@ -30,7 +33,10 @@ export class NodeController {
     if (!node) throw new Error(`Node ${nodeId} not found`);
 
     await this.nodeService!.delete(nodeId);
-    await this.graphService!.cleanCache(req.cookies!.token, node.data!.graphId);
+    await this.graphService!.cleanCache({
+      sessionId: req.cookies!.token,
+      graphId: node.data!.graphId,
+    });
 
     return res.json({ data: nodeId });
   }
@@ -40,7 +46,10 @@ export class NodeController {
     const nodeId = req.params.id;
     const node = await this.nodeService!.update({ id: nodeId, ...req.body });
 
-    await this.graphService!.cleanCache(req.cookies!.token, node.data!.graphId);
+    await this.graphService!.cleanCache({
+      sessionId: req.cookies!.token,
+      graphId: node.data!.graphId,
+    });
 
     return res.json({ data: node });
   }

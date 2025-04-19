@@ -160,6 +160,7 @@ export function wrapApi<P extends Record<string, any>, R>(
     try {
       return await fn(req, new ApiRequest(req, config));
     } catch (e) {
+      logError(e);
       return { error: (e as Error).message };
     }
   };

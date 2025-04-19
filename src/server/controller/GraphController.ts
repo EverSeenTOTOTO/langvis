@@ -28,7 +28,10 @@ export class GraphController {
     const graphId = req.params.graphId;
     const sessionId = req.cookies!.token;
 
-    const data = await this.graphService!.getOrRefreshCache(sessionId, graphId);
+    const data = await this.graphService!.getOrUpdateCache({
+      sessionId,
+      graphId,
+    });
 
     return res.json({ data });
   }
@@ -38,7 +41,7 @@ export class GraphController {
     const graphId = req.params.graphId;
     const sessionId = req.cookies!.token;
 
-    await this.graphService!.runGraph(graphId, sessionId);
+    await this.graphService!.runGraph({ sessionId, graphId });
 
     return res.json({ data: graphId });
   }

@@ -1,4 +1,3 @@
-import { message } from 'antd';
 import { singleton } from 'tsyringe';
 
 @singleton()
@@ -7,25 +6,20 @@ export class SSEStore {
 
   timeout?: NodeJS.Timeout;
 
-  handles: Map<string, (data: any) => void> = new Map();
-
-  async connect() {
+  async connect(timeout?: number) {
     if (this.eventSource?.OPEN) return;
-    return new Promise((resolve, reject) => {
-      this.checkTimeout().catch(reject);
-      this.eventSource = new EventSource('/api/sse', {
-        withCredentials: true,
-      });
+    return new Promise<void>((resolve, reject) => {
+      this.checkTimeout(timeout).catch(reject);
+      this.eventSource = new EventSource('/api/sse');
       this.eventSource.addEventListener('error', e => {
         clearTimeout(this.timeout!);
         console.error(e);
-        reject(e);
         this.close();
+        reject(e);
       });
-      this.eventSource.addEventListener('open', resolve);
-      this.eventSource.addEventListener('message', e => {
+      this.eventSource.addEventListener('open', () => {
         clearTimeout(this.timeout!);
-        this.handleSSE(e);
+        resolve();
       });
     });
   }
@@ -35,23 +29,9 @@ export class SSEStore {
     return new Promise((_, reject) => {
       this.timeout = setTimeout(() => {
         this.close();
-        reject(new Error(`SSE connect timeout`));
+        reject(new Error(`SSE connect timeout in ${timeout}ms`));
       }, timeout);
     });
-  }
-
-  protected handleSSE(e: MessageEvent<any>) {
-    try {
-      const { event, data } = JSON.parse(e.data) as {
-        event: string;
-        data: any;
-      };
-
-      return this.handles.get(event)?.(data);
-    } catch (e) {
-      message.error('SSE data parse error');
-      console.error(e);
-    }
   }
 
   close() {
@@ -59,15 +39,11 @@ export class SSEStore {
     this.eventSource = undefined;
   }
 
-  register(event: string, handler: (data: any) => void) {
-    if (this.handles.has(event)) {
-      throw new Error(`Event ${event} already registered`);
-    }
-
-    this.handles.set(event, handler);
+  register(event: string, listener: (e: any) => void) {
+    this.eventSource?.addEventListener(event, listener);
   }
 
-  unregister(event: string) {
-    this.handles.delete(event);
+  unregister(event: string, listener: (e: any) => void) {
+    this.eventSource?.removeEventListener(event, listener);
   }
 }

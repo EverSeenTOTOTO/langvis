@@ -7,6 +7,7 @@ import { autorun, makeAutoObservable, observable } from 'mobx';
 import { inject, singleton } from 'tsyringe';
 import { GraphStore } from './graph';
 import { SSEStore } from './sse';
+import { message } from 'antd';
 
 @singleton()
 export class HomeStore {
@@ -41,14 +42,19 @@ export class HomeStore {
     this.currentGraphId = id;
   }
 
-  @api('/api/graph/all')
-  async runCurrentGraph(_params?: any, req?: ApiRequest) {
-    await this.sse?.connect();
-    this.sse?.register(`graph:${this.currentGraphId}`, console.log);
+  @api('/api/graph/run/:graphId')
+  async runCurrentGraph(params: { graphId: string }, req?: ApiRequest) {
+    try {
+      await this.sse!.connect();
+      this.sse!.register(`graph:${params.graphId}`, e => {
+        const data = JSON.parse(e.data);
+        console.log(data);
+      });
 
-    const res = await req!.send();
-
-    console.log(res);
+      await req!.send();
+    } catch (e) {
+      message.error((e as Error).message);
+    }
   }
 
   @api('/api/graph/all')

@@ -29,6 +29,8 @@ export class GraphService {
       id: graphId,
     });
 
+    if (!graph) throw new Error(`Graph ${graphId} not found`);
+
     const nodes = await this.nodeService!.findByGraphId(graphId);
     const edges = await this.edgeService!.findByGraphId(graphId);
 
@@ -37,7 +39,13 @@ export class GraphService {
     return data;
   }
 
-  async getCache(sessionId: string, graphId: string) {
+  async getCache({
+    sessionId,
+    graphId,
+  }: {
+    sessionId: string;
+    graphId: string;
+  }) {
     const cache = await this.redis!.hGet(sessionId, graphId);
 
     if (cache) {
@@ -50,27 +58,51 @@ export class GraphService {
     return null;
   }
 
-  async cleanCache(sessionId: string, graphId: string) {
+  async cleanCache({
+    sessionId,
+    graphId,
+  }: {
+    sessionId: string;
+    graphId: string;
+  }) {
     await this.redis!.hDel(sessionId, graphId);
   }
 
-  async refreshCache(sessionId: string, graphId: string) {
+  async updateCache({
+    sessionId,
+    graphId,
+  }: {
+    sessionId: string;
+    graphId: string;
+  }) {
     const data = await this.findByGraphId(graphId);
     const encodedData = JSON.stringify(data);
     await this.redis!.hSet(sessionId, graphId, encodedData);
     return data;
   }
 
-  async getOrRefreshCache(sessionId: string, graphId: string) {
-    const cache = await this.getCache(sessionId, graphId);
+  async getOrUpdateCache({
+    sessionId,
+    graphId,
+  }: {
+    sessionId: string;
+    graphId: string;
+  }) {
+    const cache = await this.getCache({ sessionId, graphId });
 
     if (cache) return cache;
 
-    return this.refreshCache(sessionId, graphId);
+    return this.updateCache({ sessionId, graphId });
   }
 
-  async runGraph(sessionId: string, graphId: string) {
-    await this.getOrRefreshCache(sessionId, graphId);
-    this.sseService!.sendMessage(`graph:${graphId}`, true);
+  async runGraph({
+    sessionId,
+    graphId,
+  }: {
+    sessionId: string;
+    graphId: string;
+  }) {
+    const data = await this.getOrUpdateCache({ sessionId, graphId });
+    this.sseService!.sendMessage(`graph:${graphId}`, data);
   }
 }

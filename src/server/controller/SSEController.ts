@@ -12,18 +12,22 @@ export class SSEController {
   @api('')
   onConnect(req: Request, res: Response) {
     res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
+    // no-transform is required when working with compression, see https://github.com/nestjs/nest/issues/5762
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
 
+    res.write('retry: 3\n');
     this.sseService!.setSendMessage((event: string, data: any) => {
-      res.write(`data: ${JSON.stringify({ event, data })}\n\n`);
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
     });
 
     req.on('error', e => {
-      console.error(`SSE connection error: `, e);
+      console.error(`SSE connection error: `, e.message);
       res.end();
     });
     req.on('close', () => {
+      console.info(`SSE connection closed`);
       res.end();
     });
   }

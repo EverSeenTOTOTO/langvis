@@ -17,7 +17,10 @@ export class EdgeController {
   async createEdge(req: Request, res: Response) {
     const edge = await this.edgeService!.create(req.body);
 
-    await this.graphService!.cleanCache(req.cookies!.token, edge.graphId);
+    await this.graphService!.cleanCache({
+      sessionId: req.cookies!.token,
+      graphId: edge.graphId,
+    });
 
     res.json({ data: edge });
   }
@@ -30,7 +33,10 @@ export class EdgeController {
     if (!edge) throw new Error(`Edge ${edgeId}not found`);
 
     await this.edgeService!.delete(edgeId);
-    await this.graphService!.cleanCache(req.cookies!.token, edge.graphId);
+    await this.graphService!.cleanCache({
+      sessionId: req.cookies!.token,
+      graphId: edge.graphId,
+    });
 
     res.json({ data: req.params.id });
   }

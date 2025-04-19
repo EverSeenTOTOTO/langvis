@@ -17,7 +17,7 @@ const Control = () => {
           disabled={!home.currentGraphId}
           loading={runGraphApi[0].loading}
           onClick={() => {
-            runGraphApi[1]();
+            runGraphApi[1]({ graphId: home.currentGraphId! });
           }}
         >
           {home.graphState === 'RUNNING'
