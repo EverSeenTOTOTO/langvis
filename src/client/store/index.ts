@@ -3,6 +3,7 @@ import 'reflect-metadata';
 import { container } from 'tsyringe';
 import composeApi from '../decorator/api';
 import composeHydrate from '../decorator/hydrate';
+import { AuthStore } from './modules/auth';
 import { GraphStore } from './modules/graph';
 import { HomeStore } from './modules/home';
 import { SettingStore } from './modules/setting';
@@ -27,6 +28,8 @@ export class AppStore {
   setting = bindStore(SettingStore);
 
   sse = bindStore(SSEStore);
+
+  auth = bindStore(AuthStore);
 
   hydrate(data: Record<string, any>) {
     Object.keys(data).forEach(key => {

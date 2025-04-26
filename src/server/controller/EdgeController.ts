@@ -3,24 +3,15 @@ import { inject, singleton } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { EdgeService } from '../service/EdgeService';
-import { GraphService } from '../service/GraphService';
 
 @singleton()
 @controller('/api/edge')
 export class EdgeController {
-  constructor(
-    @inject(EdgeService) private edgeService?: EdgeService,
-    @inject(GraphService) private graphService?: GraphService,
-  ) {}
+  constructor(@inject(EdgeService) private edgeService?: EdgeService) {}
 
   @api('/create', { method: 'post' })
   async createEdge(req: Request, res: Response) {
     const edge = await this.edgeService!.create(req.body);
-
-    await this.graphService!.cleanCache({
-      sessionId: req.cookies!.token,
-      graphId: edge.graphId,
-    });
 
     res.json({ data: edge });
   }
@@ -33,10 +24,6 @@ export class EdgeController {
     if (!edge) throw new Error(`Edge ${edgeId}not found`);
 
     await this.edgeService!.delete(edgeId);
-    await this.graphService!.cleanCache({
-      sessionId: req.cookies!.token,
-      graphId: edge.graphId,
-    });
 
     res.json({ data: req.params.id });
   }

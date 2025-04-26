@@ -9,16 +9,13 @@ import { NodeMetaController } from './NodemetaController';
 import { container } from 'tsyringe';
 import { DataSource } from 'typeorm';
 import { SSEController } from './SSEController';
+import { AuthController } from './AuthController';
 
 export default async (app: Express) => {
-  await Promise.all([
-    pg.isInitialized || pg.initialize(),
-    redis.isReady || redis.connect(),
-  ]);
-
   container.register<DataSource>(pgInjectToken, { useValue: pg });
   container.register<typeof redis>(redisInjectToken, { useValue: redis });
 
+  bindController(AuthController, app);
   bindController(GraphController, app);
   bindController(NodeController, app);
   bindController(NodeMetaController, app);

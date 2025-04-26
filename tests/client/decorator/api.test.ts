@@ -53,7 +53,7 @@ beforeAll(() => {
     await new Promise(resolve => setTimeout(resolve, 100));
 
     res.writeHead(404);
-    res.end({});
+    res.end(JSON.stringify({}));
   });
   server.listen(port);
 });

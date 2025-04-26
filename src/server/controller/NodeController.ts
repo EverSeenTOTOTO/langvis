@@ -3,24 +3,15 @@ import { inject, singleton } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { NodeService } from '../service/NodeService';
-import { GraphService } from '../service/GraphService';
 
 @singleton()
 @controller('/api/node')
 export class NodeController {
-  constructor(
-    @inject(NodeService) private nodeService?: NodeService,
-    @inject(GraphService) private graphService?: GraphService,
-  ) {}
+  constructor(@inject(NodeService) private nodeService?: NodeService) {}
 
   @api('/create', { method: 'post' })
   async createNode(req: Request, res: Response) {
     const node = await this.nodeService!.create(req.body);
-
-    await this.graphService!.cleanCache({
-      sessionId: req.cookies!.token,
-      graphId: node.data!.graphId,
-    });
 
     return res.json({ data: node });
   }
@@ -33,10 +24,6 @@ export class NodeController {
     if (!node) throw new Error(`Node ${nodeId} not found`);
 
     await this.nodeService!.delete(nodeId);
-    await this.graphService!.cleanCache({
-      sessionId: req.cookies!.token,
-      graphId: node.data!.graphId,
-    });
 
     return res.json({ data: nodeId });
   }
@@ -45,11 +32,6 @@ export class NodeController {
   async updateNode(req: Request, res: Response) {
     const nodeId = req.params.id;
     const node = await this.nodeService!.update({ id: nodeId, ...req.body });
-
-    await this.graphService!.cleanCache({
-      sessionId: req.cookies!.token,
-      graphId: node.data!.graphId,
-    });
 
     return res.json({ data: node });
   }

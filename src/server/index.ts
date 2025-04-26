@@ -6,7 +6,6 @@ import express, { Express } from 'express';
 import path from 'path';
 import 'reflect-metadata';
 import bindControllers from './controller';
-import bindSessionMiddleware from './middleware/session';
 import bindSSRMiddleware from './middleware/ssr';
 import cookieParser from 'cookie-parser';
 
@@ -29,8 +28,6 @@ export const createServer = async (): Promise<Express> => {
   // TODO
   app.locals.logger = console;
 
-  await bindSessionMiddleware(app);
-
   await bindControllers(app);
   // must be last
   await bindSSRMiddleware(app);
@@ -38,7 +35,7 @@ export const createServer = async (): Promise<Express> => {
   return app;
 };
 
-const port = process.env.VITE_PORT || 3000;
+const port = process.env.PORT || 3000;
 
 createServer()
   .then(server => {
