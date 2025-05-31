@@ -21,7 +21,7 @@ export class AuthController {
   }
 
   @api('/sign-up/email', { method: 'post' })
-  async postHandler(req: Request, res: Response) {
+  async signUp(req: Request, res: Response) {
     const { headers, response } = await this.auth!.api.signUpEmail({
       returnHeaders: true,
       body: req.body,

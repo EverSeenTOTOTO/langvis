@@ -9,29 +9,39 @@ import { NodeService } from '../service/NodeService';
 export class NodeController {
   constructor(@inject(NodeService) private nodeService?: NodeService) {}
 
-  @api('/create', { method: 'post' })
+  @api('/add', { method: 'post' })
   async createNode(req: Request, res: Response) {
     const node = await this.nodeService!.create(req.body);
 
     return res.json({ data: node });
   }
 
-  @api('/delete/:id', { method: 'post' })
+  @api('/del/:nodeId', { method: 'delete' })
   async deleteNode(req: Request, res: Response) {
-    const nodeId = req.params.id;
-    const node = await this.nodeService!.findById(nodeId);
+    const nodeId = req.params.nodeId;
+    const result = await this.nodeService!.delete(nodeId);
 
-    if (!node) throw new Error(`Node ${nodeId} not found`);
-
-    await this.nodeService!.delete(nodeId);
+    if (result.affected === 0) {
+      throw new Error(`Failed to delete Node with ID ${nodeId}`);
+    }
 
     return res.json({ data: nodeId });
   }
 
-  @api('/update/:id', { method: 'post' })
+  @api('/edit/:nodeId', { method: 'post' })
   async updateNode(req: Request, res: Response) {
-    const nodeId = req.params.id;
+    const nodeId = req.params.nodeId;
     const node = await this.nodeService!.update({ id: nodeId, ...req.body });
+
+    return res.json({ data: node });
+  }
+
+  @api('/get/:nodeId', { method: 'get' })
+  async getNode(req: Request, res: Response) {
+    const nodeId = req.params.nodeId;
+    const node = await this.nodeService!.findById(nodeId);
+
+    if (!node) throw new Error(`Node ${nodeId} not found`);
 
     return res.json({ data: node });
   }

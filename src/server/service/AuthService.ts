@@ -7,37 +7,35 @@ import redis from './redis';
 
 export const authInjectToken = Symbol('auth');
 
-const auth = betterAuth({
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  database: typeormAdapter(pg),
-  secondaryStorage: {
-    get: async key => {
-      const value = await redis.get(key);
-      return value ?? null;
-    },
-    set: async (key, value, ttl) => {
-      if (ttl) {
-        await redis.set(key, value, { EX: ttl });
-      } else {
-        await redis.set(key, value);
-      }
-    },
-    delete: async key => {
-      await redis.del(key);
-    },
-  },
-  emailAndPassword: {
-    enabled: true,
-  },
-});
-
 @singleton()
 export class AuthService {
-  readonly betterAuth = auth;
+  readonly auth = betterAuth({
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    database: typeormAdapter(pg),
+    secondaryStorage: {
+      get: async key => {
+        const value = await redis.get(key);
+        return value ?? null;
+      },
+      set: async (key, value, ttl) => {
+        if (ttl) {
+          await redis.set(key, value, { EX: ttl });
+        } else {
+          await redis.set(key, value);
+        }
+      },
+      delete: async key => {
+        await redis.del(key);
+      },
+    },
+    emailAndPassword: {
+      enabled: true,
+    },
+  });
 
   get api() {
-    return this.betterAuth.api;
+    return this.auth.api;
   }
 
   protected getSessionData(req: Request) {
@@ -52,7 +50,7 @@ export class AuthService {
       }
     }
 
-    return this.betterAuth.api.getSession({
+    return this.auth.api.getSession({
       query: {
         disableCookieCache: true,
       },

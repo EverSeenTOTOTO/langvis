@@ -38,6 +38,12 @@ beforeAll(() => {
       return;
     }
 
+    if (/apiquery/.test(req.url!)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ data: req.url!.split('?')[1] }));
+      return;
+    }
+
     if (/apierror/.test(req.url!)) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'test' }));
@@ -76,6 +82,10 @@ it('wrapApi', async () => {
       return req!.send();
     }
 
+    withQuery(_: any, req?: ApiRequest) {
+      return req!.send();
+    }
+
     withParams(_: any, req?: ApiRequest) {
       return req!.send();
     }
@@ -110,6 +120,15 @@ it('wrapApi', async () => {
 
   expect(await apiHeader({})).toEqual({
     data: 'test',
+  });
+
+  const apiQuery = wrapApi(demo.withQuery.bind(demo), {
+    config: (req: { query: string }) =>
+      `http://localhost:${port}/apiquery?test=${req.query}`,
+  });
+
+  expect(await apiQuery({ query: '42' })).toEqual({
+    data: 'test=42',
   });
 
   const apiError = wrapApi(demo.modifyHeader.bind(demo), {
@@ -213,3 +232,4 @@ it('api', async () => {
       'session=eyJpZCI6Ijc3MWY5ZDdjLTEwNzUtNDljNC05YzZlLWJiNDI0ZDQ3MThkNSJ9',
   });
 });
+

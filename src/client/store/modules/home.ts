@@ -3,10 +3,9 @@ import { hydrate } from '@/client/decorator/hydrate';
 import { GraphEntity } from '@/shared/entities/Graph';
 import { NodeMetaEntity } from '@/shared/entities/NodeMeta';
 import { ClientEdge, ClientNode } from '@/shared/types';
-import { autorun, makeAutoObservable, observable } from 'mobx';
+import { autorun, makeAutoObservable, observable, reaction } from 'mobx';
 import { inject, singleton } from 'tsyringe';
 import { GraphStore } from './graph';
-import { SSEStore } from './sse';
 
 @singleton()
 export class HomeStore {
@@ -19,12 +18,7 @@ export class HomeStore {
   @hydrate()
   currentGraphId?: GraphEntity['id'];
 
-  graphState?: 'BUILD' | 'VIEW' | 'RUNNING' = 'BUILD';
-
-  constructor(
-    @inject(GraphStore) private graph?: GraphStore,
-    @inject(SSEStore) private sse?: SSEStore,
-  ) {
+  constructor(@inject(GraphStore) private graph?: GraphStore) {
     makeAutoObservable(this, {
       availableGraphs: observable.shallow,
       availableNodemetas: observable.shallow,
@@ -35,48 +29,48 @@ export class HomeStore {
         this.fetchGraphDetail({ graphId: this.currentGraphId });
       }
     });
+    reaction(
+      () => this.graph?.category,
+      async () => {
+        if (this.graph?.category) {
+          await this.fetchAvailableNodemetasByGraphCategory({
+            graphCategory: this.graph.category,
+          });
+        }
+      },
+    );
   }
 
   toggleGraph(id: string) {
     this.currentGraphId = id;
   }
 
-  @api('/api/graph/run/:graphId')
-  async runCurrentGraph(params: { graphId: string }, req?: ApiRequest) {
-    await this.sse!.connect();
-    this.sse!.register(`graph:${params.graphId}`, e => {
-      const data = JSON.parse(e.data);
-      console.log(data);
-    });
-
-    await req!.send();
-  }
-
   @api('/api/graph/all')
   async fetchAvailableGraphs(_params?: any, req?: ApiRequest) {
     const res = await req!.send();
     this.availableGraphs = res.data || [];
-    // this.currentGraphId = res.data?.[0]?.id;
+
+    if (!this.currentGraphId) {
+      this.currentGraphId = res.data?.[0]?.id;
+    }
   }
 
-  @api('/api/graph/get/:graphId')
+  @api('/api/graph/detail/:graphId')
   async fetchGraphDetail(_params: { graphId: string }, req?: ApiRequest) {
     const res = await req!.send();
     const nodes = res.data?.nodes || [];
     const edges = res.data?.edges || [];
 
+    this.graph?.setCategory(res.data?.category);
     this.graph?.setNodes(nodes);
     this.graph?.setEdges(edges);
-
-    if (res.data?.category) {
-      await this.fetchAvailableNodemetas({
-        graphCategory: res.data.category,
-      });
-    }
   }
 
-  @api('/api/nodemeta/get/:graphCategory')
-  async fetchAvailableNodemetas(
+  @api(
+    (req: { graphCategory: string }) =>
+      `/api/nodemeta/query?category=${req.graphCategory}`,
+  )
+  async fetchAvailableNodemetasByGraphCategory(
     _params: { graphCategory: string },
     req?: ApiRequest,
   ) {
@@ -84,7 +78,7 @@ export class HomeStore {
     this.availableNodemetas = res.data || [];
   }
 
-  @api('/api/node/create', { method: 'post' })
+  @api('/api/node/add', { method: 'post' })
   async createNode(_params: Partial<ClientNode>, req?: ApiRequest) {
     const res = await req!.send();
 
@@ -93,7 +87,7 @@ export class HomeStore {
     }
   }
 
-  @api('/api/node/delete/:id', { method: 'post' })
+  @api('/api/node/del/:id', { method: 'delete' })
   async deleteNode(params: { id: string }, req?: ApiRequest) {
     const res = await req!.send();
 
@@ -102,8 +96,8 @@ export class HomeStore {
     }
   }
 
-  @api('/api/node/update/:id', { method: 'post' })
-  async updateNode(params: Partial<ClientNode>, req?: ApiRequest) {
+  @api('/api/node/edit/:id', { method: 'post' })
+  async editNode(params: Partial<ClientNode>, req?: ApiRequest) {
     const res = await req!.send();
 
     if (res.data && res.data.id === params.id) {
@@ -111,7 +105,7 @@ export class HomeStore {
     }
   }
 
-  @api('/api/edge/create', { method: 'post' })
+  @api('/api/edge/add', { method: 'post' })
   async addEdge(_params: Partial<ClientEdge>, req?: ApiRequest) {
     const res = await req!.send();
 
@@ -120,7 +114,7 @@ export class HomeStore {
     }
   }
 
-  @api('/api/edge/delete/:id', { method: 'post' })
+  @api('/api/edge/del/:id', { method: 'delete' })
   async deleteEdge(params: { id: string }, req?: ApiRequest) {
     const res = await req!.send();
 

@@ -18,8 +18,4 @@ export class AuthStore {
   get signOut() {
     return this.client.signOut;
   }
-
-  get getSession() {
-    return this.client.getSession;
-  }
 }

@@ -18,30 +18,27 @@ export class NodeService {
   ) {}
 
   async create(node: ClientNode) {
-    const entity: Omit<NodeEntity, 'id' | 'graph'> = {
-      graphId: node.data?.graphId,
-      type: node.type!,
-      name: node.data?.name,
-      description: node.data?.description,
-      position: node.position,
-      data: node.data,
-    };
+    const entity = this.toDatabase(node);
+    const result = await this.pg!.getRepository(NodeEntity).save(entity);
 
-    await this.pg!.getRepository(NodeEntity).save(entity);
-
-    return this.findById(node.id);
+    return this.toClient(result);
   }
 
   delete(id: string) {
     return this.pg!.transaction(async transactionalEntityManager => {
-      await transactionalEntityManager.getRepository(NodeEntity).delete(id);
-      return transactionalEntityManager
+      const result = await transactionalEntityManager
+        .getRepository(NodeEntity)
+        .delete(id);
+
+      await transactionalEntityManager
         .createQueryBuilder()
         .delete()
         .from(EdgeEntity)
         .where('source = :id', { id })
         .orWhere('target = :id', { id })
         .execute();
+
+      return result;
     });
   }
 

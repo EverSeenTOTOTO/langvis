@@ -23,10 +23,10 @@ export class Button {
     };
   }
 
-  static toDatabase(node: ClientButton): Partial<NodeEntity> {
+  static toDatabase(node: ClientButton): Omit<NodeEntity, 'graph'> {
     return {
       id: node.id,
-      type: node.type,
+      type: node.type!,
       position: node.position,
       graphId: node.data.graphId,
       name: node.data.name,

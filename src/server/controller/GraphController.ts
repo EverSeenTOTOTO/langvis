@@ -15,8 +15,39 @@ export class GraphController {
     @inject(GraphService) private graphService?: GraphService,
   ) {}
 
+  @api('/add', { method: 'post' })
+  async create(req: Request, res: Response) {
+    const graph = await this.graphService!.create(req.body as GraphEntity);
+
+    return res.json({ data: graph });
+  }
+
+  @api('/del/:graphId', { method: 'delete' })
+  async delete(req: Request, res: Response) {
+    const graphId = req.params.graphId;
+    const result = await this.graphService!.delete(graphId);
+
+    if (result.affected === 0) {
+      throw new Error(`Failed to delete graph with ID ${graphId}`);
+    }
+
+    return res.json({ data: graphId });
+  }
+
+  @api('/edit/:graphId', { method: 'post' })
+  async modify(req: Request, res: Response) {
+    const graphId = req.params.graphId;
+    const graph = req.body as GraphEntity;
+    const result = await this.graphService!.update({
+      ...graph,
+      id: graphId,
+    });
+
+    return res.json({ data: result });
+  }
+
   @api('/all')
-  async getAllGraphs(_req: Request, res: Response) {
+  async queryAll(_req: Request, res: Response) {
     const repo = this.pg!.getRepository(GraphEntity);
     const data = await repo.find();
 
@@ -24,20 +55,20 @@ export class GraphController {
   }
 
   @api('/get/:graphId')
-  async getOne(req: Request, res: Response) {
+  async queryOne(req: Request, res: Response) {
     const graphId = req.params.graphId;
 
-    const data = await this.graphService!.findByGraphId(graphId);
+    const data = await this.graphService!.findById(graphId);
 
     return res.json({ data });
   }
 
-  @api('/run/:graphId')
-  async run(req: Request, res: Response) {
+  @api('/detail/:graphId')
+  async queryDetail(req: Request, res: Response) {
     const graphId = req.params.graphId;
 
-    await this.graphService!.runGraph(graphId);
+    const data = await this.graphService!.findDetailById(graphId);
 
-    return res.json({ data: graphId });
+    return res.json({ data });
   }
 }

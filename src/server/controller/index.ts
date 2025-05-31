@@ -5,13 +5,22 @@ import redis, { redisInjectToken } from '../service/redis';
 import { EdgeController } from './EdgeController';
 import { GraphController } from './GraphController';
 import { NodeController } from './NodeController';
-import { NodeMetaController } from './NodemetaController';
+import { NodeMetaController } from './NodeMetaController';
 import { container } from 'tsyringe';
 import { DataSource } from 'typeorm';
 import { SSEController } from './SSEController';
 import { AuthController } from './AuthController';
+import { ExecuteController } from './ExecuteController';
 
 export default async (app: Express) => {
+  if (!pg.isInitialized) {
+    await pg.initialize();
+  }
+
+  if (!redis.isReady) {
+    await redis.connect();
+  }
+
   container.register<DataSource>(pgInjectToken, { useValue: pg });
   container.register<typeof redis>(redisInjectToken, { useValue: redis });
 
@@ -21,4 +30,5 @@ export default async (app: Express) => {
   bindController(NodeMetaController, app);
   bindController(EdgeController, app);
   bindController(SSEController, app);
+  bindController(ExecuteController, app);
 };

@@ -71,7 +71,7 @@ function Graph(props: ReactFlowProps) {
         });
       }}
       onNodeDragStop={(_e, node) => {
-        home.updateNode(pick<any>(node, 'id', 'position', 'data', 'type'));
+        home.editNode(pick<any>(node, 'id', 'position', 'data', 'type'));
       }}
       {...props}
     >

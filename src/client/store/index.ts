@@ -8,6 +8,7 @@ import { GraphStore } from './modules/graph';
 import { HomeStore } from './modules/home';
 import { SettingStore } from './modules/setting';
 import { SSEStore } from './modules/sse';
+import { ExecuteStore } from './modules/execute';
 
 configure({ enforceActions: 'never' });
 
@@ -24,6 +25,8 @@ export class AppStore {
   home = bindStore(HomeStore);
 
   graph = bindStore(GraphStore);
+
+  execute = bindStore(ExecuteStore);
 
   setting = bindStore(SettingStore);
 

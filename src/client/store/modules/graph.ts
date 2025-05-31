@@ -13,6 +13,8 @@ import { singleton } from 'tsyringe';
 
 @singleton()
 export class GraphStore {
+  category?: string;
+
   nodes: Node[] = [];
 
   edges: Edge[] = [];
@@ -24,6 +26,10 @@ export class GraphStore {
       nodes: observable.shallow,
       edges: observable.shallow,
     });
+  }
+
+  setCategory(category?: string) {
+    this.category = category;
   }
 
   setFlow(flow: ReactFlowInstance) {

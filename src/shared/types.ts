@@ -23,6 +23,13 @@ export enum NodeState {
   Disabled = 'disabled',
 }
 
+export enum EdgeState {
+  Idle = 'idle',
+  Pause = 'pause',
+  Error = 'error',
+  Disabled = 'disabled',
+}
+
 export type Slot = Pick<Handle, 'position' | 'type'> & { name: string };
 
 // client component props

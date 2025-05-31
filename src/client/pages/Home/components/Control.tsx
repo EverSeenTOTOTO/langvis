@@ -6,9 +6,10 @@ import { useAsyncFn } from 'react-use';
 
 const Control = () => {
   const home = useStore('home');
+  const exec = useStore('execute');
   const setting = useStore('setting');
 
-  const runGraphApi = useAsyncFn(home.runCurrentGraph.bind(home));
+  const runGraphApi = useAsyncFn(exec.runCurrentGraph.bind(exec));
 
   return (
     <>
@@ -20,10 +21,10 @@ const Control = () => {
             runGraphApi[1]({ graphId: home.currentGraphId! });
           }}
         >
-          {home.graphState === 'RUNNING'
+          {exec.graphState === 'RUNNING'
             ? setting.tr('Running')
             : setting.tr('Run')}
-          {home.graphState === 'RUNNING' ? (
+          {exec.graphState === 'RUNNING' ? (
             <LoadingOutlined />
           ) : (
             <CaretRightOutlined />

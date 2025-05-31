@@ -15,7 +15,11 @@ type ApiConfig = {
   options?: RequestInit & { timeout?: number };
 };
 
-export type ApiOptions<P> = string | ApiConfig | ((req: P) => ApiConfig);
+export type ApiOptions<P> =
+  | string
+  | ((req: P) => string)
+  | ApiConfig
+  | ((req: P) => ApiConfig);
 
 const logError = (msg: any) => {
   if (isTest()) return;
@@ -29,16 +33,19 @@ const logError = (msg: any) => {
 
 const isFullPath = (path: string) => /^https?:\/\//.test(path);
 
-const compilePath = <P extends Record<string, any>>(path: string, req: P) => {
+const compilePath = <P extends Record<string, any>>(url: string, req: P) => {
+  const query = url.match(/\?.*/);
+  const path = url.replace(/\?.*/, ''); // Remove query string for path-to-regexp
+
   if (isFullPath(path)) {
     const url = new URL(path);
 
     url.pathname = compile(url.pathname)(req);
 
-    return url.toString();
+    return `${url.toString()}${query ? query[0] : ''}`;
   }
 
-  return compile(path)(req);
+  return `${compile(path)(req)}${query ? query[0] : ''}`;
 };
 
 const getApiOptions = <P extends Record<string, any>>(
@@ -48,19 +55,27 @@ const getApiOptions = <P extends Record<string, any>>(
     options,
   }: { config: ApiOptions<P>; options?: ApiConfig['options'] },
 ) => {
+  // @api('path')
   if (typeof config === 'string') {
     return { path: compilePath(config, req), options };
   }
 
   if (typeof config === 'function') {
-    const { path, options } = config(req);
+    const result = config(req);
 
+    // @api((req) => 'path')
+    if (typeof result === 'string') {
+      return { path: compilePath(result, req), options };
+    }
+
+    // @api((req) => ({ path: 'path', options: {} }))
     return {
-      path: compilePath(path, req),
-      options,
+      path: compilePath(result.path, req),
+      options: result.options || options,
     };
   }
 
+  // @api({ path: 'path', options: {} })
   const { path } = config;
 
   return {

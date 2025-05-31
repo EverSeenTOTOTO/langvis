@@ -15,11 +15,37 @@ export class GraphService {
     @inject(SSEService) private sseService?: SSEService,
   ) {}
 
+  create(graph: GraphEntity) {
+    return this.pg!.getRepository(GraphEntity).save(graph);
+  }
+
+  async delete(graphId: string) {
+    const graphRepo = this.pg!.getRepository(GraphEntity);
+    const graph = await graphRepo.findOneBy({ id: graphId });
+
+    if (!graph) throw new Error(`Graph ${graphId} not found`);
+
+    return graphRepo.delete(graphId);
+  }
+
+  async update(graph: GraphEntity) {
+    const graphRepo = this.pg!.getRepository(GraphEntity);
+    const existingGraph = await graphRepo.findOneBy({ id: graph.id });
+
+    if (!existingGraph) throw new Error(`Graph ${graph.id} not found`);
+
+    return graphRepo.save(graph);
+  }
+
   findAll() {
     return this.pg!.getRepository(GraphEntity).find();
   }
 
-  async findByGraphId(graphId: string) {
+  findById(graphId: string) {
+    return this.pg!.getRepository(GraphEntity).findOneBy({ id: graphId });
+  }
+
+  async findDetailById(graphId: string) {
     const graphRepo = this.pg!.getRepository(GraphEntity);
     const graph = await graphRepo.findOneBy({
       id: graphId,
@@ -36,7 +62,7 @@ export class GraphService {
   }
 
   async runGraph(graphId: string) {
-    const data = await this.findByGraphId(graphId);
+    const data = await this.findDetailById(graphId);
     this.sseService!.sendMessage(`graph:${graphId}`, data);
   }
 }

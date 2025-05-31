@@ -67,7 +67,7 @@ const EditModal = ({
   const [form] = Form.useForm();
   const home = useStore('home');
   const setting = useStore('setting');
-  const updateNodeApi = useAsyncFn(home.updateNode.bind(home));
+  const updateNodeApi = useAsyncFn(home.editNode.bind(home));
 
   return (
     <Modal

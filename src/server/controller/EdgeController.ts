@@ -9,22 +9,38 @@ import { EdgeService } from '../service/EdgeService';
 export class EdgeController {
   constructor(@inject(EdgeService) private edgeService?: EdgeService) {}
 
-  @api('/create', { method: 'post' })
-  async createEdge(req: Request, res: Response) {
-    const edge = await this.edgeService!.create(req.body);
+  @api('/add', { method: 'post' })
+  async create(req: Request, res: Response) {
+    const result = await this.edgeService!.create(req.body);
 
-    res.json({ data: edge });
+    return res.json({ data: result });
   }
 
-  @api('/delete/:id', { method: 'post' })
-  async deleteEdge(req: Request, res: Response) {
-    const edgeId = req.params.id;
-    const edge = await this.edgeService!.findById(edgeId);
+  @api('/del/:edgeId', { method: 'delete' })
+  async delete(req: Request, res: Response) {
+    const edgeId = req.params.edgeId;
+    const result = await this.edgeService!.delete(edgeId);
 
-    if (!edge) throw new Error(`Edge ${edgeId}not found`);
+    if (result.affected === 0) {
+      throw new Error(`Failed to delete Edge with ID ${edgeId}`);
+    }
 
-    await this.edgeService!.delete(edgeId);
+    return res.json({ data: edgeId });
+  }
 
-    res.json({ data: req.params.id });
+  @api('/edit/:edgeId', { method: 'post' })
+  async modify(req: Request, res: Response) {
+    const edgeId = req.params.edgeId;
+    const updated = await this.edgeService!.update({ id: edgeId, ...req.body });
+
+    return res.json({ data: updated });
+  }
+
+  @api('/get/:edgeId')
+  async queryOne(req: Request, res: Response) {
+    const edgeId = req.params.edgeId;
+    const data = await this.edgeService!.findById(edgeId);
+
+    return res.json({ data });
   }
 }
