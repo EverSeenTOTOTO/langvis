@@ -87,4 +87,3 @@ const ButtonNode = (props: InstrinicNodeProps['button']) => {
 };
 
 export default observer(ButtonNode);
-

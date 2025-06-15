@@ -9,18 +9,50 @@ import {
 import { Button, Popconfirm } from 'antd';
 import DropdownMenu from '../Dropdown';
 
+const getEdgePath = (
+  edge: ClientEdgeProps,
+): ReturnType<typeof getSimpleBezierPath> => {
+  const { sourceX, sourceY, targetX, targetY } = edge;
+
+  if (edge.source === edge.target) {
+    // Create a symmetric half circle for self-referencing edges
+    const radius = 72;
+    const startX = sourceX;
+    const startY = sourceY;
+    const endX = targetX;
+    const endY = targetY;
+
+    // Calculate the center of the arc above the node
+    const centerX = (startX + endX) / 2;
+    const centerY = Math.min(startY, endY) - radius;
+
+    // cubic
+    const path = `M ${startX} ${startY} C ${startX} ${centerY}, ${endX} ${centerY}, ${endX} ${endY}`;
+
+    // Position the label directly on the curve for better alignment
+    const labelX = centerX;
+    const labelY = centerY + radius * 0.2; // Adjust label position proportional to the radius
+    const offsetX = 0;
+    const offsetY = 0;
+
+    return [path, labelX, labelY, offsetX, offsetY];
+  } else {
+    return getSimpleBezierPath({
+      sourceX: sourceX,
+      sourceY: sourceY,
+      targetX: targetX,
+      targetY: targetY,
+    });
+  }
+};
+
 const BasicEdge = (edge: ClientEdgeProps) => {
   const setting = useStore('setting');
   const home = useStore('home');
 
-  const { id, sourceX, sourceY, targetX, targetY, data } = edge;
+  const { id, data } = edge;
 
-  const [edgePath, labelX, labelY] = getSimpleBezierPath({
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-  });
+  const [edgePath, labelX, labelY] = getEdgePath(edge);
 
   return (
     <>
