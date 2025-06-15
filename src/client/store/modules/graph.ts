@@ -44,6 +44,60 @@ export class GraphStore {
     this.edges = edges;
   }
 
+  getNode(id: string) {
+    return this.nodes.find(n => n.id === id);
+  }
+
+  setNode(id: string, node: Node | ((n: Node) => Node)) {
+    this.nodes = this.nodes.map(n =>
+      n.id === id
+        ? {
+            ...(typeof node === 'function' ? node(n) : node),
+            ...node,
+          }
+        : n,
+    );
+
+    return this;
+  }
+
+  setNodeData(id: string, data: any) {
+    return this.setNode(id, node => ({
+      ...node,
+      data: {
+        ...node.data,
+        ...data,
+      },
+    }));
+  }
+
+  getEdge(id: string) {
+    return this.edges.find(e => e.id === id);
+  }
+
+  setEdge(id: string, edge: Edge | ((e: Edge) => Edge)) {
+    this.edges = this.edges.map(e =>
+      e.id === id
+        ? {
+            ...(typeof edge === 'function' ? edge(e) : edge),
+            ...edge,
+          }
+        : e,
+    );
+
+    return this;
+  }
+
+  setEdgeData(id: string, data: any) {
+    return this.setEdge(id, edge => ({
+      ...edge,
+      data: {
+        ...edge.data,
+        ...data,
+      },
+    }));
+  }
+
   updateNodes(changes: NodeChange<Node>[]) {
     this.nodes = applyNodeChanges(changes, this.nodes);
   }

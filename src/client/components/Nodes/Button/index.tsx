@@ -35,19 +35,21 @@ const ButtonNode = (props: InstrinicNodeProps['button']) => {
           {
             type: 'item',
             label: setting.tr('Delete node'),
-            danger: true,
             key: 'delete',
-            icon: <DeleteOutlined />,
-            render: ({ dom }) => {
+            render: ({ item, setOpen }) => {
               return (
                 <Popconfirm
                   title={setting.tr('Sure to delete?')}
                   placement="rightTop"
                   onConfirm={async () => {
                     await deleteNodeApi[1]({ id: props.id });
+                    setOpen(false);
                   }}
+                  onCancel={() => setOpen(false)}
                 >
-                  <span onClick={e => e.stopPropagation()}>{dom}</span>
+                  <Button type="text" danger icon={<DeleteOutlined />}>
+                    {item.label}
+                  </Button>
                 </Popconfirm>
               );
             },
@@ -85,3 +87,4 @@ const ButtonNode = (props: InstrinicNodeProps['button']) => {
 };
 
 export default observer(ButtonNode);
+

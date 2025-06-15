@@ -44,7 +44,7 @@ export async function render(context: RenderContext) {
   }
 
   const success = await prefetch(ctx).catch(e => {
-    console.error(e);
+    req.log.error(e);
 
     return false;
   });

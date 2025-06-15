@@ -23,11 +23,11 @@ export class SSEController {
     });
 
     req.on('error', e => {
-      console.error(`SSE connection error: `, e.message);
+      req.log.error(`SSE connection error: `, e.message);
       res.end();
     });
     req.on('close', () => {
-      console.info(`SSE connection closed`);
+      req.log.info(`SSE connection closed`);
       res.end();
     });
   }

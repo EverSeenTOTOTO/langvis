@@ -31,7 +31,7 @@ export default async (app: Express) => {
         res.end(html);
       } catch (e) {
         vite.ssrFixStacktrace(e as Error);
-        console.error(e);
+        req.log.error(e);
         next();
       }
     });

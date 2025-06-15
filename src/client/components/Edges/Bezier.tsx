@@ -11,7 +11,9 @@ import DropdownMenu from '../Dropdown';
 
 const BasicEdge = (edge: ClientEdgeProps) => {
   const setting = useStore('setting');
-  const { id, sourceX, sourceY, targetX, targetY } = edge;
+  const home = useStore('home');
+
+  const { id, sourceX, sourceY, targetX, targetY, data } = edge;
 
   const [edgePath, labelX, labelY] = getSimpleBezierPath({
     sourceX,
@@ -19,11 +21,10 @@ const BasicEdge = (edge: ClientEdgeProps) => {
     targetX,
     targetY,
   });
-  const home = useStore('home');
 
   return (
     <>
-      <BaseEdge id={id} path={edgePath} />
+      <BaseEdge id={id} path={edgePath} />{' '}
       <EdgeLabelRenderer>
         <DropdownMenu
           trigger={['click']}
@@ -31,19 +32,21 @@ const BasicEdge = (edge: ClientEdgeProps) => {
             {
               type: 'item',
               label: setting.tr('Delete edge'),
-              danger: true,
               key: 'delete',
-              icon: <DeleteOutlined />,
-              render: ({ dom }) => {
+              render: ({ item, setOpen }) => {
                 return (
                   <Popconfirm
                     title={setting.tr('Sure to delete?')}
                     placement="rightTop"
                     onConfirm={async () => {
                       await home.deleteEdge({ id: edge.id });
+                      setOpen(false);
                     }}
+                    onCancel={() => setOpen(false)}
                   >
-                    <span onClick={e => e.stopPropagation()}>{dom}</span>
+                    <Button type="text" danger icon={<DeleteOutlined />}>
+                      {item.label}
+                    </Button>
                   </Popconfirm>
                 );
               },
@@ -62,6 +65,7 @@ const BasicEdge = (edge: ClientEdgeProps) => {
             style={{
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px) scale(0.6)`,
+              visibility: data?.hover ? 'visible' : 'hidden',
               pointerEvents: 'all',
               fontSize: 12,
             }}
@@ -77,3 +81,4 @@ const BasicEdge = (edge: ClientEdgeProps) => {
 };
 
 export default BasicEdge;
+

@@ -1,4 +1,5 @@
 import { createClient, RedisClientType } from 'redis';
+import { logger } from '../middleware/logger';
 
 export const redisInjectToken = Symbol('redis');
 
@@ -6,6 +7,6 @@ export const redisInjectToken = Symbol('redis');
 // @ts-ignore
 const redis: RedisClientType<any> = createClient({
   url: `redis://${import.meta.env.VITE_REDIS_HOST}:${import.meta.env.VITE_REDIS_PORT}`,
-}).on('error', err => console.log('Redis Client Error', err));
+}).on('error', err => logger.error('Redis Client Error', err));
 
 export default redis;

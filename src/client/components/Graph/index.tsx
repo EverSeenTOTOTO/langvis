@@ -73,6 +73,12 @@ function Graph(props: ReactFlowProps) {
       onNodeDragStop={(_e, node) => {
         home.editNode(pick<any>(node, 'id', 'position', 'data', 'type'));
       }}
+      onEdgeMouseEnter={(_e, edge) => {
+        graph.setEdgeData(edge.id, { hover: true });
+      }}
+      onEdgeMouseLeave={(_e, edge) => {
+        graph.setEdgeData(edge.id, { hover: false });
+      }}
       {...props}
     >
       <Background />
@@ -82,3 +88,4 @@ function Graph(props: ReactFlowProps) {
 }
 
 export default observer(Graph);
+

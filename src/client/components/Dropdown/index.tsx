@@ -48,7 +48,7 @@ const DropdownMenu = ({ items, ...props }: DropdownProps) => {
       {...props}
       open={open}
       onOpenChange={open => setOpen(open)}
-      dropdownRender={() => (
+      popupRender={() => (
         <Space direction="vertical" size="small" className="dropdownmenu">
           {items?.map(item => {
             if (item.type === 'divider') {
@@ -82,3 +82,4 @@ const DropdownMenu = ({ items, ...props }: DropdownProps) => {
 };
 
 export default DropdownMenu;
+

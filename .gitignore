@@ -6,3 +6,4 @@ coverage/*
 .env
 .env.development
 *-audit.json
+logs/*
