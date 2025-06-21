@@ -112,12 +112,6 @@ export class ApiRequest<P extends Record<string, any> = {}> extends Request {
   async send() {
     const fetchApi = isClient() ? fetch : serverFetch;
 
-    if (!isClient() && !isTest()) {
-      console.log(
-        `Server prefetch cookie: ${await serverFetch.cookieJar.getCookieString(this.url)}`,
-      );
-    }
-
     const res = await Promise.race([
       fetchApi(this),
       new Promise<Error>(resolve => {
@@ -196,3 +190,4 @@ export default function <T extends Record<string, any>>(instance: T) {
 
   return instance;
 }
+

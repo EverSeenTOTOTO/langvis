@@ -4,24 +4,29 @@ import { Express } from 'express';
 import fs from 'fs';
 import path from 'path';
 
+const configFile = path.join(__dirname, '../../config/vite.common.ts');
+const templateFile = path.join(
+  __dirname,
+  isProd ? 'index.html' : '../../index.html',
+);
+const serverEntry = path.join(
+  __dirname,
+  isProd ? 'index.server.js' : '../client/index.server.tsx',
+);
+
 // ssr
 export default async (app: Express) => {
   if (!isProd) {
     const vite = await createViteServer({
-      configFile: path.join(__dirname, '../../config/vite.common.ts'),
+      configFile: configFile,
       server: { middlewareMode: true },
       appType: 'custom',
     });
     app.use(vite.middlewares);
     app.get('*', async (req, res, next) => {
       try {
-        const templateHtml = await fs.promises.readFile(
-          path.join(__dirname, '../../index.html'),
-          'utf-8',
-        );
-        const { render } = await vite.ssrLoadModule(
-          path.join(__dirname, '../client/index.server.tsx'),
-        );
+        const templateHtml = await fs.promises.readFile(templateFile, 'utf-8');
+        const { render } = await vite.ssrLoadModule(serverEntry);
         const template = await vite.transformIndexHtml(
           req.originalUrl!,
           templateHtml,
@@ -40,8 +45,8 @@ export default async (app: Express) => {
   }
 
   const [{ render }, template] = await Promise.all([
-    import(path.join(__dirname, 'index.server.js')),
-    fs.promises.readFile(path.join(__dirname, 'index.html'), 'utf-8'),
+    import(serverEntry),
+    fs.promises.readFile(templateFile, 'utf-8'),
   ]);
 
   app.get('*', async (req, res) => {
@@ -51,3 +56,4 @@ export default async (app: Express) => {
     res.end(html);
   });
 };
+

@@ -8,7 +8,7 @@ import path from 'node:path';
 import bindControllers from './controller';
 import bindSSRMiddleware from './middleware/ssr';
 import cookieParser from 'cookie-parser';
-import loggerMiddleware, { logger } from './middleware/logger';
+import bindLogger, { logger } from './middleware/logger';
 
 dotenv.config({
   path: isProd
@@ -20,13 +20,13 @@ dotenv.config({
 export const createServer = async (): Promise<Express> => {
   const app = express();
 
-  app.use(loggerMiddleware);
   app.use(express.static(__dirname, { index: false }));
   app.use(bodyParser.urlencoded({ extended: false }));
   app.use(bodyParser.json());
   app.use(cookieParser());
   app.use(compression());
 
+  await bindLogger(app);
   await bindControllers(app);
   // must be last
   await bindSSRMiddleware(app);
@@ -40,3 +40,4 @@ createServer()
     });
   })
   .catch(logger.error);
+

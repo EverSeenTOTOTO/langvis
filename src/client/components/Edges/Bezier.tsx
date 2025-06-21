@@ -113,4 +113,3 @@ const BasicEdge = (edge: ClientEdgeProps) => {
 };
 
 export default BasicEdge;
-

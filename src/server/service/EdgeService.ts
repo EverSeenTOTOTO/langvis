@@ -1,15 +1,37 @@
 import { EdgeEntity, EdgeMetaName } from '@/shared/entities/Edge';
 import { ClientEdge, InstrinicEdge } from '@/shared/types';
-import { inject, singleton } from 'tsyringe';
+import { delay, inject, singleton } from 'tsyringe';
 import { DataSource } from 'typeorm';
 import { pgInjectToken } from './pg';
 import { Bezier } from '../core/edges/Bezier';
 
+// Forward reference for circular dependency
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const NodeServiceRef = delay(() => require('./NodeService').NodeService);
+
 @singleton()
 export class EdgeService {
-  constructor(@inject(pgInjectToken) private pg?: DataSource) {}
+  constructor(
+    @inject(pgInjectToken) private pg?: DataSource,
+    @inject(NodeServiceRef) private nodeService?: any,
+  ) {}
 
   async create(edge: ClientEdge) {
+    const existingEdge = await this.findBySourceAndTarget(
+      edge.source,
+      edge.target,
+    );
+
+    if (existingEdge) {
+      console.log(existingEdge);
+      const source = await this.nodeService!.findById(edge.source);
+      const target = await this.nodeService!.findById(edge.target);
+
+      throw new Error(
+        `Edge with <${source.data?.name}.source> and <${target.data?.name}.target> already exists`,
+      );
+    }
+
     const entity = this.toDatabase(edge);
     const result = await this.pg!.getRepository(EdgeEntity).save(entity);
 
@@ -78,6 +100,18 @@ export class EdgeService {
     return result.map(edge => this.toClient(edge));
   }
 
+  async findBySourceAndTarget(sourceId: string, targetId: string) {
+    const result = await this.pg!.getRepository(EdgeEntity)
+      .createQueryBuilder('edge')
+      .where('edge.source = :sourceId AND edge.target = :targetId', {
+        sourceId,
+        targetId,
+      })
+      .getOne();
+
+    return result ? this.toClient(result) : null;
+  }
+
   toClient(edge: EdgeEntity) {
     switch (edge.type) {
       case EdgeMetaName.BEZIER:
@@ -100,3 +134,4 @@ export class EdgeService {
     }
   }
 }
+

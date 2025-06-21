@@ -58,6 +58,9 @@ function Graph(props: ReactFlowProps) {
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       colorMode={setting.mode}
+      nodesDraggable={graph.nodeDraggable}
+      nodesConnectable={graph.nodeConnectable}
+      elementsSelectable={graph.elementSelectable}
       onInit={flow => graph.setFlow(flow)}
       nodes={graph.nodes}
       onNodesChange={changes => graph.updateNodes(changes)}
@@ -82,9 +85,10 @@ function Graph(props: ReactFlowProps) {
       {...props}
     >
       <Background />
-      <Controls position="bottom-right" />
+      <Controls position="bottom-right" showInteractive={false} />
     </ReactFlow>
   );
 }
 
 export default observer(Graph);
+

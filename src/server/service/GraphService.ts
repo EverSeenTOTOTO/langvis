@@ -4,7 +4,6 @@ import { DataSource } from 'typeorm';
 import { EdgeService } from './EdgeService';
 import { NodeService } from './NodeService';
 import { pgInjectToken } from './pg';
-import { SSEService } from './SSEService';
 
 @singleton()
 export class GraphService {
@@ -12,7 +11,6 @@ export class GraphService {
     @inject(NodeService) private nodeService?: NodeService,
     @inject(EdgeService) private edgeService?: EdgeService,
     @inject(pgInjectToken) private pg?: DataSource,
-    @inject(SSEService) private sseService?: SSEService,
   ) {}
 
   create(graph: GraphEntity) {
@@ -60,9 +58,5 @@ export class GraphService {
 
     return data;
   }
-
-  async runGraph(graphId: string) {
-    const data = await this.findDetailById(graphId);
-    this.sseService!.sendMessage(`graph:${graphId}`, data);
-  }
 }
+

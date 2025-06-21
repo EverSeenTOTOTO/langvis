@@ -21,11 +21,21 @@ export class GraphStore {
 
   flow?: ReactFlowInstance;
 
+  nodeDraggable = true;
+  nodeConnectable = true;
+  elementSelectable = true;
+
   constructor() {
     makeAutoObservable(this, {
       nodes: observable.shallow,
       edges: observable.shallow,
     });
+  }
+
+  setDisabled(disabled: boolean) {
+    this.nodeDraggable = !disabled;
+    this.nodeConnectable = !disabled;
+    this.elementSelectable = !disabled;
   }
 
   setCategory(category?: string) {
@@ -110,3 +120,4 @@ export class GraphStore {
     this.edges = addEdge({ ...connection, type: 'bezier' }, this.edges);
   }
 }
+

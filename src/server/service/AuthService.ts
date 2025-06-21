@@ -5,8 +5,6 @@ import { singleton } from 'tsyringe';
 import pg from './pg';
 import redis from './redis';
 
-export const authInjectToken = Symbol('auth');
-
 @singleton()
 export class AuthService {
   readonly auth = betterAuth({
@@ -84,3 +82,4 @@ export class AuthService {
     return id;
   }
 }
+

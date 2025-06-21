@@ -2,19 +2,22 @@ import { EdgeEntity } from '@/shared/entities/Edge';
 import { NodeEntity } from '@/shared/entities/Node';
 import { NodeMetaName } from '@/shared/entities/NodeMeta';
 import { ClientNode, InstrinicNode } from '@/shared/types';
-import { inject, singleton } from 'tsyringe';
+import { delay, inject, singleton } from 'tsyringe';
 import { DataSource } from 'typeorm';
 import { Button } from '../core/nodes/Button';
 import { pgInjectToken } from './pg';
-import { EdgeService } from './EdgeService';
 import { Handle } from '@xyflow/react';
 import { flatten } from 'lodash-es';
+
+// Forward reference for circular dependency
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const EdgeServiceRef = delay(() => require('./EdgeService').EdgeService);
 
 @singleton()
 export class NodeService {
   constructor(
     @inject(pgInjectToken) private pg?: DataSource,
-    @inject(EdgeService) private edgeService?: EdgeService,
+    @inject(EdgeServiceRef) private edgeService?: any,
   ) {}
 
   async create(node: ClientNode) {
@@ -130,3 +133,4 @@ export class NodeService {
     }
   }
 }
+
