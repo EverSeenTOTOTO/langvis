@@ -1,8 +1,5 @@
-import 'reflect-metadata';
-
 import factory, { api, ApiRequest, wrapApi } from '@/client/decorator/api';
 import http from 'node:http';
-import { afterAll, beforeAll, expect, it } from 'vitest';
 
 const port = 3002;
 let server: http.Server;

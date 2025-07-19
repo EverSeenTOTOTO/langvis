@@ -1,11 +1,8 @@
-import 'reflect-metadata';
-
 import { api } from '@/server/decorator/api';
 import bindController, { controller } from '@/server/decorator/controller';
 import bodyParser from 'body-parser';
 import express, { type Request, type Response } from 'express';
 import { container, inject, injectable } from 'tsyringe';
-import { expect, it } from 'vitest';
 
 it('controller', async () => {
   @injectable()

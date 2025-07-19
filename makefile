@@ -67,4 +67,4 @@ start: build
 
 .PHONY: test
 test:
-	npx vitest run -c config/vite.common.ts --coverage
+	npx vitest run --coverage
