@@ -20,4 +20,3 @@ export class ExecuteController {
     return res.json({ data: graphId });
   }
 }
-

@@ -3,14 +3,14 @@ import { inject, singleton } from 'tsyringe';
 import { DataSource } from 'typeorm';
 import { EdgeService } from './EdgeService';
 import { NodeService } from './NodeService';
-import { pgInjectToken } from './pg';
+import { InjectTokens } from '../utils';
 
 @singleton()
 export class GraphService {
   constructor(
     @inject(NodeService) private nodeService?: NodeService,
     @inject(EdgeService) private edgeService?: EdgeService,
-    @inject(pgInjectToken) private pg?: DataSource,
+    @inject(InjectTokens.PG) private pg?: DataSource,
   ) {}
 
   create(graph: GraphEntity) {
@@ -59,4 +59,3 @@ export class GraphService {
     return data;
   }
 }
-

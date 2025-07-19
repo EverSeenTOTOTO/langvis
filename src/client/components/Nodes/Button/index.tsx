@@ -18,7 +18,7 @@ const ButtonNode = (props: InstrinicNodeProps['button']) => {
     <>
       <DropdownMenu
         trigger={['click']}
-        placement="bottomRight"
+        placement="bottomLeft"
         overlayStyle={{ minWidth: 120 }}
         items={[
           {

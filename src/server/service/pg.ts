@@ -5,8 +5,6 @@ import { NodeMetaEntity } from '@/shared/entities/NodeMeta';
 import { DataSource } from 'typeorm';
 import { entities, migrations } from '@hedystia/better-auth-typeorm';
 
-export const pgInjectToken = Symbol('pg');
-
 const pg = new DataSource({
   type: 'postgres',
   host: import.meta.env.VITE_PG_HOST,

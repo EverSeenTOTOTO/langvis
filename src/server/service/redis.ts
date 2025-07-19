@@ -1,8 +1,6 @@
 import { createClient, RedisClientType } from 'redis';
 import { logger } from '../middleware/logger';
 
-export const redisInjectToken = Symbol('redis');
-
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 const redis: RedisClientType<any> = createClient({

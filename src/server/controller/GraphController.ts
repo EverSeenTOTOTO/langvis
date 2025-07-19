@@ -5,13 +5,13 @@ import { DataSource } from 'typeorm';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { GraphService } from '../service/GraphService';
-import { pgInjectToken } from '../service/pg';
+import { InjectTokens } from '../utils';
 
 @singleton()
 @controller('/api/graph')
 export class GraphController {
   constructor(
-    @inject(pgInjectToken) private pg?: DataSource,
+    @inject(InjectTokens.PG) private pg?: DataSource,
     @inject(GraphService) private graphService?: GraphService,
   ) {}
 

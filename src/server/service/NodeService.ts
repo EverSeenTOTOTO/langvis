@@ -1,23 +1,19 @@
 import { EdgeEntity } from '@/shared/entities/Edge';
 import { NodeEntity } from '@/shared/entities/Node';
 import { NodeMetaName } from '@/shared/entities/NodeMeta';
-import { ClientNode, InstrinicNode } from '@/shared/types';
-import { delay, inject, singleton } from 'tsyringe';
+import { ClientNode, InstrinicNode, Slot } from '@/shared/types';
+import { flatten } from 'lodash-es';
+import { inject, singleton } from 'tsyringe';
 import { DataSource } from 'typeorm';
 import { Button } from '../core/nodes/Button';
-import { pgInjectToken } from './pg';
-import { Handle } from '@xyflow/react';
-import { flatten } from 'lodash-es';
-
-// Forward reference for circular dependency
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const EdgeServiceRef = delay(() => require('./EdgeService').EdgeService);
+import type { EdgeService } from './EdgeService';
+import { InjectTokens } from '../utils';
 
 @singleton()
 export class NodeService {
   constructor(
-    @inject(pgInjectToken) private pg?: DataSource,
-    @inject(EdgeServiceRef) private edgeService?: any,
+    @inject(InjectTokens.PG) private pg?: DataSource,
+    @inject(InjectTokens.EDGE_SERVICE) private edgeService?: EdgeService,
   ) {}
 
   async create(node: ClientNode) {
@@ -60,21 +56,19 @@ export class NodeService {
         .getRepository(NodeEntity)
         .findOne({ where: { id: node.id } });
 
-      const deletedHandles =
-        old!.data?.handles?.filter((handle: Handle) => {
-          return !newNode!.data?.handles?.some(
-            (h: Handle) => h.type === handle.type,
-          );
+      const deletedSlots =
+        old!.data?.slots?.filter((slot: Slot) => {
+          return !newNode!.data?.slots?.some((h: Slot) => h.type === slot.type);
         }) || [];
 
-      if (deletedHandles.length > 0) {
+      if (deletedSlots.length > 0) {
         const edges = await Promise.all(
-          deletedHandles.map((handle: Handle) => {
-            if (handle.type === 'source') {
+          deletedSlots.map((slot: Slot) => {
+            if (slot.type === 'source') {
               return this.edgeService!.findBySourceNodeId(node.id);
             }
 
-            if (handle.type === 'target') {
+            if (slot.type === 'target') {
               return this.edgeService!.findByTargetNodeId(node.id);
             }
 
@@ -133,4 +127,3 @@ export class NodeService {
     }
   }
 }
-

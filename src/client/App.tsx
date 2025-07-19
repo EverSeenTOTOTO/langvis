@@ -1,3 +1,8 @@
+import {
+  px2remTransformer,
+  legacyLogicalPropertiesTransformer,
+  StyleProvider,
+} from '@ant-design/cssinjs';
 import { ConfigProvider, theme as antdTheme } from 'antd';
 import type { Request, Response } from 'express';
 import { observer } from 'mobx-react-lite';
@@ -9,6 +14,10 @@ import '@xyflow/react/dist/style.css';
 import useI18n from './hooks/useI18n';
 import useThemeClassname from './hooks/useThemeClassname';
 import './index.scss';
+
+const px2rem = px2remTransformer({
+  rootValue: 16,
+});
 
 export const App = observer(
   ({ routes }: { store: AppStore; routes: AppRoutes }) => {
@@ -28,11 +37,15 @@ export const App = observer(
         }}
         locale={locale}
       >
-        <Routes>
-          {routes.map(({ path, component: RouteComponent }) => (
-            <Route key={path} path={path} element={<RouteComponent />} />
-          ))}
-        </Routes>
+        <StyleProvider
+          transformers={[legacyLogicalPropertiesTransformer, px2rem]}
+        >
+          <Routes>
+            {routes.map(({ path, component: RouteComponent }) => (
+              <Route key={path} path={path} element={<RouteComponent />} />
+            ))}
+          </Routes>
+        </StyleProvider>
       </ConfigProvider>
     );
   },

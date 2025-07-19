@@ -28,4 +28,3 @@ export class ExecuteStore {
     await req!.send();
   }
 }
-

@@ -40,4 +40,3 @@ createServer()
     });
   })
   .catch(logger.error);
-

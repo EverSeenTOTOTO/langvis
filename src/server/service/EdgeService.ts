@@ -1,19 +1,16 @@
 import { EdgeEntity, EdgeMetaName } from '@/shared/entities/Edge';
 import { ClientEdge, InstrinicEdge } from '@/shared/types';
-import { delay, inject, singleton } from 'tsyringe';
+import { inject, singleton } from 'tsyringe';
 import { DataSource } from 'typeorm';
-import { pgInjectToken } from './pg';
 import { Bezier } from '../core/edges/Bezier';
-
-// Forward reference for circular dependency
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const NodeServiceRef = delay(() => require('./NodeService').NodeService);
+import { type NodeService } from './NodeService';
+import { InjectTokens } from '../utils';
 
 @singleton()
 export class EdgeService {
   constructor(
-    @inject(pgInjectToken) private pg?: DataSource,
-    @inject(NodeServiceRef) private nodeService?: any,
+    @inject(InjectTokens.PG) private pg?: DataSource,
+    @inject(InjectTokens.NODE_SERVICE) private nodeService?: NodeService,
   ) {}
 
   async create(edge: ClientEdge) {
@@ -23,7 +20,6 @@ export class EdgeService {
     );
 
     if (existingEdge) {
-      console.log(existingEdge);
       const source = await this.nodeService!.findById(edge.source);
       const target = await this.nodeService!.findById(edge.target);
 
@@ -134,4 +130,3 @@ export class EdgeService {
     }
   }
 }
-

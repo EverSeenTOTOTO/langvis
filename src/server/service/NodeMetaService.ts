@@ -1,11 +1,11 @@
 import { NodeMetaEntity, NodeMetaName } from '@/shared/entities/NodeMeta';
 import { inject, singleton } from 'tsyringe';
 import { DataSource } from 'typeorm';
-import { pgInjectToken } from './pg';
+import { InjectTokens } from '../utils';
 
 @singleton()
 export class NodeMetaService {
-  constructor(@inject(pgInjectToken) private pg?: DataSource) {}
+  constructor(@inject(InjectTokens.PG) private pg?: DataSource) {}
 
   async createNodeMeta(data: NodeMetaEntity) {
     const repo = this.pg!.getRepository(NodeMetaEntity);

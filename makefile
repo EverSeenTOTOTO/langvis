@@ -2,9 +2,39 @@ SHELL := /bin/bash
 
 DIST ?= dist
 
+# js sandbox
+.PHONY: quickjs-wasi
+quickjs-wasi:
+	@if [ ! -f third-party/quickjs/build/qjs ]; then \
+		echo "Building QuickJS WASI..."; \
+		git submodule update --init --recursive; \
+		cd third-party/quickjs && \
+		cmake -B build -DCMAKE_TOOLCHAIN_FILE=/opt/wasi-sdk/share/cmake/wasi-sdk.cmake && \
+		make -C build qjs_exe && \
+		bun run build/qjs -qd && \
+		echo "console.log('hello wasi!');" > t.js && \
+		bun run build/qjs t.js; \
+	else \
+		echo "QuickJS WASI already built. Skipping build step."; \
+	fi
+
+# Use my forked version
+.PHONY: better-auth-typeorm
+better-auth-typeorm:
+	@if [ ! -d third-party/better-auth-typeorm-pg/package/dist ]; then \
+		echo "Building better-auth-typeorm-pg..." && \
+		cd third-party/better-auth-typeorm-pg && \
+		bun install && \
+		cd package && \
+		bun run build && \
+		echo "better-auth-typeorm-pg built successfully."; \
+	else \
+		echo "better-auth-typeorm-pg already built. Skipping build step."; \
+	fi
+
 .PHONY: prepare
-prepare:
-	npx husky install
+prepare: quickjs-wasi better-auth-typeorm
+	npx husky
 	# https://github.com/oven-sh/bun/issues/4677#issuecomment-1713522789
 	# https://github.com/oven-sh/bun/pull/18086
 	jq '.main = .module' node_modules/tsyringe/package.json > tmp.json && mv tmp.json node_modules/tsyringe/package.json

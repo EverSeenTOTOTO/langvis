@@ -1,16 +1,19 @@
 import bindController from '@/server/decorator/controller';
 import type { Express } from 'express';
-import pg, { pgInjectToken } from '../service/pg';
-import redis, { redisInjectToken } from '../service/redis';
+import pg from '../service/pg';
+import redis from '../service/redis';
 import { EdgeController } from './EdgeController';
 import { GraphController } from './GraphController';
 import { NodeController } from './NodeController';
 import { NodeMetaController } from './NodeMetaController';
-import { container } from 'tsyringe';
+import { container, delay } from 'tsyringe';
 import { DataSource } from 'typeorm';
 import { SSEController } from './SSEController';
 import { AuthController } from './AuthController';
 import { ExecuteController } from './ExecuteController';
+import { InjectTokens } from '../utils';
+import { NodeService } from '../service/NodeService';
+import { EdgeService } from '../service/EdgeService';
 
 export default async (app: Express) => {
   if (!pg.isInitialized) {
@@ -21,8 +24,16 @@ export default async (app: Express) => {
     await redis.connect();
   }
 
-  container.register<DataSource>(pgInjectToken, { useValue: pg });
-  container.register<typeof redis>(redisInjectToken, { useValue: redis });
+  container.register<DataSource>(InjectTokens.PG, { useValue: pg });
+  container.register<typeof redis>(InjectTokens.REDIS, {
+    useValue: redis,
+  });
+  container.register<NodeService>(InjectTokens.NODE_SERVICE, {
+    useToken: delay(() => NodeService),
+  });
+  container.register<EdgeService>(InjectTokens.EDGE_SERVICE, {
+    useToken: delay(() => EdgeService),
+  });
 
   bindController(AuthController, app);
   bindController(GraphController, app);

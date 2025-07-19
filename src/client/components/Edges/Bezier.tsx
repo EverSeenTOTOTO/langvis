@@ -56,7 +56,7 @@ const BasicEdge = (edge: ClientEdgeProps) => {
 
   return (
     <>
-      <BaseEdge id={id} path={edgePath} />{' '}
+      <BaseEdge id={id} path={edgePath} style={{ strokeWidth: 2 }} />
       <EdgeLabelRenderer>
         <DropdownMenu
           trigger={['click']}

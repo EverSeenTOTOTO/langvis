@@ -14,4 +14,3 @@ export class ExecuteService {
     this.sse!.sendMessage(SSEvents.GraphRun(graphId), data);
   }
 }
-

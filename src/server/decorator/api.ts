@@ -29,8 +29,9 @@ export default function <T extends Record<string, any>>(
         async (req, res) => {
           try {
             await handle(req, res);
-          } catch (e) {
-            req.log?.error(e);
+          } catch (err) {
+            const e = err as Error;
+            req.log?.error(e.stack || e.message);
             res.status(500).json({
               error: (e as Error).message || 'Internal Server Error',
             });
