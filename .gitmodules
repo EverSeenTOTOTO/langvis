@@ -1,0 +1,6 @@
+[submodule "third-party/quickjs"]
+	path = third-party/quickjs
+	url = https://github.com/quickjs-ng/quickjs.git
+[submodule "third-party/better-auth-typeorm-pg"]
+	path = third-party/better-auth-typeorm-pg
+	url = https://github.com/EverSeenTOTOTO/better-auth-typeorm-pg.git
