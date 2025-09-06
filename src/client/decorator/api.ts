@@ -97,7 +97,7 @@ export class ApiRequest<P extends Record<string, any> = {}> extends Request {
     const { path, options } = getApiOptions(req, config);
     const url =
       path.startsWith('/') && !isClient() ? getPrefetchPath(path) : path;
-    const extraOptions = ['post'].includes(options?.method || 'get')
+    const extraOptions = ['post', 'put'].includes(options?.method || 'get')
       ? {
           body: JSON.stringify(req),
           headers: { 'Content-Type': 'application/json' },

@@ -26,4 +26,3 @@ export const getSessionHeaders = (req: Request) => {
 
   return headers;
 };
-

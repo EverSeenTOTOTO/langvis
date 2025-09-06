@@ -1,8 +1,13 @@
+:root {
+  --header-height: 48px;
+}
+
 .header {
   position: fixed;
   right: 0;
   left: 0;
   z-index: 2;
+  height: var(--header-height);
   padding: 8px 12px;
   background-color: var(--ant-color-bg-container);
   border-bottom: 1px solid var(--ant-color-split);
@@ -12,6 +17,10 @@
       margin: 0;
     }
   }
+}
+
+.header-placeholder {
+  height: var(--header-height);
 }
 
 .user-dropdown {

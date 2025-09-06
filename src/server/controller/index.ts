@@ -7,6 +7,7 @@ import pg from '../service/pg';
 import { InjectTokens } from '../utils';
 import { AuthController } from './AuthController';
 import { UserController } from './UserController';
+import { ConversationController } from './ConversationController';
 
 export default async (app: Express) => {
   if (!pg.isInitialized) {
@@ -24,4 +25,5 @@ export default async (app: Express) => {
 
   bindController(AuthController, app);
   bindController(UserController, app);
+  bindController(ConversationController, app);
 };

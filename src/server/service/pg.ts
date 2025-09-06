@@ -1,5 +1,7 @@
 import { DataSource } from 'typeorm';
 import { entities, migrations } from '@hedystia/better-auth-typeorm';
+import { ConversationEntity } from '@/shared/entities/Conversation';
+import { MessageEntity } from '@/shared/entities/Message';
 
 const pg = new DataSource({
   type: 'postgres',
@@ -10,7 +12,7 @@ const pg = new DataSource({
   database: import.meta.env.VITE_PG_DATABASE,
   synchronize: true,
   logging: false,
-  entities: [...entities],
+  entities: [ConversationEntity, MessageEntity, ...entities],
   migrations: [...migrations],
   migrationsRun: true,
 });

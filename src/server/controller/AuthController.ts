@@ -3,6 +3,7 @@ import { inject, singleton } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { AuthService } from '../service/AuthService';
+import { getSessionHeaders } from '../utils';
 
 @singleton()
 @controller('/api/auth')
@@ -46,16 +47,8 @@ export class AuthController {
 
   @api('/get-session')
   async getSession(req: Request, res: Response) {
-    // Convert express headers to Headers object
-    const headers = new Headers();
-    for (const [key, value] of Object.entries(req.headers)) {
-      if (value) {
-        headers.set(key, Array.isArray(value) ? value.join(',') : value);
-      }
-    }
-
     const response: any = await this.auth!.api.getSession({
-      headers,
+      headers: getSessionHeaders(req),
     });
     return res.json(response);
   }
