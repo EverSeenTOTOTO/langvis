@@ -17,12 +17,7 @@ export class ChatService {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
     });
-
-    response.write(
-      `data: ${JSON.stringify({ type: 'connected', message: 'SSE connection established' })}\n\n`,
-    );
 
     const connection: SSEConnection = {
       conversationId,
@@ -32,11 +27,21 @@ export class ChatService {
 
     this.sseConnections.set(conversationId, connection);
 
+    response.write(
+      `data: ${JSON.stringify({ type: 'heartbeat' } as SSEMessage)}\n\n`,
+    );
+    // flush is required with compresss middleware
+    response.flush();
+
+    // Setup heartbeat
     const heartbeat = setInterval(() => {
       if (response.writable) {
-        response.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`);
+        response.write(
+          `data: ${JSON.stringify({ type: 'heartbeat' } as SSEMessage)}\n\n`,
+        );
+        response.flush();
       }
-    }, 25000);
+    }, 10000); // Every 10 seconds
 
     this.heartbeats.set(conversationId, heartbeat);
 
@@ -62,9 +67,9 @@ export class ChatService {
     }
   }
 
-  sendToConversation(msg: SSEMessage) {
+  sendToConversation(conversationId: string, msg: SSEMessage) {
     this.sseConnections
-      .get(msg.conversationId)
+      .get(conversationId)
       ?.response.write(`data: ${JSON.stringify(msg)}\n\n`);
   }
 }

@@ -69,6 +69,7 @@ export class ConversationService {
     content: string,
   ): Promise<Message | null> {
     const conversation = await this.getConversationById(conversationId);
+
     if (!conversation) {
       return null;
     }

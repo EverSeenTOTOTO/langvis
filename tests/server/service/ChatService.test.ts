@@ -16,6 +16,7 @@ describe('ChatService', () => {
       const mockResponse = {
         writeHead: vi.fn(),
         write: vi.fn(),
+        flush: vi.fn(),
       };
 
       const connection = chatService.initSSEConnection(
@@ -30,10 +31,9 @@ describe('ChatService', () => {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
       });
       expect(mockResponse.write).toHaveBeenCalledWith(
-        `data: ${JSON.stringify({ type: 'connected', message: 'SSE connection established' })}\n\n`,
+        `data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`,
       );
     });
   });
@@ -44,6 +44,7 @@ describe('ChatService', () => {
       const mockResponse = {
         writeHead: vi.fn(),
         write: vi.fn(),
+        flush: vi.fn(),
         end: vi.fn(),
         writableEnded: false,
       };
@@ -61,6 +62,7 @@ describe('ChatService', () => {
       const mockResponse = {
         writeHead: vi.fn(),
         write: vi.fn(() => true),
+        flush: vi.fn(),
         writableEnded: false,
       };
 
@@ -71,10 +73,10 @@ describe('ChatService', () => {
       mockResponse.write.mockClear();
 
       const testData: SSEMessage = {
-        conversationId,
-        data: { message: 'test' },
+        type: 'reply',
+        content: 'Test message',
       };
-      chatService.sendToConversation(testData);
+      chatService.sendToConversation(conversationId, testData);
 
       // Verify the call with specific arguments
       expect(mockResponse.write).toHaveBeenCalledWith(
@@ -83,3 +85,4 @@ describe('ChatService', () => {
     });
   });
 });
+
