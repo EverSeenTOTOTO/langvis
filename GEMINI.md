@@ -9,4 +9,4 @@ You should:
 
 - only run specific test when necessary, skip coverage when testing.
 - always run lint after code generating.
-- avoid unnecessary comments, keep it clean.
+- avoid useless comments, be clean.

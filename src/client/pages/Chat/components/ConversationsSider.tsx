@@ -3,6 +3,7 @@ import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { Conversations, type ConversationsProps } from '@ant-design/x';
 import {
   App,
+  Button,
   Form,
   Input,
   Layout,
@@ -35,6 +36,9 @@ const ConversationSider: React.FC = () => {
   >(null);
   const [editForm] = Form.useForm();
 
+  const createConversationApi = useAsyncFn(
+    conversationStore.createConversation.bind(conversationStore),
+  );
   const allConversationsApi = useAsyncFn(
     conversationStore.getAllConversations.bind(conversationStore),
   );
@@ -141,6 +145,17 @@ const ConversationSider: React.FC = () => {
           menu={menuConfig}
         />
       </Skeleton>
+      <Button
+        block
+        loading={createConversationApi[0].loading}
+        onClick={() =>
+          createConversationApi[1]({
+            name: settingStore.tr('New Conversation'),
+          })
+        }
+      >
+        {settingStore.tr('New Conversation')}
+      </Button>
       <Modal
         width={460}
         title={settingStore.tr('Edit Conversation')}
@@ -175,4 +190,3 @@ const ConversationSider: React.FC = () => {
 };
 
 export default observer(ConversationSider);
-

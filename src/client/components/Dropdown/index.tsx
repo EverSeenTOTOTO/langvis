@@ -1,4 +1,3 @@
-import { RightOutlined } from '@ant-design/icons';
 import {
   DropdownProps as AntdDropdownProps,
   Button,
@@ -75,7 +74,6 @@ const DropdownMenu = ({ items, ...props }: DropdownProps) => {
                 >
                   <Button icon={item.icon} type="text">
                     {item.label}
-                    <RightOutlined style={{ marginBlockStart: 2 }} />
                   </Button>
                 </Popover>
               );

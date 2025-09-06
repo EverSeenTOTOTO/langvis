@@ -145,4 +145,3 @@ export class ConversationStore {
     await this.getMessagesByConversationId({ id: params.id });
   }
 }
-

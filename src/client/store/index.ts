@@ -4,6 +4,7 @@ import { container } from 'tsyringe';
 import composeApi from '../decorator/api';
 import composeHydrate from '../decorator/hydrate';
 import { AuthStore } from './modules/auth';
+import { ChatStore } from './modules/chat';
 import { ConversationStore } from './modules/conversation';
 import { HomeStore } from './modules/home';
 import { SettingStore } from './modules/setting';
@@ -30,6 +31,8 @@ export class AppStore {
   user = bindStore(UserStore);
 
   conversation = bindStore(ConversationStore);
+
+  chat = bindStore(ChatStore);
 
   hydrate(data: Record<string, any>) {
     Object.keys(data).forEach(key => {
