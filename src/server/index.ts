@@ -9,6 +9,7 @@ import bindControllers from './controller';
 import bindSSRMiddleware from './middleware/ssr';
 import cookieParser from 'cookie-parser';
 import bindLogger, { logger } from './middleware/logger';
+import bindAuthMiddleware from './middleware/auth';
 
 dotenv.config({
   path: isProd
@@ -27,6 +28,7 @@ export const createServer = async (): Promise<Express> => {
   app.use(compression());
 
   await bindLogger(app);
+  await bindAuthMiddleware(app);
   await bindControllers(app);
   // must be last
   await bindSSRMiddleware(app);

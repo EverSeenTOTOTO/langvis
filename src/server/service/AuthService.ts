@@ -81,5 +81,13 @@ export class AuthService {
 
     return id;
   }
-}
 
+  async isAuthenticated(req: Request): Promise<boolean> {
+    try {
+      const user = await this.getUser(req);
+      return !!user;
+    } catch {
+      return false;
+    }
+  }
+}

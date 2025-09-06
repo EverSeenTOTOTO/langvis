@@ -9,6 +9,7 @@ import { observer } from 'mobx-react-lite';
 import { Route, Routes } from 'react-router-dom';
 import { AppRoutes } from './routes';
 import { AppStore, useStore } from './store';
+import ProtectedRoute from './components/ProtectedRoute';
 
 import useI18n from './hooks/useI18n';
 import useThemeClassname from './hooks/useThemeClassname';
@@ -40,9 +41,22 @@ export const App = observer(
           transformers={[legacyLogicalPropertiesTransformer, px2rem]}
         >
           <Routes>
-            {routes.map(({ path, component: RouteComponent }) => (
-              <Route key={path} path={path} element={<RouteComponent />} />
-            ))}
+            {routes.map(({ path, component: RouteComponent }) => {
+              // Skip authentication for login page
+              const isLoginPage = path === '/login';
+
+              return (
+                <Route
+                  key={path}
+                  path={path}
+                  element={
+                    <ProtectedRoute skipAuth={isLoginPage}>
+                      <RouteComponent />
+                    </ProtectedRoute>
+                  }
+                />
+              );
+            })}
           </Routes>
         </StyleProvider>
       </ConfigProvider>
@@ -77,4 +91,3 @@ export function prefetch(ctx: PrefetchContext) {
 
   return Promise.all(ps);
 }
-

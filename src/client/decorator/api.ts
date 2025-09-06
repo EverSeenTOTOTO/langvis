@@ -131,6 +131,16 @@ export class ApiRequest<P extends Record<string, any> = {}> extends Request {
     const rsp = await res.json();
 
     if (res.status < 200 || res.status >= 300) {
+      // If server provides redirect info, include it in the error
+      if (rsp?.redirect) {
+        const e = new Error(
+          rsp?.error ?? `Response error: ${this.url} ${res.status}`,
+        );
+        (e as any).redirect = rsp.redirect;
+        logError(e);
+        return { error: e.message, redirect: rsp.redirect };
+      }
+
       const e = new Error(
         rsp?.error ?? `Response error: ${this.url} ${res.status}`,
       );
@@ -167,7 +177,13 @@ export function wrapApi<P extends Record<string, any>, R>(
 ) {
   return async (req: P) => {
     try {
-      return await fn(req, new ApiRequest(req, config));
+      const result = await fn(req, new ApiRequest(req, config));
+
+      if (result && typeof result === 'object' && 'redirect' in result) {
+        return result;
+      }
+
+      return result;
     } catch (e) {
       logError(e);
       return { error: (e as Error).message };
@@ -190,3 +206,4 @@ export default function <T extends Record<string, any>>(instance: T) {
 
   return instance;
 }
+
