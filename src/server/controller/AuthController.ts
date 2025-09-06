@@ -44,4 +44,3 @@ export class AuthController {
     return res.json({ success: true });
   }
 }
-

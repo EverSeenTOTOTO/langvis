@@ -53,4 +53,3 @@ export default () => {
 
   return { locale };
 };
-
