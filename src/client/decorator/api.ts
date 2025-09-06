@@ -206,4 +206,3 @@ export default function <T extends Record<string, any>>(instance: T) {
 
   return instance;
 }
-

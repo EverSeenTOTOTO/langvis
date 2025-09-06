@@ -20,6 +20,9 @@ if (!i18next.isInitialized) {
         translation: {
           Language: '语言',
           Theme: '颜色主题',
+          Login: '登录',
+          'Please input your email': '请输入邮箱',
+          'Please input your password': '请输入密码',
         },
       },
     },
@@ -53,3 +56,4 @@ export default () => {
 
   return { locale };
 };
+

@@ -49,9 +49,6 @@ export class AuthService {
     }
 
     return this.auth.api.getSession({
-      query: {
-        disableCookieCache: true,
-      },
       headers,
     });
   }

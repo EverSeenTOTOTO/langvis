@@ -4,4 +4,4 @@ There is NO npm scripts in package.json, all scripts are managed in makefile. us
 
 When you finished code generating, do NOT forget to run lint.
 
-Reduce unnecessary comments, keep it clean.
+Avoid unnecessary comments, keep it clean.
