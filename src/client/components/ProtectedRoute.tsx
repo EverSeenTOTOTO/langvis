@@ -2,6 +2,7 @@ import { useStore } from '@/client/store';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import './ProtectedRoute.scss';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -21,7 +22,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // If user is authenticated, render children
-  if (userStore.currentUser) {
+  if ( userStore.currentUser) {
     return <>{children}</>;
   }
 
@@ -30,4 +31,3 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 };
 
 export default observer(ProtectedRoute);
-

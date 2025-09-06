@@ -11,6 +11,9 @@ type SignInParams = Parameters<
 type SignOutParams = Parameters<
   ReturnType<typeof createAuthClient>['signOut']
 >[0];
+type GetSessionParams = Parameters<
+  ReturnType<typeof createAuthClient>['getSession']
+>[0];
 
 @singleton()
 export class AuthStore {
@@ -39,4 +42,15 @@ export class AuthStore {
     this.user?.setCurrentUser(null);
     return result;
   }
+
+  async getSession(param: GetSessionParams = {}) {
+    const result = await this.client.getSession(param);
+    if (result.data?.user) {
+      this.user?.setCurrentUser(result.data.user);
+    } else {
+      this.user?.setCurrentUser(null);
+    }
+    return result;
+  }
 }
+

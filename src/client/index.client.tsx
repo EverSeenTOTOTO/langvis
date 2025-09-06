@@ -18,14 +18,16 @@ if (window.__PREFETCHED_STATE__) {
   prefetch({ routes, store, req: { originalUrl: window.location.pathname } });
 }
 
-hydrateRoot(
-  container!,
-  <BrowserRouter
-    future={{
-      v7_relativeSplatPath: true,
-      v7_startTransition: true,
-    }}
-  >
-    <App store={store} routes={routes} />
-  </BrowserRouter>,
-);
+store.auth.getSession().finally(() => {
+  hydrateRoot(
+    container!,
+    <BrowserRouter
+      future={{
+        v7_relativeSplatPath: true,
+        v7_startTransition: true,
+      }}
+    >
+      <App store={store} routes={routes} />
+    </BrowserRouter>,
+  );
+});
