@@ -16,6 +16,7 @@ export class ConversationController {
   @api('/', { method: 'post' })
   async createConversation(req: Request, res: Response) {
     const { name } = req.body;
+
     if (!name) {
       return res.status(400).json({ error: 'Name is required' });
     }
@@ -23,6 +24,7 @@ export class ConversationController {
     try {
       const conversation =
         await this.conversationService.createConversation(name);
+
       return res.status(201).json(conversation);
     } catch (e) {
       return res.status(500).json({
@@ -50,9 +52,11 @@ export class ConversationController {
     try {
       const conversation =
         await this.conversationService.getConversationById(id);
+
       if (!conversation) {
         return res.status(404).json({ error: 'Conversation not found' });
       }
+
       return res.json(conversation);
     } catch (e) {
       return res.status(500).json({
@@ -75,9 +79,11 @@ export class ConversationController {
         id,
         name,
       );
+
       if (!conversation) {
         return res.status(404).json({ error: 'Conversation not found' });
       }
+
       return res.json(conversation);
     } catch (e) {
       return res.status(500).json({
@@ -91,9 +97,11 @@ export class ConversationController {
     const { id } = req.params;
     try {
       const result = await this.conversationService.deleteConversation(id);
+
       if (!result) {
         return res.status(404).json({ error: 'Conversation not found' });
       }
+
       return res.status(200).json({ success: true });
     } catch (e) {
       return res.status(500).json({
@@ -122,9 +130,11 @@ export class ConversationController {
         role as Role,
         content,
       );
+
       if (!message) {
-        return res.status(404).json({ error: 'Conversation not found' });
+        return res.status(404).json({ error: `Conversation ${id} not found` });
       }
+
       return res.status(201).json(message);
     } catch (e) {
       return res.status(500).json({
@@ -139,6 +149,7 @@ export class ConversationController {
     try {
       const messages =
         await this.conversationService.getMessagesByConversationId(id);
+
       return res.json(messages);
     } catch (e) {
       return res.status(500).json({
@@ -162,13 +173,12 @@ export class ConversationController {
           id,
           messageIds,
         );
+
       if (!result) {
         return res.status(404).json({ error: 'Conversation not found' });
       }
 
-      return res.status(204).json({
-        id,
-      });
+      return res.status(204).json({ id });
     } catch (e) {
       return res.status(500).json({
         error: `Failed to delete messages: ${(e as Error)?.message}`,

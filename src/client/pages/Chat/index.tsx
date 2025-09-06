@@ -1,5 +1,4 @@
 import { useStore } from '@/client/store';
-import { Role } from '@/shared/entities/Message';
 import { Sender } from '@ant-design/x';
 import { Layout, message } from 'antd';
 import { observer } from 'mobx-react-lite';
@@ -39,18 +38,7 @@ const Chat: React.FC = () => {
 
     setValue('');
 
-    // Add temporary user message with loading state
-    conversationStore.addTempMessage(
-      conversationStore.currentConversationId,
-      Role.USER,
-    );
-
-    // Add user message
-    await addMessageApi[1]({
-      id: conversationStore.currentConversationId,
-      role: Role.USER,
-      content: value,
-    });
+    await conversationStore.handleUserMessage(value);
   };
 
   return (

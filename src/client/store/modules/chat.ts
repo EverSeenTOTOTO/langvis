@@ -1,73 +1,68 @@
-import { makeAutoObservable } from 'mobx';
-import { singleton } from 'tsyringe';
 import { getPrefetchPath } from '@/client/decorator/api';
 import { Conversation } from '@/shared/entities/Conversation';
-import { message } from 'antd';
 import { SSEMessage } from '@/shared/types';
+import { message } from 'antd';
+import { makeAutoObservable } from 'mobx';
+import { inject, singleton } from 'tsyringe';
+import { SettingStore } from './setting';
+import { isClient } from '@/shared/constants';
 
 type ConversationId = Conversation['id'];
-type Callback = (data: any) => void;
 
 @singleton()
 export class ChatStore {
-  private eventSource: EventSource | null = null;
-  private listeners: Map<ConversationId, Callback> = new Map();
+  private eventSources: Map<ConversationId, EventSource> = new Map();
 
-  constructor() {
+  constructor(@inject(SettingStore) private settingStore: SettingStore) {
     makeAutoObservable(this);
   }
 
-  connectToSSE(conversationId: ConversationId): Promise<void> {
-    this.disconnectFromSSE();
+  isConnected(conversationId: ConversationId): boolean {
+    return (
+      this.eventSources.get(conversationId)?.readyState === EventSource.OPEN
+    );
+  }
+
+  connectToSSE(
+    conversationId: ConversationId,
+    onMessage?: (msg: SSEMessage) => void,
+  ): Promise<void> {
+    this.disconnectFromSSE(conversationId);
 
     return new Promise((resolve, reject) => {
       const path = `/api/chat/sse/${conversationId}`;
-      const url = path.startsWith('/') ? getPrefetchPath(path) : path;
+      const url =
+        path.startsWith('/') && !isClient() ? getPrefetchPath(path) : path;
 
-      this.eventSource = new EventSource(url);
+      const eventSource = new EventSource(url, {
+        withCredentials: true,
+      });
 
-      if (this.eventSource) {
-        this.eventSource.addEventListener('open', () => resolve());
-        this.eventSource.addEventListener('error', reject);
-        this.eventSource.addEventListener('message', event => {
-          try {
-            const parsedData: SSEMessage = JSON.parse(event.data);
-            this.handleMessage(parsedData);
-          } catch (e) {
-            console.error('Error parsing SSE message:', e);
-          }
-        });
-      } else {
-        reject(new Error('Failed to create EventSource'));
-      }
+      const timeout = setTimeout(() => {
+        eventSource.close();
+        reject(new Error('SSE connection timeout'));
+      }, 30000);
+
+      eventSource.addEventListener('open', () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+      eventSource.addEventListener('error', reject);
+      eventSource.addEventListener('message', event => {
+        try {
+          const parsedData: SSEMessage = JSON.parse(event.data);
+
+          onMessage?.(parsedData);
+        } catch (e) {
+          message.error(
+            `${this.settingStore.tr('Failed parsing  SSE message')}: ${(e as Error).message}`,
+          );
+        }
+      });
     });
   }
-
-  private handleMessage(sseMessage: SSEMessage) {
-    if (!('data' in sseMessage)) {
-      message.error('Invalid SSE message format');
-      console.error('Invalid SSE message format:', sseMessage);
-      return;
-    }
-
-    const { conversationId, data } = sseMessage;
-
-    this.listeners.get(conversationId)?.(data);
-  }
-
-  register(conversationId: ConversationId, callback: Callback) {
-    this.listeners.set(conversationId, callback);
-  }
-
-  unregister(conversationId: ConversationId) {
-    this.listeners.delete(conversationId);
-  }
-
-  disconnectFromSSE() {
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
-    this.listeners.clear();
+  disconnectFromSSE(conversationId: ConversationId) {
+    this.eventSources.get(conversationId)?.close();
+    this.eventSources.delete(conversationId);
   }
 }

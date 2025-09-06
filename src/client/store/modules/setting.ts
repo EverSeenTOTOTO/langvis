@@ -47,6 +47,10 @@ const initI18n = (lang: string = 'en_US') => {
             'Conversation Name': '对话名称',
             'Please enter a conversation name': '请输入对话名称',
             'Enter conversation name': '输入对话名称',
+            'Error parsing SSE message': '解析 SSE 消息时出错',
+            'Failed to connect to SSE': '连接到 SSE 失败',
+            'Received sse message for non-pending conversation':
+              '收到了非进行中对话的 SSE 消息',
           },
         },
       },
