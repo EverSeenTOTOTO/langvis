@@ -43,4 +43,20 @@ export class AuthController {
     res.set('set-cookie', response.headers?.getSetCookie());
     return res.json({ success: true });
   }
+
+  @api('/get-session')
+  async getSession(req: Request, res: Response) {
+    // Convert express headers to Headers object
+    const headers = new Headers();
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (value) {
+        headers.set(key, Array.isArray(value) ? value.join(',') : value);
+      }
+    }
+
+    const response: any = await this.auth!.api.getSession({
+      headers,
+    });
+    return res.json(response);
+  }
 }

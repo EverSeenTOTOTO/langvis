@@ -11,10 +11,20 @@ declare global {
   }
 }
 
+const EXEMPT_PATHS = [
+  '/auth/sign-up/email',
+  '/auth/sign-in/email',
+  '/auth/get-session',
+];
+
 export default async (app: Express) => {
   const authService = container.resolve<AuthService>(AuthService);
 
-  app.use('/api/*', async (req: Request, res: Response, next: NextFunction) => {
+  app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
+    if (EXEMPT_PATHS.includes(req.path)) {
+      return next();
+    }
+
     try {
       const isAuthenticated = await authService.isAuthenticated(req);
 
@@ -38,3 +48,4 @@ export default async (app: Express) => {
     }
   });
 };
+

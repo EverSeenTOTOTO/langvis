@@ -3,6 +3,7 @@ import { betterAuth } from 'better-auth';
 import type { Request } from 'express';
 import { singleton } from 'tsyringe';
 import pg from './pg';
+import { getSessionHeaders } from '../utils';
 // import redis from './redis';
 
 @singleton()
@@ -37,16 +38,7 @@ export class AuthService {
   }
 
   protected getSessionData(req: Request) {
-    const headers = new Headers();
-
-    // Copy the headers from the request
-    for (const [key, value] of Object.entries(req.headers)) {
-      if (Array.isArray(value)) {
-        headers.append(key, value[0]);
-      } else {
-        headers.append(key, value!);
-      }
-    }
+    const headers = getSessionHeaders(req);
 
     return this.auth.api.getSession({
       headers,
@@ -88,3 +80,4 @@ export class AuthService {
     }
   }
 }
+

@@ -1,17 +1,16 @@
 import {
-  px2remTransformer,
   legacyLogicalPropertiesTransformer,
+  px2remTransformer,
   StyleProvider,
 } from '@ant-design/cssinjs';
-import { ConfigProvider, theme as antdTheme } from 'antd';
+import { theme as antdTheme, ConfigProvider } from 'antd';
 import type { Request, Response } from 'express';
 import { observer } from 'mobx-react-lite';
 import { Route, Routes } from 'react-router-dom';
+import ProtectedRoute from './components/ProtectedRoute';
 import { AppRoutes } from './routes';
 import { AppStore, useStore } from './store';
-import ProtectedRoute from './components/ProtectedRoute';
 
-import useI18n from './hooks/useI18n';
 import useThemeClassname from './hooks/useThemeClassname';
 import './index.scss';
 
@@ -22,7 +21,6 @@ const px2rem = px2remTransformer({
 export const App = observer(
   ({ routes }: { store: AppStore; routes: AppRoutes }) => {
     const setting = useStore('setting');
-    const { locale } = useI18n();
 
     useThemeClassname();
 
@@ -35,7 +33,7 @@ export const App = observer(
               : antdTheme.defaultAlgorithm,
           cssVar: true,
         }}
-        locale={locale}
+        locale={setting.locale}
       >
         <StyleProvider
           transformers={[legacyLogicalPropertiesTransformer, px2rem]}

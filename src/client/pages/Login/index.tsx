@@ -1,12 +1,11 @@
+import { useStore } from '@/client/store';
 import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, message } from 'antd';
-import { useStore } from '@/client/store';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
-import './index.scss';
 import { observer } from 'mobx-react-lite';
-import { isClient } from '@/shared/constants';
+import { useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAsyncFn } from 'react-use';
+import './index.scss';
 
 const Login = () => {
   const authStore = useStore('auth');
@@ -17,7 +16,7 @@ const Login = () => {
 
   useEffect(() => {
     // Only run redirect logic in browser environment
-    if (isClient() && userStore.currentUser) {
+    if (userStore.currentUser) {
       // If user is already logged in, redirect to home or the page they were trying to access
       const from = (location.state as any)?.from || '/';
       navigate(from);
@@ -28,12 +27,11 @@ const Login = () => {
 
   const onFinish = async (values: { email: string; password: string }) => {
     try {
+      // these api are not handled by @api decorator, so we need to catch errors here
       const result = await signInApi[1]({
         email: values.email,
         password: values.password,
       });
-
-      console.log(result)
 
       // Handle redirect from server in case of auth error
       if (result && typeof result === 'object' && 'redirect' in result) {
@@ -42,16 +40,16 @@ const Login = () => {
       }
 
       if (result.data?.user) {
-        message.success('Login successful!');
         // Redirect to the page they were trying to access or home
         const from = (location.state as any)?.from || '/';
         navigate(from);
       } else {
-        message.error('Login failed. Please check your credentials.');
+        message.error(
+          `${setting.tr('Login failed')}: ${(result.error as any)?.error}`,
+        );
       }
     } catch (error: any) {
-      message.error('Login failed. Please check your credentials.');
-      console.error('Login error:', error);
+      message.error(`${setting.tr('Login failed')}: ${error?.message}`);
     }
   };
 

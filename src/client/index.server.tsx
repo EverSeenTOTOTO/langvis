@@ -8,6 +8,7 @@ import { createRoutes } from './routes';
 import { createStore } from './store';
 import { getPrefetchPath, serverFetch } from './decorator/api';
 import { isEmpty } from 'lodash-es';
+import { getSessionHeaders } from '@/server/utils';
 
 enableStaticRendering(true);
 
@@ -27,12 +28,22 @@ export async function render(context: RenderContext) {
 
   const store = createStore();
   const routes = createRoutes();
-
   ctx.store = store;
   ctx.routes = routes;
 
   if (!isEmpty(req.cookies)) {
-    // sync client cookie to server prefetch env
+    // prefetch user session if client cookie present
+    await store.auth
+      .getSession({
+        fetchOptions: {
+          headers: getSessionHeaders(req),
+        },
+      })
+      .catch(e => {
+        req.log.error(e);
+      });
+
+    // sync client cookie to futher server prefetch env
     const fullUrl = getPrefetchPath(req.originalUrl);
     const cookieStr = Object.entries(req.cookies)
       .map(([key, value]) => `${key}=${value}`)
@@ -66,3 +77,4 @@ export async function render(context: RenderContext) {
 
   return ctx;
 }
+
