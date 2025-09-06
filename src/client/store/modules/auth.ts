@@ -21,7 +21,7 @@ export class AuthStore {
 
   constructor(@inject(UserStore) private user?: UserStore) {}
 
-  async signUpAndSetUser(params: SignUpParams) {
+  async signUpEmail(params: SignUpParams) {
     const result = await this.client.signUp.email(params);
     if (result.data?.user) {
       this.user?.setCurrentUser(result.data.user);
@@ -29,7 +29,7 @@ export class AuthStore {
     return result;
   }
 
-  async signInAndSetUser(params: SignInParams) {
+  async signInEmail(params: SignInParams) {
     const result = await this.client.signIn.email(params);
     if (result.data?.user) {
       this.user?.setCurrentUser(result.data.user);
@@ -37,7 +37,7 @@ export class AuthStore {
     return result;
   }
 
-  async signOutAndClearUser(params: SignOutParams) {
+  async signOut(params: SignOutParams) {
     const result = await this.client.signOut(params);
     this.user?.setCurrentUser(null);
     return result;
@@ -53,4 +53,3 @@ export class AuthStore {
     return result;
   }
 }
-

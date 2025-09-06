@@ -12,6 +12,7 @@ import { Avatar, Col, Divider, Row, Select, Switch, Typography } from 'antd';
 import { observer } from 'mobx-react-lite';
 import { useNavigate } from 'react-router-dom';
 import { useAsyncFn } from 'react-use';
+import './index.scss';
 
 const Header = () => {
   const userStore = useStore('user');
@@ -20,7 +21,7 @@ const Header = () => {
   const currentUser = userStore.currentUser;
   const navigate = useNavigate();
 
-  const logoutApi = useAsyncFn(authStore.signOutAndClearUser.bind(authStore));
+  const logoutApi = useAsyncFn(authStore.signOut.bind(authStore));
 
   const items: DropdownProps['items'] = [
     {
@@ -79,37 +80,43 @@ const Header = () => {
       type: 'item',
       loading: logoutApi[0].loading,
       onClick: async () => {
-        await authStore.signOutAndClearUser({});
+        await authStore.signOut({});
         navigate('/login');
       },
     },
   ];
 
   return (
-    <Row wrap={false} align="middle" className="header">
-      <Col className="logo">
-        <Typography.Title level={3}>Langvis</Typography.Title>
-      </Col>
-      <Divider type="vertical" />
+    <>
+      <Row wrap={false} align="middle" className="header">
+        <Col className="logo">
+          <Typography.Title level={3}>Langvis</Typography.Title>
+        </Col>
+        <Divider type="vertical" />
 
-      <Col flex={1} />
-      <Divider type="vertical" />
+        <Col flex={1} />
+        <Divider type="vertical" />
 
-      {currentUser ? (
-        <Dropdown items={items} trigger={['click']}>
-          <div className="user-dropdown">
-            <Avatar src={currentUser.image} alt={currentUser.name} size="small">
-              {!currentUser.image && <UserOutlined />}
-            </Avatar>
-            <span className="user-name">{currentUser.name}</span>
-          </div>
-        </Dropdown>
-      ) : (
-        <Avatar size="small" />
-      )}
-    </Row>
+        {currentUser ? (
+          <Dropdown items={items} trigger={['click']}>
+            <div className="user-dropdown">
+              <Avatar
+                src={currentUser.image}
+                alt={currentUser.name}
+                size="small"
+              >
+                {!currentUser.image && <UserOutlined />}
+              </Avatar>
+              <span className="user-name">{currentUser.name}</span>
+            </div>
+          </Dropdown>
+        ) : (
+          <Avatar size="small" />
+        )}
+      </Row>
+      <div className="header-placeholder" />
+    </>
   );
 };
 
 export default observer(Header);
-

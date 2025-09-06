@@ -3,7 +3,7 @@ import {
   px2remTransformer,
   StyleProvider,
 } from '@ant-design/cssinjs';
-import { theme as antdTheme, ConfigProvider } from 'antd';
+import { App as AntdApp, theme as antdTheme, ConfigProvider } from 'antd';
 import type { Request, Response } from 'express';
 import { observer } from 'mobx-react-lite';
 import { Route, Routes } from 'react-router-dom';
@@ -38,24 +38,29 @@ export const App = observer(
         <StyleProvider
           transformers={[legacyLogicalPropertiesTransformer, px2rem]}
         >
-          <Routes>
-            {routes.map(({ path, component: RouteComponent }) => {
-              // Skip authentication for login page
-              const isLoginPage = path === '/login';
+          <AntdApp>
+            <Routes>
+              {routes.map(({ path, component: RouteComponent }) => {
+                const skipAuth = ['/login'].includes(path);
+                const withHeader = !['/login'].includes(path);
 
-              return (
-                <Route
-                  key={path}
-                  path={path}
-                  element={
-                    <ProtectedRoute skipAuth={isLoginPage}>
-                      <RouteComponent />
-                    </ProtectedRoute>
-                  }
-                />
-              );
-            })}
-          </Routes>
+                return (
+                  <Route
+                    key={path}
+                    path={path}
+                    element={
+                      <ProtectedRoute
+                        skipAuth={skipAuth}
+                        withHeader={withHeader}
+                      >
+                        <RouteComponent />
+                      </ProtectedRoute>
+                    }
+                  />
+                );
+              })}
+            </Routes>
+          </AntdApp>
         </StyleProvider>
       </ConfigProvider>
     );

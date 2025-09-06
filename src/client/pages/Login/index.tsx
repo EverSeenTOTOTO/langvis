@@ -23,7 +23,7 @@ const Login = () => {
     }
   }, [location.state]);
 
-  const signInApi = useAsyncFn(authStore.signInAndSetUser.bind(authStore));
+  const signInApi = useAsyncFn(authStore.signInEmail.bind(authStore));
 
   const onFinish = async (values: { email: string; password: string }) => {
     try {
@@ -98,4 +98,3 @@ const Login = () => {
 };
 
 export default observer(Login);
-

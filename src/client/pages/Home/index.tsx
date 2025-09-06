@@ -1,9 +1,7 @@
 import { observer } from 'mobx-react-lite';
-import Header from './components/Header';
-import './index.scss';
 
 const Home = () => {
-  return <Header />;
+  return 'Nothing yet';
 };
 
 export default observer(Home);

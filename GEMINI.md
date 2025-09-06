@@ -1,7 +1,12 @@
-This project use `bun` as dep manager, use `vitest` as unit test framework and `vite` as dev framework.
+This project
 
-There is NO npm scripts in package.json, all scripts are managed in makefile. use `make` for building purpose.
+- use `bun` as dep manager
+- use `make` instead of npm scripts as build system
+- use`vite` as dev framework.
+- use `vitest` as unit test framework
 
-When you finished code generating, do NOT forget to run lint.
+You should:
 
-Avoid unnecessary comments, keep it clean.
+- only run specific test when necessary, skip coverage when testing.
+- always run lint after code generating.
+- avoid unnecessary comments, keep it clean.
