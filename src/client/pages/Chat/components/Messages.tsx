@@ -50,4 +50,3 @@ const Messages = () => {
 };
 
 export default observer(Messages);
-

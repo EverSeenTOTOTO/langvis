@@ -51,18 +51,6 @@ const Chat: React.FC = () => {
       role: Role.USER,
       content: value,
     });
-
-    conversationStore.addTempMessage(
-      conversationStore.currentConversationId,
-      Role.ASSIST,
-    );
-
-    // Add assistant message (simulate AI response)
-    await addMessageApi[1]({
-      id: conversationStore.currentConversationId,
-      role: Role.ASSIST,
-      content: `Thanks for your message "${value}".`,
-    });
   };
 
   return (
@@ -89,4 +77,3 @@ const Chat: React.FC = () => {
 };
 
 export default observer(Chat);
-

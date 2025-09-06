@@ -8,6 +8,7 @@ import { InjectTokens } from '../utils';
 import { AuthController } from './AuthController';
 import { UserController } from './UserController';
 import { ConversationController } from './ConversationController';
+import { ChatController } from './ChatController';
 
 export default async (app: Express) => {
   if (!pg.isInitialized) {
@@ -26,4 +27,5 @@ export default async (app: Express) => {
   bindController(AuthController, app);
   bindController(UserController, app);
   bindController(ConversationController, app);
+  bindController(ChatController, app);
 };

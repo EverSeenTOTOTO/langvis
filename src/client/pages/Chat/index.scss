@@ -4,8 +4,13 @@
   .chat-sider {
     height: 100%;
     padding: 8px;
+    padding-inline: var(--ant-padding-sm);
     overflow-y: auto;
     border-right: 1px solid var(--ant-color-border);
+
+    .ant-conversations {
+      padding-inline: 0;
+    }
   }
 
   .chat-content {
