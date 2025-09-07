@@ -6,7 +6,7 @@ import { controller } from '../decorator/controller';
 import { ConversationService } from '../service/ConversationService';
 
 @singleton()
-@controller('/api/conversations')
+@controller('/api/conversation')
 export class ConversationController {
   constructor(
     @inject(ConversationService)

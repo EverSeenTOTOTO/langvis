@@ -55,7 +55,7 @@ export class ConversationStore {
     this.messages[conversationId].push(tempMessage);
   }
 
-  @api('/api/conversations', { method: 'post' })
+  @api('/api/conversation', { method: 'post' })
   async createConversation(
     _params: { name: string },
     req?: ApiRequest<{ name: string }>,
@@ -69,7 +69,7 @@ export class ConversationStore {
     }
   }
 
-  @api('/api/conversations')
+  @api('/s')
   async getAllConversations(_params?: any, req?: ApiRequest) {
     const result = (await req!.send()) as Conversation[];
 
@@ -88,7 +88,7 @@ export class ConversationStore {
     return result;
   }
 
-  @api((req: { id: string }) => `/api/conversations/${req.id}`, {
+  @api((req: { id: string }) => `/api/conversation/${req.id}`, {
     method: 'put',
   })
   async updateConversation(
@@ -102,7 +102,7 @@ export class ConversationStore {
     return result;
   }
 
-  @api((req: { id: string }) => `/api/conversations/${req.id}`, {
+  @api((req: { id: string }) => `/api/conversation/${req.id}`, {
     method: 'delete',
   })
   async deleteConversation(
@@ -113,7 +113,7 @@ export class ConversationStore {
     await this.getAllConversations();
   }
 
-  @api((req: { id: string }) => `/api/conversations/${req.id}/messages`, {
+  @api((req: { id: string }) => `/api/conversation/${req.id}/messages`, {
     method: 'post',
   })
   async addMessageToConversation(
@@ -124,7 +124,7 @@ export class ConversationStore {
     await this.getMessagesByConversationId({ id: params.id });
   }
 
-  @api((req: { id: string }) => `/api/conversations/${req.id}/messages`)
+  @api((req: { id: string }) => `/api/conversation/${req.id}/messages`)
   async getMessagesByConversationId(
     params: { id: string },
     req?: ApiRequest<{ id: string }>,
@@ -136,7 +136,7 @@ export class ConversationStore {
     return messages;
   }
 
-  @api((req: { id: string }) => `/api/conversations/${req.id}/messages`, {
+  @api((req: { id: string }) => `/api/conversation/${req.id}/messages`, {
     method: 'delete',
   })
   async batchDeleteMessagesInConversation(

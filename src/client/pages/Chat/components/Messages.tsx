@@ -8,10 +8,32 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeMathjax from 'rehype-mathjax';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
-import { oneLight } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import { useEffect, useRef, useState } from 'react';
+
+// Lazy load SyntaxHighlighter to reduce initial bundle size
+const syntaxComponentsRef: {
+  current: { SyntaxHighlighter: any; oneDark: any; oneLight: any } | null;
+} = { current: null };
+const loadSyntaxComponents = () => {
+  if (!syntaxComponentsRef.current) {
+    return Promise.all([
+      import('react-syntax-highlighter').then(module => module.Prism),
+      import('react-syntax-highlighter/dist/cjs/styles/prism').then(
+        module => module.oneDark,
+      ),
+      import('react-syntax-highlighter/dist/cjs/styles/prism').then(
+        module => module.oneLight,
+      ),
+    ]).then(([SyntaxHighlighter, oneDark, oneLight]) => {
+      syntaxComponentsRef.current = {
+        SyntaxHighlighter,
+        oneDark,
+        oneLight,
+      };
+    });
+  }
+  return Promise.resolve();
+};
 
 const MarkdownRender = observer(({ children }: { children: string }) => {
   const settingStore = useStore('setting');
@@ -20,6 +42,17 @@ const MarkdownRender = observer(({ children }: { children: string }) => {
   useEffect(() => {
     forceUpdate(n => n + 1);
   }, [settingStore.mode]);
+
+  // Load syntax highlighting components on client side only
+  useEffect(() => {
+    loadSyntaxComponents()
+      .then(() => {
+        forceUpdate(n => n + 1);
+      })
+      .catch(error => {
+        console.error('Failed to load syntax highlighting components:', error);
+      });
+  }, []);
 
   return (
     <ReactMarkdown
@@ -32,20 +65,23 @@ const MarkdownRender = observer(({ children }: { children: string }) => {
         code({ inline, className, children, ...props }: any) {
           const match = /language-(\w+)/.exec(className || '');
 
-          return !inline && match ? (
-            <SyntaxHighlighter
-              {...props}
-              style={
-                settingStore.mode === 'dark'
-                  ? (oneDark as any)
-                  : (oneLight as any)
-              }
-              language={match[1]}
-              PreTag="div"
-            >
-              {String(children).replace(/\n$/, '')}
-            </SyntaxHighlighter>
-          ) : (
+          // Only render syntax highlighted code blocks when components are loaded
+          if (!inline && match && syntaxComponentsRef.current) {
+            const { SyntaxHighlighter, oneDark, oneLight } =
+              syntaxComponentsRef.current;
+            return (
+              <SyntaxHighlighter
+                {...props}
+                style={settingStore.mode === 'dark' ? oneDark : oneLight}
+                language={match[1]}
+                PreTag="div"
+              >
+                {String(children).replace(/\n$/, '')}
+              </SyntaxHighlighter>
+            );
+          }
+
+          return (
             <code {...props} className={className}>
               {children}
             </code>

@@ -9,6 +9,7 @@ import { ConversationStore } from './modules/conversation';
 import { HomeStore } from './modules/home';
 import { SettingStore } from './modules/setting';
 import { UserStore } from './modules/user';
+import { AgentStore } from './modules/agent';
 
 configure({ enforceActions: 'never' });
 
@@ -33,6 +34,8 @@ export class AppStore {
   conversation = bindStore(ConversationStore);
 
   chat = bindStore(ChatStore);
+
+  agent = bindStore(AgentStore);
 
   hydrate(data: Record<string, any>) {
     Object.keys(data).forEach(key => {
