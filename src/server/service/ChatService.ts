@@ -68,8 +68,9 @@ export class ChatService {
   }
 
   sendToConversation(conversationId: string, msg: SSEMessage) {
-    this.sseConnections
-      .get(conversationId)
-      ?.response.write(`data: ${JSON.stringify(msg)}\n\n`);
+    const response = this.sseConnections.get(conversationId)?.response;
+
+    response?.write(`data: ${JSON.stringify(msg)}\n\n`);
+    response?.flush();
   }
 }
