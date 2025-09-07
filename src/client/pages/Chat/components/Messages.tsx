@@ -4,6 +4,59 @@ import { RobotOutlined, UserOutlined } from '@ant-design/icons';
 import { Bubble } from '@ant-design/x';
 import { Flex } from 'antd';
 import { observer } from 'mobx-react-lite';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeMathjax from 'rehype-mathjax';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import { oneLight } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import { useEffect, useState } from 'react';
+
+const MarkdownRender = observer(({ children }: { children: string }) => {
+  const settingStore = useStore('setting');
+  const [, forceUpdate] = useState(0);
+
+  useEffect(() => {
+    forceUpdate(n => n + 1);
+  }, [settingStore.mode]);
+
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeMathjax]}
+      components={{
+        a: ({ ...props }) => (
+          <a {...props} target="_blank" rel="noopener noreferrer" />
+        ),
+        code({ inline, className, children, ...props }: any) {
+          const match = /language-(\w+)/.exec(className || '');
+
+          return !inline && match ? (
+            <SyntaxHighlighter
+              {...props}
+              style={
+                settingStore.mode === 'dark'
+                  ? (oneDark as any)
+                  : (oneLight as any)
+              }
+              language={match[1]}
+              PreTag="div"
+            >
+              {String(children).replace(/\n$/, '')}
+            </SyntaxHighlighter>
+          ) : (
+            <code {...props} className={className}>
+              {children}
+            </code>
+          );
+        },
+      }}
+    >
+      {children}
+    </ReactMarkdown>
+  );
+});
 
 const fooAvatar: React.CSSProperties = {
   color: '#f56a00',
@@ -43,6 +96,7 @@ const Messages = () => {
               ? { avatar: hideAvatar }
               : {}
           }
+          messageRender={content => <MarkdownRender>{content}</MarkdownRender>}
         />
       ))}
     </Flex>

@@ -146,4 +146,3 @@ const ConversationSider: React.FC = () => {
 };
 
 export default observer(ConversationSider);
-
