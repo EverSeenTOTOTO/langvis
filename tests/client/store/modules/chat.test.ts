@@ -155,7 +155,10 @@ describe('ChatStore', () => {
 
   it('should handle valid SSE messages', async () => {
     const conversationId = 'test-conversation-id';
-    const mockMessageData: SSEMessage = { type: 'reply', content: 'Hello' };
+    const mockMessageData: SSEMessage = {
+      type: 'completion_delta',
+      content: 'Hello',
+    };
 
     const onMessageMock = vi.fn();
 

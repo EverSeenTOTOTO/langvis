@@ -125,25 +125,34 @@ export class ChatStore {
     const lastMessage =
       this.conversationStore.messages[conversationId].slice(-1)[0];
 
-    if (
-      lastMessage?.role !== Role.ASSIST ||
-      !ConversationStore.isTempMessage(lastMessage)
-    ) {
-      message.error(
-        this.settingStore.tr(
-          'Received sse message for non-pending conversation',
-        ),
-      );
-      return;
-    }
+    const checkLastMessage = () => {
+      if (
+        lastMessage?.role !== Role.ASSIST ||
+        !ConversationStore.isTempMessage(lastMessage)
+      ) {
+        message.error(
+          this.settingStore.tr(
+            'Received sse message for non-pending conversation',
+          ),
+        );
+        return false;
+      }
+      return true;
+    };
 
     switch (msg.type) {
-      case 'reply': {
+      case 'completion_delta':
+        if (!checkLastMessage()) break;
         lastMessage.loading = false;
         lastMessage.content += msg.content;
         break;
-      }
-      case 'error': {
+      case 'completion_done':
+        this.conversationStore.getMessagesByConversationId({
+          id: conversationId,
+        });
+        break;
+      case 'completion_error': {
+        if (!checkLastMessage()) break;
         message.error(`${this.settingStore.tr(msg.error)}`);
 
         lastMessage.loading = false;
