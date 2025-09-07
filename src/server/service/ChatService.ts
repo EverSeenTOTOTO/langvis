@@ -5,7 +5,6 @@ import { singleton } from 'tsyringe';
 interface SSEConnection {
   conversationId: string;
   response: any;
-  createdAt: Date;
 }
 
 @singleton()
@@ -23,7 +22,6 @@ export class ChatService {
     const connection: SSEConnection = {
       conversationId,
       response,
-      createdAt: new Date(),
     };
 
     this.sseConnections.set(conversationId, connection);

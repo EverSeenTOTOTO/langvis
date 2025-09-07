@@ -51,7 +51,7 @@ export class ChatController {
 
     // Validate role
     if (!Object.values(Role).includes(role as Role)) {
-      return res.status(400).json({ error: 'Invalid role' });
+      return res.status(400).json({ error: `Invalid role: ${role}` });
     }
 
     const message = await this.conversationService.addMessageToConversation(
@@ -81,49 +81,61 @@ export class ChatController {
     const start = Date.now();
     req.log.info(`Starting completion for conversation ${conversationId}`);
 
-    const stream = await this.completionService.streamChatCompletion({
-      messages: (messages || []).map(each =>
-        pick(each, ['role', 'content']),
-      ) as ChatCompletionMessageParam[],
-    });
-
     let content = '';
-    for await (const chunk of stream) {
-      if (!content) {
+
+    // Create a custom WritableStream that handles the SSE sending
+    const outputStream = new WritableStream({
+      write: async (chunk: string) => {
+        if (!content) {
+          req.log.info(
+            `First chunk received for conversation ${conversationId}, time taken: ${Date.now() - start}ms`,
+          );
+        }
+
+        content += chunk;
+        this.chatService.sendToConversation(conversationId, {
+          type: 'completion_delta',
+          content: chunk,
+        });
+      },
+      close: async () => {
         req.log.info(
-          `First chunk received for conversation ${conversationId}, time taken: ${Date.now() - start}ms`,
-        );
-      }
-
-      const delta = chunk?.choices[0]?.delta?.content || '';
-
-      content += delta;
-
-      req.log.debug(JSON.stringify(chunk, null, 2));
-
-      this.chatService.sendToConversation(conversationId, {
-        type: 'completion_delta',
-        content: delta,
-      });
-
-      // persist the message when finished
-      if (chunk.choices[0]?.finish_reason) {
-        req.log.info(
-          `Received ${content.length} characters of content for conversation ${conversationId}, finish_reason: ${chunk.choices[0]?.finish_reason}.`,
+          `Received ${content.length} characters of content for conversation ${conversationId}`,
         );
 
+        // Send completion done message
+        this.chatService.sendToConversation(conversationId, {
+          type: 'completion_done',
+        });
+
+        // Persist the completed message when stream closes
         await this.conversationService.addMessageToConversation(
           conversationId,
           Role.ASSIST,
           content,
         );
 
-        this.chatService.sendToConversation(conversationId, {
-          type: 'completion_done',
-          finish_reaseon: chunk.choices[0]?.finish_reason,
-        });
-        break;
-      }
-    }
+        req.log.info(`Stream completed for conversation ${conversationId}`);
+      },
+      abort: (reason: any) => {
+        req.log.error(
+          `Stream aborted for conversation ${conversationId}:`,
+          reason,
+        );
+      },
+    });
+
+    await this.completionService.streamChatCompletion(
+      {
+        conversationId,
+        outputStream,
+      },
+      {
+        messages: (messages || []).map(each =>
+          pick(each, ['role', 'content']),
+        ) as ChatCompletionMessageParam[],
+      },
+    );
   }
 }
+

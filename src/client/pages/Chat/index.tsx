@@ -23,6 +23,7 @@ const Chat: React.FC = () => {
   const addMessageApi = useAsyncFn(
     conversationStore.addMessageToConversation.bind(conversationStore),
   );
+  const chatApi = useAsyncFn(chatStore.handleUserMessage.bind(chatStore));
 
   const handleSend = async () => {
     if (!value) return;
@@ -40,7 +41,7 @@ const Chat: React.FC = () => {
 
     setValue('');
 
-    await chatStore.handleUserMessage({
+    await chatApi[1]({
       id: conversationStore.currentConversationId,
       role: Role.USER,
       content: value,
@@ -60,7 +61,9 @@ const Chat: React.FC = () => {
             autoSize={{ minRows: 2, maxRows: 6 }}
             placeholder={settingStore.tr('Type a message...')}
             loading={
-              addMessageApi[0].loading || createConversationApi[0].loading
+              addMessageApi[0].loading ||
+              createConversationApi[0].loading ||
+              chatApi[0].loading
             }
           />
         </div>

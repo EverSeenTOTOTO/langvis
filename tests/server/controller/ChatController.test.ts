@@ -195,7 +195,7 @@ describe('ChatController', () => {
       );
 
       expect(mockStatus).toHaveBeenCalledWith(400);
-      expect(mockJson).toHaveBeenCalledWith({ error: 'Invalid role' });
+      expect(mockJson).toHaveBeenCalledWith({ error: 'Invalid role: invalid' });
     });
 
     it('should return 404 if conversation is not found', async () => {
