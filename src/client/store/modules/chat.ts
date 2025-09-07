@@ -58,8 +58,14 @@ export class ChatStore {
         clearTimeout(timeout);
         resolve();
       });
-      eventSource.addEventListener('error', reject);
-      eventSource.onmessage = event => {
+      eventSource.addEventListener('error', () => {
+        eventSource.close();
+        reject();
+      });
+      eventSource.addEventListener('message', event => {
+        clearTimeout(timeout);
+        resolve();
+
         try {
           const parsedData: SSEMessage = JSON.parse(event.data);
 
@@ -69,7 +75,7 @@ export class ChatStore {
             `${this.settingStore.tr('Failed parsing  SSE message')}: ${(e as Error).message}`,
           );
         }
-      };
+      });
     });
   }
 
@@ -82,46 +88,48 @@ export class ChatStore {
     method: 'post',
   })
   async handleUserMessage(_params: UserMessage, req?: ApiRequest<Message>) {
-    const id = this.conversationStore.currentConversationId;
+    const conversationId = this.conversationStore.currentConversationId;
 
-    if (!id) {
+    if (!conversationId) {
       message.error(
         this.settingStore.tr('Failed to create or get conversation'),
       );
       return;
     }
 
-    this.conversationStore.addTempMessage(id, Role.USER);
+    this.conversationStore.addTempMessage(conversationId, Role.USER);
+
+    if (!this.isConnected(conversationId)) {
+      try {
+        await this.connectToSSE(conversationId, msg => {
+          this.handleSSEMessage(conversationId, msg);
+        });
+      } catch (e) {
+        console.error(e);
+        message.error(
+          `${this.settingStore.tr('Failed to connect to SSE')}: ${(e as Error)?.message}`,
+        );
+      }
+    }
 
     await req!.send();
 
-    if (this.conversationStore.currentConversationId !== id) return;
+    if (this.conversationStore.currentConversationId !== conversationId) return;
 
-    await this.conversationStore.getMessagesByConversationId({ id });
-
-    this.conversationStore.addTempMessage(id, Role.ASSIST);
-
-    if (this.isConnected(id)) return;
-
-    try {
-      await this.connectToSSE(id, msg => {
-        if (this.conversationStore.currentConversationId !== id) {
-          console.warn(
-            `Abort SSE message for non-current conversation: ${id}, current: ${this.conversationStore.currentConversationId}`,
-          );
-          return;
-        }
-        this.handleSSEMessage(id, msg);
-      });
-    } catch (e) {
-      console.error(e);
-      message.error(
-        `${this.settingStore.tr('Failed to connect to SSE')}: ${(e as Error)?.message}`,
-      );
-    }
+    await this.conversationStore.getMessagesByConversationId({
+      id: conversationId,
+    });
+    this.conversationStore.addTempMessage(conversationId, Role.ASSIST);
   }
 
   private handleSSEMessage(conversationId: string, msg: SSEMessage) {
+    if (this.conversationStore.currentConversationId !== conversationId) {
+      console.warn(
+        `Abort SSE message for non-current conversation: ${conversationId}, current: ${this.conversationStore.currentConversationId}`,
+      );
+      return;
+    }
+
     const lastMessage =
       this.conversationStore.messages[conversationId].slice(-1)[0];
 
@@ -147,6 +155,7 @@ export class ChatStore {
         lastMessage.content += msg.content;
         break;
       case 'completion_done':
+        this.disconnectFromSSE(conversationId);
         this.conversationStore.getMessagesByConversationId({
           id: conversationId,
         });
@@ -157,6 +166,7 @@ export class ChatStore {
 
         lastMessage.loading = false;
         lastMessage.content = msg.error;
+        this.disconnectFromSSE(conversationId);
         break;
       }
       default:

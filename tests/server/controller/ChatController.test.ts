@@ -17,7 +17,14 @@ class MockConversationService {
 }
 
 class MockCompletionService {
-  streamChatCompletion = vi.fn();
+  streamChatCompletion = vi.fn().mockResolvedValue({
+    [Symbol.asyncIterator]: async function* () {
+      yield { choices: [{ delta: { content: 'Hello' }, finish_reason: null }] };
+      yield {
+        choices: [{ delta: { content: ' world' }, finish_reason: 'stop' }],
+      };
+    },
+  });
 }
 
 let mockChatService: MockChatService;
@@ -121,6 +128,10 @@ describe('ChatController', () => {
       mockConversationService.addMessageToConversation = vi
         .fn()
         .mockResolvedValue(mockMessage);
+
+      mockConversationService.getMessagesByConversationId = vi
+        .fn()
+        .mockResolvedValue([{ role: Role.USER, content: 'Hello' }]);
 
       await chatController.chat(
         mockRequest as Request,

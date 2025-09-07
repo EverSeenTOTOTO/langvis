@@ -110,17 +110,14 @@ describe('ChatStore', () => {
 
     const connectPromise = chatStore.connectToSSE(conversationId);
 
-    setTimeout(() => {
-      mockEventSource.simulateOpen();
-    }, 10);
-
-    vi.advanceTimersByTime(50);
+    // Immediately simulate the open event
+    mockEventSource.simulateOpen();
 
     await expect(connectPromise).resolves.toBeUndefined();
     expect(chatStore.isConnected(conversationId)).toBe(true);
 
     vi.useRealTimers();
-  });
+  }, 10000);
 
   it('should reject connection when timeout occurs', async () => {
     const conversationId = 'test-conversation-id';
