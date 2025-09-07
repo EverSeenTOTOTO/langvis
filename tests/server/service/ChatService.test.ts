@@ -73,7 +73,7 @@ describe('ChatService', () => {
       mockResponse.write.mockClear();
 
       const testData: SSEMessage = {
-        type: 'reply',
+        type: 'completion_delta',
         content: 'Test message',
       };
       chatService.sendToConversation(conversationId, testData);

@@ -85,17 +85,36 @@ export class ChatController {
         stream: true,
       });
 
+      let content = '';
       for await (const chunk of stream) {
         const delta = chunk?.choices[0]?.delta?.content || '';
+
+        content += delta;
+
         this.chatService.sendToConversation(conversationId, {
-          type: 'reply',
+          type: 'completion_delta',
           content: delta,
         });
+
+        // persist the message when finished
+        if (chunk.choices[0]?.finish_reason) {
+          await this.conversationService.addMessageToConversation(
+            conversationId,
+            Role.ASSIST,
+            content,
+          );
+
+          this.chatService.sendToConversation(conversationId, {
+            type: 'completion_done',
+            finish_reaseon: chunk.choices[0]?.finish_reason,
+          });
+          break;
+        }
       }
     } catch (e) {
       req.log.error(e);
       this.chatService.sendToConversation(conversationId, {
-        type: 'error',
+        type: 'completion_error',
         error: (e as Error)?.message,
       });
     }

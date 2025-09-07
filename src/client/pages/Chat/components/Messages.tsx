@@ -11,7 +11,7 @@ import rehypeMathjax from 'rehype-mathjax';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import { oneLight } from 'react-syntax-highlighter/dist/cjs/styles/prism';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const MarkdownRender = observer(({ children }: { children: string }) => {
   const settingStore = useStore('setting');
@@ -77,6 +77,15 @@ const Messages = () => {
   const currentMessages = conversationStore.currentConversationId
     ? conversationStore.messages[conversationStore.currentConversationId] || []
     : [];
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom when messages change or update
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [
+    currentMessages.length,
+    currentMessages[currentMessages.length - 1]?.content,
+  ]);
 
   return (
     <Flex gap="middle" vertical className="chat-messages">
@@ -99,6 +108,7 @@ const Messages = () => {
           messageRender={content => <MarkdownRender>{content}</MarkdownRender>}
         />
       ))}
+      <div ref={messagesEndRef} style={{ height: 0 }} />
     </Flex>
   );
 };
