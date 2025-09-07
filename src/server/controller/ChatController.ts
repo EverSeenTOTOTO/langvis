@@ -30,6 +30,7 @@ export class ChatController {
     this.chatService.initSSEConnection(conversationId, res);
 
     req.on('close', () => {
+      req.log.info('SSE connection closed:', conversationId);
       this.chatService.closeSSEConnection(conversationId);
     });
 
@@ -77,46 +78,52 @@ export class ChatController {
         conversationId,
       );
 
-    try {
-      const stream = await this.completionService.streamChatCompletion({
-        messages: messages.map(each =>
-          pick(each, ['role', 'content']),
-        ) as ChatCompletionMessageParam[],
-        stream: true,
+    const start = Date.now();
+    req.log.info(`Starting completion for conversation ${conversationId}`);
+
+    const stream = await this.completionService.streamChatCompletion({
+      messages: (messages || []).map(each =>
+        pick(each, ['role', 'content']),
+      ) as ChatCompletionMessageParam[],
+    });
+
+    let content = '';
+    for await (const chunk of stream) {
+      if (!content) {
+        req.log.info(
+          `First chunk received for conversation ${conversationId}, time taken: ${Date.now() - start}ms`,
+        );
+      }
+
+      const delta = chunk?.choices[0]?.delta?.content || '';
+
+      content += delta;
+
+      req.log.debug(JSON.stringify(chunk, null, 2));
+
+      this.chatService.sendToConversation(conversationId, {
+        type: 'completion_delta',
+        content: delta,
       });
 
-      let content = '';
-      for await (const chunk of stream) {
-        const delta = chunk?.choices[0]?.delta?.content || '';
+      // persist the message when finished
+      if (chunk.choices[0]?.finish_reason) {
+        req.log.info(
+          `Received ${content.length} characters of content for conversation ${conversationId}, finish_reason: ${chunk.choices[0]?.finish_reason}.`,
+        );
 
-        content += delta;
+        await this.conversationService.addMessageToConversation(
+          conversationId,
+          Role.ASSIST,
+          content,
+        );
 
         this.chatService.sendToConversation(conversationId, {
-          type: 'completion_delta',
-          content: delta,
+          type: 'completion_done',
+          finish_reaseon: chunk.choices[0]?.finish_reason,
         });
-
-        // persist the message when finished
-        if (chunk.choices[0]?.finish_reason) {
-          await this.conversationService.addMessageToConversation(
-            conversationId,
-            Role.ASSIST,
-            content,
-          );
-
-          this.chatService.sendToConversation(conversationId, {
-            type: 'completion_done',
-            finish_reaseon: chunk.choices[0]?.finish_reason,
-          });
-          break;
-        }
+        break;
       }
-    } catch (e) {
-      req.log.error(e);
-      this.chatService.sendToConversation(conversationId, {
-        type: 'completion_error',
-        error: (e as Error)?.message,
-      });
     }
   }
 }
