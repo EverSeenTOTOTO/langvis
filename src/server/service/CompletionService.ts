@@ -1,38 +1,26 @@
-import OpenAI from 'openai';
-import { singleton } from 'tsyringe';
+import { inject, singleton } from 'tsyringe';
 import type {
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
 } from 'openai/resources/chat/completions';
-import { logger } from '../middleware/logger';
+import LlmCallTool from '../core/agent/LlmCall';
+import type { AgentCallContext, AgentStreamCallContext } from '../core/agent';
 
 @singleton()
 export class CompletionService {
-  private openai: OpenAI;
+  constructor(@inject(LlmCallTool) private readonly llmCallTool: LlmCallTool) {}
 
-  constructor() {
-    this.openai = new OpenAI({
-      baseURL: process.env.OPENAI_BASE_URL,
-      apiKey: process.env.OPENAI_API_KEY,
-      logger,
-    });
+  chatCompletion(
+    context: AgentCallContext,
+    body: Partial<ChatCompletionCreateParamsNonStreaming>,
+  ) {
+    return this.llmCallTool.call(context, body);
   }
 
-  chatCompletion(body: Partial<ChatCompletionCreateParamsNonStreaming>) {
-    return this.openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL!,
-      messages: [],
-      ...body,
-      stream: false,
-    });
-  }
-
-  streamChatCompletion(body: Partial<ChatCompletionCreateParamsStreaming>) {
-    return this.openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL!,
-      messages: [],
-      ...body,
-      stream: true,
-    });
+  streamChatCompletion(
+    context: AgentStreamCallContext,
+    body: Partial<ChatCompletionCreateParamsStreaming>,
+  ) {
+    return this.llmCallTool.streamCall(context, body);
   }
 }

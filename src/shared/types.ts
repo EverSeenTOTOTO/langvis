@@ -7,5 +7,4 @@ export type SSEMessage =
     }
   | {
       type: 'completion_done';
-      finish_reaseon: string | null;
     };

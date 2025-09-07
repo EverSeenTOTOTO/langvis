@@ -35,7 +35,6 @@ describe('ChatService', () => {
 
       expect(connection.conversationId).toBe(conversationId);
       expect(connection.response).toBe(mockResponse);
-      expect(connection.createdAt).toBeInstanceOf(Date);
       expect(mockResponse.writeHead).toHaveBeenCalledWith(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',

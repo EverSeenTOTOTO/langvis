@@ -1,10 +1,10 @@
 import { hydrate } from '@/client/decorator/hydrate';
-import i18next from 'i18next';
-import { autorun, makeAutoObservable } from 'mobx';
-import { singleton } from 'tsyringe';
-import zhCN from 'antd/locale/zh_CN';
-import enUS from 'antd/locale/en_US';
 import { Locale } from 'antd/es/locale';
+import enUS from 'antd/locale/en_US';
+import zhCN from 'antd/locale/zh_CN';
+import i18next from 'i18next';
+import { makeAutoObservable, reaction } from 'mobx';
+import { singleton } from 'tsyringe';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -74,30 +74,31 @@ export class SettingStore {
   constructor() {
     makeAutoObservable(this);
 
-    // Initialize i18n and set the translator function
     initI18n(this.lang);
     this.tr = i18next.getFixedT(this.lang);
 
-    autorun(() => {
-      switch (this.lang) {
-        case 'en_US':
-          i18next.changeLanguage('en_US').then(() => {
-            import('dayjs/locale/en');
-            this.setLocale(enUS);
-            // trigger rerender
-            this.setTr(i18next.getFixedT('en_US'));
-          });
-          break;
-        case 'zh_CN':
-        default:
-          i18next.changeLanguage('zh_CN').then(() => {
-            import('dayjs/locale/zh-cn');
-            this.setLocale(zhCN);
-            this.setTr(i18next.getFixedT('zh_CN'));
-          });
-          break;
-      }
-    });
+    reaction(
+      () => this.lang,
+      () => {
+        switch (this.lang) {
+          case 'en_US':
+            i18next.changeLanguage('en_US').then(() => {
+              import('dayjs/locale/en');
+              this.setLocale(enUS);
+              this.setTr(i18next.getFixedT('en_US'));
+            });
+            break;
+          case 'zh_CN':
+          default:
+            i18next.changeLanguage('zh_CN').then(() => {
+              import('dayjs/locale/zh-cn');
+              this.setLocale(zhCN);
+              this.setTr(i18next.getFixedT('zh_CN'));
+            });
+            break;
+        }
+      },
+    );
   }
 
   toggleMode() {

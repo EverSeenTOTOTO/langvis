@@ -3,6 +3,7 @@ import type { Express } from 'express';
 import { container } from 'tsyringe';
 import { DataSource } from 'typeorm';
 import pg from '../service/pg';
+import openai from '../service/openai';
 // import redis from '../service/redis';
 import { InjectTokens } from '../utils';
 import { AuthController } from './AuthController';
@@ -20,6 +21,7 @@ export default async (app: Express) => {
   // }
 
   container.register<DataSource>(InjectTokens.PG, { useValue: pg });
+  container.register<typeof openai>(InjectTokens.OPENAI, { useValue: openai });
   // container.register<typeof redis>(InjectTokens.REDIS, {
   //   useValue: redis,
   // });

@@ -10,6 +10,7 @@ export const isProd = process.env.NODE_ENV === 'production';
 export const InjectTokens = {
   PG: Symbol('postgres'),
   REDIS: Symbol('redis'),
+  OPENAI: Symbol('openai'),
 };
 
 export const getSessionHeaders = (req: Request) => {
