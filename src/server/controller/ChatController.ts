@@ -87,11 +87,9 @@ export class ChatController {
 
       for await (const chunk of stream) {
         const delta = chunk?.choices[0]?.delta?.content || '';
-        const sseEvent = `data: ${delta}\n\n`;
-
         this.chatService.sendToConversation(conversationId, {
           type: 'reply',
-          content: sseEvent,
+          content: delta,
         });
       }
     } catch (e) {

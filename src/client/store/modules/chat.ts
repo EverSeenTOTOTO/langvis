@@ -59,7 +59,7 @@ export class ChatStore {
         resolve();
       });
       eventSource.addEventListener('error', reject);
-      eventSource.addEventListener('message', event => {
+      eventSource.onmessage = event => {
         try {
           const parsedData: SSEMessage = JSON.parse(event.data);
 
@@ -69,7 +69,7 @@ export class ChatStore {
             `${this.settingStore.tr('Failed parsing  SSE message')}: ${(e as Error).message}`,
           );
         }
-      });
+      };
     });
   }
 
@@ -140,7 +140,7 @@ export class ChatStore {
     switch (msg.type) {
       case 'reply': {
         lastMessage.loading = false;
-        lastMessage.content += msg.content.replace(/^data: /, '');
+        lastMessage.content += msg.content;
         break;
       }
       case 'error': {
