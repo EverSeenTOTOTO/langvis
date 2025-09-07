@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatService } from '../../../src/server/service/ChatService';
-import { SSEMessage } from '../../../src/shared/types';
+import { ChatService } from '@/server/service/ChatService';
+import { SSEMessage } from '@/shared/types';
 import type { Response } from 'express';
 
 // Helper to create a proper mock Response object
