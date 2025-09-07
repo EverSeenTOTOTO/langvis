@@ -37,13 +37,14 @@ const initI18n = (lang: string = 'en_US') => {
             'New Conversation': '新对话',
             'Failed to create or get conversation': '创建或获取对话失败',
             'Delete Conversation': '删除对话',
-            'Are you sure you want to delete this conversation? This action cannot be undone.':
-              '您确定要删除此对话吗？此操作无法撤销。',
+            'Are you sure you want to delete? This action cannot be undone.':
+              '您确定要删除吗？此操作无法撤销。',
             Delete: '删除',
             Cancel: '取消',
             'Type a message...': '输入消息...',
             'Edit Conversation': '编辑对话',
             Save: '保存',
+            'Conversation ID': '对话ID',
             'Conversation Name': '对话名称',
             'Please enter a conversation name': '请输入对话名称',
             'Enter conversation name': '输入对话名称',
@@ -115,3 +116,4 @@ export class SettingStore {
     this.tr = tr;
   }
 }
+

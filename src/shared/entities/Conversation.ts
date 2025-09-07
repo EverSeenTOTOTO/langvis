@@ -15,6 +15,9 @@ export class ConversationEntity {
   @Column({ type: 'varchar', length: 255 })
   name!: string;
 
+  @Column({ type: 'json', nullable: true })
+  config!: Record<string, any> | null;
+
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;
 

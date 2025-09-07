@@ -1,20 +1,11 @@
 import { useStore } from '@/client/store';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { Conversations, type ConversationsProps } from '@ant-design/x';
-import {
-  App,
-  Button,
-  Form,
-  Input,
-  Layout,
-  Modal,
-  Skeleton,
-  theme,
-  type GetProp,
-} from 'antd';
+import { App, Button, Layout, Skeleton, theme, type GetProp } from 'antd';
 import { observer } from 'mobx-react-lite';
 import React, { useEffect, useState } from 'react';
 import { useAsyncFn } from 'react-use';
+import ConversationModal from './ConversationModal';
 
 const { useApp } = App;
 const { Sider } = Layout;
@@ -34,7 +25,6 @@ const ConversationSider: React.FC = () => {
   const [editingConversationId, setEditingConversationId] = useState<
     string | null
   >(null);
-  const [editForm] = Form.useForm();
 
   const createConversationApi = useAsyncFn(
     conversationStore.createConversation.bind(conversationStore),
@@ -62,19 +52,15 @@ const ConversationSider: React.FC = () => {
         `${settingStore.tr('Conversation')} ${conversation.id.substring(0, 8)}`,
     }));
 
-  const handleEditConversation = (
-    conversationId: string,
-    currentName: string,
-  ) => {
+  const handleEditConversation = (conversationId: string) => {
     setEditingConversationId(conversationId);
-    editForm.setFieldsValue({ name: currentName });
   };
 
   const handleDeleteConversation = (conversationId: string) => {
     modal.confirm({
       title: settingStore.tr('Delete Conversation'),
       content: settingStore.tr(
-        'Are you sure you want to delete this conversation? This action cannot be undone.',
+        'Are you sure you want to delete? This action cannot be undone.',
       ),
       okText: settingStore.tr('Delete'),
       okType: 'danger',
@@ -83,17 +69,6 @@ const ConversationSider: React.FC = () => {
         await deleteConversationApi[1]({ id: conversationId });
       },
     });
-  };
-
-  const handleUpdateConversation = async () => {
-    if (!editingConversationId) return;
-
-    const values = await editForm.validateFields();
-    await updateConversationApi[1]({
-      id: editingConversationId,
-      name: values.name,
-    });
-    setEditingConversationId(null);
   };
 
   const menuConfig: ConversationsProps['menu'] = conversation => ({
@@ -119,11 +94,7 @@ const ConversationSider: React.FC = () => {
       );
 
       if (menuInfo.key === 'edit' && conversationItem) {
-        handleEditConversation(
-          conversationId,
-          conversationItem.name ||
-            `${settingStore.tr('Conversation')} ${conversationId.substring(0, 8)}`,
-        );
+        handleEditConversation(conversationId);
       } else if (menuInfo.key === 'delete') {
         handleDeleteConversation(conversationId);
       }
@@ -145,48 +116,34 @@ const ConversationSider: React.FC = () => {
           menu={menuConfig}
         />
       </Skeleton>
-      <Button
-        block
-        loading={createConversationApi[0].loading}
-        onClick={() =>
-          createConversationApi[1]({
-            name: settingStore.tr('New Conversation'),
-          })
-        }
+      <ConversationModal
+        mode="create"
+        title={settingStore.tr('New Conversation')}
+        confirmLoading={createConversationApi[0].loading}
+        onFinish={values => createConversationApi[1](values)}
+        initialValues={{ name: settingStore.tr('New Conversation') }}
       >
-        {settingStore.tr('New Conversation')}
-      </Button>
-      <Modal
-        width={460}
+        <Button block loading={createConversationApi[0].loading}>
+          {settingStore.tr('New Conversation')}
+        </Button>
+      </ConversationModal>
+      <ConversationModal
+        mode="edit"
         title={settingStore.tr('Edit Conversation')}
         open={!!editingConversationId}
-        onOk={handleUpdateConversation}
         onCancel={() => setEditingConversationId(null)}
-        okText={settingStore.tr('Save')}
-        cancelText={settingStore.tr('Cancel')}
+        onFinish={async values => {
+          await updateConversationApi[1](values);
+          setEditingConversationId(null);
+        }}
+        initialValues={conversationStore.conversations.find(
+          c => c.id === editingConversationId,
+        )}
         confirmLoading={updateConversationApi[0].loading}
-      >
-        <Form form={editForm} layout="vertical">
-          <Form.Item
-            name="name"
-            label={settingStore.tr('Conversation Name')}
-            rules={[
-              {
-                required: true,
-                message: settingStore.tr('Please enter a conversation name'),
-              },
-              {
-                type: 'string',
-                max: 20,
-              },
-            ]}
-          >
-            <Input placeholder={settingStore.tr('Enter conversation name')} />
-          </Form.Item>
-        </Form>
-      </Modal>
+      />
     </Sider>
   );
 };
 
 export default observer(ConversationSider);
+
