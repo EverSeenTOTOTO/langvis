@@ -7,10 +7,12 @@ import { useAsyncFn } from 'react-use';
 import ConversationsSider from './components/ConversationsSider';
 import Messages from './components/Messages';
 import './index.scss';
+import { Role } from '@/shared/entities/Message';
 
 const { Content } = Layout;
 
 const Chat: React.FC = () => {
+  const chatStore = useStore('chat');
   const conversationStore = useStore('conversation');
   const settingStore = useStore('setting');
   const [value, setValue] = useState('');
@@ -38,7 +40,11 @@ const Chat: React.FC = () => {
 
     setValue('');
 
-    await conversationStore.handleUserMessage(value);
+    await chatStore.handleUserMessage({
+      id: conversationStore.currentConversationId,
+      role: Role.USER,
+      content: value,
+    });
   };
 
   return (

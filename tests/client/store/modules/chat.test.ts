@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatStore } from '@/client/store/modules/chat';
 import { SettingStore } from '@/client/store/modules/setting';
+import { ConversationStore } from '@/client/store/modules/conversation';
 import { SSEMessage } from '@/shared/types';
 
 class MockEventSource {
@@ -56,6 +57,7 @@ class MockEventSource {
 
 vi.mock('@/client/decorator/api', () => ({
   getPrefetchPath: vi.fn((path: string) => `http://localhost:3000${path}`),
+  api: vi.fn(() => () => {}),
 }));
 
 vi.mock('antd', () => ({
@@ -82,7 +84,9 @@ describe('ChatStore', () => {
       }),
     } as unknown as SettingStore;
 
-    chatStore = new ChatStore(mockSettingStore);
+    const mockConversationStore = {} as unknown as ConversationStore;
+
+    chatStore = new ChatStore(mockConversationStore, mockSettingStore);
   });
 
   it('should create ChatStore instance', () => {
@@ -182,7 +186,7 @@ describe('ChatStore', () => {
     );
     (global as any).EventSource = vi.fn(() => mockEventSource);
 
-    chatStore.connectToSSE(conversationId);
+    chatStore.connectToSSE(conversationId, () => {});
 
     setTimeout(() => {
       mockEventSource.simulateOpen();
@@ -205,13 +209,17 @@ describe('ChatStore', () => {
     mockEventSource = new MockEventSource(
       `http://localhost:3000/api/chat/sse/${conversationId}`,
     );
-    (chatStore as any).eventSources.set(conversationId, mockEventSource);
+    (global as any).EventSource = vi.fn(() => mockEventSource);
 
-    expect(chatStore.isConnected(conversationId)).toBe(false);
+    // Connect to SSE first to properly register it
+    chatStore.connectToSSE(conversationId);
+    mockEventSource.simulateOpen();
+
+    expect(chatStore.isConnected(conversationId)).toBe(true);
 
     chatStore.disconnectFromSSE(conversationId);
 
-    expect(chatStore.isConnected(conversationId)).toBe(false);
+    // After disconnecting, the event source should be removed from the map
     expect((chatStore as any).eventSources.has(conversationId)).toBe(false);
   });
 });

@@ -116,4 +116,3 @@ export class SettingStore {
     this.tr = tr;
   }
 }
-

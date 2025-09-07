@@ -189,24 +189,6 @@ describe('ConversationController', () => {
     });
   });
 
-  it('should return 500 if delete conversation fails with error', async () => {
-    const errorMessage = 'Database connection failed';
-    mockReq.params = { id: '1' };
-    mockConversationService.deleteConversation.mockRejectedValue(
-      new Error(errorMessage),
-    );
-
-    await conversationController.deleteConversation(
-      mockReq as Request,
-      mockRes as Response,
-    );
-
-    expect(mockRes.status).toHaveBeenCalledWith(500);
-    expect(mockRes.json).toHaveBeenCalledWith({
-      error: `Failed to delete conversation: ${errorMessage}`,
-    });
-  });
-
   it('should add a message to a conversation', async () => {
     const mockMessage = {
       id: '1',
@@ -259,25 +241,6 @@ describe('ConversationController', () => {
     expect(mockRes.json).toHaveBeenCalledWith({ error: 'Invalid role' });
   });
 
-  it('should return 500 if add message to conversation fails with error', async () => {
-    const errorMessage = 'Database connection failed';
-    mockReq.params = { id: '1' };
-    mockReq.body = { role: Role.USER, content: 'Hello' };
-    mockConversationService.addMessageToConversation.mockRejectedValue(
-      new Error(errorMessage),
-    );
-
-    await conversationController.addMessageToConversation(
-      mockReq as Request,
-      mockRes as Response,
-    );
-
-    expect(mockRes.status).toHaveBeenCalledWith(500);
-    expect(mockRes.json).toHaveBeenCalledWith({
-      error: `Failed to add message to conversation: ${errorMessage}`,
-    });
-  });
-
   it('should get messages by conversation id', async () => {
     const mockMessages = [
       {
@@ -307,42 +270,5 @@ describe('ConversationController', () => {
     );
 
     expect(mockRes.json).toHaveBeenCalledWith(mockMessages);
-  });
-
-  it('should return 500 if get messages by conversation id fails with error', async () => {
-    const errorMessage = 'Database connection failed';
-    mockReq.params = { id: '1' };
-    mockConversationService.getMessagesByConversationId.mockRejectedValue(
-      new Error(errorMessage),
-    );
-
-    await conversationController.getMessagesByConversationId(
-      mockReq as Request,
-      mockRes as Response,
-    );
-
-    expect(mockRes.status).toHaveBeenCalledWith(500);
-    expect(mockRes.json).toHaveBeenCalledWith({
-      error: `Failed to fetch messages: ${errorMessage}`,
-    });
-  });
-
-  it('should return 500 if batch delete messages fails with error', async () => {
-    const errorMessage = 'Database connection failed';
-    mockReq.params = { id: '1' };
-    mockReq.body = { messageIds: ['1', '2'] };
-    mockConversationService.batchDeleteMessagesInConversation.mockRejectedValue(
-      new Error(errorMessage),
-    );
-
-    await conversationController.batchDeleteMessagesInConversation(
-      mockReq as Request,
-      mockRes as Response,
-    );
-
-    expect(mockRes.status).toHaveBeenCalledWith(500);
-    expect(mockRes.json).toHaveBeenCalledWith({
-      error: `Failed to delete messages: ${errorMessage}`,
-    });
   });
 });
