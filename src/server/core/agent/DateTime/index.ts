@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 import type { Agent, AgentCallContext } from '..';
+import { ToolNames } from '@/server/utils';
 
 // Extend dayjs with plugins
 dayjs.extend(utc);
@@ -15,7 +16,7 @@ export type DateTimeInput = {
 
 @injectable()
 export default class DateTimeTool implements Agent {
-  static readonly Name = 'DateTime Tool';
+  static readonly Name = ToolNames.DATE_TIME_TOOL;
   static readonly Description =
     'A tool to get the current date and time. You can specify a `timezone` (e.g., "America/New_York") and a `format` (e.g., "YYYY-MM-DD HH:mm:ss"). If no timezone is provided, it defaults to UTC. If no format is provided, it returns the ISO 8601 format.';
 

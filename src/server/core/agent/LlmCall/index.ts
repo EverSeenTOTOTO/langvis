@@ -1,17 +1,17 @@
-import { inject, injectable } from 'tsyringe';
+import { InjectTokens, ToolNames } from '@/server/utils';
+import OpenAI from 'openai';
+import type { Stream } from 'openai/core/streaming.mjs';
 import type {
   ChatCompletion,
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
 } from 'openai/resources/chat/completions';
+import { inject, injectable } from 'tsyringe';
 import { Agent, type AgentCallContext, type AgentStreamCallContext } from '..';
-import { InjectTokens } from '../../../utils';
-import OpenAI from 'openai';
-import type { Stream } from 'openai/core/streaming.mjs';
 
 @injectable()
 export default class LlmCallTool implements Agent {
-  static readonly Name = 'Llm Call Tool';
+  static readonly Name = ToolNames.LLM_CALL_TOOL;
   static readonly Description = 'A tool to perform a single call of Llm.';
 
   constructor(@inject(InjectTokens.OPENAI) private readonly openai: OpenAI) {}

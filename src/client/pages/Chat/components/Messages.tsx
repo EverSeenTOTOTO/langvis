@@ -8,36 +8,39 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeMathjax from 'rehype-mathjax';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-// Lazy load SyntaxHighlighter to reduce initial bundle size
-const syntaxComponentsRef: {
-  current: { SyntaxHighlighter: any; oneDark: any; oneLight: any } | null;
-} = { current: null };
-const loadSyntaxComponents = () => {
-  if (!syntaxComponentsRef.current) {
-    return Promise.all([
-      import('react-syntax-highlighter').then(module => module.Prism),
-      import('react-syntax-highlighter/dist/cjs/styles/prism').then(
-        module => module.oneDark,
-      ),
-      import('react-syntax-highlighter/dist/cjs/styles/prism').then(
-        module => module.oneLight,
-      ),
-    ]).then(([SyntaxHighlighter, oneDark, oneLight]) => {
+const MarkdownRender = observer(({ children }: { children: string }) => {
+  const settingStore = useStore('setting');
+  const [, forceUpdate] = useState(0);
+
+  // Lazy load SyntaxHighlighter to reduce initial bundle size
+  const syntaxComponentsRef = useRef<{
+    SyntaxHighlighter: any;
+    oneDark: any;
+    oneLight: any;
+  } | null>(null);
+
+  const loadSyntaxComponents = useCallback(async () => {
+    if (!syntaxComponentsRef.current) {
+      const [SyntaxHighlighter, oneDark, oneLight] = await Promise.all([
+        import('react-syntax-highlighter').then(module => module.Prism),
+        import('react-syntax-highlighter/dist/cjs/styles/prism').then(
+          module => module.oneDark,
+        ),
+        import('react-syntax-highlighter/dist/cjs/styles/prism').then(
+          module => module.oneLight,
+        ),
+      ]);
       syntaxComponentsRef.current = {
         SyntaxHighlighter,
         oneDark,
         oneLight,
       };
-    });
-  }
-  return Promise.resolve();
-};
-
-const MarkdownRender = observer(({ children }: { children: string }) => {
-  const settingStore = useStore('setting');
-  const [, forceUpdate] = useState(0);
+      forceUpdate(n => n + 1);
+    }
+    return Promise.resolve();
+  }, []);
 
   useEffect(() => {
     forceUpdate(n => n + 1);
@@ -45,13 +48,9 @@ const MarkdownRender = observer(({ children }: { children: string }) => {
 
   // Load syntax highlighting components on client side only
   useEffect(() => {
-    loadSyntaxComponents()
-      .then(() => {
-        forceUpdate(n => n + 1);
-      })
-      .catch(error => {
-        console.error('Failed to load syntax highlighting components:', error);
-      });
+    loadSyntaxComponents().catch(error => {
+      console.error('Failed to load syntax highlighting components:', error);
+    });
   }, []);
 
   return (

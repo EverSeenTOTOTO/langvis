@@ -83,7 +83,9 @@ const ConversationModal = ({
         </Form.Item>
         <Form.Item name={['config', 'agent']} label={settingStore.tr('Agent')}>
           <Select
+            disabled={mode === 'edit'}
             loading={fetchAgentApi[0].loading}
+            placeholder={settingStore.tr('Select an agent')}
             options={
               fetchAgentApi[0]?.value?.map(
                 (agent: { name: string; description: string }) => ({
@@ -100,13 +102,13 @@ const ConversationModal = ({
 
             if (!agent) return null;
 
+            const agentInfo = fetchAgentApi[0]?.value?.find(
+              (a: { name: string }) => a.name === agent,
+            );
+
             return (
               <Typography.Paragraph type="secondary">
-                {settingStore.tr(
-                  fetchAgentApi[0]?.value?.find(
-                    (a: { name: string }) => a.name === agent,
-                  )?.description || '',
-                )}
+                {settingStore.tr(agentInfo?.description || '')}
               </Typography.Paragraph>
             );
           }}
