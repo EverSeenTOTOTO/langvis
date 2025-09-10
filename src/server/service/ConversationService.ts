@@ -9,9 +9,15 @@ import { In } from 'typeorm';
 
 @singleton()
 export class ConversationService {
-  async createConversation(name: string): Promise<Conversation> {
+  async createConversation(
+    name: string,
+    config?: Record<string, any> | null,
+  ): Promise<Conversation> {
     const conversationRepository = pg.getRepository(ConversationEntity);
-    const conversation = conversationRepository.create({ name });
+    const conversation = conversationRepository.create({
+      name,
+      config: config ?? null,
+    });
     return await conversationRepository.save(conversation);
   }
 
@@ -28,6 +34,7 @@ export class ConversationService {
   async updateConversation(
     id: string,
     name: string,
+    config?: Record<string, any> | null,
   ): Promise<Conversation | null> {
     const conversationRepository = pg.getRepository(ConversationEntity);
     const conversation = await conversationRepository.findOneBy({ id });
@@ -35,6 +42,9 @@ export class ConversationService {
       return null;
     }
     conversation.name = name;
+    if (config !== undefined) {
+      conversation.config = config ?? null;
+    }
     return await conversationRepository.save(conversation);
   }
 

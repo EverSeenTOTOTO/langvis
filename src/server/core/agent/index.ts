@@ -16,3 +16,9 @@ export interface Agent {
     input: Record<string, any>,
   ): Promise<unknown>;
 }
+
+// Type for the agent constructor to allow accessing static properties
+export type AgentConstructor = (new () => Agent) & {
+  Name: string;
+  Description: string;
+};

@@ -69,7 +69,7 @@ export class ConversationStore {
     }
   }
 
-  @api('/s')
+  @api('/api/conversation')
   async getAllConversations(_params?: any, req?: ApiRequest) {
     const result = (await req!.send()) as Conversation[];
 

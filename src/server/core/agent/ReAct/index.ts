@@ -1,8 +1,14 @@
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import { container, inject, injectable } from 'tsyringe';
-import type { Agent, AgentCallContext, AgentStreamCallContext } from '..';
+import { container, injectable } from 'tsyringe';
+import type {
+  Agent,
+  AgentCallContext,
+  AgentConstructor,
+  AgentStreamCallContext,
+} from '..';
 import LlmCallTool from '../LlmCall';
 import getReActPrompt from './prompt';
+import { ToolNames } from '@/server/utils';
 
 // Define the types for ReAct agent
 export type ReActAgentCallInput = {
@@ -35,20 +41,21 @@ export type ReActStep =
 
 @injectable()
 export default class ReActAgent implements Agent {
-  static readonly Name = 'ReAct Agent';
+  static readonly Name = ToolNames.REACT_AGENT;
   static readonly Description =
     'An agent that uses the ReAct framework to interact with tools and provide answers based on reasoning and actions.';
 
   private readonly maxIterations = 10;
 
-  private readonly tools: {
-    Name: string;
-    Description: string;
-  }[];
+  private readonly tools: Agent[];
 
-  constructor(@inject(LlmCallTool) private readonly llmCallTool: LlmCallTool) {
-    this.tools = [LlmCallTool];
+  constructor() {
+    this.tools = [ToolNames.DATE_TIME_TOOL].map(name =>
+      container.resolve<Agent>(name),
+    );
   }
+
+  private readonly llmCallTool = container.resolve(LlmCallTool);
 
   async call(): Promise<unknown> {
     throw new Error('Method not implemented.');
@@ -59,7 +66,11 @@ export default class ReActAgent implements Agent {
       background: input.background || '',
       tools:
         this.tools
-          ?.map(tool => `+ ${tool.Name}: ${tool.Description}`)
+          ?.map(tool => {
+            const ctor = tool.constructor as AgentConstructor;
+
+            return `+ ${ctor.name}: ${ctor.Description}`;
+          })
           .join('\n') || 'No tools available.',
     });
 
@@ -68,7 +79,7 @@ export default class ReActAgent implements Agent {
       ...(input.messages || []),
     ];
 
-    const writer = (ctx.outputStream as WritableStream).getWriter();
+    const writer = ctx.outputStream.getWriter();
 
     for (let i = 0; i < this.maxIterations; i++) {
       const response = await this.llmCallTool.call(ctx, {
@@ -94,7 +105,6 @@ export default class ReActAgent implements Agent {
       const parsed = this.parseResponse(content);
 
       if ('finalAnswer' in parsed) {
-        await writer.write(parsed.finalAnswer);
         await writer.close();
         return;
       }
@@ -179,12 +189,9 @@ export default class ReActAgent implements Agent {
     actionInput: Record<string, any>,
   ): Promise<string> {
     try {
-      const tool = container.resolve(action) as Agent;
+      const tool = container.resolve<Agent>(action);
+      const result = await tool.call(ctx, actionInput);
 
-      const result = await tool.call(
-        { conversationId: ctx.conversationId },
-        actionInput,
-      );
       return JSON.stringify(result);
     } catch (error) {
       return `Error executing tool "${action}": ${(error as Error).message}`;

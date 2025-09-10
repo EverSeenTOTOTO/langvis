@@ -15,14 +15,16 @@ export class ConversationController {
 
   @api('/', { method: 'post' })
   async createConversation(req: Request, res: Response) {
-    const { name } = req.body;
+    const { name, config } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Name is required' });
     }
 
-    const conversation =
-      await this.conversationService.createConversation(name);
+    const conversation = await this.conversationService.createConversation(
+      name,
+      config,
+    );
 
     return res.status(201).json(conversation);
   }
@@ -49,7 +51,7 @@ export class ConversationController {
   @api('/:id', { method: 'put' })
   async updateConversation(req: Request, res: Response) {
     const { id } = req.params;
-    const { name } = req.body;
+    const { name, config } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Name is required' });
@@ -58,6 +60,7 @@ export class ConversationController {
     const conversation = await this.conversationService.updateConversation(
       id,
       name,
+      config,
     );
 
     if (!conversation) {

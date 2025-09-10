@@ -10,6 +10,7 @@ import { AuthController } from './AuthController';
 import { UserController } from './UserController';
 import { ConversationController } from './ConversationController';
 import { ChatController } from './ChatController';
+import { AgentController } from './AgentController';
 
 export default async (app: Express) => {
   if (!pg.isInitialized) {
@@ -30,4 +31,5 @@ export default async (app: Express) => {
   bindController(UserController, app);
   bindController(ConversationController, app);
   bindController(ChatController, app);
+  bindController(AgentController, app);
 };

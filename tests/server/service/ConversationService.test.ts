@@ -48,6 +48,7 @@ describe('ConversationService', () => {
     const mockConversation = {
       id: '1',
       name: 'Test Conversation',
+      config: null,
       createdAt: new Date(),
       messages: [],
     };
@@ -59,6 +60,30 @@ describe('ConversationService', () => {
 
     const result =
       await conversationService.createConversation('Test Conversation');
+    expect(result).toEqual(mockConversation);
+  });
+
+  it('should create a conversation with config', async () => {
+    const mockConversation = {
+      id: '1',
+      name: 'Test Conversation',
+      config: { model: 'gpt-4', temperature: 0.7 },
+      createdAt: new Date(),
+      messages: [],
+    };
+
+    (pg.getRepository as any).mockReturnValue({
+      create: vi.fn().mockImplementation(entity => {
+        expect(entity.config).toEqual({ model: 'gpt-4', temperature: 0.7 });
+        return mockConversation;
+      }),
+      save: vi.fn().mockResolvedValue(mockConversation),
+    });
+
+    const result = await conversationService.createConversation(
+      'Test Conversation',
+      { model: 'gpt-4', temperature: 0.7 },
+    );
     expect(result).toEqual(mockConversation);
   });
 
@@ -106,6 +131,7 @@ describe('ConversationService', () => {
     const mockConversation = {
       id: '1',
       name: 'Updated Conversation',
+      config: null,
       createdAt: new Date(),
       messages: [],
     };
@@ -113,6 +139,53 @@ describe('ConversationService', () => {
     (pg.getRepository as any).mockReturnValue({
       findOneBy: vi.fn().mockResolvedValue(mockConversation),
       save: vi.fn().mockResolvedValue(mockConversation),
+    });
+
+    const result = await conversationService.updateConversation(
+      '1',
+      'Updated Conversation',
+    );
+    expect(result).toEqual(mockConversation);
+  });
+
+  it('should update a conversation with config', async () => {
+    const mockConversation = {
+      id: '1',
+      name: 'Updated Conversation',
+      config: { model: 'gpt-4', temperature: 0.7 },
+      createdAt: new Date(),
+      messages: [],
+    };
+
+    (pg.getRepository as any).mockReturnValue({
+      findOneBy: vi.fn().mockResolvedValue(mockConversation),
+      save: vi.fn().mockResolvedValue(mockConversation),
+    });
+
+    const result = await conversationService.updateConversation(
+      '1',
+      'Updated Conversation',
+      { model: 'gpt-4', temperature: 0.7 },
+    );
+    expect(result).toEqual(mockConversation);
+  });
+
+  it('should update a conversation without changing config when not provided', async () => {
+    const mockConversation = {
+      id: '1',
+      name: 'Updated Conversation',
+      config: { model: 'gpt-3.5', temperature: 0.5 },
+      createdAt: new Date(),
+      messages: [],
+    };
+
+    (pg.getRepository as any).mockReturnValue({
+      findOneBy: vi.fn().mockResolvedValue(mockConversation),
+      save: vi.fn().mockImplementation(entity => {
+        expect(entity.name).toBe('Updated Conversation');
+        expect(entity.config).toEqual({ model: 'gpt-3.5', temperature: 0.5 });
+        return mockConversation;
+      }),
     });
 
     const result = await conversationService.updateConversation(

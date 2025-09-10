@@ -1,21 +1,20 @@
 import type { Request, Response } from 'express';
-import { singleton } from 'tsyringe';
-import ReActAgent from '../core/agent/ReAct';
+import { inject, singleton } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
+import { AgentService } from '../service/AgentService';
 
 @singleton()
 @controller('/api/agent')
 export class AgentController {
-  readonly agents = [ReActAgent];
+  constructor(
+    @inject(AgentService)
+    private agentService: AgentService,
+  ) {}
 
   @api('/', { method: 'get' })
   async getAllAgents(_req: Request, res: Response) {
-    return res.json(
-      this.agents.map(agent => ({
-        name: agent.Name,
-        description: agent.Description,
-      })),
-    );
+    const agents = await this.agentService.getAllAgents();
+    return res.json(agents);
   }
 }

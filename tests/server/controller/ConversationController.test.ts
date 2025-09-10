@@ -34,6 +34,7 @@ describe('ConversationController', () => {
     const mockConversation = {
       id: '1',
       name: 'Test Conversation',
+      config: null,
       createdAt: new Date(),
     };
 
@@ -47,6 +48,35 @@ describe('ConversationController', () => {
       mockRes as Response,
     );
 
+    expect(mockRes.status).toHaveBeenCalledWith(201);
+    expect(mockRes.json).toHaveBeenCalledWith(mockConversation);
+  });
+
+  it('should create a conversation with config', async () => {
+    const mockConversation = {
+      id: '1',
+      name: 'Test Conversation',
+      config: { model: 'gpt-4', temperature: 0.7 },
+      createdAt: new Date(),
+    };
+
+    mockReq.body = {
+      name: 'Test Conversation',
+      config: { model: 'gpt-4', temperature: 0.7 },
+    };
+    mockConversationService.createConversation.mockResolvedValue(
+      mockConversation,
+    );
+
+    await conversationController.createConversation(
+      mockReq as Request,
+      mockRes as Response,
+    );
+
+    expect(mockConversationService.createConversation).toHaveBeenCalledWith(
+      'Test Conversation',
+      { model: 'gpt-4', temperature: 0.7 },
+    );
     expect(mockRes.status).toHaveBeenCalledWith(201);
     expect(mockRes.json).toHaveBeenCalledWith(mockConversation);
   });
@@ -128,6 +158,7 @@ describe('ConversationController', () => {
     const mockConversation = {
       id: '1',
       name: 'Updated Conversation',
+      config: null,
       createdAt: new Date(),
     };
 
@@ -142,6 +173,36 @@ describe('ConversationController', () => {
       mockRes as Response,
     );
 
+    expect(mockRes.json).toHaveBeenCalledWith(mockConversation);
+  });
+
+  it('should update a conversation with config', async () => {
+    const mockConversation = {
+      id: '1',
+      name: 'Updated Conversation',
+      config: { model: 'gpt-4', temperature: 0.7 },
+      createdAt: new Date(),
+    };
+
+    mockReq.params = { id: '1' };
+    mockReq.body = {
+      name: 'Updated Conversation',
+      config: { model: 'gpt-4', temperature: 0.7 },
+    };
+    mockConversationService.updateConversation.mockResolvedValue(
+      mockConversation,
+    );
+
+    await conversationController.updateConversation(
+      mockReq as Request,
+      mockRes as Response,
+    );
+
+    expect(mockConversationService.updateConversation).toHaveBeenCalledWith(
+      '1',
+      'Updated Conversation',
+      { model: 'gpt-4', temperature: 0.7 },
+    );
     expect(mockRes.json).toHaveBeenCalledWith(mockConversation);
   });
 

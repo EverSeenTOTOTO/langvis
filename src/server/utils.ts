@@ -13,6 +13,12 @@ export const InjectTokens = {
   OPENAI: Symbol('openai'),
 };
 
+export const ToolNames = {
+  DATE_TIME_TOOL: 'DateTime Tool',
+  LLM_CALL_TOOL: 'Llm Call Tool',
+  REACT_AGENT: 'ReAct Agent',
+};
+
 export const getSessionHeaders = (req: Request) => {
   const headers = new Headers();
 

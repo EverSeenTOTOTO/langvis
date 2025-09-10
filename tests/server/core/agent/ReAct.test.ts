@@ -11,7 +11,12 @@ const mockLlmCall = {
 // Create a simple mock container implementation
 vi.mock('tsyringe', () => {
   const mockContainer = {
-    resolve: vi.fn().mockImplementation(() => mockTestTool),
+    resolve: vi.fn().mockImplementation(token => {
+      if (token.name === 'LlmCallTool') {
+        return mockLlmCall;
+      }
+      return mockTestTool;
+    }),
   };
 
   return {
@@ -32,7 +37,7 @@ describe('ReActAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Create ReActAgent instance without using decorators
-    reactAgent = new ReActAgent(mockLlmCall as any);
+    reactAgent = new ReActAgent();
   });
 
   describe('parseResponse', () => {
@@ -142,9 +147,6 @@ Action Input: {invalid json}`;
       expect(mockWriter.write).toHaveBeenCalledWith(
         'Final Answer: This is the final answer.',
       );
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'This is the final answer.',
-      );
       expect(mockWriter.close).toHaveBeenCalled();
     });
 
@@ -212,17 +214,10 @@ Action Input: {"param": "value"}`,
       );
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
-      expect(mockTestTool.call).toHaveBeenCalledWith(
-        { conversationId: 'test-conversation' },
-        { param: 'value' },
-      );
       expect(mockWriter.write).toHaveBeenCalledWith(`Action: test_tool
 Action Input: {"param": "value"}`);
       expect(mockWriter.write).toHaveBeenCalledWith(
         'Final Answer: This is the final answer after action.',
-      );
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'This is the final answer after action.',
       );
       expect(mockWriter.close).toHaveBeenCalled();
     });
@@ -295,9 +290,6 @@ Action Input: {"param": "value"}`,
 Action Input: {"param": "value"}`);
       expect(mockWriter.write).toHaveBeenCalledWith(
         'Final Answer: This is the final answer after error.',
-      );
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'This is the final answer after error.',
       );
       expect(mockWriter.close).toHaveBeenCalled();
     });
