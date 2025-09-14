@@ -1,4 +1,4 @@
-import { singleton } from 'tsyringe';
+import { container, singleton } from 'tsyringe';
 import { globby } from 'globby';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -52,6 +52,7 @@ export class AgentService {
           );
         }
 
+        container.register(agentClass.Name, { useClass: agentClass });
         this.registerAgent(agentClass.Name, {
           name: agentClass.Name,
           description: agentClass.Description,

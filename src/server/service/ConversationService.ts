@@ -115,4 +115,19 @@ export class ConversationService {
       id: In(messageIds),
     });
   }
+
+  async updateMessage(
+    messageId: string,
+    content: string,
+  ): Promise<Message | null> {
+    const messageRepository = pg.getRepository(MessageEntity);
+    const message = await messageRepository.findOneBy({ id: messageId });
+
+    if (!message) {
+      return null;
+    }
+
+    message.content = content;
+    return await messageRepository.save(message);
+  }
 }

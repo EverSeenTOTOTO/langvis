@@ -9,11 +9,10 @@ import type {
 import LlmCallTool from '../LlmCall';
 import getReActPrompt from './prompt';
 import { ToolNames } from '@/server/utils';
+import { logger } from '@/server/middleware/logger';
 
-// Define the types for ReAct agent
 export type ReActAgentCallInput = {
   messages?: ChatCompletionMessageParam[];
-  background?: string;
 };
 
 export type ReActThought = {
@@ -45,7 +44,7 @@ export default class ReActAgent implements Agent {
   static readonly Description =
     'An agent that uses the ReAct framework to interact with tools and provide answers based on reasoning and actions.';
 
-  private readonly maxIterations = 10;
+  private readonly maxIterations = 5;
 
   private readonly tools: Agent[];
 
@@ -63,13 +62,13 @@ export default class ReActAgent implements Agent {
 
   async streamCall(ctx: AgentStreamCallContext, input: ReActAgentCallInput) {
     const prompt = getReActPrompt({
-      background: input.background || '',
+      background: '',
       tools:
         this.tools
           ?.map(tool => {
             const ctor = tool.constructor as AgentConstructor;
 
-            return `+ ${ctor.name}: ${ctor.Description}`;
+            return `+ ${ctor.Name}:\n\t${ctor.Description}`;
           })
           .join('\n') || 'No tools available.',
     });
@@ -78,13 +77,14 @@ export default class ReActAgent implements Agent {
       { role: 'system', content: prompt },
       ...(input.messages || []),
     ];
-
     const writer = ctx.outputStream.getWriter();
 
     for (let i = 0; i < this.maxIterations; i++) {
+      logger.debug('ReAct initial messages: ', messages);
       const response = await this.llmCallTool.call(ctx, {
         messages,
         temperature: 0,
+        stop: ['Observation:', 'Observation：'],
       });
 
       const content = response.choices[0]?.message?.content;
@@ -96,6 +96,7 @@ export default class ReActAgent implements Agent {
       }
 
       await writer.write(content);
+      await writer.write('\n');
 
       messages.push({
         role: 'assistant',
@@ -103,6 +104,8 @@ export default class ReActAgent implements Agent {
       });
 
       const parsed = this.parseResponse(content);
+
+      logger.info('ReAct parsed response: ', parsed);
 
       if ('finalAnswer' in parsed) {
         await writer.close();
@@ -116,15 +119,17 @@ export default class ReActAgent implements Agent {
             parsed.action,
             parsed.actionInput,
           );
-          const observationContent = `Observation: ${observation}`;
+          const observationContent = `Observation: ${observation}\n`;
 
+          writer.write(observationContent);
           messages.push({
             role: 'user',
             content: observationContent,
           });
         } catch (error) {
-          const errorContent = `Observation: Error executing action ${parsed.action}: ${(error as Error).message}`;
+          const errorContent = `Observation: Error executing action ${parsed.action}: ${(error as Error).message}\n`;
 
+          writer.write(errorContent);
           messages.push({
             role: 'user',
             content: errorContent,
@@ -155,18 +160,18 @@ export default class ReActAgent implements Agent {
       const actionInputLine = lines.find(line =>
         line.toLowerCase().startsWith('action input:'),
       );
-      if (!actionInputLine) {
-        throw new Error('Action provided without Action Input');
-      }
-      const actionInputStr = actionInputLine
-        .replace(/action input:\s*/i, '')
-        .trim();
-      let actionInput: Record<string, any>;
 
-      try {
-        actionInput = JSON.parse(actionInputStr);
-      } catch {
-        throw new Error('Invalid JSON in Action Input');
+      let actionInput: Record<string, any> = {};
+
+      if (actionInputLine) {
+        try {
+          const actionInputStr = actionInputLine
+            .replace(/action input:\s*/i, '')
+            .trim();
+          actionInput = JSON.parse(actionInputStr);
+        } catch {
+          throw new Error('Invalid JSON in Action Input');
+        }
       }
 
       return { action, actionInput };
@@ -188,8 +193,14 @@ export default class ReActAgent implements Agent {
     action: string,
     actionInput: Record<string, any>,
   ): Promise<string> {
+    let tool;
     try {
-      const tool = container.resolve<Agent>(action);
+      tool = container.resolve<Agent>(action);
+    } catch {
+      return `Tool "${action}" not found, available tools: ${this.tools.map(t => (t.constructor as AgentConstructor).Name).join(';')}`;
+    }
+
+    try {
       const result = await tool.call(ctx, actionInput);
 
       return JSON.stringify(result);

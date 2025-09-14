@@ -9,9 +9,10 @@ const mockLlmCall = {
 };
 
 // Create a simple mock container implementation
-vi.mock('tsyringe', () => {
+vi.mock('tsyringe', async importOriginal => {
+  const actual: any = await importOriginal();
   const mockContainer = {
-    resolve: vi.fn().mockImplementation(token => {
+    resolve: vi.fn().mockImplementation((token: any) => {
       if (token.name === 'LlmCallTool') {
         return mockLlmCall;
       }
@@ -20,6 +21,7 @@ vi.mock('tsyringe', () => {
   };
 
   return {
+    ...actual,
     container: mockContainer,
     inject: () => () => {},
     injectable: () => () => {},
@@ -85,11 +87,13 @@ action input: {"param": "value"}`;
       expect(result).toEqual({ finalAnswer: 'This is the final answer.' });
     });
 
-    it('should throw error for action without action input', () => {
+    it('should parse action without action input as action with empty object', () => {
       const content = `Action: test_tool`;
-      expect(() => (reactAgent as any).parseResponse(content)).toThrow(
-        'Action provided without Action Input',
-      );
+      const result = (reactAgent as any).parseResponse(content);
+      expect(result).toEqual({
+        action: 'test_tool',
+        actionInput: {},
+      });
     });
 
     it('should throw error for invalid JSON in action input', () => {

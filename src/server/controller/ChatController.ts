@@ -1,20 +1,21 @@
-import { Role } from '@/shared/entities/Message';
+import { Message, Role } from '@/shared/entities/Message';
 import type { Request, Response } from 'express';
 import { pick } from 'lodash-es';
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { inject, singleton } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
-import { ChatService } from '../service/ChatService';
+import { SSEService } from '../service/ChatService';
 import { CompletionService } from '../service/CompletionService';
 import { ConversationService } from '../service/ConversationService';
+import { ConversationConfig } from '@/shared/types';
 
 @singleton()
 @controller('/api/chat')
 export class ChatController {
   constructor(
-    @inject(ChatService)
-    private chatService: ChatService,
+    @inject(SSEService)
+    private sseService: SSEService,
 
     @inject(ConversationService)
     private conversationService: ConversationService,
@@ -27,16 +28,16 @@ export class ChatController {
   async initSSE(req: Request, res: Response) {
     const { conversationId } = req.params;
 
-    this.chatService.initSSEConnection(conversationId, res);
+    this.sseService.initSSEConnection(conversationId, res);
 
     req.on('close', () => {
       req.log.info('SSE connection closed:', conversationId);
-      this.chatService.closeSSEConnection(conversationId);
+      this.sseService.closeSSEConnection(conversationId);
     });
 
     req.on('error', err => {
       req.log.error('SSE connection error:', err);
-      this.chatService.closeSSEConnection(conversationId);
+      this.sseService.closeSSEConnection(conversationId);
     });
   }
 
@@ -59,8 +60,18 @@ export class ChatController {
       role as Role,
       content,
     );
+    const conversation =
+      await this.conversationService.getConversationById(conversationId);
 
-    this.startCompletion(req);
+    if (
+      conversation?.config &&
+      'agent' in conversation.config &&
+      conversation.config.agent
+    ) {
+      this.startAgent(req, conversation.config as ConversationConfig);
+    } else {
+      this.startCompletion(req);
+    }
 
     if (!message) {
       return res
@@ -78,9 +89,9 @@ export class ChatController {
         conversationId,
       );
 
-    const start = Date.now();
     req.log.info(`Starting completion for conversation ${conversationId}`);
 
+    const start = Date.now();
     let content = '';
 
     // Create a custom WritableStream that handles the SSE sending
@@ -93,7 +104,7 @@ export class ChatController {
         }
 
         content += chunk;
-        this.chatService.sendToConversation(conversationId, {
+        this.sseService.sendToConversation(conversationId, {
           type: 'completion_delta',
           content: chunk,
         });
@@ -104,7 +115,7 @@ export class ChatController {
         );
 
         // Send completion done message
-        this.chatService.sendToConversation(conversationId, {
+        this.sseService.sendToConversation(conversationId, {
           type: 'completion_done',
         });
 
@@ -115,7 +126,9 @@ export class ChatController {
           content,
         );
 
-        req.log.info(`Stream completed for conversation ${conversationId}`);
+        req.log.info(
+          `Stream completed for conversation ${conversationId}, total time: ${Date.now() - start}ms`,
+        );
       },
       abort: (reason: any) => {
         req.log.error(
@@ -127,6 +140,78 @@ export class ChatController {
 
     await this.completionService.streamChatCompletion(
       {
+        conversationId,
+        outputStream,
+      },
+      {
+        messages: (messages || []).map(each =>
+          pick(each, ['role', 'content']),
+        ) as ChatCompletionMessageParam[],
+      },
+    );
+  }
+
+  private async startAgent(req: Request, config: ConversationConfig) {
+    const { conversationId } = req.params;
+    const messages =
+      await this.conversationService.getMessagesByConversationId(
+        conversationId,
+      );
+
+    req.log.info(`Starting agent call for conversation ${conversationId}`);
+
+    const start = Date.now();
+    let content = '';
+    let message: Message | null = null;
+
+    // Create a custom WritableStream that handles the SSE sending
+    const outputStream = new WritableStream({
+      write: async (chunk: string) => {
+        if (!content) {
+          req.log.info(
+            `First chunk received for agent call in conversation ${conversationId}, time taken: ${Date.now() - start}ms`,
+          );
+
+          // Create initial message with empty content
+          message = await this.conversationService.addMessageToConversation(
+            conversationId,
+            Role.ASSIST,
+            '',
+          );
+        }
+
+        content += chunk;
+        this.sseService.sendToConversation(conversationId, {
+          type: 'completion_delta',
+          content: chunk,
+        });
+
+        // Update the message with accumulated content
+        if (message) {
+          await this.conversationService.updateMessage(message.id, content);
+        }
+      },
+      close: async () => {
+        // Send completion done message
+        this.sseService.sendToConversation(conversationId, {
+          type: 'completion_done',
+        });
+
+        req.log.info(
+          `Agent call finished for conversation ${conversationId}, total time: ${Date.now() - start}ms`,
+        );
+      },
+      abort: (reason: any) => {
+        req.log.error(
+          `Agent call canceled for conversation ${conversationId}:`,
+          reason,
+        );
+      },
+    });
+
+    await this.completionService.streamAgentCall(
+      {
+        ...config,
         conversationId,
         outputStream,
       },

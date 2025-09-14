@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatService } from '@/server/service/ChatService';
+import { SSEService } from '@/server/service/ChatService';
 import { SSEMessage } from '@/shared/types';
 import type { Response } from 'express';
 
@@ -16,10 +16,10 @@ const createMockResponse = (): Response => {
 };
 
 describe('ChatService', () => {
-  let chatService: ChatService;
+  let chatService: SSEService;
 
   beforeEach(() => {
-    chatService = new ChatService();
+    chatService = new SSEService();
     vi.clearAllMocks();
   });
 

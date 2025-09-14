@@ -364,4 +364,39 @@ describe('ConversationService', () => {
     const result = await conversationService.getMessagesByConversationId('1');
     expect(result).toEqual(mockMessages);
   });
+
+  it('should update a message', async () => {
+    const mockMessage = {
+      id: '1',
+      conversationId: '1',
+      role: Role.ASSIST,
+      content: 'Hello world',
+      createdAt: new Date(),
+    };
+
+    // Mock message repository
+    (pg.getRepository as any).mockReturnValueOnce({
+      findOneBy: vi.fn().mockResolvedValue(mockMessage),
+      save: vi.fn().mockResolvedValue(mockMessage),
+    });
+
+    const result = await conversationService.updateMessage(
+      '1',
+      'Hello world updated',
+    );
+    expect(result).toEqual(mockMessage);
+  });
+
+  it('should return null when updating a non-existent message', async () => {
+    // Mock message repository
+    (pg.getRepository as any).mockReturnValueOnce({
+      findOneBy: vi.fn().mockResolvedValue(null),
+    });
+
+    const result = await conversationService.updateMessage(
+      'non-existent-id',
+      'Hello world',
+    );
+    expect(result).toBeNull();
+  });
 });
