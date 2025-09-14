@@ -8,7 +8,7 @@ interface SSEConnection {
 }
 
 @singleton()
-export class ChatService {
+export class SSEService {
   private sseConnections: Map<string, SSEConnection> = new Map();
   private heartbeats: Map<string, NodeJS.Timeout> = new Map();
 

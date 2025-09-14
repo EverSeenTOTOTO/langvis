@@ -7,6 +7,7 @@ import { observer } from 'mobx-react-lite';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+import remarkBreaks from 'remark-breaks';
 import rehypeMathjax from 'rehype-mathjax';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -55,7 +56,7 @@ const MarkdownRender = observer(({ children }: { children: string }) => {
 
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
+      remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
       rehypePlugins={[rehypeMathjax]}
       components={{
         a: ({ ...props }) => (

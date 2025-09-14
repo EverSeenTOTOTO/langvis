@@ -14,10 +14,21 @@ class MockChatService {
 class MockConversationService {
   addMessageToConversation = vi.fn();
   getMessagesByConversationId = vi.fn();
+  getConversationById = vi.fn();
+  updateMessage = vi.fn();
 }
 
 class MockCompletionService {
   streamChatCompletion = vi.fn().mockResolvedValue({
+    [Symbol.asyncIterator]: async function* () {
+      yield { choices: [{ delta: { content: 'Hello' }, finish_reason: null }] };
+      yield {
+        choices: [{ delta: { content: ' world' }, finish_reason: 'stop' }],
+      };
+    },
+  });
+
+  streamAgentCall = vi.fn().mockResolvedValue({
     [Symbol.asyncIterator]: async function* () {
       yield { choices: [{ delta: { content: 'Hello' }, finish_reason: null }] };
       yield {
@@ -121,6 +132,11 @@ describe('ChatController', () => {
       const role = Role.USER;
       const content = 'Hello';
       const mockMessage = { id: '1', conversationId, role, content };
+      const mockConversation = {
+        id: conversationId,
+        name: 'Test Conversation',
+        config: {},
+      };
 
       mockRequest.params = { conversationId };
       mockRequest.body = { role, content };
@@ -128,6 +144,10 @@ describe('ChatController', () => {
       mockConversationService.addMessageToConversation = vi
         .fn()
         .mockResolvedValue(mockMessage);
+
+      mockConversationService.getConversationById = vi
+        .fn()
+        .mockResolvedValue(mockConversation);
 
       mockConversationService.getMessagesByConversationId = vi
         .fn()
@@ -202,23 +222,117 @@ describe('ChatController', () => {
       const conversationId = 'nonexistent-conversation-id';
       const role = Role.USER;
       const content = 'Hello';
+      const mockConversation = null;
 
       mockRequest.params = { conversationId };
       mockRequest.body = { role, content };
 
       mockConversationService.addMessageToConversation = vi
         .fn()
-        .mockResolvedValue(null);
+        .mockResolvedValue({ id: '1', conversationId, role, content });
+
+      mockConversationService.getConversationById = vi
+        .fn()
+        .mockResolvedValue(mockConversation);
 
       await chatController.chat(
         mockRequest as Request,
         mockResponse as Response,
       );
 
-      expect(mockStatus).toHaveBeenCalledWith(404);
-      expect(mockJson).toHaveBeenCalledWith({
-        error: `Conversation ${conversationId} not found`,
+      expect(mockConversationService.getConversationById).toHaveBeenCalledWith(
+        conversationId,
+      );
+    });
+  });
+
+  describe('startAgent', () => {
+    it('should create and update message during agent streaming', async () => {
+      const conversationId = 'test-conversation-id';
+      const mockMessage = {
+        id: '1',
+        conversationId,
+        role: Role.ASSIST,
+        content: '',
+      };
+
+      mockRequest.params = { conversationId };
+
+      // Mock conversation service methods
+      mockConversationService.getMessagesByConversationId = vi
+        .fn()
+        .mockResolvedValue([{ role: Role.USER, content: 'Hello' }]);
+
+      mockConversationService.addMessageToConversation = vi
+        .fn()
+        .mockResolvedValue(mockMessage);
+
+      mockConversationService.updateMessage = vi
+        .fn()
+        .mockResolvedValue({ ...mockMessage, content: 'Hello world' });
+
+      // Track calls to streamAgentCall
+      let capturedOutputStream: any = null;
+
+      // Mock completion service
+      mockCompletionService.streamAgentCall = vi
+        .fn()
+        .mockImplementation(async params => {
+          const { outputStream } = params;
+          capturedOutputStream = outputStream;
+        });
+
+      // Call startAgent directly
+      const startAgentPromise = (chatController as any).startAgent(
+        mockRequest as Request,
+        { agent: 'test-agent' },
+      );
+
+      // Wait for streamAgentCall to be called
+      await vi.waitFor(() => {
+        expect(mockCompletionService.streamAgentCall).toHaveBeenCalled();
       });
+
+      // Now manually call the write and close methods on the captured output stream
+      if (capturedOutputStream) {
+        const writer = capturedOutputStream.getWriter();
+        await writer.write('Hello');
+        await writer.write(' world');
+        await writer.close();
+      }
+
+      // Wait for startAgent to complete
+      await startAgentPromise;
+
+      // Verify interactions
+      expect(
+        mockConversationService.addMessageToConversation,
+      ).toHaveBeenCalledWith(conversationId, Role.ASSIST, '');
+
+      expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
+        '1',
+        'Hello',
+      );
+
+      expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
+        '1',
+        'Hello world',
+      );
+
+      expect(mockChatService.sendToConversation).toHaveBeenCalledWith(
+        conversationId,
+        { type: 'completion_delta', content: 'Hello' },
+      );
+
+      expect(mockChatService.sendToConversation).toHaveBeenCalledWith(
+        conversationId,
+        { type: 'completion_delta', content: ' world' },
+      );
+
+      expect(mockChatService.sendToConversation).toHaveBeenCalledWith(
+        conversationId,
+        { type: 'completion_done' },
+      );
     });
   });
 });

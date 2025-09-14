@@ -15,7 +15,7 @@ export const InjectTokens = {
 
 export const ToolNames = {
   DATE_TIME_TOOL: 'DateTime Tool',
-  LLM_CALL_TOOL: 'Llm Call Tool',
+  LLM_CALL_TOOL: 'LlmCall Tool',
   REACT_AGENT: 'ReAct Agent',
 };
 

@@ -2,10 +2,11 @@ import type { Conversation } from '@/shared/entities/Conversation';
 
 export type AgentCallContext = {
   readonly conversationId: Conversation['id'];
+  readonly agentName?: string;
 };
 
 export type AgentStreamCallContext = AgentCallContext & {
-  outputStream: WritableStream;
+  readonly outputStream: WritableStream;
 };
 
 export interface Agent {
