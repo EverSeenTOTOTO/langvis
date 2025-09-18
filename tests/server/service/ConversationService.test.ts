@@ -48,13 +48,16 @@ describe('ConversationService', () => {
     const mockConversation = {
       id: '1',
       name: 'Test Conversation',
-      config: null,
+      config: { agent: 'LlmCall Tool' },
       createdAt: new Date(),
       messages: [],
     };
 
     (pg.getRepository as any).mockReturnValue({
-      create: vi.fn().mockReturnValue(mockConversation),
+      create: vi.fn().mockImplementation(entity => {
+        expect(entity.config).toEqual({ agent: 'LlmCall Tool' });
+        return mockConversation;
+      }),
       save: vi.fn().mockResolvedValue(mockConversation),
     });
 
@@ -67,14 +70,18 @@ describe('ConversationService', () => {
     const mockConversation = {
       id: '1',
       name: 'Test Conversation',
-      config: { model: 'gpt-4', temperature: 0.7 },
+      config: { model: 'gpt-4', temperature: 0.7, agent: 'LlmCall Tool' },
       createdAt: new Date(),
       messages: [],
     };
 
     (pg.getRepository as any).mockReturnValue({
       create: vi.fn().mockImplementation(entity => {
-        expect(entity.config).toEqual({ model: 'gpt-4', temperature: 0.7 });
+        expect(entity.config).toEqual({
+          model: 'gpt-4',
+          temperature: 0.7,
+          agent: 'LlmCall Tool',
+        });
         return mockConversation;
       }),
       save: vi.fn().mockResolvedValue(mockConversation),
@@ -183,6 +190,7 @@ describe('ConversationService', () => {
       findOneBy: vi.fn().mockResolvedValue(mockConversation),
       save: vi.fn().mockImplementation(entity => {
         expect(entity.name).toBe('Updated Conversation');
+        // When updating without providing new config, the existing config should remain unchanged
         expect(entity.config).toEqual({ model: 'gpt-3.5', temperature: 0.5 });
         return mockConversation;
       }),

@@ -6,6 +6,7 @@ import {
 } from '@/shared/entities/Conversation';
 import { MessageEntity, Message, Role } from '@/shared/entities/Message';
 import { In } from 'typeorm';
+import { ToolNames } from '@/server/utils';
 
 @singleton()
 export class ConversationService {
@@ -13,10 +14,16 @@ export class ConversationService {
     name: string,
     config?: Record<string, any> | null,
   ): Promise<Conversation> {
+    // Set default agent to LlmCallTool if not specified
+    const finalConfig = config ?? {};
+    if (!finalConfig.agent) {
+      finalConfig.agent = ToolNames.LLM_CALL_TOOL; // Default to LlmCallTool
+    }
+
     const conversationRepository = pg.getRepository(ConversationEntity);
     const conversation = conversationRepository.create({
       name,
-      config: config ?? null,
+      config: finalConfig,
     });
     return await conversationRepository.save(conversation);
   }

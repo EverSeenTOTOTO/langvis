@@ -3,12 +3,14 @@ import type { Request, Response } from 'express';
 import { pick } from 'lodash-es';
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { inject, singleton } from 'tsyringe';
+import { container } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { SSEService } from '../service/ChatService';
-import { CompletionService } from '../service/CompletionService';
 import { ConversationService } from '../service/ConversationService';
 import { ConversationConfig } from '@/shared/types';
+import type { Agent, AgentStreamCallContext } from '../core/agent';
+import { createPeriodicSaveStream } from '../utils/streamUtils';
 
 @singleton()
 @controller('/api/chat')
@@ -19,9 +21,6 @@ export class ChatController {
 
     @inject(ConversationService)
     private conversationService: ConversationService,
-
-    @inject(CompletionService)
-    private completionService: CompletionService,
   ) {}
 
   @api('/sse/:conversationId', { method: 'get' })
@@ -63,15 +62,24 @@ export class ChatController {
     const conversation =
       await this.conversationService.getConversationById(conversationId);
 
-    if (
-      conversation?.config &&
-      'agent' in conversation.config &&
-      conversation.config.agent
-    ) {
-      this.startAgent(req, conversation.config as ConversationConfig);
-    } else {
-      this.startCompletion(req);
+    // Validate that conversation and agent config exist
+    if (!conversation) {
+      return res
+        .status(404)
+        .json({ error: `Conversation ${conversationId} not found` });
     }
+
+    if (
+      !conversation.config ||
+      !('agent' in conversation.config) ||
+      !conversation.config.agent
+    ) {
+      return res.status(400).json({
+        error: `Conversation ${conversationId} has no agent configured`,
+      });
+    }
+
+    this.startAgent(req, conversation.config as ConversationConfig);
 
     if (!message) {
       return res
@@ -80,75 +88,6 @@ export class ChatController {
     }
 
     return res.status(201).json(message);
-  }
-
-  private async startCompletion(req: Request) {
-    const { conversationId } = req.params;
-    const messages =
-      await this.conversationService.getMessagesByConversationId(
-        conversationId,
-      );
-
-    req.log.info(`Starting completion for conversation ${conversationId}`);
-
-    const start = Date.now();
-    let content = '';
-
-    // Create a custom WritableStream that handles the SSE sending
-    const outputStream = new WritableStream({
-      write: async (chunk: string) => {
-        if (!content) {
-          req.log.info(
-            `First chunk received for conversation ${conversationId}, time taken: ${Date.now() - start}ms`,
-          );
-        }
-
-        content += chunk;
-        this.sseService.sendToConversation(conversationId, {
-          type: 'completion_delta',
-          content: chunk,
-        });
-      },
-      close: async () => {
-        req.log.info(
-          `Received ${content.length} characters of content for conversation ${conversationId}`,
-        );
-
-        // Send completion done message
-        this.sseService.sendToConversation(conversationId, {
-          type: 'completion_done',
-        });
-
-        // Persist the completed message when stream closes
-        await this.conversationService.addMessageToConversation(
-          conversationId,
-          Role.ASSIST,
-          content,
-        );
-
-        req.log.info(
-          `Stream completed for conversation ${conversationId}, total time: ${Date.now() - start}ms`,
-        );
-      },
-      abort: (reason: any) => {
-        req.log.error(
-          `Stream aborted for conversation ${conversationId}:`,
-          reason,
-        );
-      },
-    });
-
-    await this.completionService.streamChatCompletion(
-      {
-        conversationId,
-        outputStream,
-      },
-      {
-        messages: (messages || []).map(each =>
-          pick(each, ['role', 'content']),
-        ) as ChatCompletionMessageParam[],
-      },
-    );
   }
 
   private async startAgent(req: Request, config: ConversationConfig) {
@@ -161,37 +100,50 @@ export class ChatController {
     req.log.info(`Starting agent call for conversation ${conversationId}`);
 
     const start = Date.now();
-    let content = '';
     let message: Message | null = null;
 
-    // Create a custom WritableStream that handles the SSE sending
-    const outputStream = new WritableStream({
-      write: async (chunk: string) => {
-        if (!content) {
+    // Create a custom WritableStream with periodic save capability
+    const outputStream = createPeriodicSaveStream({
+      onChunk: async (chunk: string, fullContent: string) => {
+        if (!fullContent) {
           req.log.info(
             `First chunk received for agent call in conversation ${conversationId}, time taken: ${Date.now() - start}ms`,
           );
 
           // Create initial message with empty content
-          message = await this.conversationService.addMessageToConversation(
-            conversationId,
-            Role.ASSIST,
-            '',
-          );
+          this.conversationService
+            .addMessageToConversation(conversationId, Role.ASSIST, '')
+            .then(msg => {
+              message = msg;
+            });
         }
 
-        content += chunk;
         this.sseService.sendToConversation(conversationId, {
           type: 'completion_delta',
           content: chunk,
         });
-
-        // Update the message with accumulated content
-        if (message) {
-          await this.conversationService.updateMessage(message.id, content);
-        }
       },
-      close: async () => {
+      // onComplete handler - called when stream is complete
+      onComplete: async (finalContent: string) => {
+        // Ensure final content is saved
+        if (message) {
+          try {
+            await this.conversationService.updateMessage(
+              message.id,
+              finalContent,
+            );
+
+            req.log.info(
+              `Final content saved for conversation ${conversationId}`,
+            );
+          } catch (error) {
+            req.log.error(
+              `Failed to save final content for conversation ${conversationId}:`,
+              error,
+            );
+          }
+        }
+
         // Send completion done message
         this.sseService.sendToConversation(conversationId, {
           type: 'completion_done',
@@ -201,25 +153,54 @@ export class ChatController {
           `Agent call finished for conversation ${conversationId}, total time: ${Date.now() - start}ms`,
         );
       },
-      abort: (reason: any) => {
+      onError: (reason: unknown) => {
         req.log.error(
           `Agent call canceled for conversation ${conversationId}:`,
           reason,
         );
       },
+
+      // Save progress periodically to reduce database pressure while maintaining consistency
+      saveInterval: 10,
+      onPeriodicSave: async (periodicContent: string) => {
+        if (message) {
+          try {
+            await this.conversationService.updateMessage(
+              message.id,
+              periodicContent,
+            );
+            req.log.info(`Saved progress for conversation ${conversationId}`);
+          } catch (error) {
+            req.log.error(
+              `Failed to save progress for conversation ${conversationId}:`,
+              error,
+            );
+          }
+        }
+      },
     });
 
-    await this.completionService.streamAgentCall(
-      {
-        ...config,
-        conversationId,
-        outputStream,
-      },
-      {
-        messages: (messages || []).map(each =>
-          pick(each, ['role', 'content']),
-        ) as ChatCompletionMessageParam[],
-      },
-    );
+    try {
+      const agent = container.resolve(config.agent) as Agent;
+
+      await agent.streamCall(
+        {
+          ...config,
+          conversationId,
+          outputStream,
+        } as AgentStreamCallContext,
+        {
+          messages: (messages || []).map(each =>
+            pick(each, ['role', 'content']),
+          ) as ChatCompletionMessageParam[],
+        },
+      );
+    } catch (error: unknown) {
+      req.log.error(`Error calling agent ${config.agent}:`, error);
+      this.sseService.sendToConversation(conversationId, {
+        type: 'completion_error',
+        error: `Error calling agent: ${(error as Error).message || 'Unknown error'}`,
+      });
+    }
   }
 }
