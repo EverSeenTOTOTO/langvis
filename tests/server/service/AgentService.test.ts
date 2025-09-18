@@ -6,11 +6,13 @@ import { InjectTokens } from '@/server/utils';
 
 // Mock globby to avoid file system operations
 vi.mock('globby', () => ({
-  globby: vi.fn().mockResolvedValue([
-    '/src/server/core/agent/DateTime/index.ts',
-    '/src/server/core/agent/LlmCall/index.ts',
-    '/src/server/core/agent/ReAct/index.ts'
-  ])
+  globby: vi
+    .fn()
+    .mockResolvedValue([
+      '/src/server/core/agent/DateTime/index.ts',
+      '/src/server/core/agent/LlmCall/index.ts',
+      '/src/server/core/agent/ReAct/index.ts',
+    ]),
 }));
 
 // Create mock agent classes that implement the Agent interface
@@ -37,15 +39,15 @@ class MockReActAgent {
 
 // Mock dynamic imports for agent modules
 vi.mock('@/server/core/agent/DateTime/index.ts', () => ({
-  default: MockDateTimeTool
+  default: MockDateTimeTool,
 }));
 
 vi.mock('@/server/core/agent/LlmCall/index.ts', () => ({
-  default: MockLlmCallTool
+  default: MockLlmCallTool,
 }));
 
 vi.mock('@/server/core/agent/ReAct/index.ts', () => ({
-  default: MockReActAgent
+  default: MockReActAgent,
 }));
 
 // Mock OpenAI
@@ -67,10 +69,10 @@ describe('AgentService', () => {
 
     // Register required dependencies
     container.register(InjectTokens.OPENAI, { useValue: mockOpenAI });
-    
+
     // Clear mock call history
     vi.clearAllMocks();
-    
+
     // Clear container registrations
     container.clearInstances();
   });
@@ -80,7 +82,7 @@ describe('AgentService', () => {
     expect(Array.isArray(agents)).toBe(true);
     // We expect exactly three agents
     expect(agents.length).toBe(3);
-    
+
     // Check that all expected agents are present
     const agentNames = agents.map(agent => agent.name);
     expect(agentNames).toContain(ToolNames.DATE_TIME_TOOL);

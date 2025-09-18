@@ -2,6 +2,7 @@ import { describe, it, beforeEach, vi, expect } from 'vitest';
 import { ChatController } from '@/server/controller/ChatController';
 import type { Request, Response } from 'express';
 import { Role } from '@/shared/entities/Message';
+import { ToolNames } from '@/server/utils';
 
 // Create mock service classes
 class MockChatService {
@@ -18,29 +19,8 @@ class MockConversationService {
   updateMessage = vi.fn();
 }
 
-class MockCompletionService {
-  streamChatCompletion = vi.fn().mockResolvedValue({
-    [Symbol.asyncIterator]: async function* () {
-      yield { choices: [{ delta: { content: 'Hello' }, finish_reason: null }] };
-      yield {
-        choices: [{ delta: { content: ' world' }, finish_reason: 'stop' }],
-      };
-    },
-  });
-
-  streamAgentCall = vi.fn().mockResolvedValue({
-    [Symbol.asyncIterator]: async function* () {
-      yield { choices: [{ delta: { content: 'Hello' }, finish_reason: null }] };
-      yield {
-        choices: [{ delta: { content: ' world' }, finish_reason: 'stop' }],
-      };
-    },
-  });
-}
-
 let mockChatService: MockChatService;
 let mockConversationService: MockConversationService;
-let mockCompletionService: MockCompletionService;
 
 describe('ChatController', () => {
   let chatController: ChatController;
@@ -54,11 +34,9 @@ describe('ChatController', () => {
   beforeEach(() => {
     mockChatService = new MockChatService();
     mockConversationService = new MockConversationService();
-    mockCompletionService = new MockCompletionService();
     chatController = new ChatController(
       mockChatService as any,
       mockConversationService as any,
-      mockCompletionService as any,
     );
 
     mockJson = vi.fn(() => mockResponse as Response);
@@ -127,7 +105,7 @@ describe('ChatController', () => {
   });
 
   describe('chat', () => {
-    it('should add a message to conversation and start completion', async () => {
+    it('should add a message to conversation and start agent call', async () => {
       const conversationId = 'test-conversation-id';
       const role = Role.USER;
       const content = 'Hello';
@@ -135,7 +113,7 @@ describe('ChatController', () => {
       const mockConversation = {
         id: conversationId,
         name: 'Test Conversation',
-        config: {},
+        config: { agent: ToolNames.LLM_CALL_TOOL },
       };
 
       mockRequest.params = { conversationId };
@@ -240,99 +218,43 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockConversationService.getConversationById).toHaveBeenCalledWith(
-        conversationId,
-      );
+      expect(mockStatus).toHaveBeenCalledWith(404);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: `Conversation ${conversationId} not found`,
+      });
     });
-  });
 
-  describe('startAgent', () => {
-    it('should create and update message during agent streaming', async () => {
+    it('should return 400 if agent configuration is missing', async () => {
       const conversationId = 'test-conversation-id';
-      const mockMessage = {
-        id: '1',
-        conversationId,
-        role: Role.ASSIST,
-        content: '',
+      const role = Role.USER;
+      const content = 'Hello';
+      const mockMessage = { id: '1', conversationId, role, content };
+      const mockConversation = {
+        id: conversationId,
+        name: 'Test Conversation',
+        config: {},
       };
 
       mockRequest.params = { conversationId };
-
-      // Mock conversation service methods
-      mockConversationService.getMessagesByConversationId = vi
-        .fn()
-        .mockResolvedValue([{ role: Role.USER, content: 'Hello' }]);
+      mockRequest.body = { role, content };
 
       mockConversationService.addMessageToConversation = vi
         .fn()
         .mockResolvedValue(mockMessage);
 
-      mockConversationService.updateMessage = vi
+      mockConversationService.getConversationById = vi
         .fn()
-        .mockResolvedValue({ ...mockMessage, content: 'Hello world' });
+        .mockResolvedValue(mockConversation);
 
-      // Track calls to streamAgentCall
-      let capturedOutputStream: any = null;
-
-      // Mock completion service
-      mockCompletionService.streamAgentCall = vi
-        .fn()
-        .mockImplementation(async params => {
-          const { outputStream } = params;
-          capturedOutputStream = outputStream;
-        });
-
-      // Call startAgent directly
-      const startAgentPromise = (chatController as any).startAgent(
+      await chatController.chat(
         mockRequest as Request,
-        { agent: 'test-agent' },
+        mockResponse as Response,
       );
 
-      // Wait for streamAgentCall to be called
-      await vi.waitFor(() => {
-        expect(mockCompletionService.streamAgentCall).toHaveBeenCalled();
+      expect(mockStatus).toHaveBeenCalledWith(400);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: 'Conversation test-conversation-id has no agent configured',
       });
-
-      // Now manually call the write and close methods on the captured output stream
-      if (capturedOutputStream) {
-        const writer = capturedOutputStream.getWriter();
-        await writer.write('Hello');
-        await writer.write(' world');
-        await writer.close();
-      }
-
-      // Wait for startAgent to complete
-      await startAgentPromise;
-
-      // Verify interactions
-      expect(
-        mockConversationService.addMessageToConversation,
-      ).toHaveBeenCalledWith(conversationId, Role.ASSIST, '');
-
-      expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
-        '1',
-        'Hello',
-      );
-
-      expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
-        '1',
-        'Hello world',
-      );
-
-      expect(mockChatService.sendToConversation).toHaveBeenCalledWith(
-        conversationId,
-        { type: 'completion_delta', content: 'Hello' },
-      );
-
-      expect(mockChatService.sendToConversation).toHaveBeenCalledWith(
-        conversationId,
-        { type: 'completion_delta', content: ' world' },
-      );
-
-      expect(mockChatService.sendToConversation).toHaveBeenCalledWith(
-        conversationId,
-        { type: 'completion_done' },
-      );
     });
   });
 });
