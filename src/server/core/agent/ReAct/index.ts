@@ -7,7 +7,7 @@ import type {
   AgentStreamCallContext,
 } from '..';
 import LlmCallTool from '../LlmCall';
-import getReActPrompt from './prompt';
+import generateReActPrompt from './prompt';
 import { ToolNames } from '@/server/utils';
 import { logger } from '@/server/middleware/logger';
 
@@ -48,29 +48,34 @@ export default class ReActAgent implements Agent {
 
   private readonly tools: Agent[];
 
+  private readonly llmCallTool = container.resolve(LlmCallTool);
+
   constructor() {
     this.tools = [ToolNames.DATE_TIME_TOOL].map(name =>
       container.resolve<Agent>(name),
     );
   }
 
-  private readonly llmCallTool = container.resolve(LlmCallTool);
+  protected generateToolsDescription(): string {
+    return (
+      this.tools
+        ?.map(tool => {
+          const ctor = tool.constructor as AgentConstructor;
+
+          return `+ ${ctor.Name}:\n\t${ctor.Description}`;
+        })
+        .join('\n') || 'No tools available.'
+    );
+  }
 
   async call(): Promise<unknown> {
     throw new Error('Method not implemented.');
   }
 
   async streamCall(ctx: AgentStreamCallContext, input: ReActAgentCallInput) {
-    const prompt = getReActPrompt({
+    const prompt = generateReActPrompt({
       background: '',
-      tools:
-        this.tools
-          ?.map(tool => {
-            const ctor = tool.constructor as AgentConstructor;
-
-            return `+ ${ctor.Name}:\n\t${ctor.Description}`;
-          })
-          .join('\n') || 'No tools available.',
+      tools: this.generateToolsDescription(),
     });
 
     const messages: ChatCompletionMessageParam[] = [
@@ -81,6 +86,7 @@ export default class ReActAgent implements Agent {
 
     for (let i = 0; i < this.maxIterations; i++) {
       logger.debug('ReAct initial messages: ', messages);
+
       const response = await this.llmCallTool.call(ctx, {
         messages,
         temperature: 0,

@@ -1,15 +1,13 @@
 import { Message, Role } from '@/shared/entities/Message';
+import { ConversationConfig } from '@/shared/types';
 import type { Request, Response } from 'express';
-import { pick } from 'lodash-es';
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import { inject, singleton } from 'tsyringe';
-import { container } from 'tsyringe';
+import { container, inject, singleton } from 'tsyringe';
+import type { Agent, AgentStreamCallContext } from '../core/agent';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { SSEService } from '../service/ChatService';
 import { ConversationService } from '../service/ConversationService';
-import { ConversationConfig } from '@/shared/types';
-import type { Agent, AgentStreamCallContext } from '../core/agent';
 import { createPeriodicSaveStream } from '../utils/streamUtils';
 
 @singleton()
@@ -54,11 +52,6 @@ export class ChatController {
       return res.status(400).json({ error: `Invalid role: ${role}` });
     }
 
-    const message = await this.conversationService.addMessageToConversation(
-      conversationId,
-      role as Role,
-      content,
-    );
     const conversation =
       await this.conversationService.getConversationById(conversationId);
 
@@ -79,13 +72,19 @@ export class ChatController {
       });
     }
 
-    this.startAgent(req, conversation.config as ConversationConfig);
+    const message = await this.conversationService.addMessageToConversation(
+      conversationId,
+      role as Role,
+      content,
+    );
 
     if (!message) {
       return res
         .status(404)
         .json({ error: `Conversation ${conversationId} not found` });
     }
+
+    this.startAgent(req, conversation.config as ConversationConfig);
 
     return res.status(201).json(message);
   }
@@ -102,6 +101,13 @@ export class ChatController {
     const start = Date.now();
     let message: Message | null = null;
 
+    // Create initial message with empty content
+    const initialPromise = this.conversationService
+      .addMessageToConversation(conversationId, Role.ASSIST, '')
+      .then(msg => {
+        message = msg;
+      });
+
     // Create a custom WritableStream with periodic save capability
     const outputStream = createPeriodicSaveStream({
       onChunk: async (chunk: string, fullContent: string) => {
@@ -109,13 +115,7 @@ export class ChatController {
           req.log.info(
             `First chunk received for agent call in conversation ${conversationId}, time taken: ${Date.now() - start}ms`,
           );
-
-          // Create initial message with empty content
-          this.conversationService
-            .addMessageToConversation(conversationId, Role.ASSIST, '')
-            .then(msg => {
-              message = msg;
-            });
+          await initialPromise;
         }
 
         this.sseService.sendToConversation(conversationId, {
@@ -132,10 +132,6 @@ export class ChatController {
               message.id,
               finalContent,
             );
-
-            req.log.info(
-              `Final content saved for conversation ${conversationId}`,
-            );
           } catch (error) {
             req.log.error(
               `Failed to save final content for conversation ${conversationId}:`,
@@ -149,8 +145,11 @@ export class ChatController {
           type: 'completion_done',
         });
 
+        const elapsed = Date.now() - start;
         req.log.info(
-          `Agent call finished for conversation ${conversationId}, total time: ${Date.now() - start}ms`,
+          `Agent call finished for conversation ${conversationId}, total time: ${elapsed}ms, time per token: ${
+            elapsed / (finalContent.length || 1)
+          }ms`,
         );
       },
       onError: (reason: unknown) => {
@@ -161,7 +160,6 @@ export class ChatController {
       },
 
       // Save progress periodically to reduce database pressure while maintaining consistency
-      saveInterval: 10,
       onPeriodicSave: async (periodicContent: string) => {
         if (message) {
           try {
@@ -190,16 +188,14 @@ export class ChatController {
           outputStream,
         } as AgentStreamCallContext,
         {
-          messages: (messages || []).map(each =>
-            pick(each, ['role', 'content']),
-          ) as ChatCompletionMessageParam[],
+          messages: (messages || []) as ChatCompletionMessageParam[],
         },
       );
     } catch (error: unknown) {
       req.log.error(`Error calling agent ${config.agent}:`, error);
       this.sseService.sendToConversation(conversationId, {
         type: 'completion_error',
-        error: `Error calling agent: ${(error as Error).message || 'Unknown error'}`,
+        error: `Error calling agent: ${(error as Error)?.message || 'Unknown error'}`,
       });
     }
   }
