@@ -4,7 +4,10 @@ import { Express } from 'express';
 import fs from 'fs';
 import path from 'path';
 
-const configFile = path.join(__dirname, '../../config/vite.common.ts');
+const configFile = path.join(
+  __dirname,
+  isProd ? `../../config/vite.common.ts` : `../../../config/vite.common.ts`,
+);
 const templateFile = path.join(
   __dirname,
   isProd ? 'index.html' : '../../index.html',
@@ -56,3 +59,4 @@ export default async (app: Express) => {
     res.end(html);
   });
 };
+

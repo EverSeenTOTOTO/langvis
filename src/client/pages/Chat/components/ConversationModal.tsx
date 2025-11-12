@@ -20,9 +20,9 @@ const ConversationModal = ({
   onFinish?: (values: any) => Promise<unknown>;
   onCancel?: () => void;
 }) => {
+  const [form] = Form.useForm();
   const agentStore = useStore('agent');
   const settingStore = useStore('setting');
-  const [form] = Form.useForm();
 
   const fetchAgentApi = useAsyncFn(agentStore.getAllAgent.bind(agentStore));
 
@@ -81,7 +81,11 @@ const ConversationModal = ({
         >
           <Input placeholder={settingStore.tr('Enter conversation name')} />
         </Form.Item>
-        <Form.Item name={['config', 'agent']} label={settingStore.tr('Agent')}>
+        <Form.Item
+          name={['config', 'agent']}
+          label={settingStore.tr('Agent')}
+          initialValue={fetchAgentApi[0].value?.[0]?.name}
+        >
           <Select
             disabled={mode === 'edit'}
             loading={fetchAgentApi[0].loading}

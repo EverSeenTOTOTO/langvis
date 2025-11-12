@@ -44,7 +44,7 @@ export default class LlmCallTool implements Agent {
 
     try {
       for await (const chunk of response) {
-        const delta = chunk?.choices[0]?.delta?.content || '';
+        const delta = chunk?.choices[0]?.delta?.content;
         if (delta) {
           await writer.write(delta);
         }

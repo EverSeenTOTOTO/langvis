@@ -48,6 +48,7 @@ export class ChatStore {
       const eventSource = new EventSource(url, {
         withCredentials: true,
       });
+      this.eventSources.set(conversationId, eventSource);
 
       const timeout = setTimeout(() => {
         eventSource.close();
@@ -174,3 +175,4 @@ export class ChatStore {
     }
   }
 }
+
