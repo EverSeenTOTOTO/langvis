@@ -24,7 +24,7 @@ vi.mock('tsyringe', async importOriginal => {
     ...actual,
     container: mockContainer,
     inject: () => () => {},
-    injectable: () => () => {},
+    injectable: () => () => {}, // Add mock for injectable
   };
 });
 
@@ -38,8 +38,10 @@ describe('ReActAgent', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Create ReActAgent instance without using decorators
-    reactAgent = new ReActAgent();
+    // Create ReActAgent instance with required dependencies
+    reactAgent = new ReActAgent(mockLlmCall as any);
+    // Manually set the tools property for testing
+    (reactAgent as any).tools = [mockTestTool];
   });
 
   describe('parseResponse', () => {

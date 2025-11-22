@@ -48,14 +48,14 @@ describe('ConversationService', () => {
     const mockConversation = {
       id: '1',
       name: 'Test Conversation',
-      config: { agent: 'LlmCall Tool' },
+      config: { agent: 'ReAct Agent' },
       createdAt: new Date(),
       messages: [],
     };
 
     (pg.getRepository as any).mockReturnValue({
       create: vi.fn().mockImplementation(entity => {
-        expect(entity.config).toEqual({ agent: 'LlmCall Tool' });
+        expect(entity.config).toEqual({ agent: 'ReAct Agent' });
         return mockConversation;
       }),
       save: vi.fn().mockResolvedValue(mockConversation),
@@ -70,7 +70,7 @@ describe('ConversationService', () => {
     const mockConversation = {
       id: '1',
       name: 'Test Conversation',
-      config: { model: 'gpt-4', temperature: 0.7, agent: 'LlmCall Tool' },
+      config: { model: 'gpt-4', temperature: 0.7, agent: 'ReAct Agent' },
       createdAt: new Date(),
       messages: [],
     };
@@ -80,7 +80,7 @@ describe('ConversationService', () => {
         expect(entity.config).toEqual({
           model: 'gpt-4',
           temperature: 0.7,
-          agent: 'LlmCall Tool',
+          agent: 'ReAct Agent',
         });
         return mockConversation;
       }),

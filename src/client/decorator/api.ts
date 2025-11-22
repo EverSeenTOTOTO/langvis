@@ -125,29 +125,19 @@ export class ApiRequest<P extends Record<string, any> = {}> extends Request {
     if (res instanceof Error) {
       logError(res);
 
-      return { error: res.message };
+      throw res;
     }
 
     const rsp = await res.json();
 
     if (res.status < 200 || res.status >= 300) {
-      // If server provides redirect info, include it in the error
-      if (rsp?.redirect) {
-        const e = new Error(
-          rsp?.error ?? `Response error: ${this.url} ${res.status}`,
-        );
-        (e as any).redirect = rsp.redirect;
-        logError(e);
-        return { error: e.message, redirect: rsp.redirect };
-      }
-
       const e = new Error(
         rsp?.error ?? `Response error: ${this.url} ${res.status}`,
       );
 
       logError(e);
 
-      return { error: e.message };
+      throw e;
     }
 
     return rsp;
@@ -206,3 +196,4 @@ export default function <T extends Record<string, any>>(instance: T) {
 
   return instance;
 }
+

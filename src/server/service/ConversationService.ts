@@ -6,7 +6,7 @@ import {
 } from '@/shared/entities/Conversation';
 import { MessageEntity, Message, Role } from '@/shared/entities/Message';
 import { In } from 'typeorm';
-import { ToolNames } from '@/server/utils';
+import { AGENT_META } from '@/shared/constants';
 
 @singleton()
 export class ConversationService {
@@ -14,10 +14,9 @@ export class ConversationService {
     name: string,
     config?: Record<string, any> | null,
   ): Promise<Conversation> {
-    // Set default agent to LlmCallTool if not specified
     const finalConfig = config ?? {};
     if (!finalConfig.agent) {
-      finalConfig.agent = ToolNames.LLM_CALL_TOOL; // Default to LlmCallTool
+      finalConfig.agent = AGENT_META.REACT_AGENT.Name.en;
     }
 
     const conversationRepository = pg.getRepository(ConversationEntity);

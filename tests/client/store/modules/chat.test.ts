@@ -271,4 +271,3 @@ describe('ChatStore', () => {
     expect((chatStore as any).eventSources.has(conversationId)).toBe(false);
   });
 });
-
