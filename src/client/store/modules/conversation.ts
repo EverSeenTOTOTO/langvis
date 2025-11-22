@@ -129,7 +129,7 @@ export class ConversationStore {
     params: { id: string },
     req?: ApiRequest<{ id: string }>,
   ) {
-    const messages = (await req!.send()) as Message[];
+    const messages = await req!.send();
 
     this.messages[params.id] = messages;
 

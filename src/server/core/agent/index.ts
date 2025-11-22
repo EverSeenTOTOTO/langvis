@@ -22,4 +22,5 @@ export interface Agent {
 export type AgentConstructor = (new () => Agent) & {
   Name: string;
   Description: string;
+  Type: 'Agent' | 'Tool';
 };

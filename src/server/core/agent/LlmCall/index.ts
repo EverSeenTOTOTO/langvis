@@ -1,4 +1,4 @@
-import { InjectTokens, ToolNames } from '@/server/utils';
+import { InjectTokens } from '@/server/utils';
 import OpenAI from 'openai';
 import type { Stream } from 'openai/core/streaming.mjs';
 import type {
@@ -8,11 +8,13 @@ import type {
 } from 'openai/resources/chat/completions';
 import { inject, injectable } from 'tsyringe';
 import { Agent, type AgentCallContext, type AgentStreamCallContext } from '..';
+import { AGENT_META } from '@/shared/constants';
 
 @injectable()
 export default class LlmCallTool implements Agent {
-  static readonly Name = ToolNames.LLM_CALL_TOOL;
-  static readonly Description = 'A tool to perform a single call of Llm.';
+  static readonly Type = AGENT_META.LLM_CALL_TOOL.Type;
+  static readonly Name = AGENT_META.LLM_CALL_TOOL.Name.en; // Access localized name
+  static readonly Description = AGENT_META.LLM_CALL_TOOL.Description.en; // Access localized description
 
   constructor(@inject(InjectTokens.OPENAI) private readonly openai: OpenAI) {}
 

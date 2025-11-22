@@ -1,9 +1,11 @@
-This project
+# Project: langvis
 
-- use `bun` as dep manager
-- use `make` instead of npm scripts as build system
+## General Instructions
+
+- use `bun` as dep manager and script engine.
 - use`vite` as dev framework.
-- use `vitest` as unit test framework
+- use `make` instead of npm scripts as build system, e.g. `make lint` and `make test`.
+- use `vitest` as unit test framework, especially when you want to test ONLY one case.
 
 You should:
 

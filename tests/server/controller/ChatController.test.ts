@@ -2,7 +2,7 @@ import { describe, it, beforeEach, vi, expect } from 'vitest';
 import { ChatController } from '@/server/controller/ChatController';
 import type { Request, Response } from 'express';
 import { Role } from '@/shared/entities/Message';
-import { ToolNames } from '@/server/utils';
+import { AGENT_META } from '@/shared/constants';
 
 // Create mock service classes
 class MockChatService {
@@ -113,7 +113,7 @@ describe('ChatController', () => {
       const mockConversation = {
         id: conversationId,
         name: 'Test Conversation',
-        config: { agent: ToolNames.LLM_CALL_TOOL },
+        config: { agent: AGENT_META.LLM_CALL_TOOL.Name.en },
       };
 
       mockRequest.params = { conversationId };

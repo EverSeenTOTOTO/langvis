@@ -1,5 +1,5 @@
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import { container, injectable } from 'tsyringe';
+import { container, inject, injectable } from 'tsyringe';
 import type {
   Agent,
   AgentCallContext,
@@ -8,8 +8,8 @@ import type {
 } from '..';
 import LlmCallTool from '../LlmCall';
 import generateReActPrompt from './prompt';
-import { ToolNames } from '@/server/utils';
 import { logger } from '@/server/middleware/logger';
+import { AGENT_META } from '@/shared/constants';
 
 export type ReActAgentCallInput = {
   messages?: ChatCompletionMessageParam[];
@@ -40,21 +40,15 @@ export type ReActStep =
 
 @injectable()
 export default class ReActAgent implements Agent {
-  static readonly Name = ToolNames.REACT_AGENT;
-  static readonly Description =
-    'An agent that uses the ReAct framework to interact with tools and provide answers based on reasoning and actions.';
+  static readonly Type = AGENT_META.REACT_AGENT.Type;
+  static readonly Name = AGENT_META.REACT_AGENT.Name.en; // Access localized name
+  static readonly Description = AGENT_META.REACT_AGENT.Description.en; // Access localized description
 
   private readonly maxIterations = 5;
+  public tools: Agent[] = []; // Will be populated dynamically by the container
 
-  private readonly tools: Agent[];
-
-  private readonly llmCallTool = container.resolve(LlmCallTool);
-
-  constructor() {
-    this.tools = [ToolNames.DATE_TIME_TOOL].map(name =>
-      container.resolve<Agent>(name),
-    );
-  }
+  // Inject tools automatically
+  constructor(@inject(LlmCallTool) private readonly llmCallTool: LlmCallTool) {}
 
   protected generateToolsDescription(): string {
     return (

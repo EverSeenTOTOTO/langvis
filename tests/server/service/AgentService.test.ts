@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import AgentService from '@/server/service/AgentService';
+import { AgentService } from '@/server/service/AgentService';
 import { container } from 'tsyringe';
-import { ToolNames } from '@/server/utils';
+import { AGENT_META, ENTITY_TYPES } from '@/shared/constants';
 import { InjectTokens } from '@/server/utils';
 
 // Mock globby to avoid file system operations
@@ -17,24 +17,28 @@ vi.mock('globby', () => ({
 
 // Create mock agent classes that implement the Agent interface
 class MockDateTimeTool {
-  static Name = ToolNames.DATE_TIME_TOOL;
-  static Description = 'A tool to get the current date and time.';
+  static Name = AGENT_META.DATE_TIME_TOOL.Name.en;
+  static Description = AGENT_META.DATE_TIME_TOOL.Description.en;
+  static Type = ENTITY_TYPES.TOOL;
   call = vi.fn();
   streamCall = vi.fn();
 }
 
 class MockLlmCallTool {
-  static Name = ToolNames.LLM_CALL_TOOL;
-  static Description = 'A tool to perform a single call of Llm.';
+  static Name = AGENT_META.LLM_CALL_TOOL.Name.en;
+  static Description = AGENT_META.LLM_CALL_TOOL.Description.en;
+  static Type = ENTITY_TYPES.TOOL;
   call = vi.fn();
   streamCall = vi.fn();
 }
 
 class MockReActAgent {
-  static Name = ToolNames.REACT_AGENT;
-  static Description = 'An agent that uses the ReAct framework.';
+  static Name = AGENT_META.REACT_AGENT.Name.en;
+  static Description = AGENT_META.REACT_AGENT.Description.en;
+  static Type = ENTITY_TYPES.AGENT;
   call = vi.fn();
   streamCall = vi.fn();
+  tools: any[] = []; // Add tools property for ReActAgent
 }
 
 // Mock dynamic imports for agent modules
@@ -62,10 +66,11 @@ const mockOpenAI = {
 };
 
 describe('AgentService', () => {
+  let agentService: AgentService;
+
   beforeEach(() => {
-    // Reset the service state before each test
-    const service = new (AgentService.constructor as any)();
-    Object.assign(AgentService, service);
+    // Create a new instance of AgentService for each test
+    agentService = new AgentService();
 
     // Register required dependencies
     container.register(InjectTokens.OPENAI, { useValue: mockOpenAI });
@@ -78,47 +83,84 @@ describe('AgentService', () => {
   });
 
   it('should get all agents', async () => {
-    const agents = await AgentService.getAllAgents();
+    const agents = await agentService.getAllAgents();
     expect(Array.isArray(agents)).toBe(true);
-    // We expect exactly three agents
-    expect(agents.length).toBe(3);
+    // We expect exactly one agent (ReAct) since tools are filtered out
+    expect(agents.length).toBe(1);
 
-    // Check that all expected agents are present
+    // Check that the expected agent is present
     const agentNames = agents.map(agent => agent.name);
-    expect(agentNames).toContain(ToolNames.DATE_TIME_TOOL);
-    expect(agentNames).toContain(ToolNames.LLM_CALL_TOOL);
-    expect(agentNames).toContain(ToolNames.REACT_AGENT);
+    expect(agentNames).toContain(AGENT_META.REACT_AGENT.Name.en);
   });
 
   it('should get an agent by name', async () => {
-    const agent = await AgentService.getAgentByName(ToolNames.DATE_TIME_TOOL);
+    const agent = await agentService.getAgentByName(
+      AGENT_META.REACT_AGENT.Name.en,
+    );
     expect(agent).toBeDefined();
-    expect(agent?.name).toBe(ToolNames.DATE_TIME_TOOL);
+    expect(agent?.name).toBe(AGENT_META.REACT_AGENT.Name.en);
     expect(agent?.description).toBeDefined();
   });
 
   it('should return undefined for non-existent agent', async () => {
-    const agent = await AgentService.getAgentByName('NonExistentAgent');
+    const agent = await agentService.getAgentByName('NonExistentAgent');
     expect(agent).toBeUndefined();
   });
 
   it('should register agents in the container', async () => {
     // Initialize the agent service to register agents
-    await AgentService.getAllAgents();
+    await agentService.getAllAgents();
 
-    // Check that each agent is registered in the container
-    expect(() => container.resolve(ToolNames.DATE_TIME_TOOL)).not.toThrow();
-    expect(() => container.resolve(ToolNames.LLM_CALL_TOOL)).not.toThrow();
-    expect(() => container.resolve(ToolNames.REACT_AGENT)).not.toThrow();
+    // Check that the agent is registered in the container
+    expect(() =>
+      container.resolve(AGENT_META.REACT_AGENT.Name.en),
+    ).not.toThrow();
 
     // Verify that we can resolve instances
-    const dateTimeTool: any = container.resolve(ToolNames.DATE_TIME_TOOL);
-    const llmCallTool: any = container.resolve(ToolNames.LLM_CALL_TOOL);
-    const reactAgent: any = container.resolve(ToolNames.REACT_AGENT);
+    const reactAgent: any = container.resolve(AGENT_META.REACT_AGENT.Name.en);
+
+    expect(reactAgent).toBeDefined();
+
+    // Verify that it has the expected methods
+    expect(typeof reactAgent.streamCall).toBe('function');
+
+    // Verify that tools were injected
+    expect(Array.isArray(reactAgent.tools)).toBe(true);
+  });
+
+  it('should register tools and agents correctly', async () => {
+    // Initialize the agent service to register agents
+    await agentService.getAllAgents();
+
+    // Check that both tools and agent are registered
+    expect(() =>
+      container.resolve(AGENT_META.DATE_TIME_TOOL.Name.en),
+    ).not.toThrow();
+    expect(() =>
+      container.resolve(AGENT_META.LLM_CALL_TOOL.Name.en),
+    ).not.toThrow();
+    expect(() =>
+      container.resolve(AGENT_META.REACT_AGENT.Name.en),
+    ).not.toThrow();
+
+    // Verify that we can resolve instances
+    const dateTimeTool: any = container.resolve(
+      AGENT_META.DATE_TIME_TOOL.Name.en,
+    );
+    const llmCallTool: any = container.resolve(
+      AGENT_META.LLM_CALL_TOOL.Name.en,
+    );
+    const reactAgent: any = container.resolve(AGENT_META.REACT_AGENT.Name.en);
 
     expect(dateTimeTool).toBeDefined();
     expect(llmCallTool).toBeDefined();
     expect(reactAgent).toBeDefined();
+
+    // The tools should be injected through the afterResolution hook
+    // Since we're using mocks, we need to verify that the hook worked
+    // by checking if tools were populated correctly
+    expect(Array.isArray(reactAgent.tools)).toBe(true);
+    expect(reactAgent.tools.length).toBe(2);
 
     // Verify that they have the expected methods
     expect(typeof dateTimeTool.call).toBe('function');

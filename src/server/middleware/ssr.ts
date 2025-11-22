@@ -10,11 +10,11 @@ const configFile = path.join(
 );
 const templateFile = path.join(
   __dirname,
-  isProd ? 'index.html' : '../../index.html',
+  isProd ? 'index.html' : '../../../index.html',
 );
 const serverEntry = path.join(
   __dirname,
-  isProd ? 'index.server.js' : '../client/index.server.tsx',
+  isProd ? 'index.server.js' : '../../client/index.server.tsx',
 );
 
 // ssr
@@ -59,4 +59,3 @@ export default async (app: Express) => {
     res.end(html);
   });
 };
-
