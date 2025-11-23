@@ -165,20 +165,7 @@ export function wrapApi<P extends Record<string, any>, R>(
     options?: ApiConfig['options'];
   },
 ) {
-  return async (req: P) => {
-    try {
-      const result = await fn(req, new ApiRequest(req, config));
-
-      if (result && typeof result === 'object' && 'redirect' in result) {
-        return result;
-      }
-
-      return result;
-    } catch (e) {
-      logError(e);
-      return { error: (e as Error).message };
-    }
-  };
+  return async (params: P) => fn(params, new ApiRequest(params, config));
 }
 
 export default function <T extends Record<string, any>>(instance: T) {
@@ -196,4 +183,3 @@ export default function <T extends Record<string, any>>(instance: T) {
 
   return instance;
 }
-

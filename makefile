@@ -29,7 +29,7 @@ lint:
 	npx tsc --noEmit
 	npx eslint --fix .
 	npx stylelint "src/**/*.{css,scss}" --fix
-	npx prettier -w .
+	npx prettier --log-level silent -w .
 	@echo -e '\033[1;32mNo lint errors found.'
 
 .PHONY: clean

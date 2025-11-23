@@ -1,4 +1,4 @@
-import LlmCallTool from '@/server/core/agent/LlmCall';
+import LlmCallTool from '@/server/core/tool/LlmCall';
 import OpenAI from 'openai';
 import type { Stream } from 'openai/core/streaming.mjs';
 import type {
@@ -57,10 +57,7 @@ describe('LlmCallTool', () => {
         model: 'gpt-3.5-turbo',
       };
 
-      const result = await llmCallTool.call(
-        { conversationId: 'test-conversation' },
-        input,
-      );
+      const result = await llmCallTool.call(input);
 
       expect(mockCreate).toHaveBeenCalledWith({
         model: 'gpt-3.5-turbo',
@@ -105,13 +102,7 @@ describe('LlmCallTool', () => {
         model: 'gpt-3.5-turbo',
       };
 
-      await llmCallTool.streamCall(
-        {
-          conversationId: 'test-conversation',
-          outputStream: mockOutputStream as any,
-        },
-        input,
-      );
+      await llmCallTool.streamCall(input, mockOutputStream as any);
 
       expect(mockCreate).toHaveBeenCalledWith({
         model: 'gpt-3.5-turbo',
@@ -153,13 +144,7 @@ describe('LlmCallTool', () => {
       };
 
       await expect(
-        llmCallTool.streamCall(
-          {
-            conversationId: 'test-conversation',
-            outputStream: mockOutputStream as any,
-          },
-          input,
-        ),
+        llmCallTool.streamCall(input, mockOutputStream as any),
       ).rejects.toThrow(mockError);
 
       expect(mockWriter.abort).toHaveBeenCalledWith(mockError);

@@ -6,7 +6,7 @@ import {
 } from '@/shared/entities/Conversation';
 import { MessageEntity, Message, Role } from '@/shared/entities/Message';
 import { In } from 'typeorm';
-import { AGENT_META } from '@/shared/constants';
+import { AgentMetas } from '@/shared/constants';
 
 @singleton()
 export class ConversationService {
@@ -16,7 +16,7 @@ export class ConversationService {
   ): Promise<Conversation> {
     const finalConfig = config ?? {};
     if (!finalConfig.agent) {
-      finalConfig.agent = AGENT_META.REACT_AGENT.Name.en;
+      finalConfig.agent = AgentMetas.REACT_AGENT.Name.en;
     }
 
     const conversationRepository = pg.getRepository(ConversationEntity);

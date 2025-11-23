@@ -23,6 +23,7 @@ const MarkdownRender = observer(({ children }: { children: string }) => {
   } | null>(null);
 
   const loadSyntaxComponents = useCallback(async () => {
+    if (import.meta.env.DEV) return;
     if (!syntaxComponentsRef.current) {
       const [SyntaxHighlighter, oneDark, oneLight] = await Promise.all([
         import('react-syntax-highlighter').then(module => module.Prism),
@@ -40,7 +41,6 @@ const MarkdownRender = observer(({ children }: { children: string }) => {
       };
       forceUpdate(n => n + 1);
     }
-    return Promise.resolve();
   }, []);
 
   useEffect(() => {

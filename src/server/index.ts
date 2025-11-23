@@ -13,15 +13,15 @@ import bindAuthMiddleware from './middleware/auth';
 
 dotenv.config({
   path: isProd
-    ? path.join(__dirname, '../.env')
-    : path.join(__dirname, '../../.env.development'),
+    ? path.join(__dirname(), '../.env')
+    : path.join(__dirname(), '../../.env.development'),
 });
 
 // hypothesis: client assets to be in the same directory
 export const createServer = async (): Promise<Express> => {
   const app = express();
 
-  app.use(express.static(__dirname, { index: false }));
+  app.use(express.static(__dirname(), { index: false }));
   app.use(bodyParser.urlencoded({ extended: false }));
   app.use(bodyParser.json());
   app.use(cookieParser());

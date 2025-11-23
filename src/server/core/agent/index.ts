@@ -1,26 +1,17 @@
-import type { Conversation } from '@/shared/entities/Conversation';
-
-export type AgentCallContext = {
-  readonly conversationId: Conversation['id'];
-  readonly agentName?: string;
-};
-
-export type AgentStreamCallContext = AgentCallContext & {
-  readonly outputStream: WritableStream;
-};
+import type { ChatState } from '../ChatState';
 
 export interface Agent {
-  call(ctx: AgentCallContext, input: Record<string, any>): Promise<unknown>;
+  getSystemPrompt?(): Promise<string>;
+
+  call(chatState: ChatState): Promise<unknown>;
 
   streamCall(
-    ctx: AgentStreamCallContext,
-    input: Record<string, any>,
+    chatState: ChatState,
+    outputStream: WritableStream,
   ): Promise<unknown>;
 }
 
-// Type for the agent constructor to allow accessing static properties
 export type AgentConstructor = (new () => Agent) & {
   Name: string;
   Description: string;
-  Type: 'Agent' | 'Tool';
 };

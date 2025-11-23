@@ -137,9 +137,9 @@ it('wrapApi', async () => {
     },
   });
 
-  expect(await apiError({})).toEqual({
-    error: `Request timeout: http://localhost:${port}/apitimeout`,
-  });
+  await expect(apiError({})).rejects.toThrow(
+    `Request timeout: http://localhost:${port}/apitimeout`,
+  );
 
   const apiParam = wrapApi(demo.withParams.bind(demo), {
     config: `http://localhost:${port}/api/:type`,
@@ -214,15 +214,11 @@ it('api', async () => {
   expect(await demo.modifyHeader({})).toEqual({
     data: 'test',
   });
-  expect(await demo.error({})).toEqual({
-    error: `Request timeout: http://localhost:${port}/apitimeout`,
-  });
-  expect(await demo.error2({})).toEqual({
-    error: 'test',
-  });
-  expect(await demo.error3({})).toEqual({
-    error: 'test',
-  });
+  await expect(demo.error({})).rejects.toThrow(
+    `Request timeout: http://localhost:${port}/apitimeout`,
+  );
+  await expect(demo.error2({})).rejects.toThrow('test');
+  await expect(demo.error3({})).rejects.toThrow('test');
   expect(await demo.withParams({ type: 'get' })).toEqual({ data: 'GET' });
   expect(await demo.cookie({})).toEqual({
     cookie:
