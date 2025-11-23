@@ -14,7 +14,7 @@ export class AgentController {
 
   @api('/', { method: 'get' })
   async getAllAgents(_req: Request, res: Response) {
-    const agents = await this.agentService.getAllAgents();
+    const agents = await this.agentService.getAllAgentInfo();
     return res.json(agents);
   }
 }

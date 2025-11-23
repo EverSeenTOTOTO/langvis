@@ -1,14 +1,14 @@
-import { Message, Role } from '@/shared/entities/Message';
+import { Role } from '@/shared/entities/Message';
 import { ConversationConfig } from '@/shared/types';
 import type { Request, Response } from 'express';
-import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { v4 as uuid } from 'uuid';
 import { container, inject, singleton } from 'tsyringe';
-import type { Agent, AgentStreamCallContext } from '../core/agent';
+import type { Agent } from '../core/agent';
+import { ChatMessage, ChatState } from '../core/ChatState';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { SSEService } from '../service/ChatService';
 import { ConversationService } from '../service/ConversationService';
-import { createPeriodicSaveStream } from '../utils/streamUtils';
 
 @singleton()
 @controller('/api/chat')
@@ -84,7 +84,15 @@ export class ChatController {
         .json({ error: `Conversation ${conversationId} not found` });
     }
 
-    this.startAgent(req, conversation.config as ConversationConfig);
+    // Start agent processing in background, but handle errors to prevent unhandled rejections
+    this.startAgent(req, conversation.config as ConversationConfig).catch(
+      error => {
+        req.log.error(
+          `Error in agent processing for conversation ${conversationId}:`,
+          error,
+        );
+      },
+    );
 
     return res.status(201).json(message);
   }
@@ -99,23 +107,67 @@ export class ChatController {
     req.log.info(`Starting agent call for conversation ${conversationId}`);
 
     const start = Date.now();
-    let message: Message | null = null;
+    const agent = container.resolve(config.agent) as Agent;
 
-    // Create initial message with empty content
-    const initialPromise = this.conversationService
-      .addMessageToConversation(conversationId, Role.ASSIST, '')
-      .then(msg => {
-        message = msg;
-      });
+    if (!agent) {
+      req.log.error(
+        `Agent ${config.agent} not found for conversation ${conversationId}`,
+      );
+      return;
+    }
 
-    // Create a custom WritableStream with periodic save capability
-    const outputStream = createPeriodicSaveStream({
-      onChunk: async (chunk: string, fullContent: string) => {
-        if (!fullContent) {
+    // Create ChatState with existing messages
+    const chatState = new ChatState(conversationId, [
+      ...(typeof agent.getSystemPrompt === 'function'
+        ? ([
+            {
+              id: uuid(),
+              role: Role.SYSTEM,
+              content: await agent.getSystemPrompt(),
+            },
+          ] as ChatMessage[])
+        : []),
+      ...messages,
+    ]);
+
+    // Create initial message with empty content and add to chat state
+    const initialMessage =
+      await this.conversationService.addMessageToConversation(
+        conversationId,
+        Role.ASSIST,
+        '',
+      );
+
+    if (!initialMessage) {
+      req.log.error(
+        `Failed to create initial message for conversation ${conversationId}`,
+      );
+      return;
+    }
+
+    // Add the initial message to chat state
+    chatState.addMessage(initialMessage);
+
+    // Create a custom WritableStream with message consistency checks
+    const outputStream = new WritableStream({
+      write: async (chunk: string) => {
+        // Check if current message is still the same as initial message
+        if (chatState.currentMessage?.id !== initialMessage.id) {
+          req.log.warn(
+            `Stream aborted: current message changed during streaming for conversation ${conversationId}`,
+          );
+          throw new Error('Current message changed during streaming');
+        }
+
+        // Update the current message in chat state
+        const currentContent = chatState.currentMessage.content || '';
+        const newContent = currentContent + chunk;
+        chatState.updateCurrentMessage(newContent);
+
+        if (!currentContent) {
           req.log.info(
             `First chunk received for agent call in conversation ${conversationId}, time taken: ${Date.now() - start}ms`,
           );
-          await initialPromise;
         }
 
         this.sseService.sendToConversation(conversationId, {
@@ -123,21 +175,28 @@ export class ChatController {
           content: chunk,
         });
       },
-      // onComplete handler - called when stream is complete
-      onComplete: async (finalContent: string) => {
-        // Ensure final content is saved
-        if (message) {
-          try {
-            await this.conversationService.updateMessage(
-              message.id,
-              finalContent,
-            );
-          } catch (error) {
-            req.log.error(
-              `Failed to save final content for conversation ${conversationId}:`,
-              error,
-            );
-          }
+      close: async () => {
+        // Check if current message is still the same as initial message
+        if (chatState.currentMessage?.id !== initialMessage.id) {
+          req.log.warn(
+            `Stream close aborted: current message changed during streaming for conversation ${conversationId}`,
+          );
+          return;
+        }
+
+        const finalContent = chatState.currentMessage.content || '';
+
+        // Save final content to database
+        try {
+          await this.conversationService.updateMessage(
+            initialMessage.id,
+            finalContent,
+          );
+        } catch (error) {
+          req.log.error(
+            `Failed to save final content for conversation ${conversationId}:`,
+            error,
+          );
         }
 
         // Send completion done message
@@ -152,45 +211,16 @@ export class ChatController {
           }ms`,
         );
       },
-      onError: (reason: unknown) => {
+      abort: (reason: unknown) => {
         req.log.error(
           `Agent call canceled for conversation ${conversationId}:`,
           reason,
         );
       },
-
-      // Save progress periodically to reduce database pressure while maintaining consistency
-      onPeriodicSave: async (periodicContent: string) => {
-        if (message) {
-          try {
-            await this.conversationService.updateMessage(
-              message.id,
-              periodicContent,
-            );
-            req.log.info(`Saved progress for conversation ${conversationId}`);
-          } catch (error) {
-            req.log.error(
-              `Failed to save progress for conversation ${conversationId}:`,
-              error,
-            );
-          }
-        }
-      },
     });
 
     try {
-      const agent = container.resolve(config.agent) as Agent;
-
-      await agent.streamCall(
-        {
-          ...config,
-          conversationId,
-          outputStream,
-        } as AgentStreamCallContext,
-        {
-          messages: (messages || []) as ChatCompletionMessageParam[],
-        },
-      );
+      await agent.streamCall(chatState, outputStream);
     } catch (error: unknown) {
       req.log.error(`Error calling agent ${config.agent}:`, error);
       this.sseService.sendToConversation(conversationId, {

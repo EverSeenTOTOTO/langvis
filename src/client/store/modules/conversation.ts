@@ -47,6 +47,7 @@ export class ConversationStore {
       id: `temp-${uuidv4()}`,
       content: '',
       role,
+      meta: {},
       createdAt: new Date(),
       conversationId,
       loading: true,

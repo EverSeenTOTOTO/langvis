@@ -1,9 +1,9 @@
-import { injectable } from 'tsyringe';
+import { ToolMetas } from '@/shared/constants';
 import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
-import type { Agent, AgentCallContext } from '..';
-import { AGENT_META } from '@/shared/constants';
+import utc from 'dayjs/plugin/utc';
+import { injectable } from 'tsyringe';
+import { Tool } from '..';
 
 // Extend dayjs with plugins
 dayjs.extend(utc);
@@ -15,13 +15,13 @@ export type DateTimeInput = {
 };
 
 @injectable()
-export default class DateTimeTool implements Agent {
-  static readonly Type = AGENT_META.DATE_TIME_TOOL.Type;
-  static readonly Name = AGENT_META.DATE_TIME_TOOL.Name.en; // Access localized name
-  static readonly Description = AGENT_META.DATE_TIME_TOOL.Description.en; // Access localized description
+export default class DateTimeTool implements Tool {
+  static readonly Name = ToolMetas.DATE_TIME_TOOL.Name.en; // Access localized name
+  static readonly Description = ToolMetas.DATE_TIME_TOOL.Description.en; // Access localized description
 
-  async call(_ctx: AgentCallContext, input: DateTimeInput): Promise<string> {
-    const { timezone, format } = input;
+  async call(input: Record<string, any>): Promise<string> {
+    const timezone = input?.timezone;
+    const format = input?.format;
 
     let date = dayjs();
 

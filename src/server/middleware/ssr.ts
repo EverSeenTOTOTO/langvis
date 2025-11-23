@@ -5,15 +5,15 @@ import fs from 'fs';
 import path from 'path';
 
 const configFile = path.join(
-  __dirname,
+  __dirname(),
   isProd ? `../../config/vite.common.ts` : `../../../config/vite.common.ts`,
 );
 const templateFile = path.join(
-  __dirname,
+  __dirname(),
   isProd ? 'index.html' : '../../../index.html',
 );
 const serverEntry = path.join(
-  __dirname,
+  __dirname(),
   isProd ? 'index.server.js' : '../../client/index.server.tsx',
 );
 

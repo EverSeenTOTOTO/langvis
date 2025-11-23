@@ -2,7 +2,23 @@ import { describe, it, beforeEach, vi, expect } from 'vitest';
 import { ChatController } from '@/server/controller/ChatController';
 import type { Request, Response } from 'express';
 import { Role } from '@/shared/entities/Message';
-import { AGENT_META } from '@/shared/constants';
+import { ToolMetas } from '@/shared/constants';
+import { container } from 'tsyringe';
+import { ChatState } from '@/server/core/ChatState';
+
+// Mock the container and agent
+const mockAgent = {
+  streamCall: vi.fn(),
+  call: vi.fn(),
+};
+
+vi.mock('tsyringe', () => ({
+  container: {
+    resolve: vi.fn(),
+  },
+  singleton: () => vi.fn(),
+  inject: () => vi.fn(),
+}));
 
 // Create mock service classes
 class MockChatService {
@@ -102,6 +118,90 @@ describe('ChatController', () => {
         expect.any(Function),
       );
     });
+
+    it('should handle request close event during SSE connection', async () => {
+      const conversationId = 'test-conversation-id';
+      mockRequest.params = { conversationId };
+
+      let closeCallback: (() => void) | undefined;
+      (mockRequest.on as any).mockImplementation(
+        (event: string, callback: () => void) => {
+          if (event === 'close') {
+            closeCallback = callback;
+          }
+        },
+      );
+
+      await chatController.initSSE(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      // Simulate close event
+      closeCallback?.();
+
+      expect(mockChatService.closeSSEConnection).toHaveBeenCalledWith(
+        conversationId,
+      );
+      expect(mockRequest.log?.info).toHaveBeenCalledWith(
+        'SSE connection closed:',
+        conversationId,
+      );
+    });
+
+    it('should handle request error event during SSE connection', async () => {
+      const conversationId = 'test-conversation-id';
+      const testError = new Error('Connection error');
+      mockRequest.params = { conversationId };
+
+      let errorCallback: ((err: Error) => void) | undefined;
+      (mockRequest.on as any).mockImplementation(
+        (event: string, callback: (err?: Error) => void) => {
+          if (event === 'error') {
+            errorCallback = callback;
+          }
+        },
+      );
+
+      await chatController.initSSE(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      // Simulate error event
+      errorCallback?.(testError);
+
+      expect(mockChatService.closeSSEConnection).toHaveBeenCalledWith(
+        conversationId,
+      );
+      expect(mockRequest.log?.error).toHaveBeenCalledWith(
+        'SSE connection error:',
+        testError,
+      );
+    });
+
+    it('should setup SSE connection with proper event handlers', async () => {
+      const conversationId = 'test-conversation-id';
+      mockRequest.params = { conversationId };
+
+      await chatController.initSSE(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      // Verify that both close and error handlers are registered
+      expect(mockRequest.on).toHaveBeenCalledTimes(2);
+      expect(mockRequest.on).toHaveBeenNthCalledWith(
+        1,
+        'close',
+        expect.any(Function),
+      );
+      expect(mockRequest.on).toHaveBeenNthCalledWith(
+        2,
+        'error',
+        expect.any(Function),
+      );
+    });
   });
 
   describe('chat', () => {
@@ -113,7 +213,7 @@ describe('ChatController', () => {
       const mockConversation = {
         id: conversationId,
         name: 'Test Conversation',
-        config: { agent: AGENT_META.LLM_CALL_TOOL.Name.en },
+        config: { agent: ToolMetas.LLM_CALL_TOOL.Name.en },
       };
 
       mockRequest.params = { conversationId };
@@ -255,6 +355,248 @@ describe('ChatController', () => {
       expect(mockJson).toHaveBeenCalledWith({
         error: 'Conversation test-conversation-id has no agent configured',
       });
+    });
+
+    it('should return 404 if initial message addition fails', async () => {
+      const conversationId = 'test-conversation-id';
+      const role = Role.USER;
+      const content = 'Hello';
+
+      mockRequest.params = { conversationId };
+      mockRequest.body = { role, content };
+
+      mockConversationService.addMessageToConversation = vi
+        .fn()
+        .mockResolvedValue(null);
+
+      await chatController.chat(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      expect(mockStatus).toHaveBeenCalledWith(404);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: `Conversation ${conversationId} not found`,
+      });
+    });
+  });
+
+  describe('startAgent streaming logic', () => {
+    let conversationId: string;
+    let mockInitialMessage: any;
+    let mockExistingMessages: any[];
+    let mockConversation: any;
+
+    beforeEach(() => {
+      conversationId = 'test-conversation-id';
+      mockInitialMessage = {
+        id: 'initial-msg-id',
+        conversationId,
+        role: Role.ASSIST,
+        content: '',
+      };
+      mockExistingMessages = [
+        { id: 'msg-1', role: Role.USER, content: 'Hello' },
+      ];
+      mockConversation = {
+        id: conversationId,
+        config: { agent: ToolMetas.LLM_CALL_TOOL.Name.en },
+      };
+
+      // Setup mocks
+      mockConversationService.getConversationById.mockResolvedValue(
+        mockConversation,
+      );
+      mockConversationService.getMessagesByConversationId.mockResolvedValue(
+        mockExistingMessages,
+      );
+      mockConversationService.addMessageToConversation
+        .mockResolvedValueOnce({ id: 'user-msg', conversationId })
+        .mockResolvedValueOnce(mockInitialMessage);
+      mockConversationService.updateMessage.mockResolvedValue(undefined);
+
+      // Mock container.resolve to return the mock agent
+      vi.mocked(container.resolve).mockReturnValue(mockAgent);
+      mockAgent.streamCall.mockResolvedValue(undefined);
+
+      mockRequest.params = { conversationId };
+      mockRequest.body = { role: Role.USER, content: 'Hello' };
+    });
+
+    it('should initiate streaming when valid conversation and agent exist', async () => {
+      await chatController.chat(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      // Verify the chat method returns success
+      expect(mockStatus).toHaveBeenCalledWith(201);
+
+      // Verify the agent was resolved and streamCall was eventually called
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(container.resolve).toHaveBeenCalledWith(
+        mockConversation.config.agent,
+      );
+    });
+
+    it('should handle initial assistant message creation failure', async () => {
+      // Mock the assistant message creation to fail
+      mockConversationService.addMessageToConversation
+        .mockResolvedValueOnce({ id: 'user-msg', conversationId }) // User message succeeds
+        .mockResolvedValueOnce(null); // Assistant message fails
+
+      await chatController.chat(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      // Should still return success for the user message
+      expect(mockStatus).toHaveBeenCalledWith(201);
+    });
+
+    it('should verify chat state and stream setup with correct parameters', async () => {
+      await chatController.chat(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      // Allow async operations to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Verify that streamCall was called with ChatState and WritableStream
+      expect(mockAgent.streamCall).toHaveBeenCalledWith(
+        expect.any(ChatState),
+        expect.any(WritableStream),
+      );
+    });
+
+    it('should create initial assistant message for streaming', async () => {
+      await chatController.chat(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      // Verify that two messages were created: user message and initial assistant message
+      expect(
+        mockConversationService.addMessageToConversation,
+      ).toHaveBeenCalledTimes(2);
+      expect(
+        mockConversationService.addMessageToConversation,
+      ).toHaveBeenNthCalledWith(1, conversationId, Role.USER, 'Hello');
+      expect(
+        mockConversationService.addMessageToConversation,
+      ).toHaveBeenNthCalledWith(2, conversationId, Role.ASSIST, '');
+    });
+  });
+
+  describe('SSE and Streaming Integration', () => {
+    let conversationId: string;
+    let mockInitialMessage: any;
+    let mockConversation: any;
+
+    beforeEach(() => {
+      conversationId = 'integration-test-conversation';
+      mockInitialMessage = {
+        id: 'integration-msg-id',
+        conversationId,
+        role: Role.ASSIST,
+        content: '',
+      };
+      mockConversation = {
+        id: conversationId,
+        config: { agent: ToolMetas.LLM_CALL_TOOL.Name.en },
+      };
+
+      mockConversationService.getConversationById.mockResolvedValue(
+        mockConversation,
+      );
+      mockConversationService.getMessagesByConversationId.mockResolvedValue([]);
+      mockConversationService.addMessageToConversation
+        .mockResolvedValueOnce({ id: 'user-msg', conversationId })
+        .mockResolvedValueOnce(mockInitialMessage);
+      mockConversationService.updateMessage.mockResolvedValue(undefined);
+      vi.mocked(container.resolve).mockReturnValue(mockAgent);
+      mockAgent.streamCall.mockResolvedValue(undefined);
+
+      mockRequest.params = { conversationId };
+      mockRequest.body = { role: Role.USER, content: 'Test message' };
+    });
+
+    it('should setup streaming integration correctly', async () => {
+      await chatController.chat(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      // Verify the basic setup worked
+      expect(mockStatus).toHaveBeenCalledWith(201);
+      expect(mockConversationService.getConversationById).toHaveBeenCalledWith(
+        conversationId,
+      );
+      expect(
+        mockConversationService.addMessageToConversation,
+      ).toHaveBeenCalledTimes(2);
+
+      // Allow async operations to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Verify agent was resolved and streamCall was initiated
+      expect(container.resolve).toHaveBeenCalledWith(
+        mockConversation.config.agent,
+      );
+      expect(mockAgent.streamCall).toHaveBeenCalled();
+    });
+
+    it('should handle conversation not found during integration', async () => {
+      mockConversationService.getConversationById.mockResolvedValue(null);
+
+      await chatController.chat(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      expect(mockStatus).toHaveBeenCalledWith(404);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: `Conversation ${conversationId} not found`,
+      });
+      expect(mockAgent.streamCall).not.toHaveBeenCalled();
+    });
+
+    it('should handle missing agent configuration during integration', async () => {
+      const conversationWithoutAgent = {
+        id: conversationId,
+        config: {},
+      };
+      mockConversationService.getConversationById.mockResolvedValue(
+        conversationWithoutAgent,
+      );
+
+      await chatController.chat(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      expect(mockStatus).toHaveBeenCalledWith(400);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: `Conversation ${conversationId} has no agent configured`,
+      });
+      expect(mockAgent.streamCall).not.toHaveBeenCalled();
+    });
+
+    it('should verify WritableStream is properly created for agent', async () => {
+      await chatController.chat(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      // Allow async operations to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Verify that streamCall was called with the correct types
+      expect(mockAgent.streamCall).toHaveBeenCalledWith(
+        expect.any(ChatState),
+        expect.any(WritableStream),
+      );
     });
   });
 });
