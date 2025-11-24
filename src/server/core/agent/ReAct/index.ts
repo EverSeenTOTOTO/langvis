@@ -146,43 +146,24 @@ export default class ReActAgent implements Agent {
 
   private parseResponse(content: string): ReActStep {
     try {
-      // Clean markdown code blocks only at the beginning and end
-
-      let cleanedContent = content
-
+      const cleanedContent = content
         .trim()
-
         .replace(/^```json\s*/, '') // Remove ```json at the beginning
-
         .replace(/\s*```$/, ''); // Remove ``` at the end
-
-      // Find the actual JSON content (from first { to last })
-
-      const firstBrace = cleanedContent.indexOf('{');
-
-      const lastBrace = cleanedContent.lastIndexOf('}');
-
-      if (firstBrace !== -1 && lastBrace !== -1 && firstBrace <= lastBrace) {
-        cleanedContent = cleanedContent.substring(firstBrace, lastBrace + 1);
-      }
 
       const parsed = JSON.parse(cleanedContent);
 
-      // Validate and return the parsed response with priority order
-
-      // Priority: thought > action > final_answer
-
-      if (parsed.thought !== undefined) {
+      if (parsed.thought) {
         return { thought: String(parsed.thought) };
       }
 
-      if (parsed.action !== undefined) {
+      if (parsed.action) {
         if (
           typeof parsed.action === 'object' &&
           parsed.action !== null &&
           typeof parsed.action.tool === 'string' &&
           parsed.action.tool.length > 0 &&
-          parsed.action.input !== undefined
+          parsed.action.input
         ) {
           return { action: parsed.action };
         }
@@ -190,26 +171,22 @@ export default class ReActAgent implements Agent {
         throw new Error('Invalid action format: missing or invalid tool/input');
       }
 
-      if (parsed.final_answer !== undefined) {
+      if (parsed.final_answer) {
         return { final_answer: String(parsed.final_answer) };
       }
 
-      // If none of the expected properties are found
-
       throw new Error(
-        'Unrecognized JSON structure: missing thought, action, or final_answer',
+        'Unrecognized JSON structure: missing `thought`, `action`, or `final_answer`',
       );
     } catch (error) {
-      logger.warn('Failed to parse JSON response, treating as thought:', {
-        error: error instanceof Error ? error.message : String(error),
+      const message = error instanceof Error ? error.message : String(error);
 
-        content:
-          content.substring(0, 200) + (content.length > 200 ? '...' : ''),
-      });
+      logger.warn(
+        'Failed to parse JSON response, treating as thought: ',
+        message,
+      );
 
-      // Fallback: treat the entire content as a thought
-
-      return { thought: content.trim() };
+      return { thought: message };
     }
   }
 
@@ -221,7 +198,7 @@ export default class ReActAgent implements Agent {
     try {
       tool = container.resolve<Tool>(action);
     } catch {
-      return `Tool "${action}" not found, available tools: ${this.tools.map(t => (t.constructor as AgentConstructor).Name).join(';')}`;
+      return `Tool "${action}" not found, available tools: ${this.tools.map(t => `\`${(t.constructor as AgentConstructor).Name}\``).join(', ')}`;
     }
 
     try {
