@@ -115,6 +115,11 @@ const Messages = () => {
     : [];
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  console.log(
+    conversationStore.currentConversationId,
+    JSON.stringify(currentMessages),
+  );
+
   // Scroll to bottom when messages change or update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

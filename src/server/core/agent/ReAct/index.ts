@@ -3,11 +3,11 @@ import { AgentMetas, ToolMetas } from '@/shared/constants';
 import type { ChatCompletion } from 'openai/resources/chat/completions';
 import { container, injectable } from 'tsyringe';
 import type { Agent, AgentConstructor } from '..';
-import type { ChatState } from '../../ChatState';
 import { Tool } from '../../tool';
 import generateReActPrompt from './prompt';
 import LlmCallTool from '../../tool/LlmCall';
-import { Role } from '@/shared/entities/Message';
+import { Role, Message } from '@/shared/entities/Message';
+import { isEmpty } from 'lodash-es';
 
 export type ReActThought = {
   thought: string;
@@ -57,24 +57,28 @@ export default class ReActAgent implements Agent {
   }
 
   async call(): Promise<unknown> {
-    throw new Error('Method not implemented.');
+    // For now, just throw an error as the main interface is streamCall
+    // This could be implemented to return a final result without streaming
+    throw new Error('Non-streaming call not implemented.');
   }
 
-  async streamCall(chatState: ChatState, outputStream: WritableStream) {
+  async streamCall(messages: Message[], outputStream: WritableStream) {
     const writer = outputStream.getWriter();
     const llmCallTool = container.resolve<LlmCallTool>(
       ToolMetas.LLM_CALL_TOOL.Name.en,
     );
-    const messages = chatState.messages?.slice(0, -1).map(msg => ({
+
+    // Convert messages to the format expected by LLM
+    const conversationMessages = messages.map(msg => ({
       role: msg.role as 'user' | 'assistant' | 'system',
       content: msg.content,
     }));
 
     for (let i = 0; i < this.maxIterations; i++) {
-      logger.debug('ReAct iter messages: ', messages);
+      logger.debug('ReAct iter messages: ', conversationMessages);
 
       const response = (await llmCallTool.call({
-        messages,
+        messages: conversationMessages,
         temperature: 0,
         stop: ['Observation:', 'Observation：'],
       })) as ChatCompletion;
@@ -87,7 +91,28 @@ export default class ReActAgent implements Agent {
         return;
       }
 
-      const parsed = this.parseResponse(content);
+      conversationMessages.push({
+        role: Role.ASSIST,
+        content,
+      });
+
+      let parsed: Partial<ReActStep> = {};
+      try {
+        parsed = this.parseResponse(content);
+
+        if (isEmpty(parsed)) {
+          throw new Error('Parsed response is empty');
+        }
+      } catch (error) {
+        const observationContent = `Observation: Error parsing response: ${(error as Error).message}\n`;
+
+        conversationMessages.push({
+          role: Role.USER,
+          content: observationContent,
+        });
+        writer.write(observationContent);
+        continue;
+      }
 
       logger.info('ReAct parsed response: ', parsed);
 
@@ -98,7 +123,7 @@ export default class ReActAgent implements Agent {
       }
 
       if ('action' in parsed) {
-        const { tool, input } = parsed.action;
+        const { tool, input } = parsed.action!;
         await writer.write(`Action: ${tool}\n`);
         await writer.write(`Action Input: ${JSON.stringify(input)}\n`);
 
@@ -106,7 +131,7 @@ export default class ReActAgent implements Agent {
           const observation = await this.executeAction(tool, input);
           const observationContent = `Observation: ${observation}\n`;
 
-          messages.push({
+          conversationMessages.push({
             role: Role.USER,
             content: observationContent,
           });
@@ -115,7 +140,7 @@ export default class ReActAgent implements Agent {
           const errorContent = `Observation: Error executing action ${tool}: ${(error as Error).message}\n`;
 
           await writer.write(errorContent);
-          messages.push({
+          conversationMessages.push({
             role: Role.USER,
             content: errorContent,
           });
@@ -128,10 +153,6 @@ export default class ReActAgent implements Agent {
         const thoughtContent = `Thought: ${parsed.thought}\n`;
 
         await writer.write(thoughtContent);
-        messages.push({
-          role: Role.ASSIST,
-          content: thoughtContent,
-        });
         continue;
       }
 
@@ -145,49 +166,38 @@ export default class ReActAgent implements Agent {
   }
 
   private parseResponse(content: string): ReActStep {
-    try {
-      const cleanedContent = content
-        .trim()
-        .replace(/^```json\s*/, '') // Remove ```json at the beginning
-        .replace(/\s*```$/, ''); // Remove ``` at the end
+    const cleanedContent = content
+      .trim()
+      .replace(/^```json\s*/, '') // Remove ```json at the beginning
+      .replace(/\s*```$/, ''); // Remove ``` at the end
 
-      const parsed = JSON.parse(cleanedContent);
+    const parsed = JSON.parse(cleanedContent);
 
-      if (parsed.thought) {
-        return { thought: String(parsed.thought) };
-      }
-
-      if (parsed.action) {
-        if (
-          typeof parsed.action === 'object' &&
-          parsed.action !== null &&
-          typeof parsed.action.tool === 'string' &&
-          parsed.action.tool.length > 0 &&
-          parsed.action.input
-        ) {
-          return { action: parsed.action };
-        }
-
-        throw new Error('Invalid action format: missing or invalid tool/input');
-      }
-
-      if (parsed.final_answer) {
-        return { final_answer: String(parsed.final_answer) };
-      }
-
-      throw new Error(
-        'Unrecognized JSON structure: missing `thought`, `action`, or `final_answer`',
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-
-      logger.warn(
-        'Failed to parse JSON response, treating as thought: ',
-        message,
-      );
-
-      return { thought: message };
+    if (parsed.thought) {
+      return { thought: String(parsed.thought) };
     }
+
+    if (parsed.action) {
+      if (
+        typeof parsed.action === 'object' &&
+        parsed.action !== null &&
+        typeof parsed.action.tool === 'string' &&
+        parsed.action.tool.length > 0 &&
+        parsed.action.input
+      ) {
+        return { action: parsed.action };
+      }
+
+      throw new Error('Invalid action format: missing or invalid tool/input');
+    }
+
+    if (parsed.final_answer) {
+      return { final_answer: String(parsed.final_answer) };
+    }
+
+    throw new Error(
+      'Unrecognized JSON structure: missing `thought`, `action`, or `final_answer`',
+    );
   }
 
   private async executeAction(
