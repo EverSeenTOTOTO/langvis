@@ -1,12 +1,12 @@
-import type { ChatState } from '../ChatState';
+import type { Message } from '@/shared/entities/Message';
 
 export interface Agent {
   getSystemPrompt?(): Promise<string>;
 
-  call(chatState: ChatState): Promise<unknown>;
+  call(messages: Message[]): Promise<unknown>;
 
   streamCall(
-    chatState: ChatState,
+    messages: Message[],
     outputStream: WritableStream,
   ): Promise<unknown>;
 }

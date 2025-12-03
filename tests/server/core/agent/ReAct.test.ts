@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ReActAgent from '@/server/core/agent/ReAct';
-import { ChatState } from '@/server/core/ChatState';
-import { Role } from '@/shared/entities/Message';
+import { Role, Message } from '@/shared/entities/Message';
+
+// Mock lodash-es
+vi.mock('lodash-es', () => ({
+  isEmpty: vi.fn().mockImplementation((obj: any) => {
+    return obj == null || Object.keys(obj).length === 0;
+  }),
+}));
 
 // Mock LlmCallTool
 const mockLlmCall = {
@@ -41,7 +47,6 @@ vi.mock('tsyringe', async importOriginal => {
 
 describe('ReActAgent', () => {
   let reactAgent: ReActAgent;
-  let chatState: ChatState;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -51,7 +56,6 @@ describe('ReActAgent', () => {
     const mockToolWithConstructor = Object.create(mockTestTool);
     mockToolWithConstructor.constructor = { Name: 'test_tool' };
     (reactAgent as any).tools = [mockToolWithConstructor];
-    chatState = new ChatState('test-conversation');
   });
 
   describe('parseResponse', () => {
@@ -71,11 +75,7 @@ describe('ReActAgent', () => {
     it('should parse thought response with multiple markdown blocks', () => {
       const content =
         '```json\n```json\n{"thought": "I need to analyze the user query."}\n```\n```';
-      const result = (reactAgent as any).parseResponse(content);
-      // The current implementation will fail to parse this and treat it as a thought
-      expect(result).toEqual({
-        thought: expect.stringContaining('is not valid JSON'),
-      });
+      expect(() => (reactAgent as any).parseResponse(content)).toThrow();
     });
 
     it('should parse thought response with mixed markdown and whitespace', () => {
@@ -158,72 +158,51 @@ describe('ReActAgent', () => {
     it('should handle response with extra text before JSON', () => {
       const content =
         'Here is my response:\n```json\n{"thought": "I need to think."}\n```';
-      const result = (reactAgent as any).parseResponse(content);
-      // This will fail to parse because of extra text before JSON
-      expect(result).toEqual({
-        thought: expect.stringContaining('is not valid JSON'),
-      });
+      expect(() => (reactAgent as any).parseResponse(content)).toThrow();
     });
 
     it('should handle response with extra text after JSON', () => {
       const content =
         '```json\n{"thought": "I need to think."}\n```\nThis is additional text.';
-      const result = (reactAgent as any).parseResponse(content);
-      // This will fail to parse because of extra text after JSON
-      expect(result).toEqual({
-        thought: expect.stringContaining(
-          'Unexpected non-whitespace character after JSON',
-        ),
-      });
+      expect(() => (reactAgent as any).parseResponse(content)).toThrow();
     });
 
     it('should handle invalid action format', () => {
       const content = '{"action": "invalid_action_format"}';
-      const result = (reactAgent as any).parseResponse(content);
-      expect(result).toEqual({
-        thought: 'Invalid action format: missing or invalid tool/input',
-      });
+      expect(() => (reactAgent as any).parseResponse(content)).toThrow(
+        'Invalid action format: missing or invalid tool/input',
+      );
     });
 
     it('should handle action with missing tool', () => {
       const content = '{"action": {"input": {"param": "value"}}}';
-      const result = (reactAgent as any).parseResponse(content);
-      expect(result).toEqual({
-        thought: 'Invalid action format: missing or invalid tool/input',
-      });
+      expect(() => (reactAgent as any).parseResponse(content)).toThrow(
+        'Invalid action format: missing or invalid tool/input',
+      );
     });
 
     it('should handle action with missing input', () => {
       const content = '{"action": {"tool": "test_tool"}}';
-      const result = (reactAgent as any).parseResponse(content);
-      expect(result).toEqual({
-        thought: 'Invalid action format: missing or invalid tool/input',
-      });
+      expect(() => (reactAgent as any).parseResponse(content)).toThrow(
+        'Invalid action format: missing or invalid tool/input',
+      );
     });
 
     it('should handle unrecognized JSON structure', () => {
       const content = '{"unknown_field": "value"}';
-      const result = (reactAgent as any).parseResponse(content);
-      expect(result).toEqual({
-        thought:
-          'Unrecognized JSON structure: missing `thought`, `action`, or `final_answer`',
-      });
+      expect(() => (reactAgent as any).parseResponse(content)).toThrow(
+        'Unrecognized JSON structure: missing `thought`, `action`, or `final_answer`',
+      );
     });
 
     it('should fallback to thought for invalid JSON', () => {
       const content = 'Invalid JSON content';
-      const result = (reactAgent as any).parseResponse(content);
-      expect(result).toEqual({
-        thought: expect.stringContaining('is not valid JSON'),
-      });
+      expect(() => (reactAgent as any).parseResponse(content)).toThrow();
     });
 
     it('should fallback to thought for malformed markdown JSON', () => {
       const content = '```json\n{invalid json}\n```';
-      const result = (reactAgent as any).parseResponse(content);
-      expect(result).toEqual({
-        thought: expect.stringContaining('Expected property name'),
-      });
+      expect(() => (reactAgent as any).parseResponse(content)).toThrow();
     });
 
     it('should handle empty action input', () => {
@@ -355,21 +334,24 @@ describe('ReActAgent', () => {
         getWriter: vi.fn().mockReturnValue(mockWriter),
       };
 
-      chatState.addMessage({
-        id: 'msg-1',
-        role: Role.USER,
-        content: 'Hello',
-        meta: {},
-      });
+      const messages: Message[] = [
+        {
+          id: 'msg-1',
+          role: Role.USER,
+          content: 'Hello',
+          meta: {},
+          conversationId: 'test-conversation',
+          createdAt: new Date(),
+        },
+      ];
 
-      await reactAgent.streamCall(chatState, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockLlmCall.call).toHaveBeenCalled();
       expect(mockWriter.write).toHaveBeenCalledWith(
         'This is the final answer.',
       );
       expect(mockWriter.close).toHaveBeenCalled();
-      chatState.pop();
     });
 
     it('should execute action and continue loop', async () => {
@@ -424,14 +406,18 @@ describe('ReActAgent', () => {
         getWriter: vi.fn().mockReturnValue(mockWriter),
       };
 
-      chatState.addMessage({
-        id: 'msg-1',
-        role: Role.USER,
-        content: 'Hello',
-        meta: {},
-      });
+      const messages: Message[] = [
+        {
+          id: 'msg-1',
+          role: Role.USER,
+          content: 'Hello',
+          meta: {},
+          conversationId: 'test-conversation',
+          createdAt: new Date(),
+        },
+      ];
 
-      await reactAgent.streamCall(chatState, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith('Action: test_tool\n');
@@ -445,7 +431,6 @@ describe('ReActAgent', () => {
         'This is the final answer after action.',
       );
       expect(mockWriter.close).toHaveBeenCalled();
-      chatState.pop();
     });
 
     it('should handle action execution error', async () => {
@@ -500,14 +485,18 @@ describe('ReActAgent', () => {
         getWriter: vi.fn().mockReturnValue(mockWriter),
       };
 
-      chatState.addMessage({
-        id: 'msg-1',
-        role: Role.USER,
-        content: 'Hello',
-        meta: {},
-      });
+      const messages: Message[] = [
+        {
+          id: 'msg-1',
+          role: Role.USER,
+          content: 'Hello',
+          meta: {},
+          conversationId: 'test-conversation',
+          createdAt: new Date(),
+        },
+      ];
 
-      await reactAgent.streamCall(chatState, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith(
@@ -517,7 +506,6 @@ describe('ReActAgent', () => {
         'This is the final answer after error.',
       );
       expect(mockWriter.close).toHaveBeenCalled();
-      chatState.pop();
     });
 
     it('should handle thought response', async () => {
@@ -569,14 +557,18 @@ describe('ReActAgent', () => {
         getWriter: vi.fn().mockReturnValue(mockWriter),
       };
 
-      chatState.addMessage({
-        id: 'msg-1',
-        role: Role.USER,
-        content: 'Hello',
-        meta: {},
-      });
+      const messages: Message[] = [
+        {
+          id: 'msg-1',
+          role: Role.USER,
+          content: 'Hello',
+          meta: {},
+          conversationId: 'test-conversation',
+          createdAt: new Date(),
+        },
+      ];
 
-      await reactAgent.streamCall(chatState, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith(
@@ -586,7 +578,6 @@ describe('ReActAgent', () => {
         'This is the final answer after thinking.',
       );
       expect(mockWriter.close).toHaveBeenCalled();
-      chatState.pop();
     });
 
     it('should handle max iterations reached', async () => {
@@ -619,21 +610,24 @@ describe('ReActAgent', () => {
         getWriter: vi.fn().mockReturnValue(mockWriter),
       };
 
-      chatState.addMessage({
-        id: 'msg-1',
-        role: Role.USER,
-        content: 'Hello',
-        meta: {},
-      });
+      const messages: Message[] = [
+        {
+          id: 'msg-1',
+          role: Role.USER,
+          content: 'Hello',
+          meta: {},
+          conversationId: 'test-conversation',
+          createdAt: new Date(),
+        },
+      ];
 
-      await reactAgent.streamCall(chatState, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(5); // maxIterations
       expect(mockWriter.write).toHaveBeenCalledWith(
         'Max iterations reached without final answer.',
       );
       expect(mockWriter.close).toHaveBeenCalled();
-      chatState.pop();
     });
 
     it('should handle empty response content', async () => {
@@ -665,18 +659,21 @@ describe('ReActAgent', () => {
         getWriter: vi.fn().mockReturnValue(mockWriter),
       };
 
-      chatState.addMessage({
-        id: 'msg-1',
-        role: Role.USER,
-        content: 'Hello',
-        meta: {},
-      });
+      const messages: Message[] = [
+        {
+          id: 'msg-1',
+          role: Role.USER,
+          content: 'Hello',
+          meta: {},
+          conversationId: 'test-conversation',
+          createdAt: new Date(),
+        },
+      ];
 
-      await reactAgent.streamCall(chatState, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockWriter.write).toHaveBeenCalledWith('No response from model');
       expect(mockWriter.close).toHaveBeenCalled();
-      chatState.pop();
     });
 
     it('should handle unparseable response', async () => {
@@ -727,22 +724,168 @@ describe('ReActAgent', () => {
         getWriter: vi.fn().mockReturnValue(mockWriter),
       };
 
-      chatState.addMessage({
-        id: 'msg-1',
-        role: Role.USER,
-        content: 'Hello',
-        meta: {},
-      });
+      const messages: Message[] = [
+        {
+          id: 'msg-1',
+          role: Role.USER,
+          content: 'Hello',
+          meta: {},
+          conversationId: 'test-conversation',
+          createdAt: new Date(),
+        },
+      ];
 
-      await reactAgent.streamCall(chatState, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith(
-        expect.stringContaining('Thought: Unexpected token'),
+        expect.stringContaining('Observation: Error parsing response:'),
       );
       expect(mockWriter.write).toHaveBeenCalledWith('Final answer');
       expect(mockWriter.close).toHaveBeenCalled();
-      chatState.pop();
+    });
+
+    it('should handle empty parsed response during streaming', async () => {
+      const mockEmptyResponse = {
+        id: 'test-id-1',
+        choices: [
+          {
+            finish_reason: 'stop',
+            index: 0,
+            message: {
+              content: '{}',
+              role: 'assistant',
+            },
+          },
+        ],
+        created: 1234567890,
+        model: 'gpt-3.5-turbo',
+        object: 'chat.completion',
+      };
+
+      const mockFinalResponse = {
+        id: 'test-id-2',
+        choices: [
+          {
+            finish_reason: 'stop',
+            index: 0,
+            message: {
+              content: '{"final_answer": "Final answer"}',
+              role: 'assistant',
+            },
+          },
+        ],
+        created: 1234567891,
+        model: 'gpt-3.5-turbo',
+        object: 'chat.completion',
+      };
+
+      mockLlmCall.call
+        .mockResolvedValueOnce(mockEmptyResponse)
+        .mockResolvedValueOnce(mockFinalResponse);
+
+      const mockWriter = {
+        write: vi.fn(),
+        close: vi.fn(),
+      };
+
+      const mockOutputStream = {
+        getWriter: vi.fn().mockReturnValue(mockWriter),
+      };
+
+      const messages: Message[] = [
+        {
+          id: 'msg-1',
+          role: Role.USER,
+          content: 'Hello',
+          meta: {},
+          conversationId: 'test-conversation',
+          createdAt: new Date(),
+        },
+      ];
+
+      await reactAgent.streamCall(messages, mockOutputStream as any);
+
+      expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
+      expect(mockWriter.write).toHaveBeenCalledWith(
+        'Observation: Error parsing response: Unrecognized JSON structure: missing `thought`, `action`, or `final_answer`\n',
+      );
+      expect(mockWriter.write).toHaveBeenCalledWith('Final answer');
+      expect(mockWriter.close).toHaveBeenCalled();
+    });
+
+    it('should handle when parseResponse returns empty object', async () => {
+      const mockResponse = {
+        id: 'test-id-1',
+        choices: [
+          {
+            finish_reason: 'stop',
+            index: 0,
+            message: {
+              content: '{"valid": "json"}',
+              role: 'assistant',
+            },
+          },
+        ],
+        created: 1234567890,
+        model: 'gpt-3.5-turbo',
+        object: 'chat.completion',
+      };
+
+      const mockFinalResponse = {
+        id: 'test-id-2',
+        choices: [
+          {
+            finish_reason: 'stop',
+            index: 0,
+            message: {
+              content: '{"final_answer": "Final answer"}',
+              role: 'assistant',
+            },
+          },
+        ],
+        created: 1234567891,
+        model: 'gpt-3.5-turbo',
+        object: 'chat.completion',
+      };
+
+      mockLlmCall.call
+        .mockResolvedValueOnce(mockResponse)
+        .mockResolvedValueOnce(mockFinalResponse);
+
+      // Mock parseResponse to return empty object for this test
+      const originalParseResponse = (reactAgent as any).parseResponse;
+      (reactAgent as any).parseResponse = vi.fn().mockReturnValueOnce({});
+      (reactAgent as any).parseResponse.mockImplementationOnce(() => ({}));
+
+      const mockWriter = {
+        write: vi.fn(),
+        close: vi.fn(),
+      };
+
+      const mockOutputStream = {
+        getWriter: vi.fn().mockReturnValue(mockWriter),
+      };
+
+      const messages: Message[] = [
+        {
+          id: 'msg-1',
+          role: Role.USER,
+          content: 'Hello',
+          meta: {},
+          conversationId: 'test-conversation',
+          createdAt: new Date(),
+        },
+      ];
+
+      await reactAgent.streamCall(messages, mockOutputStream as any);
+
+      expect(mockWriter.write).toHaveBeenCalledWith(
+        'Observation: Error parsing response: Parsed response is empty\n',
+      );
+
+      // Restore original method
+      (reactAgent as any).parseResponse = originalParseResponse;
     });
 
     it('should handle tool not found during action execution', async () => {
@@ -795,14 +938,18 @@ describe('ReActAgent', () => {
         getWriter: vi.fn().mockReturnValue(mockWriter),
       };
 
-      chatState.addMessage({
-        id: 'msg-1',
-        role: Role.USER,
-        content: 'Hello',
-        meta: {},
-      });
+      const messages: Message[] = [
+        {
+          id: 'msg-1',
+          role: Role.USER,
+          content: 'Hello',
+          meta: {},
+          conversationId: 'test-conversation',
+          createdAt: new Date(),
+        },
+      ];
 
-      await reactAgent.streamCall(chatState, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith('Action: unknown_tool\n');
@@ -816,7 +963,6 @@ describe('ReActAgent', () => {
         'This is the final answer after tool not found.',
       );
       expect(mockWriter.close).toHaveBeenCalled();
-      chatState.pop();
     });
   });
 });

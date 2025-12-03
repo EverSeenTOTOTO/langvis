@@ -4,7 +4,6 @@ import type { Request, Response } from 'express';
 import { Role } from '@/shared/entities/Message';
 import { ToolMetas } from '@/shared/constants';
 import { container } from 'tsyringe';
-import { ChatState } from '@/server/core/ChatState';
 
 // Mock the container and agent
 const mockAgent = {
@@ -18,10 +17,11 @@ vi.mock('tsyringe', () => ({
   },
   singleton: () => vi.fn(),
   inject: () => vi.fn(),
+  injectable: () => vi.fn(),
 }));
 
 // Create mock service classes
-class MockChatService {
+class MockSSEService {
   initSSEConnection = vi.fn();
   closeSSEConnection = vi.fn();
   sendToConversation = vi.fn();
@@ -33,9 +33,10 @@ class MockConversationService {
   getMessagesByConversationId = vi.fn();
   getConversationById = vi.fn();
   updateMessage = vi.fn();
+  createMessageStream = vi.fn();
 }
 
-let mockChatService: MockChatService;
+let mockSSEService: MockSSEService;
 let mockConversationService: MockConversationService;
 
 describe('ChatController', () => {
@@ -48,10 +49,10 @@ describe('ChatController', () => {
   let mockWrite: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mockChatService = new MockChatService();
+    mockSSEService = new MockSSEService();
     mockConversationService = new MockConversationService();
     chatController = new ChatController(
-      mockChatService as any,
+      mockSSEService as any,
       mockConversationService as any,
     );
 
@@ -96,7 +97,7 @@ describe('ChatController', () => {
       const conversationId = 'test-conversation-id';
       mockRequest.params = { conversationId };
 
-      mockChatService.initSSEConnection = vi
+      mockSSEService.initSSEConnection = vi
         .fn()
         .mockReturnValue('connection-id');
 
@@ -105,7 +106,7 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockChatService.initSSEConnection).toHaveBeenCalledWith(
+      expect(mockSSEService.initSSEConnection).toHaveBeenCalledWith(
         conversationId,
         mockResponse,
       );
@@ -140,7 +141,7 @@ describe('ChatController', () => {
       // Simulate close event
       closeCallback?.();
 
-      expect(mockChatService.closeSSEConnection).toHaveBeenCalledWith(
+      expect(mockSSEService.closeSSEConnection).toHaveBeenCalledWith(
         conversationId,
       );
       expect(mockRequest.log?.info).toHaveBeenCalledWith(
@@ -171,7 +172,7 @@ describe('ChatController', () => {
       // Simulate error event
       errorCallback?.(testError);
 
-      expect(mockChatService.closeSSEConnection).toHaveBeenCalledWith(
+      expect(mockSSEService.closeSSEConnection).toHaveBeenCalledWith(
         conversationId,
       );
       expect(mockRequest.log?.error).toHaveBeenCalledWith(
@@ -415,6 +416,21 @@ describe('ChatController', () => {
         .mockResolvedValueOnce(mockInitialMessage);
       mockConversationService.updateMessage.mockResolvedValue(undefined);
 
+      // Create a mock WritableStream
+      const mockWritableStream = new WritableStream({
+        write() {
+          // Mock write implementation
+        },
+        close() {
+          // Mock close implementation
+        },
+        abort() {
+          // Mock abort implementation
+        },
+      }); // Mock createMessageStream to return the mock WritableStream
+      mockConversationService.createMessageStream = vi
+        .fn()
+        .mockResolvedValue(mockWritableStream);
       // Mock container.resolve to return the mock agent
       vi.mocked(container.resolve).mockReturnValue(mockAgent);
       mockAgent.streamCall.mockResolvedValue(undefined);
@@ -463,29 +479,33 @@ describe('ChatController', () => {
       // Allow async operations to complete
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Verify that streamCall was called with ChatState and WritableStream
+      // Verify that streamCall was called with Message[] and WritableStream
       expect(mockAgent.streamCall).toHaveBeenCalledWith(
-        expect.any(ChatState),
+        expect.any(Array),
         expect.any(WritableStream),
       );
     });
 
-    it('should create initial assistant message for streaming', async () => {
+    it('should start agent processing that creates initial assistant message for streaming', async () => {
       await chatController.chat(
         mockRequest as Request,
         mockResponse as Response,
       );
 
-      // Verify that two messages were created: user message and initial assistant message
+      // Verify the user message was added
       expect(
         mockConversationService.addMessageToConversation,
-      ).toHaveBeenCalledTimes(2);
-      expect(
-        mockConversationService.addMessageToConversation,
-      ).toHaveBeenNthCalledWith(1, conversationId, Role.USER, 'Hello');
-      expect(
-        mockConversationService.addMessageToConversation,
-      ).toHaveBeenNthCalledWith(2, conversationId, Role.ASSIST, '');
+      ).toHaveBeenCalledWith(conversationId, Role.USER, 'Hello');
+
+      // Verify the agent was resolved and streamCall was eventually called
+      await new Promise(resolve => setTimeout(resolve, 50));
+      expect(container.resolve).toHaveBeenCalledWith(
+        mockConversation.config.agent,
+      );
+      expect(mockAgent.streamCall).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.any(WritableStream),
+      );
     });
   });
 
@@ -515,6 +535,25 @@ describe('ChatController', () => {
         .mockResolvedValueOnce({ id: 'user-msg', conversationId })
         .mockResolvedValueOnce(mockInitialMessage);
       mockConversationService.updateMessage.mockResolvedValue(undefined);
+
+      // Create a mock WritableStream
+      const mockWritableStream = new WritableStream({
+        write() {
+          // Mock write implementation
+        },
+        close() {
+          // Mock close implementation
+        },
+        abort() {
+          // Mock abort implementation
+        },
+      });
+
+      // Mock createMessageStream to return the mock WritableStream
+      mockConversationService.createMessageStream = vi
+        .fn()
+        .mockResolvedValue(mockWritableStream);
+
       vi.mocked(container.resolve).mockReturnValue(mockAgent);
       mockAgent.streamCall.mockResolvedValue(undefined);
 
@@ -535,10 +574,10 @@ describe('ChatController', () => {
       );
       expect(
         mockConversationService.addMessageToConversation,
-      ).toHaveBeenCalledTimes(2);
+      ).toHaveBeenCalledWith(conversationId, Role.USER, 'Test message');
 
       // Allow async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       // Verify agent was resolved and streamCall was initiated
       expect(container.resolve).toHaveBeenCalledWith(
@@ -594,7 +633,7 @@ describe('ChatController', () => {
 
       // Verify that streamCall was called with the correct types
       expect(mockAgent.streamCall).toHaveBeenCalledWith(
-        expect.any(ChatState),
+        expect.any(Array),
         expect.any(WritableStream),
       );
     });

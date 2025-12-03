@@ -39,9 +39,15 @@ vi.mock('@/server/service/pg', () => ({
 
 describe('ConversationService', () => {
   let conversationService: ConversationService;
+  const mockSSEService = {
+    sendToConversation: vi.fn(),
+    sendToConnection: vi.fn(),
+    initSSEConnection: vi.fn(),
+    closeSSEConnection: vi.fn(),
+  };
 
   beforeEach(() => {
-    conversationService = new ConversationService();
+    conversationService = new ConversationService(mockSSEService as any);
   });
 
   it('should create a conversation', async () => {

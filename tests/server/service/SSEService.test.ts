@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SSEService } from '@/server/service/ChatService';
+import { SSEService } from '@/server/service/SSEService';
 import { SSEMessage } from '@/shared/types';
 import type { Response } from 'express';
 

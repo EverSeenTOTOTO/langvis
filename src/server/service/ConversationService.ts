@@ -1,15 +1,22 @@
-import { singleton } from 'tsyringe';
-import pg from './pg';
-import {
-  ConversationEntity,
-  Conversation,
-} from '@/shared/entities/Conversation';
-import { MessageEntity, Message, Role } from '@/shared/entities/Message';
-import { In } from 'typeorm';
 import { AgentMetas } from '@/shared/constants';
+import {
+  Conversation,
+  ConversationEntity,
+} from '@/shared/entities/Conversation';
+import { Message, MessageEntity, Role } from '@/shared/entities/Message';
+import { inject, singleton } from 'tsyringe';
+import { In } from 'typeorm';
+import { logger } from '../middleware/logger';
+import pg from './pg';
+import { SSEService } from './SSEService';
 
 @singleton()
 export class ConversationService {
+  constructor(
+    @inject(SSEService)
+    private sseService: SSEService,
+  ) {}
+
   async createConversation(
     name: string,
     config?: Record<string, any> | null,
@@ -83,6 +90,7 @@ export class ConversationService {
     conversationId: string,
     role: Role,
     content: string,
+    meta?: Record<string, any> | null,
   ): Promise<Message | null> {
     const conversation = await this.getConversationById(conversationId);
 
@@ -95,6 +103,7 @@ export class ConversationService {
       conversationId,
       role,
       content,
+      meta,
     });
 
     return await messageRepository.save(message);
@@ -125,6 +134,7 @@ export class ConversationService {
   async updateMessage(
     messageId: string,
     content: string,
+    meta?: Record<string, any> | null,
   ): Promise<Message | null> {
     const messageRepository = pg.getRepository(MessageEntity);
     const message = await messageRepository.findOneBy({ id: messageId });
@@ -134,6 +144,114 @@ export class ConversationService {
     }
 
     message.content = content;
+    if (meta !== undefined) {
+      message.meta = meta;
+    }
     return await messageRepository.save(message);
+  }
+
+  /**
+   * Delete all messages after a specific message (for rollback operations)
+   */
+  async deleteMessagesAfter(
+    conversationId: string,
+    afterMessageId: string,
+  ): Promise<boolean> {
+    const messageRepository = pg.getRepository(MessageEntity);
+
+    // Get the target message to get its timestamp
+    const targetMessage = await messageRepository.findOneBy({
+      id: afterMessageId,
+      conversationId,
+    });
+
+    if (!targetMessage) {
+      return false;
+    }
+
+    // Delete all messages created after the target message
+    await messageRepository
+      .createQueryBuilder()
+      .delete()
+      .from(MessageEntity)
+      .where('conversationId = :conversationId', { conversationId })
+      .andWhere('createdAt > :createdAt', {
+        createdAt: targetMessage.createdAt,
+      })
+      .execute();
+
+    return true;
+  }
+
+  async createMessageStream(
+    conversationId: string,
+    role: Role,
+    initialContent: string = '',
+    meta: Record<string, any> = {},
+  ): Promise<WritableStream<string>> {
+    // Create initial message in database with empty content
+    const message = await this.addMessageToConversation(
+      conversationId,
+      role,
+      initialContent,
+      meta,
+    );
+
+    if (!message) {
+      throw new Error('Failed to create initial message for streaming');
+    }
+
+    // Record start time for logging
+    const startTime = Date.now();
+
+    // Create a custom WritableStream that integrates with streaming message service
+    const writableStream = new WritableStream<string>({
+      write: async (chunk: string) => {
+        // Update the streaming message
+        message.content += chunk;
+
+        // Log first chunk received
+        const isFirstChunk = message.content.length === chunk.length;
+
+        if (isFirstChunk) {
+          logger.info(
+            `First chunk received for agent call in conversation ${conversationId}, time taken: ${Date.now() - startTime}ms`,
+          );
+        }
+
+        this.sseService.sendToConversation(conversationId, {
+          type: 'completion_delta',
+          content: chunk,
+        });
+      },
+      close: async () => {
+        try {
+          // Save final content to database
+          await this.updateMessage(message.id, message.content, message.meta);
+        } catch (error) {
+          logger.error('Failed to finalize streaming message:', error);
+        }
+
+        // Send completion done message
+        this.sseService.sendToConversation(conversationId, {
+          type: 'completion_done',
+        });
+
+        const elapsed = Date.now() - startTime;
+        logger.info(
+          `Agent call finished for conversation ${conversationId}, total time: ${elapsed}ms, time per token: ${
+            elapsed / (message.content.length || 1)
+          }ms`,
+        );
+      },
+      abort: (reason: unknown) => {
+        logger.error(
+          `Agent call canceled for conversation ${conversationId}:`,
+          reason,
+        );
+      },
+    });
+
+    return writableStream;
   }
 }
