@@ -1,0 +1,37 @@
+// Custom scrollbar mixin for webkit browsers
+@mixin custom-scrollbar(
+  $width: 6px,
+  $track-color: transparent,
+  $thumb-color: rgb(0 0 0 / 20%),
+  $thumb-hover-color: rgb(0 0 0 / 30%),
+  $border-radius: 3px
+) {
+  &::-webkit-scrollbar {
+    width: $width;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: $track-color;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: $thumb-color;
+    border-radius: $border-radius;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: $thumb-hover-color;
+  }
+}
+
+// Default scrollbar style used in the project
+@mixin default-scrollbar {
+  @include custom-scrollbar(
+    6px,
+    transparent,
+    rgb(0 0 0 / 20%),
+    rgb(0 0 0 / 30%),
+    3px
+  );
+}
+

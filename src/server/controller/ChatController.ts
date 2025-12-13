@@ -7,7 +7,6 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { SSEService } from '../service/SSEService';
 import { ConversationService } from '../service/ConversationService';
-import { v4 as uuid } from 'uuid';
 
 @singleton()
 @controller('/api/chat')
@@ -71,37 +70,30 @@ export class ChatController {
       });
     }
 
-    const message = await this.conversationService.addMessageToConversation(
-      conversationId,
+    // Start agent processing in background, but handle errors to prevent unhandled rejections
+    await this.startAgent(
+      req,
+      conversation.config as ConversationConfig,
       role as Role,
       content,
-    );
+    ).catch(error => {
+      req.log.error(
+        `Error in agent processing for conversation ${conversationId}:`,
+        error,
+      );
+    });
 
-    if (!message) {
-      return res
-        .status(404)
-        .json({ error: `Conversation ${conversationId} not found` });
-    }
-
-    // Start agent processing in background, but handle errors to prevent unhandled rejections
-    this.startAgent(req, conversation.config as ConversationConfig).catch(
-      error => {
-        req.log.error(
-          `Error in agent processing for conversation ${conversationId}:`,
-          error,
-        );
-      },
-    );
-
-    return res.status(201).json(message);
+    // Return success immediately
+    return res.status(200).json({ success: true });
   }
 
-  private async startAgent(req: Request, config: ConversationConfig) {
+  private async startAgent(
+    req: Request,
+    config: ConversationConfig,
+    userRole: Role,
+    userContent: string,
+  ) {
     const { conversationId } = req.params;
-    const messages =
-      await this.conversationService.getMessagesByConversationId(
-        conversationId,
-      );
 
     req.log.info(`Starting agent call for conversation ${conversationId}`);
 
@@ -114,32 +106,48 @@ export class ChatController {
       return;
     }
 
-    // Prepare conversation history with system prompt if needed
-    const conversationHistory = [...messages];
-    if (typeof agent.getSystemPrompt === 'function') {
-      const systemPrompt = await agent.getSystemPrompt();
-      const systemMessage = {
-        id: uuid(),
-        role: Role.SYSTEM,
-        content: systemPrompt,
-        meta: {},
+    // Get existing messages from database
+    const messages =
+      await this.conversationService.getMessagesByConversationId(
         conversationId,
-        createdAt: new Date(),
-      };
-
-      conversationHistory.unshift(systemMessage);
-    }
-
-    try {
-      // Create streaming message with integrated WritableStream
-      const stream = await this.conversationService.createMessageStream(
-        conversationId,
-        Role.ASSIST,
       );
 
-      await agent.streamCall(conversationHistory, stream);
-    } catch (error: unknown) {
-      req.log.error(`Error calling agent ${config.agent}:`, error);
+    // Prepare conversation history with system prompt if needed
+    if (typeof agent.getSystemPrompt === 'function' && messages.length == 0) {
+      const systemPrompt = await agent.getSystemPrompt();
+
+      // Save system prompt to database
+      const systemMessage =
+        await this.conversationService.addMessageToConversation(
+          conversationId,
+          Role.SYSTEM,
+          systemPrompt,
+        );
+
+      if (systemMessage) {
+        messages.push(systemMessage);
+      }
     }
+
+    // Save user message to database
+    const userMessage = await this.conversationService.addMessageToConversation(
+      conversationId,
+      userRole,
+      userContent,
+    );
+
+    if (userMessage) {
+      messages.push(userMessage);
+    }
+
+    // Create streaming message with integrated WritableStream
+    const stream = await this.conversationService.createMessageStream(
+      conversationId,
+      Role.ASSIST,
+      '',
+      { loading: true },
+    );
+
+    agent.streamCall(messages, stream);
   }
 }

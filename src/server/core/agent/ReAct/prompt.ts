@@ -51,7 +51,7 @@ Each assistant message must contain one of the following types:
      "thought": "Interpret the observation and decide next step."
    }
 
-5. ***If info is missing:**
+5. **If info is missing:**
    {
      "final_answer": "List the clarification questions needed before proceeding."
    }

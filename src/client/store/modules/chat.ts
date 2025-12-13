@@ -2,7 +2,6 @@ import { api, ApiRequest, getPrefetchPath } from '@/client/decorator/api';
 import { isClient } from '@/shared/constants';
 import { Conversation } from '@/shared/entities/Conversation';
 import type { Message } from '@/shared/entities/Message';
-import { Role } from '@/shared/entities/Message';
 import { SSEMessage } from '@/shared/types';
 import { message } from 'antd';
 import { makeAutoObservable } from 'mobx';
@@ -88,7 +87,7 @@ export class ChatStore {
   @api((req: UserMessage) => `/api/chat/start/${req.id}`, {
     method: 'post',
   })
-  async handleUserMessage(_params: UserMessage, req?: ApiRequest<Message>) {
+  async startChat(_params: UserMessage, req?: ApiRequest<Message>) {
     const conversationId = this.conversationStore.currentConversationId;
 
     if (!conversationId) {
@@ -97,8 +96,6 @@ export class ChatStore {
       );
       return;
     }
-
-    this.conversationStore.addTempMessage(conversationId, Role.USER);
 
     if (!this.isConnected(conversationId)) {
       try {
@@ -110,6 +107,7 @@ export class ChatStore {
         message.error(
           `${this.settingStore.tr('Failed to connect to SSE')}: ${(e as Error)?.message}`,
         );
+        return;
       }
     }
 
@@ -117,10 +115,10 @@ export class ChatStore {
 
     if (this.conversationStore.currentConversationId !== conversationId) return;
 
+    // 刷新消息列表，获取用户消息和服务端创建的空 assistant 消息
     await this.conversationStore.getMessagesByConversationId({
       id: conversationId,
     });
-    this.conversationStore.addTempMessage(conversationId, Role.ASSIST);
   }
 
   private handleSSEMessage(conversationId: string, msg: SSEMessage) {
@@ -131,43 +129,23 @@ export class ChatStore {
       return;
     }
 
-    const lastMessage =
-      this.conversationStore.messages[conversationId].slice(-1)[0];
-
-    const checkLastMessage = () => {
-      if (
-        lastMessage?.role !== Role.ASSIST ||
-        !ConversationStore.isTempMessage(lastMessage)
-      ) {
-        message.error(
-          this.settingStore.tr(
-            'Received sse message for non-pending conversation',
-          ),
-        );
-        return false;
-      }
-      return true;
-    };
-
     switch (msg.type) {
       case 'completion_delta':
-        if (!checkLastMessage()) break;
-        lastMessage.loading = false;
-        lastMessage.content += msg.content;
+        this.conversationStore.updateStreamingContent(
+          conversationId,
+          msg.content,
+        );
         break;
       case 'completion_done':
         this.disconnectFromSSE(conversationId);
+        // 刷新消息列表以获取最终的完整消息
         this.conversationStore.getMessagesByConversationId({
           id: conversationId,
         });
         break;
       case 'completion_error': {
-        if (!checkLastMessage()) break;
-        message.error(`${this.settingStore.tr(msg.error)}`);
-
-        lastMessage.loading = false;
-        lastMessage.content = msg.error;
         this.disconnectFromSSE(conversationId);
+        message.error(`${this.settingStore.tr('Chat error')}: ${msg.error}`);
         break;
       }
       default:
