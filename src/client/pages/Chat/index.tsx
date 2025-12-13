@@ -1,4 +1,5 @@
 import { useStore } from '@/client/store';
+import { Role } from '@/shared/entities/Message';
 import { Sender } from '@ant-design/x';
 import { Layout, message } from 'antd';
 import { observer } from 'mobx-react-lite';
@@ -7,7 +8,6 @@ import { useAsyncFn } from 'react-use';
 import ConversationsSider from './components/ConversationsSider';
 import Messages from './components/Messages';
 import './index.scss';
-import { Role } from '@/shared/entities/Message';
 
 const { Content } = Layout;
 
@@ -23,7 +23,7 @@ const Chat: React.FC = () => {
   const addMessageApi = useAsyncFn(
     conversationStore.addMessageToConversation.bind(conversationStore),
   );
-  const chatApi = useAsyncFn(chatStore.handleUserMessage.bind(chatStore));
+  const chatApi = useAsyncFn(chatStore.startChat.bind(chatStore));
 
   const handleSend = async () => {
     if (!value) return;

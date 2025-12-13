@@ -25,7 +25,7 @@ const Login = () => {
 
   const signInApi = useAsyncFn(authStore.signInEmail.bind(authStore));
 
-  const onFinish = async (values: { email: string; password: string }) => {
+  const onFinish = async (values: Record<string, any>) => {
     try {
       // these api are not handled by @api decorator, so we need to catch errors here
       const result = await signInApi[1]({

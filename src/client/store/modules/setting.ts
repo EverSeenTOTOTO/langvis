@@ -44,6 +44,7 @@ const initI18n = (lang: string = 'en_US') => {
             'Type a message...': '输入消息...',
             'Edit Conversation': '编辑对话',
             Save: '保存',
+            'System Prompt': '系统提示语',
             'Conversation ID': '对话ID',
             'Conversation Name': '对话名称',
             'Please enter a conversation name': '请输入对话名称',

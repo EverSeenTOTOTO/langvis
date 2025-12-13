@@ -9,6 +9,7 @@ import { In } from 'typeorm';
 import { logger } from '../middleware/logger';
 import pg from './pg';
 import { SSEService } from './SSEService';
+import { omit } from 'lodash-es';
 
 @singleton()
 export class ConversationService {
@@ -186,8 +187,8 @@ export class ConversationService {
   async createMessageStream(
     conversationId: string,
     role: Role,
-    initialContent: string = '',
-    meta: Record<string, any> = {},
+    initialContent: string,
+    meta: Record<string, any>,
   ): Promise<WritableStream<string>> {
     // Create initial message in database with empty content
     const message = await this.addMessageToConversation(
@@ -227,7 +228,11 @@ export class ConversationService {
       close: async () => {
         try {
           // Save final content to database
-          await this.updateMessage(message.id, message.content, message.meta);
+          await this.updateMessage(
+            message.id,
+            message.content,
+            omit(message.meta, 'loading'),
+          );
         } catch (error) {
           logger.error('Failed to finalize streaming message:', error);
         }

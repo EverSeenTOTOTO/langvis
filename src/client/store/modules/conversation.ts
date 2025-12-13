@@ -5,7 +5,6 @@ import type { Message } from '@/shared/entities/Message';
 import { Role } from '@/shared/entities/Message';
 import { makeAutoObservable, reaction } from 'mobx';
 import { singleton } from 'tsyringe';
-import { v4 as uuidv4 } from 'uuid';
 
 @singleton()
 export class ConversationStore {
@@ -34,26 +33,10 @@ export class ConversationStore {
     this.currentConversationId = id;
   }
 
-  static isTempMessage(msg: Message) {
-    return msg.id.startsWith('temp-');
-  }
-
-  addTempMessage(conversationId: string, role: Role) {
-    if (!this.messages[conversationId]) {
-      this.messages[conversationId] = [];
-    }
-
-    const tempMessage: Message = {
-      id: `temp-${uuidv4()}`,
-      content: '',
-      role,
-      meta: {},
-      createdAt: new Date(),
-      conversationId,
-      loading: true,
-    };
-
-    this.messages[conversationId].push(tempMessage);
+  get currentConversation(): Conversation | undefined {
+    return this.conversations.find(
+      each => each.id === this.currentConversationId,
+    );
   }
 
   @api('/api/conversation', { method: 'post' })
@@ -146,5 +129,32 @@ export class ConversationStore {
   ) {
     await req!.send();
     await this.getMessagesByConversationId({ id: params.id });
+  }
+
+  // 流式消息更新方法
+  updateStreamingContent(conversationId: string, deltaContent: string) {
+    const messages = this.messages[conversationId];
+    if (!messages) return;
+
+    // 找到最后一个 assistant 消息（通常是正在流式传输的消息）
+    const lastMessage = messages[messages.length - 1];
+
+    if (
+      !lastMessage ||
+      lastMessage.role !== Role.ASSIST ||
+      !(lastMessage.meta?.streaming || lastMessage.meta?.loading)
+    ) {
+      return;
+    }
+
+    messages[messages.length - 1] = {
+      ...lastMessage,
+      content: lastMessage.content + deltaContent,
+      meta: {
+        ...lastMessage.meta,
+        loading: false,
+        streaming: true,
+      },
+    };
   }
 }

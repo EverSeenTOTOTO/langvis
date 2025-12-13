@@ -237,11 +237,8 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(
-        mockConversationService.addMessageToConversation,
-      ).toHaveBeenCalledWith(conversationId, role, content);
-      expect(mockStatus).toHaveBeenCalledWith(201);
-      expect(mockJson).toHaveBeenCalledWith(mockMessage);
+      expect(mockStatus).toHaveBeenCalledWith(200);
+      expect(mockJson).toHaveBeenCalledWith({ success: true });
     });
 
     it('should return 400 if role is missing', async () => {
@@ -446,7 +443,8 @@ describe('ChatController', () => {
       );
 
       // Verify the chat method returns success
-      expect(mockStatus).toHaveBeenCalledWith(201);
+      expect(mockStatus).toHaveBeenCalledWith(200);
+      expect(mockJson).toHaveBeenCalledWith({ success: true });
 
       // Verify the agent was resolved and streamCall was eventually called
       await new Promise(resolve => setTimeout(resolve, 0));
@@ -467,7 +465,8 @@ describe('ChatController', () => {
       );
 
       // Should still return success for the user message
-      expect(mockStatus).toHaveBeenCalledWith(201);
+      expect(mockStatus).toHaveBeenCalledWith(200);
+      expect(mockJson).toHaveBeenCalledWith({ success: true });
     });
 
     it('should verify chat state and stream setup with correct parameters', async () => {
@@ -568,7 +567,8 @@ describe('ChatController', () => {
       );
 
       // Verify the basic setup worked
-      expect(mockStatus).toHaveBeenCalledWith(201);
+      expect(mockStatus).toHaveBeenCalledWith(200);
+      expect(mockJson).toHaveBeenCalledWith({ success: true });
       expect(mockConversationService.getConversationById).toHaveBeenCalledWith(
         conversationId,
       );
