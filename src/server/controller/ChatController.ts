@@ -76,12 +76,7 @@ export class ChatController {
       conversation.config as ConversationConfig,
       role as Role,
       content,
-    ).catch(error => {
-      req.log.error(
-        `Error in agent processing for conversation ${conversationId}:`,
-        error,
-      );
-    });
+    );
 
     // Return success immediately
     return res.status(200).json({ success: true });
@@ -112,42 +107,56 @@ export class ChatController {
         conversationId,
       );
 
-    // Prepare conversation history with system prompt if needed
+    // Prepare messages to batch insert
+    const messagesToInsert: Array<{
+      role: Role;
+      content: string;
+      meta?: Record<string, any> | null;
+    }> = [];
+
+    // Add system prompt if needed
     if (typeof agent.getSystemPrompt === 'function' && messages.length == 0) {
       const systemPrompt = await agent.getSystemPrompt();
-
-      // Save system prompt to database
-      const systemMessage =
-        await this.conversationService.addMessageToConversation(
-          conversationId,
-          Role.SYSTEM,
-          systemPrompt,
-        );
-
-      if (systemMessage) {
-        messages.push(systemMessage);
-      }
+      messagesToInsert.push({
+        role: Role.SYSTEM,
+        content: systemPrompt,
+      });
     }
 
-    // Save user message to database
-    const userMessage = await this.conversationService.addMessageToConversation(
+    // Add user message
+    messagesToInsert.push({
+      role: userRole,
+      content: userContent,
+    });
+
+    // Add initial assistant message for streaming
+    messagesToInsert.push({
+      role: Role.ASSIST,
+      content: '',
+      meta: { loading: true },
+    });
+
+    // Batch insert all messages at once
+    const insertedMessages = await this.conversationService.batchAddMessages(
       conversationId,
-      userRole,
-      userContent,
+      messagesToInsert,
     );
 
-    if (userMessage) {
-      messages.push(userMessage);
-    }
+    // Update messages array with inserted messages
+    messages.push(...insertedMessages);
 
-    // Create streaming message with integrated WritableStream
-    const stream = await this.conversationService.createMessageStream(
+    // Get the assistant message (last inserted message) for streaming
+    const assistantMessage = insertedMessages[insertedMessages.length - 1];
+
+    // Create streaming for the assistant message
+    const stream = await this.conversationService.createStreamForMessage(
       conversationId,
-      Role.ASSIST,
-      '',
-      { loading: true },
+      assistantMessage,
     );
 
-    agent.streamCall(messages, stream);
+    // Only pass messages except the empty assistant message to agent
+    const messagesForAgent = messages.slice(0, -1);
+
+    agent.streamCall(messagesForAgent, stream);
   }
 }

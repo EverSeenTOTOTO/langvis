@@ -51,4 +51,3 @@ const AssistantMessage: React.FC<MessageProps> = ({
 };
 
 export default AssistantMessage;
-

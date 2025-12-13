@@ -134,6 +134,7 @@ export class ConversationStore {
   // 流式消息更新方法
   updateStreamingContent(conversationId: string, deltaContent: string) {
     const messages = this.messages[conversationId];
+
     if (!messages) return;
 
     // 找到最后一个 assistant 消息（通常是正在流式传输的消息）

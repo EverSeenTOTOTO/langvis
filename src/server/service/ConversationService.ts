@@ -110,6 +110,33 @@ export class ConversationService {
     return await messageRepository.save(message);
   }
 
+  async batchAddMessages(
+    conversationId: string,
+    messagesData: Array<{
+      role: Role;
+      content: string;
+      meta?: Record<string, any> | null;
+    }>,
+  ): Promise<Message[]> {
+    const conversation = await this.getConversationById(conversationId);
+
+    if (!conversation) {
+      throw new Error(`Conversation ${conversationId} not found`);
+    }
+
+    const messageRepository = pg.getRepository(MessageEntity);
+    const messages = messagesData.map(data =>
+      messageRepository.create({
+        conversationId,
+        role: data.role,
+        content: data.content,
+        meta: data.meta,
+      }),
+    );
+
+    return await messageRepository.save(messages);
+  }
+
   async getMessagesByConversationId(
     conversationId: string,
   ): Promise<Message[]> {
@@ -202,6 +229,13 @@ export class ConversationService {
       throw new Error('Failed to create initial message for streaming');
     }
 
+    return this.createStreamForMessage(conversationId, message);
+  }
+
+  async createStreamForMessage(
+    conversationId: string,
+    message: Message,
+  ): Promise<WritableStream<string>> {
     // Record start time for logging
     const startTime = Date.now();
 
