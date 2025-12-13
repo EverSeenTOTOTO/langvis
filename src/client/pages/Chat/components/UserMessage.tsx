@@ -15,15 +15,17 @@ const UserMessage: React.FC<MessageProps> = ({
   };
 
   const footer = (
-    <Flex justify="end">
+    <Flex justify="end" className="message-footer" gap={4}>
       <Button
-        type="text"
+        color="default"
+        variant="filled"
         icon={<CopyOutlined />}
         onClick={copyToClipboard}
         size="small"
       />
       <Button
-        type="text"
+        color="default"
+        variant="filled"
         icon={<RedoOutlined />}
         onClick={() => onRetry(msg.id)}
         size="small"
@@ -35,7 +37,12 @@ const UserMessage: React.FC<MessageProps> = ({
     <Bubble
       key={msg.id}
       placement="end"
-      content={<MarkdownRender>{msg.content}</MarkdownRender>}
+      content={
+        <>
+          <MarkdownRender>{msg.content}</MarkdownRender>
+          {footer}
+        </>
+      }
       loading={msg.loading}
       avatar={<Avatar icon={<UserOutlined />} />}
       styles={
@@ -47,8 +54,6 @@ const UserMessage: React.FC<MessageProps> = ({
             }
           : {}
       }
-      footer={footer}
-      footerPlacement="outer-end"
     />
   );
 };
