@@ -413,4 +413,53 @@ describe('ConversationService', () => {
     );
     expect(result).toBeNull();
   });
+
+  it('should batch add messages to a conversation', async () => {
+    const mockConversation = { id: '1', name: 'Test Conversation' };
+    const messagesData = [
+      { role: Role.USER, content: 'Hello' },
+      { role: Role.ASSIST, content: '', meta: { loading: true } },
+    ];
+    const expectedMessages = [
+      { id: '1', conversationId: '1', role: Role.USER, content: 'Hello' },
+      { 
+        id: '2', 
+        conversationId: '1', 
+        role: Role.ASSIST, 
+        content: '', 
+        meta: { loading: true } 
+      },
+    ];
+
+    // Mock conversation repository
+    (pg.getRepository as any).mockReturnValueOnce({
+      findOneBy: vi.fn().mockResolvedValue(mockConversation),
+    });
+
+    // Mock message repository
+    (pg.getRepository as any).mockReturnValueOnce({
+      create: vi.fn().mockImplementation((data) => data),
+      save: vi.fn().mockResolvedValue(expectedMessages),
+    });
+
+    const result = await conversationService.batchAddMessages(
+      '1',
+      messagesData,
+    );
+    
+    expect(result).toEqual(expectedMessages);
+  });
+
+  it('should throw error when batch adding messages to non-existent conversation', async () => {
+    const messagesData = [{ role: Role.USER, content: 'Hello' }];
+
+    // Mock conversation repository to return null
+    (pg.getRepository as any).mockReturnValueOnce({
+      findOneBy: vi.fn().mockResolvedValue(null),
+    });
+
+    await expect(
+      conversationService.batchAddMessages('non-existent', messagesData)
+    ).rejects.toThrow('Conversation non-existent not found');
+  });
 });

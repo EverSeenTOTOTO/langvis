@@ -59,4 +59,3 @@ const UserMessage: React.FC<MessageProps> = ({
 };
 
 export default UserMessage;
-

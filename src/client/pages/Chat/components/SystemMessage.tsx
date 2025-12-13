@@ -41,4 +41,3 @@ const SystemMessage: React.FC<MessageProps> = ({ msg }) => {
 };
 
 export default observer(SystemMessage);
-
