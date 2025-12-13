@@ -28,33 +28,29 @@
       padding: 16px;
       overflow-y: auto;
 
-      .ant-bubble-system {
+      .system-message {
         .ant-collapse-content-box {
           @include mixins.default-scrollbar;
         }
       }
 
-      .ant-bubble-body {
-        position: relative;
-
+      .ant-bubble {
         .ant-bubble-content {
+          position: relative;
           padding: 0 var(--ant-padding);
-        }
 
-        .ant-bubble-footer {
-          display: none;
-        }
+          .message-footer {
+            display: none;
+          }
 
-        &:hover {
-          .ant-bubble-footer {
-            position: absolute;
-            right: 0;
-            bottom: 0;
-            display: flex;
-            transform: translateY(100%);
-
-            > .ant-flex {
-              padding-block-start: 8px;
+          &:hover {
+            .message-footer {
+              position: absolute;
+              right: 0;
+              bottom: 0;
+              display: flex;
+              padding-block-start: 4px;
+              transform: translateY(100%);
             }
           }
         }
