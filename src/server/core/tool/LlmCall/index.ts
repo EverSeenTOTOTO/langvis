@@ -7,13 +7,12 @@ import type {
   ChatCompletionCreateParamsStreaming,
 } from 'openai/resources/chat/completions';
 import { inject, injectable } from 'tsyringe';
-import { ToolMetas } from '@/shared/constants';
 import { Tool } from '..';
 
 @injectable()
 export default class LlmCallTool implements Tool {
-  static readonly Name = ToolMetas.LLM_CALL_TOOL.Name.en; // Access localized name
-  static readonly Description = ToolMetas.LLM_CALL_TOOL.Description.en; // Access localized description
+  name!: string;
+  description!: string;
 
   constructor(@inject(InjectTokens.OPENAI) private readonly openai: OpenAI) {}
 

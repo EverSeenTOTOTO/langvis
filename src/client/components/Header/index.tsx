@@ -1,4 +1,3 @@
-import Dropdown, { DropdownProps } from '@/client/components/Dropdown';
 import { useStore } from '@/client/store';
 import { SUPPORTED_LOCALES } from '@/client/store/modules/setting';
 import {
@@ -8,10 +7,19 @@ import {
   SunOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import { Avatar, Col, Divider, Row, Select, Switch, Typography } from 'antd';
+import {
+  Avatar,
+  Col,
+  Divider,
+  Dropdown,
+  Row,
+  Select,
+  Switch,
+  Typography,
+} from 'antd';
+import type { ItemType } from 'antd/es/menu/interface';
 import { observer } from 'mobx-react-lite';
 import { useNavigate } from 'react-router-dom';
-import { useAsyncFn } from 'react-use';
 import './index.scss';
 
 const Header = () => {
@@ -21,9 +29,7 @@ const Header = () => {
   const currentUser = userStore.currentUser;
   const navigate = useNavigate();
 
-  const logoutApi = useAsyncFn(authStore.signOut.bind(authStore));
-
-  const items: DropdownProps['items'] = [
+  const items: ItemType[] = [
     {
       key: 'theme',
       type: 'submenu',
@@ -35,11 +41,11 @@ const Header = () => {
           key: 'theme-switch',
           label: (
             <Switch
+              onClick={(_, e) => e.stopPropagation()}
               unCheckedChildren={<SunOutlined />}
               checkedChildren={<MoonOutlined />}
               checked={settingStore.mode === 'dark'}
               onChange={() => settingStore.toggleMode()}
-              onClick={(_, e) => e.stopPropagation()}
             />
           ),
         },
@@ -78,7 +84,6 @@ const Header = () => {
       icon: <LogoutOutlined />,
       label: settingStore.tr('Logout'),
       type: 'item',
-      loading: logoutApi[0].loading,
       onClick: async () => {
         await authStore.signOut({});
         navigate('/login');
@@ -92,13 +97,13 @@ const Header = () => {
         <Col className="logo">
           <Typography.Title level={3}>Langvis</Typography.Title>
         </Col>
-        <Divider type="vertical" />
+        <Divider orientation="vertical" />
 
         <Col flex={1} />
-        <Divider type="vertical" />
+        <Divider orientation="vertical" />
 
         {currentUser ? (
-          <Dropdown items={items} trigger={['click']}>
+          <Dropdown menu={{ items }} trigger={['click']}>
             <div className="user-dropdown">
               <Avatar
                 src={currentUser.image}

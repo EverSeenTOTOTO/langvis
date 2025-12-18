@@ -107,12 +107,16 @@ export class ChatController {
         conversationId,
       );
 
-    // Prepare messages to batch insert
+    // Prepare messages to batch insert with explicit timestamps to ensure order
+    const baseTimestamp = Date.now();
     const messagesToInsert: Array<{
       role: Role;
       content: string;
       meta?: Record<string, any> | null;
+      createdAt: Date;
     }> = [];
+
+    let timestampOffset = 0;
 
     // Add system prompt if needed
     if (typeof agent.getSystemPrompt === 'function' && messages.length == 0) {
@@ -120,6 +124,7 @@ export class ChatController {
       messagesToInsert.push({
         role: Role.SYSTEM,
         content: systemPrompt,
+        createdAt: new Date(baseTimestamp + timestampOffset++),
       });
     }
 
@@ -127,6 +132,7 @@ export class ChatController {
     messagesToInsert.push({
       role: userRole,
       content: userContent,
+      createdAt: new Date(baseTimestamp + timestampOffset++),
     });
 
     // Add initial assistant message for streaming
@@ -134,6 +140,7 @@ export class ChatController {
       role: Role.ASSIST,
       content: '',
       meta: { loading: true },
+      createdAt: new Date(baseTimestamp + timestampOffset++),
     });
 
     // Batch insert all messages at once
@@ -157,6 +164,6 @@ export class ChatController {
     // Only pass messages except the empty assistant message to agent
     const messagesForAgent = messages.slice(0, -1);
 
-    agent.streamCall(messagesForAgent, stream);
+    agent.streamCall(messagesForAgent, stream, config);
   }
 }

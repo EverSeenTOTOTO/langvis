@@ -1,19 +1,31 @@
 import { singleton, container, Lifecycle } from 'tsyringe';
 import { globby } from 'globby';
-import { AgentMetas, AgentToolMeta, ToolMetas } from '@/shared/constants';
 import { __dirname } from '@/server/utils';
 import { Tool, ToolConstructor } from '../core/tool';
 import { AgentConstructor } from '../core/agent';
 import { logger } from '../middleware/logger';
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
 
-const fullMeta = {
-  ...AgentMetas,
-  ...ToolMetas,
-};
+export interface AgentToolMeta {
+  name: {
+    en: string;
+    zh?: string;
+    [key: string]: string | undefined;
+  };
+  description: {
+    en: string;
+    zh?: string;
+    [key: string]: string | undefined;
+  };
+  tools?: string[];
+  configItems?: any[];
+}
 
 export type AgentInfo = {
   name: string;
   description: string;
+  configItems?: any[];
 };
 
 @singleton()
@@ -24,11 +36,6 @@ export class AgentService {
   async getAllAgentInfo(): Promise<AgentInfo[]> {
     await this.initialize();
     return [...this.agents.values()];
-  }
-
-  async getAgentInfoByName(name: string): Promise<AgentInfo | undefined> {
-    await this.initialize();
-    return this.agents.get(name);
   }
 
   private async initialize(): Promise<void> {
@@ -43,54 +50,77 @@ export class AgentService {
 
     logger.info(
       `🔧 Discovered ${tools.length} tools:`,
-      tools.map(t => t.class.Name),
+      tools.map(t => t.class.name),
     );
     logger.info(
       `🤖 Discovered ${agents.length} agents:`,
-      agents.map(a => a.class.Name),
+      agents.map(a => a.class.name),
     );
 
     // Register tools
-    tools.map(tool => {
-      container.register(tool.class.Name, tool.class, {
+    tools.forEach(tool => {
+      const toolName = tool.meta.name.en; // Use display name as token
+
+      container.register(toolName, tool.class, {
         lifecycle: Lifecycle.Singleton,
       });
-      logger.info(`✅ Tool registered successfully: ${tool.class.Name}`);
+
+      // Inject metadata after resolution
+      container.afterResolution(
+        toolName,
+        (_token, instance: object) => {
+          if (instance && 'name' in instance && 'description' in instance) {
+            Reflect.set(instance, 'name', tool.meta.name.en);
+            Reflect.set(instance, 'description', tool.meta.description.en);
+          }
+        },
+        { frequency: 'Once' },
+      );
+
+      logger.info(`✅ Tool registered successfully: ${toolName}`);
     });
 
     // Register agents
-    agents.map(agent => {
-      container.register(agent.class.Name, agent.class, {
+    agents.forEach(agent => {
+      const agentName = agent.meta.name.en; // Use display name as token
+
+      container.register(agentName, agent.class, {
         lifecycle: Lifecycle.Singleton,
       });
 
       const agentInfo = {
-        name: agent.meta.Name.en,
-        description: agent.meta.Description.en,
+        name: agent.meta.name.en,
+        description: agent.meta.description.en,
+        configItems: agent.meta.configItems,
       };
-      this.agents.set(agent.class.Name, agentInfo);
+      this.agents.set(agentName, agentInfo);
 
-      // Setup dependency injection for agent tools
+      // Setup dependency injection for agent metadata and tools
       container.afterResolution(
-        agent.class.Name,
+        agentName,
         (_token, instance: object) => {
-          if (instance && 'tools' in instance) {
-            const dependencies = agent.meta.Dependencies || [];
+          // Inject name and description
+          if (instance && 'name' in instance && 'description' in instance) {
+            Reflect.set(instance, 'name', agent.meta.name.en);
+            Reflect.set(instance, 'description', agent.meta.description.en);
+          }
 
-            const tools = dependencies.map(name =>
-              container.resolve<Tool>(name),
-            );
+          // Inject tools
+          if (instance && 'tools' in instance) {
+            const toolNames = agent.meta.tools || [];
+
+            const tools = toolNames.map(name => container.resolve<Tool>(name));
 
             Reflect.set(instance, 'tools', tools);
             logger.info(
-              `✅ Injected ${tools.length} tools into agent: ${agent.class.Name}`,
+              `✅ Injected ${tools.length} tools into agent: ${agentName}`,
             );
           }
         },
-        { frequency: 'Always' },
+        { frequency: 'Once' },
       );
 
-      logger.info(`✅ Agent registered successfully: ${agent.class.Name}`);
+      logger.info(`✅ Agent registered successfully: ${agentName}`);
     });
 
     this.isInitialized = true;
@@ -136,16 +166,21 @@ export class AgentService {
       return null;
     }
 
-    const metaData = Object.keys(fullMeta).find(key => {
-      const metaName = fullMeta[key].Name.en;
-      return metaName === entityClass.Name;
-    });
+    // Read config.json from the same directory
+    const configPath = resolve(dirname(absolutePath), 'config.json');
+    let metaData: AgentToolMeta;
 
-    if (!metaData) {
-      logger.warn(`❌ No metadata found for entity ${entityClass.Name}`);
+    try {
+      const configContent = readFileSync(configPath, 'utf-8');
+      metaData = JSON.parse(configContent);
+    } catch (error) {
+      logger.warn(
+        `❌ No config.json found for entity at ${absolutePath}:`,
+        error,
+      );
       return null;
     }
 
-    return { class: entityClass, meta: fullMeta[metaData] };
+    return { class: entityClass, meta: metaData };
   }
 }

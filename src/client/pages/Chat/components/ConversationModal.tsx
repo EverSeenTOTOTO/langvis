@@ -1,9 +1,19 @@
 import Modal, { ModalProps } from '@/client/components/Modal';
 import { useStore } from '@/client/store';
-import { Form, FormProps, Input, Select, Typography } from 'antd';
+import {
+  Checkbox,
+  Form,
+  FormProps,
+  Input,
+  Radio,
+  Select,
+  Switch,
+  Typography,
+} from 'antd';
 import { observer } from 'mobx-react-lite';
 import { useEffect } from 'react';
 import { useAsyncFn } from 'react-use';
+import { AgentConfigItem } from '@/shared/constants/form';
 
 const ConversationModal = ({
   mode,
@@ -29,6 +39,44 @@ const ConversationModal = ({
   useEffect(() => {
     fetchAgentApi[1]();
   }, []);
+
+  const renderConfigItem = (item: AgentConfigItem) => {
+    switch (item.type) {
+      case 'select':
+        return (
+          <Select
+            mode={item.mode}
+            options={item.options}
+            placeholder={item.placeholder}
+            disabled={item.disabled}
+          />
+        );
+      case 'text':
+        return (
+          <Input
+            placeholder={item.placeholder}
+            showCount={item.showCount}
+            disabled={item.disabled}
+          />
+        );
+      case 'checkbox-group':
+        return (
+          <Checkbox.Group options={item.options} disabled={item.disabled} />
+        );
+      case 'radio-group':
+        return <Radio.Group options={item.options} disabled={item.disabled} />;
+      case 'switch':
+        return (
+          <Switch
+            checkedChildren={item.checkedChildren}
+            unCheckedChildren={item.unCheckedChildren}
+            disabled={item.disabled}
+          />
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <Modal
@@ -111,9 +159,26 @@ const ConversationModal = ({
             );
 
             return (
-              <Typography.Paragraph type="secondary">
-                {settingStore.tr(agentInfo?.description || '')}
-              </Typography.Paragraph>
+              <>
+                <Typography.Paragraph type="secondary">
+                  {settingStore.tr(agentInfo?.description || '')}
+                </Typography.Paragraph>
+                {agentInfo?.configItems?.map((item: AgentConfigItem) => (
+                  <Form.Item
+                    key={item.name as string}
+                    name={['config', item.name]}
+                    label={settingStore.tr(item.label as string)}
+                    hidden={item.hidden}
+                    required={item.required}
+                    initialValue={item.initialValue}
+                    tooltip={item.tooltip}
+                    valuePropName={item.valuePropName || 'value'}
+                    style={{ flex: item.flex }}
+                  >
+                    {renderConfigItem(item)}
+                  </Form.Item>
+                ))}
+              </>
             );
           }}
         </Form.Item>
@@ -123,3 +188,4 @@ const ConversationModal = ({
 };
 
 export default observer(ConversationModal);
+

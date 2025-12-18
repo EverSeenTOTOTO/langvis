@@ -1,4 +1,7 @@
 export interface Tool {
+  name: string;
+  description: string;
+
   call(input: Record<string, any>): Promise<unknown>;
 
   streamCall(
@@ -7,7 +10,4 @@ export interface Tool {
   ): Promise<unknown>;
 }
 
-export type ToolConstructor = (new () => Tool) & {
-  Name: string;
-  Description: string;
-};
+export type ToolConstructor = new () => Tool;

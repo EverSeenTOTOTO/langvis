@@ -1,4 +1,3 @@
-import { AgentMetas } from '@/shared/constants';
 import {
   Conversation,
   ConversationEntity,
@@ -24,7 +23,7 @@ export class ConversationService {
   ): Promise<Conversation> {
     const finalConfig = config ?? {};
     if (!finalConfig.agent) {
-      finalConfig.agent = AgentMetas.REACT_AGENT.Name.en;
+      finalConfig.agent = 'Chat Agent';
     }
 
     const conversationRepository = pg.getRepository(ConversationEntity);
@@ -116,6 +115,7 @@ export class ConversationService {
       role: Role;
       content: string;
       meta?: Record<string, any> | null;
+      createdAt?: Date;
     }>,
   ): Promise<Message[]> {
     const conversation = await this.getConversationById(conversationId);
@@ -131,6 +131,7 @@ export class ConversationService {
         role: data.role,
         content: data.content,
         meta: data.meta,
+        ...(data.createdAt && { createdAt: data.createdAt }),
       }),
     );
 
@@ -209,27 +210,6 @@ export class ConversationService {
       .execute();
 
     return true;
-  }
-
-  async createMessageStream(
-    conversationId: string,
-    role: Role,
-    initialContent: string,
-    meta: Record<string, any>,
-  ): Promise<WritableStream<string>> {
-    // Create initial message in database with empty content
-    const message = await this.addMessageToConversation(
-      conversationId,
-      role,
-      initialContent,
-      meta,
-    );
-
-    if (!message) {
-      throw new Error('Failed to create initial message for streaming');
-    }
-
-    return this.createStreamForMessage(conversationId, message);
   }
 
   async createStreamForMessage(

@@ -1,0 +1,21 @@
+{
+  "name": {
+    "en": "Chat Agent",
+    "zh": "对话智能体"
+  },
+  "description": {
+    "en": "A conversational agent that engages in natural dialogue with users, maintaining conversation history and context for coherent responses.",
+    "zh": "与用户进行自然对话的会话智能体，维护对话历史和上下文以提供连贯的回应。"
+  },
+  "tools": ["LlmCall Tool"],
+  "configItems": [
+    {
+      "type": "text",
+      "label": "Modal",
+      "name": "model",
+      "required": true,
+      "initialValue": "gemini-2.5-flash"
+    }
+  ]
+}
+
