@@ -31,7 +31,6 @@ export const App = observer(
             setting.mode === 'dark'
               ? antdTheme.darkAlgorithm
               : antdTheme.defaultAlgorithm,
-          cssVar: true,
         }}
         locale={setting.locale}
       >

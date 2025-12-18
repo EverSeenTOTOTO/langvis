@@ -52,10 +52,10 @@ describe('ReActAgent', () => {
     vi.clearAllMocks();
     // Create ReActAgent instance with required dependencies
     reactAgent = new ReActAgent();
-    // Manually set the tools property for testing with proper constructor names
-    const mockToolWithConstructor = Object.create(mockTestTool);
-    mockToolWithConstructor.constructor = { Name: 'test_tool' };
-    (reactAgent as any).tools = [mockToolWithConstructor];
+    // Manually set the tools property for testing with name as instance property
+    const mockToolWithName = Object.create(mockTestTool);
+    mockToolWithName.name = 'test_tool';
+    (reactAgent as any).tools = [mockToolWithName];
   });
 
   describe('parseResponse', () => {

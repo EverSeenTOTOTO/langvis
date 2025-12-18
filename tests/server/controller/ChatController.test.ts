@@ -2,7 +2,6 @@ import { describe, it, beforeEach, vi, expect } from 'vitest';
 import { ChatController } from '@/server/controller/ChatController';
 import type { Request, Response } from 'express';
 import { Role } from '@/shared/entities/Message';
-import { ToolMetas } from '@/shared/constants';
 import { container } from 'tsyringe';
 
 // Mock the container and agent
@@ -216,7 +215,7 @@ describe('ChatController', () => {
       const mockConversation = {
         id: conversationId,
         name: 'Test Conversation',
-        config: { agent: ToolMetas.LLM_CALL_TOOL.Name.en },
+        config: { agent: 'Chat Agent' },
       };
 
       mockRequest.params = { conversationId };
@@ -393,7 +392,7 @@ describe('ChatController', () => {
       ];
       mockConversation = {
         id: conversationId,
-        config: { agent: ToolMetas.LLM_CALL_TOOL.Name.en },
+        config: { agent: 'Chat Agent' },
       };
 
       // Setup mocks
@@ -493,6 +492,7 @@ describe('ChatController', () => {
       expect(mockAgent.streamCall).toHaveBeenCalledWith(
         expect.any(Array),
         expect.any(WritableStream),
+        expect.any(Object),
       );
     });
 
@@ -523,6 +523,7 @@ describe('ChatController', () => {
       expect(mockAgent.streamCall).toHaveBeenCalledWith(
         expect.any(Array),
         expect.any(WritableStream),
+        expect.any(Object),
       );
     });
   });
@@ -542,7 +543,7 @@ describe('ChatController', () => {
       };
       mockConversation = {
         id: conversationId,
-        config: { agent: ToolMetas.LLM_CALL_TOOL.Name.en },
+        config: { agent: 'Chat Agent' },
       };
 
       mockConversationService.getConversationById.mockResolvedValue(
@@ -676,8 +677,8 @@ describe('ChatController', () => {
       expect(mockAgent.streamCall).toHaveBeenCalledWith(
         expect.any(Array),
         expect.any(WritableStream),
+        expect.any(Object),
       );
     });
   });
 });
-

@@ -1,4 +1,3 @@
-import { ToolMetas } from '@/shared/constants';
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
@@ -16,8 +15,8 @@ export type DateTimeInput = {
 
 @injectable()
 export default class DateTimeTool implements Tool {
-  static readonly Name = ToolMetas.DATE_TIME_TOOL.Name.en; // Access localized name
-  static readonly Description = ToolMetas.DATE_TIME_TOOL.Description.en; // Access localized description
+  name!: string;
+  description!: string;
 
   async call(input: Record<string, any>): Promise<string> {
     const timezone = input?.timezone;

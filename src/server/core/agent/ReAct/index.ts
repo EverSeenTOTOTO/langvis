@@ -1,8 +1,7 @@
 import { logger } from '@/server/middleware/logger';
-import { AgentMetas, ToolMetas } from '@/shared/constants';
 import type { ChatCompletion } from 'openai/resources/chat/completions';
 import { container, injectable } from 'tsyringe';
-import type { Agent, AgentConstructor } from '..';
+import type { Agent } from '..';
 import { Tool } from '../../tool';
 import generateReActPrompt from './prompt';
 import LlmCallTool from '../../tool/LlmCall';
@@ -36,11 +35,15 @@ export type ReActStep =
 
 @injectable()
 export default class ReActAgent implements Agent {
-  static readonly Name = AgentMetas.REACT_AGENT.Name.en; // Access localized name
-  static readonly Description = AgentMetas.REACT_AGENT.Description.en; // Access localized description
+  name!: string;
+
+  description!: string;
 
   private readonly maxIterations = 5;
-  public tools: Agent[] = []; // Will be populated dynamically by the container
+
+  public tools: Agent[] = [];
+
+  // Will be populated dynamically by the container
 
   async getSystemPrompt(): Promise<string> {
     return generateReActPrompt({
@@ -48,25 +51,19 @@ export default class ReActAgent implements Agent {
       tools:
         this.tools
           ?.map(tool => {
-            const ctor = tool.constructor as AgentConstructor;
-
-            return `+ ${ctor.Name}:\n\t${ctor.Description}`;
+            return `+ ${tool.name}: ${tool.description}`;
           })
           .join('\n') || 'No tools available.',
     });
   }
 
   async call(): Promise<unknown> {
-    // For now, just throw an error as the main interface is streamCall
-    // This could be implemented to return a final result without streaming
     throw new Error('Non-streaming call not implemented.');
   }
 
   async streamCall(messages: Message[], outputStream: WritableStream) {
     const writer = outputStream.getWriter();
-    const llmCallTool = container.resolve<LlmCallTool>(
-      ToolMetas.LLM_CALL_TOOL.Name.en,
-    );
+    const llmCallTool = container.resolve<LlmCallTool>('LlmCall Tool');
 
     // Convert messages to the format expected by LLM
     const conversationMessages = messages.map(msg => ({
@@ -208,7 +205,7 @@ export default class ReActAgent implements Agent {
     try {
       tool = container.resolve<Tool>(action);
     } catch {
-      return `Tool "${action}" not found, available tools: ${this.tools.map(t => `\`${(t.constructor as AgentConstructor).Name}\``).join(', ')}`;
+      return `Tool "${action}" not found, available tools: ${this.tools.map(t => `\`${t.name}\``).join(', ')}`;
     }
 
     try {

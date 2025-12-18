@@ -54,14 +54,14 @@ describe('ConversationService', () => {
     const mockConversation = {
       id: '1',
       name: 'Test Conversation',
-      config: { agent: 'ReAct Agent' },
+      config: { agent: 'Chat Agent' },
       createdAt: new Date(),
       messages: [],
     };
 
     (pg.getRepository as any).mockReturnValue({
       create: vi.fn().mockImplementation(entity => {
-        expect(entity.config).toEqual({ agent: 'ReAct Agent' });
+        expect(entity.config).toEqual({ agent: 'Chat Agent' });
         return mockConversation;
       }),
       save: vi.fn().mockResolvedValue(mockConversation),
@@ -76,7 +76,7 @@ describe('ConversationService', () => {
     const mockConversation = {
       id: '1',
       name: 'Test Conversation',
-      config: { model: 'gpt-4', temperature: 0.7, agent: 'ReAct Agent' },
+      config: { model: 'gpt-4', temperature: 0.7, agent: 'Chat Agent' },
       createdAt: new Date(),
       messages: [],
     };
@@ -86,7 +86,7 @@ describe('ConversationService', () => {
         expect(entity.config).toEqual({
           model: 'gpt-4',
           temperature: 0.7,
-          agent: 'ReAct Agent',
+          agent: 'Chat Agent',
         });
         return mockConversation;
       }),
@@ -422,12 +422,12 @@ describe('ConversationService', () => {
     ];
     const expectedMessages = [
       { id: '1', conversationId: '1', role: Role.USER, content: 'Hello' },
-      { 
-        id: '2', 
-        conversationId: '1', 
-        role: Role.ASSIST, 
-        content: '', 
-        meta: { loading: true } 
+      {
+        id: '2',
+        conversationId: '1',
+        role: Role.ASSIST,
+        content: '',
+        meta: { loading: true },
       },
     ];
 
@@ -438,7 +438,7 @@ describe('ConversationService', () => {
 
     // Mock message repository
     (pg.getRepository as any).mockReturnValueOnce({
-      create: vi.fn().mockImplementation((data) => data),
+      create: vi.fn().mockImplementation(data => data),
       save: vi.fn().mockResolvedValue(expectedMessages),
     });
 
@@ -446,7 +446,7 @@ describe('ConversationService', () => {
       '1',
       messagesData,
     );
-    
+
     expect(result).toEqual(expectedMessages);
   });
 
@@ -459,7 +459,7 @@ describe('ConversationService', () => {
     });
 
     await expect(
-      conversationService.batchAddMessages('non-existent', messagesData)
+      conversationService.batchAddMessages('non-existent', messagesData),
     ).rejects.toThrow('Conversation non-existent not found');
   });
 });
