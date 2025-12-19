@@ -1,18 +1,15 @@
 import MarkdownRender from '@/client/components/MarkdownRender';
+import useClipboard from '@/client/hooks/useClipboard';
+import { Message } from '@/shared/entities/Message';
 import { CopyOutlined, RedoOutlined, UserOutlined } from '@ant-design/icons';
 import { Bubble } from '@ant-design/x';
 import { Avatar, Button, Flex } from 'antd';
-import { MessageProps } from './Messages';
 
-const UserMessage: React.FC<MessageProps> = ({
-  msg,
-  index,
-  currentMessages,
-  onRetry,
-}) => {
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(msg.content);
-  };
+const UserMessage: React.FC<{
+  msg: Message;
+  onRetry: (messageId: string) => void;
+}> = ({ msg, onRetry }) => {
+  const { copyToClipboard } = useClipboard();
 
   const footer = (
     <Flex justify="end" className="message-footer" gap={4}>
@@ -20,7 +17,7 @@ const UserMessage: React.FC<MessageProps> = ({
         color="default"
         variant="filled"
         icon={<CopyOutlined />}
-        onClick={copyToClipboard}
+        onClick={() => copyToClipboard(msg.content)}
         size="small"
       />
       <Button
@@ -45,15 +42,6 @@ const UserMessage: React.FC<MessageProps> = ({
       }
       loading={msg.loading}
       avatar={<Avatar icon={<UserOutlined />} />}
-      styles={
-        index > 0 && currentMessages[index - 1].role === msg.role
-          ? {
-              avatar: {
-                visibility: 'hidden',
-              },
-            }
-          : {}
-      }
     />
   );
 };

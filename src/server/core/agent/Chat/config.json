@@ -10,11 +10,33 @@
   "tools": ["LlmCall Tool"],
   "configItems": [
     {
-      "type": "text",
-      "label": "Modal",
+      "type": "model",
       "name": "model",
-      "required": true,
-      "initialValue": "gemini-2.5-flash"
+      "code": {
+        "type": "text",
+        "label": "Code",
+        "name": "code",
+        "required": true,
+        "initialValue": "gemini-2.5-flash"
+      },
+      "temperature": {
+        "type": "number",
+        "label": "Temperature",
+        "name": "temperature",
+        "initialValue": 0.7,
+        "min": 0,
+        "max": 1,
+        "step": 0.1
+      },
+      "topP": {
+        "type": "number",
+        "label": "TopP",
+        "name": "topP",
+        "initialValue": 0.7,
+        "min": 0,
+        "max": 1,
+        "step": 0.1
+      }
     }
   ]
 }

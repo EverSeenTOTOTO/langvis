@@ -61,7 +61,11 @@ export default class ReActAgent implements Agent {
     throw new Error('Non-streaming call not implemented.');
   }
 
-  async streamCall(messages: Message[], outputStream: WritableStream) {
+  async streamCall(
+    messages: Message[],
+    outputStream: WritableStream,
+    config?: Record<string, any>,
+  ) {
     const writer = outputStream.getWriter();
     const llmCallTool = container.resolve<LlmCallTool>('LlmCall Tool');
 
@@ -76,7 +80,8 @@ export default class ReActAgent implements Agent {
 
       const response = (await llmCallTool.call({
         messages: conversationMessages,
-        temperature: 0,
+        model: config?.model?.code,
+        temperature: config?.model?.temperature,
         stop: ['Observation:', 'Observation：'],
       })) as ChatCompletion;
 

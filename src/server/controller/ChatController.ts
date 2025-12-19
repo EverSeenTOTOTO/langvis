@@ -148,8 +148,6 @@ export class ChatController {
       conversationId,
       messagesToInsert,
     );
-
-    // Update messages array with inserted messages
     messages.push(...insertedMessages);
 
     // Get the assistant message (last inserted message) for streaming
@@ -164,6 +162,8 @@ export class ChatController {
     // Only pass messages except the empty assistant message to agent
     const messagesForAgent = messages.slice(0, -1);
 
-    agent.streamCall(messagesForAgent, stream, config);
+    agent
+      .streamCall(messagesForAgent, stream, config)
+      .catch(e => stream.abort(e));
   }
 }

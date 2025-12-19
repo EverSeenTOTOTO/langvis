@@ -145,7 +145,9 @@ export class ChatStore {
         break;
       case 'completion_error': {
         this.disconnectFromSSE(conversationId);
-        message.error(`${this.settingStore.tr('Chat error')}: ${msg.error}`);
+        this.conversationStore.getMessagesByConversationId({
+          id: conversationId,
+        });
         break;
       }
       default:

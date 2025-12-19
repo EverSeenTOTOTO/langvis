@@ -75,3 +75,14 @@
     }
   }
 }
+
+.config-left {
+  flex: 1 1 30%;
+  padding-inline-end: 12px;
+  border-inline-end: 1px solid var(--ant-color-split);
+}
+
+.config-right {
+  flex: 1 1 70%;
+  padding-inline-start: 12px;
+}
