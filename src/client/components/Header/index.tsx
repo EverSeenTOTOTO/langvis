@@ -9,7 +9,6 @@ import {
 } from '@ant-design/icons';
 import {
   Avatar,
-  Divider,
   Dropdown,
   Flex,
   Select,
@@ -109,9 +108,7 @@ const Header = () => {
           Langvis
         </Typography.Title>
 
-        <Divider vertical />
-        <span style={{ flex: 1 }} />
-        <Divider vertical />
+        <span className="header-divider" />
 
         {currentUser ? (
           <Dropdown menu={{ items }} trigger={['click']}>

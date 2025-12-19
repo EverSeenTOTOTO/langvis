@@ -33,8 +33,8 @@ export default class ChatAgent implements Agent {
 
     await llmCallTool.streamCall(
       {
-        model: config?.model,
-        temperature: config?.temperature ?? 0.7,
+        model: config?.model?.code,
+        temperature: config?.model?.temperature,
         messages: conversationMessages,
       },
       outputStream,

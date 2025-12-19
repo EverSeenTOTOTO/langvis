@@ -19,17 +19,17 @@ better-auth-typeorm:
 
 .PHONY: prepare
 prepare: better-auth-typeorm
-	npx husky
+	bunx husky
 	# https://github.com/oven-sh/bun/issues/4677#issuecomment-1713522789
 	# https://github.com/oven-sh/bun/pull/18086
 	jq '.main = .module' node_modules/tsyringe/package.json > tmp.json && mv tmp.json node_modules/tsyringe/package.json
 
 .PHONY: lint
 lint:
-	npx tsc --noEmit
-	npx eslint --fix .
-	npx stylelint "src/**/*.{css,scss}" --fix
-	npx prettier --log-level silent -w .
+	bunx tsc --noEmit
+	bunx eslint --fix .
+	bunx stylelint "src/**/*.{css,scss}" --fix
+	bunx prettier --log-level silent -w .
 	@echo -e '\033[1;32mNo lint errors found.'
 
 .PHONY: clean
@@ -42,9 +42,9 @@ dev:
 
 .PHONY: build
 build: clean
-	npx vite build --mode production --config config/vite.prod.ts
-	npx vite build --mode production --config config/vite.server.ts
-	npx vite build --mode production --config config/vite.serverEntry.ts
+	bunx vite build --mode production --config config/vite.prod.ts
+	bunx vite build --mode production --config config/vite.server.ts
+	bunx vite build --mode production --config config/vite.serverEntry.ts
 
 .PHONY: start
 start: build
@@ -52,4 +52,4 @@ start: build
 
 .PHONY: test
 test:
-	npx vitest run --coverage
+	bunx vitest run --coverage

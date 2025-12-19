@@ -39,6 +39,10 @@ export class ConversationStore {
     );
   }
 
+  get currentMessages(): Message[] {
+    return this.messages[this.currentConversationId || ''] || [];
+  }
+
   @api('/api/conversation', { method: 'post' })
   async createConversation(
     _params: { name: string },

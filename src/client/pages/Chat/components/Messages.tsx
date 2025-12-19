@@ -7,18 +7,9 @@ import SystemMessage from './SystemMessage';
 import UserMessage from './UserMessage';
 import AssistantMessage from './AssistantMessage';
 
-export interface MessageProps {
-  msg: any;
-  index: number;
-  currentMessages: any[];
-  onRetry: (messageId: string) => void;
-}
-
 const Messages = () => {
   const conversationStore = useStore('conversation');
-  const currentMessages = conversationStore.currentConversationId
-    ? conversationStore.messages[conversationStore.currentConversationId] || []
-    : [];
+  const currentMessages = conversationStore.currentMessages;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const handleRetry = (messageId: string) => {
@@ -36,38 +27,14 @@ const Messages = () => {
 
   return (
     <Flex gap="middle" vertical className="chat-messages">
-      {currentMessages.map((msg, index) => {
+      {currentMessages.map(msg => {
         switch (msg.role) {
           case Role.SYSTEM:
-            return (
-              <SystemMessage
-                key={msg.id}
-                msg={msg}
-                index={index}
-                currentMessages={currentMessages}
-                onRetry={handleRetry}
-              />
-            );
+            return <SystemMessage key={msg.id} msg={msg} />;
           case Role.USER:
-            return (
-              <UserMessage
-                key={msg.id}
-                msg={msg}
-                index={index}
-                currentMessages={currentMessages}
-                onRetry={handleRetry}
-              />
-            );
+            return <UserMessage key={msg.id} msg={msg} onRetry={handleRetry} />;
           case Role.ASSIST:
-            return (
-              <AssistantMessage
-                key={msg.id}
-                msg={msg}
-                index={index}
-                currentMessages={currentMessages}
-                onRetry={handleRetry}
-              />
-            );
+            return <AssistantMessage key={msg.id} msg={msg} />;
           default:
             return null;
         }

@@ -1,11 +1,11 @@
 import MarkdownRender from '@/client/components/MarkdownRender';
 import { useStore } from '@/client/store';
+import { Message } from '@/shared/entities/Message';
 import { Collapse, Divider, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { observer } from 'mobx-react-lite';
-import { MessageProps } from './Messages';
 
-const SystemMessage: React.FC<MessageProps> = ({ msg }) => {
+const SystemMessage: React.FC<{ msg: Message }> = ({ msg }) => {
   const settingStore = useStore('setting');
   const conversationStore = useStore('conversation');
 

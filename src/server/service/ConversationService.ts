@@ -263,11 +263,27 @@ export class ConversationService {
           }ms`,
         );
       },
-      abort: (reason: unknown) => {
-        logger.error(
-          `Agent call canceled for conversation ${conversationId}:`,
-          reason,
-        );
+      abort: async (reason: unknown) => {
+        try {
+          // Save final content to database
+          await this.updateMessage(
+            message.id,
+            (reason as Error)?.message || `Aborted`,
+            {
+              ...message.meta,
+              loading: undefined,
+              error: true,
+            },
+          );
+        } catch (error) {
+          logger.error('Failed to finalize streaming message:', error);
+        }
+
+        // Send completion done message
+        this.sseService.sendToConversation(conversationId, {
+          type: 'completion_error',
+          error: (reason as Error)?.message,
+        });
       },
     });
 

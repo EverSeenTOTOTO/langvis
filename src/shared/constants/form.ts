@@ -6,6 +6,7 @@ import {
   SwitchProps,
 } from 'antd';
 import { CheckboxGroupProps } from 'antd/es/checkbox';
+import { InputNumberProps } from 'antd/lib';
 import { CSSProperties } from 'react';
 
 type CommonProps = Pick<
@@ -41,14 +42,44 @@ export type RadioGroupItem = CommonProps &
     type: 'radio-group';
   };
 
+export type NumberItem = CommonProps &
+  Pick<
+    InputNumberProps,
+    | 'controls'
+    | 'disabled'
+    | 'max'
+    | 'min'
+    | 'precision'
+    | 'step'
+    | 'stringMode'
+  > & {
+    type: 'number';
+  };
+
 export type SwitchItem = CommonProps &
   Pick<SwitchProps, 'disabled' | 'checkedChildren' | 'unCheckedChildren'> & {
     type: 'switch';
   };
+
+export type ModelItem = {
+  type: 'model';
+  name: FormItemProps['name'];
+  code?: TextItem;
+  temperature?: NumberItem;
+  topP?: NumberItem;
+};
 
 export type AgentConfigItem =
   | SelectItem
   | TextItem
   | CheckboxGroupItem
   | RadioGroupItem
-  | SwitchItem;
+  | SwitchItem
+  | NumberItem
+  | ModelItem;
+
+export type AgentFormItem = AgentConfigItem extends infer Each
+  ? Each extends ModelItem
+    ? never
+    : Each
+  : never;

@@ -8,11 +8,17 @@
   left: 0;
   z-index: 2;
   flex-wrap: nowrap;
+  gap: 8px;
   max-height: var(--header-height);
   padding: 8px 12px;
 
   .logo {
     margin: 0;
+  }
+
+  .header-divider {
+    flex: 1;
+    border-inline: 1px solid var(--ant-color-split);
   }
 
   .user-dropdown {
