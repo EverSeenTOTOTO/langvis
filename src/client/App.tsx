@@ -8,10 +8,10 @@ import type { Request, Response } from 'express';
 import { observer } from 'mobx-react-lite';
 import { Route, Routes } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
+import useThemeClassname from './hooks/useThemeClassname';
 import { AppRoutes } from './routes';
 import { AppStore, useStore } from './store';
 
-import useThemeClassname from './hooks/useThemeClassname';
 import './index.scss';
 
 const px2rem = px2remTransformer({

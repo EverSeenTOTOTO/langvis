@@ -9,12 +9,12 @@ import {
 } from '@ant-design/icons';
 import {
   Avatar,
-  Col,
   Divider,
   Dropdown,
-  Row,
+  Flex,
   Select,
   Switch,
+  theme,
   Typography,
 } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
@@ -22,12 +22,15 @@ import { observer } from 'mobx-react-lite';
 import { useNavigate } from 'react-router-dom';
 import './index.scss';
 
+const { useToken } = theme;
+
 const Header = () => {
   const userStore = useStore('user');
   const authStore = useStore('auth');
   const settingStore = useStore('setting');
   const currentUser = userStore.currentUser;
   const navigate = useNavigate();
+  const { token } = useToken();
 
   const items: ItemType[] = [
     {
@@ -93,14 +96,22 @@ const Header = () => {
 
   return (
     <>
-      <Row wrap={false} align="middle" className="header">
-        <Col className="logo">
-          <Typography.Title level={3}>Langvis</Typography.Title>
-        </Col>
-        <Divider orientation="vertical" />
+      <Flex
+        wrap={false}
+        align="middle"
+        className="header"
+        style={{
+          backgroundColor: token.colorBgContainer,
+          borderBottom: `1px solid ${token.colorBorder}`,
+        }}
+      >
+        <Typography.Title className="logo" level={3}>
+          Langvis
+        </Typography.Title>
 
-        <Col flex={1} />
-        <Divider orientation="vertical" />
+        <Divider vertical />
+        <span style={{ flex: 1 }} />
+        <Divider vertical />
 
         {currentUser ? (
           <Dropdown menu={{ items }} trigger={['click']}>
@@ -118,7 +129,7 @@ const Header = () => {
         ) : (
           <Avatar size="small" />
         )}
-      </Row>
+      </Flex>
       <div className="header-placeholder" />
     </>
   );

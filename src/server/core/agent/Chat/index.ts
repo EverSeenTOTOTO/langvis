@@ -41,4 +41,3 @@ export default class ChatAgent implements Agent {
     );
   }
 }
-
