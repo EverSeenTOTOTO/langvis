@@ -264,17 +264,14 @@ export class ConversationService {
         );
       },
       abort: async (reason: unknown) => {
+        const content = (reason as Error)?.message || `Aborted`;
         try {
           // Save final content to database
-          await this.updateMessage(
-            message.id,
-            (reason as Error)?.message || `Aborted`,
-            {
-              ...message.meta,
-              loading: undefined,
-              error: true,
-            },
-          );
+          await this.updateMessage(message.id, content, {
+            ...message.meta,
+            loading: undefined,
+            error: true,
+          });
         } catch (error) {
           logger.error('Failed to finalize streaming message:', error);
         }
@@ -282,7 +279,7 @@ export class ConversationService {
         // Send completion done message
         this.sseService.sendToConversation(conversationId, {
           type: 'completion_error',
-          error: (reason as Error)?.message,
+          error: content,
         });
       },
     });
@@ -290,3 +287,4 @@ export class ConversationService {
     return writableStream;
   }
 }
+
