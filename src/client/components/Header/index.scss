@@ -7,43 +7,26 @@
   right: 0;
   left: 0;
   z-index: 2;
-  height: var(--header-height);
+  flex-wrap: nowrap;
+  max-height: var(--header-height);
   padding: 8px 12px;
-  background-color: var(--ant-color-bg-container);
-  border-bottom: 1px solid var(--ant-color-split);
 
   .logo {
-    .ant-typography {
-      margin: 0;
+    margin: 0;
+  }
+
+  .user-dropdown {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+
+    .user-name {
+      margin-left: 8px;
+      color: var(--ant-color-text);
     }
   }
 }
 
 .header-placeholder {
   height: var(--header-height);
-}
-
-.user-dropdown {
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-
-  .user-name {
-    margin-left: 8px;
-    color: var(--ant-color-text);
-  }
-}
-
-.setting-content {
-  width: 180px;
-
-  .ant-form-item {
-    margin-bottom: 8px;
-  }
-
-  .ant-form-item:first-child {
-    .ant-form-item-control-input {
-      text-align: right;
-    }
-  }
 }

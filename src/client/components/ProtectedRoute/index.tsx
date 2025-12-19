@@ -1,7 +1,7 @@
 import { useStore } from '@/client/store';
 import { observer } from 'mobx-react-lite';
-import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../Header';
 import './index.scss';
 
@@ -18,30 +18,27 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const userStore = useStore('user');
   const location = useLocation();
+  const navigate = useNavigate();
   const header = withHeader ? <Header /> : null;
 
-  // If skipAuth is true (e.g., for login page), render children directly
-  if (skipAuth) {
-    return (
-      <>
-        {header}
-        {children}
-      </>
-    );
-  }
+  useEffect(() => {
+    if (!skipAuth && !userStore.currentUser) {
+      // If user is not authenticated and we're in browser, redirect to login
+      navigate('/login', {
+        state: {
+          from: location.pathname,
+        },
+        replace: true,
+      });
+    }
+  }, [skipAuth, userStore.currentUser]);
 
-  // If user is authenticated, render children
-  if (userStore.currentUser) {
-    return (
-      <>
-        {header}
-        {children}
-      </>
-    );
-  }
-
-  // If user is not authenticated and we're in browser, redirect to login
-  return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  return (
+    <>
+      {header}
+      {children}
+    </>
+  );
 };
 
 export default observer(ProtectedRoute);

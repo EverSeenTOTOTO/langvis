@@ -36,6 +36,7 @@ export default async (app: Express) => {
         );
         const { html } = await render({ req, res, template });
 
+        res.setHeader('Content-Type', 'text/html');
         res.end(html);
       } catch (e) {
         vite.ssrFixStacktrace(e as Error);
