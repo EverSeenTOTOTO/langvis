@@ -1,12 +1,13 @@
 import { logger } from '@/server/middleware/logger';
 import type { ChatCompletion } from 'openai/resources/chat/completions';
 import { container, injectable } from 'tsyringe';
-import type { Agent } from '..';
+import { Agent } from '..';
 import { Tool } from '../../tool';
 import generateReActPrompt from './prompt';
 import LlmCallTool from '../../tool/LlmCall';
 import { Role, Message } from '@/shared/entities/Message';
 import { isEmpty } from 'lodash-es';
+import { StreamChunk } from '@/shared/types';
 
 export type ReActThought = {
   thought: string;
@@ -34,7 +35,7 @@ export type ReActStep =
   | ReActFinalAnswer;
 
 @injectable()
-export default class ReActAgent implements Agent {
+export default class ReActAgent extends Agent {
   name!: string;
 
   description!: string;
@@ -57,13 +58,9 @@ export default class ReActAgent implements Agent {
     });
   }
 
-  async call(): Promise<unknown> {
-    throw new Error('Non-streaming call not implemented.');
-  }
-
   async streamCall(
     messages: Message[],
-    outputStream: WritableStream,
+    outputStream: WritableStream<StreamChunk>,
     config?: Record<string, any>,
   ) {
     const writer = outputStream.getWriter();
@@ -88,7 +85,7 @@ export default class ReActAgent implements Agent {
       const content = response.choices[0]?.message?.content;
 
       if (!content) {
-        await writer.write('No response from model');
+        await writer.write({ type: 'chunk', data: 'No response from model' });
         await writer.close();
         return;
       }
@@ -112,22 +109,34 @@ export default class ReActAgent implements Agent {
           role: Role.USER,
           content: observationContent,
         });
-        writer.write(observationContent);
+        writer.write({
+          type: 'chunk',
+          data: observationContent,
+        });
         continue;
       }
 
       logger.info('ReAct parsed response: ', parsed);
 
       if ('final_answer' in parsed) {
-        await writer.write(parsed.final_answer);
+        await writer.write({
+          type: 'chunk',
+          data: parsed.final_answer!,
+        });
         await writer.close();
         return;
       }
 
       if ('action' in parsed) {
         const { tool, input } = parsed.action!;
-        await writer.write(`Action: ${tool}\n`);
-        await writer.write(`Action Input: ${JSON.stringify(input)}\n`);
+        await writer.write({
+          type: 'chunk',
+          data: `Action: ${tool}\n`,
+        });
+        await writer.write({
+          type: 'chunk',
+          data: `Action Input: ${JSON.stringify(input)}\n`,
+        });
 
         try {
           const observation = await this.executeAction(tool, input);
@@ -137,11 +146,17 @@ export default class ReActAgent implements Agent {
             role: Role.USER,
             content: observationContent,
           });
-          await writer.write(observationContent);
+          await writer.write({
+            type: 'chunk',
+            data: observationContent,
+          });
         } catch (error) {
           const errorContent = `Observation: Error executing action ${tool}: ${(error as Error).message}\n`;
 
-          await writer.write(errorContent);
+          await writer.write({
+            type: 'chunk',
+            data: errorContent,
+          });
           conversationMessages.push({
             role: Role.USER,
             content: errorContent,
@@ -154,16 +169,23 @@ export default class ReActAgent implements Agent {
       if ('thought' in parsed) {
         const thoughtContent = `Thought: ${parsed.thought}\n`;
 
-        await writer.write(thoughtContent);
+        await writer.write({
+          type: 'chunk',
+          data: thoughtContent,
+        });
         continue;
       }
 
-      writer.write(
-        `Unable to parse response: ${content}. Retrying (${i}/${this.maxIterations})...\n`,
-      );
+      writer.write({
+        type: 'chunk',
+        data: `Unable to parse response: ${content}. Retrying (${i}/${this.maxIterations})...\n`,
+      });
     }
 
-    await writer.write('Max iterations reached without final answer.');
+    await writer.write({
+      type: 'chunk',
+      data: 'Max iterations reached without final answer.',
+    });
     await writer.close();
   }
 

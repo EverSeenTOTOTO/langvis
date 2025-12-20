@@ -1,13 +1,13 @@
-import { singleton, container, Lifecycle } from 'tsyringe';
+import { singleton, container, Lifecycle, inject } from 'tsyringe';
 import { globby } from 'globby';
 import { __dirname } from '@/server/utils';
-import { Tool, ToolConstructor } from '../core/tool';
 import { AgentConstructor } from '../core/agent';
 import { logger } from '../middleware/logger';
-import { readFileSync } from 'fs';
+import { readFile } from 'fs/promises';
 import { resolve, dirname } from 'path';
+import { ToolService } from './ToolService';
 
-export interface AgentToolMeta {
+export interface AgentMeta {
   name: {
     en: string;
     zh?: string;
@@ -33,6 +33,16 @@ export class AgentService {
   private readonly agents = new Map<string, AgentInfo>();
   private isInitialized = false;
 
+  constructor(
+    @inject(ToolService)
+    private toolService: ToolService,
+  ) {
+    this.initialize().catch(error => {
+      this.isInitialized = false;
+      logger.error('❌ Failed to initialize AgentService:', error);
+    });
+  }
+
   async getAllAgentInfo(): Promise<AgentInfo[]> {
     await this.initialize();
     return [...this.agents.values()];
@@ -43,42 +53,15 @@ export class AgentService {
       return;
     }
 
-    const [tools, agents] = await Promise.all([
-      this.discoverEntities('tool'),
-      this.discoverEntities('agent'),
-    ]);
+    // Initialize tools first
+    await this.toolService.getAllToolInfo();
 
-    logger.info(
-      `🔧 Discovered ${tools.length} tools:`,
-      tools.map(t => t.class.name),
-    );
+    const agents = await this.discoverAgents();
+
     logger.info(
       `🤖 Discovered ${agents.length} agents:`,
       agents.map(a => a.class.name),
     );
-
-    // Register tools
-    tools.forEach(tool => {
-      const toolName = tool.meta.name.en; // Use display name as token
-
-      container.register(toolName, tool.class, {
-        lifecycle: Lifecycle.Singleton,
-      });
-
-      // Inject metadata after resolution
-      container.afterResolution(
-        toolName,
-        (_token, instance: object) => {
-          if (instance && 'name' in instance && 'description' in instance) {
-            Reflect.set(instance, 'name', tool.meta.name.en);
-            Reflect.set(instance, 'description', tool.meta.description.en);
-          }
-        },
-        { frequency: 'Once' },
-      );
-
-      logger.info(`✅ Tool registered successfully: ${toolName}`);
-    });
 
     // Register agents
     agents.forEach(agent => {
@@ -98,7 +81,7 @@ export class AgentService {
       // Setup dependency injection for agent metadata and tools
       container.afterResolution(
         agentName,
-        (_token, instance: object) => {
+        async (_token, instance: object) => {
           // Inject name and description
           if (instance && 'name' in instance && 'description' in instance) {
             Reflect.set(instance, 'name', agent.meta.name.en);
@@ -109,11 +92,11 @@ export class AgentService {
           if (instance && 'tools' in instance) {
             const toolNames = agent.meta.tools || [];
 
-            const tools = toolNames.map(name => container.resolve<Tool>(name));
+            const tools = await this.toolService.getToolsByNames(toolNames);
 
             Reflect.set(instance, 'tools', tools);
             logger.info(
-              `✅ Injected ${tools.length} tools into agent: ${agentName}`,
+              `✅ Injected ${toolNames.length} tools into agent: ${agentName}`,
             );
           }
         },
@@ -126,8 +109,8 @@ export class AgentService {
     this.isInitialized = true;
   }
 
-  private async discoverEntities(type: 'agent' | 'tool') {
-    const pattern = `../core/${type}/*/index.ts`;
+  private async discoverAgents() {
+    const pattern = '../core/agent/*/index.ts';
     const cwd = __dirname();
 
     const agentPaths = await globby(pattern, {
@@ -135,52 +118,52 @@ export class AgentService {
       absolute: true,
     });
 
-    const entities: {
-      class: AgentConstructor | ToolConstructor;
-      meta: AgentToolMeta;
+    const agents: {
+      class: AgentConstructor;
+      meta: AgentMeta;
     }[] = [];
 
     for (const absolutePath of agentPaths) {
       try {
-        const entity = await this.loadEntity(absolutePath);
-        if (entity) {
-          entities.push(entity);
+        const agent = await this.loadAgent(absolutePath);
+        if (agent) {
+          agents.push(agent);
         }
       } catch (error) {
         logger.error(
-          `❌ Failed to process ${type} module ${absolutePath}:`,
+          `❌ Failed to process agent module ${absolutePath}:`,
           error,
         );
       }
     }
 
-    return entities;
+    return agents;
   }
 
-  private async loadEntity(absolutePath: string) {
+  private async loadAgent(absolutePath: string) {
     const module = await import(absolutePath);
-    const entityClass = module.default;
+    const agentClass = module.default;
 
-    if (!entityClass) {
+    if (!agentClass) {
       logger.warn(`⚠️ No default export found in: ${absolutePath}`);
       return null;
     }
 
     // Read config.json from the same directory
     const configPath = resolve(dirname(absolutePath), 'config.json');
-    let metaData: AgentToolMeta;
+    let metaData: AgentMeta;
 
     try {
-      const configContent = readFileSync(configPath, 'utf-8');
+      const configContent = await readFile(configPath, 'utf-8');
       metaData = JSON.parse(configContent);
     } catch (error) {
       logger.warn(
-        `❌ No config.json found for entity at ${absolutePath}:`,
+        `❌ No config.json found for agent at ${absolutePath}:`,
         error,
       );
       return null;
     }
 
-    return { class: entityClass, meta: metaData };
+    return { class: agentClass, meta: metaData };
   }
 }

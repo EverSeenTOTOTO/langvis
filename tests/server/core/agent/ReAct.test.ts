@@ -348,9 +348,10 @@ describe('ReActAgent', () => {
       await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockLlmCall.call).toHaveBeenCalled();
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'This is the final answer.',
-      );
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'This is the final answer.',
+      });
       expect(mockWriter.close).toHaveBeenCalled();
     });
 
@@ -420,16 +421,22 @@ describe('ReActAgent', () => {
       await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
-      expect(mockWriter.write).toHaveBeenCalledWith('Action: test_tool\n');
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'Action Input: {"param":"value"}\n',
-      );
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'Observation: {"result":"test result"}\n',
-      );
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'This is the final answer after action.',
-      );
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'Action: test_tool\n',
+      });
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'Action Input: {"param":"value"}\n',
+      });
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'Observation: {"result":"test result"}\n',
+      });
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'This is the final answer after action.',
+      });
       expect(mockWriter.close).toHaveBeenCalled();
     });
 
@@ -499,12 +506,14 @@ describe('ReActAgent', () => {
       await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'Observation: Error executing tool "test_tool": Test error\n',
-      );
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'This is the final answer after error.',
-      );
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'Observation: Error executing tool "test_tool": Test error\n',
+      });
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'This is the final answer after error.',
+      });
       expect(mockWriter.close).toHaveBeenCalled();
     });
 
@@ -571,12 +580,14 @@ describe('ReActAgent', () => {
       await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'Thought: I need to think about this.\n',
-      );
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'This is the final answer after thinking.',
-      );
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'Thought: I need to think about this.\n',
+      });
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'This is the final answer after thinking.',
+      });
       expect(mockWriter.close).toHaveBeenCalled();
     });
 
@@ -624,9 +635,10 @@ describe('ReActAgent', () => {
       await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(5); // maxIterations
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'Max iterations reached without final answer.',
-      );
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'Max iterations reached without final answer.',
+      });
       expect(mockWriter.close).toHaveBeenCalled();
     });
 
@@ -672,7 +684,10 @@ describe('ReActAgent', () => {
 
       await reactAgent.streamCall(messages, mockOutputStream as any);
 
-      expect(mockWriter.write).toHaveBeenCalledWith('No response from model');
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'No response from model',
+      });
       expect(mockWriter.close).toHaveBeenCalled();
     });
 
@@ -739,9 +754,15 @@ describe('ReActAgent', () => {
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith(
-        expect.stringContaining('Observation: Error parsing response:'),
+        expect.objectContaining({
+          type: 'chunk',
+          data: expect.stringContaining('Observation: Error parsing response:'),
+        }),
       );
-      expect(mockWriter.write).toHaveBeenCalledWith('Final answer');
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'Final answer',
+      });
       expect(mockWriter.close).toHaveBeenCalled();
     });
 
@@ -807,10 +828,14 @@ describe('ReActAgent', () => {
       await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'Observation: Error parsing response: Unrecognized JSON structure: missing `thought`, `action`, or `final_answer`\n',
-      );
-      expect(mockWriter.write).toHaveBeenCalledWith('Final answer');
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'Observation: Error parsing response: Unrecognized JSON structure: missing `thought`, `action`, or `final_answer`\n',
+      });
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'Final answer',
+      });
       expect(mockWriter.close).toHaveBeenCalled();
     });
 
@@ -880,9 +905,10 @@ describe('ReActAgent', () => {
 
       await reactAgent.streamCall(messages, mockOutputStream as any);
 
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'Observation: Error parsing response: Parsed response is empty\n',
-      );
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'Observation: Error parsing response: Parsed response is empty\n',
+      });
 
       // Restore original method
       (reactAgent as any).parseResponse = originalParseResponse;
@@ -952,16 +978,26 @@ describe('ReActAgent', () => {
       await reactAgent.streamCall(messages, mockOutputStream as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
-      expect(mockWriter.write).toHaveBeenCalledWith('Action: unknown_tool\n');
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'Action: unknown_tool\n',
+      });
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'Action Input: {"param":"value"}\n',
+      });
       expect(mockWriter.write).toHaveBeenCalledWith(
-        'Action Input: {"param":"value"}\n',
+        expect.objectContaining({
+          type: 'chunk',
+          data: expect.stringContaining(
+            'Observation: Tool "unknown_tool" not found',
+          ),
+        }),
       );
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        expect.stringContaining('Observation: Tool "unknown_tool" not found'),
-      );
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'This is the final answer after tool not found.',
-      );
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        type: 'chunk',
+        data: 'This is the final answer after tool not found.',
+      });
       expect(mockWriter.close).toHaveBeenCalled();
     });
   });

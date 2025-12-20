@@ -38,6 +38,9 @@
         .ant-bubble-content {
           position: relative;
           padding: 0 var(--ant-padding);
+          overflow: auto hidden;
+
+          @include mixins.default-scrollbar;
 
           .message-footer {
             display: none;
@@ -54,6 +57,14 @@
             }
           }
         }
+      }
+
+      .ant-bubble-start {
+        margin-right: 25%;
+      }
+
+      .ant-bubble-end {
+        margin-left: 25%;
       }
 
       @include mixins.default-scrollbar;
@@ -74,6 +85,37 @@
       height: 72px;
     }
   }
+
+  @media (width <= 768px) {
+    .chat-drawer-trigger {
+      position: absolute;
+      right: 8px;
+      bottom: 100px;
+      z-index: 100;
+      font-size: 18px;
+      box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
+    }
+
+    .chat-content {
+      .chat-messages {
+        padding: 8px;
+
+        .ant-bubble-start {
+          margin-right: 0;
+        }
+
+        .ant-bubble-end {
+          margin-left: 0;
+        }
+      }
+
+      .chat-input {
+        right: 4px;
+        bottom: 8px;
+        left: 4px;
+      }
+    }
+  }
 }
 
 .config-left {
@@ -85,4 +127,20 @@
 .config-right {
   flex: 1 1 70%;
   padding-inline-start: 12px;
+}
+
+@media (width <= 768px) {
+  .config-left {
+    flex: 1 1 100%;
+    padding-block-end: 12px;
+    padding-inline-end: 0;
+    border-block-end: 1px solid var(--ant-color-split);
+    border-inline-end: none;
+  }
+
+  .config-right {
+    flex: 1 1 100%;
+    padding-block-start: 12px;
+    padding-inline-start: 0;
+  }
 }

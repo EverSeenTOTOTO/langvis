@@ -11,6 +11,8 @@ import { UserController } from './UserController';
 import { ConversationController } from './ConversationController';
 import { ChatController } from './ChatController';
 import { AgentController } from './AgentController';
+import { FileController } from './FileController';
+import { TTSController } from './TTSController';
 
 export default async (app: Express) => {
   if (!pg.isInitialized) {
@@ -32,4 +34,6 @@ export default async (app: Express) => {
   bindController(ConversationController, app);
   bindController(ChatController, app);
   bindController(AgentController, app);
+  bindController(FileController, app);
+  bindController(TTSController, app);
 };

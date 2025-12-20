@@ -1,6 +1,7 @@
 import { container } from 'tsyringe';
 import type { Express } from 'express';
 import bindApi from './api';
+import { logger } from '../middleware/logger';
 
 const metaDataKey = Symbol('controller');
 
@@ -17,6 +18,7 @@ export default <C extends Record<string, any>>(
   const instance = container.resolve(Clz);
   const { namespace } = Reflect.getMetadata(metaDataKey, Clz);
 
+  logger.info(`Binding controller: ${namespace}`);
   bindApi(instance, namespace, app);
 
   return instance;

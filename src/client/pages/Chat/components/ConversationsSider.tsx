@@ -10,7 +10,9 @@ import ConversationModal from './ConversationModal';
 const { useApp } = App;
 const { Sider } = Layout;
 
-const ConversationSider: React.FC = () => {
+const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
+  onConversationChange,
+}) => {
   const { token } = theme.useToken();
 
   const siderStyle = {
@@ -112,6 +114,7 @@ const ConversationSider: React.FC = () => {
           activeKey={conversationStore.currentConversationId || undefined}
           onActiveChange={key => {
             conversationStore.setCurrentConversationId(key);
+            onConversationChange?.();
           }}
           menu={menuConfig}
         />

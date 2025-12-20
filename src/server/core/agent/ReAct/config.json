@@ -10,24 +10,39 @@
   "tools": ["LlmCall Tool", "DateTime Tool"],
   "configItems": [
     {
-      "type": "model",
+      "type": "group",
       "name": "model",
-      "code": {
-        "type": "text",
-        "label": "Code",
-        "name": "code",
-        "required": true,
-        "initialValue": "gemini-2.5-flash"
-      },
-      "temperature": {
-        "type": "number",
-        "label": "Temperature",
-        "name": "temperature",
-        "initialValue": 0,
-        "min": 0,
-        "max": 1,
-        "step": 0.1
-      }
+      "label": "Model Settings",
+      "children": [
+        {
+          "type": "text",
+          "label": "Model Code",
+          "name": "code",
+          "required": true,
+          "span": 24,
+          "initialValue": "gemini-2.5-flash"
+        },
+        {
+          "type": "number",
+          "label": "Temperature",
+          "name": "temperature",
+          "span": 12,
+          "initialValue": 0.7,
+          "min": 0,
+          "max": 1,
+          "step": 0.1
+        },
+        {
+          "type": "number",
+          "label": "TopP",
+          "name": "topP",
+          "span": 12,
+          "initialValue": 0.7,
+          "min": 0,
+          "max": 1,
+          "step": 0.1
+        }
+      ]
     }
   ]
 }

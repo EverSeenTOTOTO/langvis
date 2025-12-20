@@ -6,6 +6,7 @@
 - use`vite` as dev framework.
 - use `make` instead of npm scripts as build system, e.g. `make lint` and `make test`.
 - use `vitest` as unit test framework, especially when you want to test ONLY one case: `bunx vitest`.
+- use `curl` instead of `web_fetch` tool to fetch websites due to security problems.
 
 You should:
 

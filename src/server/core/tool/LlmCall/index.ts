@@ -10,11 +10,13 @@ import { inject, injectable } from 'tsyringe';
 import { Tool } from '..';
 
 @injectable()
-export default class LlmCallTool implements Tool {
+export default class LlmCallTool extends Tool {
   name!: string;
   description!: string;
 
-  constructor(@inject(InjectTokens.OPENAI) private readonly openai: OpenAI) {}
+  constructor(@inject(InjectTokens.OPENAI) private readonly openai: OpenAI) {
+    super();
+  }
 
   async call(
     input: Partial<ChatCompletionCreateParamsNonStreaming>,

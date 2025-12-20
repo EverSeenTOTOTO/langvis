@@ -9,6 +9,7 @@ import { logger } from '../middleware/logger';
 import pg from './pg';
 import { SSEService } from './SSEService';
 import { omit } from 'lodash-es';
+import { StreamChunk } from '@/shared/types';
 
 @singleton()
 export class ConversationService {
@@ -160,7 +161,7 @@ export class ConversationService {
     });
   }
 
-  async updateMessage(
+  async saveMessage(
     messageId: string,
     content: string,
     meta?: Record<string, any> | null,
@@ -215,37 +216,65 @@ export class ConversationService {
   async createStreamForMessage(
     conversationId: string,
     message: Message,
-  ): Promise<WritableStream<string>> {
+  ): Promise<WritableStream<StreamChunk>> {
     // Record start time for logging
     const startTime = Date.now();
 
+    const updateMessage = async (chunk: string) => {
+      // Update the streaming message
+      message.content += chunk;
+
+      // Log first chunk received
+      const isFirstChunk = message.content.length === chunk.length;
+
+      if (isFirstChunk) {
+        message.meta = {
+          ...message.meta,
+          loading: false,
+          streaming: true,
+        };
+
+        logger.info(
+          `First chunk received for agent call in conversation ${conversationId}, time taken: ${Date.now() - startTime}ms`,
+        );
+      }
+
+      this.sseService.sendToConversation(conversationId, {
+        type: 'completion_delta',
+        content: chunk,
+        meta: message.meta!,
+      });
+    };
+
+    const updateMeta = async (meta: Record<string, any>) => {
+      message.meta = {
+        ...message.meta,
+        ...meta,
+      };
+
+      this.sseService.sendToConversation(conversationId, {
+        type: 'completion_delta',
+        meta,
+      });
+    };
+
     // Create a custom WritableStream that integrates with streaming message service
-    const writableStream = new WritableStream<string>({
-      write: async (chunk: string) => {
-        // Update the streaming message
-        message.content += chunk;
-
-        // Log first chunk received
-        const isFirstChunk = message.content.length === chunk.length;
-
-        if (isFirstChunk) {
-          logger.info(
-            `First chunk received for agent call in conversation ${conversationId}, time taken: ${Date.now() - startTime}ms`,
-          );
+    const writableStream = new WritableStream<StreamChunk>({
+      write: (chunk: StreamChunk) => {
+        switch (chunk.type) {
+          case 'chunk':
+            return updateMessage(chunk.data);
+          case 'meta':
+            return updateMeta(chunk.data);
         }
-
-        this.sseService.sendToConversation(conversationId, {
-          type: 'completion_delta',
-          content: chunk,
-        });
       },
       close: async () => {
         try {
           // Save final content to database
-          await this.updateMessage(
+          await this.saveMessage(
             message.id,
             message.content,
-            omit(message.meta, 'loading'),
+            omit(message.meta, ['loading', 'streaming']),
           );
         } catch (error) {
           logger.error('Failed to finalize streaming message:', error);
@@ -267,7 +296,7 @@ export class ConversationService {
         const content = (reason as Error)?.message || `Aborted`;
         try {
           // Save final content to database
-          await this.updateMessage(message.id, content, {
+          await this.saveMessage(message.id, content, {
             ...message.meta,
             loading: undefined,
             error: true,
@@ -287,4 +316,3 @@ export class ConversationService {
     return writableStream;
   }
 }
-

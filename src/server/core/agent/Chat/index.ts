@@ -1,11 +1,12 @@
 import { logger } from '@/server/middleware/logger';
 import { injectable, container } from 'tsyringe';
-import type { Agent } from '..';
+import { Agent } from '..';
 import LlmCallTool from '../../tool/LlmCall';
 import { Message } from '@/shared/entities/Message';
+import { StreamChunk } from '@/shared/types';
 
 @injectable()
-export default class ChatAgent implements Agent {
+export default class ChatAgent extends Agent {
   name!: string;
   description!: string;
 
@@ -13,13 +14,9 @@ export default class ChatAgent implements Agent {
     return `You are a helpful AI assistant. You engage in natural conversations with users, providing thoughtful and accurate responses. You maintain context from previous messages in the conversation to provide coherent and relevant answers.`;
   }
 
-  async call(): Promise<unknown> {
-    throw new Error('Non-streaming call not implemented.');
-  }
-
   async streamCall(
     messages: Message[],
-    outputStream: WritableStream,
+    outputStream: WritableStream<StreamChunk>,
     config?: Record<string, any>,
   ) {
     const llmCallTool = container.resolve<LlmCallTool>('LlmCall Tool');

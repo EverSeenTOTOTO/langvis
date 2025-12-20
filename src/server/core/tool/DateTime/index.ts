@@ -14,7 +14,7 @@ export type DateTimeInput = {
 };
 
 @injectable()
-export default class DateTimeTool implements Tool {
+export default class DateTimeTool extends Tool {
   name!: string;
   description!: string;
 
@@ -44,9 +44,5 @@ export default class DateTimeTool implements Tool {
 
     // Return formatted date (includes timezone info if timezone was applied)
     return date.format();
-  }
-
-  async streamCall(): Promise<never> {
-    throw new Error('Method not implemented.');
   }
 }

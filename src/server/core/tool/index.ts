@@ -1,13 +1,24 @@
-export interface Tool {
-  name: string;
-  description: string;
+import { StreamChunk } from '@/shared/types';
 
-  call(input: Record<string, any>): Promise<unknown>;
+/* eslint-disable @typescript-eslint/no-unused-vars */
+export abstract class Tool {
+  abstract name: string;
+  abstract description: string;
 
-  streamCall(
-    input: Record<string, any>,
-    outputStream: WritableStream,
-  ): Promise<unknown>;
+  async call(_input: Record<string, any>): Promise<unknown> {
+    throw new Error(
+      `${this.constructor.name}: Non-streaming call not implemented.`,
+    );
+  }
+
+  async streamCall(
+    _input: Record<string, any>,
+    _outputStream: WritableStream<StreamChunk>,
+  ): Promise<unknown> {
+    throw new Error(
+      `${this.constructor.name}: Streaming call not implemented.`,
+    );
+  }
 }
 
 export type ToolConstructor = new () => Tool;

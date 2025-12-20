@@ -1,9 +1,20 @@
+export type StreamChunk =
+  | {
+      type: 'chunk';
+      data: string;
+    }
+  | {
+      type: 'meta';
+      data: Record<string, any>;
+    };
+
 export type SSEMessage =
   | { type: 'heartbeat' }
   | { type: 'completion_error'; error: string }
   | {
       type: 'completion_delta';
-      content: string;
+      content?: string;
+      meta?: Record<string, any>;
     }
   | {
       type: 'completion_done';
