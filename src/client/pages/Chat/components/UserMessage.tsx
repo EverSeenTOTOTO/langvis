@@ -1,15 +1,15 @@
 import MarkdownRender from '@/client/components/MarkdownRender';
-import useClipboard from '@/client/hooks/useClipboard';
 import { Message } from '@/shared/entities/Message';
 import { CopyOutlined, RedoOutlined, UserOutlined } from '@ant-design/icons';
 import { Bubble } from '@ant-design/x';
 import { Avatar, Button, Flex } from 'antd';
+import { useCopyToClipboard } from 'react-use';
 
 const UserMessage: React.FC<{
   msg: Message;
   onRetry: (messageId: string) => void;
 }> = ({ msg, onRetry }) => {
-  const { copyToClipboard } = useClipboard();
+  const [, copyToClipboard] = useCopyToClipboard();
 
   const footer = (
     <Flex justify="end" className="message-footer" gap={4}>

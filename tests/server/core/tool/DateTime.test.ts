@@ -49,8 +49,9 @@ describe('DateTimeTool', () => {
   });
 
   it('should throw error for streamCall method', async () => {
-    await expect(dateTimeTool.streamCall()).rejects.toThrow(
-      'Method not implemented.',
+    const mockStream = new WritableStream();
+    await expect(dateTimeTool.streamCall({}, mockStream)).rejects.toThrow(
+      'DateTimeTool: Streaming call not implemented.',
     );
   });
 });

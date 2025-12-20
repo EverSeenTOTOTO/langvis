@@ -7,4 +7,3 @@ export const getOwnPropertyNames = <T extends object>(x: T) => {
 
 export const isClient = () => typeof document !== 'undefined';
 export const isTest = () => import.meta.env.MODE === 'test';
-

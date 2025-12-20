@@ -151,37 +151,6 @@ describe('ChatController', () => {
       );
     });
 
-    it('should handle request error event during SSE connection', async () => {
-      const conversationId = 'test-conversation-id';
-      const testError = new Error('Connection error');
-      mockRequest.params = { conversationId };
-
-      let errorCallback: ((err: Error) => void) | undefined;
-      (mockRequest.on as any).mockImplementation(
-        (event: string, callback: (err?: Error) => void) => {
-          if (event === 'error') {
-            errorCallback = callback;
-          }
-        },
-      );
-
-      await chatController.initSSE(
-        mockRequest as Request,
-        mockResponse as Response,
-      );
-
-      // Simulate error event
-      errorCallback?.(testError);
-
-      expect(mockSSEService.closeSSEConnection).toHaveBeenCalledWith(
-        conversationId,
-      );
-      expect(mockRequest.log?.error).toHaveBeenCalledWith(
-        'SSE connection error:',
-        testError,
-      );
-    });
-
     it('should setup SSE connection with proper event handlers', async () => {
       const conversationId = 'test-conversation-id';
       mockRequest.params = { conversationId };

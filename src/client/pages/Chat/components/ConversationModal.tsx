@@ -1,14 +1,10 @@
 import Modal, { ModalProps } from '@/client/components/Modal';
 import { useStore } from '@/client/store';
-import {
-  AgentFormItem,
-  AgentConfigItem,
-  ModelItem,
-  TextItem,
-} from '@/shared/constants/form';
+import { AgentConfigItem, AgentFormItem } from '@/shared/constants/form';
 import {
   Checkbox,
   Col,
+  Collapse,
   Empty,
   Flex,
   Form,
@@ -23,7 +19,7 @@ import {
 } from 'antd';
 import { observer } from 'mobx-react-lite';
 import { useEffect } from 'react';
-import { useAsyncFn } from 'react-use';
+import { useAsyncFn, useMedia } from 'react-use';
 
 const ConversationModal = ({
   mode,
@@ -43,6 +39,7 @@ const ConversationModal = ({
   const [form] = Form.useForm();
   const agentStore = useStore('agent');
   const settingStore = useStore('setting');
+  const isMobile = useMedia('(max-width: 768px)', false);
 
   const fetchAgentApi = useAsyncFn(agentStore.getAllAgent.bind(agentStore));
 
@@ -65,22 +62,14 @@ const ConversationModal = ({
         tooltip={item.tooltip}
         valuePropName={item.valuePropName || 'value'}
         style={{ flex: item.flex }}
+        rules={[
+          {
+            required: item.required,
+          },
+        ]}
       >
         {children}
       </Form.Item>
-    );
-  };
-
-  const renderChildItem = (item: ModelItem, key: keyof typeof item) => {
-    if (!item[key]) return null;
-
-    return (
-      <Col span={12}>
-        {renderConfigItem({
-          ...item[key],
-          name: [item.name, item[key]?.name],
-        })}
-      </Col>
     );
   };
 
@@ -138,18 +127,37 @@ const ConversationModal = ({
             style={{ width: '100%' }}
           />,
         );
-      case 'model':
+      case 'group':
         return (
-          <Row gutter={12}>
-            <Col span={24}>
-              {renderConfigItem({
-                ...item.code,
-                name: [item.name, item.code?.name],
-              } as TextItem)}
-            </Col>
-            {renderChildItem(item, 'temperature')}
-            {renderChildItem(item, 'topP')}
-          </Row>
+          <Collapse
+            key={item.name.toString()}
+            size="small"
+            bordered={false}
+            defaultActiveKey="1"
+            style={{ marginBottom: 16 }}
+            items={[
+              {
+                key: '1',
+                label: item.label,
+                children: (
+                  <Row gutter={12}>
+                    {item.children?.map(child => (
+                      <Col
+                        span={child.span}
+                        flex={child.flex}
+                        key={child.name.toString()}
+                      >
+                        {renderConfigItem({
+                          ...child,
+                          name: [item.name, child.name],
+                        })}
+                      </Col>
+                    ))}
+                  </Row>
+                ),
+              },
+            ]}
+          />
         );
       default:
         console.warn(`Unsupport item: ${JSON.stringify(item)}`);
@@ -159,7 +167,7 @@ const ConversationModal = ({
 
   return (
     <Modal
-      width="60%"
+      width={isMobile ? '100%' : '60%'}
       title={title}
       afterClose={() => {
         form.resetFields();
@@ -179,7 +187,7 @@ const ConversationModal = ({
       {...props}
     >
       <Form form={form} layout="vertical" initialValues={initialValues}>
-        <Flex>
+        <Flex vertical={isMobile}>
           <div className="config-left">
             <Form.Item
               name="id"

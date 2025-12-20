@@ -1,4 +1,5 @@
 import {
+  ColProps,
   FormItemProps,
   InputProps,
   RadioGroupProps,
@@ -7,7 +8,6 @@ import {
 } from 'antd';
 import { CheckboxGroupProps } from 'antd/es/checkbox';
 import { InputNumberProps } from 'antd/lib';
-import { CSSProperties } from 'react';
 
 type CommonProps = Pick<
   FormItemProps,
@@ -19,7 +19,8 @@ type CommonProps = Pick<
   | 'tooltip'
   | 'valuePropName'
 > & {
-  flex?: CSSProperties['flex'];
+  flex?: ColProps['flex'];
+  span?: ColProps['span'];
 };
 
 export type SelectItem = CommonProps &
@@ -61,12 +62,13 @@ export type SwitchItem = CommonProps &
     type: 'switch';
   };
 
-export type ModelItem = {
-  type: 'model';
-  name: FormItemProps['name'];
-  code?: TextItem;
-  temperature?: NumberItem;
-  topP?: NumberItem;
+export type GroupItem = {
+  label: string;
+  name: string | string[];
+  type: 'group';
+  children: AgentConfigItem[];
+  flex?: ColProps['flex'];
+  span?: ColProps['span'];
 };
 
 export type AgentConfigItem =
@@ -76,10 +78,10 @@ export type AgentConfigItem =
   | RadioGroupItem
   | SwitchItem
   | NumberItem
-  | ModelItem;
+  | GroupItem;
 
 export type AgentFormItem = AgentConfigItem extends infer Each
-  ? Each extends ModelItem
+  ? Each extends GroupItem
     ? never
     : Each
   : never;

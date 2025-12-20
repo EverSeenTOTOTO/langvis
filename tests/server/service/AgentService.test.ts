@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { container } from 'tsyringe';
 import { AgentService } from '@/server/service/AgentService';
+import { ToolService } from '@/server/service/ToolService';
 import { InjectTokens } from '@/server/utils';
 
 describe('AgentService: Config → Container Registration Integration Tests', () => {
@@ -20,8 +21,12 @@ describe('AgentService: Config → Container Registration Integration Tests', ()
     const mockOpenAI = new MockOpenAI({ apiKey: 'test-key' });
     container.register(InjectTokens.OPENAI, { useValue: mockOpenAI });
 
-    // Now initialize AgentService - this will read configs and register agents/tools
-    const agentService = new AgentService();
+    // Initialize AgentService - the constructor calls this.initialize() asynchronously
+    const toolService = new ToolService();
+    const agentService = new AgentService(toolService);
+
+    // Wait for the async initialization to complete by calling getAllAgentInfo()
+    // This ensures agents are discovered and registered before tests run
     await agentService.getAllAgentInfo();
   });
 
@@ -152,7 +157,8 @@ describe('AgentService: Config → Container Registration Integration Tests', ()
 
   describe('API Contract: AgentService.getAllAgentInfo() returns display names', () => {
     it('should return agent info with display names as keys', async () => {
-      const agentService = new AgentService();
+      const toolService = new ToolService();
+      const agentService = new AgentService(toolService);
       const agentInfos = await agentService.getAllAgentInfo();
 
       expect(agentInfos.length).toBeGreaterThan(0);
@@ -174,7 +180,8 @@ describe('AgentService: Config → Container Registration Integration Tests', ()
        * This is THE critical test that proves the contract:
        * AgentService.getAllAgentInfo() returns names that work as container tokens
        */
-      const agentService = new AgentService();
+      const toolService = new ToolService();
+      const agentService = new AgentService(toolService);
       const agentInfos = await agentService.getAllAgentInfo();
 
       for (const agentInfo of agentInfos) {
@@ -205,7 +212,8 @@ describe('AgentService: Config → Container Registration Integration Tests', ()
        */
 
       // Step 1-2: Get agent info (simulating API call)
-      const agentService = new AgentService();
+      const toolService = new ToolService();
+      const agentService = new AgentService(toolService);
       const agentInfos = await agentService.getAllAgentInfo();
 
       // Step 3: User selects agent (simulating frontend)
@@ -250,7 +258,8 @@ describe('AgentService: Config → Container Registration Integration Tests', ()
     });
 
     it('verifies all agent info names contain spaces (display name pattern)', async () => {
-      const agentService = new AgentService();
+      const toolService = new ToolService();
+      const agentService = new AgentService(toolService);
       const agentInfos = await agentService.getAllAgentInfo();
 
       for (const agentInfo of agentInfos) {

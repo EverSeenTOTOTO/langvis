@@ -31,8 +31,11 @@ export class ChatController {
     });
 
     req.on('error', err => {
-      req.log.error('SSE connection error:', err);
-      this.sseService.closeSSEConnection(conversationId);
+      const isNormalClose =
+        err.message === 'aborted' || (err as any).code === 'ECONNRESET';
+      if (!isNormalClose) {
+        req.log.error('SSE connection error:', err);
+      }
     });
   }
 
@@ -121,11 +124,13 @@ export class ChatController {
     // Add system prompt if needed
     if (typeof agent.getSystemPrompt === 'function' && messages.length == 0) {
       const systemPrompt = await agent.getSystemPrompt();
-      messagesToInsert.push({
-        role: Role.SYSTEM,
-        content: systemPrompt,
-        createdAt: new Date(baseTimestamp + timestampOffset++),
-      });
+      if (systemPrompt) {
+        messagesToInsert.push({
+          role: Role.SYSTEM,
+          content: systemPrompt,
+          createdAt: new Date(baseTimestamp + timestampOffset++),
+        });
+      }
     }
 
     // Add user message

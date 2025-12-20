@@ -1,18 +1,33 @@
 import type { Message } from '@/shared/entities/Message';
+import { StreamChunk } from '@/shared/types';
 
-export interface Agent {
-  name: string;
-  description: string;
+/* eslint-disable @typescript-eslint/no-unused-vars */
+export abstract class Agent {
+  abstract name: string;
+  abstract description: string;
 
-  getSystemPrompt?(): Promise<string>;
+  async getSystemPrompt(): Promise<string> {
+    return '';
+  }
 
-  call(messages: Message[], config?: Record<string, any>): Promise<unknown>;
+  async call(
+    _messages: Message[],
+    _config?: Record<string, any>,
+  ): Promise<unknown> {
+    throw new Error(
+      `${this.constructor.name}: Non-streaming call not implemented.`,
+    );
+  }
 
-  streamCall(
-    messages: Message[],
-    outputStream: WritableStream,
-    config?: Record<string, any>,
-  ): Promise<unknown>;
+  async streamCall(
+    _messages: Message[],
+    _outputStream: WritableStream<StreamChunk>,
+    _config?: Record<string, any>,
+  ): Promise<unknown> {
+    throw new Error(
+      `${this.constructor.name}: Streaming call not implemented.`,
+    );
+  }
 }
 
 export type AgentConstructor = new () => Agent;
