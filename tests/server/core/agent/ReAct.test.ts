@@ -35,6 +35,7 @@ vi.mock('tsyringe', async importOriginal => {
         `No matching bindings found for serviceIdentifier: ${token}`,
       );
     }),
+    register: vi.fn(),
   };
 
   return {

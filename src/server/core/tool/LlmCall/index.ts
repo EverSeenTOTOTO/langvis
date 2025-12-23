@@ -1,5 +1,5 @@
+import { OpenAI } from '@/server/service/openai';
 import { InjectTokens } from '@/server/utils';
-import OpenAI from 'openai';
 import type { Stream } from 'openai/core/streaming.mjs';
 import type {
   ChatCompletion,

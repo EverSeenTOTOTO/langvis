@@ -261,6 +261,10 @@ export class ConversationService {
     // Create a custom WritableStream that integrates with streaming message service
     const writableStream = new WritableStream<StreamChunk>({
       write: (chunk: StreamChunk) => {
+        if (typeof chunk === 'string') {
+          return updateMessage(chunk);
+        }
+
         switch (chunk.type) {
           case 'chunk':
             return updateMessage(chunk.data);

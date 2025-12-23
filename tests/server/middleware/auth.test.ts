@@ -16,6 +16,7 @@ vi.mock('tsyringe', async importOriginal => {
     ...(actual as any),
     container: {
       resolve: vi.fn(() => mockAuthService),
+      register: vi.fn(),
     },
   };
 });
