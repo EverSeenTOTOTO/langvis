@@ -13,6 +13,7 @@ const mockAgent = {
 vi.mock('tsyringe', () => ({
   container: {
     resolve: vi.fn(),
+    register: vi.fn(),
   },
   singleton: () => vi.fn(),
   inject: () => vi.fn(),

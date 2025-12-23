@@ -85,8 +85,6 @@ const getApiOptions = <P extends Record<string, any>>(
 };
 
 export class ApiRequest<P extends Record<string, any> = {}> extends Request {
-  readonly timeout?: number;
-
   constructor(
     req: P,
     config: {
@@ -101,26 +99,17 @@ export class ApiRequest<P extends Record<string, any> = {}> extends Request {
       ? {
           body: JSON.stringify(req),
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(options?.timeout || 60_000),
         }
       : undefined;
 
     super(url, merge(options, extraOptions));
-
-    this.timeout = options?.timeout || 10_000;
   }
 
   async send() {
     const fetchApi = isClient() ? fetch : serverFetch;
 
-    const res = await Promise.race([
-      fetchApi(this),
-      new Promise<Error>(resolve => {
-        setTimeout(
-          () => resolve(new Error(`Request timeout: ${this.url}`)),
-          this.timeout,
-        );
-      }),
-    ]);
+    const res = await fetchApi(this);
 
     if (res instanceof Error) {
       logError(res);

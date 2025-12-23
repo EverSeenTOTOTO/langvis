@@ -1,10 +1,9 @@
-import { singleton, container, Lifecycle } from 'tsyringe';
+import { readFile } from 'fs/promises';
 import { globby } from 'globby';
-import { __dirname } from '@/server/utils';
+import { dirname, resolve } from 'path';
+import { container, Lifecycle, singleton } from 'tsyringe';
 import { Tool, ToolConstructor } from '../core/tool';
 import { logger } from '../middleware/logger';
-import { readFile } from 'fs/promises';
-import { resolve, dirname } from 'path';
 
 export interface ToolMeta {
   name: {
@@ -104,11 +103,10 @@ export class ToolService {
   }
 
   private async discoverTools() {
-    const pattern = '../core/tool/*/index.ts';
-    const cwd = __dirname();
+    const pattern = './src/server/core/tool/*/index.ts';
 
     const toolPaths = await globby(pattern, {
-      cwd,
+      cwd: process.cwd(),
       absolute: true,
     });
 

@@ -1,10 +1,9 @@
-import { singleton, container, Lifecycle, inject } from 'tsyringe';
+import { readFile } from 'fs/promises';
 import { globby } from 'globby';
-import { __dirname } from '@/server/utils';
+import { dirname, resolve } from 'path';
+import { container, inject, Lifecycle, singleton } from 'tsyringe';
 import { AgentConstructor } from '../core/agent';
 import { logger } from '../middleware/logger';
-import { readFile } from 'fs/promises';
-import { resolve, dirname } from 'path';
 import { ToolService } from './ToolService';
 
 export interface AgentMeta {
@@ -110,11 +109,10 @@ export class AgentService {
   }
 
   private async discoverAgents() {
-    const pattern = '../core/agent/*/index.ts';
-    const cwd = __dirname();
+    const pattern = './src/server/core/agent/*/index.ts';
 
     const agentPaths = await globby(pattern, {
-      cwd,
+      cwd: process.cwd(),
       absolute: true,
     });
 
