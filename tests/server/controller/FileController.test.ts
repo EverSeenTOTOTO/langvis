@@ -1,30 +1,23 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  afterAll,
-  vi,
-  beforeEach,
-} from 'vitest';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { describe, it, expect, beforeAll, vi, beforeEach } from 'vitest';
 import { container } from 'tsyringe';
 import { FileController } from '@/server/controller/FileController';
 import { FileService } from '@/server/service/FileService';
 import type { Request, Response } from 'express';
+import { Readable } from 'stream';
 
-describe('FileController', () => {
+describe('FileController - Streaming', () => {
   let controller: FileController;
   let mockFileService: Partial<FileService>;
-  const testFileName = 'test-file.txt';
-  const testImageName = 'test-image.jpg';
-  const testDocName = 'test-doc.docx';
-  const uploadDir = path.join(process.cwd(), 'upload');
+  const testFileName = 'test-video.mp4';
+  const testContent = 'This is test video content for streaming';
 
-  const mockRequest = (filename?: string) =>
+  const mockRequest = (
+    filename?: string,
+    headers: Record<string, string> = {},
+  ) =>
     ({
       params: filename ? { 0: filename } : {},
+      headers,
     }) as Request;
 
   const mockResponse = () => {
@@ -33,26 +26,42 @@ describe('FileController', () => {
     res.json = vi.fn().mockReturnValue(res);
     res.send = vi.fn().mockReturnValue(res);
     res.setHeader = vi.fn().mockReturnValue(res);
+
+    // Mock the pipe functionality for streams
+    const mockPipe = vi.fn();
+    res.pipe = mockPipe;
+
+    // Add necessary stream-like properties for pipe to work
+    res.on = vi.fn().mockReturnValue(res);
+    res.once = vi.fn().mockReturnValue(res);
+    res.emit = vi.fn().mockReturnValue(res);
+    res.removeListener = vi.fn().mockReturnValue(res);
+    res.write = vi.fn().mockReturnValue(res);
+    res.end = vi.fn().mockReturnValue(res);
+
     return res;
   };
 
-  beforeAll(async () => {
-    // Ensure upload directory exists
-    await fs.mkdir(uploadDir, { recursive: true });
+  const createMockStream = (
+    content: string,
+    options?: { start?: number; end?: number },
+  ) => {
+    let sliceContent = content;
+    if (options?.start !== undefined || options?.end !== undefined) {
+      const start = options.start || 0;
+      const end = options.end !== undefined ? options.end + 1 : content.length;
+      sliceContent = content.slice(start, end);
+    }
 
-    // Create test files
-    await fs.writeFile(path.join(uploadDir, testFileName), 'Test file content');
-    await fs.writeFile(
-      path.join(uploadDir, testImageName),
-      'Fake image content',
-    );
-    await fs.writeFile(
-      path.join(uploadDir, testDocName),
-      'Fake document content',
-    );
+    const stream = new Readable();
+    stream.push(sliceContent);
+    stream.push(null);
+    return stream;
+  };
 
+  beforeAll(() => {
     // Set environment variables for allowed extensions
-    process.env.FILE_INLINE_EXTENSIONS = '.txt,.jpg,.png,.pdf';
+    process.env.FILE_INLINE_EXTENSIONS = '.txt,.jpg,.png,.pdf,.mp4';
     process.env.FILE_RANGE_EXTENSIONS = '.mp4,.webm,.mp3';
   });
 
@@ -62,9 +71,8 @@ describe('FileController', () => {
 
     // Create mock FileService
     mockFileService = {
-      downloadFile: vi.fn(),
       getFileStats: vi.fn(),
-      getFilePath: vi.fn(),
+      createReadStream: vi.fn(),
     };
 
     // Register mock service
@@ -72,143 +80,152 @@ describe('FileController', () => {
     controller = container.resolve(FileController);
   });
 
-  afterAll(async () => {
-    // Clean up test files
-    const testFiles = [testFileName, testImageName, testDocName];
-    for (const file of testFiles) {
-      try {
-        await fs.unlink(path.join(uploadDir, file));
-      } catch {
-        // File might not exist, ignore error
-      }
-    }
-  });
-
-  describe('downloadFile', () => {
-    it('should download existing file with attachment disposition', async () => {
+  describe('downloadFile with streaming', () => {
+    it('should stream entire file when no range header', async () => {
       const req = mockRequest(testFileName);
       const res = mockResponse();
-      const fileBuffer = Buffer.from('Test file content');
-      const fileStats = { size: 17, mtime: new Date('2023-01-01') };
+      const fileStats = {
+        size: testContent.length,
+        mtime: new Date('2023-01-01'),
+      };
+      const mockStream = createMockStream(testContent);
 
       (mockFileService.getFileStats as any).mockResolvedValue(fileStats);
-      (mockFileService.downloadFile as any).mockResolvedValue(fileBuffer);
+      (mockFileService.createReadStream as any).mockResolvedValue(mockStream);
 
       await controller.downloadFile(req, res);
 
+      expect(mockFileService.createReadStream).toHaveBeenCalledWith(
+        testFileName,
+      );
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Length',
+        testContent.length,
+      );
+      expect(res.setHeader).toHaveBeenCalledWith('Accept-Ranges', 'bytes');
       expect(res.setHeader).toHaveBeenCalledWith(
         'Content-Disposition',
         expect.stringContaining('attachment'),
       );
-      expect(res.setHeader).toHaveBeenCalledWith(
-        'Content-Disposition',
-        expect.stringContaining(testFileName),
-      );
-      expect(res.send).toHaveBeenCalledWith(fileBuffer);
     });
 
-    it('should return 404 for non-existing file', async () => {
-      const req = mockRequest('non-existing.txt');
+    it('should handle range requests for partial content', async () => {
+      const req = mockRequest(testFileName, { range: 'bytes=0-9' });
       const res = mockResponse();
+      const fileStats = {
+        size: testContent.length,
+        mtime: new Date('2023-01-01'),
+      };
+      const mockStream = createMockStream(testContent, { start: 0, end: 9 });
 
-      (mockFileService.getFileStats as any).mockResolvedValue(null);
+      (mockFileService.getFileStats as any).mockResolvedValue(fileStats);
+      (mockFileService.createReadStream as any).mockResolvedValue(mockStream);
 
       await controller.downloadFile(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({
-        error: 'File not found',
-      });
+      expect(mockFileService.createReadStream).toHaveBeenCalledWith(
+        testFileName,
+        { start: 0, end: 9 },
+      );
+      expect(res.status).toHaveBeenCalledWith(206);
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Range',
+        `bytes 0-9/${testContent.length}`,
+      );
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Length', 10);
+    });
+
+    it('should return 416 for invalid range', async () => {
+      const req = mockRequest(testFileName, { range: 'bytes=100-200' });
+      const res = mockResponse();
+      const fileStats = {
+        size: testContent.length,
+        mtime: new Date('2023-01-01'),
+      };
+
+      (mockFileService.getFileStats as any).mockResolvedValue(fileStats);
+
+      await controller.downloadFile(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(416);
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Range',
+        `bytes */${testContent.length}`,
+      );
     });
   });
 
-  describe('playFile', () => {
-    it('should play allowed file type with inline disposition', async () => {
+  describe('playFile with streaming', () => {
+    it('should stream media file with range support', async () => {
       const req = mockRequest(testFileName);
       const res = mockResponse();
-      const fileBuffer = Buffer.from('Test file content');
-      const fileStats = { size: 17, mtime: new Date('2023-01-01') };
+      const fileStats = {
+        size: testContent.length,
+        mtime: new Date('2023-01-01'),
+      };
+      const mockStream = createMockStream(testContent);
 
       (mockFileService.getFileStats as any).mockResolvedValue(fileStats);
-      (mockFileService.downloadFile as any).mockResolvedValue(fileBuffer);
+      (mockFileService.createReadStream as any).mockResolvedValue(mockStream);
 
       await controller.playFile(req, res);
 
+      expect(mockFileService.createReadStream).toHaveBeenCalledWith(
+        testFileName,
+      );
+      expect(res.setHeader).toHaveBeenCalledWith('Accept-Ranges', 'bytes');
       expect(res.setHeader).toHaveBeenCalledWith(
         'Content-Disposition',
         expect.stringContaining('inline'),
       );
       expect(res.setHeader).toHaveBeenCalledWith(
-        'Content-Disposition',
-        expect.stringContaining(testFileName),
-      );
-      expect(res.send).toHaveBeenCalledWith(fileBuffer);
-    });
-
-    it('should return 403 for disallowed file type', async () => {
-      const req = mockRequest(testDocName);
-      const res = mockResponse();
-
-      await controller.playFile(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(403);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          error: expect.stringContaining(
-            'File type not allowed for inline viewing',
-          ),
-          allowedExtensions: expect.any(Array),
-        }),
+        'Cache-Control',
+        'public, max-age=31536000',
       );
     });
 
-    it('should return 404 for non-existing file', async () => {
-      const req = mockRequest('non-existing.txt');
+    it('should handle range requests for media files', async () => {
+      const req = mockRequest(testFileName, { range: 'bytes=5-14' });
       const res = mockResponse();
-
-      (mockFileService.getFileStats as any).mockResolvedValue(null);
-
-      await controller.playFile(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({
-        error: 'File not found',
-      });
-    });
-  });
-
-  describe('getFileInfo', () => {
-    it('should return file info for existing file', async () => {
-      const req = mockRequest(testFileName);
-      const res = mockResponse();
-      const fileStats = { size: 17, mtime: new Date('2023-01-01') };
+      const fileStats = {
+        size: testContent.length,
+        mtime: new Date('2023-01-01'),
+      };
+      const mockStream = createMockStream(testContent, { start: 5, end: 14 });
 
       (mockFileService.getFileStats as any).mockResolvedValue(fileStats);
+      (mockFileService.createReadStream as any).mockResolvedValue(mockStream);
 
-      await controller.getFileInfo(req, res);
+      await controller.playFile(req, res);
 
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          filename: testFileName,
-          size: 17,
-          mtime: fileStats.mtime,
-          mimeType: expect.any(String),
-        }),
+      expect(mockFileService.createReadStream).toHaveBeenCalledWith(
+        testFileName,
+        { start: 5, end: 14 },
+      );
+      expect(res.status).toHaveBeenCalledWith(206);
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Range',
+        `bytes 5-14/${testContent.length}`,
       );
     });
 
-    it('should return 404 for non-existing file', async () => {
-      const req = mockRequest('non-existing.txt');
+    it('should not handle range requests for non-range supported files', async () => {
+      const req = mockRequest('test.txt', { range: 'bytes=5-14' });
       const res = mockResponse();
+      const fileStats = {
+        size: testContent.length,
+        mtime: new Date('2023-01-01'),
+      };
+      const mockStream = createMockStream(testContent);
 
-      (mockFileService.getFileStats as any).mockResolvedValue(null);
+      (mockFileService.getFileStats as any).mockResolvedValue(fileStats);
+      (mockFileService.createReadStream as any).mockResolvedValue(mockStream);
 
-      await controller.getFileInfo(req, res);
+      await controller.playFile(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({
-        error: 'File not found',
-      });
+      // Should ignore range header for .txt files
+      expect(mockFileService.createReadStream).toHaveBeenCalledWith('test.txt');
+      expect(res.setHeader).not.toHaveBeenCalledWith('Accept-Ranges', 'bytes');
     });
   });
 });

@@ -1,5 +1,5 @@
 import { singleton } from 'tsyringe';
-import { promises as fs } from 'fs';
+import { promises as fs, createReadStream } from 'fs';
 import path from 'path';
 
 @singleton()
@@ -87,6 +87,31 @@ export class FileService {
       }
       throw error;
     }
+  }
+
+  async createReadStream(
+    filename: string,
+    options?: { start?: number; end?: number },
+  ): Promise<NodeJS.ReadableStream> {
+    const filePath = this.validatePath(filename);
+
+    // Check if file exists first
+    try {
+      await fs.access(filePath);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'ENOENT'
+      ) {
+        throw new Error('File not found');
+      }
+      throw error;
+    }
+
+    const stream = createReadStream(filePath, options);
+
+    return stream;
   }
 
   async getFileStats(
