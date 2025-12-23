@@ -6,7 +6,6 @@ import composeHydrate from '../decorator/hydrate';
 import { AuthStore } from './modules/auth';
 import { ChatStore } from './modules/chat';
 import { ConversationStore } from './modules/conversation';
-import { HomeStore } from './modules/home';
 import { SettingStore } from './modules/setting';
 import { UserStore } from './modules/user';
 import { AgentStore } from './modules/agent';
@@ -23,8 +22,6 @@ const bindStore = <C extends Record<string, any>>(
 };
 
 export class AppStore {
-  home = bindStore(HomeStore);
-
   setting = bindStore(SettingStore);
 
   auth = bindStore(AuthStore);

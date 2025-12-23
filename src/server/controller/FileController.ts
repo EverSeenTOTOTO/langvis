@@ -28,44 +28,89 @@ export class FileController {
   }
 
   @api('/download/*', { method: 'get' })
-  async downloadFile(req: Request, res: Response) {
+  async downloadFile(req: Request, res: Response): Promise<void> {
     const filename = req.params[0];
 
     if (!filename) {
-      return res.status(400).json({ error: 'Filename is required' });
+      res.status(400).json({ error: 'Filename is required' });
+      return;
     }
 
-    // Get file stats first to check if file exists and get metadata
-    const fileStats = await this.fileService.getFileStats(filename);
+    try {
+      // Get file stats first to check if file exists and get metadata
+      const fileStats = await this.fileService.getFileStats(filename);
 
-    if (!fileStats) {
-      return res.status(404).json({ error: 'File not found' });
+      if (!fileStats) {
+        res.status(404).json({ error: 'File not found' });
+        return;
+      }
+
+      const mimeType = mime.lookup(filename) || 'application/octet-stream';
+      const { size } = fileStats;
+
+      // Parse range header if present
+      const range = req.headers.range;
+      if (range) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : size - 1;
+
+        if (start >= size || end >= size) {
+          res.setHeader('Content-Range', `bytes */${size}`);
+          res.status(416).json({ error: 'Range Not Satisfiable' });
+          return;
+        }
+
+        const chunksize = end - start + 1;
+        const stream = await this.fileService.createReadStream(filename, {
+          start,
+          end,
+        });
+
+        res.status(206);
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`);
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Content-Length', chunksize);
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${filename}"`,
+        );
+        res.setHeader('Last-Modified', fileStats.mtime.toUTCString());
+
+        stream.pipe(res);
+      } else {
+        // Full file download
+        const stream = await this.fileService.createReadStream(filename);
+
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Length', size);
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${filename}"`,
+        );
+        res.setHeader('Last-Modified', fileStats.mtime.toUTCString());
+        res.setHeader('Accept-Ranges', 'bytes');
+
+        stream.pipe(res);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message === 'File not found') {
+        res.status(404).json({ error: 'File not found' });
+        return;
+      }
+      console.error('Error in downloadFile:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
-
-    // Get file buffer
-    const fileBuffer = await this.fileService.downloadFile(filename);
-
-    if (!fileBuffer) {
-      return res.status(404).json({ error: 'File not found' });
-    }
-
-    // Set appropriate headers for download (force attachment)
-    const mimeType = mime.lookup(filename) || 'application/octet-stream';
-
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Length', fileStats.size);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Last-Modified', fileStats.mtime.toUTCString());
-
-    return res.send(fileBuffer);
   }
 
   @api('/play/*', { method: 'get' })
-  async playFile(req: Request, res: Response) {
+  async playFile(req: Request, res: Response): Promise<void> {
     const filename = req.params[0];
 
     if (!filename) {
-      return res.status(400).json({ error: 'Filename is required' });
+      res.status(400).json({ error: 'Filename is required' });
+      return;
     }
 
     // Check if file extension is allowed for inline viewing
@@ -73,45 +118,81 @@ export class FileController {
     const allowedExtensions = this.getInlineExtensions();
 
     if (!allowedExtensions.includes(ext)) {
-      return res.status(403).json({
+      res.status(403).json({
         error: 'File type not allowed for inline viewing',
         allowedExtensions,
       });
+      return;
     }
 
-    // Get file stats first to check if file exists and get metadata
-    const fileStats = await this.fileService.getFileStats(filename);
+    try {
+      // Get file stats first to check if file exists and get metadata
+      const fileStats = await this.fileService.getFileStats(filename);
 
-    if (!fileStats) {
-      return res.status(404).json({ error: 'File not found' });
+      if (!fileStats) {
+        res.status(404).json({ error: 'File not found' });
+        return;
+      }
+
+      const mimeType = mime.lookup(filename) || 'application/octet-stream';
+      const { size } = fileStats;
+      const rangeExtensions = this.getRangeExtensions();
+
+      // Add cache control for better performance
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+      res.setHeader('ETag', `"${fileStats.mtime.getTime()}-${fileStats.size}"`);
+      res.setHeader('Last-Modified', fileStats.mtime.toUTCString());
+
+      // Handle Range requests for media files
+      const range = req.headers.range;
+      if (range && rangeExtensions.includes(ext)) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : size - 1;
+
+        if (start >= size || end >= size) {
+          res.setHeader('Content-Range', `bytes */${size}`);
+          res.status(416).json({ error: 'Range Not Satisfiable' });
+          return;
+        }
+
+        const chunksize = end - start + 1;
+        const stream = await this.fileService.createReadStream(filename, {
+          start,
+          end,
+        });
+
+        res.status(206);
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`);
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Content-Length', chunksize);
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+
+        stream.pipe(res);
+      } else {
+        // Full file streaming
+        const stream = await this.fileService.createReadStream(filename);
+
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Length', size);
+        res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+
+        // Add Accept-Ranges header for files that support range requests
+        if (rangeExtensions.includes(ext)) {
+          res.setHeader('Accept-Ranges', 'bytes');
+        }
+
+        stream.pipe(res);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message === 'File not found') {
+        res.status(404).json({ error: 'File not found' });
+        return;
+      }
+      console.error('Error in playFile:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
-
-    // Get file buffer
-    const fileBuffer = await this.fileService.downloadFile(filename);
-
-    if (!fileBuffer) {
-      return res.status(404).json({ error: 'File not found' });
-    }
-
-    // Set appropriate headers for inline viewing/playing
-    const mimeType = mime.lookup(filename) || 'application/octet-stream';
-
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Length', fileStats.size);
-    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-    res.setHeader('Last-Modified', fileStats.mtime.toUTCString());
-
-    // Add cache control for better performance
-    res.setHeader('Cache-Control', 'public, max-age=31536000');
-    res.setHeader('ETag', `"${fileStats.mtime.getTime()}-${fileStats.size}"`);
-
-    // Add Accept-Ranges header for files that support range requests
-    const rangeExtensions = this.getRangeExtensions();
-    if (rangeExtensions.includes(ext)) {
-      res.setHeader('Accept-Ranges', 'bytes');
-    }
-
-    return res.send(fileBuffer);
   }
 
   @api('/info/*', { method: 'get' })
@@ -122,19 +203,27 @@ export class FileController {
       return res.status(400).json({ error: 'Filename is required' });
     }
 
-    const fileStats = await this.fileService.getFileStats(filename);
+    try {
+      const fileStats = await this.fileService.getFileStats(filename);
 
-    if (!fileStats) {
-      return res.status(404).json({ error: 'File not found' });
+      if (!fileStats) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+
+      const mimeType = mime.lookup(filename) || 'application/octet-stream';
+
+      return res.json({
+        filename,
+        size: fileStats.size,
+        mtime: fileStats.mtime,
+        mimeType,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'File not found') {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      console.error('Error in getFileInfo:', error);
+      return res.status(500).json({ error: 'Internal server error' });
     }
-
-    const mimeType = mime.lookup(filename) || 'application/octet-stream';
-
-    return res.json({
-      filename,
-      size: fileStats.size,
-      mtime: fileStats.mtime,
-      mimeType,
-    });
   }
 }

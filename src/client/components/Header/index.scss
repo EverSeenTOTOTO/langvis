@@ -14,11 +14,12 @@
 
   .logo {
     margin: 0;
+    cursor: pointer;
   }
 
   .header-divider {
     flex: 1;
-    border-inline: 1px solid var(--ant-color-split);
+    border-inline-end: 1px solid var(--ant-color-split);
   }
 
   .user-dropdown {

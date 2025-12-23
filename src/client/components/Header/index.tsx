@@ -104,7 +104,11 @@ const Header = () => {
           borderBottom: `1px solid ${token.colorBorder}`,
         }}
       >
-        <Typography.Title className="logo" level={3}>
+        <Typography.Title
+          className="logo"
+          level={3}
+          onClick={() => navigate('/')}
+        >
           Langvis
         </Typography.Title>
 
