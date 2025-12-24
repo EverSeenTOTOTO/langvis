@@ -1,8 +1,8 @@
-import { singleton } from 'tsyringe';
+import { User, UserEntity } from '@/shared/entities/User';
+import { service } from '../decorator/service';
 import pg from './pg';
-import { UserEntity, User } from '@/shared/entities/User';
 
-@singleton()
+@service()
 export class UserService {
   async getAllUsers(): Promise<User[]> {
     const userRepository = pg.getRepository(UserEntity);

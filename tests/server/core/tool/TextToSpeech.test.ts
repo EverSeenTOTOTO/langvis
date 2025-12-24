@@ -19,8 +19,10 @@ describe('TextToSpeechTool', () => {
 
   beforeEach(() => {
     tool = new TextToSpeechTool();
-    tool.name = 'TextToSpeech Tool';
-    tool.description = 'Converts text to speech';
+    tool.config = {
+      name: { en: 'TextToSpeech Tool' },
+      description: { en: 'Converts text to speech' },
+    };
 
     process.env = {
       ...originalEnv,

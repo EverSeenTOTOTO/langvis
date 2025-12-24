@@ -1,12 +1,12 @@
 import { typeormAdapter } from '@hedystia/better-auth-typeorm';
 import { betterAuth } from 'better-auth';
 import type { Request } from 'express';
-import { singleton } from 'tsyringe';
-import pg from './pg';
+import { service } from '../decorator/service';
 import { getSessionHeaders } from '../utils';
+import pg from './pg';
 // import redis from './redis';
 
-@singleton()
+@service()
 export class AuthService {
   readonly auth = betterAuth({
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment

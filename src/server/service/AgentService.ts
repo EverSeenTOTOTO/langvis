@@ -1,50 +1,31 @@
-import { readFile } from 'fs/promises';
+import { AgentConfig } from '@/shared/types';
 import { globby } from 'globby';
-import { dirname, resolve } from 'path';
-import { container, inject, Lifecycle, singleton } from 'tsyringe';
+import path from 'path';
+import { container, inject } from 'tsyringe';
 import { AgentConstructor } from '../core/agent';
+import { registerAgent } from '../decorator/config';
+import { service } from '../decorator/service';
 import { logger } from '../middleware/logger';
 import { ToolService } from './ToolService';
 
-export interface AgentMeta {
-  name: {
-    en: string;
-    zh?: string;
-    [key: string]: string | undefined;
-  };
-  description: {
-    en: string;
-    zh?: string;
-    [key: string]: string | undefined;
-  };
-  tools?: string[];
-  configItems?: any[];
-}
-
-export type AgentInfo = {
-  name: string;
-  description: string;
-  configItems?: any[];
-};
-
-@singleton()
+@service()
 export class AgentService {
-  private readonly agents = new Map<string, AgentInfo>();
+  private agents: string[] = [];
   private isInitialized = false;
 
   constructor(
     @inject(ToolService)
     private toolService: ToolService,
   ) {
-    this.initialize().catch(error => {
-      this.isInitialized = false;
-      logger.error('❌ Failed to initialize AgentService:', error);
-    });
+    this.initialize();
   }
 
-  async getAllAgentInfo(): Promise<AgentInfo[]> {
+  async getAllAgentInfo() {
     await this.initialize();
-    return [...this.agents.values()];
+    return this.agents.map(agent => ({
+      id: agent,
+      ...container.resolve<any>(agent)?.config,
+    }));
   }
 
   private async initialize(): Promise<void> {
@@ -52,60 +33,27 @@ export class AgentService {
       return;
     }
 
-    // Initialize tools first
-    await this.toolService.getAllToolInfo();
+    this.isInitialized = true;
 
-    const agents = await this.discoverAgents();
+    try {
+      // Initialize tools first
+      await this.toolService.getAllToolInfo();
 
-    logger.info(
-      `🤖 Discovered ${agents.length} agents:`,
-      agents.map(a => a.class.name),
-    );
+      const agents = await this.discoverAgents();
 
-    // Register agents
-    agents.forEach(agent => {
-      const agentName = agent.meta.name.en; // Use display name as token
-
-      container.register(agentName, agent.class, {
-        lifecycle: Lifecycle.Singleton,
-      });
-
-      const agentInfo = {
-        name: agent.meta.name.en,
-        description: agent.meta.description.en,
-        configItems: agent.meta.configItems,
-      };
-      this.agents.set(agentName, agentInfo);
-
-      // Setup dependency injection for agent metadata and tools
-      container.afterResolution(
-        agentName,
-        async (_token, instance: object) => {
-          // Inject name and description
-          if (instance && 'name' in instance && 'description' in instance) {
-            Reflect.set(instance, 'name', agent.meta.name.en);
-            Reflect.set(instance, 'description', agent.meta.description.en);
-          }
-
-          // Inject tools
-          if (instance && 'tools' in instance) {
-            const toolNames = agent.meta.tools || [];
-
-            const tools = await this.toolService.getToolsByNames(toolNames);
-
-            Reflect.set(instance, 'tools', tools);
-            logger.info(
-              `✅ Injected ${toolNames.length} tools into agent: ${agentName}`,
-            );
-          }
-        },
-        { frequency: 'Once' },
+      logger.info(
+        `Discovered ${agents.length} agents:`,
+        agents.map(a => a.clazz.name),
       );
 
-      logger.info(`✅ Agent registered successfully: ${agentName}`);
-    });
-
-    this.isInitialized = true;
+      // Register agents
+      this.agents = await Promise.all(
+        agents.map(agent => registerAgent(agent.clazz, agent.config)),
+      );
+    } catch (e) {
+      this.isInitialized = false;
+      logger.error('Failed to initialize AgentService:', e);
+    }
   }
 
   private async discoverAgents() {
@@ -117,51 +65,32 @@ export class AgentService {
     });
 
     const agents: {
-      class: AgentConstructor;
-      meta: AgentMeta;
+      clazz: AgentConstructor;
+      config: AgentConfig;
     }[] = [];
 
     for (const absolutePath of agentPaths) {
       try {
-        const agent = await this.loadAgent(absolutePath);
-        if (agent) {
-          agents.push(agent);
+        const [{ default: clazz }, { config }] = await Promise.all([
+          import(absolutePath),
+          import(path.resolve(path.dirname(absolutePath), 'config.ts')),
+        ]);
+
+        if (clazz && config) {
+          agents.push({
+            clazz,
+            config,
+          });
+        } else {
+          logger.warn(
+            `Incomplete agent module at ${path.basename(absolutePath, '.ts')}`,
+          );
         }
       } catch (error) {
-        logger.error(
-          `❌ Failed to process agent module ${absolutePath}:`,
-          error,
-        );
+        logger.error(`Failed to process agent module ${absolutePath}:`, error);
       }
     }
 
     return agents;
-  }
-
-  private async loadAgent(absolutePath: string) {
-    const module = await import(absolutePath);
-    const agentClass = module.default;
-
-    if (!agentClass) {
-      logger.warn(`⚠️ No default export found in: ${absolutePath}`);
-      return null;
-    }
-
-    // Read config.json from the same directory
-    const configPath = resolve(dirname(absolutePath), 'config.json');
-    let metaData: AgentMeta;
-
-    try {
-      const configContent = await readFile(configPath, 'utf-8');
-      metaData = JSON.parse(configContent);
-    } catch (error) {
-      logger.warn(
-        `❌ No config.json found for agent at ${absolutePath}:`,
-        error,
-      );
-      return null;
-    }
-
-    return { class: agentClass, meta: metaData };
   }
 }

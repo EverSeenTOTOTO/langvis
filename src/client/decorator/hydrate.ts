@@ -1,4 +1,4 @@
-import { getOwnPropertyNames } from '@/shared/constants';
+import { getOwnPropertyNames } from '@/shared/utils';
 import { action } from 'mobx';
 
 const metaDataKey = Symbol('hydrate');

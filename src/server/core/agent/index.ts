@@ -1,10 +1,10 @@
 import type { Message } from '@/shared/entities/Message';
-import { StreamChunk } from '@/shared/types';
+import { StreamChunk, AgentConfig } from '@/shared/types';
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 export abstract class Agent {
-  abstract name: string;
-  abstract description: string;
+  abstract id: string;
+  abstract config: AgentConfig;
 
   async getSystemPrompt(): Promise<string> {
     return '';

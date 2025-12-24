@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ConversationService } from '@/server/service/ConversationService';
 import { Role } from '@/shared/entities/Message';
 import pg from '@/server/service/pg';
+import { AgentIds } from '@/shared/constants';
 
 // Mock the pg module
 vi.mock('@/server/service/pg', () => ({
@@ -54,14 +55,14 @@ describe('ConversationService', () => {
     const mockConversation = {
       id: '1',
       name: 'Test Conversation',
-      config: { agent: 'Chat Agent' },
+      config: { agent: AgentIds.CHAT_AGENT },
       createdAt: new Date(),
       messages: [],
     };
 
     (pg.getRepository as any).mockReturnValue({
       create: vi.fn().mockImplementation(entity => {
-        expect(entity.config).toEqual({ agent: 'Chat Agent' });
+        expect(entity.config).toEqual({ agent: AgentIds.CHAT_AGENT });
         return mockConversation;
       }),
       save: vi.fn().mockResolvedValue(mockConversation),
@@ -76,7 +77,7 @@ describe('ConversationService', () => {
     const mockConversation = {
       id: '1',
       name: 'Test Conversation',
-      config: { model: 'gpt-4', temperature: 0.7, agent: 'Chat Agent' },
+      config: { model: 'gpt-4', temperature: 0.7, agent: AgentIds.CHAT_AGENT },
       createdAt: new Date(),
       messages: [],
     };
@@ -86,7 +87,7 @@ describe('ConversationService', () => {
         expect(entity.config).toEqual({
           model: 'gpt-4',
           temperature: 0.7,
-          agent: 'Chat Agent',
+          agent: AgentIds.CHAT_AGENT,
         });
         return mockConversation;
       }),

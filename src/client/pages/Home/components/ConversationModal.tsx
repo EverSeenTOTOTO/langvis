@@ -1,6 +1,7 @@
 import Modal, { ModalProps } from '@/client/components/Modal';
 import { useStore } from '@/client/store';
-import { AgentConfigItem, AgentFormItem } from '@/shared/constants/form';
+import { AgentIds } from '@/shared/constants';
+import { AgentConfig, AgentConfigItem, AgentFormItem } from '@/shared/types';
 import {
   Checkbox,
   Col,
@@ -50,16 +51,16 @@ const ConversationModal = ({
   const renderFormItem = (item: AgentFormItem, children: React.ReactNode) => {
     return (
       <Form.Item
-        key={item.name.toString()}
+        key={JSON.stringify(item.name)}
         name={[
           'config',
           ...(Array.isArray(item.name) ? item.name : [item.name]),
         ]}
-        label={settingStore.tr(item.label as string)}
+        label={item.label ? settingStore.tr(item.label?.en) : undefined}
         hidden={item.hidden}
         required={item.required}
         initialValue={item.initialValue}
-        tooltip={item.tooltip}
+        tooltip={item.tooltip?.en}
         valuePropName={item.valuePropName || 'value'}
         style={{ flex: item.flex }}
         rules={[
@@ -130,7 +131,7 @@ const ConversationModal = ({
       case 'group':
         return (
           <Collapse
-            key={item.name.toString()}
+            key={JSON.stringify(item.name)}
             size="small"
             bordered={false}
             defaultActiveKey="1"
@@ -138,15 +139,11 @@ const ConversationModal = ({
             items={[
               {
                 key: '1',
-                label: item.label,
+                label: item.label ? settingStore.tr(item.label?.en) : undefined,
                 children: (
                   <Row gutter={12}>
                     {item.children?.map(child => (
-                      <Col
-                        span={child.span}
-                        flex={child.flex}
-                        key={child.name.toString()}
-                      >
+                      <Col span={child.span} flex={child.flex} key={child.name}>
                         {renderConfigItem({
                           ...child,
                           name: [item.name, child.name],
@@ -221,7 +218,7 @@ const ConversationModal = ({
             <Form.Item
               name={['config', 'agent']}
               label={settingStore.tr('Agent')}
-              initialValue="Chat Agent"
+              initialValue={AgentIds.CHAT_AGENT}
             >
               <Select
                 disabled={mode === 'edit'}
@@ -229,9 +226,9 @@ const ConversationModal = ({
                 placeholder={settingStore.tr('Select an agent')}
                 options={
                   fetchAgentApi[0]?.value?.map(
-                    (agent: { name: string; description: string }) => ({
-                      label: settingStore.tr(agent.name),
-                      value: agent.name,
+                    (config: AgentConfig & { id: string }) => ({
+                      label: settingStore.tr(config.name.en),
+                      value: config.id,
                     }),
                   ) || []
                 }
@@ -243,13 +240,13 @@ const ConversationModal = ({
 
                 if (!agent) return null;
 
-                const agentInfo = fetchAgentApi[0]?.value?.find(
-                  (a: { name: string }) => a.name === agent,
+                const agentInfo: AgentConfig = fetchAgentApi[0]?.value?.find(
+                  (a: AgentConfig & { id: string }) => a.id === agent,
                 );
 
                 return (
                   <Typography.Paragraph type="secondary">
-                    {settingStore.tr(agentInfo?.description || '')}
+                    {settingStore.tr(agentInfo?.description.en || '')}
                   </Typography.Paragraph>
                 );
               }}
@@ -264,8 +261,8 @@ const ConversationModal = ({
                   return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
                 }
 
-                const agentInfo = fetchAgentApi[0]?.value?.find(
-                  (a: { name: string }) => a.name === agent,
+                const agentInfo: AgentConfig = fetchAgentApi[0]?.value?.find(
+                  (a: AgentConfig & { id: string }) => a.id === agent,
                 );
 
                 if (!agentInfo?.configItems?.length) {

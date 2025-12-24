@@ -1,9 +1,9 @@
-import { StreamChunk } from '@/shared/types';
+import { StreamChunk, ToolConfig } from '@/shared/types';
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 export abstract class Tool {
-  abstract name: string;
-  abstract description: string;
+  abstract id: string;
+  abstract config: ToolConfig;
 
   async call(_input: Record<string, any>): Promise<unknown> {
     throw new Error(

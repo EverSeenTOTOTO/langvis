@@ -1,7 +1,9 @@
+import { tool } from '@/server/decorator/config';
+import { ToolIds } from '@/shared/constants';
+import { ToolConfig } from '@/shared/types';
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
-import { injectable } from 'tsyringe';
 import { Tool } from '..';
 
 // Extend dayjs with plugins
@@ -13,10 +15,10 @@ export type DateTimeInput = {
   format?: string;
 };
 
-@injectable()
+@tool(ToolIds.DATE_TIME)
 export default class DateTimeTool extends Tool {
-  name!: string;
-  description!: string;
+  id!: string;
+  config!: ToolConfig;
 
   async call(input: Record<string, any>): Promise<string> {
     const timezone = input?.timezone;

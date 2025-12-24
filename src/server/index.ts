@@ -1,15 +1,15 @@
-import 'reflect-metadata';
 import { __dirname, isProd } from '@/server/utils';
 import bodyParser from 'body-parser';
 import compression from 'compression';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import express, { Express } from 'express';
 import path from 'node:path';
+import 'reflect-metadata';
 import bindControllers from './controller';
-import bindSSRMiddleware from './middleware/ssr';
-import cookieParser from 'cookie-parser';
-import bindLogger, { logger } from './middleware/logger';
 import bindAuthMiddleware from './middleware/auth';
+import bindLogger, { logger } from './middleware/logger';
+import bindSSRMiddleware from './middleware/ssr';
 
 dotenv.config({
   path: isProd
@@ -34,11 +34,13 @@ export const createServer = async (): Promise<Express> => {
   await bindSSRMiddleware(app);
   return app;
 };
+
 const port = process.env.PORT || 3000;
+
 createServer()
   .then(server => {
     server.listen(port, () => {
       logger.info(`Server started at http://localhost:${port}`);
     });
   })
-  .catch(logger.error);
+  .catch(console.error);

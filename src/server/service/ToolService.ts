@@ -1,62 +1,27 @@
-import { readFile } from 'fs/promises';
 import { globby } from 'globby';
-import { dirname, resolve } from 'path';
-import { container, Lifecycle, singleton } from 'tsyringe';
-import { Tool, ToolConstructor } from '../core/tool';
+import { container } from 'tsyringe';
+import { service } from '../decorator/service';
 import { logger } from '../middleware/logger';
+import path from 'path';
+import { registerTool } from '../decorator/config';
+import { ToolConfig } from '@/shared/types';
+import { Tool, ToolConstructor } from '../core/tool';
 
-export interface ToolMeta {
-  name: {
-    en: string;
-    zh?: string;
-    [key: string]: string | undefined;
-  };
-  description: {
-    en: string;
-    zh?: string;
-    [key: string]: string | undefined;
-  };
-}
-
-export type ToolInfo = {
-  name: string;
-  description: string;
-};
-
-@singleton()
+@service()
 export class ToolService {
-  private readonly tools = new Map<string, ToolInfo>();
+  private tools: string[] = [];
   private isInitialized = false;
 
   constructor() {
-    this.initialize().catch(error => {
-      this.isInitialized = false;
-      logger.error('❌ Failed to initialize ToolService:', error);
-    });
+    this.initialize();
   }
 
-  async getAllToolInfo(): Promise<ToolInfo[]> {
+  async getAllToolInfo() {
     await this.initialize();
-    return [...this.tools.values()];
-  }
-
-  async getToolsByNames(toolNames: string[]): Promise<Tool[]> {
-    await this.initialize();
-    return toolNames.map(name => container.resolve<Tool>(name));
-  }
-
-  async callTool(
-    toolName: string,
-    input: Record<string, any>,
-  ): Promise<unknown> {
-    await this.initialize();
-
-    if (!this.tools.has(toolName)) {
-      throw new Error(`Tool not found: ${toolName}`);
-    }
-
-    const tool = container.resolve<Tool>(toolName);
-    return await tool.call(input);
+    return this.tools.map(tool => ({
+      id: tool,
+      ...container.resolve<any>(tool)?.config,
+    }));
   }
 
   private async initialize(): Promise<void> {
@@ -65,41 +30,22 @@ export class ToolService {
     }
     this.isInitialized = true;
 
-    const tools = await this.discoverTools();
+    try {
+      const tools = await this.discoverTools();
 
-    logger.info(
-      `🔧 Discovered ${tools.length} tools:`,
-      tools.map(t => t.class.name),
-    );
-
-    // Register tools
-    tools.forEach(tool => {
-      const toolName = tool.meta.name.en; // Use display name as token
-
-      container.register(toolName, tool.class, {
-        lifecycle: Lifecycle.Singleton,
-      });
-
-      // Inject metadata after resolution
-      container.afterResolution(
-        toolName,
-        (_token, instance: object) => {
-          if (instance && 'name' in instance && 'description' in instance) {
-            Reflect.set(instance, 'name', tool.meta.name.en);
-            Reflect.set(instance, 'description', tool.meta.description.en);
-          }
-        },
-        { frequency: 'Once' },
+      logger.info(
+        `Discovered ${tools.length} tools:`,
+        tools.map(a => a.clazz.name),
       );
 
-      const toolInfo = {
-        name: tool.meta.name.en,
-        description: tool.meta.description.en,
-      };
-      this.tools.set(toolName, toolInfo);
-
-      logger.info(`✅ Tool registered successfully: ${toolName}`);
-    });
+      // Register tools
+      this.tools = await Promise.all(
+        tools.map(tool => registerTool(tool.clazz, tool.config)),
+      );
+    } catch (e) {
+      this.isInitialized = false;
+      logger.error('Failed to initialize ToolService:', e);
+    }
   }
 
   private async discoverTools() {
@@ -111,51 +57,43 @@ export class ToolService {
     });
 
     const tools: {
-      class: ToolConstructor;
-      meta: ToolMeta;
+      clazz: ToolConstructor;
+      config: ToolConfig;
     }[] = [];
 
     for (const absolutePath of toolPaths) {
       try {
-        const tool = await this.loadTool(absolutePath);
-        if (tool) {
-          tools.push(tool);
+        const [{ default: clazz }, { config }] = await Promise.all([
+          import(absolutePath),
+          import(path.resolve(path.dirname(absolutePath), 'config.ts')),
+        ]);
+
+        if (clazz && config) {
+          tools.push({
+            clazz,
+            config,
+          });
+        } else {
+          logger.warn(
+            `Incomplete tool module at ${path.basename(absolutePath, '.ts')}`,
+          );
         }
       } catch (error) {
-        logger.error(
-          `❌ Failed to process tool module ${absolutePath}:`,
-          error,
-        );
+        logger.error(`Failed to process tool module ${absolutePath}:`, error);
       }
     }
 
     return tools;
   }
 
-  private async loadTool(absolutePath: string) {
-    const module = await import(absolutePath);
-    const toolClass = module.default;
+  async callTool(toolId: string, input: Record<string, any>): Promise<unknown> {
+    await this.initialize();
 
-    if (!toolClass) {
-      logger.warn(`⚠️ No default export found in: ${absolutePath}`);
-      return null;
+    if (!this.tools.includes(toolId)) {
+      throw new Error(`Tool not found: ${toolId}`);
     }
 
-    // Read config.json from the same directory
-    const configPath = resolve(dirname(absolutePath), 'config.json');
-    let metaData: ToolMeta;
-
-    try {
-      const configContent = await readFile(configPath, 'utf-8');
-      metaData = JSON.parse(configContent);
-    } catch (error) {
-      logger.warn(
-        `❌ No config.json found for tool at ${absolutePath}:`,
-        error,
-      );
-      return null;
-    }
-
-    return { class: toolClass, meta: metaData };
+    const tool = container.resolve<Tool>(toolId);
+    return await tool.call(input);
   }
 }

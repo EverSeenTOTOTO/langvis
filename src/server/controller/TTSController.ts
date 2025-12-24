@@ -1,9 +1,10 @@
+import { ToolIds } from '@/shared/constants';
 import type { Request, Response } from 'express';
-import { inject, singleton } from 'tsyringe';
+import { inject } from 'tsyringe';
+import { v4 as uuidv4 } from 'uuid';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { ToolService } from '../service/ToolService';
-import { v4 as uuidv4 } from 'uuid';
 
 interface TTSRequest {
   text: string;
@@ -13,7 +14,6 @@ interface TTSRequest {
   speedRatio?: number;
 }
 
-@singleton()
 @controller('/api/tts')
 export class TTSController {
   constructor(@inject(ToolService) private toolService: ToolService) {}
@@ -32,7 +32,7 @@ export class TTSController {
 
       const requestId = reqId || uuidv4();
 
-      const result = await this.toolService.callTool('TextToSpeech Tool', {
+      const result = await this.toolService.callTool(ToolIds.TEXT_TO_SPEECH, {
         text,
         reqId: requestId,
         voiceType,

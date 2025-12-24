@@ -1,0 +1,12 @@
+import { ToolConfig } from '@/shared/types';
+
+export const config: ToolConfig = {
+  name: {
+    en: 'LlmCall Tool',
+    zh: '大模型调用工具',
+  },
+  description: {
+    en: 'A tool to perform a single call of Llm.',
+    zh: '执行单次大语言模型调用的工具。',
+  },
+};

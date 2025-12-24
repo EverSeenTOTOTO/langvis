@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ReActAgent from '@/server/core/agent/ReAct';
 import { Role, Message } from '@/shared/entities/Message';
+import { ToolIds } from '@/shared/constants';
 
 // Mock lodash-es
 vi.mock('lodash-es', () => ({
@@ -24,7 +25,7 @@ vi.mock('tsyringe', async importOriginal => {
   const actual: any = await importOriginal();
   const mockContainer = {
     resolve: vi.fn().mockImplementation((token: any) => {
-      if (token === 'LlmCall Tool') {
+      if (token === ToolIds.LLM_CALL) {
         return mockLlmCall;
       }
       if (token === 'test_tool') {
@@ -53,10 +54,13 @@ describe('ReActAgent', () => {
     vi.clearAllMocks();
     // Create ReActAgent instance with required dependencies
     reactAgent = new ReActAgent();
-    // Manually set the tools property for testing with name as instance property
-    const mockToolWithName = Object.create(mockTestTool);
-    mockToolWithName.name = 'test_tool';
-    (reactAgent as any).tools = [mockToolWithName];
+    // Manually set the tools property for testing with config structure
+    const mockToolWithConfig = Object.create(mockTestTool);
+    mockToolWithConfig.config = {
+      name: { en: 'test_tool' },
+      description: { en: 'Test tool description' },
+    };
+    (reactAgent as any).tools = [mockToolWithConfig];
   });
 
   describe('parseResponse', () => {

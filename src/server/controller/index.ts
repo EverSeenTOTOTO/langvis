@@ -1,7 +1,6 @@
 import bindController from '@/server/decorator/controller';
 import type { Express } from 'express';
-import pg from '../service/pg';
-// import redis from '../service/redis';
+import setupServices from '../service';
 import { AgentController } from './AgentController';
 import { AuthController } from './AuthController';
 import { ChatController } from './ChatController';
@@ -11,13 +10,7 @@ import { TTSController } from './TTSController';
 import { UserController } from './UserController';
 
 export default async (app: Express) => {
-  if (!pg.isInitialized) {
-    await pg.initialize();
-  }
-
-  // if (!redis.isReady) {
-  //   await redis.connect();
-  // }
+  await setupServices(app);
 
   bindController(AuthController, app);
   bindController(UserController, app);

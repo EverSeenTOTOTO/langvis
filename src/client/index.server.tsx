@@ -37,6 +37,7 @@ export async function render(context: RenderContext) {
       .getSession({
         fetchOptions: {
           headers: getSessionHeaders(req),
+          signal: AbortSignal.timeout(10_000),
         },
       })
       .catch(e => {

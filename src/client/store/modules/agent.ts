@@ -1,7 +1,7 @@
 import { api, ApiRequest } from '@/client/decorator/api';
-import { singleton } from 'tsyringe';
+import { store } from '@/client/decorator/store';
 
-@singleton()
+@store()
 export class AgentStore {
   @api('/api/agent')
   getAllAgent(_params?: any, req?: ApiRequest) {

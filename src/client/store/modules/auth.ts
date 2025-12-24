@@ -1,5 +1,6 @@
+import { store } from '@/client/decorator/store';
 import { createAuthClient } from 'better-auth/react';
-import { inject, singleton } from 'tsyringe';
+import { inject } from 'tsyringe';
 import { UserStore } from './user';
 
 type SignUpParams = Parameters<
@@ -15,7 +16,7 @@ type GetSessionParams = Parameters<
   ReturnType<typeof createAuthClient>['getSession']
 >[0];
 
-@singleton()
+@store()
 export class AuthStore {
   private client = createAuthClient({});
 

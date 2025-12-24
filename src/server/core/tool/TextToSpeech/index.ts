@@ -1,7 +1,9 @@
-import { injectable } from 'tsyringe';
+import { tool } from '@/server/decorator/config';
+import { logger } from '@/server/middleware/logger';
+import { ToolIds } from '@/shared/constants';
+import { ToolConfig } from '@/shared/types';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { logger } from '@/server/middleware/logger';
 import { Tool } from '..';
 
 export interface TextToSpeechInput {
@@ -18,10 +20,10 @@ export interface TextToSpeechOutput {
   filePath: string;
 }
 
-@injectable()
+@tool(ToolIds.TEXT_TO_SPEECH)
 export default class TextToSpeechTool extends Tool {
-  name!: string;
-  description!: string;
+  id!: string;
+  config!: ToolConfig;
 
   private readonly ttsDir: string;
 

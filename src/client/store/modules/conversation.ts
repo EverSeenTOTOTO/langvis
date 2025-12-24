@@ -1,12 +1,12 @@
 import { api, ApiRequest } from '@/client/decorator/api';
 import { hydrate } from '@/client/decorator/hydrate';
+import { store } from '@/client/decorator/store';
 import { Conversation } from '@/shared/entities/Conversation';
 import type { Message } from '@/shared/entities/Message';
 import { Role } from '@/shared/entities/Message';
 import { makeAutoObservable, reaction } from 'mobx';
-import { singleton } from 'tsyringe';
 
-@singleton()
+@store()
 export class ConversationStore {
   @hydrate()
   conversations: Conversation[] = [];
