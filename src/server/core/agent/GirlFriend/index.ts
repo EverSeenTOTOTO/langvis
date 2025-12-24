@@ -1,16 +1,18 @@
+import { agent } from '@/server/decorator/config';
 import { logger } from '@/server/middleware/logger';
+import { AgentIds, ToolIds } from '@/shared/constants';
 import { Message } from '@/shared/entities/Message';
-import { StreamChunk } from '@/shared/types';
-import { container, injectable } from 'tsyringe';
+import { AgentConfig, StreamChunk } from '@/shared/types';
+import { container } from 'tsyringe';
 import { v4 as uuid } from 'uuid';
 import { Agent } from '..';
-import LlmCallTool from '../../tool/LlmCall';
-import TextToSpeechTool from '../../tool/TextToSpeech';
+import type { Tool } from '../../tool';
+import type TextToSpeechTool from '../../tool/TextToSpeech';
 
-@injectable()
-export default class ChatAgent extends Agent {
-  name!: string;
-  description!: string;
+@agent(AgentIds.GIRLFRIEND_AGENT)
+export default class GirlFriendAgent extends Agent {
+  id!: string;
+  config!: AgentConfig;
 
   async getSystemPrompt(): Promise<string> {
     return ``;
@@ -21,7 +23,7 @@ export default class ChatAgent extends Agent {
     outputStream: WritableStream<StreamChunk>,
     config?: Record<string, any>,
   ) {
-    const llmCallTool = container.resolve<LlmCallTool>('LlmCall Tool');
+    const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
 
     const conversationMessages = messages.map(msg => ({
       role: msg.role as 'user' | 'assistant' | 'system',
@@ -30,7 +32,7 @@ export default class ChatAgent extends Agent {
 
     logger.debug('Chat agent messages: ', conversationMessages);
     const writer = outputStream.getWriter();
-    const tts = container.resolve<TextToSpeechTool>('TextToSpeech Tool');
+    const tts = container.resolve<TextToSpeechTool>(ToolIds.TEXT_TO_SPEECH);
 
     let content = '';
 

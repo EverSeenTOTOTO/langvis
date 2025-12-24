@@ -1,8 +1,8 @@
+import { store } from '@/client/decorator/store';
 import { User } from '@/shared/entities/User';
 import { makeAutoObservable } from 'mobx';
-import { singleton } from 'tsyringe';
 
-@singleton()
+@store()
 export class UserStore {
   currentUser: User | null = null;
 

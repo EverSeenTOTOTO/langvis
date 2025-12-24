@@ -1,9 +1,7 @@
-import { DataSource } from 'typeorm';
-import { entities, migrations } from '@hedystia/better-auth-typeorm';
 import { ConversationEntity } from '@/shared/entities/Conversation';
 import { MessageEntity } from '@/shared/entities/Message';
-import { container } from 'tsyringe';
-import { InjectTokens } from '../utils';
+import { entities, migrations } from '@hedystia/better-auth-typeorm';
+import { DataSource } from 'typeorm';
 
 const pg = new DataSource({
   type: 'postgres',
@@ -18,7 +16,5 @@ const pg = new DataSource({
   migrations: [...migrations],
   migrationsRun: true,
 });
-
-container.register<DataSource>(InjectTokens.PG, { useValue: pg });
 
 export default pg;

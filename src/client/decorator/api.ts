@@ -1,4 +1,4 @@
-import { getOwnPropertyNames, isClient, isTest } from '@/shared/constants';
+import { getOwnPropertyNames, isClient, isTest } from '@/shared/utils';
 import { message } from 'antd';
 import fetchCookie from 'fetch-cookie';
 import { merge } from 'lodash-es';

@@ -1,13 +1,14 @@
 import { api, ApiRequest, getPrefetchPath } from '@/client/decorator/api';
-import { isClient } from '@/shared/constants';
+import { store } from '@/client/decorator/store';
 import { Conversation } from '@/shared/entities/Conversation';
 import type { Message } from '@/shared/entities/Message';
 import { SSEMessage } from '@/shared/types';
+import { isClient } from '@/shared/utils';
 import { message } from 'antd';
 import { makeAutoObservable } from 'mobx';
-import { inject, singleton } from 'tsyringe';
-import { SettingStore } from './setting';
+import { inject } from 'tsyringe';
 import { ConversationStore } from './conversation';
+import { SettingStore } from './setting';
 
 type ConversationId = Conversation['id'];
 type UserMessage = {
@@ -16,7 +17,7 @@ type UserMessage = {
   id: ConversationId;
 };
 
-@singleton()
+@store()
 export class ChatStore {
   private eventSources: Map<ConversationId, EventSource> = new Map();
 

@@ -1,11 +1,10 @@
 import { Role } from '@/shared/entities/Message';
 import type { Request, Response } from 'express';
-import { inject, singleton } from 'tsyringe';
+import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { ConversationService } from '../service/ConversationService';
 
-@singleton()
 @controller('/api/conversation')
 export class ConversationController {
   constructor(

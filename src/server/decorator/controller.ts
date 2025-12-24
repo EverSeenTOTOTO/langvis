@@ -1,12 +1,14 @@
-import { container } from 'tsyringe';
+import { container, singleton } from 'tsyringe';
 import type { Express } from 'express';
 import bindApi from './api';
 import { logger } from '../middleware/logger';
+import chalk from 'chalk';
 
 const metaDataKey = Symbol('controller');
 
 export function controller(namespace = ''): ClassDecorator {
   return function controllerDecorator(target: any) {
+    singleton()(target);
     Reflect.defineMetadata(metaDataKey, { namespace }, target);
   };
 }
@@ -18,7 +20,7 @@ export default <C extends Record<string, any>>(
   const instance = container.resolve(Clz);
   const { namespace } = Reflect.getMetadata(metaDataKey, Clz);
 
-  logger.info(`Binding controller: ${namespace}`);
+  logger.info(`Binding controller with namespace: ${chalk.yellow(namespace)}`);
   bindApi(instance, namespace, app);
 
   return instance;

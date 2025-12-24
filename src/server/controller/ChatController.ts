@@ -1,14 +1,14 @@
 import { Role } from '@/shared/entities/Message';
 import { ConversationConfig } from '@/shared/types';
 import type { Request, Response } from 'express';
-import { container, inject, singleton } from 'tsyringe';
+import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
-import { SSEService } from '../service/SSEService';
 import { ConversationService } from '../service/ConversationService';
+import { SSEService } from '../service/SSEService';
+import chalk from 'chalk';
 
-@singleton()
 @controller('/api/chat')
 export class ChatController {
   constructor(
@@ -93,14 +93,14 @@ export class ChatController {
   ) {
     const { conversationId } = req.params;
 
-    req.log.info(`Starting agent call for conversation ${conversationId}`);
+    req.log.info(
+      `Starting agent call for conversation ${conversationId}, agent: ${chalk.yellow(config.agent)}`,
+    );
 
     const agent = container.resolve(config.agent) as Agent;
 
     if (!agent) {
-      req.log.error(
-        `Agent ${config.agent} not found for conversation ${conversationId}`,
-      );
+      req.log.error(`Agent ${chalk.yellow(config.agent)} not registered.`);
       return;
     }
 

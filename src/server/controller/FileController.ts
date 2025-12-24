@@ -1,12 +1,11 @@
 import type { Request, Response } from 'express';
-import { inject, singleton } from 'tsyringe';
-import path from 'path';
 import mime from 'mime-types';
+import path from 'path';
+import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { FileService } from '../service/FileService';
 
-@singleton()
 @controller('/api/files')
 export class FileController {
   constructor(@inject(FileService) private fileService: FileService) {}

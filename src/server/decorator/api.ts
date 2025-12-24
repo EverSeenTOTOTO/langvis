@@ -1,4 +1,4 @@
-import { getOwnPropertyNames } from '@/shared/constants';
+import { getOwnPropertyNames } from '@/shared/utils';
 import { Express } from 'express';
 
 const metaDataKey = Symbol('server_api');

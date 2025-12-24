@@ -1,18 +1,20 @@
+import { tool } from '@/server/decorator/config';
 import { OpenAI } from '@/server/service/openai';
-import { InjectTokens } from '@/server/utils';
+import { InjectTokens, ToolIds } from '@/shared/constants';
+import { ToolConfig } from '@/shared/types';
 import type { Stream } from 'openai/core/streaming.mjs';
 import type {
   ChatCompletion,
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
 } from 'openai/resources/chat/completions';
-import { inject, injectable } from 'tsyringe';
+import { inject } from 'tsyringe';
 import { Tool } from '..';
 
-@injectable()
+@tool(ToolIds.LLM_CALL)
 export default class LlmCallTool extends Tool {
-  name!: string;
-  description!: string;
+  id!: string;
+  config!: ToolConfig;
 
   constructor(@inject(InjectTokens.OPENAI) private readonly openai: OpenAI) {
     super();

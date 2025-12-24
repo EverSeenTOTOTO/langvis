@@ -1,13 +1,13 @@
 import { SSEMessage } from '@/shared/types';
 import type { Response } from 'express';
-import { singleton } from 'tsyringe';
+import { service } from '../decorator/service';
 
 interface SSEConnection {
   conversationId: string;
   response: any;
 }
 
-@singleton()
+@service()
 export class SSEService {
   private sseConnections: Map<string, SSEConnection> = new Map();
   private heartbeats: Map<string, NodeJS.Timeout> = new Map();

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TTSController } from '@/server/controller/TTSController';
 import type { Request, Response } from 'express';
+import { ToolIds } from '@/shared/constants';
 
 const mockToolService = {
   callTool: vi.fn(),
@@ -47,7 +48,7 @@ describe('TTSController', () => {
       await controller.generateTTS(mockReq as Request, mockRes as Response);
 
       expect(mockToolService.callTool).toHaveBeenCalledWith(
-        'TextToSpeech Tool',
+        ToolIds.TEXT_TO_SPEECH,
         {
           text: 'Hello world',
           reqId: 'mocked-uuid',
@@ -77,7 +78,7 @@ describe('TTSController', () => {
       await controller.generateTTS(mockReq as Request, mockRes as Response);
 
       expect(mockToolService.callTool).toHaveBeenCalledWith(
-        'TextToSpeech Tool',
+        ToolIds.TEXT_TO_SPEECH,
         {
           text: 'Hello world',
           reqId: 'custom-id',
@@ -101,7 +102,7 @@ describe('TTSController', () => {
       await controller.generateTTS(mockReq as Request, mockRes as Response);
 
       expect(mockToolService.callTool).toHaveBeenCalledWith(
-        'TextToSpeech Tool',
+        ToolIds.TEXT_TO_SPEECH,
         {
           text: 'Hello world',
           reqId: 'mocked-uuid',

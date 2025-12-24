@@ -8,12 +8,6 @@ export const __dirname = () => path.dirname(__filename());
 export const isDev = process.env.NODE_ENV === 'development';
 export const isProd = process.env.NODE_ENV === 'production';
 
-export const InjectTokens = {
-  PG: Symbol('postgres'),
-  REDIS: Symbol('redis'),
-  OPENAI: Symbol('openai'),
-};
-
 export const getSessionHeaders = (req: Request) => {
   const headers = new Headers();
 

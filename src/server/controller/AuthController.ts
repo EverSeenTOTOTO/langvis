@@ -1,11 +1,10 @@
 import type { Request, Response } from 'express';
-import { inject, singleton } from 'tsyringe';
+import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { AuthService } from '../service/AuthService';
 import { getSessionHeaders } from '../utils';
 
-@singleton()
 @controller('/api/auth')
 export class AuthController {
   constructor(@inject(AuthService) private auth?: AuthService) {}

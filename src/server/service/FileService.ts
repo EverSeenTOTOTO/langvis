@@ -1,8 +1,8 @@
-import { singleton } from 'tsyringe';
-import { promises as fs, createReadStream } from 'fs';
+import { createReadStream, promises as fs } from 'fs';
 import path from 'path';
+import { service } from '../decorator/service';
 
-@singleton()
+@service()
 export class FileService {
   private readonly uploadDir: string;
 

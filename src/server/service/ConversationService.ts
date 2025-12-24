@@ -3,15 +3,17 @@ import {
   ConversationEntity,
 } from '@/shared/entities/Conversation';
 import { Message, MessageEntity, Role } from '@/shared/entities/Message';
-import { inject, singleton } from 'tsyringe';
+import { StreamChunk } from '@/shared/types';
+import { omit } from 'lodash-es';
+import { inject } from 'tsyringe';
 import { In } from 'typeorm';
+import { service } from '../decorator/service';
 import { logger } from '../middleware/logger';
 import pg from './pg';
 import { SSEService } from './SSEService';
-import { omit } from 'lodash-es';
-import { StreamChunk } from '@/shared/types';
+import { AgentIds } from '@/shared/constants';
 
-@singleton()
+@service()
 export class ConversationService {
   constructor(
     @inject(SSEService)
@@ -24,7 +26,7 @@ export class ConversationService {
   ): Promise<Conversation> {
     const finalConfig = config ?? {};
     if (!finalConfig.agent) {
-      finalConfig.agent = 'Chat Agent';
+      finalConfig.agent = AgentIds.CHAT_AGENT;
     }
 
     const conversationRepository = pg.getRepository(ConversationEntity);
@@ -297,6 +299,11 @@ export class ConversationService {
         );
       },
       abort: async (reason: unknown) => {
+        logger.error(
+          `Streaming aborted for conversation ${conversationId}:`,
+          reason,
+        );
+
         const content = (reason as Error)?.message || `Aborted`;
         try {
           // Save final content to database

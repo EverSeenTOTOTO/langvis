@@ -1,10 +1,10 @@
 import { hydrate } from '@/client/decorator/hydrate';
+import { store } from '@/client/decorator/store';
 import { Locale } from 'antd/es/locale';
 import enUS from 'antd/locale/en_US';
 import zhCN from 'antd/locale/zh_CN';
 import i18next from 'i18next';
 import { makeAutoObservable, reaction } from 'mobx';
-import { singleton } from 'tsyringe';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -62,7 +62,7 @@ const initI18n = (lang: string = 'en_US') => {
   return i18next.getFixedT(lang);
 };
 
-@singleton()
+@store()
 export class SettingStore {
   @hydrate()
   mode: ThemeMode = 'dark';

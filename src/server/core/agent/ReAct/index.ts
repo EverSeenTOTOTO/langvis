@@ -1,13 +1,14 @@
+import { agent } from '@/server/decorator/config';
 import { logger } from '@/server/middleware/logger';
+import { AgentIds, ToolIds } from '@/shared/constants';
+import { Message, Role } from '@/shared/entities/Message';
+import { AgentConfig, StreamChunk } from '@/shared/types';
+import { isEmpty } from 'lodash-es';
 import type { ChatCompletion } from 'openai/resources/chat/completions';
-import { container, injectable } from 'tsyringe';
+import { container } from 'tsyringe';
 import { Agent } from '..';
 import { Tool } from '../../tool';
 import generateReActPrompt from './prompt';
-import LlmCallTool from '../../tool/LlmCall';
-import { Role, Message } from '@/shared/entities/Message';
-import { isEmpty } from 'lodash-es';
-import { StreamChunk } from '@/shared/types';
 
 export type ReActThought = {
   thought: string;
@@ -34,15 +35,14 @@ export type ReActStep =
   | ReActObservation
   | ReActFinalAnswer;
 
-@injectable()
+@agent(AgentIds.REACT_AGENT)
 export default class ReActAgent extends Agent {
-  name!: string;
-
-  description!: string;
+  id!: string;
+  config!: AgentConfig;
 
   private readonly maxIterations = 5;
 
-  public tools: Agent[] = [];
+  public tools: Tool[] = [];
 
   // Will be populated dynamically by the container
 
@@ -52,7 +52,7 @@ export default class ReActAgent extends Agent {
       tools:
         this.tools
           ?.map(tool => {
-            return `+ ${tool.name}: ${tool.description}`;
+            return `+ ${tool.id}: ${tool.config?.description?.en}`;
           })
           .join('\n') || 'No tools available.',
     });
@@ -64,7 +64,7 @@ export default class ReActAgent extends Agent {
     config?: Record<string, any>,
   ) {
     const writer = outputStream.getWriter();
-    const llmCallTool = container.resolve<LlmCallTool>('LlmCall Tool');
+    const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
 
     // Convert messages to the format expected by LLM
     const conversationMessages = messages.map(msg => ({
@@ -232,7 +232,7 @@ export default class ReActAgent extends Agent {
     try {
       tool = container.resolve<Tool>(action);
     } catch {
-      return `Tool "${action}" not found, available tools: ${this.tools.map(t => `\`${t.name}\``).join(', ')}`;
+      return `Tool "${action}" not found, available tools: ${this.tools.map(t => `\`${t.config?.name?.en}\``).join(', ')}`;
     }
 
     try {

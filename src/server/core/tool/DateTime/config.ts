@@ -1,0 +1,12 @@
+import { ToolConfig } from '@/shared/types';
+
+export const config: ToolConfig = {
+  name: {
+    en: 'DateTime Tool',
+    zh: '日期时间工具',
+  },
+  description: {
+    en: 'A tool to get the current date and time. You can specify a `timezone` (e.g., "America/New_York") and a `format` (e.g., "YYYY-MM-DD HH:mm:ss"). If no timezone is provided, it defaults to UTC. If no format is provided, it returns the ISO 8601 format.',
+    zh: '获取当前日期和时间的工具。可以指定 `timezone`（如 "America/New_York"）和 `format`（如 "YYYY-MM-DD HH:mm:ss"）。如果未提供时区，默认使用 UTC。如果未提供格式，则返回 ISO 8601 格式。',
+  },
+};
