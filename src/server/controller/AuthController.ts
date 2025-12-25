@@ -6,7 +6,7 @@ import { AuthService } from '../service/AuthService';
 import { getSessionHeaders } from '../utils';
 
 @controller('/api/auth')
-export class AuthController {
+export default class AuthController {
   constructor(@inject(AuthService) private auth?: AuthService) {}
 
   @api('/sign-in/email', { method: 'post' })

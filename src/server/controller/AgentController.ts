@@ -5,7 +5,7 @@ import { controller } from '../decorator/controller';
 import { AgentService } from '../service/AgentService';
 
 @controller('/api/agent')
-export class AgentController {
+export default class AgentController {
   constructor(
     @inject(AgentService)
     private agentService: AgentService,

@@ -1,5 +1,5 @@
 import { describe, it, beforeEach, vi, expect } from 'vitest';
-import { ChatController } from '@/server/controller/ChatController';
+import ChatController from '@/server/controller/ChatController';
 import type { Request, Response } from 'express';
 import { Role } from '@/shared/entities/Message';
 import { container } from 'tsyringe';
@@ -652,3 +652,4 @@ describe('ChatController', () => {
     });
   });
 });
+

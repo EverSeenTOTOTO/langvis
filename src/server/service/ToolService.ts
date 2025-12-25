@@ -6,6 +6,7 @@ import path from 'path';
 import { registerTool } from '../decorator/config';
 import { ToolConfig } from '@/shared/types';
 import { Tool, ToolConstructor } from '../core/tool';
+import { isProd } from '../utils';
 
 @service()
 export class ToolService {
@@ -49,7 +50,8 @@ export class ToolService {
   }
 
   private async discoverTools() {
-    const pattern = './src/server/core/tool/*/index.ts';
+    const suffix = isProd ? '.js' : '.ts';
+    const pattern = `./${isProd ? 'dist' : 'src'}/server/core/tool/*/index${suffix}`;
 
     const toolPaths = await globby(pattern, {
       cwd: process.cwd(),
@@ -65,7 +67,7 @@ export class ToolService {
       try {
         const [{ default: clazz }, { config }] = await Promise.all([
           import(absolutePath),
-          import(path.resolve(path.dirname(absolutePath), 'config.ts')),
+          import(path.resolve(path.dirname(absolutePath), `config${suffix}`)),
         ]);
 
         if (clazz && config) {
@@ -75,7 +77,7 @@ export class ToolService {
           });
         } else {
           logger.warn(
-            `Incomplete tool module at ${path.basename(absolutePath, '.ts')}`,
+            `Incomplete tool module at ${path.basename(absolutePath, suffix)}`,
           );
         }
       } catch (error) {

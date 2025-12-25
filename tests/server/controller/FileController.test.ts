@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, vi, beforeEach } from 'vitest';
 import { container } from 'tsyringe';
-import { FileController } from '@/server/controller/FileController';
+import FileController from '@/server/controller/FileController';
 import { FileService } from '@/server/service/FileService';
 import type { Request, Response } from 'express';
 import { Readable } from 'stream';

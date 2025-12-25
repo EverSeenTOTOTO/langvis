@@ -7,6 +7,7 @@ import { registerAgent } from '../decorator/config';
 import { service } from '../decorator/service';
 import { logger } from '../middleware/logger';
 import { ToolService } from './ToolService';
+import { isProd } from '../utils';
 
 @service()
 export class AgentService {
@@ -57,7 +58,8 @@ export class AgentService {
   }
 
   private async discoverAgents() {
-    const pattern = './src/server/core/agent/*/index.ts';
+    const suffix = isProd ? '.js' : '.ts';
+    const pattern = `./${isProd ? 'dist' : 'src'}/server/core/agent/*/index${suffix}`;
 
     const agentPaths = await globby(pattern, {
       cwd: process.cwd(),
@@ -73,7 +75,7 @@ export class AgentService {
       try {
         const [{ default: clazz }, { config }] = await Promise.all([
           import(absolutePath),
-          import(path.resolve(path.dirname(absolutePath), 'config.ts')),
+          import(path.resolve(path.dirname(absolutePath), `config${suffix}`)),
         ]);
 
         if (clazz && config) {
@@ -83,7 +85,7 @@ export class AgentService {
           });
         } else {
           logger.warn(
-            `Incomplete agent module at ${path.basename(absolutePath, '.ts')}`,
+            `Incomplete agent module at ${path.basename(absolutePath, suffix)}`,
           );
         }
       } catch (error) {

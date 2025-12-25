@@ -5,7 +5,7 @@ import { controller } from '../decorator/controller';
 import { UserService } from '../service/UserService';
 
 @controller('/api/users')
-export class UserController {
+export default class UserController {
   constructor(@inject(UserService) private userService: UserService) {}
 
   @api('/', { method: 'get' })

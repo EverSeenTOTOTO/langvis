@@ -1,5 +1,5 @@
 import { describe, it, beforeEach, afterEach, vi, expect } from 'vitest';
-import { AuthController } from '@/server/controller/AuthController';
+import AuthController from '@/server/controller/AuthController';
 import { AuthService } from '@/server/service/AuthService';
 import type { Request } from 'express';
 

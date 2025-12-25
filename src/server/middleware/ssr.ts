@@ -1,20 +1,17 @@
-import { createServer as createViteServer } from 'vite';
-import { __dirname, isProd } from '@/server/utils';
+import { isProd } from '@/server/utils';
 import { Express } from 'express';
 import fs from 'fs';
 import path from 'path';
+import { createServer as createViteServer } from 'vite';
 
-const configFile = path.join(
-  __dirname(),
-  isProd ? `../../config/vite.common.ts` : `../../../config/vite.common.ts`,
-);
+const configFile = path.join(process.cwd(), `config/vite.common.ts`);
 const templateFile = path.join(
-  __dirname(),
-  isProd ? 'index.html' : '../../../index.html',
+  process.cwd(),
+  `${isProd ? 'dist/' : ''}index.html`,
 );
 const serverEntry = path.join(
-  __dirname(),
-  isProd ? 'index.server.js' : '../../client/index.server.tsx',
+  process.cwd(),
+  isProd ? 'dist/index.server.js' : 'src/client/index.server.tsx',
 );
 
 // ssr
