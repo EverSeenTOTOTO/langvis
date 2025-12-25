@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
-import { paths } from './vite.common';
 import pkg from '../package.json';
+import { fetchEntries, paths } from './vite.common';
 
 // use vite as cjs bundler
 export default defineConfig(() => ({
@@ -14,10 +14,17 @@ export default defineConfig(() => ({
     sourcemap: false,
     emptyOutDir: false,
     rollupOptions: {
-      input: paths.server,
+      input: {
+        server: paths.server,
+        ...fetchEntries('src/server/core/**/*.ts'),
+        ...fetchEntries('src/server/controller/*Controller.ts'),
+      },
       output: {
         dir: paths.dist,
-        entryFileNames: 'server.js',
+        preserveModules: true,
+        preserveModulesRoot: 'src',
+        entryFileNames: '[name].js',
+        chunkFileNames: '[name].js',
       },
     },
   },

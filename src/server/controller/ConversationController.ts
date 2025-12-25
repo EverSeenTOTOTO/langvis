@@ -6,7 +6,7 @@ import { controller } from '../decorator/controller';
 import { ConversationService } from '../service/ConversationService';
 
 @controller('/api/conversation')
-export class ConversationController {
+export default class ConversationController {
   constructor(
     @inject(ConversationService)
     private conversationService: ConversationService,

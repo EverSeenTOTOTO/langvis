@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ConversationController } from '@/server/controller/ConversationController';
+import ConversationController from '@/server/controller/ConversationController';
 import { Role } from '@/shared/entities/Message';
 import type { Request, Response } from 'express';
 

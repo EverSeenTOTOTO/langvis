@@ -10,7 +10,7 @@ import {
 import { promises as fs } from 'fs';
 import path from 'path';
 import { container } from 'tsyringe';
-import { FileController } from '@/server/controller/FileController';
+import FileController from '@/server/controller/FileController';
 import { FileService } from '@/server/service/FileService';
 import type { Request, Response } from 'express';
 

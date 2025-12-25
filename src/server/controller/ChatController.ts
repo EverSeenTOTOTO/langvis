@@ -10,7 +10,7 @@ import { SSEService } from '../service/SSEService';
 import chalk from 'chalk';
 
 @controller('/api/chat')
-export class ChatController {
+export default class ChatController {
   constructor(
     @inject(SSEService)
     private sseService: SSEService,

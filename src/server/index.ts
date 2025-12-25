@@ -1,4 +1,4 @@
-import { __dirname, isProd } from '@/server/utils';
+import { isProd } from '@/server/utils';
 import bodyParser from 'body-parser';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
@@ -13,15 +13,16 @@ import bindSSRMiddleware from './middleware/ssr';
 
 dotenv.config({
   path: isProd
-    ? path.join(__dirname(), '../.env')
-    : path.join(__dirname(), '../../.env.development'),
+    ? path.join(process.cwd(), '.env')
+    : path.join(process.cwd(), '.env.development'),
 });
 
 // hypothesis: client assets to be in the same directory
 export const createServer = async (): Promise<Express> => {
   const app = express();
+  const dist = path.join(process.cwd(), 'dist');
 
-  app.use(express.static(__dirname(), { index: false }));
+  app.use(express.static(dist, { index: false }));
   app.use(bodyParser.urlencoded({ extended: false }));
   app.use(bodyParser.json());
   app.use(cookieParser());

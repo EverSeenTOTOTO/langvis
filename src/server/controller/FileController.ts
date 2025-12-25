@@ -7,7 +7,7 @@ import { controller } from '../decorator/controller';
 import { FileService } from '../service/FileService';
 
 @controller('/api/files')
-export class FileController {
+export default class FileController {
   constructor(@inject(FileService) private fileService: FileService) {}
 
   private getInlineExtensions(): string[] {

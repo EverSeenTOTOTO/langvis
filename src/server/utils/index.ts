@@ -1,9 +1,4 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
 import type { Request } from 'express';
-
-export const __filename = () => fileURLToPath(import.meta.url);
-export const __dirname = () => path.dirname(__filename());
 
 export const isDev = process.env.NODE_ENV === 'development';
 export const isProd = process.env.NODE_ENV === 'production';
