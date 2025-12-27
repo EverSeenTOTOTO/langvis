@@ -8,13 +8,15 @@ import { omit } from 'lodash-es';
 import { inject } from 'tsyringe';
 import { In } from 'typeorm';
 import { service } from '../decorator/service';
-import { logger } from '../middleware/logger';
 import pg from './pg';
 import { SSEService } from './SSEService';
 import { AgentIds } from '@/shared/constants';
+import Logger from './logger';
 
 @service()
 export class ConversationService {
+  private readonly logger = Logger.child({ source: 'ConversationService' });
+
   constructor(
     @inject(SSEService)
     private sseService: SSEService,
@@ -236,7 +238,7 @@ export class ConversationService {
           streaming: true,
         };
 
-        logger.info(
+        this.logger.info(
           `First chunk received for agent call in conversation ${conversationId}, time taken: ${Date.now() - startTime}ms`,
         );
       }
@@ -283,7 +285,7 @@ export class ConversationService {
             omit(message.meta, ['loading', 'streaming']),
           );
         } catch (error) {
-          logger.error('Failed to finalize streaming message:', error);
+          this.logger.error('Failed to finalize streaming message:', error);
         }
 
         // Send completion done message
@@ -292,14 +294,14 @@ export class ConversationService {
         });
 
         const elapsed = Date.now() - startTime;
-        logger.info(
+        this.logger.info(
           `Agent call finished for conversation ${conversationId}, total time: ${elapsed}ms, time per token: ${
             elapsed / (message.content.length || 1)
           }ms`,
         );
       },
       abort: async (reason: unknown) => {
-        logger.error(
+        this.logger.error(
           `Streaming aborted for conversation ${conversationId}:`,
           reason,
         );
@@ -313,7 +315,7 @@ export class ConversationService {
             error: true,
           });
         } catch (error) {
-          logger.error('Failed to finalize streaming message:', error);
+          this.logger.error('Failed to finalize streaming message:', error);
         }
 
         // Send completion done message

@@ -1,7 +1,7 @@
 import { globby } from 'globby';
 import { container } from 'tsyringe';
 import { service } from '../decorator/service';
-import { logger } from '../middleware/logger';
+import Logger from './logger';
 import path from 'path';
 import { registerTool } from '../decorator/config';
 import { ToolConfig } from '@/shared/types';
@@ -10,6 +10,8 @@ import { isProd } from '../utils';
 
 @service()
 export class ToolService {
+  private readonly logger = Logger.child({ source: 'ConversationService' });
+
   private tools: string[] = [];
   private isInitialized = false;
 
@@ -34,7 +36,7 @@ export class ToolService {
     try {
       const tools = await this.discoverTools();
 
-      logger.info(
+      this.logger.info(
         `Discovered ${tools.length} tools:`,
         tools.map(a => a.clazz.name),
       );
@@ -45,7 +47,7 @@ export class ToolService {
       );
     } catch (e) {
       this.isInitialized = false;
-      logger.error('Failed to initialize ToolService:', e);
+      this.logger.error('Failed to initialize ToolService:', e);
     }
   }
 
@@ -76,12 +78,15 @@ export class ToolService {
             config,
           });
         } else {
-          logger.warn(
+          this.logger.warn(
             `Incomplete tool module at ${path.basename(absolutePath, suffix)}`,
           );
         }
       } catch (error) {
-        logger.error(`Failed to process tool module ${absolutePath}:`, error);
+        this.logger.error(
+          `Failed to process tool module ${absolutePath}:`,
+          error,
+        );
       }
     }
 

@@ -4,7 +4,7 @@ import { isArray, mergeWith } from 'lodash-es';
 import { container, injectable, Lifecycle } from 'tsyringe';
 import { Agent } from '../core/agent';
 import { Tool } from '../core/tool';
-import { logger } from '../middleware/logger';
+import logger from '../service/logger';
 import chalk from 'chalk';
 
 const metaDataKey = Symbol('config');
@@ -44,7 +44,7 @@ export const registerAgent = async (
   });
 
   logger.info(
-    `Register agent ${chalk.blueBright(config.name.en)} with token ${chalk.yellow(token)}`,
+    `Register agent ${chalk.cyan(config.name.en)} with token ${chalk.yellow(token)}`,
   );
 
   container.afterResolution(
@@ -64,7 +64,7 @@ export const registerAgent = async (
         Reflect.set(instance, 'tools', tools);
 
         logger.info(
-          `✅ Injected ${tools.length} tools into agent: ${chalk.blueBright(config.name.en)}`,
+          `✅ Injected ${tools.length} tools into agent: ${chalk.cyan(config.name.en)}`,
         );
       }
     },
@@ -85,7 +85,7 @@ export const registerTool = async (
   });
 
   logger.info(
-    `Register tool ${chalk.blueBright(config.name.en)} with token ${chalk.yellow(token)}`,
+    `Register tool ${chalk.cyan(config.name.en)} with token ${chalk.yellow(token)}`,
   );
 
   container.afterResolution(

@@ -1,5 +1,5 @@
 import { agent } from '@/server/decorator/config';
-import { logger } from '@/server/middleware/logger';
+import Logger from '@/server/service/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { Message, Role } from '@/shared/entities/Message';
 import { AgentConfig, StreamChunk } from '@/shared/types';
@@ -40,6 +40,8 @@ export default class ReActAgent extends Agent {
   id!: string;
   config!: AgentConfig;
 
+  private readonly logger = Logger.child({ source: AgentIds.REACT_AGENT });
+
   private readonly maxIterations = 5;
 
   public tools: Tool[] = [];
@@ -73,7 +75,7 @@ export default class ReActAgent extends Agent {
     }));
 
     for (let i = 0; i < this.maxIterations; i++) {
-      logger.debug('ReAct iter messages: ', conversationMessages);
+      this.logger.debug('ReAct iter messages: ', conversationMessages);
 
       const response = (await llmCallTool.call({
         messages: conversationMessages,
@@ -116,7 +118,7 @@ export default class ReActAgent extends Agent {
         continue;
       }
 
-      logger.info('ReAct parsed response: ', parsed);
+      this.logger.info('ReAct parsed response: ', parsed);
 
       if ('final_answer' in parsed) {
         await writer.write({

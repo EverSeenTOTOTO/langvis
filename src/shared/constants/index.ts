@@ -14,4 +14,5 @@ export const InjectTokens = {
   PG: Symbol('postgres'),
   REDIS: Symbol('redis'),
   OPENAI: Symbol('openai'),
+  LOGGER: Symbol('logger'),
 };

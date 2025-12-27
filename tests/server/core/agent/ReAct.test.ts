@@ -3,13 +3,6 @@ import ReActAgent from '@/server/core/agent/ReAct';
 import { Role, Message } from '@/shared/entities/Message';
 import { ToolIds } from '@/shared/constants';
 
-// Mock lodash-es
-vi.mock('lodash-es', () => ({
-  isEmpty: vi.fn().mockImplementation((obj: any) => {
-    return obj == null || Object.keys(obj).length === 0;
-  }),
-}));
-
 // Mock LlmCallTool
 const mockLlmCall = {
   call: vi.fn(),
@@ -1007,3 +1000,4 @@ describe('ReActAgent', () => {
     });
   });
 });
+
