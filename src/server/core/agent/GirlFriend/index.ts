@@ -8,6 +8,7 @@ import { v4 as uuid } from 'uuid';
 import { Agent } from '..';
 import type { Tool } from '../../tool';
 import type TextToSpeechTool from '../../tool/TextToSpeech';
+import generatePrompt from './prompt';
 
 @agent(AgentIds.GIRLFRIEND_AGENT)
 export default class GirlFriendAgent extends Agent {
@@ -17,7 +18,7 @@ export default class GirlFriendAgent extends Agent {
   private readonly logger = Logger.child({ source: AgentIds.GIRLFRIEND_AGENT });
 
   async getSystemPrompt(): Promise<string> {
-    return ``;
+    return generatePrompt();
   }
 
   async streamCall(

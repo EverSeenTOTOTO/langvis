@@ -84,7 +84,6 @@ describe('TextToSpeechTool', () => {
       });
 
       expect(result).toEqual({
-        filename: 'test-123.mp3',
         voice: expect.any(String),
         filePath: 'tts/test-123.mp3',
       });

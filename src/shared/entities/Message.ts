@@ -41,9 +41,16 @@ export class MessageEntity {
   conversation: any;
 }
 
-export type Message = Omit<
+type MessageMeta<T extends Record<string, any>> = {
+  loading?: boolean;
+  streaming?: boolean;
+  error?: boolean;
+} & T;
+
+export type Message<T extends Record<string, any> = Record<string, any>> = Omit<
   InstanceType<typeof MessageEntity>,
-  'conversation'
+  'conversation' | 'meta'
 > & {
   loading?: boolean;
+  meta?: MessageMeta<T> | null;
 };

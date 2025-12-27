@@ -8,7 +8,7 @@ import type { ChatCompletion } from 'openai/resources/chat/completions';
 import { container } from 'tsyringe';
 import { Agent } from '..';
 import { Tool } from '../../tool';
-import generateReActPrompt from './prompt';
+import generatePrompt from './prompt';
 
 export type ReActThought = {
   thought: string;
@@ -49,7 +49,7 @@ export default class ReActAgent extends Agent {
   // Will be populated dynamically by the container
 
   async getSystemPrompt(): Promise<string> {
-    return generateReActPrompt({
+    return generatePrompt({
       background: '',
       tools:
         this.tools
