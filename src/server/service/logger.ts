@@ -58,8 +58,8 @@ const consoleFormat = printf(({ timestamp, level, ...meta }) => {
     delete meta.message;
     meta = { ...meta, ...extra };
     result += ` ${chalk.cyan(JSON.stringify(meta))}`;
-  } else {
-    result += ` ${meta.message || ''}`;
+  } else if (typeof meta.message === 'string') {
+    result += ` ${meta.message || ''} ${chalk.cyan(JSON.stringify(meta))}`;
   }
 
   return result;

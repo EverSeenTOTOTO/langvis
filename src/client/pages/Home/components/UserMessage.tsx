@@ -3,6 +3,7 @@ import { Message } from '@/shared/entities/Message';
 import { CopyOutlined, RedoOutlined, UserOutlined } from '@ant-design/icons';
 import { Bubble } from '@ant-design/x';
 import { Avatar, Button, Flex } from 'antd';
+import { observer } from 'mobx-react-lite';
 import { useCopyToClipboard } from 'react-use';
 
 const UserMessage: React.FC<{
@@ -46,4 +47,4 @@ const UserMessage: React.FC<{
   );
 };
 
-export default UserMessage;
+export default observer(UserMessage);

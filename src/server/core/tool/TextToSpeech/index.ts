@@ -15,7 +15,6 @@ export interface TextToSpeechInput {
 }
 
 export interface TextToSpeechOutput {
-  filename: string;
   voice: string;
   filePath: string;
 }
@@ -154,7 +153,6 @@ export default class TextToSpeechTool extends Tool {
       );
 
       return {
-        filename,
         voice,
         filePath: `tts/${filename}`,
       };
