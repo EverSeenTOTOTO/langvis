@@ -3,7 +3,7 @@ import type { Express } from 'express';
 import setupServices from '../service';
 import { globby } from 'globby';
 import { isProd } from '../utils';
-import { logger } from '../middleware/logger';
+import logger from '../service/logger';
 import chalk from 'chalk';
 import path from 'path';
 
@@ -22,7 +22,7 @@ export default async (app: Express) => {
     const { default: controller } = await import(absolutePath);
 
     logger.info(
-      `Binding controller: ${chalk.blueBright(path.basename(absolutePath, suffix))}`,
+      `Binding controller: ${chalk.cyan(path.basename(absolutePath, suffix))}`,
     );
 
     bindController(controller, app);

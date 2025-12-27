@@ -1,5 +1,5 @@
 import { agent } from '@/server/decorator/config';
-import { logger } from '@/server/middleware/logger';
+import Logger from '@/server/service/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { Message } from '@/shared/entities/Message';
 import { AgentConfig, StreamChunk } from '@/shared/types';
@@ -13,6 +13,8 @@ import type TextToSpeechTool from '../../tool/TextToSpeech';
 export default class GirlFriendAgent extends Agent {
   id!: string;
   config!: AgentConfig;
+
+  private readonly logger = Logger.child({ source: AgentIds.GIRLFRIEND_AGENT });
 
   async getSystemPrompt(): Promise<string> {
     return ``;
@@ -30,7 +32,7 @@ export default class GirlFriendAgent extends Agent {
       content: msg.content,
     }));
 
-    logger.debug('Chat agent messages: ', conversationMessages);
+    this.logger.debug('GF agent messages: ', conversationMessages);
     const writer = outputStream.getWriter();
     const tts = container.resolve<TextToSpeechTool>(ToolIds.TEXT_TO_SPEECH);
 

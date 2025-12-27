@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { logger } from '../middleware/logger';
+import logger from '../service/logger';
 
 export { OpenAI };
 

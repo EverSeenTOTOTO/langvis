@@ -1,5 +1,5 @@
 import { tool } from '@/server/decorator/config';
-import { logger } from '@/server/middleware/logger';
+import Logger from '@/server/service/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
 import { promises as fs } from 'fs';
@@ -25,6 +25,8 @@ export default class TextToSpeechTool extends Tool {
   id!: string;
   config!: ToolConfig;
 
+  private readonly logger = Logger.child({ source: ToolIds.TEXT_TO_SPEECH });
+
   private readonly ttsDir: string;
 
   constructor() {
@@ -37,7 +39,7 @@ export default class TextToSpeechTool extends Tool {
       await fs.access(this.ttsDir);
     } catch {
       await fs.mkdir(this.ttsDir, { recursive: true });
-      logger.info(`Created TTS directory: ${this.ttsDir}`);
+      this.logger.info(`Created TTS directory: ${this.ttsDir}`);
     }
   }
 
@@ -61,7 +63,7 @@ export default class TextToSpeechTool extends Tool {
 
     await this.ensureDirectoryExists();
 
-    logger.info(
+    this.logger.info(
       `Processing TTS request: ${reqId}, voice: ${voice}, text_length: ${text.length}`,
     );
 
@@ -80,8 +82,8 @@ export default class TextToSpeechTool extends Tool {
       },
     };
 
-    logger.debug(`TTS API request url: ${url}`);
-    // logger.debug(`TTS API request payload: ${JSON.stringify(payload)}`);
+    this.logger.debug(`TTS API request url: ${url}`);
+    // this.logger.debug(`TTS API request payload: ${JSON.stringify(payload)}`);
 
     const response = await fetch(url, {
       method: 'POST',
@@ -95,7 +97,7 @@ export default class TextToSpeechTool extends Tool {
 
     if (!response.ok) {
       const responseText = await response.text();
-      logger.error(
+      this.logger.error(
         `TTS API failed - Status: ${response.status}, Response: ${responseText.slice(0, 500)}`,
       );
       throw new Error(
@@ -108,18 +110,18 @@ export default class TextToSpeechTool extends Tool {
     if (data.error) {
       const errorMsg =
         data.error.message_cn || data.error.message || 'Unknown error';
-      logger.error(`TTS API error for ${reqId}: ${errorMsg}`);
+      this.logger.error(`TTS API error for ${reqId}: ${errorMsg}`);
       throw new Error(`TTS API error: ${errorMsg}`);
     }
 
     if (data.code !== 3000) {
       const errorMsg = data.message || `Unknown error, code: ${data.code}`;
-      logger.error(`TTS API failed for ${reqId}: ${errorMsg}`);
+      this.logger.error(`TTS API failed for ${reqId}: ${errorMsg}`);
       throw new Error(`TTS API failed: ${errorMsg}`);
     }
 
     if (!data.data) {
-      logger.error(`No audio data in response for ${reqId}`);
+      this.logger.error(`No audio data in response for ${reqId}`);
       throw new Error('No audio data received from TTS API');
     }
 
@@ -130,7 +132,9 @@ export default class TextToSpeechTool extends Tool {
         throw new Error('Decoded audio data is empty');
       }
     } catch (error) {
-      logger.error(`Failed to decode base64 audio data for ${reqId}: ${error}`);
+      this.logger.error(
+        `Failed to decode base64 audio data for ${reqId}: ${error}`,
+      );
       throw new Error(`Failed to decode audio data: ${error}`);
     }
 
@@ -145,7 +149,7 @@ export default class TextToSpeechTool extends Tool {
         throw new Error('Failed to write audio file or file is empty');
       }
 
-      logger.info(
+      this.logger.info(
         `TTS completed successfully: ${reqId}, file: ${filePath}, size: ${audioBuffer.length} bytes`,
       );
 
@@ -155,7 +159,7 @@ export default class TextToSpeechTool extends Tool {
         filePath: `tts/${filename}`,
       };
     } catch (error) {
-      logger.error(`Failed to write MP3 file for ${reqId}: ${error}`);
+      this.logger.error(`Failed to write MP3 file for ${reqId}: ${error}`);
       throw new Error(`Failed to save audio file: ${error}`);
     }
   }

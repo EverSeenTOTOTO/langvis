@@ -5,14 +5,16 @@ import { container, inject } from 'tsyringe';
 import { AgentConstructor } from '../core/agent';
 import { registerAgent } from '../decorator/config';
 import { service } from '../decorator/service';
-import { logger } from '../middleware/logger';
 import { ToolService } from './ToolService';
 import { isProd } from '../utils';
+import Logger from './logger';
 
 @service()
 export class AgentService {
   private agents: string[] = [];
   private isInitialized = false;
+
+  private readonly logger = Logger.child({ source: 'AgentService' });
 
   constructor(
     @inject(ToolService)
@@ -42,7 +44,7 @@ export class AgentService {
 
       const agents = await this.discoverAgents();
 
-      logger.info(
+      this.logger.info(
         `Discovered ${agents.length} agents:`,
         agents.map(a => a.clazz.name),
       );
@@ -53,7 +55,7 @@ export class AgentService {
       );
     } catch (e) {
       this.isInitialized = false;
-      logger.error('Failed to initialize AgentService:', e);
+      this.logger.error('Failed to initialize AgentService:', e);
     }
   }
 
@@ -84,12 +86,12 @@ export class AgentService {
             config,
           });
         } else {
-          logger.warn(
+          this.logger.warn(
             `Incomplete agent module at ${path.basename(absolutePath, suffix)}`,
           );
         }
       } catch (error) {
-        logger.error(`Failed to process agent module ${absolutePath}:`, error);
+        Logger.error(`Failed to process agent module ${absolutePath}:`, error);
       }
     }
 

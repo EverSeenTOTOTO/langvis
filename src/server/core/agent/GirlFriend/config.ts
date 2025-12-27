@@ -1,7 +1,8 @@
-import { ToolIds } from '@/shared/constants';
+import { AgentIds, ToolIds } from '@/shared/constants';
 import { AgentConfig } from '@/shared/types';
 
 export const config: AgentConfig = {
+  extends: AgentIds.CHAT_AGENT,
   name: {
     en: 'GirlFriend Agent',
     zh: '缓解性压抑智能体',
@@ -41,6 +42,94 @@ export const config: AgentConfig = {
             {
               label: '高冷御姐',
               value: 'zh_female_gaolengyujie_emo_v2_mars_bigtts',
+            },
+            {
+              label: '清新女声',
+              value: 'zh_female_qingxinnvsheng_mars_bigtts',
+            },
+            {
+              label: '知性女声',
+              value: 'zh_female_zhixingnvsheng_mars_bigtts',
+            },
+            {
+              label: '邻家女孩',
+              value: 'zh_female_linjianvhai_moon_bigtts',
+            },
+            {
+              label: '知性温婉',
+              value: 'ICL_zh_female_zhixingwenwan_tob',
+            },
+            {
+              label: '温柔文雅',
+              value: 'ICL_zh_female_wenrouwenya_tob',
+            },
+            {
+              label: '文艺女声',
+              value: 'ICL_zh_female_wenyinvsheng_v1_tob',
+            },
+            {
+              label: '纯澈女声',
+              value: 'ICL_zh_female_feicui_v1_tob',
+            },
+            {
+              label: '初恋女友',
+              value: 'ICL_zh_female_yuxin_v1_tob',
+            },
+            {
+              label: '温柔白月光',
+              value: 'ICL_zh_female_yry_tob',
+            },
+            {
+              label: '高冷御姐',
+              value: 'zh_female_gaolengyujie_moon_bigtts',
+            },
+            {
+              label: '撒娇女友',
+              value: 'zh_female_sajiaonvyou_moon_bigtts',
+            },
+            {
+              label: '活泼刁蛮',
+              value: 'ICL_zh_female_huopodiaoman_tob',
+            },
+            {
+              label: '傲慢娇声',
+              value: 'ICL_zh_female_aomanjiaosheng_tob',
+            },
+            {
+              label: '暖心学姐',
+              value: 'ICL_zh_female_nuanxinxuejie_tob',
+            },
+            {
+              label: '成熟姐姐',
+              value: 'ICL_zh_female_chengshujiejie_tob',
+            },
+            {
+              label: '妩媚御姐',
+              value: 'ICL_zh_female_wumeiyujie_tob',
+            },
+            {
+              label: '傲娇女友',
+              value: 'ICL_zh_female_aojiaonvyou_tob',
+            },
+            {
+              label: '妩媚可人',
+              value: 'ICL_zh_female_ganli_v1_tob',
+            },
+            {
+              label: '邪魅御姐',
+              value: 'ICL_zh_female_xiangliangya_v1_tob',
+            },
+            {
+              label: '性感御姐',
+              value: 'ICL_zh_female_xingganyujie_tob',
+            },
+            {
+              label: '性感魅惑',
+              value: 'ICL_zh_female_luoqing_v1_tob',
+            },
+            {
+              label: '假小子',
+              value: 'ICL_zh_female_jiaxiaozi_tob',
             },
           ],
         },

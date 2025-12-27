@@ -1,5 +1,5 @@
 import { createClient, RedisClientType } from 'redis';
-import { logger } from '../middleware/logger';
+import logger from '../service/logger';
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore

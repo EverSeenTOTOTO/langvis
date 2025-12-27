@@ -8,8 +8,9 @@ import path from 'node:path';
 import 'reflect-metadata';
 import bindControllers from './controller';
 import bindAuthMiddleware from './middleware/auth';
-import bindLogger, { logger } from './middleware/logger';
+import bindRequestId from './middleware/requestId';
 import bindSSRMiddleware from './middleware/ssr';
+import logger from './service/logger';
 
 dotenv.config({
   path: isProd
@@ -28,7 +29,7 @@ export const createServer = async (): Promise<Express> => {
   app.use(cookieParser());
   app.use(compression());
 
-  await bindLogger(app);
+  await bindRequestId(app);
   await bindAuthMiddleware(app);
   await bindControllers(app);
   // must be last
@@ -44,4 +45,4 @@ createServer()
       logger.info(`Server started at http://localhost:${port}`);
     });
   })
-  .catch(console.error);
+  .catch(logger.error);
