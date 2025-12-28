@@ -35,30 +35,64 @@ const ReActAgentMessage = ({
                   if ('final_answer' in step) {
                     return {
                       title: 'Final Answer',
-                      content: step.final_answer,
                     };
                   }
 
                   if ('thought' in step) {
-                    return { title: 'Thought', content: step.thought };
+                    return {
+                      title: 'Thought',
+                      content: (
+                        <Typography.Paragraph
+                          type="secondary"
+                          copyable
+                          ellipsis={{
+                            rows: 3,
+                            expandable: 'collapsible',
+                          }}
+                        >
+                          {step.thought}
+                        </Typography.Paragraph>
+                      ),
+                    };
                   }
 
                   if ('action' in step) {
                     return {
                       title: `Action: ${step.action.tool}`,
                       content: (
-                        <Typography.Text type="secondary" copyable>
+                        <Typography.Paragraph
+                          type="secondary"
+                          copyable
+                          ellipsis={{
+                            rows: 3,
+                            expandable: 'collapsible',
+                          }}
+                        >
                           {JSON.stringify(step.action.input, null, 2)}
-                        </Typography.Text>
+                        </Typography.Paragraph>
                       ),
                     };
                   }
 
                   if ('observation' in step) {
-                    return { title: 'Observation', content: step.observation };
+                    return {
+                      title: 'Observation',
+                      content: (
+                        <Typography.Paragraph
+                          type="secondary"
+                          copyable
+                          ellipsis={{
+                            rows: 3,
+                            expandable: 'collapsible',
+                          }}
+                        >
+                          {step.observation}
+                        </Typography.Paragraph>
+                      ),
+                    };
                   }
 
-                  return { title: 'Step', content: 'Unknown step' };
+                  return { title: 'Unknown Step' };
                 })}
               />
             ),
@@ -79,3 +113,4 @@ const ReActAgentMessage = ({
 };
 
 export default observer(ReActAgentMessage);
+

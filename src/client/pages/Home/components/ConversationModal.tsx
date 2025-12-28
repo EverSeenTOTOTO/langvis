@@ -19,7 +19,7 @@ import {
   Typography,
 } from 'antd';
 import { observer } from 'mobx-react-lite';
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import { useAsyncFn, useMedia } from 'react-use';
 
 const ConversationModal = ({
@@ -162,6 +162,10 @@ const ConversationModal = ({
     }
   };
 
+  useLayoutEffect(() => {
+    form.setFieldsValue(initialValues);
+  }, [initialValues]);
+
   return (
     <Modal
       width={isMobile ? '100%' : '60%'}
@@ -183,7 +187,7 @@ const ConversationModal = ({
       }}
       {...props}
     >
-      <Form form={form} layout="vertical" initialValues={initialValues}>
+      <Form form={form} layout="vertical">
         <Flex vertical={isMobile}>
           <div className="config-left">
             <Form.Item
@@ -280,3 +284,4 @@ const ConversationModal = ({
 };
 
 export default observer(ConversationModal);
+

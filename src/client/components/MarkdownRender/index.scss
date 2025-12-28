@@ -1,0 +1,8 @@
+@use '../../styles/mixins';
+
+.markdown-render {
+  overflow: auto hidden;
+
+  @include mixins.default-scrollbar;
+}
+
