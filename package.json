@@ -36,6 +36,7 @@
     "mobx": "^6.13.5",
     "mobx-react-lite": "^3.4.3",
     "openai": "^5.19.1",
+    "p-queue": "^9.0.1",
     "path-to-regexp": "^8.2.0",
     "pg": "^8.13.1",
     "rc-util": "^5.44.3",

@@ -12,6 +12,7 @@ import pg from './pg';
 import { SSEService } from './SSEService';
 import { AgentIds } from '@/shared/constants';
 import Logger from './logger';
+import PQueue from 'p-queue';
 
 @service()
 export class ConversationService {
@@ -221,28 +222,37 @@ export class ConversationService {
     conversationId: string,
     message: Message,
   ): Promise<WritableStream<StreamChunk>> {
-    // Record start time for logging
     const startTime = Date.now();
+    let firstChunkReceived = false;
 
-    // Create a custom WritableStream that integrates with streaming message service
+    const queue = new PQueue({
+      interval: 30,
+      intervalCap: 1,
+      concurrency: 1,
+    });
+
+    const enqueueDelta = (delta: string) => {
+      const charsPerChunk = 2;
+      for (let i = 0; i < delta.length; i += charsPerChunk) {
+        queue.add(() =>
+          this.sseService.sendToConversation(conversationId, {
+            type: 'completion_delta',
+            content: delta.slice(i, i + charsPerChunk),
+            meta: message.meta!,
+          }),
+        );
+      }
+    };
+
     const writableStream = new WritableStream<StreamChunk>({
-      write: (chunk: StreamChunk) => {
+      write: async (chunk: StreamChunk) => {
         const data = typeof chunk === 'string' ? { content: chunk } : chunk;
 
-        // Update the streaming message
-        message.content += data.content || '';
+        message.content += data.content ?? '';
+        message.meta = { ...message.meta, ...data.meta };
 
-        // Log first chunk received
-        const isFirstChunk =
-          message.content.length > 0 &&
-          message.content.length === data.content?.length;
-
-        message.meta = {
-          ...message.meta,
-          ...data.meta,
-        };
-
-        if (isFirstChunk) {
+        if (!firstChunkReceived && data.content) {
+          firstChunkReceived = true;
           message.meta = {
             ...message.meta,
             loading: false,
@@ -254,15 +264,14 @@ export class ConversationService {
           );
         }
 
-        this.sseService.sendToConversation(conversationId, {
-          type: 'completion_delta',
-          content: data.content,
-          meta: message.meta!,
-        });
+        if (data.meta) {
+          await queue.onIdle();
+        }
+
+        enqueueDelta(data.content ?? '');
       },
       close: async () => {
         try {
-          // Save final content to database
           await this.saveMessage(
             message.id,
             message.content,
@@ -272,19 +281,22 @@ export class ConversationService {
           this.logger.error('Failed to finalize streaming message:', error);
         }
 
-        // Send completion done message
-        this.sseService.sendToConversation(conversationId, {
-          type: 'completion_done',
-        });
-
         const elapsed = Date.now() - startTime;
         this.logger.info(
           `Agent call finished for conversation ${conversationId}, total time: ${elapsed}ms, time per token: ${
             elapsed / (message.content.length || 1)
           }ms`,
         );
+
+        await queue.onIdle();
+
+        this.sseService.sendToConversation(conversationId, {
+          type: 'completion_done',
+        });
       },
       abort: async (reason: unknown) => {
+        queue.clear();
+
         this.logger.error(
           `Streaming aborted for conversation ${conversationId}:`,
           reason,
@@ -292,7 +304,6 @@ export class ConversationService {
 
         const content = (reason as Error)?.message || `Aborted`;
         try {
-          // Save final content to database
           await this.saveMessage(message.id, content, {
             ...message.meta,
             loading: undefined,
@@ -302,7 +313,6 @@ export class ConversationService {
           this.logger.error('Failed to finalize streaming message:', error);
         }
 
-        // Send completion done message
         this.sseService.sendToConversation(conversationId, {
           type: 'completion_error',
           error: content,
@@ -313,3 +323,4 @@ export class ConversationService {
     return writableStream;
   }
 }
+

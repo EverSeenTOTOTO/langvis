@@ -19,7 +19,7 @@ import {
   Typography,
 } from 'antd';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useLayoutEffect } from 'react';
+import { useEffect } from 'react';
 import { useAsyncFn, useMedia } from 'react-use';
 
 const ConversationModal = ({
@@ -162,7 +162,7 @@ const ConversationModal = ({
     }
   };
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     form.setFieldsValue(initialValues);
   }, [initialValues]);
 
