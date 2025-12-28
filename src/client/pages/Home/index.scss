@@ -38,22 +38,21 @@
         .ant-bubble-content {
           position: relative;
           padding: 0 var(--ant-padding);
-          overflow: auto hidden;
-
-          @include mixins.default-scrollbar;
 
           .message-footer {
-            display: none;
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            padding-block-start: 4px;
+            opacity: 0;
+            transform: translateY(100%);
+            transition: opacity 0.3s ease;
           }
 
           &:hover {
             .message-footer {
-              position: absolute;
-              right: 0;
-              bottom: 0;
-              display: flex;
-              padding-block-start: 4px;
-              transform: translateY(100%);
+              opacity: 1;
             }
           }
         }
@@ -144,3 +143,4 @@
     padding-inline-start: 0;
   }
 }
+

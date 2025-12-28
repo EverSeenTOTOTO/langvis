@@ -130,4 +130,3 @@ export default class WebFetchTool extends Tool {
     };
   }
 }
-

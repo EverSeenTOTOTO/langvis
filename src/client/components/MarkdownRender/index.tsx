@@ -6,6 +6,7 @@ import remarkMath from 'remark-math';
 import remarkBreaks from 'remark-breaks';
 import rehypeMathjax from 'rehype-mathjax';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import './index.scss';
 
 const MarkdownRender = observer(({ children }: { children: string }) => {
   const settingStore = useStore('setting');
@@ -51,43 +52,46 @@ const MarkdownRender = observer(({ children }: { children: string }) => {
   }, []);
 
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-      rehypePlugins={[rehypeMathjax]}
-      components={{
-        a: ({ ...props }) => (
-          <a {...props} target="_blank" rel="noopener noreferrer" />
-        ),
-        code({ inline, className, children, ...props }: any) {
-          const match = /language-(\w+)/.exec(className || '');
+    <div className="markdown-render">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
+        rehypePlugins={[rehypeMathjax]}
+        components={{
+          a: ({ ...props }) => (
+            <a {...props} target="_blank" rel="noopener noreferrer" />
+          ),
+          code({ inline, className, children, ...props }: any) {
+            const match = /language-(\w+)/.exec(className || '');
 
-          // Only render syntax highlighted code blocks when components are loaded
-          if (!inline && match && syntaxComponentsRef.current) {
-            const { SyntaxHighlighter, oneDark, oneLight } =
-              syntaxComponentsRef.current;
+            // Only render syntax highlighted code blocks when components are loaded
+            if (!inline && match && syntaxComponentsRef.current) {
+              const { SyntaxHighlighter, oneDark, oneLight } =
+                syntaxComponentsRef.current;
+              return (
+                <SyntaxHighlighter
+                  {...props}
+                  style={settingStore.mode === 'dark' ? oneDark : oneLight}
+                  language={match[1]}
+                  PreTag="div"
+                >
+                  {String(children).replace(/\n$/, '')}
+                </SyntaxHighlighter>
+              );
+            }
+
             return (
-              <SyntaxHighlighter
-                {...props}
-                style={settingStore.mode === 'dark' ? oneDark : oneLight}
-                language={match[1]}
-                PreTag="div"
-              >
-                {String(children).replace(/\n$/, '')}
-              </SyntaxHighlighter>
+              <code {...props} className={className}>
+                {children}
+              </code>
             );
-          }
-
-          return (
-            <code {...props} className={className}>
-              {children}
-            </code>
-          );
-        },
-      }}
-    >
-      {children}
-    </ReactMarkdown>
+          },
+        }}
+      >
+        {children}
+      </ReactMarkdown>
+    </div>
   );
 });
 
 export default MarkdownRender;
+
