@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { isObject } from 'lodash-es';
+import { isEmpty, isObject } from 'lodash-es';
 import winston from 'winston';
 import 'winston-daily-rotate-file';
 import { isProd } from '../utils';
@@ -59,7 +59,12 @@ const consoleFormat = printf(({ timestamp, level, ...meta }) => {
     meta = { ...meta, ...extra };
     result += ` ${chalk.cyan(JSON.stringify(meta))}`;
   } else if (typeof meta.message === 'string') {
-    result += ` ${meta.message || ''} ${chalk.cyan(JSON.stringify(meta))}`;
+    const message = meta.message;
+    delete meta.message;
+    result += ` ${message || ''}`;
+    if (!isEmpty(meta)) {
+      result += ` ${chalk.cyan(JSON.stringify(meta))}`;
+    }
   }
 
   return result;

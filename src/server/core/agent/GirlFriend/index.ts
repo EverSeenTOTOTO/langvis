@@ -41,7 +41,7 @@ export default class GirlFriendAgent extends Agent {
 
     const localStream = new WritableStream({
       write: async chunk => {
-        await writer.write({ type: 'chunk', data: chunk });
+        await writer.write(chunk);
         content += chunk;
       },
       close: async () => {
@@ -53,7 +53,7 @@ export default class GirlFriendAgent extends Agent {
             emotion: config?.tts?.emotion,
             speedRatio: config?.tts?.speedRatio,
           });
-          await writer.write({ type: 'meta', data: result });
+          await writer.write({ meta: result });
           await writer.close();
         } catch (err) {
           writer.abort(err);

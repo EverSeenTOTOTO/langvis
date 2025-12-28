@@ -68,17 +68,22 @@ export default class ReActAgent extends Agent {
     const writer = outputStream.getWriter();
     const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
 
-    // Convert messages to the format expected by LLM
-    const conversationMessages = messages.map(msg => ({
+    const iterMessages = messages.map(msg => ({
       role: msg.role as 'user' | 'assistant' | 'system',
       content: msg.content,
     }));
+    const steps: ReActStep[] = [];
+
+    const updateStep = async (step: ReActStep) => {
+      steps.push(step);
+      await writer.write({ meta: { steps } });
+    };
 
     for (let i = 0; i < this.maxIterations; i++) {
-      this.logger.debug('ReAct iter messages: ', conversationMessages);
+      this.logger.debug('ReAct iter messages: ', iterMessages);
 
       const response = (await llmCallTool.call({
-        messages: conversationMessages,
+        messages: iterMessages,
         model: config?.model?.code,
         temperature: config?.model?.temperature,
         stop: ['Observation:', 'Observation：'],
@@ -87,12 +92,12 @@ export default class ReActAgent extends Agent {
       const content = response.choices[0]?.message?.content;
 
       if (!content) {
-        await writer.write({ type: 'chunk', data: 'No response from model' });
+        await writer.write('No response from model');
         await writer.close();
         return;
       }
 
-      conversationMessages.push({
+      iterMessages.push({
         role: Role.ASSIST,
         content,
       });
@@ -105,90 +110,62 @@ export default class ReActAgent extends Agent {
           throw new Error('Parsed response is empty');
         }
       } catch (error) {
-        const observationContent = `Observation: Error parsing response: ${(error as Error).message}\n`;
+        const observation = `Error parsing response: ${(error as Error).message}`;
 
-        conversationMessages.push({
+        iterMessages.push({
           role: Role.USER,
-          content: observationContent,
+          content: `Observation: ${observation}`,
         });
-        writer.write({
-          type: 'chunk',
-          data: observationContent,
-        });
+        await updateStep({ observation });
         continue;
       }
 
       this.logger.info('ReAct parsed response: ', parsed);
 
       if ('final_answer' in parsed) {
-        await writer.write({
-          type: 'chunk',
-          data: parsed.final_answer!,
-        });
+        await updateStep({ final_answer: parsed.final_answer! });
+        await writer.write(parsed.final_answer!);
         await writer.close();
         return;
       }
 
       if ('action' in parsed) {
         const { tool, input } = parsed.action!;
-        await writer.write({
-          type: 'chunk',
-          data: `Action: ${tool}\n`,
-        });
-        await writer.write({
-          type: 'chunk',
-          data: `Action Input: ${JSON.stringify(input)}\n`,
-        });
+
+        updateStep({ action: parsed.action! });
 
         try {
           const observation = await this.executeAction(tool, input);
-          const observationContent = `Observation: ${observation}\n`;
 
-          conversationMessages.push({
+          iterMessages.push({
             role: Role.USER,
-            content: observationContent,
+            content: `Observation: ${observation}\n`,
           });
-          await writer.write({
-            type: 'chunk',
-            data: observationContent,
-          });
+          await updateStep({ observation });
         } catch (error) {
-          const errorContent = `Observation: Error executing action ${tool}: ${(error as Error).message}\n`;
+          const observation = `Error executing action ${tool}: ${(error as Error).message}\n`;
 
-          await writer.write({
-            type: 'chunk',
-            data: errorContent,
-          });
-          conversationMessages.push({
+          iterMessages.push({
             role: Role.USER,
-            content: errorContent,
+            content: `Observation: ${observation}`,
           });
+          await updateStep({ observation });
         }
 
         continue;
       }
 
       if ('thought' in parsed) {
-        const thoughtContent = `Thought: ${parsed.thought}\n`;
-
-        await writer.write({
-          type: 'chunk',
-          data: thoughtContent,
-        });
+        await updateStep({ thought: parsed.thought! });
         continue;
       }
 
-      writer.write({
-        type: 'chunk',
-        data: `Unable to parse response: ${content}. Retrying (${i}/${this.maxIterations})...\n`,
+      await updateStep({
+        observation: `Unable to parse response: ${content}. Retrying (${i}/${this.maxIterations})...\n`,
       });
     }
 
-    await writer.write({
-      type: 'chunk',
-      data: 'Max iterations reached without final answer.',
-    });
-    await writer.close();
+    await writer.abort(new Error('Max iterations reached'));
   }
 
   private parseResponse(content: string): ReActStep {

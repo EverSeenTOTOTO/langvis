@@ -150,14 +150,8 @@ export interface ToolConfig {
 
 export type StreamChunk =
   | string
-  | {
-      type: 'chunk';
-      data: string;
-    }
-  | {
-      type: 'meta';
-      data: Record<string, any>;
-    };
+  | { content: string; meta?: Record<string, any> }
+  | { content?: string; meta: Record<string, any> };
 
 export type SSEMessage =
   | { type: 'heartbeat' }

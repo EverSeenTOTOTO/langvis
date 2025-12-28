@@ -8,6 +8,7 @@ import { Avatar, Button, Flex } from 'antd';
 import { observer } from 'mobx-react-lite';
 import { useCopyToClipboard } from 'react-use';
 import GirlFriendAgentMessage from './AgentMessage/GirlFriendAgent';
+import ReActAgentMessage from './AgentMessage/ReActAgent';
 
 const renderMessage = (msg: Message) => {
   const conversationStore = useStore('conversation');
@@ -18,6 +19,8 @@ const renderMessage = (msg: Message) => {
   switch (agent) {
     case AgentIds.GIRLFRIEND_AGENT:
       return <GirlFriendAgentMessage msg={msg} />;
+    case AgentIds.REACT_AGENT:
+      return <ReActAgentMessage msg={msg} />;
     case AgentIds.CHAT_AGENT:
     default:
       return <MarkdownRender>{msg.content}</MarkdownRender>;
