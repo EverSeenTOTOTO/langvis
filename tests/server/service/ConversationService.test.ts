@@ -463,4 +463,152 @@ describe('ConversationService', () => {
       conversationService.batchAddMessages('non-existent', messagesData),
     ).rejects.toThrow('Conversation non-existent not found');
   });
+
+  it('should throttle stream output at constant rate', async () => {
+    const mockMessage = {
+      id: 'msg-1',
+      conversationId: 'conv-1',
+      role: Role.ASSIST,
+      content: '',
+      meta: {},
+      createdAt: new Date(),
+    };
+
+    (pg.getRepository as any).mockReturnValue({
+      findOneBy: vi.fn().mockResolvedValue(mockMessage),
+      save: vi.fn().mockResolvedValue(mockMessage),
+    });
+
+    mockSSEService.sendToConversation.mockClear();
+
+    const stream = await conversationService.createStreamForMessage(
+      'conv-1',
+      mockMessage,
+    );
+    const writer = stream.getWriter();
+
+    const timestamps: number[] = [];
+    mockSSEService.sendToConversation.mockImplementation(() => {
+      timestamps.push(Date.now());
+    });
+
+    await writer.write('Hello');
+    await writer.close();
+
+    expect(mockMessage.content).toBe('Hello');
+    expect(timestamps.length).toBeGreaterThan(0);
+
+    if (timestamps.length > 1) {
+      const intervals = [];
+      for (let i = 1; i < timestamps.length; i++) {
+        intervals.push(timestamps[i] - timestamps[i - 1]);
+      }
+      const avgInterval =
+        intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      expect(avgInterval).toBeGreaterThanOrEqual(15);
+      expect(avgInterval).toBeLessThanOrEqual(50);
+    }
+  });
+
+  it('should chunk content into smaller pieces', async () => {
+    const mockMessage = {
+      id: 'msg-1',
+      conversationId: 'conv-1',
+      role: Role.ASSIST,
+      content: '',
+      meta: {},
+      createdAt: new Date(),
+    };
+
+    (pg.getRepository as any).mockReturnValue({
+      findOneBy: vi.fn().mockResolvedValue(mockMessage),
+      save: vi.fn().mockResolvedValue(mockMessage),
+    });
+
+    mockSSEService.sendToConversation.mockClear();
+
+    const stream = await conversationService.createStreamForMessage(
+      'conv-1',
+      mockMessage,
+    );
+    const writer = stream.getWriter();
+
+    const chunks: string[] = [];
+    mockSSEService.sendToConversation.mockImplementation((_, data) => {
+      if (data.type === 'completion_delta' && data.content) {
+        chunks.push(data.content);
+      }
+    });
+
+    await writer.write('Hello World!');
+    await writer.close();
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.join('')).toBe('Hello World!');
+    chunks.forEach(chunk => {
+      expect(chunk.length).toBeLessThanOrEqual(2);
+    });
+  });
+
+  it('should send completion_done after queue is drained', async () => {
+    const mockMessage = {
+      id: 'msg-1',
+      conversationId: 'conv-1',
+      role: Role.ASSIST,
+      content: '',
+      meta: {},
+      createdAt: new Date(),
+    };
+
+    (pg.getRepository as any).mockReturnValue({
+      findOneBy: vi.fn().mockResolvedValue(mockMessage),
+      save: vi.fn().mockResolvedValue(mockMessage),
+    });
+
+    mockSSEService.sendToConversation.mockClear();
+
+    const stream = await conversationService.createStreamForMessage(
+      'conv-1',
+      mockMessage,
+    );
+    const writer = stream.getWriter();
+
+    await writer.write('Test');
+    await writer.close();
+
+    const calls = mockSSEService.sendToConversation.mock.calls;
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall[1]).toEqual({ type: 'completion_done' });
+  });
+
+  it('should clear queue on abort', async () => {
+    const mockMessage = {
+      id: 'msg-1',
+      conversationId: 'conv-1',
+      role: Role.ASSIST,
+      content: '',
+      meta: {},
+      createdAt: new Date(),
+    };
+
+    (pg.getRepository as any).mockReturnValue({
+      findOneBy: vi.fn().mockResolvedValue(mockMessage),
+      save: vi.fn().mockResolvedValue(mockMessage),
+    });
+
+    mockSSEService.sendToConversation.mockClear();
+
+    const stream = await conversationService.createStreamForMessage(
+      'conv-1',
+      mockMessage,
+    );
+    const writer = stream.getWriter();
+
+    await writer.write('Test message');
+    await writer.abort(new Error('Aborted'));
+
+    const calls = mockSSEService.sendToConversation.mock.calls;
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall[1].type).toBe('completion_error');
+  });
 });

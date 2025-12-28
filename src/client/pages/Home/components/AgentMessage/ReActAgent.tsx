@@ -113,4 +113,3 @@ const ReActAgentMessage = ({
 };
 
 export default observer(ReActAgentMessage);
-
