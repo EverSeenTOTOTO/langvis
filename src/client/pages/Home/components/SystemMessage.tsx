@@ -20,15 +20,15 @@ const SystemMessage: React.FC<{ msg: Message }> = ({ msg }) => {
             key: '1',
             label: settingStore.tr('System Prompt'),
             children: <MarkdownRender>{msg.content}</MarkdownRender>,
-            styles: {
-              body: {
-                maxHeight: 360,
-                overflow: 'auto',
-              },
-            },
           },
         ]}
         style={{ width: '100%' }}
+        styles={{
+          body: {
+            maxHeight: 360,
+            overflow: 'auto',
+          },
+        }}
       />
       <Divider>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>

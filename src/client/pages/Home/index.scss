@@ -29,7 +29,7 @@
       overflow-y: auto;
 
       .system-message {
-        .ant-collapse-content-box {
+        .ant-collapse-body {
           @include mixins.default-scrollbar;
         }
       }

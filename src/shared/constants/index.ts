@@ -2,6 +2,7 @@ export enum ToolIds {
   DATE_TIME = 'date_time_tool',
   LLM_CALL = 'llm_call_tool',
   TEXT_TO_SPEECH = 'text_to_speech_tool',
+  WEB_FETCH = 'web_fetch_tool',
 }
 
 export enum AgentIds {

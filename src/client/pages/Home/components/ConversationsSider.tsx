@@ -6,6 +6,7 @@ import { observer } from 'mobx-react-lite';
 import React, { useEffect, useState } from 'react';
 import { useAsyncFn } from 'react-use';
 import ConversationModal from './ConversationModal';
+import { useSearchParam } from '@/client/hooks/useSearchParam';
 
 const { useApp } = App;
 const { Sider } = Layout;
@@ -14,31 +15,35 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
   onConversationChange,
 }) => {
   const { token } = theme.useToken();
-
-  const siderStyle = {
-    width: 256,
-    background: token.colorBgContainer,
-    borderRadius: token.borderRadius,
-  };
+  const [currentId, setCurrentId] = useSearchParam('conversationId');
 
   const { modal } = useApp();
-  const conversationStore = useStore('conversation');
+  const store = useStore('conversation');
   const settingStore = useStore('setting');
-  const [editingConversationId, setEditingConversationId] = useState<
-    string | null
-  >(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentId) {
+      store.setCurrentConversationId(currentId);
+    }
+  }, [currentId]);
+  useEffect(() => {
+    if (store.currentConversationId) {
+      setCurrentId(store.currentConversationId);
+    } else {
+      setCurrentId(null);
+    }
+  }, [store.currentConversationId]);
 
   const createConversationApi = useAsyncFn(
-    conversationStore.createConversation.bind(conversationStore),
+    store.createConversation.bind(store),
   );
-  const allConversationsApi = useAsyncFn(
-    conversationStore.getAllConversations.bind(conversationStore),
-  );
+  const allConversationsApi = useAsyncFn(store.getAllConversations.bind(store));
   const deleteConversationApi = useAsyncFn(
-    conversationStore.deleteConversation.bind(conversationStore),
+    store.deleteConversation.bind(store),
   );
   const updateConversationApi = useAsyncFn(
-    conversationStore.updateConversation.bind(conversationStore),
+    store.updateConversation.bind(store),
   );
 
   useEffect(() => {
@@ -46,16 +51,17 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
   }, []);
 
   // Map conversation items for the sidebar
-  const items: GetProp<ConversationsProps, 'items'> =
-    conversationStore.conversations.map(conversation => ({
+  const items: GetProp<ConversationsProps, 'items'> = store.conversations.map(
+    conversation => ({
       key: conversation.id,
       label:
         conversation.name ||
         `${settingStore.tr('Conversation')} ${conversation.id.substring(0, 8)}`,
-    }));
+    }),
+  );
 
   const handleEditConversation = (conversationId: string) => {
-    setEditingConversationId(conversationId);
+    setEditingId(conversationId);
   };
 
   const handleDeleteConversation = (conversationId: string) => {
@@ -91,7 +97,7 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
     onClick: menuInfo => {
       menuInfo.domEvent.stopPropagation();
       const conversationId = conversation.key as string;
-      const conversationItem = conversationStore.conversations.find(
+      const conversationItem = store.conversations.find(
         c => c.id === conversationId,
       );
 
@@ -104,16 +110,22 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
   });
 
   return (
-    <Sider width={256} className="chat-sider" style={siderStyle}>
+    <Sider
+      width={256}
+      className="chat-sider"
+      style={{
+        width: 256,
+        background: token.colorBgContainer,
+        borderRadius: token.borderRadius,
+      }}
+    >
       <Skeleton loading={allConversationsApi[0].loading} active>
         <Conversations
           items={items}
-          defaultActiveKey={
-            conversationStore.currentConversationId || undefined
-          }
-          activeKey={conversationStore.currentConversationId || undefined}
+          defaultActiveKey={store.currentConversationId || undefined}
+          activeKey={store.currentConversationId || undefined}
           onActiveChange={key => {
-            conversationStore.setCurrentConversationId(key);
+            setCurrentId(key);
             onConversationChange?.();
           }}
           menu={menuConfig}
@@ -133,15 +145,13 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
       <ConversationModal
         mode="edit"
         title={settingStore.tr('Edit Conversation')}
-        open={!!editingConversationId}
-        onCancel={() => setEditingConversationId(null)}
+        open={!!editingId}
+        onCancel={() => setEditingId(null)}
         onFinish={async values => {
           await updateConversationApi[1](values);
-          setEditingConversationId(null);
+          setEditingId(null);
         }}
-        initialValues={conversationStore.conversations.find(
-          c => c.id === editingConversationId,
-        )}
+        initialValues={store.conversations.find(c => c.id === editingId)}
         confirmLoading={updateConversationApi[0].loading}
       />
     </Sider>

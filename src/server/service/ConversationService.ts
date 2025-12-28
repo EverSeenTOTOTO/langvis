@@ -224,57 +224,41 @@ export class ConversationService {
     // Record start time for logging
     const startTime = Date.now();
 
-    const updateMessage = async (chunk: string) => {
-      // Update the streaming message
-      message.content += chunk;
-
-      // Log first chunk received
-      const isFirstChunk = message.content.length === chunk.length;
-
-      if (isFirstChunk) {
-        message.meta = {
-          ...message.meta,
-          loading: false,
-          streaming: true,
-        };
-
-        this.logger.info(
-          `First chunk received for agent call in conversation ${conversationId}, time taken: ${Date.now() - startTime}ms`,
-        );
-      }
-
-      this.sseService.sendToConversation(conversationId, {
-        type: 'completion_delta',
-        content: chunk,
-        meta: message.meta!,
-      });
-    };
-
-    const updateMeta = async (meta: Record<string, any>) => {
-      message.meta = {
-        ...message.meta,
-        ...meta,
-      };
-
-      this.sseService.sendToConversation(conversationId, {
-        type: 'completion_delta',
-        meta,
-      });
-    };
-
     // Create a custom WritableStream that integrates with streaming message service
     const writableStream = new WritableStream<StreamChunk>({
       write: (chunk: StreamChunk) => {
-        if (typeof chunk === 'string') {
-          return updateMessage(chunk);
+        const data = typeof chunk === 'string' ? { content: chunk } : chunk;
+
+        // Update the streaming message
+        message.content += data.content || '';
+
+        // Log first chunk received
+        const isFirstChunk =
+          message.content.length > 0 &&
+          message.content.length === data.content?.length;
+
+        message.meta = {
+          ...message.meta,
+          ...data.meta,
+        };
+
+        if (isFirstChunk) {
+          message.meta = {
+            ...message.meta,
+            loading: false,
+            streaming: true,
+          };
+
+          this.logger.info(
+            `First chunk received for agent call in conversation ${conversationId}, time taken: ${Date.now() - startTime}ms`,
+          );
         }
 
-        switch (chunk.type) {
-          case 'chunk':
-            return updateMessage(chunk.data);
-          case 'meta':
-            return updateMeta(chunk.data);
-        }
+        this.sseService.sendToConversation(conversationId, {
+          type: 'completion_delta',
+          content: data.content,
+          meta: message.meta!,
+        });
       },
       close: async () => {
         try {
