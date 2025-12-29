@@ -101,4 +101,3 @@ export const registerTool = async (
 
   return token;
 };
-
