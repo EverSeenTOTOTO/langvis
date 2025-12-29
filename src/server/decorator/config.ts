@@ -64,7 +64,7 @@ export const registerAgent = async (
         Reflect.set(instance, 'tools', tools);
 
         logger.info(
-          `✅ Injected ${tools.length} tools into agent: ${chalk.cyan(config.name.en)}`,
+          `Injected ${tools.length} tools into agent: ${chalk.cyan(config.name.en)}`,
         );
       }
     },
@@ -101,3 +101,4 @@ export const registerTool = async (
 
   return token;
 };
+

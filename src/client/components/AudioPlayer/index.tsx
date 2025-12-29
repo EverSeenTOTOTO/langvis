@@ -1,4 +1,5 @@
 import {
+  MutedOutlined,
   PauseOutlined,
   PlayCircleOutlined,
   SoundOutlined,
@@ -30,6 +31,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(0.8);
+  const [muted, setMuted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { token } = useToken();
 
@@ -70,8 +72,18 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
     const newVolume = value / 100;
     audio.volume = newVolume;
+    audio.muted = false;
     setVolume(newVolume);
+    setMuted(false);
   }, []);
+
+  const handleMute = (muted: boolean) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    audio.muted = muted;
+    setMuted(muted);
+  };
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -105,9 +117,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     audio.addEventListener('loadstart', handleLoadStart);
     audio.addEventListener('canplay', handleCanPlay);
 
-    // Set initial volume
-    audio.volume = volume;
-
     return () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
@@ -115,6 +124,13 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       audio.removeEventListener('loadstart', handleLoadStart);
       audio.removeEventListener('canplay', handleCanPlay);
     };
+  }, [src]);
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    // Set initial volume
+    audio.volume = volume;
   }, [src, volume]);
 
   const progressPercent = duration ? (currentTime / duration) * 100 : 0;
@@ -156,7 +172,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       />
 
       <Tooltip
-        trigger="click"
         classNames={{
           root: 'volume-control',
         }}
@@ -170,7 +185,17 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           />
         }
       >
-        <SoundOutlined className="volume-icon" />
+        {muted ? (
+          <MutedOutlined
+            className="volume-icon"
+            onClick={() => handleMute(false)}
+          />
+        ) : (
+          <SoundOutlined
+            className="volume-icon"
+            onClick={() => handleMute(true)}
+          />
+        )}
       </Tooltip>
 
       {suffix}

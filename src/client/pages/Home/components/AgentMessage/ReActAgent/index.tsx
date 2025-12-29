@@ -5,7 +5,6 @@ import { Message } from '@/shared/entities/Message';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Collapse, Flex, Spin, Steps, Typography } from 'antd';
 import { observer } from 'mobx-react-lite';
-import './index.scss';
 
 const ReActAgentMessage = ({
   msg,

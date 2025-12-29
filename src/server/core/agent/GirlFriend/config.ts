@@ -12,18 +12,16 @@ export const config: AgentConfig = {
     zh: '与用户进行自然对话的会话智能体，维护对话历史和上下文以提供连贯的回应。',
   },
   tools: [ToolIds.TEXT_TO_SPEECH],
-  configItems: [
-    {
+  config: {
+    tts: {
       type: 'group',
-      name: 'tts',
       label: {
         en: 'Text-to-Speech Settings',
         zh: '文本转语音设置',
       },
-      children: [
-        {
+      children: {
+        voice: {
           type: 'select',
-          name: 'voice',
           label: {
             en: 'Voice Type',
             zh: '音色',
@@ -32,15 +30,15 @@ export const config: AgentConfig = {
           span: 8,
           options: [
             {
-              label: '温柔女友',
+              label: '温柔女友（v2）',
               value: 'zh_female_roumeinvyou_emo_v2_mars_bigtts',
             },
             {
-              label: '魅力女友',
+              label: '魅力女友（v2）',
               value: 'zh_female_meilinvyou_emo_v2_mars_bigtts',
             },
             {
-              label: '高冷御姐',
+              label: '高冷御姐（v2）',
               value: 'zh_female_gaolengyujie_emo_v2_mars_bigtts',
             },
             {
@@ -133,9 +131,8 @@ export const config: AgentConfig = {
             },
           ],
         },
-        {
+        emotion: {
           type: 'select',
-          name: 'emotion',
           label: {
             en: 'Emotion',
             zh: '情感',
@@ -157,9 +154,8 @@ export const config: AgentConfig = {
             },
           ],
         },
-        {
+        speedRatio: {
           type: 'number',
-          name: 'speedRatio',
           label: {
             en: 'Speed Ratio',
             zh: '语速',
@@ -171,7 +167,7 @@ export const config: AgentConfig = {
           max: 2.0,
           step: 0.1,
         },
-      ],
+      },
     },
-  ],
+  },
 };

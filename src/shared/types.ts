@@ -20,10 +20,10 @@ export interface I18nText {
 
 export type CommonProps = Pick<
   FormItemProps,
-  'name' | 'hidden' | 'required' | 'initialValue' | 'valuePropName'
+  'hidden' | 'required' | 'initialValue' | 'valuePropName'
 > & {
   label?: I18nText;
-  tooltip?: I18nText;
+  description?: I18nText;
   flex?: ColProps['flex'];
   span?: ColProps['span'];
 };
@@ -69,14 +69,13 @@ export type SwitchItem = CommonProps &
 
 export type GroupItem = {
   label: I18nText;
-  name: string | string[];
   type: 'group';
-  children: AgentConfigItem[];
+  children: Record<string, ConfigItem>;
   flex?: ColProps['flex'];
   span?: ColProps['span'];
 };
 
-export type AgentConfigItem =
+export type ConfigItem =
   | SelectItem
   | TextItem
   | CheckboxGroupItem
@@ -85,34 +84,11 @@ export type AgentConfigItem =
   | NumberItem
   | GroupItem;
 
-export type AgentFormItem = AgentConfigItem extends infer Each
+export type AtomicConfigItem = ConfigItem extends infer Each
   ? Each extends GroupItem
     ? never
     : Each
   : never;
-
-/**
- * Tool输入参数定义
- */
-export interface ToolParameterConfig {
-  type: 'string' | 'number' | 'boolean' | 'object' | 'array';
-  required?: boolean;
-  default?: any;
-  description?: I18nText;
-  range?: string;
-  options?: Array<{
-    label: string;
-    value: string | number;
-  }>;
-}
-
-/**
- * Tool输入/输出配置
- */
-export interface ToolIOConfig {
-  description?: I18nText;
-  parameters?: Record<string, ToolParameterConfig>;
-}
 
 /**
  * Agent配置接口
@@ -126,7 +102,7 @@ export interface AgentConfig {
   /** 依赖的工具列表 */
   tools?: string[];
   /** 配置项定义 */
-  configItems?: AgentConfigItem[];
+  config?: Record<string, ConfigItem>;
   /** 是否启用 */
   enabled?: boolean;
 }
@@ -141,9 +117,9 @@ export interface ToolConfig {
   /** 描述信息 */
   description: I18nText;
   /** 输入配置 */
-  input?: ToolIOConfig;
+  input?: Record<string, ConfigItem>;
   /** 输出配置 */
-  output?: ToolIOConfig;
+  output?: Record<string, ConfigItem>;
   /** 是否启用 */
   enabled?: boolean;
 }
