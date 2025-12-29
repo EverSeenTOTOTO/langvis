@@ -1,7 +1,7 @@
 import Modal, { ModalProps } from '@/client/components/Modal';
 import { useStore } from '@/client/store';
 import { AgentIds } from '@/shared/constants';
-import { AgentConfig, AgentConfigItem, AgentFormItem } from '@/shared/types';
+import { AgentConfig, AtomicConfigItem, ConfigItem } from '@/shared/types';
 import {
   Checkbox,
   Col,
@@ -18,6 +18,7 @@ import {
   Switch,
   Typography,
 } from 'antd';
+import type { NamePath } from 'antd/es/form/interface';
 import { observer } from 'mobx-react-lite';
 import { useEffect } from 'react';
 import { useAsyncFn, useMedia } from 'react-use';
@@ -48,7 +49,10 @@ const ConversationModal = ({
     fetchAgentApi[1]();
   }, []);
 
-  const renderFormItem = (item: AgentFormItem, children: React.ReactNode) => {
+  const renderFormItem = (
+    item: AtomicConfigItem & { name: NamePath },
+    children: React.ReactNode,
+  ) => {
     return (
       <Form.Item
         key={JSON.stringify(item.name)}
@@ -60,7 +64,7 @@ const ConversationModal = ({
         hidden={item.hidden}
         required={item.required}
         initialValue={item.initialValue}
-        tooltip={item.tooltip?.en}
+        tooltip={item.description?.en}
         valuePropName={item.valuePropName || 'value'}
         style={{ flex: item.flex }}
         rules={[
@@ -74,7 +78,7 @@ const ConversationModal = ({
     );
   };
 
-  const renderConfigItem = (item: AgentConfigItem) => {
+  const renderConfigItem = (item: ConfigItem & { name: NamePath }) => {
     switch (item.type) {
       case 'select':
         return renderFormItem(
@@ -142,14 +146,16 @@ const ConversationModal = ({
                 label: item.label ? settingStore.tr(item.label?.en) : undefined,
                 children: (
                   <Row gutter={12}>
-                    {item.children?.map(child => (
-                      <Col span={child.span} flex={child.flex} key={child.name}>
-                        {renderConfigItem({
-                          ...child,
-                          name: [item.name, child.name],
-                        })}
-                      </Col>
-                    ))}
+                    {Object.entries(item.children ?? {})?.map(
+                      ([name, child]) => (
+                        <Col span={child.span} flex={child.flex} key={name}>
+                          {renderConfigItem({
+                            ...child,
+                            name: [item.name, name],
+                          })}
+                        </Col>
+                      ),
+                    )}
                   </Row>
                 ),
               },
@@ -268,12 +274,18 @@ const ConversationModal = ({
                 const agentInfo: AgentConfig = fetchAgentApi[0]?.value?.find(
                   (a: AgentConfig & { id: string }) => a.id === agent,
                 );
+                const keys = Object.keys(agentInfo?.config ?? {});
 
-                if (!agentInfo?.configItems?.length) {
+                if (!keys.length) {
                   return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
                 }
 
-                return agentInfo?.configItems?.map(renderConfigItem);
+                return keys?.map(name =>
+                  renderConfigItem({
+                    name,
+                    ...agentInfo.config![name],
+                  }),
+                );
               }}
             </Form.Item>
           </div>
@@ -284,4 +296,3 @@ const ConversationModal = ({
 };
 
 export default observer(ConversationModal);
-

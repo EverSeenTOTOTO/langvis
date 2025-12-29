@@ -24,7 +24,6 @@ const GirFriendAgentMessage = ({
           className="gf-meta-audio"
           suffix={
             <Tooltip
-              trigger="click"
               classNames={{ root: 'gf-meta-tooltip' }}
               title={
                 <Typography.Text copyable>{msg.meta.filePath}</Typography.Text>
