@@ -1,6 +1,7 @@
 import { SSEMessage } from '@/shared/types';
 import type { Response } from 'express';
 import { service } from '../decorator/service';
+import Logger from '../utils/logger';
 
 interface SSEConnection {
   conversationId: string;
@@ -11,6 +12,7 @@ interface SSEConnection {
 export class SSEService {
   private sseConnections: Map<string, SSEConnection> = new Map();
   private heartbeats: Map<string, NodeJS.Timeout> = new Map();
+  private readonly logger = Logger.child({ source: 'SSEService' });
 
   initSSEConnection(conversationId: string, response: Response) {
     response.writeHead(200, {
@@ -70,9 +72,10 @@ export class SSEService {
 
     if (!response?.writable) {
       this.closeSSEConnection(conversationId);
-      throw new Error(
+      this.logger.warn(
         `SSE connection for conversation ${conversationId} is not writable`,
       );
+      return;
     }
 
     response.write(`data: ${JSON.stringify(msg)}\n\n`);

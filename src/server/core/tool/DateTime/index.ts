@@ -1,11 +1,11 @@
 import { tool } from '@/server/decorator/agenttool';
+import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
 import { Tool } from '..';
-import type { Logger } from '@/server/utils/logger';
 
 // Extend dayjs with plugins
 dayjs.extend(utc);

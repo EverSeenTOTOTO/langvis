@@ -87,14 +87,10 @@ describe('LlmCallTool', () => {
 
       mockCreate.mockResolvedValue(mockStream);
 
-      // Create mock outputStream
+      // Create mock writer
       const mockWriter = {
         write: vi.fn(),
         close: vi.fn(),
-      };
-
-      const mockOutputStream = {
-        getWriter: vi.fn().mockReturnValue(mockWriter),
       };
 
       const input: Partial<ChatCompletionCreateParamsStreaming> = {
@@ -102,7 +98,7 @@ describe('LlmCallTool', () => {
         model: 'gpt-3.5-turbo',
       };
 
-      await llmCallTool.streamCall(input, mockOutputStream as any);
+      await llmCallTool.streamCall(input, mockWriter as any);
 
       expect(mockCreate).toHaveBeenCalledWith({
         model: 'gpt-3.5-turbo',
@@ -135,16 +131,12 @@ describe('LlmCallTool', () => {
         abort: vi.fn(),
       };
 
-      const mockOutputStream = {
-        getWriter: vi.fn().mockReturnValue(mockWriter),
-      };
-
       const input: Partial<ChatCompletionCreateParamsStreaming> = {
         messages: [{ role: 'user', content: 'Hello' }],
       };
 
       await expect(
-        llmCallTool.streamCall(input, mockOutputStream as any),
+        llmCallTool.streamCall(input, mockWriter as any),
       ).rejects.toThrow(mockError);
 
       expect(mockWriter.abort).toHaveBeenCalledWith(mockError);

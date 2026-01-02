@@ -1,3 +1,4 @@
+import { AgentIds } from '@/shared/constants';
 import {
   Conversation,
   ConversationEntity,
@@ -5,18 +6,19 @@ import {
 import { Message, MessageEntity, Role } from '@/shared/entities/Message';
 import { StreamChunk } from '@/shared/types';
 import { omit } from 'lodash-es';
+import PQueue from 'p-queue';
 import { inject } from 'tsyringe';
 import { In } from 'typeorm';
 import { service } from '../decorator/service';
+import Logger from '../utils/logger';
 import pg from './pg';
 import { SSEService } from './SSEService';
-import { AgentIds } from '@/shared/constants';
-import Logger from '../utils/logger';
-import PQueue from 'p-queue';
 
 @service()
 export class ConversationService {
   private readonly logger = Logger.child({ source: 'ConversationService' });
+  private activeWriters: Map<string, WritableStreamDefaultWriter<StreamChunk>> =
+    new Map();
 
   constructor(
     @inject(SSEService)
@@ -218,10 +220,27 @@ export class ConversationService {
     return true;
   }
 
+  async cancelStream(messageId: string, reason?: string): Promise<boolean> {
+    const writer = this.activeWriters.get(messageId);
+
+    if (!writer) return false;
+
+    try {
+      await writer.abort(new Error(reason ?? 'Cancelled by user'));
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Failed to cancel stream for message ${messageId}:`,
+        error,
+      );
+      return false;
+    }
+  }
+
   async createStreamForMessage(
     conversationId: string,
     message: Message,
-  ): Promise<WritableStream<StreamChunk>> {
+  ): Promise<WritableStreamDefaultWriter<StreamChunk>> {
     const startTime = Date.now();
     let firstChunkReceived = false;
 
@@ -271,6 +290,8 @@ export class ConversationService {
         enqueueDelta(data.content ?? '');
       },
       close: async () => {
+        this.activeWriters.delete(message.id);
+
         try {
           await this.saveMessage(
             message.id,
@@ -295,6 +316,7 @@ export class ConversationService {
         });
       },
       abort: async (reason: unknown) => {
+        this.activeWriters.delete(message.id);
         queue.clear();
 
         this.logger.error(
@@ -307,6 +329,7 @@ export class ConversationService {
           await this.saveMessage(message.id, content, {
             ...message.meta,
             loading: undefined,
+            streaming: undefined,
             error: true,
           });
         } catch (error) {
@@ -320,6 +343,11 @@ export class ConversationService {
       },
     });
 
-    return writableStream;
+    this.logger.info(`Created writable stream for message ${message.id}`);
+
+    const writer = writableStream.getWriter();
+    this.activeWriters.set(message.id, writer);
+
+    return writer;
   }
 }

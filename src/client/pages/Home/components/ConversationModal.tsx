@@ -176,9 +176,7 @@ const ConversationModal = ({
     <Modal
       width={isMobile ? '100%' : '60%'}
       title={title}
-      afterClose={() => {
-        form.resetFields();
-      }}
+      destroyOnHidden
       okText={settingStore.tr('Save')}
       cancelText={settingStore.tr('Cancel')}
       trigger={children as React.ReactElement}

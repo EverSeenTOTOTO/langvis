@@ -1,11 +1,11 @@
 import { tool } from '@/server/decorator/agenttool';
+import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
 import { Readability } from '@mozilla/readability';
 import DOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
 import { Tool } from '..';
-import type { Logger } from '@/server/utils/logger';
 
 export interface WebFetchInput {
   url: string;

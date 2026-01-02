@@ -25,7 +25,7 @@ export abstract class Agent {
 
   async streamCall(
     _messages: Message[],
-    _outputStream: WritableStream<StreamChunk>,
+    _outputWriter: WritableStreamDefaultWriter<StreamChunk>,
     _config?: Record<string, any>,
   ): Promise<unknown> {
     throw new Error(

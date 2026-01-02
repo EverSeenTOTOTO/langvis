@@ -481,11 +481,10 @@ describe('ConversationService', () => {
 
     mockSSEService.sendToConversation.mockClear();
 
-    const stream = await conversationService.createStreamForMessage(
+    const writer = await conversationService.createStreamForMessage(
       'conv-1',
       mockMessage,
     );
-    const writer = stream.getWriter();
 
     const timestamps: number[] = [];
     mockSSEService.sendToConversation.mockImplementation(() => {
@@ -527,11 +526,10 @@ describe('ConversationService', () => {
 
     mockSSEService.sendToConversation.mockClear();
 
-    const stream = await conversationService.createStreamForMessage(
+    const writer = await conversationService.createStreamForMessage(
       'conv-1',
       mockMessage,
     );
-    const writer = stream.getWriter();
 
     const chunks: string[] = [];
     mockSSEService.sendToConversation.mockImplementation((_, data) => {
@@ -567,11 +565,10 @@ describe('ConversationService', () => {
 
     mockSSEService.sendToConversation.mockClear();
 
-    const stream = await conversationService.createStreamForMessage(
+    const writer = await conversationService.createStreamForMessage(
       'conv-1',
       mockMessage,
     );
-    const writer = stream.getWriter();
 
     await writer.write('Test');
     await writer.close();
@@ -598,11 +595,10 @@ describe('ConversationService', () => {
 
     mockSSEService.sendToConversation.mockClear();
 
-    const stream = await conversationService.createStreamForMessage(
+    const writer = await conversationService.createStreamForMessage(
       'conv-1',
       mockMessage,
     );
-    const writer = stream.getWriter();
 
     await writer.write('Test message');
     await writer.abort(new Error('Aborted'));
@@ -610,5 +606,140 @@ describe('ConversationService', () => {
     const calls = mockSSEService.sendToConversation.mock.calls;
     const lastCall = calls[calls.length - 1];
     expect(lastCall[1].type).toBe('completion_error');
+  });
+
+  describe('cancelStream', () => {
+    it('should cancel an active stream', async () => {
+      const messageId = 'msg-123';
+      const mockWriter = {
+        abort: vi.fn().mockResolvedValue(undefined),
+      } as any;
+
+      (conversationService as any).activeWriters.set(messageId, mockWriter);
+
+      const result = await conversationService.cancelStream(messageId);
+
+      expect(result).toBe(true);
+      expect(mockWriter.abort).toHaveBeenCalledWith(
+        new Error('Cancelled by user'),
+      );
+    });
+
+    it('should return false when no active stream exists', async () => {
+      const messageId = 'msg-nonexistent';
+
+      const result = await conversationService.cancelStream(messageId);
+
+      expect(result).toBe(false);
+    });
+
+    it('should handle abort errors gracefully', async () => {
+      const messageId = 'msg-123';
+      const mockWriter = {
+        abort: vi.fn().mockRejectedValue(new Error('Abort failed')),
+      } as any;
+
+      (conversationService as any).activeWriters.set(messageId, mockWriter);
+
+      const result = await conversationService.cancelStream(messageId);
+
+      expect(result).toBe(false);
+      expect(mockWriter.abort).toHaveBeenCalledWith(
+        new Error('Cancelled by user'),
+      );
+    });
+  });
+
+  describe('stream tracking', () => {
+    it('should track active writer when created', async () => {
+      const conversationId = 'conv-123';
+      const message = {
+        id: 'msg-123',
+        conversationId,
+        role: Role.ASSIST,
+        content: '',
+        meta: { loading: true },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const writer = await conversationService.createStreamForMessage(
+        conversationId,
+        message,
+      );
+
+      expect((conversationService as any).activeWriters.has(message.id)).toBe(
+        true,
+      );
+      expect((conversationService as any).activeWriters.get(message.id)).toBe(
+        writer,
+      );
+    });
+
+    it('should remove writer from tracking when closed', async () => {
+      const conversationId = 'conv-123';
+      const message = {
+        id: 'msg-123',
+        conversationId,
+        role: Role.ASSIST,
+        content: '',
+        meta: { loading: true },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      (pg.getRepository as any).mockReturnValue({
+        findOneBy: vi.fn().mockResolvedValue(message),
+        save: vi.fn().mockResolvedValue(message),
+      });
+
+      const writer = await conversationService.createStreamForMessage(
+        conversationId,
+        message,
+      );
+
+      expect((conversationService as any).activeWriters.has(message.id)).toBe(
+        true,
+      );
+
+      await writer.close();
+
+      expect((conversationService as any).activeWriters.has(message.id)).toBe(
+        false,
+      );
+    });
+
+    it('should remove writer from tracking when aborted', async () => {
+      const conversationId = 'conv-123';
+      const message = {
+        id: 'msg-123',
+        conversationId,
+        role: Role.ASSIST,
+        content: '',
+        meta: { loading: true },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      (pg.getRepository as any).mockReturnValue({
+        findOneBy: vi.fn().mockResolvedValue(message),
+        save: vi.fn().mockResolvedValue(message),
+      });
+
+      const writer = await conversationService.createStreamForMessage(
+        conversationId,
+        message,
+      );
+
+      expect((conversationService as any).activeWriters.has(message.id)).toBe(
+        true,
+      );
+
+      await writer.abort(new Error('Test abort'));
+
+      expect((conversationService as any).activeWriters.has(message.id)).toBe(
+        false,
+      );
+    });
   });
 });

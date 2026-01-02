@@ -5,7 +5,7 @@ import type { Message } from '@/shared/entities/Message';
 import { SSEMessage } from '@/shared/types';
 import { isClient } from '@/shared/utils';
 import { message } from 'antd';
-import { makeAutoObservable } from 'mobx';
+import { makeAutoObservable, reaction } from 'mobx';
 import { inject } from 'tsyringe';
 import { ConversationStore } from './conversation';
 import { SettingStore } from './setting';
@@ -26,6 +26,18 @@ export class ChatStore {
     @inject(SettingStore) private settingStore: SettingStore,
   ) {
     makeAutoObservable(this);
+    reaction(
+      () => conversationStore.currentConversationId,
+      (_, prevId) => {
+        if (prevId && conversationStore.activeAssistMessage) {
+          this.cancelChat({
+            id: prevId,
+            messageId: conversationStore.activeAssistMessage.id,
+            reason: 'Cancelled due to conversation switch',
+          });
+        }
+      },
+    );
   }
 
   isConnected(conversationId: ConversationId): boolean {
@@ -83,6 +95,16 @@ export class ChatStore {
   disconnectFromSSE(conversationId: ConversationId) {
     this.eventSources.get(conversationId)?.close();
     this.eventSources.delete(conversationId);
+  }
+
+  @api((req: { id: string }) => `/api/chat/cancel/${req.id}`, {
+    method: 'post',
+  })
+  async cancelChat(
+    _params: { id: string; messageId: string; reason?: string },
+    req?: ApiRequest<{ success: boolean }>,
+  ) {
+    await req!.send();
   }
 
   @api((req: UserMessage) => `/api/chat/start/${req.id}`, {
@@ -157,3 +179,4 @@ export class ChatStore {
     }
   }
 }
+

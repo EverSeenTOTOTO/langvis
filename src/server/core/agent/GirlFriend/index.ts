@@ -1,4 +1,5 @@
 import { agent } from '@/server/decorator/agenttool';
+import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { Message } from '@/shared/entities/Message';
 import { AgentConfig, StreamChunk } from '@/shared/types';
@@ -8,7 +9,6 @@ import { Agent } from '..';
 import type { Tool } from '../../tool';
 import type TextToSpeechTool from '../../tool/TextToSpeech';
 import generatePrompt from './prompt';
-import type { Logger } from '@/server/utils/logger';
 
 @agent(AgentIds.GIRLFRIEND)
 export default class GirlFriendAgent extends Agent {
@@ -22,7 +22,7 @@ export default class GirlFriendAgent extends Agent {
 
   async streamCall(
     messages: Message[],
-    outputStream: WritableStream<StreamChunk>,
+    outputWriter: WritableStreamDefaultWriter<StreamChunk>,
     config?: Record<string, any>,
   ) {
     const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
@@ -33,7 +33,7 @@ export default class GirlFriendAgent extends Agent {
     }));
 
     this.logger.debug('GF agent messages: ', conversationMessages);
-    const writer = outputStream.getWriter();
+    const writer = outputWriter;
     const tts = container.resolve<TextToSpeechTool>(ToolIds.TEXT_TO_SPEECH);
 
     let content = '';
@@ -61,13 +61,15 @@ export default class GirlFriendAgent extends Agent {
       abort: reason => writer.abort(reason),
     });
 
+    const localWriter = localStream.getWriter();
+
     await llmCallTool.streamCall(
       {
         model: config?.model?.code,
         temperature: config?.model?.temperature,
         messages: conversationMessages,
       },
-      localStream,
+      localWriter,
     );
   }
 }

@@ -19,7 +19,7 @@ export default class ChatAgent extends Agent {
 
   async streamCall(
     messages: Message[],
-    outputStream: WritableStream<StreamChunk>,
+    outputWriter: WritableStreamDefaultWriter<StreamChunk>,
     config?: Record<string, any>,
   ) {
     const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
@@ -37,7 +37,7 @@ export default class ChatAgent extends Agent {
         temperature: config?.model?.temperature,
         messages: conversationMessages,
       },
-      outputStream,
+      outputWriter,
     );
   }
 }
