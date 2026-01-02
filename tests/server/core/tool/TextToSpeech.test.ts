@@ -154,7 +154,8 @@ describe('TextToSpeechTool', () => {
   describe('streamCall', () => {
     it('should throw not implemented error', async () => {
       const mockStream = new WritableStream();
-      await expect(tool.streamCall({}, mockStream)).rejects.toThrow(
+      const mockWriter = mockStream.getWriter();
+      await expect(tool.streamCall({}, mockWriter)).rejects.toThrow(
         'TextToSpeechTool: Streaming call not implemented.',
       );
     });

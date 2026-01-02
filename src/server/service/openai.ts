@@ -3,10 +3,10 @@ import logger from '../utils/logger';
 
 export { OpenAI };
 
-const openai = new OpenAI({
-  baseURL: process.env.OPENAI_API_BASE,
-  apiKey: process.env.OPENAI_API_KEY,
-  logger,
-});
-
-export default openai;
+export default () => {
+  return new OpenAI({
+    baseURL: process.env.OPENAI_API_BASE,
+    apiKey: process.env.OPENAI_API_KEY,
+    logger,
+  });
+};

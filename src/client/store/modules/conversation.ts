@@ -6,6 +6,11 @@ import type { Message } from '@/shared/entities/Message';
 import { Role } from '@/shared/entities/Message';
 import { makeAutoObservable, reaction } from 'mobx';
 
+const isActiveAssistMessage = (message?: Message) =>
+  message &&
+  message.role === Role.ASSIST &&
+  (message.meta?.streaming || message.meta?.loading);
+
 @store()
 export class ConversationStore {
   @hydrate()
@@ -37,10 +42,6 @@ export class ConversationStore {
     return this.conversations.find(
       each => each.id === this.currentConversationId,
     );
-  }
-
-  get currentMessages(): Message[] {
-    return this.messages[this.currentConversationId || ''] || [];
   }
 
   @api('/api/conversation', { method: 'post' })
@@ -135,6 +136,18 @@ export class ConversationStore {
     await this.getMessagesByConversationId({ id: params.id });
   }
 
+  get currentMessages(): Message[] {
+    return this.messages[this.currentConversationId!] || [];
+  }
+
+  get activeAssistMessage() {
+    const lastMessage = this.currentMessages?.[this.currentMessages.length - 1];
+
+    if (!isActiveAssistMessage(lastMessage)) return;
+
+    return lastMessage;
+  }
+
   // 流式消息更新方法
   updateStreamingMessage(
     conversationId: string,
@@ -148,13 +161,7 @@ export class ConversationStore {
     // 找到最后一个 assistant 消息（通常是正在流式传输的消息）
     const lastMessage = messages[messages.length - 1];
 
-    if (
-      !lastMessage ||
-      lastMessage.role !== Role.ASSIST ||
-      !(lastMessage.meta?.streaming || lastMessage.meta?.loading)
-    ) {
-      return;
-    }
+    if (!isActiveAssistMessage(lastMessage)) return;
 
     messages[messages.length - 1] = {
       ...lastMessage,

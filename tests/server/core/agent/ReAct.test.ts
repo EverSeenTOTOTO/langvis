@@ -346,10 +346,6 @@ describe('ReActAgent', () => {
         close: vi.fn(),
       };
 
-      const mockOutputStream = {
-        getWriter: vi.fn().mockReturnValue(mockWriter),
-      };
-
       const messages: Message[] = [
         {
           id: 'msg-1',
@@ -361,7 +357,7 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockWriter as any);
 
       expect(mockLlmCall.call).toHaveBeenCalled();
       expect(mockWriter.write).toHaveBeenCalledWith({
@@ -421,10 +417,6 @@ describe('ReActAgent', () => {
         close: vi.fn(),
       };
 
-      const mockOutputStream = {
-        getWriter: vi.fn().mockReturnValue(mockWriter),
-      };
-
       const messages: Message[] = [
         {
           id: 'msg-1',
@@ -436,7 +428,7 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockWriter as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith(
@@ -511,10 +503,6 @@ describe('ReActAgent', () => {
         close: vi.fn(),
       };
 
-      const mockOutputStream = {
-        getWriter: vi.fn().mockReturnValue(mockWriter),
-      };
-
       const messages: Message[] = [
         {
           id: 'msg-1',
@@ -526,7 +514,7 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockWriter as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
 
@@ -599,10 +587,6 @@ describe('ReActAgent', () => {
         close: vi.fn(),
       };
 
-      const mockOutputStream = {
-        getWriter: vi.fn().mockReturnValue(mockWriter),
-      };
-
       const messages: Message[] = [
         {
           id: 'msg-1',
@@ -614,7 +598,7 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockWriter as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith(
@@ -658,10 +642,6 @@ describe('ReActAgent', () => {
         abort: vi.fn(),
       };
 
-      const mockOutputStream = {
-        getWriter: vi.fn().mockReturnValue(mockWriter),
-      };
-
       const messages: Message[] = [
         {
           id: 'msg-1',
@@ -673,7 +653,7 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockWriter as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(5);
       expect(mockWriter.abort).toHaveBeenCalledWith(
@@ -708,10 +688,6 @@ describe('ReActAgent', () => {
         close: vi.fn(),
       };
 
-      const mockOutputStream = {
-        getWriter: vi.fn().mockReturnValue(mockWriter),
-      };
-
       const messages: Message[] = [
         {
           id: 'msg-1',
@@ -723,7 +699,7 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockWriter as any);
 
       expect(mockWriter.write).toHaveBeenCalledWith('No response from model');
       expect(mockWriter.close).toHaveBeenCalled();
@@ -773,10 +749,6 @@ describe('ReActAgent', () => {
         close: vi.fn(),
       };
 
-      const mockOutputStream = {
-        getWriter: vi.fn().mockReturnValue(mockWriter),
-      };
-
       const messages: Message[] = [
         {
           id: 'msg-1',
@@ -788,7 +760,7 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockWriter as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith(
@@ -850,10 +822,6 @@ describe('ReActAgent', () => {
         close: vi.fn(),
       };
 
-      const mockOutputStream = {
-        getWriter: vi.fn().mockReturnValue(mockWriter),
-      };
-
       const messages: Message[] = [
         {
           id: 'msg-1',
@@ -865,7 +833,7 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockWriter as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith(
@@ -932,10 +900,6 @@ describe('ReActAgent', () => {
         close: vi.fn(),
       };
 
-      const mockOutputStream = {
-        getWriter: vi.fn().mockReturnValue(mockWriter),
-      };
-
       const messages: Message[] = [
         {
           id: 'msg-1',
@@ -947,7 +911,7 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockWriter as any);
 
       expect(mockWriter.write).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1010,10 +974,6 @@ describe('ReActAgent', () => {
         close: vi.fn(),
       };
 
-      const mockOutputStream = {
-        getWriter: vi.fn().mockReturnValue(mockWriter),
-      };
-
       const messages: Message[] = [
         {
           id: 'msg-1',
@@ -1025,7 +985,7 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockOutputStream as any);
+      await reactAgent.streamCall(messages, mockWriter as any);
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith(

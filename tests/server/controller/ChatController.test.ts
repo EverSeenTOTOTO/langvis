@@ -36,6 +36,7 @@ class MockConversationService {
   createMessageStream = vi.fn();
   batchAddMessages = vi.fn();
   createStreamForMessage = vi.fn();
+  cancelStream = vi.fn();
 }
 
 let mockSSEService: MockSSEService;
@@ -649,6 +650,96 @@ describe('ChatController', () => {
         expect.any(WritableStream),
         expect.any(Object),
       );
+    });
+  });
+
+  describe('cancelChat', () => {
+    it('should cancel an active stream successfully', async () => {
+      mockRequest.params = {
+        conversationId: 'conv-123',
+      };
+      mockRequest.body = {
+        messageId: 'msg-456',
+      };
+
+      mockConversationService.cancelStream = vi.fn().mockResolvedValue(true);
+
+      await chatController.cancelChat(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      expect(mockConversationService.cancelStream).toHaveBeenCalledWith(
+        'msg-456',
+        undefined,
+      );
+      expect(mockStatus).toHaveBeenCalledWith(200);
+      expect(mockJson).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('should return 404 when no active stream is found', async () => {
+      mockRequest.params = {
+        conversationId: 'conv-123',
+      };
+      mockRequest.body = {
+        messageId: 'msg-456',
+      };
+
+      mockConversationService.cancelStream = vi.fn().mockResolvedValue(false);
+
+      await chatController.cancelChat(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      expect(mockConversationService.cancelStream).toHaveBeenCalledWith(
+        'msg-456',
+        undefined,
+      );
+      expect(mockStatus).toHaveBeenCalledWith(404);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: 'No active stream found for message msg-456',
+      });
+    });
+
+    it('should return 400 when conversationId is missing', async () => {
+      mockRequest.params = {};
+      mockRequest.body = {
+        messageId: 'msg-456',
+      };
+
+      mockConversationService.cancelStream = vi.fn();
+
+      await chatController.cancelChat(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      expect(mockConversationService.cancelStream).not.toHaveBeenCalled();
+      expect(mockStatus).toHaveBeenCalledWith(400);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: 'conversationId and messageId are required',
+      });
+    });
+
+    it('should return 400 when messageId is missing', async () => {
+      mockRequest.params = {
+        conversationId: 'conv-123',
+      };
+      mockRequest.body = {};
+
+      mockConversationService.cancelStream = vi.fn();
+
+      await chatController.cancelChat(
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      expect(mockConversationService.cancelStream).not.toHaveBeenCalled();
+      expect(mockStatus).toHaveBeenCalledWith(400);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: 'conversationId and messageId are required',
+      });
     });
   });
 });

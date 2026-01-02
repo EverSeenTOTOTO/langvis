@@ -1,4 +1,5 @@
 import { agent } from '@/server/decorator/agenttool';
+import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { Message, Role } from '@/shared/entities/Message';
 import { AgentConfig, StreamChunk } from '@/shared/types';
@@ -8,7 +9,6 @@ import { container } from 'tsyringe';
 import { Agent } from '..';
 import { Tool } from '../../tool';
 import generatePrompt from './prompt';
-import type { Logger } from '@/server/utils/logger';
 
 export type ReActThought = {
   thought: string;
@@ -61,10 +61,10 @@ export default class ReActAgent extends Agent {
 
   async streamCall(
     messages: Message[],
-    outputStream: WritableStream<StreamChunk>,
+    outputWriter: WritableStreamDefaultWriter<StreamChunk>,
     config?: Record<string, any>,
   ) {
-    const writer = outputStream.getWriter();
+    const writer = outputWriter;
     const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
 
     const iterMessages = messages.map(msg => ({

@@ -1,5 +1,6 @@
 import { Role } from '@/shared/entities/Message';
 import { ConversationConfig } from '@/shared/types';
+import chalk from 'chalk';
 import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
@@ -7,7 +8,6 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { ConversationService } from '../service/ConversationService';
 import { SSEService } from '../service/SSEService';
-import chalk from 'chalk';
 
 @controller('/api/chat')
 export default class ChatController {
@@ -37,6 +37,35 @@ export default class ChatController {
         req.log.error('SSE connection error:', err);
       }
     });
+  }
+
+  @api('/cancel/:conversationId', { method: 'post' })
+  async cancelChat(req: Request, res: Response) {
+    const { conversationId } = req.params;
+    const { messageId, reason } = req.body;
+
+    if (!conversationId || !messageId) {
+      return res
+        .status(400)
+        .json({ error: 'conversationId and messageId are required' });
+    }
+
+    const cancelled = await this.conversationService.cancelStream(
+      messageId,
+      reason,
+    );
+
+    if (!cancelled) {
+      return res.status(404).json({
+        error: `No active stream found for message ${messageId}`,
+      });
+    }
+
+    req.log.info(
+      `Cancelled streaming for conversation ${conversationId}, message ${messageId}`,
+    );
+
+    return res.status(200).json({ success: true });
   }
 
   @api('/start/:conversationId', { method: 'post' })
@@ -158,8 +187,8 @@ export default class ChatController {
     // Get the assistant message (last inserted message) for streaming
     const assistantMessage = insertedMessages[insertedMessages.length - 1];
 
-    // Create streaming for the assistant message
-    const stream = await this.conversationService.createStreamForMessage(
+    // Create streaming writer for the assistant message
+    const writer = await this.conversationService.createStreamForMessage(
       conversationId,
       assistantMessage,
     );
@@ -168,7 +197,7 @@ export default class ChatController {
     const messagesForAgent = messages.slice(0, -1);
 
     agent
-      .streamCall(messagesForAgent, stream, config)
-      .catch(e => stream.abort(e));
+      .streamCall(messagesForAgent, writer, config)
+      .catch(e => writer.abort(e));
   }
 }

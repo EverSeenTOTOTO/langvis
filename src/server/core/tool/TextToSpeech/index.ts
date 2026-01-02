@@ -1,10 +1,10 @@
 import { tool } from '@/server/decorator/agenttool';
+import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { Tool } from '..';
-import type { Logger } from '@/server/utils/logger';
 
 export interface TextToSpeechInput {
   text: string;

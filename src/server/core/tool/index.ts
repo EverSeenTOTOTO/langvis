@@ -17,7 +17,7 @@ export abstract class Tool {
 
   async streamCall(
     _input: Record<string, any>,
-    _outputStream: WritableStream<StreamChunk>,
+    _outputWriter: WritableStreamDefaultWriter<StreamChunk>,
   ): Promise<unknown> {
     throw new Error(
       `${this.constructor.name}: Streaming call not implemented.`,

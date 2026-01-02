@@ -12,10 +12,15 @@ import bindRequestId from './middleware/requestId';
 import bindSSRMiddleware from './middleware/ssr';
 import logger from './utils/logger';
 
+logger.info(
+  `Starting with environment: ${isProd ? 'production' : 'development'}`,
+);
+
 dotenv.config({
   path: isProd
     ? path.join(process.cwd(), '.env')
     : path.join(process.cwd(), '.env.development'),
+  override: true,
 });
 
 // hypothesis: client assets to be in the same directory

@@ -52,6 +52,17 @@ const Chat: React.FC = () => {
     });
   };
 
+  const cancelApi = useAsyncFn(chatStore.cancelChat.bind(chatStore));
+
+  const handleCancel = async () => {
+    if (!conversationStore.activeAssistMessage) return;
+
+    await cancelApi[1]({
+      id: conversationStore.currentConversationId!,
+      messageId: conversationStore.activeAssistMessage.id,
+    });
+  };
+
   return (
     <Layout className="chat-page">
       {isMobile ? (
@@ -86,9 +97,12 @@ const Chat: React.FC = () => {
             value={value}
             onChange={setValue}
             onSubmit={handleSend}
+            onCancel={handleCancel}
             autoSize={{ minRows: 2, maxRows: 6 }}
             placeholder={settingStore.tr('Type a message...')}
             loading={
+              conversationStore.activeAssistMessage?.meta?.loading ||
+              conversationStore.activeAssistMessage?.meta?.streaming ||
               addMessageApi[0].loading ||
               createConversationApi[0].loading ||
               chatApi[0].loading
