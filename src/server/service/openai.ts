@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import logger from '../service/logger';
+import logger from '../utils/logger';
 
 export { OpenAI };
 

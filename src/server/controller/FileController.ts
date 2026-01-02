@@ -5,9 +5,12 @@ import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { FileService } from '../service/FileService';
+import Logger from '../utils/logger';
 
 @controller('/api/files')
 export default class FileController {
+  private readonly logger = Logger.child({ source: 'FileController' });
+
   constructor(@inject(FileService) private fileService: FileService) {}
 
   private getInlineExtensions(): string[] {
@@ -98,7 +101,7 @@ export default class FileController {
         res.status(404).json({ error: 'File not found' });
         return;
       }
-      console.error('Error in downloadFile:', error);
+      this.logger.error('Error in downloadFile:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -189,7 +192,7 @@ export default class FileController {
         res.status(404).json({ error: 'File not found' });
         return;
       }
-      console.error('Error in playFile:', error);
+      this.logger.error('Error in playFile:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -221,7 +224,7 @@ export default class FileController {
       if (error instanceof Error && error.message === 'File not found') {
         return res.status(404).json({ error: 'File not found' });
       }
-      console.error('Error in getFileInfo:', error);
+      this.logger.error('Error in getFileInfo:', error);
       return res.status(500).json({ error: 'Internal server error' });
     }
   }

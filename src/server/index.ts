@@ -10,7 +10,7 @@ import bindControllers from './controller';
 import bindAuthMiddleware from './middleware/auth';
 import bindRequestId from './middleware/requestId';
 import bindSSRMiddleware from './middleware/ssr';
-import logger from './service/logger';
+import logger from './utils/logger';
 
 dotenv.config({
   path: isProd

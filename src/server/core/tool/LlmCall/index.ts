@@ -1,4 +1,4 @@
-import { tool } from '@/server/decorator/config';
+import { tool } from '@/server/decorator/agenttool';
 import { OpenAI } from '@/server/service/openai';
 import { InjectTokens, ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
@@ -10,11 +10,13 @@ import type {
 } from 'openai/resources/chat/completions';
 import { inject } from 'tsyringe';
 import { Tool } from '..';
+import type { Logger } from '@/server/utils/logger';
 
 @tool(ToolIds.LLM_CALL)
 export default class LlmCallTool extends Tool {
-  id!: string;
-  config!: ToolConfig;
+  readonly id!: string;
+  readonly config!: ToolConfig;
+  protected readonly logger!: Logger;
 
   constructor(@inject(InjectTokens.OPENAI) private readonly openai: OpenAI) {
     super();

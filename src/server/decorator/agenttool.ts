@@ -4,7 +4,7 @@ import { isArray, mergeWith } from 'lodash-es';
 import { container, injectable, Lifecycle } from 'tsyringe';
 import { Agent } from '../core/agent';
 import { Tool } from '../core/tool';
-import logger from '../service/logger';
+import logger from '../utils/logger';
 import chalk from 'chalk';
 
 const metaDataKey = Symbol('config');
@@ -37,7 +37,7 @@ export const registerAgent = async (
   Clz: new (...params: any[]) => Agent,
   config: AgentConfig,
 ) => {
-  const { token } = Reflect.getMetadata(metaDataKey, Clz);
+  const { token, type } = Reflect.getMetadata(metaDataKey, Clz);
 
   container.register<Agent>(token, Clz, {
     lifecycle: Lifecycle.Singleton,
@@ -54,6 +54,8 @@ export const registerAgent = async (
 
       Reflect.set(instance, 'config', merged);
       Reflect.set(instance, 'id', token);
+      Reflect.set(instance, 'type', type);
+      Reflect.set(instance, 'logger', logger.child({ source: token }));
 
       // Inject tools
       if (instance && 'tools' in instance) {
@@ -78,7 +80,7 @@ export const registerTool = async (
   Clz: new (...params: any[]) => Tool,
   config: ToolConfig,
 ) => {
-  const { token } = Reflect.getMetadata(metaDataKey, Clz);
+  const { token, type } = Reflect.getMetadata(metaDataKey, Clz);
 
   container.register<Tool>(token, Clz, {
     lifecycle: Lifecycle.Singleton,
@@ -95,6 +97,8 @@ export const registerTool = async (
 
       Reflect.set(instance, 'config', merged);
       Reflect.set(instance, 'id', token);
+      Reflect.set(instance, 'type', type);
+      Reflect.set(instance, 'logger', logger.child({ source: token }));
     },
     { frequency: 'Once' },
   );

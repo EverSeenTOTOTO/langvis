@@ -1,3 +1,7 @@
 import { singleton } from 'tsyringe';
 
-export const service = singleton;
+export function service(): ClassDecorator {
+  return function serviceDecorator(target: any) {
+    singleton()(target);
+  };
+}

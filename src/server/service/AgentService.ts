@@ -3,11 +3,11 @@ import { globby } from 'globby';
 import path from 'path';
 import { container, inject } from 'tsyringe';
 import { AgentConstructor } from '../core/agent';
-import { registerAgent } from '../decorator/config';
+import { registerAgent } from '../decorator/agenttool';
 import { service } from '../decorator/service';
 import { ToolService } from './ToolService';
 import { isProd } from '../utils';
-import Logger from './logger';
+import Logger from '../utils/logger';
 
 @service()
 export class AgentService {

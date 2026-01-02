@@ -2,6 +2,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ReActAgent from '@/server/core/agent/ReAct';
 import { Role, Message } from '@/shared/entities/Message';
 import { ToolIds } from '@/shared/constants';
+import logger from '@/server/utils/logger';
+
+// Mock logger
+vi.mock('@/server/utils/logger', () => {
+  const mockLogger = {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    child: vi.fn(),
+  };
+  mockLogger.child.mockReturnValue(mockLogger);
+  return {
+    default: mockLogger,
+  };
+});
 
 // Mock LlmCallTool
 const mockLlmCall = {
@@ -47,6 +63,8 @@ describe('ReActAgent', () => {
     vi.clearAllMocks();
     // Create ReActAgent instance with required dependencies
     reactAgent = new ReActAgent();
+    // Set the logger
+    (reactAgent as any).logger = logger;
     // Manually set the tools property for testing with config structure
     const mockToolWithConfig = Object.create(mockTestTool);
     mockToolWithConfig.config = {

@@ -1,10 +1,11 @@
-import { tool } from '@/server/decorator/config';
+import { tool } from '@/server/decorator/agenttool';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
 import { Tool } from '..';
+import type { Logger } from '@/server/utils/logger';
 
 // Extend dayjs with plugins
 dayjs.extend(utc);
@@ -17,8 +18,9 @@ export type DateTimeInput = {
 
 @tool(ToolIds.DATE_TIME)
 export default class DateTimeTool extends Tool {
-  id!: string;
-  config!: ToolConfig;
+  readonly id!: string;
+  readonly config!: ToolConfig;
+  protected readonly logger!: Logger;
 
   async call(input: Record<string, any>): Promise<string> {
     const timezone = input?.timezone;

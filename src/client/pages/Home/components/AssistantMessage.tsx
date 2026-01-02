@@ -14,14 +14,14 @@ const renderMessage = (msg: Message) => {
   const conversationStore = useStore('conversation');
   const currentConversation = conversationStore.currentConversation;
 
-  const agent = currentConversation?.config?.agent || AgentIds.CHAT_AGENT;
+  const agent = currentConversation?.config?.agent || AgentIds.CHAT;
 
   switch (agent) {
-    case AgentIds.GIRLFRIEND_AGENT:
+    case AgentIds.GIRLFRIEND:
       return <GirlFriendAgentMessage msg={msg} />;
-    case AgentIds.REACT_AGENT:
+    case AgentIds.REACT:
       return <ReActAgentMessage msg={msg} />;
-    case AgentIds.CHAT_AGENT:
+    case AgentIds.CHAT:
     default:
       return <MarkdownRender>{msg.content}</MarkdownRender>;
   }

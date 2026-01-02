@@ -1,16 +1,15 @@
 import { Express } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { container } from 'tsyringe';
+import { v4 as uuidv4 } from 'uuid';
 import { AuthService } from '../service/AuthService';
-import { InjectTokens } from '@/shared/constants';
-import type { Logger } from '../service/logger';
+import Logger from '../utils/logger';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       id?: string;
-      log: Logger;
+      log: typeof Logger;
     }
   }
 }
@@ -36,9 +35,7 @@ export default async (app: Express) => {
       loggerMeta.sessionId = sessionId;
     }
 
-    const logger = container.resolve<Logger>(InjectTokens.LOGGER);
-
-    req.log = logger.child(loggerMeta);
+    req.log = Logger.child(loggerMeta);
     res.setHeader('X-Request-Id', id);
     next();
   });

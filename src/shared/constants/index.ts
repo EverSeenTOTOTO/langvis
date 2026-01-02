@@ -6,14 +6,14 @@ export enum ToolIds {
 }
 
 export enum AgentIds {
-  CHAT_AGENT = 'chat_agent',
-  REACT_AGENT = 'react_agent',
-  GIRLFRIEND_AGENT = 'girlfriend_agent',
+  DOCUMENT_CONCLUDE = 'document_conclude_agent',
+  CHAT = 'chat_agent',
+  REACT = 'react_agent',
+  GIRLFRIEND = 'girlfriend_agent',
 }
 
 export const InjectTokens = {
   PG: Symbol('postgres'),
   REDIS: Symbol('redis'),
   OPENAI: Symbol('openai'),
-  LOGGER: Symbol('logger'),
 };

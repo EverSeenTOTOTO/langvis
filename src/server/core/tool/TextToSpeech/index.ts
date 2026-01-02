@@ -1,10 +1,10 @@
-import { tool } from '@/server/decorator/config';
-import Logger from '@/server/service/logger';
+import { tool } from '@/server/decorator/agenttool';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { Tool } from '..';
+import type { Logger } from '@/server/utils/logger';
 
 export interface TextToSpeechInput {
   text: string;
@@ -21,10 +21,9 @@ export interface TextToSpeechOutput {
 
 @tool(ToolIds.TEXT_TO_SPEECH)
 export default class TextToSpeechTool extends Tool {
-  id!: string;
-  config!: ToolConfig;
-
-  private readonly logger = Logger.child({ source: ToolIds.TEXT_TO_SPEECH });
+  readonly id!: string;
+  readonly config!: ToolConfig;
+  protected readonly logger!: Logger;
 
   private readonly ttsDir: string;
 
