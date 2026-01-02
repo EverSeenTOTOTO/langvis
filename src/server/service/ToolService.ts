@@ -1,9 +1,9 @@
 import { globby } from 'globby';
 import { container } from 'tsyringe';
 import { service } from '../decorator/service';
-import Logger from './logger';
+import Logger from '../utils/logger';
 import path from 'path';
-import { registerTool } from '../decorator/config';
+import { registerTool } from '../decorator/agenttool';
 import { ToolConfig } from '@/shared/types';
 import { Tool, ToolConstructor } from '../core/tool';
 import { isProd } from '../utils';
@@ -84,8 +84,10 @@ export class ToolService {
         }
       } catch (error) {
         this.logger.error(
-          `Failed to process tool module ${absolutePath}:`,
-          error,
+          `Failed to load tool module ${absolutePath}:`,
+          error instanceof Error
+            ? { message: error.message, stack: error.stack }
+            : error,
         );
       }
     }

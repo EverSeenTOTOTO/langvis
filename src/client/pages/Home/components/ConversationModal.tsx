@@ -228,7 +228,7 @@ const ConversationModal = ({
             <Form.Item
               name={['config', 'agent']}
               label={settingStore.tr('Agent')}
-              initialValue={AgentIds.CHAT_AGENT}
+              initialValue={AgentIds.CHAT}
             >
               <Select
                 disabled={mode === 'edit'}

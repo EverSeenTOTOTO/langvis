@@ -5,19 +5,26 @@ import {
   tool,
   registerAgent,
   registerTool,
-} from '@/server/decorator/config';
+} from '@/server/decorator/agenttool';
 import { AgentConfig, ToolConfig } from '@/shared/types';
 import { Agent } from '@/server/core/agent';
 import { Tool } from '@/server/core/tool';
 import { AgentIds, ToolIds } from '@/shared/constants';
+import winston from 'winston';
 
-vi.mock('@/server/service/logger', () => ({
-  default: {
+vi.mock('@/server/utils/logger', () => {
+  const mockLogger = {
     info: vi.fn(),
     error: vi.fn(),
     warn: vi.fn(),
-  },
-}));
+    debug: vi.fn(),
+    child: vi.fn(),
+  };
+  mockLogger.child.mockReturnValue(mockLogger);
+  return {
+    default: mockLogger,
+  };
+});
 
 describe('Config Decorators', () => {
   beforeEach(() => {
@@ -27,13 +34,14 @@ describe('Config Decorators', () => {
 
   describe('agent decorator', () => {
     it('should add metadata and make class injectable', () => {
-      @agent(AgentIds.CHAT_AGENT)
+      @agent(AgentIds.CHAT)
       class TestAgent extends Agent {
-        id = AgentIds.CHAT_AGENT;
+        id = AgentIds.CHAT;
         config: AgentConfig = {
           name: { en: 'Test Agent' },
           description: { en: 'Test description' },
         };
+        logger = winston.createLogger();
       }
 
       // Check if the class can be resolved (injectable)
@@ -50,6 +58,7 @@ describe('Config Decorators', () => {
           name: { en: 'Test Tool' },
           description: { en: 'Test description' },
         };
+        logger = winston.createLogger();
       }
 
       // Check if the class can be resolved (injectable)
@@ -59,13 +68,14 @@ describe('Config Decorators', () => {
 
   describe('registerAgent', () => {
     it('should register agent with basic config', async () => {
-      @agent(AgentIds.CHAT_AGENT)
+      @agent(AgentIds.CHAT)
       class TestAgent extends Agent {
-        id = AgentIds.CHAT_AGENT;
+        id = AgentIds.CHAT;
         config: AgentConfig = {
           name: { en: 'Test Agent' },
           description: { en: 'Test description' },
         };
+        logger = winston.createLogger();
       }
 
       const config: AgentConfig = {
@@ -76,13 +86,13 @@ describe('Config Decorators', () => {
 
       const token = await registerAgent(TestAgent, config);
 
-      expect(token).toBe(AgentIds.CHAT_AGENT);
+      expect(token).toBe(AgentIds.CHAT);
 
       // Should be able to resolve the agent
-      const instance = container.resolve<Agent>(AgentIds.CHAT_AGENT);
+      const instance = container.resolve<Agent>(AgentIds.CHAT);
       expect(instance).toBeInstanceOf(TestAgent);
       expect(instance.config).toEqual(config);
-      expect(instance.id).toBe(AgentIds.CHAT_AGENT);
+      expect(instance.id).toBe(AgentIds.CHAT);
     });
 
     it('should register agent with tools', async () => {
@@ -93,15 +103,17 @@ describe('Config Decorators', () => {
           name: { en: 'Test Tool' },
           description: { en: 'Test description' },
         };
+        logger = winston.createLogger();
       }
 
-      @agent(AgentIds.CHAT_AGENT)
+      @agent(AgentIds.CHAT)
       class TestAgent extends Agent {
-        id = AgentIds.CHAT_AGENT;
+        id = AgentIds.CHAT;
         config: AgentConfig = {
           name: { en: 'Test Agent' },
           description: { en: 'Test description' },
         };
+        logger = winston.createLogger();
         tools: Tool[] = [];
       }
 
@@ -121,34 +133,34 @@ describe('Config Decorators', () => {
 
       const token = await registerAgent(TestAgent, agentConfig);
 
-      expect(token).toBe(AgentIds.CHAT_AGENT);
+      expect(token).toBe(AgentIds.CHAT);
 
       // Check if tools are injected
-      const instance = container.resolve<Agent>(
-        AgentIds.CHAT_AGENT,
-      ) as TestAgent;
+      const instance = container.resolve<Agent>(AgentIds.CHAT) as TestAgent;
       expect(instance.tools).toHaveLength(1);
       expect(instance.tools[0]).toBeInstanceOf(TestTool);
     });
 
     it('should handle config extension', async () => {
-      @agent(AgentIds.REACT_AGENT)
+      @agent(AgentIds.REACT)
       class BaseAgent extends Agent {
-        id = AgentIds.REACT_AGENT;
+        id = AgentIds.REACT;
         config: AgentConfig = {
           name: { en: 'Base Agent' },
           description: { en: 'Base description' },
           enabled: true,
         };
+        logger = winston.createLogger();
       }
 
-      @agent(AgentIds.CHAT_AGENT)
+      @agent(AgentIds.CHAT)
       class ExtendedAgent extends Agent {
-        id = AgentIds.CHAT_AGENT;
+        id = AgentIds.CHAT;
         config: AgentConfig = {
           name: { en: 'Extended Agent' },
           description: { en: 'Extended description' },
         };
+        logger = winston.createLogger();
       }
 
       // Register base agent first
@@ -161,16 +173,16 @@ describe('Config Decorators', () => {
 
       // Register extended agent that extends base
       const extendedConfig: AgentConfig = {
-        extends: AgentIds.REACT_AGENT,
+        extends: AgentIds.REACT,
         name: { en: 'Extended Agent' },
         description: { en: 'Extended description' },
       };
 
       const token = await registerAgent(ExtendedAgent, extendedConfig);
 
-      expect(token).toBe(AgentIds.CHAT_AGENT);
+      expect(token).toBe(AgentIds.CHAT);
 
-      const instance = container.resolve<Agent>(AgentIds.CHAT_AGENT);
+      const instance = container.resolve<Agent>(AgentIds.CHAT);
       expect(instance.config.enabled).toBe(true); // Inherited from base
       expect(instance.config.name.en).toBe('Extended Agent'); // Overridden
     });
@@ -185,6 +197,7 @@ describe('Config Decorators', () => {
           name: { en: 'Test Tool' },
           description: { en: 'Test description' },
         };
+        logger = winston.createLogger();
       }
 
       const config: ToolConfig = {
@@ -213,6 +226,7 @@ describe('Config Decorators', () => {
           description: { en: 'Base description' },
           enabled: true,
         };
+        logger = winston.createLogger();
       }
 
       @tool(ToolIds.DATE_TIME)
@@ -222,6 +236,7 @@ describe('Config Decorators', () => {
           name: { en: 'Extended Tool' },
           description: { en: 'Extended description' },
         };
+        logger = winston.createLogger();
       }
 
       // Register base tool first

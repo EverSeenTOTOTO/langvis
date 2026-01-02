@@ -1,8 +1,8 @@
-import { AgentIds, ToolIds } from '@/shared/constants';
+import { AgentIds } from '@/shared/constants';
 import { AgentConfig } from '@/shared/types';
 
 export const config: AgentConfig = {
-  extends: AgentIds.CHAT_AGENT,
+  extends: AgentIds.CHAT,
   name: {
     en: 'GirlFriend Agent',
     zh: '缓解性压抑智能体',
@@ -11,7 +11,6 @@ export const config: AgentConfig = {
     en: 'A conversational agent that engages in natural dialogue with users, maintaining conversation history and context for coherent responses.',
     zh: '与用户进行自然对话的会话智能体，维护对话历史和上下文以提供连贯的回应。',
   },
-  tools: [ToolIds.TEXT_TO_SPEECH],
   config: {
     tts: {
       type: 'group',

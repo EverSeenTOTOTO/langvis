@@ -1,7 +1,7 @@
 import { container, singleton } from 'tsyringe';
 import type { Express } from 'express';
 import bindApi from './api';
-import logger from '../service/logger';
+import logger from '../utils/logger';
 import chalk from 'chalk';
 
 const metaDataKey = Symbol('controller');

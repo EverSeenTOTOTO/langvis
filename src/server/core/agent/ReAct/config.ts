@@ -2,7 +2,7 @@ import { AgentIds, ToolIds } from '@/shared/constants';
 import { AgentConfig } from '@/shared/types';
 
 export const config: AgentConfig = {
-  extends: AgentIds.CHAT_AGENT,
+  extends: AgentIds.CHAT,
   name: {
     en: 'ReAct Agent',
     zh: 'ReAct 智能体',

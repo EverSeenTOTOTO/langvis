@@ -1,5 +1,4 @@
-import { agent } from '@/server/decorator/config';
-import Logger from '@/server/service/logger';
+import { agent } from '@/server/decorator/agenttool';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { Message, Role } from '@/shared/entities/Message';
 import { AgentConfig, StreamChunk } from '@/shared/types';
@@ -9,6 +8,7 @@ import { container } from 'tsyringe';
 import { Agent } from '..';
 import { Tool } from '../../tool';
 import generatePrompt from './prompt';
+import type { Logger } from '@/server/utils/logger';
 
 export type ReActThought = {
   thought: string;
@@ -35,12 +35,11 @@ export type ReActStep =
   | ReActObservation
   | ReActFinalAnswer;
 
-@agent(AgentIds.REACT_AGENT)
+@agent(AgentIds.REACT)
 export default class ReActAgent extends Agent {
-  id!: string;
-  config!: AgentConfig;
-
-  private readonly logger = Logger.child({ source: AgentIds.REACT_AGENT });
+  readonly id!: string;
+  readonly config!: AgentConfig;
+  protected readonly logger!: Logger;
 
   private readonly maxIterations = 5;
 

@@ -55,14 +55,14 @@ describe('ConversationService', () => {
     const mockConversation = {
       id: '1',
       name: 'Test Conversation',
-      config: { agent: AgentIds.CHAT_AGENT },
+      config: { agent: AgentIds.CHAT },
       createdAt: new Date(),
       messages: [],
     };
 
     (pg.getRepository as any).mockReturnValue({
       create: vi.fn().mockImplementation(entity => {
-        expect(entity.config).toEqual({ agent: AgentIds.CHAT_AGENT });
+        expect(entity.config).toEqual({ agent: AgentIds.CHAT });
         return mockConversation;
       }),
       save: vi.fn().mockResolvedValue(mockConversation),
@@ -77,7 +77,7 @@ describe('ConversationService', () => {
     const mockConversation = {
       id: '1',
       name: 'Test Conversation',
-      config: { model: 'gpt-4', temperature: 0.7, agent: AgentIds.CHAT_AGENT },
+      config: { model: 'gpt-4', temperature: 0.7, agent: AgentIds.CHAT },
       createdAt: new Date(),
       messages: [],
     };
@@ -87,7 +87,7 @@ describe('ConversationService', () => {
         expect(entity.config).toEqual({
           model: 'gpt-4',
           temperature: 0.7,
-          agent: AgentIds.CHAT_AGENT,
+          agent: AgentIds.CHAT,
         });
         return mockConversation;
       }),

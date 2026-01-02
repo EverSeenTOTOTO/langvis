@@ -1,5 +1,4 @@
-import { agent } from '@/server/decorator/config';
-import Logger from '@/server/service/logger';
+import { agent } from '@/server/decorator/agenttool';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { Message } from '@/shared/entities/Message';
 import { AgentConfig, StreamChunk } from '@/shared/types';
@@ -9,13 +8,13 @@ import { Agent } from '..';
 import type { Tool } from '../../tool';
 import type TextToSpeechTool from '../../tool/TextToSpeech';
 import generatePrompt from './prompt';
+import type { Logger } from '@/server/utils/logger';
 
-@agent(AgentIds.GIRLFRIEND_AGENT)
+@agent(AgentIds.GIRLFRIEND)
 export default class GirlFriendAgent extends Agent {
-  id!: string;
-  config!: AgentConfig;
-
-  private readonly logger = Logger.child({ source: AgentIds.GIRLFRIEND_AGENT });
+  readonly id!: string;
+  readonly config!: AgentConfig;
+  protected readonly logger!: Logger;
 
   async getSystemPrompt(): Promise<string> {
     return generatePrompt();

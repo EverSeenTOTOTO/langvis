@@ -3,7 +3,7 @@ import type { Express } from 'express';
 import setupServices from '../service';
 import { globby } from 'globby';
 import { isProd } from '../utils';
-import logger from '../service/logger';
+import logger from '../utils/logger';
 import chalk from 'chalk';
 import path from 'path';
 

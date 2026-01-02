@@ -1,17 +1,35 @@
-import { ToolIds } from '@/shared/constants';
 import WebFetchTool from '@/server/core/tool/WebFetch';
+import logger from '@/server/utils/logger';
+import { ToolIds } from '@/shared/constants';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/server/utils/logger', () => {
+  const mockLogger = {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    child: vi.fn(),
+  };
+  mockLogger.child.mockReturnValue(mockLogger);
+  return {
+    default: mockLogger,
+  };
+});
 
 describe('WebFetchTool', () => {
   let tool: WebFetchTool;
 
   beforeEach(() => {
     tool = new WebFetchTool();
+    // @ts-expect-error readonly
     tool.id = ToolIds.WEB_FETCH;
+    // @ts-expect-error readonly
     tool.config = {
       name: { en: 'Web Fetch Tool' },
       description: { en: 'Test tool' },
     };
+    (tool as any).logger = logger;
   });
 
   it('should reject empty URL', async () => {

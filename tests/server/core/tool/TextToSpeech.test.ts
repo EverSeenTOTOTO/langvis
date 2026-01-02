@@ -1,6 +1,21 @@
 import TextToSpeechTool from '@/server/core/tool/TextToSpeech';
 import { promises as fs } from 'fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import logger from '@/server/utils/logger';
+
+vi.mock('@/server/utils/logger', () => {
+  const mockLogger = {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    child: vi.fn(),
+  };
+  mockLogger.child.mockReturnValue(mockLogger);
+  return {
+    default: mockLogger,
+  };
+});
 
 vi.mock('fs', () => ({
   promises: {
@@ -19,10 +34,12 @@ describe('TextToSpeechTool', () => {
 
   beforeEach(() => {
     tool = new TextToSpeechTool();
+    // @ts-expect-error readonly
     tool.config = {
       name: { en: 'TextToSpeech Tool' },
       description: { en: 'Converts text to speech' },
     };
+    (tool as any).logger = logger;
 
     process.env = {
       ...originalEnv,

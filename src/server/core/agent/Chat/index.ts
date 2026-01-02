@@ -1,21 +1,20 @@
-import { agent } from '@/server/decorator/config';
-import Logger from '@/server/service/logger';
+import { agent } from '@/server/decorator/agenttool';
+import type { Logger } from '@/server/utils/logger';
+import { AgentIds, ToolIds } from '@/shared/constants';
 import { Message } from '@/shared/entities/Message';
 import { AgentConfig, StreamChunk } from '@/shared/types';
 import { container } from 'tsyringe';
 import { Agent } from '..';
 import type { Tool } from '../../tool';
-import { AgentIds, ToolIds } from '@/shared/constants';
 
-@agent(AgentIds.CHAT_AGENT)
+@agent(AgentIds.CHAT)
 export default class ChatAgent extends Agent {
-  id!: string;
-  config!: AgentConfig;
-
-  private readonly logger = Logger.child({ source: AgentIds.CHAT_AGENT });
+  readonly id!: string;
+  readonly config!: AgentConfig;
+  protected readonly logger!: Logger;
 
   async getSystemPrompt(): Promise<string> {
-    return `You are a helpful AI assistant. You engage in natural conversations with users, providing thoughtful and accurate responses. You maintain context from previous messages in the conversation to provide coherent and relevant answers.`;
+    return `You are a helpful AI assistant. You engage in natural conversations with users, providing thoughtful and accurate responses. `;
   }
 
   async streamCall(

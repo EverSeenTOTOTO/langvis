@@ -11,7 +11,7 @@ import { service } from '../decorator/service';
 import pg from './pg';
 import { SSEService } from './SSEService';
 import { AgentIds } from '@/shared/constants';
-import Logger from './logger';
+import Logger from '../utils/logger';
 import PQueue from 'p-queue';
 
 @service()
@@ -29,7 +29,7 @@ export class ConversationService {
   ): Promise<Conversation> {
     const finalConfig = config ?? {};
     if (!finalConfig.agent) {
-      finalConfig.agent = AgentIds.CHAT_AGENT;
+      finalConfig.agent = AgentIds.CHAT;
     }
 
     const conversationRepository = pg.getRepository(ConversationEntity);

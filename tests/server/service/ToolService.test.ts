@@ -2,10 +2,10 @@ import { container } from 'tsyringe';
 import { ToolService } from '@/server/service/ToolService';
 import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { globby } from 'globby';
-import * as configModule from '@/server/decorator/config';
+import * as configModule from '@/server/decorator/agenttool';
 
 vi.mock('globby');
-vi.mock('@/server/decorator/config', async importOriginal => {
+vi.mock('@/server/decorator/agenttool', async importOriginal => {
   const actual = await importOriginal<typeof configModule>();
   return {
     ...actual,
@@ -89,9 +89,8 @@ describe('ToolService', () => {
       };
 
       toolService = container.resolve(ToolService);
-      vi.spyOn(toolService as any, 'tools', 'get').mockReturnValue([
-        'test-tool',
-      ]);
+      // Directly set the private tools property after initialization
+      (toolService as any).tools = ['test-tool'];
       container.register('test-tool', { useValue: mockTool });
 
       const result = await toolService.callTool('test-tool', { input: 'data' });

@@ -1,10 +1,14 @@
+import type { Logger } from '@/server/utils/logger';
 import type { Message } from '@/shared/entities/Message';
-import { StreamChunk, AgentConfig } from '@/shared/types';
+import { AgentConfig, StreamChunk } from '@/shared/types';
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 export abstract class Agent {
-  abstract id: string;
-  abstract config: AgentConfig;
+  abstract readonly id: string;
+  abstract readonly config: AgentConfig;
+  readonly type = 'agent';
+
+  protected abstract readonly logger: Logger;
 
   async getSystemPrompt(): Promise<string> {
     return '';
