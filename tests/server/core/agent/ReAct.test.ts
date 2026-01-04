@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ReActAgent from '@/server/core/agent/ReAct';
-import { Role, Message } from '@/shared/entities/Message';
-import { ToolIds } from '@/shared/constants';
 import logger from '@/server/utils/logger';
+import { ToolIds } from '@/shared/constants';
+import { Message, Role } from '@/shared/entities/Message';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock logger
 vi.mock('@/server/utils/logger', () => {
@@ -344,6 +344,7 @@ describe('ReActAgent', () => {
       const mockWriter = {
         write: vi.fn(),
         close: vi.fn(),
+        abort: vi.fn(),
       };
 
       const messages: Message[] = [
@@ -415,6 +416,7 @@ describe('ReActAgent', () => {
       const mockWriter = {
         write: vi.fn(),
         close: vi.fn(),
+        abort: vi.fn(),
       };
 
       const messages: Message[] = [
@@ -501,6 +503,7 @@ describe('ReActAgent', () => {
       const mockWriter = {
         write: vi.fn(),
         close: vi.fn(),
+        abort: vi.fn(),
       };
 
       const messages: Message[] = [
@@ -585,6 +588,7 @@ describe('ReActAgent', () => {
       const mockWriter = {
         write: vi.fn(),
         close: vi.fn(),
+        abort: vi.fn(),
       };
 
       const messages: Message[] = [
@@ -655,7 +659,7 @@ describe('ReActAgent', () => {
 
       await reactAgent.streamCall(messages, mockWriter as any);
 
-      expect(mockLlmCall.call).toHaveBeenCalledTimes(5);
+      expect(mockLlmCall.call).toHaveBeenCalledTimes(reactAgent.maxIterations);
       expect(mockWriter.abort).toHaveBeenCalledWith(
         expect.objectContaining({
           message: 'Max iterations reached',
@@ -686,6 +690,7 @@ describe('ReActAgent', () => {
       const mockWriter = {
         write: vi.fn(),
         close: vi.fn(),
+        abort: vi.fn(),
       };
 
       const messages: Message[] = [
@@ -701,8 +706,11 @@ describe('ReActAgent', () => {
 
       await reactAgent.streamCall(messages, mockWriter as any);
 
-      expect(mockWriter.write).toHaveBeenCalledWith('No response from model');
-      expect(mockWriter.close).toHaveBeenCalled();
+      expect(mockWriter.abort).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'No response from model',
+        }),
+      );
     });
 
     it('should handle unparseable response', async () => {
@@ -747,6 +755,7 @@ describe('ReActAgent', () => {
       const mockWriter = {
         write: vi.fn(),
         close: vi.fn(),
+        abort: vi.fn(),
       };
 
       const messages: Message[] = [
@@ -820,6 +829,7 @@ describe('ReActAgent', () => {
       const mockWriter = {
         write: vi.fn(),
         close: vi.fn(),
+        abort: vi.fn(),
       };
 
       const messages: Message[] = [
@@ -898,6 +908,7 @@ describe('ReActAgent', () => {
       const mockWriter = {
         write: vi.fn(),
         close: vi.fn(),
+        abort: vi.fn(),
       };
 
       const messages: Message[] = [
@@ -972,6 +983,7 @@ describe('ReActAgent', () => {
       const mockWriter = {
         write: vi.fn(),
         close: vi.fn(),
+        abort: vi.fn(),
       };
 
       const messages: Message[] = [

@@ -41,7 +41,7 @@ export default class ReActAgent extends Agent {
   readonly config!: AgentConfig;
   protected readonly logger!: Logger;
 
-  private readonly maxIterations = 5;
+  readonly maxIterations = 10;
 
   public tools: Tool[] = [];
 
@@ -91,8 +91,7 @@ export default class ReActAgent extends Agent {
       const content = response.choices[0]?.message?.content;
 
       if (!content) {
-        await writer.write('No response from model');
-        await writer.close();
+        await writer.abort(new Error('No response from model'));
         return;
       }
 

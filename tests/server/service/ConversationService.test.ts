@@ -614,12 +614,19 @@ describe('ConversationService', () => {
       const mockWriter = {
         abort: vi.fn().mockResolvedValue(undefined),
       } as any;
+      const mockQueue = {
+        clear: vi.fn(),
+      } as any;
 
-      (conversationService as any).activeWriters.set(messageId, mockWriter);
+      (conversationService as any).activeWriters.set(messageId, {
+        writer: mockWriter,
+        queue: mockQueue,
+      });
 
       const result = await conversationService.cancelStream(messageId);
 
       expect(result).toBe(true);
+      expect(mockQueue.clear).toHaveBeenCalled();
       expect(mockWriter.abort).toHaveBeenCalledWith(
         new Error('Cancelled by user'),
       );
@@ -638,12 +645,19 @@ describe('ConversationService', () => {
       const mockWriter = {
         abort: vi.fn().mockRejectedValue(new Error('Abort failed')),
       } as any;
+      const mockQueue = {
+        clear: vi.fn(),
+      } as any;
 
-      (conversationService as any).activeWriters.set(messageId, mockWriter);
+      (conversationService as any).activeWriters.set(messageId, {
+        writer: mockWriter,
+        queue: mockQueue,
+      });
 
       const result = await conversationService.cancelStream(messageId);
 
       expect(result).toBe(false);
+      expect(mockQueue.clear).toHaveBeenCalled();
       expect(mockWriter.abort).toHaveBeenCalledWith(
         new Error('Cancelled by user'),
       );
@@ -671,9 +685,9 @@ describe('ConversationService', () => {
       expect((conversationService as any).activeWriters.has(message.id)).toBe(
         true,
       );
-      expect((conversationService as any).activeWriters.get(message.id)).toBe(
-        writer,
-      );
+      const active = (conversationService as any).activeWriters.get(message.id);
+      expect(active.writer).toBe(writer);
+      expect(active.queue).toBeDefined();
     });
 
     it('should remove writer from tracking when closed', async () => {
