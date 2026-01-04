@@ -17,8 +17,10 @@ import { SSEService } from './SSEService';
 @service()
 export class ConversationService {
   private readonly logger = Logger.child({ source: 'ConversationService' });
-  private activeWriters: Map<string, WritableStreamDefaultWriter<StreamChunk>> =
-    new Map();
+  private activeWriters: Map<
+    string,
+    { writer: WritableStreamDefaultWriter<StreamChunk>; queue: PQueue }
+  > = new Map();
 
   constructor(
     @inject(SSEService)
@@ -221,12 +223,13 @@ export class ConversationService {
   }
 
   async cancelStream(messageId: string, reason?: string): Promise<boolean> {
-    const writer = this.activeWriters.get(messageId);
+    const active = this.activeWriters.get(messageId);
 
-    if (!writer) return false;
+    if (!active) return false;
 
     try {
-      await writer.abort(new Error(reason ?? 'Cancelled by user'));
+      active.queue.clear();
+      await active.writer.abort(new Error(reason ?? 'Cancelled by user'));
       return true;
     } catch (error) {
       this.logger.error(
@@ -290,6 +293,12 @@ export class ConversationService {
         enqueueDelta(data.content ?? '');
       },
       close: async () => {
+        this.logger.info(
+          `Upstream stream closed for conversation ${conversationId}`,
+        );
+
+        await queue.onIdle();
+
         this.activeWriters.delete(message.id);
 
         try {
@@ -309,15 +318,13 @@ export class ConversationService {
           }ms`,
         );
 
-        await queue.onIdle();
-
         this.sseService.sendToConversation(conversationId, {
           type: 'completion_done',
         });
       },
       abort: async (reason: unknown) => {
-        this.activeWriters.delete(message.id);
         queue.clear();
+        this.activeWriters.delete(message.id);
 
         this.logger.error(
           `Streaming aborted for conversation ${conversationId}:`,
@@ -346,7 +353,7 @@ export class ConversationService {
     this.logger.info(`Created writable stream for message ${message.id}`);
 
     const writer = writableStream.getWriter();
-    this.activeWriters.set(message.id, writer);
+    this.activeWriters.set(message.id, { writer, queue });
 
     return writer;
   }
