@@ -1,5 +1,6 @@
 import { agent } from '@/server/decorator/agenttool';
 import type { Logger } from '@/server/utils/logger';
+import { formatToolsToMarkdown } from '@/server/utils/formatTools';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { Message, Role } from '@/shared/entities/Message';
 import { AgentConfig, StreamChunk } from '@/shared/types';
@@ -10,11 +11,8 @@ import { Agent } from '..';
 import { Tool } from '../../tool';
 import generatePrompt from './prompt';
 
-export type ReActThought = {
-  thought: string;
-};
-
 export type ReActAction = {
+  thought?: string;
   action: {
     tool: string;
     input: Record<string, any>;
@@ -26,14 +24,11 @@ export type ReActObservation = {
 };
 
 export type ReActFinalAnswer = {
+  thought?: string;
   final_answer: string;
 };
 
-export type ReActStep =
-  | ReActThought
-  | ReActAction
-  | ReActObservation
-  | ReActFinalAnswer;
+export type ReActStep = ReActAction | ReActObservation | ReActFinalAnswer;
 
 @agent(AgentIds.REACT)
 export default class ReActAgent extends Agent {
@@ -45,17 +40,10 @@ export default class ReActAgent extends Agent {
 
   public tools: Tool[] = [];
 
-  // Will be populated dynamically by the container
-
   async getSystemPrompt(): Promise<string> {
     return generatePrompt({
       background: '',
-      tools:
-        this.tools
-          ?.map(tool => {
-            return `+ ${tool.id}: ${tool.config?.description?.en}`;
-          })
-          .join('\n') || 'No tools available.',
+      tools: formatToolsToMarkdown(this.tools),
     });
   }
 
@@ -121,7 +109,7 @@ export default class ReActAgent extends Agent {
       this.logger.info('ReAct parsed response: ', parsed);
 
       if ('final_answer' in parsed) {
-        await updateStep({ final_answer: parsed.final_answer! });
+        await updateStep(parsed as ReActFinalAnswer);
         await writer.write(parsed.final_answer!);
         await writer.close();
         return;
@@ -130,7 +118,7 @@ export default class ReActAgent extends Agent {
       if ('action' in parsed) {
         const { tool, input } = parsed.action!;
 
-        updateStep({ action: parsed.action! });
+        await updateStep(parsed as ReActAction);
 
         try {
           const observation = await this.executeAction(tool, input);
@@ -153,11 +141,6 @@ export default class ReActAgent extends Agent {
         continue;
       }
 
-      if ('thought' in parsed) {
-        await updateStep({ thought: parsed.thought! });
-        continue;
-      }
-
       await updateStep({
         observation: `Unable to parse response: ${content}. Retrying (${i}/${this.maxIterations})...\n`,
       });
@@ -169,14 +152,10 @@ export default class ReActAgent extends Agent {
   private parseResponse(content: string): ReActStep {
     const cleanedContent = content
       .trim()
-      .replace(/^```json\s*/, '') // Remove ```json at the beginning
-      .replace(/\s*```$/, ''); // Remove ``` at the end
+      .replace(/^```json\s*/, '')
+      .replace(/\s*```$/, '');
 
     const parsed = JSON.parse(cleanedContent);
-
-    if (parsed.thought) {
-      return { thought: String(parsed.thought) };
-    }
 
     if (parsed.action) {
       if (
@@ -186,18 +165,24 @@ export default class ReActAgent extends Agent {
         parsed.action.tool.length > 0 &&
         parsed.action.input
       ) {
-        return { action: parsed.action };
+        return {
+          thought: parsed.thought ? String(parsed.thought) : undefined,
+          action: parsed.action,
+        };
       }
 
       throw new Error('Invalid action format: missing or invalid tool/input');
     }
 
     if (parsed.final_answer) {
-      return { final_answer: String(parsed.final_answer) };
+      return {
+        thought: parsed.thought ? String(parsed.thought) : undefined,
+        final_answer: String(parsed.final_answer),
+      };
     }
 
     throw new Error(
-      'Unrecognized JSON structure: missing `thought`, `action`, or `final_answer`',
+      'Unrecognized JSON structure: missing `action` or `final_answer`',
     );
   }
 

@@ -34,13 +34,7 @@ const ReActAgentMessage = ({
                   if ('final_answer' in step) {
                     return {
                       title: 'Final Answer',
-                    };
-                  }
-
-                  if ('thought' in step) {
-                    return {
-                      title: 'Thought',
-                      content: (
+                      content: step.thought ? (
                         <Typography.Paragraph
                           type="secondary"
                           copyable
@@ -51,7 +45,7 @@ const ReActAgentMessage = ({
                         >
                           {step.thought}
                         </Typography.Paragraph>
-                      ),
+                      ) : undefined,
                     };
                   }
 
@@ -59,16 +53,30 @@ const ReActAgentMessage = ({
                     return {
                       title: `Action: ${step.action.tool}`,
                       content: (
-                        <Typography.Paragraph
-                          type="secondary"
-                          copyable
-                          ellipsis={{
-                            rows: 3,
-                            expandable: 'collapsible',
-                          }}
-                        >
-                          {JSON.stringify(step.action.input, null, 2)}
-                        </Typography.Paragraph>
+                        <>
+                          {step.thought && (
+                            <Typography.Paragraph
+                              type="secondary"
+                              italic
+                              ellipsis={{
+                                rows: 2,
+                                expandable: 'collapsible',
+                              }}
+                            >
+                              {step.thought}
+                            </Typography.Paragraph>
+                          )}
+                          <Typography.Paragraph
+                            type="secondary"
+                            copyable
+                            ellipsis={{
+                              rows: 3,
+                              expandable: 'collapsible',
+                            }}
+                          >
+                            {JSON.stringify(step.action.input, null, 2)}
+                          </Typography.Paragraph>
+                        </>
                       ),
                     };
                   }

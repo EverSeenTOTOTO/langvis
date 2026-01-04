@@ -6,8 +6,8 @@ export const config: ToolConfig = {
     zh: '文本转语音工具',
   },
   description: {
-    en: 'Converts text to speech audio file using TTS API. Supports multiple Chinese voices with emotion and speed control.',
-    zh: '使用 TTS API 将文本转换为语音音频文件。支持多种中文音声，可控制情感和语速。',
+    en: 'Converts text to speech audio file using TTS API.',
+    zh: '使用 TTS API 将文本转换为语音音频文件。',
   },
   input: {
     text: {
