@@ -1,12 +1,74 @@
 import { useStore } from '@/client/store';
+import { message } from 'antd';
 import { observer } from 'mobx-react-lite';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { Prism } from 'react-syntax-highlighter';
+import { useCopyToClipboard } from 'react-use';
+import rehypeMathjax from 'rehype-mathjax';
+import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import remarkBreaks from 'remark-breaks';
-import rehypeMathjax from 'rehype-mathjax';
-import { useCallback, useEffect, useRef, useState } from 'react';
 import './index.scss';
+
+const CodeBlock = ({
+  language,
+  code,
+  style,
+  SyntaxHighlighter,
+}: {
+  language: string;
+  code: string;
+  style: any;
+  SyntaxHighlighter: any;
+}) => {
+  const [copied, setCopied] = useState(false);
+  const [, copyToClipboard] = useCopyToClipboard();
+
+  const handleCopy = useCallback(() => {
+    copyToClipboard(code);
+    message.success('Copied');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [code, copyToClipboard]);
+
+  return (
+    <div className="code-block-wrapper">
+      <button
+        className="copy-button"
+        onClick={handleCopy}
+        aria-label="Copy code"
+        title={copied ? 'Copied!' : 'Copy code'}
+      >
+        {copied ? (
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
+          </svg>
+        ) : (
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" />
+            <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" />
+          </svg>
+        )}
+      </button>
+      <SyntaxHighlighter style={style} language={language} PreTag="div">
+        {code}
+      </SyntaxHighlighter>
+    </div>
+  );
+};
 
 const MarkdownRender = observer(({ children }: { children: string }) => {
   const settingStore = useStore('setting');
@@ -14,16 +76,22 @@ const MarkdownRender = observer(({ children }: { children: string }) => {
 
   // Lazy load SyntaxHighlighter to reduce initial bundle size
   const syntaxComponentsRef = useRef<{
-    SyntaxHighlighter: any;
-    oneDark: any;
-    oneLight: any;
+    SyntaxHighlighter: Prism;
+    oneDark: {
+      [key: string]: React.CSSProperties;
+    };
+    oneLight: {
+      [key: string]: React.CSSProperties;
+    };
   } | null>(null);
 
   const loadSyntaxComponents = useCallback(async () => {
     if (import.meta.env.DEV) return;
     if (!syntaxComponentsRef.current) {
       const [SyntaxHighlighter, oneDark, oneLight] = await Promise.all([
-        import('react-syntax-highlighter').then(module => module.Prism),
+        import('react-syntax-highlighter').then(
+          module => module.Prism as unknown as Prism,
+        ),
         import('react-syntax-highlighter/dist/cjs/styles/prism').then(
           module => module.oneDark,
         ),
@@ -67,15 +135,14 @@ const MarkdownRender = observer(({ children }: { children: string }) => {
             if (!inline && match && syntaxComponentsRef.current) {
               const { SyntaxHighlighter, oneDark, oneLight } =
                 syntaxComponentsRef.current;
+              const code = String(children).replace(/\n$/, '');
               return (
-                <SyntaxHighlighter
-                  {...props}
-                  style={settingStore.mode === 'dark' ? oneDark : oneLight}
+                <CodeBlock
                   language={match[1]}
-                  PreTag="div"
-                >
-                  {String(children).replace(/\n$/, '')}
-                </SyntaxHighlighter>
+                  code={code}
+                  style={settingStore.mode === 'dark' ? oneDark : oneLight}
+                  SyntaxHighlighter={SyntaxHighlighter}
+                />
               );
             }
 
