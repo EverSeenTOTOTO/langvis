@@ -4,7 +4,6 @@ import { ToolIds } from '@/shared/constants';
 import { Message, Role } from '@/shared/entities/Message';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock logger
 vi.mock('@/server/utils/logger', () => {
   const mockLogger = {
     info: vi.fn(),
@@ -19,17 +18,14 @@ vi.mock('@/server/utils/logger', () => {
   };
 });
 
-// Mock LlmCallTool
 const mockLlmCall = {
   call: vi.fn(),
 };
 
-// Mock tool for testing action execution
 const mockTestTool = {
   call: vi.fn(),
 };
 
-// Create a simple mock container implementation
 vi.mock('tsyringe', async importOriginal => {
   const actual: any = await importOriginal();
   const mockContainer = {
@@ -40,7 +36,6 @@ vi.mock('tsyringe', async importOriginal => {
       if (token === 'test_tool') {
         return mockTestTool;
       }
-      // Simulate tool not found
       throw new Error(
         `No matching bindings found for serviceIdentifier: ${token}`,
       );
@@ -61,11 +56,8 @@ describe('ReActAgent', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Create ReActAgent instance with required dependencies
     reactAgent = new ReActAgent();
-    // Set the logger
     (reactAgent as any).logger = logger;
-    // Manually set the tools property for testing with config structure
     const mockToolWithConfig = Object.create(mockTestTool);
     mockToolWithConfig.config = {
       name: { en: 'test_tool' },
@@ -75,37 +67,12 @@ describe('ReActAgent', () => {
   });
 
   describe('parseResponse', () => {
-    it('should parse thought response', () => {
-      const content = '{"thought": "I need to analyze the user query."}';
-      const result = (reactAgent as any).parseResponse(content);
-      expect(result).toEqual({ thought: 'I need to analyze the user query.' });
-    });
-
-    it('should parse thought response with markdown code blocks', () => {
-      const content =
-        '```json\n{"thought": "I need to analyze the user query."}\n```';
-      const result = (reactAgent as any).parseResponse(content);
-      expect(result).toEqual({ thought: 'I need to analyze the user query.' });
-    });
-
-    it('should parse thought response with multiple markdown blocks', () => {
-      const content =
-        '```json\n```json\n{"thought": "I need to analyze the user query."}\n```\n```';
-      expect(() => (reactAgent as any).parseResponse(content)).toThrow();
-    });
-
-    it('should parse thought response with mixed markdown and whitespace', () => {
-      const content =
-        '   ```json   \n  \n  {"thought": "I need to analyze the user query."}  \n  \n```   ';
-      const result = (reactAgent as any).parseResponse(content);
-      expect(result).toEqual({ thought: 'I need to analyze the user query.' });
-    });
-
-    it('should parse action response', () => {
+    it('should parse action without thought', () => {
       const content =
         '{"action": {"tool": "test_tool", "input": {"param": "value"}}}';
       const result = (reactAgent as any).parseResponse(content);
       expect(result).toEqual({
+        thought: undefined,
         action: {
           tool: 'test_tool',
           input: { param: 'value' },
@@ -113,11 +80,12 @@ describe('ReActAgent', () => {
       });
     });
 
-    it('should parse action response with markdown code blocks', () => {
+    it('should parse action with thought', () => {
       const content =
-        '```json\n{"action": {"tool": "test_tool", "input": {"param": "value"}}}\n```';
+        '{"thought": "Need to use test tool", "action": {"tool": "test_tool", "input": {"param": "value"}}}';
       const result = (reactAgent as any).parseResponse(content);
       expect(result).toEqual({
+        thought: 'Need to use test tool',
         action: {
           tool: 'test_tool',
           input: { param: 'value' },
@@ -125,11 +93,12 @@ describe('ReActAgent', () => {
       });
     });
 
-    it('should parse action response with only opening markdown block', () => {
+    it('should parse action with markdown code blocks', () => {
       const content =
-        '```json\n{"action": {"tool": "test_tool", "input": {"param": "value"}}}';
+        '```json\n{"thought": "Testing", "action": {"tool": "test_tool", "input": {"param": "value"}}}\n```';
       const result = (reactAgent as any).parseResponse(content);
       expect(result).toEqual({
+        thought: 'Testing',
         action: {
           tool: 'test_tool',
           input: { param: 'value' },
@@ -137,50 +106,43 @@ describe('ReActAgent', () => {
       });
     });
 
-    it('should parse action response with only closing markdown block', () => {
-      const content =
-        '{"action": {"tool": "test_tool", "input": {"param": "value"}}}\n```';
+    it('should parse final_answer without thought', () => {
+      const content = '{"final_answer": "This is the answer."}';
       const result = (reactAgent as any).parseResponse(content);
       expect(result).toEqual({
-        action: {
-          tool: 'test_tool',
-          input: { param: 'value' },
-        },
+        thought: undefined,
+        final_answer: 'This is the answer.',
       });
     });
 
-    it('should parse final answer response', () => {
-      const content = '{"final_answer": "This is the final answer."}';
-      const result = (reactAgent as any).parseResponse(content);
-      expect(result).toEqual({ final_answer: 'This is the final answer.' });
-    });
-
-    it('should parse final answer response with markdown code blocks', () => {
+    it('should parse final_answer with thought', () => {
       const content =
-        '```json\n{"final_answer": "This is the final answer."}\n```';
-      const result = (reactAgent as any).parseResponse(content);
-      expect(result).toEqual({ final_answer: 'This is the final answer.' });
-    });
-
-    it('should parse final answer with complex content', () => {
-      const content =
-        '```json\n{"final_answer": "根据分析，答案是：\\n1. 第一点\\n2. 第二点"}\n```';
+        '{"thought": "I have the answer now", "final_answer": "This is the answer."}';
       const result = (reactAgent as any).parseResponse(content);
       expect(result).toEqual({
-        final_answer: '根据分析，答案是：\n1. 第一点\n2. 第二点',
+        thought: 'I have the answer now',
+        final_answer: 'This is the answer.',
       });
     });
 
-    it('should handle response with extra text before JSON', () => {
+    it('should parse final_answer with markdown code blocks', () => {
       const content =
-        'Here is my response:\n```json\n{"thought": "I need to think."}\n```';
-      expect(() => (reactAgent as any).parseResponse(content)).toThrow();
+        '```json\n{"thought": "Answering user", "final_answer": "This is the answer."}\n```';
+      const result = (reactAgent as any).parseResponse(content);
+      expect(result).toEqual({
+        thought: 'Answering user',
+        final_answer: 'This is the answer.',
+      });
     });
 
-    it('should handle response with extra text after JSON', () => {
+    it('should parse final_answer with complex content', () => {
       const content =
-        '```json\n{"thought": "I need to think."}\n```\nThis is additional text.';
-      expect(() => (reactAgent as any).parseResponse(content)).toThrow();
+        '```json\n{"final_answer": "Result:\\n1. First\\n2. Second"}\n```';
+      const result = (reactAgent as any).parseResponse(content);
+      expect(result).toEqual({
+        thought: undefined,
+        final_answer: 'Result:\n1. First\n2. Second',
+      });
     });
 
     it('should handle invalid action format', () => {
@@ -204,27 +166,18 @@ describe('ReActAgent', () => {
       );
     });
 
-    it('should handle unrecognized JSON structure', () => {
-      const content = '{"unknown_field": "value"}';
+    it('should handle action with empty tool name', () => {
+      const content = '{"action": {"tool": "", "input": {}}}';
       expect(() => (reactAgent as any).parseResponse(content)).toThrow(
-        'Unrecognized JSON structure: missing `thought`, `action`, or `final_answer`',
+        'Invalid action format: missing or invalid tool/input',
       );
     });
 
-    it('should fallback to thought for invalid JSON', () => {
-      const content = 'Invalid JSON content';
-      expect(() => (reactAgent as any).parseResponse(content)).toThrow();
-    });
-
-    it('should fallback to thought for malformed markdown JSON', () => {
-      const content = '```json\n{invalid json}\n```';
-      expect(() => (reactAgent as any).parseResponse(content)).toThrow();
-    });
-
-    it('should handle empty action input', () => {
+    it('should handle action with empty input', () => {
       const content = '{"action": {"tool": "test_tool", "input": {}}}';
       const result = (reactAgent as any).parseResponse(content);
       expect(result).toEqual({
+        thought: undefined,
         action: {
           tool: 'test_tool',
           input: {},
@@ -232,7 +185,24 @@ describe('ReActAgent', () => {
       });
     });
 
-    it('should handle JSON content containing ```json strings', () => {
+    it('should handle unrecognized JSON structure', () => {
+      const content = '{"unknown_field": "value"}';
+      expect(() => (reactAgent as any).parseResponse(content)).toThrow(
+        'Unrecognized JSON structure: missing `action` or `final_answer`',
+      );
+    });
+
+    it('should throw on invalid JSON', () => {
+      const content = 'Invalid JSON content';
+      expect(() => (reactAgent as any).parseResponse(content)).toThrow();
+    });
+
+    it('should throw on malformed markdown JSON', () => {
+      const content = '```json\n{invalid json}\n```';
+      expect(() => (reactAgent as any).parseResponse(content)).toThrow();
+    });
+
+    it('should handle JSON content containing ```json strings in action', () => {
       const content = JSON.stringify({
         action: {
           tool: 'test_tool',
@@ -241,6 +211,7 @@ describe('ReActAgent', () => {
       });
       const result = (reactAgent as any).parseResponse(content);
       expect(result).toEqual({
+        thought: undefined,
         action: {
           tool: 'test_tool',
           input: { code: '```json\n{"test": "value"}\n```' },
@@ -250,17 +221,19 @@ describe('ReActAgent', () => {
 
     it('should handle markdown wrapped JSON with internal ```json content', () => {
       const innerContent = JSON.stringify({
-        final_answer: '请使用格式：```json\n{"key": "value"}\n```',
+        final_answer: 'Use format: ```json\n{"key": "value"}\n```',
       });
       const content = `\`\`\`json\n${innerContent}\n\`\`\``;
       const result = (reactAgent as any).parseResponse(content);
       expect(result).toEqual({
-        final_answer: '请使用格式：```json\n{"key": "value"}\n```',
+        thought: undefined,
+        final_answer: 'Use format: ```json\n{"key": "value"}\n```',
       });
     });
 
-    it('should handle complex case with multiple ```json markers', () => {
+    it('should handle complex action with thought and internal json', () => {
       const innerContent = JSON.stringify({
+        thought: 'Generating code',
         action: {
           tool: 'code_gen',
           input: {
@@ -271,6 +244,7 @@ describe('ReActAgent', () => {
       const content = `\`\`\`json\n${innerContent}\n\`\`\``;
       const result = (reactAgent as any).parseResponse(content);
       expect(result).toEqual({
+        thought: 'Generating code',
         action: {
           tool: 'code_gen',
           input: {
@@ -281,29 +255,49 @@ describe('ReActAgent', () => {
     });
 
     it('should handle nested JSON in final answer', () => {
-      const content = '{"final_answer": "结果：{\\"key\\": \\"value\\"}"}';
+      const content = '{"final_answer": "Result: {\\"key\\": \\"value\\"}"}';
       const result = (reactAgent as any).parseResponse(content);
       expect(result).toEqual({
-        final_answer: '结果：{"key": "value"}',
+        thought: undefined,
+        final_answer: 'Result: {"key": "value"}',
       });
     });
 
-    it('should parse response with all supported fields (prioritize correctly)', () => {
-      // Should prioritize thought over other fields
+    it('should prioritize action when both action and final_answer present', () => {
       const content =
         '{"thought": "thinking", "action": {"tool": "test", "input": {}}, "final_answer": "answer"}';
       const result = (reactAgent as any).parseResponse(content);
-      expect(result).toEqual({ thought: 'thinking' });
-    });
-
-    it('should parse response with action and final_answer (prioritize action)', () => {
-      const content =
-        '{"action": {"tool": "test", "input": {}}, "final_answer": "answer"}';
-      const result = (reactAgent as any).parseResponse(content);
       expect(result).toEqual({
+        thought: 'thinking',
         action: {
           tool: 'test',
           input: {},
+        },
+      });
+    });
+
+    it('should handle only opening markdown block', () => {
+      const content =
+        '```json\n{"action": {"tool": "test_tool", "input": {"param": "value"}}}';
+      const result = (reactAgent as any).parseResponse(content);
+      expect(result).toEqual({
+        thought: undefined,
+        action: {
+          tool: 'test_tool',
+          input: { param: 'value' },
+        },
+      });
+    });
+
+    it('should handle only closing markdown block', () => {
+      const content =
+        '{"action": {"tool": "test_tool", "input": {"param": "value"}}}\n```';
+      const result = (reactAgent as any).parseResponse(content);
+      expect(result).toEqual({
+        thought: undefined,
+        action: {
+          tool: 'test_tool',
+          input: { param: 'value' },
         },
       });
     });
@@ -318,10 +312,27 @@ describe('ReActAgent', () => {
       expect(result).toContain('Tool "non_existent_tool" not found');
       expect(result).toContain('available tools: `test_tool`');
     });
+
+    it('should execute tool successfully', async () => {
+      mockTestTool.call.mockResolvedValue({ result: 'success' });
+      const result = await (reactAgent as any).executeAction('test_tool', {
+        param: 'value',
+      });
+      expect(result).toBe('{"result":"success"}');
+    });
+
+    it('should handle tool execution error', async () => {
+      mockTestTool.call.mockRejectedValue(new Error('Tool error'));
+      const result = await (reactAgent as any).executeAction('test_tool', {
+        param: 'value',
+      });
+      expect(result).toContain('Error executing tool "test_tool"');
+      expect(result).toContain('Tool error');
+    });
   });
 
   describe('streamCall', () => {
-    it('should stream final answer', async () => {
+    it('should stream final answer without thought', async () => {
       const mockResponse = {
         id: 'test-id',
         choices: [
@@ -362,7 +373,68 @@ describe('ReActAgent', () => {
 
       expect(mockLlmCall.call).toHaveBeenCalled();
       expect(mockWriter.write).toHaveBeenCalledWith({
-        meta: { steps: [{ final_answer: 'This is the final answer.' }] },
+        meta: {
+          steps: [
+            { thought: undefined, final_answer: 'This is the final answer.' },
+          ],
+        },
+      });
+      expect(mockWriter.write).toHaveBeenCalledWith(
+        'This is the final answer.',
+      );
+      expect(mockWriter.close).toHaveBeenCalled();
+    });
+
+    it('should stream final answer with thought', async () => {
+      const mockResponse = {
+        id: 'test-id',
+        choices: [
+          {
+            finish_reason: 'stop',
+            index: 0,
+            message: {
+              content:
+                '{"thought": "I have the answer", "final_answer": "This is the final answer."}',
+              role: 'assistant',
+            },
+          },
+        ],
+        created: 1234567890,
+        model: 'gpt-3.5-turbo',
+        object: 'chat.completion',
+      };
+
+      mockLlmCall.call.mockResolvedValue(mockResponse);
+
+      const mockWriter = {
+        write: vi.fn(),
+        close: vi.fn(),
+        abort: vi.fn(),
+      };
+
+      const messages: Message[] = [
+        {
+          id: 'msg-1',
+          role: Role.USER,
+          content: 'Hello',
+          meta: {},
+          conversationId: 'test-conversation',
+          createdAt: new Date(),
+        },
+      ];
+
+      await reactAgent.streamCall(messages, mockWriter as any);
+
+      expect(mockLlmCall.call).toHaveBeenCalled();
+      expect(mockWriter.write).toHaveBeenCalledWith({
+        meta: {
+          steps: [
+            {
+              thought: 'I have the answer',
+              final_answer: 'This is the final answer.',
+            },
+          ],
+        },
       });
       expect(mockWriter.write).toHaveBeenCalledWith(
         'This is the final answer.',
@@ -379,7 +451,7 @@ describe('ReActAgent', () => {
             index: 0,
             message: {
               content:
-                '{"action": {"tool": "test_tool", "input": {"param": "value"}}}',
+                '{"thought": "Using tool", "action": {"tool": "test_tool", "input": {"param": "value"}}}',
               role: 'assistant',
             },
           },
@@ -437,7 +509,10 @@ describe('ReActAgent', () => {
         expect.objectContaining({
           meta: {
             steps: expect.arrayContaining([
-              { action: { tool: 'test_tool', input: { param: 'value' } } },
+              {
+                thought: 'Using tool',
+                action: { tool: 'test_tool', input: { param: 'value' } },
+              },
             ]),
           },
         }),
@@ -528,6 +603,7 @@ describe('ReActAgent', () => {
       const lastSteps = lastMetaCall[0].meta.steps;
 
       expect(lastSteps).toContainEqual({
+        thought: undefined,
         action: { tool: 'test_tool', input: { param: 'value' } },
       });
       expect(lastSteps).toContainEqual(
@@ -536,6 +612,7 @@ describe('ReActAgent', () => {
         }),
       );
       expect(lastSteps).toContainEqual({
+        thought: undefined,
         final_answer: 'This is the final answer after error.',
       });
 
@@ -545,90 +622,16 @@ describe('ReActAgent', () => {
       expect(mockWriter.close).toHaveBeenCalled();
     });
 
-    it('should handle thought response', async () => {
-      const mockThoughtResponse = {
-        id: 'test-id-1',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content: '{"thought": "I need to think about this."}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567890,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
-      const mockFinalResponse = {
-        id: 'test-id-2',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content:
-                '{"final_answer": "This is the final answer after thinking."}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567891,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
-      mockLlmCall.call
-        .mockResolvedValueOnce(mockThoughtResponse)
-        .mockResolvedValueOnce(mockFinalResponse);
-
-      const mockWriter = {
-        write: vi.fn(),
-        close: vi.fn(),
-        abort: vi.fn(),
-      };
-
-      const messages: Message[] = [
-        {
-          id: 'msg-1',
-          role: Role.USER,
-          content: 'Hello',
-          meta: {},
-          conversationId: 'test-conversation',
-          createdAt: new Date(),
-        },
-      ];
-
-      await reactAgent.streamCall(messages, mockWriter as any);
-
-      expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        expect.objectContaining({
-          meta: {
-            steps: expect.arrayContaining([
-              { thought: 'I need to think about this.' },
-            ]),
-          },
-        }),
-      );
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'This is the final answer after thinking.',
-      );
-      expect(mockWriter.close).toHaveBeenCalled();
-    });
-
     it('should handle max iterations reached', async () => {
-      const mockThoughtResponse = {
+      const mockActionResponse = {
         id: 'test-id',
         choices: [
           {
             finish_reason: 'stop',
             index: 0,
             message: {
-              content: '{"thought": "I keep thinking."}',
+              content:
+                '{"action": {"tool": "test_tool", "input": {"param": "value"}}}',
               role: 'assistant',
             },
           },
@@ -638,7 +641,8 @@ describe('ReActAgent', () => {
         object: 'chat.completion',
       };
 
-      mockLlmCall.call.mockResolvedValue(mockThoughtResponse);
+      mockLlmCall.call.mockResolvedValue(mockActionResponse);
+      mockTestTool.call.mockResolvedValue({ result: 'success' });
 
       const mockWriter = {
         write: vi.fn(),
@@ -852,7 +856,7 @@ describe('ReActAgent', () => {
             steps: expect.arrayContaining([
               {
                 observation:
-                  'Error parsing response: Unrecognized JSON structure: missing `thought`, `action`, or `final_answer`',
+                  'Error parsing response: Unrecognized JSON structure: missing `action` or `final_answer`',
               },
             ]),
           },
@@ -860,83 +864,6 @@ describe('ReActAgent', () => {
       );
       expect(mockWriter.write).toHaveBeenCalledWith('Final answer');
       expect(mockWriter.close).toHaveBeenCalled();
-    });
-
-    it('should handle when parseResponse returns empty object', async () => {
-      const mockResponse = {
-        id: 'test-id-1',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content: '{"valid": "json"}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567890,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
-      const mockFinalResponse = {
-        id: 'test-id-2',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content: '{"final_answer": "Final answer"}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567891,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
-      mockLlmCall.call
-        .mockResolvedValueOnce(mockResponse)
-        .mockResolvedValueOnce(mockFinalResponse);
-
-      const originalParseResponse = (reactAgent as any).parseResponse;
-      (reactAgent as any).parseResponse = vi.fn().mockReturnValueOnce({});
-      (reactAgent as any).parseResponse.mockImplementationOnce(() => ({}));
-
-      const mockWriter = {
-        write: vi.fn(),
-        close: vi.fn(),
-        abort: vi.fn(),
-      };
-
-      const messages: Message[] = [
-        {
-          id: 'msg-1',
-          role: Role.USER,
-          content: 'Hello',
-          meta: {},
-          conversationId: 'test-conversation',
-          createdAt: new Date(),
-        },
-      ];
-
-      await reactAgent.streamCall(messages, mockWriter as any);
-
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        expect.objectContaining({
-          meta: {
-            steps: expect.arrayContaining([
-              {
-                observation: 'Error parsing response: Parsed response is empty',
-              },
-            ]),
-          },
-        }),
-      );
-
-      (reactAgent as any).parseResponse = originalParseResponse;
     });
 
     it('should handle tool not found during action execution', async () => {
@@ -1004,7 +931,10 @@ describe('ReActAgent', () => {
         expect.objectContaining({
           meta: {
             steps: expect.arrayContaining([
-              { action: { tool: 'unknown_tool', input: { param: 'value' } } },
+              {
+                thought: undefined,
+                action: { tool: 'unknown_tool', input: { param: 'value' } },
+              },
             ]),
           },
         }),
