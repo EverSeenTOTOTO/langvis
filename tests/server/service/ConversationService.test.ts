@@ -756,4 +756,331 @@ describe('ConversationService', () => {
       );
     });
   });
+
+  describe('stream write operations', () => {
+    it('should handle meta changes and sync immediately', async () => {
+      const mockMessage = {
+        id: 'msg-1',
+        conversationId: 'conv-1',
+        role: Role.ASSIST,
+        content: '',
+        meta: {},
+        createdAt: new Date(),
+      };
+
+      (pg.getRepository as any).mockReturnValue({
+        findOneBy: vi.fn().mockResolvedValue(mockMessage),
+        save: vi.fn().mockResolvedValue(mockMessage),
+      });
+
+      mockSSEService.sendToConversation.mockClear();
+
+      const writer = await conversationService.createStreamForMessage(
+        'conv-1',
+        mockMessage,
+      );
+
+      await writer.write({ content: 'Hi', meta: { tool: 'web_search' } });
+      await writer.close();
+
+      const metaCalls = mockSSEService.sendToConversation.mock.calls.filter(
+        call => call[1].meta && !call[1].content,
+      );
+      expect(metaCalls.length).toBeGreaterThan(0);
+      expect(mockMessage.meta).toMatchObject({ tool: 'web_search' });
+    });
+
+    it('should handle empty content chunks gracefully', async () => {
+      const mockMessage = {
+        id: 'msg-1',
+        conversationId: 'conv-1',
+        role: Role.ASSIST,
+        content: '',
+        meta: {},
+        createdAt: new Date(),
+      };
+
+      (pg.getRepository as any).mockReturnValue({
+        findOneBy: vi.fn().mockResolvedValue(mockMessage),
+        save: vi.fn().mockResolvedValue(mockMessage),
+      });
+
+      mockSSEService.sendToConversation.mockClear();
+
+      const writer = await conversationService.createStreamForMessage(
+        'conv-1',
+        mockMessage,
+      );
+
+      await writer.write({ content: '', meta: { loading: true } });
+      await writer.write('Test');
+      await writer.close();
+
+      expect(mockMessage.content).toBe('Test');
+    });
+
+    it('should handle multiple sequential writes correctly', async () => {
+      const mockMessage = {
+        id: 'msg-1',
+        conversationId: 'conv-1',
+        role: Role.ASSIST,
+        content: '',
+        meta: {} as any,
+        createdAt: new Date(),
+      };
+
+      (pg.getRepository as any).mockReturnValue({
+        findOneBy: vi.fn().mockResolvedValue(mockMessage),
+        save: vi.fn().mockResolvedValue(mockMessage),
+      });
+
+      mockSSEService.sendToConversation.mockClear();
+
+      const writer = await conversationService.createStreamForMessage(
+        'conv-1',
+        mockMessage,
+      );
+
+      await writer.write('Hello');
+      await writer.write(' ');
+      await writer.write('World');
+      await writer.close();
+
+      expect(mockMessage.content).toBe('Hello World');
+      expect(mockMessage.meta?.streaming).toBeUndefined();
+    });
+
+    it('should handle string chunks as well as object chunks', async () => {
+      const mockMessage = {
+        id: 'msg-1',
+        conversationId: 'conv-1',
+        role: Role.ASSIST,
+        content: '',
+        meta: {},
+        createdAt: new Date(),
+      };
+
+      (pg.getRepository as any).mockReturnValue({
+        findOneBy: vi.fn().mockResolvedValue(mockMessage),
+        save: vi.fn().mockResolvedValue(mockMessage),
+      });
+
+      mockSSEService.sendToConversation.mockClear();
+
+      const writer = await conversationService.createStreamForMessage(
+        'conv-1',
+        mockMessage,
+      );
+
+      await writer.write('Hello ');
+      await writer.write({ content: 'World' });
+      await writer.close();
+
+      expect(mockMessage.content).toBe('Hello World');
+    });
+
+    it('should mark streaming flag on first write and remove on close', async () => {
+      const mockMessage = {
+        id: 'msg-1',
+        conversationId: 'conv-1',
+        role: Role.ASSIST,
+        content: '',
+        meta: { loading: true } as any,
+        createdAt: new Date(),
+      };
+
+      let savedMeta: any = undefined;
+      const saveMock = vi.fn().mockImplementation((_id, _content, meta) => {
+        savedMeta = meta;
+        return Promise.resolve(mockMessage);
+      });
+
+      (conversationService as any).saveMessage = saveMock;
+
+      mockSSEService.sendToConversation.mockClear();
+
+      const writer = await conversationService.createStreamForMessage(
+        'conv-1',
+        mockMessage,
+      );
+
+      await writer.write('Test');
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(mockMessage.meta?.streaming).toBe(true);
+      expect(mockMessage.meta?.loading).toBe(false);
+
+      await writer.close();
+
+      expect(savedMeta).toBeDefined();
+      expect(savedMeta).not.toHaveProperty('streaming');
+      expect(savedMeta).not.toHaveProperty('loading');
+    });
+  });
+
+  describe('stream error handling', () => {
+    it('should handle saveMessage failure on close gracefully', async () => {
+      const mockMessage = {
+        id: 'msg-1',
+        conversationId: 'conv-1',
+        role: Role.ASSIST,
+        content: '',
+        meta: {},
+        createdAt: new Date(),
+      };
+
+      (pg.getRepository as any).mockReturnValue({
+        findOneBy: vi.fn().mockResolvedValue(mockMessage),
+        save: vi.fn().mockRejectedValue(new Error('Database error')),
+      });
+
+      mockSSEService.sendToConversation.mockClear();
+
+      const writer = await conversationService.createStreamForMessage(
+        'conv-1',
+        mockMessage,
+      );
+
+      await writer.write('Test');
+      await expect(writer.close()).resolves.not.toThrow();
+
+      const calls = mockSSEService.sendToConversation.mock.calls;
+      const lastCall = calls[calls.length - 1];
+      expect(lastCall[1]).toEqual({ type: 'completion_done' });
+    });
+
+    it('should handle saveMessage failure on abort gracefully', async () => {
+      const mockMessage = {
+        id: 'msg-1',
+        conversationId: 'conv-1',
+        role: Role.ASSIST,
+        content: '',
+        meta: {},
+        createdAt: new Date(),
+      };
+
+      (pg.getRepository as any).mockReturnValue({
+        findOneBy: vi.fn().mockResolvedValue(mockMessage),
+        save: vi.fn().mockRejectedValue(new Error('Database error')),
+      });
+
+      mockSSEService.sendToConversation.mockClear();
+
+      const writer = await conversationService.createStreamForMessage(
+        'conv-1',
+        mockMessage,
+      );
+
+      await writer.write('Test');
+      await expect(
+        writer.abort(new Error('User cancelled')),
+      ).resolves.not.toThrow();
+
+      const calls = mockSSEService.sendToConversation.mock.calls;
+      const lastCall = calls[calls.length - 1];
+      expect(lastCall[1].type).toBe('completion_error');
+      expect(lastCall[1].error).toBe('User cancelled');
+    });
+
+    it('should use custom abort reason in error message', async () => {
+      const mockMessage = {
+        id: 'msg-1',
+        conversationId: 'conv-1',
+        role: Role.ASSIST,
+        content: '',
+        meta: {},
+        createdAt: new Date(),
+      };
+
+      let savedContent: string = '';
+      let savedMeta: any = undefined;
+      const saveMock = vi.fn().mockImplementation((_id, content, meta) => {
+        savedContent = content;
+        savedMeta = meta;
+        return Promise.resolve(mockMessage);
+      });
+
+      (conversationService as any).saveMessage = saveMock;
+
+      mockSSEService.sendToConversation.mockClear();
+
+      const writer = await conversationService.createStreamForMessage(
+        'conv-1',
+        mockMessage,
+      );
+
+      await writer.write('Test');
+      await writer.abort(new Error('Custom error message'));
+
+      expect(savedContent).toBe('Custom error message');
+      expect(savedMeta.error).toBe(true);
+
+      const calls = mockSSEService.sendToConversation.mock.calls;
+      const errorCall = calls.find(call => call[1].type === 'completion_error');
+      expect(errorCall).toBeDefined();
+      expect(errorCall![1].error).toBe('Custom error message');
+    });
+
+    it('should handle non-Error abort reasons', async () => {
+      const mockMessage = {
+        id: 'msg-1',
+        conversationId: 'conv-1',
+        role: Role.ASSIST,
+        content: '',
+        meta: {},
+        createdAt: new Date(),
+      };
+
+      let savedContent: string = '';
+      const saveMock = vi.fn().mockImplementation((_id, content) => {
+        savedContent = content;
+        return Promise.resolve(mockMessage);
+      });
+
+      (conversationService as any).saveMessage = saveMock;
+
+      mockSSEService.sendToConversation.mockClear();
+
+      const writer = await conversationService.createStreamForMessage(
+        'conv-1',
+        mockMessage,
+      );
+
+      await writer.write('Test');
+      await writer.abort('String reason');
+
+      expect(savedContent).toBe('Aborted');
+
+      const calls = mockSSEService.sendToConversation.mock.calls;
+      const errorCall = calls.find(call => call[1].type === 'completion_error');
+      expect(errorCall![1].error).toBe('Aborted');
+    });
+  });
+
+  describe('cancelStream with custom reason', () => {
+    it('should use custom reason when cancelling stream', async () => {
+      const messageId = 'msg-123';
+      const mockWriter = {
+        abort: vi.fn().mockResolvedValue(undefined),
+      } as any;
+      const mockQueue = {
+        clear: vi.fn(),
+      } as any;
+
+      (conversationService as any).activeWriters.set(messageId, {
+        writer: mockWriter,
+        queue: mockQueue,
+      });
+
+      const result = await conversationService.cancelStream(
+        messageId,
+        'Timeout exceeded',
+      );
+
+      expect(result).toBe(true);
+      expect(mockWriter.abort).toHaveBeenCalledWith(
+        new Error('Timeout exceeded'),
+      );
+    });
+  });
 });

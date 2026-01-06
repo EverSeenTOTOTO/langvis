@@ -11,9 +11,7 @@ export function formatToolsToMarkdown(tools: Tool[]): string {
       const config = tool.config;
       const sections: string[] = [];
 
-      sections.push(`### ${config.name.en}`);
-      sections.push('');
-      sections.push(`**Call ID:** \`${tool.id}\``);
+      sections.push(`### ${tool.id}`);
       sections.push('');
       sections.push(config.description.en);
       sections.push('');
@@ -64,3 +62,4 @@ function formatConfigItemsAsTable(items: Record<string, ConfigItem>): string {
 
   return rows.join('\n');
 }
+
