@@ -240,121 +240,179 @@ export class ConversationService {
     }
   }
 
+  private enqueueDelta(
+    context: {
+      queue: PQueue;
+      conversationId: string;
+      message: Message;
+    },
+    delta: string,
+  ) {
+    const charsPerChunk = 2;
+    for (let i = 0; i < delta.length; i += charsPerChunk) {
+      context.queue.add(() =>
+        this.sseService.sendToConversation(context.conversationId, {
+          type: 'completion_delta',
+          content: delta.slice(i, i + charsPerChunk),
+          meta: context.message.meta!,
+        }),
+      );
+    }
+  }
+
+  private async handleStreamWrite(
+    chunk: StreamChunk,
+    context: {
+      message: Message;
+      conversationId: string;
+      queue: PQueue;
+      firstWrite: boolean;
+      startTime: number;
+      chunkStartTime: number;
+    },
+  ): Promise<void> {
+    if (context.firstWrite) {
+      this.logger.info(
+        `First write for conversation ${context.conversationId}, time taken: ${Date.now() - context.startTime}ms`,
+      );
+    }
+
+    const data = typeof chunk === 'string' ? { content: chunk } : chunk;
+
+    if (!context.message.content && data.content) {
+      this.logger.info(
+        `First chunk received for conversation ${context.conversationId}, time taken: ${Date.now() - context.startTime}ms`,
+      );
+      context.chunkStartTime = Date.now();
+      context.message.meta = {
+        ...context.message.meta,
+        streaming: true,
+      };
+    }
+
+    context.message.content += data.content ?? '';
+    context.message.meta = {
+      ...context.message.meta,
+      ...data.meta,
+      loading: false,
+    };
+
+    if (context.firstWrite || data.meta) {
+      await context.queue.onIdle(); // meta 变化通常意味着特殊渲染内容，清空队列有利于避免绘制错乱
+      this.sseService.sendToConversation(context.conversationId, {
+        type: 'completion_delta',
+        meta: context.message.meta!,
+      });
+    }
+
+    if (data.content) {
+      this.enqueueDelta(context, data.content);
+    }
+
+    context.firstWrite = false;
+  }
+
+  private async handleStreamClose(context: {
+    message: Message;
+    conversationId: string;
+    queue: PQueue;
+    startTime: number;
+    chunkStartTime: number;
+  }): Promise<void> {
+    const chunkElapsed = Date.now() - context.chunkStartTime;
+    this.logger.info(
+      `Upstream stream closed for conversation ${context.conversationId}, transmit time: ${chunkElapsed}, time per token: ${
+        chunkElapsed / (context.message.content.length || 1)
+      }`,
+    );
+
+    try {
+      await context.queue.onIdle();
+      this.activeWriters.delete(context.message.id);
+      await this.saveMessage(
+        context.message.id,
+        context.message.content,
+        omit(context.message.meta, ['loading', 'streaming']),
+      );
+    } catch (error) {
+      this.logger.error('Failed to finalize streaming message:', error);
+    }
+
+    this.logger.info(
+      `Agent call finished for conversation ${context.conversationId}, total time: ${Date.now() - context.startTime}ms`,
+    );
+
+    this.sseService.sendToConversation(context.conversationId, {
+      type: 'completion_done',
+    });
+  }
+
+  private async handleStreamAbort(
+    reason: unknown,
+    context: {
+      message: Message;
+      conversationId: string;
+      queue: PQueue;
+    },
+  ): Promise<void> {
+    context.queue.clear();
+    this.activeWriters.delete(context.message.id);
+
+    this.logger.error(
+      `Streaming aborted for conversation ${context.conversationId}:`,
+      reason,
+    );
+
+    const content = (reason as Error)?.message || `Aborted`;
+    try {
+      await this.saveMessage(context.message.id, content, {
+        ...context.message.meta,
+        loading: undefined,
+        streaming: undefined,
+        error: true,
+      });
+    } catch (error) {
+      this.logger.error('Failed to finalize streaming message:', error);
+    }
+
+    this.sseService.sendToConversation(context.conversationId, {
+      type: 'completion_error',
+      error: content,
+    });
+  }
+
   async createStreamForMessage(
     conversationId: string,
     message: Message,
   ): Promise<WritableStreamDefaultWriter<StreamChunk>> {
-    const startTime = Date.now();
-    let firstChunkReceived = false;
-
-    const queue = new PQueue({
-      interval: 30,
-      intervalCap: 1,
-      concurrency: 1,
-    });
-
-    const enqueueDelta = (delta: string) => {
-      const charsPerChunk = 2;
-      for (let i = 0; i < delta.length; i += charsPerChunk) {
-        queue.add(() =>
-          this.sseService.sendToConversation(conversationId, {
-            type: 'completion_delta',
-            content: delta.slice(i, i + charsPerChunk),
-            meta: message.meta!,
-          }),
-        );
-      }
+    const context = {
+      message,
+      conversationId,
+      queue: new PQueue({
+        interval: 30,
+        intervalCap: 1,
+        concurrency: 1,
+      }),
+      startTime: Date.now(),
+      firstWrite: true,
+      chunkStartTime: Date.now(),
     };
 
     const writableStream = new WritableStream<StreamChunk>({
-      write: async (chunk: StreamChunk) => {
-        const data = typeof chunk === 'string' ? { content: chunk } : chunk;
-
-        message.content += data.content ?? '';
-        message.meta = { ...message.meta, ...data.meta };
-
-        if (!firstChunkReceived && data.content) {
-          firstChunkReceived = true;
-          message.meta = {
-            ...message.meta,
-            loading: false,
-            streaming: true,
-          };
-
-          this.logger.info(
-            `First chunk received for agent call in conversation ${conversationId}, time taken: ${Date.now() - startTime}ms`,
-          );
-        }
-
-        if (data.meta) {
-          await queue.onIdle();
-        }
-
-        enqueueDelta(data.content ?? '');
-      },
-      close: async () => {
-        this.logger.info(
-          `Upstream stream closed for conversation ${conversationId}`,
-        );
-
-        await queue.onIdle();
-
-        this.activeWriters.delete(message.id);
-
-        try {
-          await this.saveMessage(
-            message.id,
-            message.content,
-            omit(message.meta, ['loading', 'streaming']),
-          );
-        } catch (error) {
-          this.logger.error('Failed to finalize streaming message:', error);
-        }
-
-        const elapsed = Date.now() - startTime;
-        this.logger.info(
-          `Agent call finished for conversation ${conversationId}, total time: ${elapsed}ms, time per token: ${
-            elapsed / (message.content.length || 1)
-          }ms`,
-        );
-
-        this.sseService.sendToConversation(conversationId, {
-          type: 'completion_done',
-        });
-      },
-      abort: async (reason: unknown) => {
-        queue.clear();
-        this.activeWriters.delete(message.id);
-
-        this.logger.error(
-          `Streaming aborted for conversation ${conversationId}:`,
-          reason,
-        );
-
-        const content = (reason as Error)?.message || `Aborted`;
-        try {
-          await this.saveMessage(message.id, content, {
-            ...message.meta,
-            loading: undefined,
-            streaming: undefined,
-            error: true,
-          });
-        } catch (error) {
-          this.logger.error('Failed to finalize streaming message:', error);
-        }
-
-        this.sseService.sendToConversation(conversationId, {
-          type: 'completion_error',
-          error: content,
-        });
-      },
+      write: (chunk: StreamChunk) => this.handleStreamWrite(chunk, context),
+      close: () => this.handleStreamClose(context),
+      abort: (reason: unknown) => this.handleStreamAbort(reason, context),
     });
 
     this.logger.info(`Created writable stream for message ${message.id}`);
 
     const writer = writableStream.getWriter();
-    this.activeWriters.set(message.id, { writer, queue });
+    this.activeWriters.set(message.id, {
+      writer,
+      queue: context.queue,
+    });
 
     return writer;
   }
 }
+

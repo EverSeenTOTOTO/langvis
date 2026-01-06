@@ -151,7 +151,7 @@ export class ConversationStore {
   // 流式消息更新方法
   updateStreamingMessage(
     conversationId: string,
-    deltaContent: string,
+    deltaContent?: string,
     meta?: Record<string, any>,
   ) {
     const messages = this.messages[conversationId];
@@ -170,3 +170,4 @@ export class ConversationStore {
     };
   }
 }
+

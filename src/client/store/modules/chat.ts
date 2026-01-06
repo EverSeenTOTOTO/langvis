@@ -156,7 +156,7 @@ export class ChatStore {
       case 'completion_delta':
         this.conversationStore.updateStreamingMessage(
           conversationId,
-          msg.content ?? '',
+          msg.content,
           msg.meta,
         );
         break;

@@ -5,20 +5,29 @@ import { Message } from '@/shared/entities/Message';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Collapse, Flex, Spin, Steps, Typography } from 'antd';
 import { observer } from 'mobx-react-lite';
+import { useEffect, useState } from 'react';
 
 const ReActAgentMessage = ({
   msg,
 }: {
   msg: Message<{ steps?: ReActStep[] }>;
 }) => {
+  const [activeKey, setActiveKey] = useState<string[]>(['1']);
   const settingStore = useStore('setting');
   const hasFinalAnswer = msg.meta?.steps?.some(step => 'final_answer' in step);
+
+  useEffect(() => {
+    if (hasFinalAnswer) {
+      setActiveKey([]);
+    }
+  }, [hasFinalAnswer]);
 
   return (
     <Flex vertical align="start">
       <Collapse
         size="small"
-        defaultActiveKey={hasFinalAnswer ? [] : ['1']}
+        activeKey={activeKey}
+        onChange={keys => setActiveKey(keys as string[])}
         items={[
           {
             key: '1',
