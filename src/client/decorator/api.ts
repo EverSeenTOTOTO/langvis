@@ -126,6 +126,10 @@ export class ApiRequest<P extends Record<string, any> = {}> extends Request {
 
       logError(e);
 
+      if (res.status === 401 && rsp?.redirect && isClient()) {
+        window.location.href = rsp.redirect;
+      }
+
       throw e;
     }
 

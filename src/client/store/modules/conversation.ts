@@ -165,9 +165,8 @@ export class ConversationStore {
 
     messages[messages.length - 1] = {
       ...lastMessage,
-      content: lastMessage.content + deltaContent,
+      content: lastMessage.content + (deltaContent ?? ''),
       meta: meta ?? null,
     };
   }
 }
-

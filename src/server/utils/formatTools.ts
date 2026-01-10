@@ -62,4 +62,3 @@ function formatConfigItemsAsTable(items: Record<string, ConfigItem>): string {
 
   return rows.join('\n');
 }
-

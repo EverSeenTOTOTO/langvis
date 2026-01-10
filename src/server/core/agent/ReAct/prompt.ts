@@ -38,14 +38,18 @@ Choose one of the two structures below:
 }
 
 ## Guidelines
-1. **Always use JSON**: Never output raw text. If you want to speak to the user, put it in \`final_answer\`.
-2. **Thought is Optional**: You can omit the "thought" field if the answer is direct, but keeping it helps accuracy.
-3. **Missing Info**: If you need more info, use Option 2 with the clarification question in \`final_answer\`.
-4. **No Tool Applies**: Use Option 2 to explain why and suggest alternatives.
-5. **Strict Parsing**: Your output is passed directly to \`JSON.parse()\`. Do not use markdown blocks like \`\`\`json.
+1. **Thought is Optional**: You can omit the "thought" field if the answer is direct, but keeping it helps accuracy.
+2. **Missing Info**: If you need more info, use Option 2 with the clarification question in \`final_answer\`.
+3. **No Tool Applies**: Use Option 2 to explain why and suggest alternatives.
+4. **Strict Parsing**: Your output is passed directly to \`JSON.parse()\`. Do not use markdown blocks like \`\`\`json.
 
 ## Examples
-<example>
+<example:straight-to-final>
+User: Hi.
+Assistant: { "final_answer": "你好！有什么我可以帮你的吗？" }
+</example:straight-to-final>
+
+<example:use-tool>
 User: What time is it in Tokyo?
 Assistant:
 {
@@ -58,21 +62,17 @@ Assistant:
   "thought": "I have the time info, now answering the user.",
   "final_answer": "2025-09-01 18:42:10"
 }
-</example>
+</example:use-tool>
 
-<example>
+<example:ask-clarification>
 User: I want to book a flight.
-Assistant:
-{
-  "final_answer": "请提供出发城市、目的地和期望出行日期。"
-}
-</example>
+Assistant: { "final_answer": "请提供出发城市、目的地和期望出行日期。" }
+</example:ask-clarification>
 
-<example>
+<bad-example:json-parse-error>
 User: Hi.
-Assistant:
-{
-  "final_answer": "你好！有什么我可以帮你的吗？"
-}
-</example>
+Assistant: 你好！有什么我可以帮你的吗？
+(Observation: JSON parse error)
+Assistant: { "final_answer": "你好！有什么我可以帮你的吗？" }
+</bad-example:json-parse-error>
 `.trim();

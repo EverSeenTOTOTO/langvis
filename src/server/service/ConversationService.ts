@@ -254,7 +254,6 @@ export class ConversationService {
         this.sseService.sendToConversation(context.conversationId, {
           type: 'completion_delta',
           content: delta.slice(i, i + charsPerChunk),
-          meta: context.message.meta!,
         }),
       );
     }
@@ -415,4 +414,3 @@ export class ConversationService {
     return writer;
   }
 }
-

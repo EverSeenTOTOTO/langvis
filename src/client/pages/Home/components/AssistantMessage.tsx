@@ -2,12 +2,12 @@ import MarkdownRender from '@/client/components/MarkdownRender';
 import { useStore } from '@/client/store';
 import { AgentIds } from '@/shared/constants';
 import { Message } from '@/shared/entities/Message';
-import { CopyOutlined, RobotOutlined } from '@ant-design/icons';
+import { RobotOutlined } from '@ant-design/icons';
 import { Bubble } from '@ant-design/x';
-import { Avatar, Button, Flex } from 'antd';
+import { Avatar } from 'antd';
 import { observer } from 'mobx-react-lite';
-import { useCopyToClipboard } from 'react-use';
 import GirlFriendAgentMessage from './AgentMessage/GirlFriendAgent';
+import MessageFooter from './MessageFooter';
 import ReActAgentMessage from './AgentMessage/ReActAgent';
 
 const renderMessage = (msg: Message) => {
@@ -28,20 +28,6 @@ const renderMessage = (msg: Message) => {
 };
 
 const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
-  const [, copyToClipboard] = useCopyToClipboard();
-
-  const footer = (
-    <Flex justify="end" className="message-footer" gap={4}>
-      <Button
-        color="default"
-        variant="filled"
-        icon={<CopyOutlined />}
-        onClick={() => copyToClipboard(msg.content)}
-        size="small"
-      />
-    </Flex>
-  );
-
   return (
     <Bubble
       key={msg.id}
@@ -49,7 +35,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
       content={
         <>
           {renderMessage(msg)}
-          {footer}
+          <MessageFooter content={msg.content} />
         </>
       }
       loading={msg.meta?.loading}
