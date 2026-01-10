@@ -1,5 +1,5 @@
 import MarkdownRender from '@/client/components/MarkdownRender';
-import { Message } from '@/shared/entities/Message';
+import { Message } from '@/shared/types/entities';
 import { RedoOutlined, UserOutlined } from '@ant-design/icons';
 import { Bubble } from '@ant-design/x';
 import { Avatar, Button } from 'antd';

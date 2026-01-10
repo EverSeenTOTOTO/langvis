@@ -1,6 +1,6 @@
 import Drawer from '@/client/components/Drawer';
 import { useStore } from '@/client/store';
-import { Role } from '@/shared/entities/Message';
+import { Role } from '@/shared/types/entities';
 import { MenuOutlined } from '@ant-design/icons';
 import { Sender } from '@ant-design/x';
 import { FloatButton, Layout, message } from 'antd';

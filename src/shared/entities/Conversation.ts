@@ -1,14 +1,17 @@
+import type { Conversation } from '@/shared/types/entities';
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Entity,
   OneToMany,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 import { MessageEntity } from './Message';
 
+export { Conversation };
+
 @Entity('conversations')
-export class ConversationEntity {
+export class ConversationEntity implements Conversation {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
@@ -24,10 +27,3 @@ export class ConversationEntity {
   @OneToMany(() => MessageEntity, message => message.conversation)
   messages!: MessageEntity[];
 }
-
-export type Conversation = Omit<
-  InstanceType<typeof ConversationEntity>,
-  'messages'
-> & {
-  messages?: MessageEntity[];
-};

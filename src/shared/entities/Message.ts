@@ -1,20 +1,19 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  ManyToOne,
+  Entity,
   JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 
-export enum Role {
-  SYSTEM = 'system',
-  USER = 'user',
-  ASSIST = 'assistant',
-}
+import type { Message } from '@/shared/types/entities';
+import { Role } from '@/shared/types/entities';
+
+export { Message, Role };
 
 @Entity('messages')
-export class MessageEntity {
+export class MessageEntity implements Message {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
@@ -40,17 +39,3 @@ export class MessageEntity {
   @JoinColumn({ name: 'conversationId' })
   conversation: any;
 }
-
-type MessageMeta<T extends Record<string, any>> = {
-  loading?: boolean;
-  streaming?: boolean;
-  error?: boolean;
-} & T;
-
-export type Message<T extends Record<string, any> = Record<string, any>> = Omit<
-  InstanceType<typeof MessageEntity>,
-  'conversation' | 'meta'
-> & {
-  loading?: boolean;
-  meta?: MessageMeta<T> | null;
-};

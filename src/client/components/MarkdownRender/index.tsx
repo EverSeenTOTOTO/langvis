@@ -3,9 +3,7 @@ import { message } from 'antd';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Prism } from 'react-syntax-highlighter';
 import { useCopyToClipboard } from 'react-use';
-import rehypeMathjax from 'rehype-mathjax';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -74,35 +72,35 @@ const MarkdownRender = observer(({ children }: { children: string }) => {
   const settingStore = useStore('setting');
   const [, forceUpdate] = useState(0);
 
-  // Lazy load SyntaxHighlighter to reduce initial bundle size
-  const syntaxComponentsRef = useRef<{
-    SyntaxHighlighter: Prism;
+  const componentsRef = useRef<{
+    SyntaxHighlighter: any;
     oneDark: {
       [key: string]: React.CSSProperties;
     };
     oneLight: {
       [key: string]: React.CSSProperties;
     };
+    rehypeMathjax: any;
   } | null>(null);
 
-  const loadSyntaxComponents = useCallback(async () => {
-    if (import.meta.env.DEV) return;
-    if (!syntaxComponentsRef.current) {
-      const [SyntaxHighlighter, oneDark, oneLight] = await Promise.all([
-        import('react-syntax-highlighter').then(
-          module => module.Prism as unknown as Prism,
-        ),
-        import('react-syntax-highlighter/dist/cjs/styles/prism').then(
-          module => module.oneDark,
-        ),
-        import('react-syntax-highlighter/dist/cjs/styles/prism').then(
-          module => module.oneLight,
-        ),
-      ]);
-      syntaxComponentsRef.current = {
+  const loadComponents = useCallback(async () => {
+    if (!componentsRef.current) {
+      const [SyntaxHighlighter, oneDark, oneLight, rehypeMathjax] =
+        await Promise.all([
+          import('react-syntax-highlighter').then(module => module.Prism),
+          import('react-syntax-highlighter/dist/cjs/styles/prism').then(
+            module => module.oneDark,
+          ),
+          import('react-syntax-highlighter/dist/cjs/styles/prism').then(
+            module => module.oneLight,
+          ),
+          import('rehype-mathjax').then(module => module.default),
+        ]);
+      componentsRef.current = {
         SyntaxHighlighter,
         oneDark,
         oneLight,
+        rehypeMathjax,
       };
       forceUpdate(n => n + 1);
     }
@@ -112,18 +110,21 @@ const MarkdownRender = observer(({ children }: { children: string }) => {
     forceUpdate(n => n + 1);
   }, [settingStore.mode]);
 
-  // Load syntax highlighting components on client side only
   useEffect(() => {
-    loadSyntaxComponents().catch(error => {
-      console.error('Failed to load syntax highlighting components:', error);
+    loadComponents().catch(error => {
+      console.error('Failed to load markdown components:', error);
     });
-  }, []);
+  }, [loadComponents]);
 
   return (
     <div className="markdown-render">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-        rehypePlugins={[rehypeMathjax]}
+        rehypePlugins={
+          componentsRef.current?.rehypeMathjax
+            ? [componentsRef.current.rehypeMathjax]
+            : []
+        }
         components={{
           a: ({ ...props }) => (
             <a {...props} target="_blank" rel="noopener noreferrer" />
@@ -131,10 +132,9 @@ const MarkdownRender = observer(({ children }: { children: string }) => {
           code({ inline, className, children, ...props }: any) {
             const match = /language-(\w+)/.exec(className || '');
 
-            // Only render syntax highlighted code blocks when components are loaded
-            if (!inline && match && syntaxComponentsRef.current) {
+            if (!inline && match && componentsRef.current) {
               const { SyntaxHighlighter, oneDark, oneLight } =
-                syntaxComponentsRef.current;
+                componentsRef.current;
               const code = String(children).replace(/\n$/, '');
               return (
                 <CodeBlock

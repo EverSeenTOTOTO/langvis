@@ -1,5 +1,5 @@
 import { useStore } from '@/client/store';
-import { Role } from '@/shared/entities/Message';
+import { Role } from '@/shared/types/entities';
 import { VerticalAlignBottomOutlined } from '@ant-design/icons';
 import { Flex, FloatButton } from 'antd';
 import { observer } from 'mobx-react-lite';
