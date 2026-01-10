@@ -1,7 +1,7 @@
 import MarkdownRender from '@/client/components/MarkdownRender';
 import { useStore } from '@/client/store';
 import { AgentIds } from '@/shared/constants';
-import { Message } from '@/shared/entities/Message';
+import { Message } from '@/shared/types/entities';
 import { RobotOutlined } from '@ant-design/icons';
 import { Bubble } from '@ant-design/x';
 import { Avatar } from 'antd';

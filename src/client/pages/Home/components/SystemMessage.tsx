@@ -1,6 +1,6 @@
 import MarkdownRender from '@/client/components/MarkdownRender';
 import { useStore } from '@/client/store';
-import { Message } from '@/shared/entities/Message';
+import { Message } from '@/shared/types/entities';
 import { Collapse, Divider, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { observer } from 'mobx-react-lite';

@@ -1,7 +1,7 @@
 import MarkdownRender from '@/client/components/MarkdownRender';
 import { useStore } from '@/client/store';
 import type { ReActStep } from '@/server/core/agent/ReAct';
-import { Message } from '@/shared/entities/Message';
+import { Message } from '@/shared/types/entities';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Collapse, Flex, Spin, Steps, Typography } from 'antd';
 import { observer } from 'mobx-react-lite';

@@ -1,9 +1,9 @@
 import { api, ApiRequest } from '@/client/decorator/api';
 import { hydrate } from '@/client/decorator/hydrate';
 import { store } from '@/client/decorator/store';
-import { Conversation } from '@/shared/entities/Conversation';
-import type { Message } from '@/shared/entities/Message';
-import { Role } from '@/shared/entities/Message';
+import { Conversation } from '@/shared/types/entities';
+import type { Message } from '@/shared/types/entities';
+import { Role } from '@/shared/types/entities';
 import { makeAutoObservable, reaction } from 'mobx';
 
 const isActiveAssistMessage = (message?: Message) =>

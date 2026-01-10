@@ -1,7 +1,7 @@
 import { api, ApiRequest, getPrefetchPath } from '@/client/decorator/api';
 import { store } from '@/client/decorator/store';
-import { Conversation } from '@/shared/entities/Conversation';
-import type { Message } from '@/shared/entities/Message';
+import { Conversation } from '@/shared/types/entities';
+import type { Message } from '@/shared/types/entities';
 import { SSEMessage } from '@/shared/types';
 import { isClient } from '@/shared/utils';
 import { message } from 'antd';

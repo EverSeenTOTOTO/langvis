@@ -1,5 +1,5 @@
 import { store } from '@/client/decorator/store';
-import { User } from '@/shared/entities/User';
+import { User } from '@/shared/types/entities';
 import { makeAutoObservable } from 'mobx';
 
 @store()

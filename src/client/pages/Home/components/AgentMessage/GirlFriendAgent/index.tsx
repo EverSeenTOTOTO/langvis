@@ -1,6 +1,6 @@
 import AudioPlayer from '@/client/components/AudioPlayer';
 import MarkdownRender from '@/client/components/MarkdownRender';
-import { Message } from '@/shared/entities/Message';
+import { Message } from '@/shared/types/entities';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { Flex, Spin, Tooltip, Typography } from 'antd';
 import './index.scss';
