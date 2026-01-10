@@ -117,12 +117,15 @@ const ReActAgentMessage = ({
         style={{ width: '100%', marginBlockStart: 16 }}
       />
 
-      {!hasFinalAnswer && (
-        <Spin
-          indicator={<LoadingOutlined spin />}
-          style={{ marginBlock: 12 }}
-        />
-      )}
+      {!hasFinalAnswer &&
+        (msg.meta?.error ? (
+          <MarkdownRender>{msg.content}</MarkdownRender>
+        ) : (
+          <Spin
+            indicator={<LoadingOutlined spin />}
+            style={{ marginBlock: 12 }}
+          />
+        ))}
       {hasFinalAnswer && <MarkdownRender>{msg.content}</MarkdownRender>}
     </Flex>
   );

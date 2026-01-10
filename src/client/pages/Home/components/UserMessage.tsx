@@ -1,36 +1,15 @@
 import MarkdownRender from '@/client/components/MarkdownRender';
 import { Message } from '@/shared/entities/Message';
-import { CopyOutlined, RedoOutlined, UserOutlined } from '@ant-design/icons';
+import { RedoOutlined, UserOutlined } from '@ant-design/icons';
 import { Bubble } from '@ant-design/x';
-import { Avatar, Button, Flex } from 'antd';
+import { Avatar, Button } from 'antd';
 import { observer } from 'mobx-react-lite';
-import { useCopyToClipboard } from 'react-use';
+import MessageFooter from './MessageFooter';
 
 const UserMessage: React.FC<{
   msg: Message;
   onRetry: (messageId: string) => void;
 }> = ({ msg, onRetry }) => {
-  const [, copyToClipboard] = useCopyToClipboard();
-
-  const footer = (
-    <Flex justify="end" className="message-footer" gap={4}>
-      <Button
-        color="default"
-        variant="filled"
-        icon={<CopyOutlined />}
-        onClick={() => copyToClipboard(msg.content)}
-        size="small"
-      />
-      <Button
-        color="default"
-        variant="filled"
-        icon={<RedoOutlined />}
-        onClick={() => onRetry(msg.id)}
-        size="small"
-      />
-    </Flex>
-  );
-
   return (
     <Bubble
       key={msg.id}
@@ -38,7 +17,15 @@ const UserMessage: React.FC<{
       content={
         <>
           <MarkdownRender>{msg.content}</MarkdownRender>
-          {footer}
+          <MessageFooter content={msg.content}>
+            <Button
+              color="default"
+              variant="filled"
+              icon={<RedoOutlined />}
+              onClick={() => onRetry(msg.id)}
+              size="small"
+            />
+          </MessageFooter>
         </>
       }
       loading={msg.loading}
