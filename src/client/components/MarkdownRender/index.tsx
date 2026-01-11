@@ -84,6 +84,7 @@ const MarkdownRender = observer(({ children }: { children: string }) => {
   } | null>(null);
 
   const loadComponents = useCallback(async () => {
+    if (import.meta.env.DEV) return;
     if (!componentsRef.current) {
       const [SyntaxHighlighter, oneDark, oneLight, rehypeMathjax] =
         await Promise.all([

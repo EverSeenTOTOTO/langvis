@@ -1,21 +1,22 @@
 import bindApi, { api } from '@/server/decorator/api';
+import { request, response } from '@/server/decorator/param';
 import bodyParser from 'body-parser';
 import express, { type Request, type Response } from 'express';
 
 it('api', async () => {
   class Demo {
     @api('/get')
-    async getData(req: Request, res: Response) {
+    async getData(@request() req: Request, @response() res: Response) {
       res.json({ data: req.query });
     }
 
     @api('/post', { method: 'post' })
-    async postData(req: Request, res: Response) {
+    async postData(@request() req: Request, @response() res: Response) {
       res.json({ data: req.body });
     }
 
     @api('/header')
-    async getHeader(req: Request, res: Response) {
+    async getHeader(@request() req: Request, @response() res: Response) {
       res.json({ data: req.headers['x-test'] });
     }
 

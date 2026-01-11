@@ -1,5 +1,6 @@
 import { api } from '@/server/decorator/api';
 import bindController, { controller } from '@/server/decorator/controller';
+import { request, response } from '@/server/decorator/param';
 import bodyParser from 'body-parser';
 import express, { type Request, type Response } from 'express';
 import { container, inject } from 'tsyringe';
@@ -13,7 +14,7 @@ it('controller', async () => {
     ) {}
 
     @api('/get')
-    async getData(req: Request, res: Response) {
+    async getData(@request() req: Request, @response() res: Response) {
       res.json({ data: req.query, foo: this.foo, bar: this.bar });
     }
   }

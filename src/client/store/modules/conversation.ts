@@ -1,7 +1,14 @@
 import { api, ApiRequest } from '@/client/decorator/api';
 import { hydrate } from '@/client/decorator/hydrate';
 import { store } from '@/client/decorator/store';
-import { Conversation } from '@/shared/types/entities';
+import {
+  AddMessageToConversationRequestDto,
+  BatchDeleteMessagesInConversationRequestDto,
+  ConversationDto,
+  CreateConversationRequestDto,
+  MessageDto,
+  UpdateConversationRequestDto,
+} from '@/shared/dto/controller';
 import type { Message } from '@/shared/types/entities';
 import { Role } from '@/shared/types/entities';
 import { makeAutoObservable, reaction } from 'mobx';
@@ -14,13 +21,13 @@ const isActiveAssistMessage = (message?: Message) =>
 @store()
 export class ConversationStore {
   @hydrate()
-  conversations: Conversation[] = [];
+  conversations: ConversationDto[] = [];
 
   @hydrate()
-  currentConversationId?: Conversation['id'];
+  currentConversationId?: string;
 
   @hydrate()
-  messages: Record<string, Message[]> = {};
+  messages: Record<string, MessageDto[]> = {};
 
   constructor() {
     makeAutoObservable(this);
@@ -38,7 +45,7 @@ export class ConversationStore {
     this.currentConversationId = id;
   }
 
-  get currentConversation(): Conversation | undefined {
+  get currentConversation(): ConversationDto | undefined {
     return this.conversations.find(
       each => each.id === this.currentConversationId,
     );
@@ -46,13 +53,13 @@ export class ConversationStore {
 
   @api('/api/conversation', { method: 'post' })
   async createConversation(
-    _params: { name: string },
-    req?: ApiRequest<{ name: string }>,
+    _params: CreateConversationRequestDto,
+    req?: ApiRequest<CreateConversationRequestDto>,
   ) {
     const result = await req!.send();
 
     if (result) {
-      this.setCurrentConversationId((result as Conversation).id);
+      this.setCurrentConversationId((result as ConversationDto).id);
 
       await this.getAllConversations();
     }
@@ -60,7 +67,7 @@ export class ConversationStore {
 
   @api('/api/conversation')
   async getAllConversations(_params?: any, req?: ApiRequest) {
-    const result = (await req!.send()) as Conversation[];
+    const result = (await req!.send()) as ConversationDto[];
 
     if (result) {
       this.conversations = result;
@@ -77,14 +84,14 @@ export class ConversationStore {
     return result;
   }
 
-  @api((req: { id: string }) => `/api/conversation/${req.id}`, {
+  @api((req: UpdateConversationRequestDto) => `/api/conversation/${req.id}`, {
     method: 'put',
   })
   async updateConversation(
-    _params: { id: string; name: string },
-    req?: ApiRequest<{ id: string; name: string }>,
+    _params: UpdateConversationRequestDto,
+    req?: ApiRequest<UpdateConversationRequestDto>,
   ) {
-    const result = (await req!.send()) as Conversation;
+    const result = (await req!.send()) as ConversationDto;
 
     await this.getAllConversations();
 
@@ -102,12 +109,16 @@ export class ConversationStore {
     await this.getAllConversations();
   }
 
-  @api((req: { id: string }) => `/api/conversation/${req.id}/messages`, {
-    method: 'post',
-  })
+  @api(
+    (req: AddMessageToConversationRequestDto) =>
+      `/api/conversation/${req.id}/messages`,
+    {
+      method: 'post',
+    },
+  )
   async addMessageToConversation(
-    params: { id: string; role: Role; content: string },
-    req?: ApiRequest<{ conversationId: string; role: Role; content: string }>,
+    params: AddMessageToConversationRequestDto,
+    req?: ApiRequest<AddMessageToConversationRequestDto>,
   ) {
     await req!.send();
     await this.getMessagesByConversationId({ id: params.id });
@@ -125,18 +136,22 @@ export class ConversationStore {
     return messages;
   }
 
-  @api((req: { id: string }) => `/api/conversation/${req.id}/messages`, {
-    method: 'delete',
-  })
+  @api(
+    (req: BatchDeleteMessagesInConversationRequestDto) =>
+      `/api/conversation/${req.id}/messages`,
+    {
+      method: 'delete',
+    },
+  )
   async batchDeleteMessagesInConversation(
-    params: { id: string; messageIds: string[] },
-    req?: ApiRequest<{ id: string; messageIds: string[] }>,
+    params: BatchDeleteMessagesInConversationRequestDto,
+    req?: ApiRequest<BatchDeleteMessagesInConversationRequestDto>,
   ) {
     await req!.send();
     await this.getMessagesByConversationId({ id: params.id });
   }
 
-  get currentMessages(): Message[] {
+  get currentMessages(): MessageDto[] {
     return this.messages[this.currentConversationId!] || [];
   }
 
@@ -148,7 +163,6 @@ export class ConversationStore {
     return lastMessage;
   }
 
-  // 流式消息更新方法
   updateStreamingMessage(
     conversationId: string,
     deltaContent?: string,
@@ -158,7 +172,6 @@ export class ConversationStore {
 
     if (!messages) return;
 
-    // 找到最后一个 assistant 消息（通常是正在流式传输的消息）
     const lastMessage = messages[messages.length - 1];
 
     if (!isActiveAssistMessage(lastMessage)) return;
@@ -166,7 +179,7 @@ export class ConversationStore {
     messages[messages.length - 1] = {
       ...lastMessage,
       content: lastMessage.content + (deltaContent ?? ''),
-      meta: meta ?? null,
+      meta: meta ?? lastMessage.meta,
     };
   }
 }

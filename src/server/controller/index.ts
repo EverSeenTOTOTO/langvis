@@ -1,11 +1,11 @@
 import bindController from '@/server/decorator/controller';
+import chalk from 'chalk';
 import type { Express } from 'express';
-import setupServices from '../service';
 import { globby } from 'globby';
+import path from 'path';
+import setupServices from '../service';
 import { isProd } from '../utils';
 import logger from '../utils/logger';
-import chalk from 'chalk';
-import path from 'path';
 
 export default async (app: Express) => {
   await setupServices(app);

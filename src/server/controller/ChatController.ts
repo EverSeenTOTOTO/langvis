@@ -1,3 +1,7 @@
+import {
+  CancelChatRequestDto,
+  StartChatRequestDto,
+} from '@/shared/dto/controller';
 import { Role } from '@/shared/entities/Message';
 import { ConversationConfig } from '@/shared/types';
 import chalk from 'chalk';
@@ -6,6 +10,7 @@ import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
+import { body, param, request, response } from '../decorator/param';
 import { ConversationService } from '../service/ConversationService';
 import { SSEService } from '../service/SSEService';
 
@@ -20,9 +25,11 @@ export default class ChatController {
   ) {}
 
   @api('/sse/:conversationId', { method: 'get' })
-  async initSSE(req: Request, res: Response) {
-    const { conversationId } = req.params;
-
+  async initSSE(
+    @param('conversationId') conversationId: string,
+    @request() req: Request,
+    @response() res: Response,
+  ) {
     this.sseService.initSSEConnection(conversationId, res);
 
     req.on('close', () => {
@@ -40,52 +47,40 @@ export default class ChatController {
   }
 
   @api('/cancel/:conversationId', { method: 'post' })
-  async cancelChat(req: Request, res: Response) {
-    const { conversationId } = req.params;
-    const { messageId, reason } = req.body;
-
-    if (!conversationId || !messageId) {
-      return res
-        .status(400)
-        .json({ error: 'conversationId and messageId are required' });
-    }
-
+  async cancelChat(
+    @param('conversationId') conversationId: string,
+    @body() dto: CancelChatRequestDto,
+    @request() req: Request,
+    @response() res: Response,
+  ) {
     const cancelled = await this.conversationService.cancelStream(
-      messageId,
-      reason,
+      dto.messageId,
+      dto.reason,
     );
 
     if (!cancelled) {
       return res.status(404).json({
-        error: `No active stream found for message ${messageId}`,
+        error: `No active stream found for message ${dto.messageId}`,
       });
     }
 
     req.log.info(
-      `Cancelled streaming for conversation ${conversationId}, message ${messageId}`,
+      `Cancelled streaming for conversation ${conversationId}, message ${dto.messageId}`,
     );
 
     return res.status(200).json({ success: true });
   }
 
   @api('/start/:conversationId', { method: 'post' })
-  async chat(req: Request, res: Response) {
-    const { conversationId } = req.params;
-    const { role, content } = req.body;
-
-    if (!role || !content) {
-      return res.status(400).json({ error: 'Role and content are required' });
-    }
-
-    // Validate role
-    if (!Object.values(Role).includes(role as Role)) {
-      return res.status(400).json({ error: `Invalid role: ${role}` });
-    }
-
+  async chat(
+    @param('conversationId') conversationId: string,
+    @body() dto: StartChatRequestDto,
+    @request() req: Request,
+    @response() res: Response,
+  ) {
     const conversation =
       await this.conversationService.getConversationById(conversationId);
 
-    // Validate that conversation and agent config exist
     if (!conversation) {
       return res
         .status(404)
@@ -102,15 +97,13 @@ export default class ChatController {
       });
     }
 
-    // Start agent processing in background, but handle errors to prevent unhandled rejections
     await this.startAgent(
       req,
       conversation.config as ConversationConfig,
-      role as Role,
-      content,
+      dto.role,
+      dto.content,
     );
 
-    // Return success immediately
     return res.status(200).json({ success: true });
   }
 

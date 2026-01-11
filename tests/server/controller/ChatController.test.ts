@@ -105,6 +105,7 @@ describe('ChatController', () => {
         .mockReturnValue('connection-id');
 
       await chatController.initSSE(
+        conversationId,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -137,6 +138,7 @@ describe('ChatController', () => {
       );
 
       await chatController.initSSE(
+        conversationId,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -158,6 +160,7 @@ describe('ChatController', () => {
       mockRequest.params = { conversationId };
 
       await chatController.initSSE(
+        conversationId,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -205,6 +208,8 @@ describe('ChatController', () => {
         .mockResolvedValue([{ role: Role.USER, content: 'Hello' }]);
 
       await chatController.chat(
+        conversationId,
+        { conversationId, role, content },
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -218,17 +223,18 @@ describe('ChatController', () => {
       const content = 'Hello';
 
       mockRequest.params = { conversationId };
-      mockRequest.body = { content };
+      mockRequest.body = { conversationId, content };
 
-      await chatController.chat(
-        mockRequest as Request,
-        mockResponse as Response,
-      );
+      const { StartChatRequestDto } = await import('@/shared/dto/controller');
 
-      expect(mockStatus).toHaveBeenCalledWith(400);
-      expect(mockJson).toHaveBeenCalledWith({
-        error: 'Role and content are required',
-      });
+      try {
+        await StartChatRequestDto.validate(mockRequest.body);
+        throw new Error('Should have thrown validation error');
+      } catch (error: any) {
+        expect(error.name).toBe('ValidationException');
+        expect(error.errors).toBeDefined();
+        expect(error.errors.some((e: any) => e.property === 'role')).toBe(true);
+      }
     });
 
     it('should return 400 if content is missing', async () => {
@@ -236,17 +242,20 @@ describe('ChatController', () => {
       const role = Role.USER;
 
       mockRequest.params = { conversationId };
-      mockRequest.body = { role };
+      mockRequest.body = { conversationId, role };
 
-      await chatController.chat(
-        mockRequest as Request,
-        mockResponse as Response,
-      );
+      const { StartChatRequestDto } = await import('@/shared/dto/controller');
 
-      expect(mockStatus).toHaveBeenCalledWith(400);
-      expect(mockJson).toHaveBeenCalledWith({
-        error: 'Role and content are required',
-      });
+      try {
+        await StartChatRequestDto.validate(mockRequest.body);
+        throw new Error('Should have thrown validation error');
+      } catch (error: any) {
+        expect(error.name).toBe('ValidationException');
+        expect(error.errors).toBeDefined();
+        expect(error.errors.some((e: any) => e.property === 'content')).toBe(
+          true,
+        );
+      }
     });
 
     it('should return 400 if role is invalid', async () => {
@@ -255,15 +264,18 @@ describe('ChatController', () => {
       const content = 'Hello';
 
       mockRequest.params = { conversationId };
-      mockRequest.body = { role, content };
+      mockRequest.body = { conversationId, role, content };
 
-      await chatController.chat(
-        mockRequest as Request,
-        mockResponse as Response,
-      );
+      const { StartChatRequestDto } = await import('@/shared/dto/controller');
 
-      expect(mockStatus).toHaveBeenCalledWith(400);
-      expect(mockJson).toHaveBeenCalledWith({ error: 'Invalid role: invalid' });
+      try {
+        await StartChatRequestDto.validate(mockRequest.body);
+        throw new Error('Should have thrown validation error');
+      } catch (error: any) {
+        expect(error.name).toBe('ValidationException');
+        expect(error.errors).toBeDefined();
+        expect(error.errors.some((e: any) => e.property === 'role')).toBe(true);
+      }
     });
 
     it('should return 404 if conversation is not found', async () => {
@@ -284,6 +296,8 @@ describe('ChatController', () => {
         .mockResolvedValue(mockConversation);
 
       await chatController.chat(
+        conversationId,
+        mockRequest.body,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -317,6 +331,8 @@ describe('ChatController', () => {
         .mockResolvedValue(mockConversation);
 
       await chatController.chat(
+        conversationId,
+        mockRequest.body,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -340,6 +356,8 @@ describe('ChatController', () => {
         .mockResolvedValue(null);
 
       await chatController.chat(
+        conversationId,
+        mockRequest.body,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -418,6 +436,8 @@ describe('ChatController', () => {
 
     it('should initiate streaming when valid conversation and agent exist', async () => {
       await chatController.chat(
+        conversationId,
+        mockRequest.body,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -441,6 +461,8 @@ describe('ChatController', () => {
 
       try {
         await chatController.chat(
+          conversationId,
+          mockRequest.body,
           mockRequest as Request,
           mockResponse as Response,
         );
@@ -452,6 +474,8 @@ describe('ChatController', () => {
 
     it('should verify chat state and stream setup with correct parameters', async () => {
       await chatController.chat(
+        conversationId,
+        mockRequest.body,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -469,6 +493,8 @@ describe('ChatController', () => {
 
     it('should start agent processing that creates initial assistant message for streaming', async () => {
       await chatController.chat(
+        conversationId,
+        mockRequest.body,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -565,6 +591,8 @@ describe('ChatController', () => {
 
     it('should setup streaming integration correctly', async () => {
       await chatController.chat(
+        conversationId,
+        mockRequest.body,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -603,6 +631,8 @@ describe('ChatController', () => {
       mockConversationService.getConversationById.mockResolvedValue(null);
 
       await chatController.chat(
+        conversationId,
+        mockRequest.body,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -624,6 +654,8 @@ describe('ChatController', () => {
       );
 
       await chatController.chat(
+        conversationId,
+        mockRequest.body,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -637,6 +669,8 @@ describe('ChatController', () => {
 
     it('should verify WritableStream is properly created for agent', async () => {
       await chatController.chat(
+        conversationId,
+        mockRequest.body,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -659,12 +693,15 @@ describe('ChatController', () => {
         conversationId: 'conv-123',
       };
       mockRequest.body = {
+        conversationId: 'conv-123',
         messageId: 'msg-456',
       };
 
       mockConversationService.cancelStream = vi.fn().mockResolvedValue(true);
 
       await chatController.cancelChat(
+        'conv-123',
+        mockRequest.body,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -682,12 +719,15 @@ describe('ChatController', () => {
         conversationId: 'conv-123',
       };
       mockRequest.body = {
+        conversationId: 'conv-123',
         messageId: 'msg-456',
       };
 
       mockConversationService.cancelStream = vi.fn().mockResolvedValue(false);
 
       await chatController.cancelChat(
+        'conv-123',
+        mockRequest.body,
         mockRequest as Request,
         mockResponse as Response,
       );
@@ -710,36 +750,42 @@ describe('ChatController', () => {
 
       mockConversationService.cancelStream = vi.fn();
 
-      await chatController.cancelChat(
-        mockRequest as Request,
-        mockResponse as Response,
-      );
+      const { CancelChatRequestDto } = await import('@/shared/dto/controller');
 
-      expect(mockConversationService.cancelStream).not.toHaveBeenCalled();
-      expect(mockStatus).toHaveBeenCalledWith(400);
-      expect(mockJson).toHaveBeenCalledWith({
-        error: 'conversationId and messageId are required',
-      });
+      try {
+        await CancelChatRequestDto.validate(mockRequest.body);
+        throw new Error('Should have thrown validation error');
+      } catch (error: any) {
+        expect(error.name).toBe('ValidationException');
+        expect(error.errors).toBeDefined();
+        expect(
+          error.errors.some((e: any) => e.property === 'conversationId'),
+        ).toBe(true);
+      }
     });
 
     it('should return 400 when messageId is missing', async () => {
       mockRequest.params = {
         conversationId: 'conv-123',
       };
-      mockRequest.body = {};
+      mockRequest.body = {
+        conversationId: 'conv-123',
+      };
 
       mockConversationService.cancelStream = vi.fn();
 
-      await chatController.cancelChat(
-        mockRequest as Request,
-        mockResponse as Response,
-      );
+      const { CancelChatRequestDto } = await import('@/shared/dto/controller');
 
-      expect(mockConversationService.cancelStream).not.toHaveBeenCalled();
-      expect(mockStatus).toHaveBeenCalledWith(400);
-      expect(mockJson).toHaveBeenCalledWith({
-        error: 'conversationId and messageId are required',
-      });
+      try {
+        await CancelChatRequestDto.validate(mockRequest.body);
+        throw new Error('Should have thrown validation error');
+      } catch (error: any) {
+        expect(error.name).toBe('ValidationException');
+        expect(error.errors).toBeDefined();
+        expect(error.errors.some((e: any) => e.property === 'messageId')).toBe(
+          true,
+        );
+      }
     });
   });
 });
