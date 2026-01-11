@@ -46,7 +46,7 @@ const Chat: React.FC = () => {
     setValue('');
 
     await chatApi[1]({
-      id: conversationStore.currentConversationId,
+      conversationId: conversationStore.currentConversationId,
       role: Role.USER,
       content: value,
     });
@@ -58,7 +58,7 @@ const Chat: React.FC = () => {
     if (!conversationStore.activeAssistMessage) return;
 
     await cancelApi[1]({
-      id: conversationStore.currentConversationId!,
+      conversationId: conversationStore.currentConversationId!,
       messageId: conversationStore.activeAssistMessage.id,
     });
   };

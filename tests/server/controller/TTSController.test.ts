@@ -46,7 +46,11 @@ describe('TTSController', () => {
 
       mockToolService.callTool.mockResolvedValue(mockResult);
 
-      await controller.generateTTS(mockReq as Request, mockRes as Response);
+      await controller.generateTTS(
+        mockReq.body,
+        mockReq as Request,
+        mockRes as Response,
+      );
 
       expect(mockToolService.callTool).toHaveBeenCalledWith(
         ToolIds.TEXT_TO_SPEECH,
@@ -75,7 +79,11 @@ describe('TTSController', () => {
 
       mockToolService.callTool.mockResolvedValue({});
 
-      await controller.generateTTS(mockReq as Request, mockRes as Response);
+      await controller.generateTTS(
+        mockReq.body,
+        mockReq as Request,
+        mockRes as Response,
+      );
 
       expect(mockToolService.callTool).toHaveBeenCalledWith(
         ToolIds.TEXT_TO_SPEECH,
@@ -92,23 +100,31 @@ describe('TTSController', () => {
     it('should return 400 for empty text', async () => {
       mockReq.body = { text: '' };
 
-      await controller.generateTTS(mockReq as Request, mockRes as Response);
+      const { GenerateTTSRequestDto } = await import('@/shared/dto/controller');
 
-      expect(mockRes.status).toHaveBeenCalledWith(400);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'Text is required and must be a non-empty string',
-      });
+      try {
+        await GenerateTTSRequestDto.validate(mockReq.body);
+        throw new Error('Should have thrown validation error');
+      } catch (error: any) {
+        expect(error.name).toBe('ValidationException');
+        expect(error.errors).toBeDefined();
+        expect(error.errors.some((e: any) => e.property === 'text')).toBe(true);
+      }
     });
 
     it('should return 400 for non-string text', async () => {
       mockReq.body = { text: 123 };
 
-      await controller.generateTTS(mockReq as Request, mockRes as Response);
+      const { GenerateTTSRequestDto } = await import('@/shared/dto/controller');
 
-      expect(mockRes.status).toHaveBeenCalledWith(400);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'Text is required and must be a non-empty string',
-      });
+      try {
+        await GenerateTTSRequestDto.validate(mockReq.body);
+        throw new Error('Should have thrown validation error');
+      } catch (error: any) {
+        expect(error.name).toBe('ValidationException');
+        expect(error.errors).toBeDefined();
+        expect(error.errors.some((e: any) => e.property === 'text')).toBe(true);
+      }
     });
 
     it('should handle service errors', async () => {
@@ -117,7 +133,11 @@ describe('TTSController', () => {
         new Error('TTS service error'),
       );
 
-      await controller.generateTTS(mockReq as Request, mockRes as Response);
+      await controller.generateTTS(
+        mockReq.body,
+        mockReq as Request,
+        mockRes as Response,
+      );
 
       expect(mockRes.status).toHaveBeenCalledWith(500);
       expect(mockRes.json).toHaveBeenCalledWith({

@@ -63,7 +63,7 @@ describe('AuthController', () => {
         response: mockResponseData,
       } as any);
 
-      await authController.signIn(req, res);
+      await authController.signIn(req.body, res);
 
       expect(mockAuthService.api.signInEmail).toHaveBeenCalledWith({
         returnHeaders: true,
@@ -96,7 +96,7 @@ describe('AuthController', () => {
         response: mockResponseData,
       } as any);
 
-      await authController.signUp(req, res);
+      await authController.signUp(req.body, res);
 
       expect(mockAuthService.api.signUpEmail).toHaveBeenCalledWith({
         returnHeaders: true,

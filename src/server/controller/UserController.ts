@@ -1,7 +1,8 @@
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
+import { param, response } from '../decorator/param';
 import { UserService } from '../service/UserService';
 
 @controller('/api/users')
@@ -9,14 +10,13 @@ export default class UserController {
   constructor(@inject(UserService) private userService: UserService) {}
 
   @api('/', { method: 'get' })
-  async getAllUsers(_req: Request, res: Response) {
+  async getAllUsers(@response() res: Response) {
     const users = await this.userService.getAllUsers();
     return res.json(users);
   }
 
   @api('/:id', { method: 'get' })
-  async getUserById(req: Request, res: Response) {
-    const { id } = req.params;
+  async getUserById(@param('id') id: string, @response() res: Response) {
     const user = await this.userService.getUserById(id);
 
     if (!user) {
@@ -27,8 +27,10 @@ export default class UserController {
   }
 
   @api('/email/:email', { method: 'get' })
-  async getUserByEmail(req: Request, res: Response) {
-    const { email } = req.params;
+  async getUserByEmail(
+    @param('email') email: string,
+    @response() res: Response,
+  ) {
     const user = await this.userService.getUserByEmail(email);
 
     if (!user) {

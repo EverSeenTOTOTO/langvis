@@ -1,7 +1,9 @@
 import { api, ApiRequest, getPrefetchPath } from '@/client/decorator/api';
 import { store } from '@/client/decorator/store';
-import { Conversation } from '@/shared/types/entities';
-import type { Message } from '@/shared/types/entities';
+import {
+  CancelChatRequestDto,
+  StartChatRequestDto,
+} from '@/shared/dto/controller';
 import { SSEMessage } from '@/shared/types';
 import { isClient } from '@/shared/utils';
 import { message } from 'antd';
@@ -10,16 +12,9 @@ import { inject } from 'tsyringe';
 import { ConversationStore } from './conversation';
 import { SettingStore } from './setting';
 
-type ConversationId = Conversation['id'];
-type UserMessage = {
-  role: Message['role'];
-  content: Message['content'];
-  id: ConversationId;
-};
-
 @store()
 export class ChatStore {
-  private eventSources: Map<ConversationId, EventSource> = new Map();
+  private eventSources: Map<string, EventSource> = new Map();
 
   constructor(
     @inject(ConversationStore) private conversationStore: ConversationStore,
@@ -31,7 +26,7 @@ export class ChatStore {
       (_, prevId) => {
         if (prevId && conversationStore.activeAssistMessage) {
           this.cancelChat({
-            id: prevId,
+            conversationId: prevId,
             messageId: conversationStore.activeAssistMessage.id,
             reason: 'Cancelled due to conversation switch',
           });
@@ -40,14 +35,14 @@ export class ChatStore {
     );
   }
 
-  isConnected(conversationId: ConversationId): boolean {
+  isConnected(conversationId: string): boolean {
     return (
       this.eventSources.get(conversationId)?.readyState === EventSource.OPEN
     );
   }
 
   connectToSSE(
-    conversationId: ConversationId,
+    conversationId: string,
     onMessage?: (msg: SSEMessage) => void,
   ): Promise<void> {
     this.disconnectFromSSE(conversationId);
@@ -92,25 +87,31 @@ export class ChatStore {
     });
   }
 
-  disconnectFromSSE(conversationId: ConversationId) {
+  disconnectFromSSE(conversationId: string) {
     this.eventSources.get(conversationId)?.close();
     this.eventSources.delete(conversationId);
   }
 
-  @api((req: { id: string }) => `/api/chat/cancel/${req.id}`, {
-    method: 'post',
-  })
+  @api(
+    (req: CancelChatRequestDto) => `/api/chat/cancel/${req.conversationId}`,
+    {
+      method: 'post',
+    },
+  )
   async cancelChat(
-    _params: { id: string; messageId: string; reason?: string },
-    req?: ApiRequest<{ success: boolean }>,
+    _params: CancelChatRequestDto,
+    req?: ApiRequest<CancelChatRequestDto>,
   ) {
     await req!.send();
   }
 
-  @api((req: UserMessage) => `/api/chat/start/${req.id}`, {
+  @api((req: StartChatRequestDto) => `/api/chat/start/${req.conversationId}`, {
     method: 'post',
   })
-  async startChat(_params: UserMessage, req?: ApiRequest<Message>) {
+  async startChat(
+    _params: StartChatRequestDto,
+    req?: ApiRequest<StartChatRequestDto>,
+  ) {
     const conversationId = this.conversationStore.currentConversationId;
 
     if (!conversationId) {
@@ -138,7 +139,6 @@ export class ChatStore {
 
     if (this.conversationStore.currentConversationId !== conversationId) return;
 
-    // 刷新消息列表，获取用户消息和服务端创建的空 assistant 消息
     await this.conversationStore.getMessagesByConversationId({
       id: conversationId,
     });

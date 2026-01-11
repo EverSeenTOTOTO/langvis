@@ -1,5 +1,7 @@
+import { BaseDto } from '@/shared/dto/base';
 import { getOwnPropertyNames, isClient, isTest } from '@/shared/utils';
 import { message } from 'antd';
+import { ClassConstructor, plainToInstance } from 'class-transformer';
 import fetchCookie from 'fetch-cookie';
 import { merge } from 'lodash-es';
 import { compile } from 'path-to-regexp';
@@ -53,11 +55,18 @@ const getApiOptions = <P extends Record<string, any>>(
   {
     config,
     options,
-  }: { config: ApiOptions<P>; options?: ApiConfig['options'] },
+    requestDto,
+    responseDto,
+  }: {
+    config: ApiOptions<P>;
+    options?: ApiConfig['options'];
+    requestDto?: ClassConstructor<BaseDto>;
+    responseDto?: ClassConstructor<BaseDto>;
+  },
 ) => {
   // @api('path')
   if (typeof config === 'string') {
-    return { path: compilePath(config, req), options };
+    return { path: compilePath(config, req), options, requestDto, responseDto };
   }
 
   if (typeof config === 'function') {
@@ -65,7 +74,12 @@ const getApiOptions = <P extends Record<string, any>>(
 
     // @api((req) => 'path')
     if (typeof result === 'string') {
-      return { path: compilePath(result, req), options };
+      return {
+        path: compilePath(result, req),
+        options,
+        requestDto,
+        responseDto,
+      };
     }
 
     // @api((req) => ({ path: 'path', options: {} }))
@@ -85,25 +99,41 @@ const getApiOptions = <P extends Record<string, any>>(
 };
 
 export class ApiRequest<P extends Record<string, any> = {}> extends Request {
+  private responseDto?: ClassConstructor<BaseDto>;
+
   constructor(
     req: P,
     config: {
       config: ApiOptions<P>;
       options?: ApiConfig['options'];
+      requestDto?: ClassConstructor<BaseDto>;
+      responseDto?: ClassConstructor<BaseDto>;
     },
   ) {
-    const { path, options } = getApiOptions(req, config);
+    const { path, options, requestDto, responseDto } = getApiOptions(
+      req,
+      config,
+    );
     const url =
       path.startsWith('/') && !isClient() ? getPrefetchPath(path) : path;
+
+    let bodyData = req;
+    if (requestDto && ['post', 'put'].includes(options?.method || 'get')) {
+      bodyData = plainToInstance(requestDto, req, {
+        excludeExtraneousValues: true,
+      }) as P;
+    }
+
     const extraOptions = ['post', 'put'].includes(options?.method || 'get')
       ? {
-          body: JSON.stringify(req),
+          body: JSON.stringify(bodyData),
           headers: { 'Content-Type': 'application/json' },
           signal: AbortSignal.timeout(options?.timeout || 60_000),
         }
       : undefined;
 
     super(url, merge(options, extraOptions));
+    this.responseDto = responseDto;
   }
 
   async send() {
@@ -131,6 +161,13 @@ export class ApiRequest<P extends Record<string, any> = {}> extends Request {
       }
 
       throw e;
+    }
+
+    if (this.responseDto) {
+      return plainToInstance(this.responseDto, rsp, {
+        excludeExtraneousValues: true,
+        exposeDefaultValues: true,
+      });
     }
 
     return rsp;

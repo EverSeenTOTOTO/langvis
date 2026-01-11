@@ -7,8 +7,8 @@ import { Bubble } from '@ant-design/x';
 import { Avatar } from 'antd';
 import { observer } from 'mobx-react-lite';
 import GirlFriendAgentMessage from './AgentMessage/GirlFriendAgent';
-import MessageFooter from './MessageFooter';
 import ReActAgentMessage from './AgentMessage/ReActAgent';
+import MessageFooter from './MessageFooter';
 
 const renderMessage = (msg: Message) => {
   const conversationStore = useStore('conversation');

@@ -44,7 +44,7 @@ describe('ConversationController', () => {
     );
 
     await conversationController.createConversation(
-      mockReq as Request,
+      mockReq.body,
       mockRes as Response,
     );
 
@@ -69,7 +69,7 @@ describe('ConversationController', () => {
     );
 
     await conversationController.createConversation(
-      mockReq as Request,
+      mockReq.body,
       mockRes as Response,
     );
 
@@ -84,13 +84,18 @@ describe('ConversationController', () => {
   it('should return 400 if name is missing when creating a conversation', async () => {
     mockReq.body = {};
 
-    await conversationController.createConversation(
-      mockReq as Request,
-      mockRes as Response,
+    const { CreateConversationRequestDto } = await import(
+      '@/shared/dto/controller'
     );
 
-    expect(mockRes.status).toHaveBeenCalledWith(400);
-    expect(mockRes.json).toHaveBeenCalledWith({ error: 'Name is required' });
+    try {
+      await CreateConversationRequestDto.validate(mockReq.body);
+      throw new Error('Should have thrown validation error');
+    } catch (error: any) {
+      expect(error.name).toBe('ValidationException');
+      expect(error.errors).toBeDefined();
+      expect(error.errors.some((e: any) => e.property === 'name')).toBe(true);
+    }
   });
 
   it('should get all conversations', async () => {
@@ -111,10 +116,7 @@ describe('ConversationController', () => {
       mockConversations,
     );
 
-    await conversationController.getAllConversations(
-      mockReq as Request,
-      mockRes as Response,
-    );
+    await conversationController.getAllConversations(mockRes as Response);
 
     expect(mockRes.json).toHaveBeenCalledWith(mockConversations);
   });
@@ -131,10 +133,7 @@ describe('ConversationController', () => {
       mockConversation,
     );
 
-    await conversationController.getConversationById(
-      mockReq as Request,
-      mockRes as Response,
-    );
+    await conversationController.getConversationById('1', mockRes as Response);
 
     expect(mockRes.json).toHaveBeenCalledWith(mockConversation);
   });
@@ -143,10 +142,7 @@ describe('ConversationController', () => {
     mockReq.params = { id: '1' };
     mockConversationService.getConversationById.mockResolvedValue(null);
 
-    await conversationController.getConversationById(
-      mockReq as Request,
-      mockRes as Response,
-    );
+    await conversationController.getConversationById('1', mockRes as Response);
 
     expect(mockRes.status).toHaveBeenCalledWith(404);
     expect(mockRes.json).toHaveBeenCalledWith({
@@ -169,7 +165,8 @@ describe('ConversationController', () => {
     );
 
     await conversationController.updateConversation(
-      mockReq as Request,
+      '1',
+      mockReq.body,
       mockRes as Response,
     );
 
@@ -194,7 +191,8 @@ describe('ConversationController', () => {
     );
 
     await conversationController.updateConversation(
-      mockReq as Request,
+      '1',
+      mockReq.body,
       mockRes as Response,
     );
 
@@ -212,7 +210,8 @@ describe('ConversationController', () => {
     mockConversationService.updateConversation.mockResolvedValue(null);
 
     await conversationController.updateConversation(
-      mockReq as Request,
+      '1',
+      mockReq.body,
       mockRes as Response,
     );
 
@@ -226,10 +225,7 @@ describe('ConversationController', () => {
     mockReq.params = { id: '1' };
     mockConversationService.deleteConversation.mockResolvedValue(true);
 
-    await conversationController.deleteConversation(
-      mockReq as Request,
-      mockRes as Response,
-    );
+    await conversationController.deleteConversation('1', mockRes as Response);
 
     expect(mockRes.status).toHaveBeenCalledWith(200);
     expect(mockRes.json).toHaveBeenCalledWith({ success: true });
@@ -239,10 +235,7 @@ describe('ConversationController', () => {
     mockReq.params = { id: '1' };
     mockConversationService.deleteConversation.mockResolvedValue(false);
 
-    await conversationController.deleteConversation(
-      mockReq as Request,
-      mockRes as Response,
-    );
+    await conversationController.deleteConversation('1', mockRes as Response);
 
     expect(mockRes.status).toHaveBeenCalledWith(404);
     expect(mockRes.json).toHaveBeenCalledWith({
@@ -266,7 +259,8 @@ describe('ConversationController', () => {
     );
 
     await conversationController.addMessageToConversation(
-      mockReq as Request,
+      '1',
+      mockReq.body,
       mockRes as Response,
     );
 
@@ -278,28 +272,38 @@ describe('ConversationController', () => {
     mockReq.params = { id: '1' };
     mockReq.body = { role: Role.USER };
 
-    await conversationController.addMessageToConversation(
-      mockReq as Request,
-      mockRes as Response,
+    const { AddMessageToConversationRequestDto } = await import(
+      '@/shared/dto/controller'
     );
 
-    expect(mockRes.status).toHaveBeenCalledWith(400);
-    expect(mockRes.json).toHaveBeenCalledWith({
-      error: 'Role and content are required',
-    });
+    try {
+      await AddMessageToConversationRequestDto.validate(mockReq.body);
+      throw new Error('Should have thrown validation error');
+    } catch (error: any) {
+      expect(error.name).toBe('ValidationException');
+      expect(error.errors).toBeDefined();
+      expect(error.errors.some((e: any) => e.property === 'content')).toBe(
+        true,
+      );
+    }
   });
 
   it('should return 400 if role is invalid when adding a message', async () => {
     mockReq.params = { id: '1' };
     mockReq.body = { role: 'invalid', content: 'Hello' };
 
-    await conversationController.addMessageToConversation(
-      mockReq as Request,
-      mockRes as Response,
+    const { AddMessageToConversationRequestDto } = await import(
+      '@/shared/dto/controller'
     );
 
-    expect(mockRes.status).toHaveBeenCalledWith(400);
-    expect(mockRes.json).toHaveBeenCalledWith({ error: 'Invalid role' });
+    try {
+      await AddMessageToConversationRequestDto.validate(mockReq.body);
+      throw new Error('Should have thrown validation error');
+    } catch (error: any) {
+      expect(error.name).toBe('ValidationException');
+      expect(error.errors).toBeDefined();
+      expect(error.errors.some((e: any) => e.property === 'role')).toBe(true);
+    }
   });
 
   it('should get messages by conversation id', async () => {
@@ -326,7 +330,7 @@ describe('ConversationController', () => {
     );
 
     await conversationController.getMessagesByConversationId(
-      mockReq as Request,
+      '1',
       mockRes as Response,
     );
 

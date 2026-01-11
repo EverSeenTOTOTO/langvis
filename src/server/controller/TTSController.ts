@@ -1,33 +1,23 @@
 import { ToolIds } from '@/shared/constants';
+import { GenerateTTSRequestDto } from '@/shared/dto/controller';
 import type { Request, Response } from 'express';
 import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
+import { body, request, response } from '../decorator/param';
 import { ToolService } from '../service/ToolService';
-
-interface TTSRequest {
-  text: string;
-  reqId?: string;
-  voiceType?: string;
-  emotion?: string;
-  speedRatio?: number;
-}
 
 @controller('/api/tts')
 export default class TTSController {
   constructor(@inject(ToolService) private toolService: ToolService) {}
 
   @api('/generate', { method: 'post' })
-  async generateTTS(req: Request, res: Response) {
+  async generateTTS(
+    @body() dto: GenerateTTSRequestDto,
+    @request() req: Request,
+    @response() res: Response,
+  ) {
     try {
-      const { text, voiceType, emotion, speedRatio }: TTSRequest = req.body;
-
-      if (!text || typeof text !== 'string' || !text.trim()) {
-        return res.status(400).json({
-          error: 'Text is required and must be a non-empty string',
-        });
-      }
-
       if (!req.id) {
         return res.status(500).json({
           error: 'ReqId is required.',
@@ -35,11 +25,11 @@ export default class TTSController {
       }
 
       const result = await this.toolService.callTool(ToolIds.TEXT_TO_SPEECH, {
-        text,
+        text: dto.text,
         reqId: req.id,
-        voiceType,
-        emotion,
-        speedRatio,
+        voiceType: dto.voiceType,
+        emotion: dto.emotion,
+        speedRatio: dto.speedRatio,
       });
 
       return res.json({

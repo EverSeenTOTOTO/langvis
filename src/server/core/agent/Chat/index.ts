@@ -29,11 +29,13 @@ export default class ChatAgent extends Agent {
       content: msg.content,
     }));
 
-    this.logger.debug('Chat agent messages: ', conversationMessages);
+    const model = config?.model?.code ?? process.env.OPENAI_MODEL;
+
+    this.logger.debug(`Chat with ${model}, messages: `, conversationMessages);
 
     await llmCallTool.streamCall(
       {
-        model: config?.model?.code,
+        model,
         temperature: config?.model?.temperature,
         messages: conversationMessages,
       },
