@@ -1,4 +1,3 @@
-import { FileParamsDto } from '@/shared/dto/controller';
 import type { Request, Response } from 'express';
 import mime from 'mime-types';
 import path from 'path';
@@ -33,7 +32,7 @@ export default class FileController {
 
   @api('/download/*', { method: 'get' })
   async downloadFile(
-    @param() { filename }: FileParamsDto,
+    @param('0') filename: string,
     @request() req: Request,
     @response() res: Response,
   ): Promise<void> {
@@ -112,7 +111,7 @@ export default class FileController {
 
   @api('/play/*', { method: 'get' })
   async playFile(
-    @param() { filename }: FileParamsDto,
+    @param('0') filename: string,
     @request() req: Request,
     @response() res: Response,
   ): Promise<void> {
@@ -204,10 +203,7 @@ export default class FileController {
   }
 
   @api('/info/*', { method: 'get' })
-  async getFileInfo(
-    @param() { filename }: FileParamsDto,
-    @response() res: Response,
-  ) {
+  async getFileInfo(@param('0') filename: string, @response() res: Response) {
     if (!filename) {
       return res.status(400).json({ error: 'Filename is required' });
     }
@@ -236,3 +232,4 @@ export default class FileController {
     }
   }
 }
+
