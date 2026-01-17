@@ -1,18 +1,18 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  afterAll,
-  beforeEach,
-  vi,
-} from 'vitest';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { container } from 'tsyringe';
 import FileController from '@/server/controller/FileController';
 import { FileService } from '@/server/service/FileService';
 import type { Request, Response } from 'express';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { container } from 'tsyringe';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 describe('FileController Security Tests', () => {
   let controller: FileController;
@@ -30,10 +30,6 @@ describe('FileController Security Tests', () => {
       params: filename ? { 0: filename } : {},
       headers,
     }) as Request;
-
-  const mockDto = (filename?: string) => ({
-    filename: filename!,
-  });
 
   const mockResponse = () => {
     const res = {} as Response;
@@ -107,7 +103,7 @@ describe('FileController Security Tests', () => {
         const req = mockRequest(payload);
         const res = mockResponse();
 
-        await controller.downloadFile(mockDto(payload), req, res);
+        await controller.downloadFile(payload, req, res);
 
         // Should return 500 error due to security validation failure
         expect(res.status).toHaveBeenCalledWith(500);
@@ -125,7 +121,7 @@ describe('FileController Security Tests', () => {
           payload === '/etc/passwd' ||
           payload === '\\windows\\system32\\drivers\\etc\\hosts'
         ) {
-          await controller.playFile(mockDto(payload), req, res);
+          await controller.playFile(payload, req, res);
           expect(res.status).toHaveBeenCalledWith(403);
           expect(res.json).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -134,7 +130,7 @@ describe('FileController Security Tests', () => {
           );
         } else {
           // All other malicious paths should result in 500 error due to validation failure
-          await controller.playFile(mockDto(payload), req, res);
+          await controller.playFile(payload, req, res);
           expect(res.status).toHaveBeenCalledWith(500);
           expect(res.json).toHaveBeenCalledWith({
             error: 'Internal server error',
@@ -145,7 +141,7 @@ describe('FileController Security Tests', () => {
       it(`should prevent path traversal in getFileInfo with payload: ${payload}`, async () => {
         const res = mockResponse();
 
-        await controller.getFileInfo(mockDto(payload), res);
+        await controller.getFileInfo(payload, res);
 
         // Should return 500 error due to security validation failure
         expect(res.status).toHaveBeenCalledWith(500);
@@ -168,7 +164,7 @@ describe('FileController Security Tests', () => {
         const req = mockRequest(payload);
         const res = mockResponse();
 
-        await controller.downloadFile(mockDto(payload), req, res);
+        await controller.downloadFile(payload, req, res);
 
         // Should return 500 error due to security validation failure
         expect(res.status).toHaveBeenCalledWith(500);
@@ -190,7 +186,7 @@ describe('FileController Security Tests', () => {
         const req = mockRequest(payload);
         const res = mockResponse();
 
-        await controller.downloadFile(mockDto(payload), req, res);
+        await controller.downloadFile(payload, req, res);
 
         // Should return 500 error due to security validation failure
         expect(res.status).toHaveBeenCalledWith(500);
@@ -264,14 +260,14 @@ describe('FileController Security Tests', () => {
 
         if (filename === '' || filename === null || filename === undefined) {
           // These should return 400 bad request
-          await controller.downloadFile(mockDto(filename as string), req, res);
+          await controller.downloadFile(filename as string, req, res);
           expect(res.status).toHaveBeenCalledWith(400);
           expect(res.json).toHaveBeenCalledWith({
             error: 'Filename is required',
           });
         } else {
           // These should return 500 error due to validation failure
-          await controller.downloadFile(mockDto(filename as string), req, res);
+          await controller.downloadFile(filename as string, req, res);
           expect(res.status).toHaveBeenCalledWith(500);
           expect(res.json).toHaveBeenCalledWith({
             error: 'Internal server error',
@@ -285,7 +281,7 @@ describe('FileController Security Tests', () => {
       const req = mockRequest('file\tname.txt');
       const res = mockResponse();
 
-      await controller.downloadFile(mockDto('file\tname.txt'), req, res);
+      await controller.downloadFile('file\tname.txt', req, res);
 
       // Should return 500 error due to security validation failure
       expect(res.status).toHaveBeenCalledWith(500);
@@ -315,3 +311,4 @@ describe('FileController Security Tests', () => {
     });
   });
 });
+
