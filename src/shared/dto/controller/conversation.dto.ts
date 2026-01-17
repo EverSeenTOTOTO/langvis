@@ -1,5 +1,5 @@
 import { Role } from '@/shared/entities/Message';
-import { Expose, Type } from 'class-transformer';
+import { Expose, plainToInstance, Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsEnum,
@@ -9,20 +9,15 @@ import {
   IsString,
   IsUUID,
   ValidateNested,
+  validateSync,
 } from 'class-validator';
-import { BaseDto } from '../base';
+import { BaseDto, ValidationException } from '../base';
 
 export class ConversationConfigDto extends BaseDto {
   @Expose()
   @IsString()
   @IsNotEmpty()
   agent!: string;
-
-  @Expose()
-  model?: {
-    code?: string;
-    temperature?: number;
-  };
 }
 
 export class MessageDto extends BaseDto {
@@ -61,7 +56,13 @@ export class ConversationDto extends BaseDto {
   name!: string;
 
   @Expose()
-  @Type(() => ConversationConfigDto)
+  @Transform(
+    ({ value }) =>
+      plainToInstance(ConversationConfigDto, value, {
+        excludeExtraneousValues: false,
+      }),
+    { toClassOnly: true },
+  )
   @ValidateNested()
   @IsOptional()
   config?: ConversationConfigDto | null;
@@ -84,10 +85,19 @@ export class CreateConversationRequestDto extends BaseDto {
   name!: string;
 
   @Expose()
-  @Type(() => ConversationConfigDto)
-  @ValidateNested()
+  @Transform(
+    ({ value }) => {
+      const instance = plainToInstance(ConversationConfigDto, value);
+      const errors = validateSync(instance);
+      if (errors.length > 0) {
+        throw new ValidationException(errors);
+      }
+      return value;
+    },
+    { toClassOnly: true },
+  )
   @IsOptional()
-  config?: ConversationConfigDto;
+  config?: Record<string, any>;
 }
 
 export class CreateConversationResponseDto extends ConversationDto {}
@@ -123,10 +133,19 @@ export class UpdateConversationRequestDto extends BaseDto {
   name!: string;
 
   @Expose()
-  @Type(() => ConversationConfigDto)
-  @ValidateNested()
+  @Transform(
+    ({ value }) => {
+      const instance = plainToInstance(ConversationConfigDto, value);
+      const errors = validateSync(instance);
+      if (errors.length > 0) {
+        throw new ValidationException(errors);
+      }
+      return value;
+    },
+    { toClassOnly: true },
+  )
   @IsOptional()
-  config?: ConversationConfigDto;
+  config?: Record<string, any>;
 }
 
 export class UpdateConversationResponseDto extends ConversationDto {}

@@ -1,3 +1,4 @@
+import { useSearchParam } from '@/client/hooks/useSearchParam';
 import { useStore } from '@/client/store';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { Conversations, type ConversationsProps } from '@ant-design/x';
@@ -6,7 +7,6 @@ import { observer } from 'mobx-react-lite';
 import React, { useEffect, useState } from 'react';
 import { useAsyncFn } from 'react-use';
 import ConversationModal from './ConversationModal';
-import { useSearchParam } from '@/client/hooks/useSearchParam';
 
 const { useApp } = App;
 const { Sider } = Layout;
@@ -111,10 +111,8 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
 
   return (
     <Sider
-      width={256}
       className="chat-sider"
       style={{
-        width: 256,
         background: token.colorBgContainer,
         borderRadius: token.borderRadius,
       }}

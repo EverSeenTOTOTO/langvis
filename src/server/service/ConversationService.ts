@@ -320,9 +320,9 @@ export class ConversationService {
   }): Promise<void> {
     const chunkElapsed = Date.now() - context.chunkStartTime;
     this.logger.info(
-      `Upstream stream closed for conversation ${context.conversationId}, transmit time: ${chunkElapsed}, time per token: ${
+      `Upstream stream closed for conversation ${context.conversationId}, transmit time: ${chunkElapsed}ms, time per token: ${
         chunkElapsed / (context.message.content.length || 1)
-      }`,
+      }ms`,
     );
 
     try {

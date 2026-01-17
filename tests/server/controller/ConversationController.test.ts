@@ -81,6 +81,43 @@ describe('ConversationController', () => {
     expect(mockRes.json).toHaveBeenCalledWith(mockConversation);
   });
 
+  it('should create a conversation with extra config fields preserved', async () => {
+    const mockConversation = {
+      id: '1',
+      name: 'Test Conversation',
+      config: { agent: 'gpt-4', extra: 'field' },
+      createdAt: new Date(),
+    };
+
+    mockReq.body = {
+      name: 'Test Conversation',
+      config: { agent: 'gpt-4', extra: 'field' },
+    };
+    mockConversationService.createConversation.mockResolvedValue(
+      mockConversation,
+    );
+
+    const { CreateConversationRequestDto } = await import(
+      '@/shared/dto/controller'
+    );
+
+    const validatedBody = await CreateConversationRequestDto.validate(
+      mockReq.body,
+    );
+
+    await conversationController.createConversation(
+      validatedBody,
+      mockRes as Response,
+    );
+
+    expect(mockConversationService.createConversation).toHaveBeenCalledWith(
+      'Test Conversation',
+      { agent: 'gpt-4', extra: 'field' },
+    );
+    expect(mockRes.status).toHaveBeenCalledWith(201);
+    expect(mockRes.json).toHaveBeenCalledWith(mockConversation);
+  });
+
   it('should return 400 if name is missing when creating a conversation', async () => {
     mockReq.body = {};
 

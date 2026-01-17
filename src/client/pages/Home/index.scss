@@ -1,18 +1,36 @@
 @use '../../styles/mixins';
 
+.chat-sider {
+  flex: 0 0 var(--menu-width) !important;
+  width: var(--menu-width) !important;
+  min-width: var(--menu-width) !important;
+  max-width: var(--menu-width) !important;
+  height: 100%;
+  padding: 8px;
+  padding-inline: var(--ant-padding-sm);
+  overflow-y: auto;
+
+  .ant-conversations {
+    padding-inline: 0;
+  }
+}
+
+@media (width <= 768px) {
+  .chat-sider {
+    .ant-layout-sider-children {
+      display: flex;
+      flex-direction: column;
+      justify-content: end;
+    }
+  }
+}
+
 .chat-page {
   height: calc(100vh - var(--header-height));
 
-  .chat-sider {
-    height: 100%;
-    padding: 8px;
-    padding-inline: var(--ant-padding-sm);
-    overflow-y: auto;
-    border-right: 1px solid var(--ant-color-border);
-
-    .ant-conversations {
-      padding-inline: 0;
-    }
+  .chat-header {
+    padding: 4px 8px;
+    background-color: var(--ant-color-info-bg);
   }
 
   .chat-content {
@@ -96,10 +114,6 @@
 
   @media (width <= 768px) {
     .chat-drawer-trigger {
-      position: absolute;
-      right: 8px;
-      bottom: 100px;
-      z-index: 100;
       font-size: 18px;
       box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
     }
