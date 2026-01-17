@@ -8,5 +8,12 @@ body,
 }
 
 :root {
-  --menu-width: 256px;
+  --menu-width: 200px;
+  --header-height: 48px;
+}
+
+@media (width <= 768px) {
+  :root {
+    --menu-width: 256px;
+  }
 }

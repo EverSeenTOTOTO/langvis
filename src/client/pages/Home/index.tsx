@@ -3,7 +3,7 @@ import { useStore } from '@/client/store';
 import { Role } from '@/shared/types/entities';
 import { MenuOutlined } from '@ant-design/icons';
 import { Sender } from '@ant-design/x';
-import { FloatButton, Layout, message } from 'antd';
+import { Button, Flex, Layout, message } from 'antd';
 import { observer } from 'mobx-react-lite';
 import React, { useState } from 'react';
 import { useAsyncFn, useMedia } from 'react-use';
@@ -66,27 +66,22 @@ const Chat: React.FC = () => {
   return (
     <Layout className="chat-page">
       {isMobile ? (
-        <>
-          <FloatButton
-            className="chat-drawer-trigger"
-            icon={<MenuOutlined />}
-            onClick={() => setDrawerOpen(true)}
+        <Drawer
+          title={settingStore.tr('Conversations')}
+          open={drawerOpen}
+          onCancel={() => setDrawerOpen(false)}
+          placement="left"
+          styles={{
+            wrapper: { width: 'calc(var(--menu-width) + 24px)' },
+            body: {
+              padding: isMobile ? '24px 12px' : '0 12px',
+            },
+          }}
+        >
+          <ConversationsSider
+            onConversationChange={() => setDrawerOpen(false)}
           />
-          <Drawer
-            title={settingStore.tr('Conversations')}
-            open={drawerOpen}
-            onCancel={() => setDrawerOpen(false)}
-            placement="left"
-            styles={{
-              wrapper: { width: 'calc(var(--menu-width) + 24px)' },
-              body: { padding: '0 12px' },
-            }}
-          >
-            <ConversationsSider
-              onConversationChange={() => setDrawerOpen(false)}
-            />
-          </Drawer>
-        </>
+        </Drawer>
       ) : (
         <ConversationsSider />
       )}
@@ -99,6 +94,18 @@ const Chat: React.FC = () => {
             onSubmit={handleSend}
             onCancel={handleCancel}
             autoSize={{ minRows: 2, maxRows: 6 }}
+            header={
+              <Flex className="chat-header">
+                {isMobile && (
+                  <Button
+                    className="chat-drawer-trigger"
+                    size="small"
+                    icon={<MenuOutlined />}
+                    onClick={() => setDrawerOpen(true)}
+                  />
+                )}
+              </Flex>
+            }
             placeholder={settingStore.tr('Type a message...')}
             loading={
               conversationStore.activeAssistMessage?.meta?.loading ||

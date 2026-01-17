@@ -1,9 +1,11 @@
+import { FileParamsDto } from '@/shared/dto/controller';
 import type { Request, Response } from 'express';
 import mime from 'mime-types';
 import path from 'path';
 import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
+import { param, request, response } from '../decorator/param';
 import { FileService } from '../service/FileService';
 import Logger from '../utils/logger';
 
@@ -30,9 +32,11 @@ export default class FileController {
   }
 
   @api('/download/*', { method: 'get' })
-  async downloadFile(req: Request, res: Response): Promise<void> {
-    const filename = req.params[0];
-
+  async downloadFile(
+    @param() { filename }: FileParamsDto,
+    @request() req: Request,
+    @response() res: Response,
+  ): Promise<void> {
     if (!filename) {
       res.status(400).json({ error: 'Filename is required' });
       return;
@@ -107,9 +111,11 @@ export default class FileController {
   }
 
   @api('/play/*', { method: 'get' })
-  async playFile(req: Request, res: Response): Promise<void> {
-    const filename = req.params[0];
-
+  async playFile(
+    @param() { filename }: FileParamsDto,
+    @request() req: Request,
+    @response() res: Response,
+  ): Promise<void> {
     if (!filename) {
       res.status(400).json({ error: 'Filename is required' });
       return;
@@ -198,9 +204,10 @@ export default class FileController {
   }
 
   @api('/info/*', { method: 'get' })
-  async getFileInfo(req: Request, res: Response) {
-    const filename = req.params[0];
-
+  async getFileInfo(
+    @param() { filename }: FileParamsDto,
+    @response() res: Response,
+  ) {
     if (!filename) {
       return res.status(400).json({ error: 'Filename is required' });
     }

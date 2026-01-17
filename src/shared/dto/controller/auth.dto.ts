@@ -1,5 +1,11 @@
 import { Expose } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 import { BaseDto } from '../base';
 
 export class SignInEmailRequestDto extends BaseDto {
@@ -16,6 +22,7 @@ export class SignInEmailRequestDto extends BaseDto {
 
   @Expose()
   @IsString()
+  @IsOptional()
   name?: string;
 }
 

@@ -1,4 +1,5 @@
 import { InjectTokens } from '@/shared/constants';
+import chalk from 'chalk';
 import type { Express } from 'express';
 import { container } from 'tsyringe';
 import { DataSource } from 'typeorm';
@@ -19,7 +20,7 @@ export default async (_app: Express) => {
   // lazy evaluation since env variables is not loaded when import
   const openai = initOpenAI();
   logger.info(
-    `Initialize openai with api base: ${process.env.OPENAI_API_BASE}`,
+    `Initialize openai with api base: ${chalk.bgBlue(process.env.OPENAI_API_BASE)}, default model: ${chalk.bgRed(process.env.OPENAI_MODEL)}`,
   );
 
   container.register<OpenAI>(InjectTokens.OPENAI, {

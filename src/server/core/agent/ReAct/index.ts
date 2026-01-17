@@ -1,6 +1,6 @@
 import { agent } from '@/server/decorator/agenttool';
-import type { Logger } from '@/server/utils/logger';
 import { formatToolsToMarkdown } from '@/server/utils/formatTools';
+import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { Message, Role } from '@/shared/entities/Message';
 import { AgentConfig, StreamChunk } from '@/shared/types';

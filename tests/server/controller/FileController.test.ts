@@ -20,6 +20,10 @@ describe('FileController - Streaming', () => {
       headers,
     }) as Request;
 
+  const mockDto = (filename?: string) => ({
+    filename: filename!,
+  });
+
   const mockResponse = () => {
     const res = {} as Response;
     res.status = vi.fn().mockReturnValue(res);
@@ -93,7 +97,7 @@ describe('FileController - Streaming', () => {
       (mockFileService.getFileStats as any).mockResolvedValue(fileStats);
       (mockFileService.createReadStream as any).mockResolvedValue(mockStream);
 
-      await controller.downloadFile(req, res);
+      await controller.downloadFile(mockDto(testFileName), req, res);
 
       expect(mockFileService.createReadStream).toHaveBeenCalledWith(
         testFileName,
@@ -121,7 +125,7 @@ describe('FileController - Streaming', () => {
       (mockFileService.getFileStats as any).mockResolvedValue(fileStats);
       (mockFileService.createReadStream as any).mockResolvedValue(mockStream);
 
-      await controller.downloadFile(req, res);
+      await controller.downloadFile(mockDto(testFileName), req, res);
 
       expect(mockFileService.createReadStream).toHaveBeenCalledWith(
         testFileName,
@@ -145,7 +149,7 @@ describe('FileController - Streaming', () => {
 
       (mockFileService.getFileStats as any).mockResolvedValue(fileStats);
 
-      await controller.downloadFile(req, res);
+      await controller.downloadFile(mockDto(testFileName), req, res);
 
       expect(res.status).toHaveBeenCalledWith(416);
       expect(res.setHeader).toHaveBeenCalledWith(
@@ -168,7 +172,7 @@ describe('FileController - Streaming', () => {
       (mockFileService.getFileStats as any).mockResolvedValue(fileStats);
       (mockFileService.createReadStream as any).mockResolvedValue(mockStream);
 
-      await controller.playFile(req, res);
+      await controller.playFile(mockDto(testFileName), req, res);
 
       expect(mockFileService.createReadStream).toHaveBeenCalledWith(
         testFileName,
@@ -196,7 +200,7 @@ describe('FileController - Streaming', () => {
       (mockFileService.getFileStats as any).mockResolvedValue(fileStats);
       (mockFileService.createReadStream as any).mockResolvedValue(mockStream);
 
-      await controller.playFile(req, res);
+      await controller.playFile(mockDto(testFileName), req, res);
 
       expect(mockFileService.createReadStream).toHaveBeenCalledWith(
         testFileName,
@@ -221,7 +225,7 @@ describe('FileController - Streaming', () => {
       (mockFileService.getFileStats as any).mockResolvedValue(fileStats);
       (mockFileService.createReadStream as any).mockResolvedValue(mockStream);
 
-      await controller.playFile(req, res);
+      await controller.playFile(mockDto('test.txt'), req, res);
 
       // Should ignore range header for .txt files
       expect(mockFileService.createReadStream).toHaveBeenCalledWith('test.txt');
