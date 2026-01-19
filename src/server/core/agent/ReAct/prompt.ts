@@ -69,11 +69,4 @@ Assistant:
 User: I want to book a flight.
 Assistant: { "final_answer": "请提供出发城市、目的地和期望出行日期。" }
 </example:ask-clarification>
-
-<bad-example:json-parse-error>
-User: Hi.
-Assistant: 你好！有什么我可以帮你的吗？
-(Observation: JSON parse error)
-Assistant: { "final_answer": "你好！有什么我可以帮你的吗？" }
-</bad-example:json-parse-error>
 `.trim();
