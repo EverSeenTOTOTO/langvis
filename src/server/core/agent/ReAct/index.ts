@@ -36,7 +36,7 @@ export default class ReActAgent extends Agent {
   readonly config!: AgentConfig;
   protected readonly logger!: Logger;
 
-  readonly maxIterations = 10;
+  readonly maxIterations = 5;
 
   public tools: Tool[] = [];
 
@@ -57,7 +57,17 @@ export default class ReActAgent extends Agent {
 
     const iterMessages = messages.map(msg => ({
       role: msg.role as 'user' | 'assistant' | 'system',
-      content: msg.content,
+      content:
+        msg.role === 'assistant'
+          ? // 防止提取过的content成为错误示例，还原成JSON格式
+            JSON.stringify(
+              msg.meta?.steps?.find(
+                (each: ReActStep) => 'final_answer' in each,
+              ) || {
+                final_answer: msg.content,
+              },
+            )
+          : msg.content,
     }));
     const steps: ReActStep[] = [];
 
@@ -206,3 +216,4 @@ export default class ReActAgent extends Agent {
     }
   }
 }
+

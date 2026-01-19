@@ -90,7 +90,7 @@ export default class TextToSpeechTool extends Tool {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(120_000),
     });
 
     if (!response.ok) {
@@ -161,3 +161,4 @@ export default class TextToSpeechTool extends Tool {
     }
   }
 }
+
