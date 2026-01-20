@@ -2,7 +2,7 @@ import { BaseDto } from '@/shared/dto/base';
 import type { ClassConstructor } from 'class-transformer';
 import type { Request, Response } from 'express';
 
-const PARAM_METADATA_KEY = Symbol('param_metadata');
+export const PARAM_METADATA_KEY = Symbol('param_metadata');
 
 export enum ParamType {
   BODY = 'body',
@@ -10,6 +10,8 @@ export enum ParamType {
   PARAM = 'param',
   REQUEST = 'request',
   RESPONSE = 'response',
+  CONFIG = 'config',
+  INPUT = 'input',
 }
 
 export interface ParamMetadata {
@@ -88,6 +90,14 @@ export function request() {
 
 export function response() {
   return createParamDecorator(ParamType.RESPONSE);
+}
+
+export function config() {
+  return createParamDecorator(ParamType.CONFIG);
+}
+
+export function input() {
+  return createParamDecorator(ParamType.INPUT);
 }
 
 export async function extractParams(

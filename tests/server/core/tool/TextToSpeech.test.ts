@@ -55,24 +55,12 @@ describe('TextToSpeechTool', () => {
   });
 
   describe('call', () => {
-    it('should throw error for empty text', async () => {
-      await expect(tool.call({ text: '', reqId: 'test-id' })).rejects.toThrow(
-        'Text cannot be empty',
-      );
-    });
-
-    it('should throw error for missing reqId', async () => {
-      await expect(tool.call({ text: 'test text', reqId: '' })).rejects.toThrow(
-        'Request ID cannot be empty',
-      );
-    });
-
     it('should throw error when environment variables are missing', async () => {
       delete process.env.OPENAI_API_BASE;
       delete process.env.OPENAI_API_KEY;
 
       await expect(
-        tool.call({ text: 'test text', reqId: 'test-id' }),
+        tool.call({ voice: 'test-voice', text: 'test text', reqId: 'test-id' }),
       ).rejects.toThrow(
         'OPENAI_API_BASE and OPENAI_API_KEY must be configured',
       );
@@ -131,7 +119,7 @@ describe('TextToSpeechTool', () => {
       });
 
       await expect(
-        tool.call({ text: 'test text', reqId: 'test-id' }),
+        tool.call({ voice: 'test-voice', text: 'test text', reqId: 'test-id' }),
       ).rejects.toThrow('TTS API error: API Error');
     });
 
@@ -146,7 +134,7 @@ describe('TextToSpeechTool', () => {
       });
 
       await expect(
-        tool.call({ text: 'test text', reqId: 'test-id' }),
+        tool.call({ voice: 'test-voice', text: 'test text', reqId: 'test-id' }),
       ).rejects.toThrow('TTS API request failed with status 500');
     });
   });

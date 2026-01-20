@@ -1,4 +1,5 @@
 import { agent } from '@/server/decorator/agenttool';
+import { config } from '@/server/decorator/param';
 import { formatToolsToMarkdown } from '@/server/utils/formatTools';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
@@ -30,6 +31,13 @@ export type ReActFinalAnswer = {
 
 export type ReActStep = ReActAction | ReActObservation | ReActFinalAnswer;
 
+interface ReActAgentConfig {
+  model?: {
+    code?: string;
+    temperature?: number;
+  };
+}
+
 @agent(AgentIds.REACT)
 export default class ReActAgent extends Agent {
   readonly id!: string;
@@ -50,7 +58,7 @@ export default class ReActAgent extends Agent {
   async streamCall(
     messages: Message[],
     outputWriter: WritableStreamDefaultWriter<StreamChunk>,
-    config?: Record<string, any>,
+    @config() config?: ReActAgentConfig,
   ) {
     const writer = outputWriter;
     const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
@@ -216,4 +224,3 @@ export default class ReActAgent extends Agent {
     }
   }
 }
-

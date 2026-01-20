@@ -1,4 +1,5 @@
 import { agent } from '@/server/decorator/agenttool';
+import { config } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { Message } from '@/shared/entities/Message';
@@ -6,6 +7,14 @@ import { AgentConfig, StreamChunk } from '@/shared/types';
 import { container } from 'tsyringe';
 import { Agent } from '..';
 import type { Tool } from '../../tool';
+
+interface ChatAgentConfig {
+  model?: {
+    code?: string;
+    temperature?: number;
+    topP?: number;
+  };
+}
 
 @agent(AgentIds.CHAT)
 export default class ChatAgent extends Agent {
@@ -20,7 +29,7 @@ export default class ChatAgent extends Agent {
   async streamCall(
     messages: Message[],
     outputWriter: WritableStreamDefaultWriter<StreamChunk>,
-    config?: Record<string, any>,
+    @config() config?: ChatAgentConfig,
   ) {
     const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
 

@@ -10,7 +10,7 @@ describe('DateTimeTool', () => {
 
   it('should return current time in ISO-like format by default', async () => {
     const result = await dateTimeTool.call({});
-    expect(result).toMatch(
+    expect(result.result).toMatch(
       /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[-+]\d{2}:\d{2}/,
     );
   });
@@ -19,7 +19,7 @@ describe('DateTimeTool', () => {
     const result = await dateTimeTool.call({
       format: 'YYYY-MM-DD HH:mm:ss',
     });
-    expect(result).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
+    expect(result.result).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
   });
 
   it('should return time in specified timezone', async () => {
@@ -27,7 +27,7 @@ describe('DateTimeTool', () => {
       timezone: 'America/New_York',
     });
     // Should be in ISO format but with timezone offset
-    expect(result).toMatch(
+    expect(result.result).toMatch(
       /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[-+]\d{2}:\d{2}/,
     );
   });
@@ -37,7 +37,7 @@ describe('DateTimeTool', () => {
       timezone: 'Asia/Tokyo',
       format: 'YYYY年MM月DD日 HH:mm:ss',
     });
-    expect(result).toMatch(/\d{4}年\d{2}月\d{2}日 \d{2}:\d{2}:\d{2}/);
+    expect(result.result).toMatch(/\d{4}年\d{2}月\d{2}日 \d{2}:\d{2}:\d{2}/);
   });
 
   it('should throw error for invalid timezone', async () => {
@@ -45,7 +45,7 @@ describe('DateTimeTool', () => {
       dateTimeTool.call({
         timezone: 'Invalid/Timezone',
       }),
-    ).rejects.toThrow('Invalid timezone: Invalid/Timezone');
+    ).rejects.toThrow('Invalid time zone specified: Invalid/Timezone');
   });
 
   it('should throw error for streamCall method', async () => {

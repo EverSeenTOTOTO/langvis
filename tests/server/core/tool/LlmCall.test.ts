@@ -1,10 +1,7 @@
 import LlmCallTool from '@/server/core/tool/LlmCall';
 import OpenAI from 'openai';
 import type { Stream } from 'openai/core/streaming.mjs';
-import type {
-  ChatCompletionCreateParamsNonStreaming,
-  ChatCompletionCreateParamsStreaming,
-} from 'openai/resources/chat/completions';
+import type { ChatCompletionCreateParamsStreaming } from 'openai/resources/chat/completions';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock OpenAI
@@ -52,12 +49,12 @@ describe('LlmCallTool', () => {
 
       mockCreate.mockResolvedValue(mockResponse);
 
-      const input: Partial<ChatCompletionCreateParamsNonStreaming> = {
+      const input = {
         messages: [{ role: 'user', content: 'Hello' }],
         model: 'gpt-3.5-turbo',
       };
 
-      const result = await llmCallTool.call(input);
+      const result = await llmCallTool.call(input as any);
 
       expect(mockCreate).toHaveBeenCalledWith({
         model: 'gpt-3.5-turbo',
@@ -143,3 +140,4 @@ describe('LlmCallTool', () => {
     });
   });
 });
+

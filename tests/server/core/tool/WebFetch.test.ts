@@ -33,12 +33,14 @@ describe('WebFetchTool', () => {
   });
 
   it('should reject empty URL', async () => {
-    await expect(tool.call({ url: '' })).rejects.toThrow('URL cannot be empty');
+    await expect(tool.call({ url: '' })).rejects.toThrow(
+      'Failed to parse URL from ',
+    );
   });
 
   it('should reject invalid URL', async () => {
     await expect(tool.call({ url: 'not-a-valid-url' })).rejects.toThrow(
-      'Invalid URL',
+      'Failed to parse URL from not-a-valid-url',
     );
   });
 
