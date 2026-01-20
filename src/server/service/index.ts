@@ -8,7 +8,6 @@ import initOpenAI, { OpenAI } from './openai';
 import pg from './pg';
 // import redis from './redis';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default async (_app: Express) => {
   if (!pg.isInitialized) {
     const start = Date.now();

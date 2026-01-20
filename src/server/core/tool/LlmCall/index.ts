@@ -1,4 +1,5 @@
 import { tool } from '@/server/decorator/agenttool';
+import { input } from '@/server/decorator/param';
 import { OpenAI } from '@/server/service/openai';
 import type { Logger } from '@/server/utils/logger';
 import { InjectTokens, ToolIds } from '@/shared/constants';
@@ -6,8 +7,8 @@ import { ToolConfig } from '@/shared/types';
 import type { Stream } from 'openai/core/streaming.mjs';
 import type {
   ChatCompletion,
+  ChatCompletionCreateParams,
   ChatCompletionCreateParamsNonStreaming,
-  ChatCompletionCreateParamsStreaming,
 } from 'openai/resources/chat/completions';
 import { inject } from 'tsyringe';
 import { Tool } from '..';
@@ -23,7 +24,7 @@ export default class LlmCallTool extends Tool {
   }
 
   async call(
-    input: Partial<ChatCompletionCreateParamsNonStreaming>,
+    @input() input: Partial<ChatCompletionCreateParamsNonStreaming>,
   ): Promise<ChatCompletion> {
     const response = await this.openai.chat.completions.create({
       model: input.model || process.env.OPENAI_MODEL!,
@@ -35,7 +36,7 @@ export default class LlmCallTool extends Tool {
   }
 
   async streamCall(
-    input: Partial<ChatCompletionCreateParamsStreaming>,
+    @input() input: Partial<ChatCompletionCreateParams>,
     outputWriter: WritableStreamDefaultWriter,
   ): Promise<Stream<OpenAI.Chat.Completions.ChatCompletionChunk>> {
     // Convert current messages to OpenAI format
@@ -68,3 +69,4 @@ export default class LlmCallTool extends Tool {
     return response;
   }
 }
+

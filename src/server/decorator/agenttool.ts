@@ -6,6 +6,8 @@ import { Agent } from '../core/agent';
 import { Tool } from '../core/tool';
 import logger from '../utils/logger';
 import chalk from 'chalk';
+import { PARAM_METADATA_KEY, ParamMetadata, ParamType } from './param';
+import { validateConfig } from '../utils/configValidation';
 
 const metaDataKey = Symbol('config');
 
@@ -33,6 +35,42 @@ const resolveConfig = (config: AgentConfig | ToolConfig) => {
   });
 };
 
+const proxyValidation = (
+  instance: any,
+  method: string,
+  validationType: ParamType,
+  schema: any,
+  token: string,
+) => {
+  const prototype = Object.getPrototypeOf(instance);
+  const validationMeta: ParamMetadata[] = Reflect.getMetadata(
+    PARAM_METADATA_KEY,
+    prototype,
+    method,
+  );
+
+  if (validationMeta && validationMeta.length > 0) {
+    const originalMethod = instance[method].bind(instance);
+    instance[method] = async function (...args: any[]) {
+      for (const meta of validationMeta) {
+        if (meta.type === validationType) {
+          try {
+            const arg = args[meta.index];
+            const validated = validateConfig(schema, arg);
+            args[meta.index] = validated;
+          } catch (error) {
+            logger.error(
+              `Validation failed for ${token} method ${method}: ${(error as Error).message}`,
+            );
+            throw error;
+          }
+        }
+      }
+      return originalMethod(...args);
+    };
+  }
+};
+
 export const registerAgent = async (
   Clz: new (...params: any[]) => Agent,
   config: AgentConfig,
@@ -49,7 +87,7 @@ export const registerAgent = async (
 
   container.afterResolution(
     token,
-    async (_token, instance: object) => {
+    async (_token, instance: any) => {
       const merged = resolveConfig(config);
 
       Reflect.set(instance, 'config', merged);
@@ -69,6 +107,23 @@ export const registerAgent = async (
           `Injected ${tools.length} tools into agent: ${chalk.cyan(config.name.en)}`,
         );
       }
+
+      // Proxy methods for validation
+      proxyValidation(
+        instance,
+        'streamCall',
+        ParamType.CONFIG,
+        (merged as AgentConfig).config,
+        token,
+      );
+
+      proxyValidation(
+        instance,
+        'call',
+        ParamType.CONFIG,
+        (merged as AgentConfig).config,
+        token,
+      );
     },
     { frequency: 'Once' },
   );
@@ -92,13 +147,30 @@ export const registerTool = async (
 
   container.afterResolution(
     token,
-    async (_token, instance: object) => {
+    async (_token, instance: any) => {
       const merged = resolveConfig(config);
 
       Reflect.set(instance, 'config', merged);
       Reflect.set(instance, 'id', token);
       Reflect.set(instance, 'type', type);
       Reflect.set(instance, 'logger', logger.child({ source: token }));
+
+      // Proxy methods for validation
+      proxyValidation(
+        instance,
+        'call',
+        ParamType.INPUT,
+        (merged as ToolConfig).input,
+        token,
+      );
+
+      proxyValidation(
+        instance,
+        'streamCall',
+        ParamType.INPUT,
+        (merged as ToolConfig).input,
+        token,
+      );
     },
     { frequency: 'Once' },
   );

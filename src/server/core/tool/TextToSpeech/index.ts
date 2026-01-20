@@ -1,4 +1,5 @@
 import { tool } from '@/server/decorator/agenttool';
+import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
@@ -41,16 +42,8 @@ export default class TextToSpeechTool extends Tool {
     }
   }
 
-  async call(input: Record<string, any>): Promise<TextToSpeechOutput> {
-    const { text, reqId, voice, emotion, speedRatio } =
-      input as TextToSpeechInput;
-
-    if (!text || !text.trim()) {
-      throw new Error('Text cannot be empty');
-    }
-    if (!reqId) {
-      throw new Error('Request ID cannot be empty');
-    }
+  async call(@input() input: TextToSpeechInput): Promise<TextToSpeechOutput> {
+    const { text, reqId, voice, emotion, speedRatio } = input;
 
     const apiBase = process.env.OPENAI_API_BASE;
     const apiKey = process.env.OPENAI_API_KEY;
@@ -161,4 +154,3 @@ export default class TextToSpeechTool extends Tool {
     }
   }
 }
-

@@ -1,4 +1,5 @@
 import { agent } from '@/server/decorator/agenttool';
+import { config } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { Message } from '@/shared/entities/Message';
@@ -9,6 +10,18 @@ import { Agent } from '..';
 import type { Tool } from '../../tool';
 import type TextToSpeechTool from '../../tool/TextToSpeech';
 import generatePrompt from './prompt';
+
+interface GirlFriendConfig {
+  model?: {
+    code?: string;
+    temperature?: number;
+  };
+  tts?: {
+    voice?: string;
+    emotion?: string;
+    speedRatio?: number;
+  };
+}
 
 @agent(AgentIds.GIRLFRIEND)
 export default class GirlFriendAgent extends Agent {
@@ -23,7 +36,7 @@ export default class GirlFriendAgent extends Agent {
   async streamCall(
     messages: Message[],
     outputWriter: WritableStreamDefaultWriter<StreamChunk>,
-    config?: Record<string, any>,
+    @config() config: GirlFriendConfig,
   ) {
     const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
 
@@ -48,8 +61,8 @@ export default class GirlFriendAgent extends Agent {
           const result = await tts.call({
             text: content,
             reqId: uuid(),
-            voice: config?.tts?.voice,
-            emotion: config?.tts?.emotion,
+            voice: config?.tts?.voice || '',
+            emotion: config?.tts?.emotion || '',
             speedRatio: config?.tts?.speedRatio,
           });
           await writer.write({ meta: result });

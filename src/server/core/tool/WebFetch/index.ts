@@ -1,4 +1,5 @@
 import { tool } from '@/server/decorator/agenttool';
+import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
@@ -7,14 +8,13 @@ import DOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
 import { Tool } from '..';
 
-export interface WebFetchInput {
+interface WebFetchInput {
   url: string;
   timeout?: number;
 }
 
-export interface WebFetchOutput {
+interface WebFetchOutput {
   title: string;
-  // content: string;
   textContent: string;
   excerpt: string;
   byline: string | null;
@@ -28,18 +28,8 @@ export default class WebFetchTool extends Tool {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  async call(input: Record<string, any>): Promise<WebFetchOutput> {
-    const { url, timeout = 30000 } = input as WebFetchInput;
-
-    if (!url || !url.trim()) {
-      throw new Error('URL cannot be empty');
-    }
-
-    try {
-      new URL(url);
-    } catch {
-      throw new Error(`Invalid URL: ${url}`);
-    }
+  async call(@input() input: WebFetchInput): Promise<WebFetchOutput> {
+    const { url, timeout = 30000 } = input;
 
     this.logger.info(`Fetching content from: ${url}`);
 

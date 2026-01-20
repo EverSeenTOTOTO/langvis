@@ -2,7 +2,6 @@ import type { Logger } from '@/server/utils/logger';
 import type { Message } from '@/shared/entities/Message';
 import { AgentConfig, StreamChunk } from '@/shared/types';
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
 export abstract class Agent {
   abstract readonly id: string;
   abstract readonly config: AgentConfig;
@@ -14,10 +13,7 @@ export abstract class Agent {
     return '';
   }
 
-  async call(
-    _messages: Message[],
-    _config?: Record<string, any>,
-  ): Promise<unknown> {
+  async call(_messages: Message[], _config?: any): Promise<unknown> {
     throw new Error(
       `${this.constructor.name}: Non-streaming call not implemented.`,
     );
@@ -26,7 +22,7 @@ export abstract class Agent {
   async streamCall(
     _messages: Message[],
     _outputWriter: WritableStreamDefaultWriter<StreamChunk>,
-    _config?: Record<string, any>,
+    _config?: any,
   ): Promise<unknown> {
     throw new Error(
       `${this.constructor.name}: Streaming call not implemented.`,
