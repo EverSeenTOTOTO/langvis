@@ -66,97 +66,99 @@ const CodeBlock = ({
   );
 };
 
-const MarkdownRender = observer(({ children }: { children: string }) => {
-  const settingStore = useStore('setting');
-  const [, forceUpdate] = useState(0);
+const MarkdownRender = observer(
+  ({ children: content }: { children: string }) => {
+    const settingStore = useStore('setting');
+    const [, forceUpdate] = useState(0);
 
-  const componentsRef = useRef<{
-    SyntaxHighlighter: any;
-    oneDark: {
-      [key: string]: React.CSSProperties;
-    };
-    oneLight: {
-      [key: string]: React.CSSProperties;
-    };
-    rehypeMathjax: any;
-  } | null>(null);
-
-  const loadComponents = useCallback(async () => {
-    if (import.meta.env.DEV) return;
-    if (!componentsRef.current) {
-      const [SyntaxHighlighter, oneDark, oneLight, rehypeMathjax] =
-        await Promise.all([
-          import('react-syntax-highlighter').then(module => module.Prism),
-          import('react-syntax-highlighter/dist/cjs/styles/prism').then(
-            module => module.oneDark,
-          ),
-          import('react-syntax-highlighter/dist/cjs/styles/prism').then(
-            module => module.oneLight,
-          ),
-          import('rehype-mathjax').then(module => module.default),
-        ]);
-      componentsRef.current = {
-        SyntaxHighlighter,
-        oneDark,
-        oneLight,
-        rehypeMathjax,
+    const componentsRef = useRef<{
+      SyntaxHighlighter: any;
+      oneDark: {
+        [key: string]: React.CSSProperties;
       };
+      oneLight: {
+        [key: string]: React.CSSProperties;
+      };
+      rehypeMathjax: any;
+    } | null>(null);
+
+    const loadComponents = useCallback(async () => {
+      if (import.meta.env.DEV) return;
+      if (!componentsRef.current) {
+        const [SyntaxHighlighter, oneDark, oneLight, rehypeMathjax] =
+          await Promise.all([
+            import('react-syntax-highlighter').then(module => module.Prism),
+            import('react-syntax-highlighter/dist/cjs/styles/prism').then(
+              module => module.oneDark,
+            ),
+            import('react-syntax-highlighter/dist/cjs/styles/prism').then(
+              module => module.oneLight,
+            ),
+            import('rehype-mathjax').then(module => module.default),
+          ]);
+        componentsRef.current = {
+          SyntaxHighlighter,
+          oneDark,
+          oneLight,
+          rehypeMathjax,
+        };
+        forceUpdate(n => n + 1);
+      }
+    }, []);
+
+    useEffect(() => {
       forceUpdate(n => n + 1);
-    }
-  }, []);
+    }, [settingStore.mode]);
 
-  useEffect(() => {
-    forceUpdate(n => n + 1);
-  }, [settingStore.mode]);
+    useEffect(() => {
+      loadComponents().catch(error => {
+        console.error('Failed to load markdown components:', error);
+      });
+    }, [loadComponents]);
 
-  useEffect(() => {
-    loadComponents().catch(error => {
-      console.error('Failed to load markdown components:', error);
-    });
-  }, [loadComponents]);
+    return (
+      <div className="markdown-render">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
+          rehypePlugins={
+            componentsRef.current?.rehypeMathjax
+              ? [componentsRef.current.rehypeMathjax]
+              : []
+          }
+          components={{
+            a: ({ ...props }) => (
+              <a {...props} target="_blank" rel="noopener noreferrer" />
+            ),
+            code({ inline, className, children, ...props }: any) {
+              const match = /language-(\w+)/.exec(className || '');
 
-  return (
-    <div className="markdown-render">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-        rehypePlugins={
-          componentsRef.current?.rehypeMathjax
-            ? [componentsRef.current.rehypeMathjax]
-            : []
-        }
-        components={{
-          a: ({ ...props }) => (
-            <a {...props} target="_blank" rel="noopener noreferrer" />
-          ),
-          code({ inline, className, children, ...props }: any) {
-            const match = /language-(\w+)/.exec(className || '');
+              if (!inline && match && componentsRef.current) {
+                const { SyntaxHighlighter, oneDark, oneLight } =
+                  componentsRef.current;
+                const code = String(children).replace(/\n$/, '');
+                return (
+                  <CodeBlock
+                    language={match[1]}
+                    code={code}
+                    style={settingStore.mode === 'dark' ? oneDark : oneLight}
+                    SyntaxHighlighter={SyntaxHighlighter}
+                  />
+                );
+              }
 
-            if (!inline && match && componentsRef.current) {
-              const { SyntaxHighlighter, oneDark, oneLight } =
-                componentsRef.current;
-              const code = String(children).replace(/\n$/, '');
               return (
-                <CodeBlock
-                  language={match[1]}
-                  code={code}
-                  style={settingStore.mode === 'dark' ? oneDark : oneLight}
-                  SyntaxHighlighter={SyntaxHighlighter}
-                />
+                <code {...props} className={className}>
+                  {children}
+                </code>
               );
-            }
-
-            return (
-              <code {...props} className={className}>
-                {children}
-              </code>
-            );
-          },
-        }}
-      >
-        {children}
-      </ReactMarkdown>
-    </div>
-  );
-});
+            },
+          }}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
+    );
+  },
+);
 
 export default MarkdownRender;

@@ -146,7 +146,11 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
         open={!!editingId}
         onCancel={() => setEditingId(null)}
         onFinish={async values => {
-          await updateConversationApi[1](values);
+          await updateConversationApi[1]({
+            id: editingId!,
+            name: values.name,
+            config: values.config,
+          });
           setEditingId(null);
         }}
         initialValues={store.conversations.find(c => c.id === editingId)}

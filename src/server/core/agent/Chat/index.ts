@@ -29,7 +29,7 @@ export default class ChatAgent extends Agent {
   async streamCall(
     messages: Message[],
     outputWriter: WritableStreamDefaultWriter<StreamChunk>,
-    @config() config?: ChatAgentConfig,
+    @config() options?: ChatAgentConfig,
   ) {
     const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
 
@@ -38,14 +38,14 @@ export default class ChatAgent extends Agent {
       content: msg.content,
     }));
 
-    const model = config?.model?.code ?? process.env.OPENAI_MODEL;
+    const model = options?.model?.code ?? process.env.OPENAI_MODEL;
 
     this.logger.debug(`Chat with ${model}, messages: `, conversationMessages);
 
     await llmCallTool.streamCall(
       {
         model,
-        temperature: config?.model?.temperature,
+        temperature: options?.model?.temperature,
         messages: conversationMessages,
       },
       outputWriter,

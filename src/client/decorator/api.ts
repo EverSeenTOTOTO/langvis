@@ -39,11 +39,11 @@ const compilePath = <P extends Record<string, any>>(url: string, req: P) => {
   const path = url.replace(/\?.*/, '');
 
   if (isFullPath(path)) {
-    const url = new URL(path);
+    const parsedUrl = new URL(path);
 
-    url.pathname = compile(url.pathname)(req);
+    parsedUrl.pathname = compile(parsedUrl.pathname)(req);
 
-    return `${url.toString()}${query ? query[0] : ''}`;
+    return `${parsedUrl.toString()}${query ? query[0] : ''}`;
   }
 
   return `${compile(path)(req)}${query ? query[0] : ''}`;

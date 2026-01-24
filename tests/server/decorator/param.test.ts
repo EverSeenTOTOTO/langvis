@@ -8,7 +8,7 @@ import {
   request,
   response,
 } from '@/server/decorator/param';
-import { BaseDto, Dto } from '@/shared/dto/base';
+import { BaseDto, dto } from '@/shared/dto/base';
 import type { Request, Response } from 'express';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,7 +17,7 @@ interface TestInput {
   age: number;
 }
 
-@Dto<TestInput>({
+@dto<TestInput>({
   type: 'object',
   properties: {
     name: { type: 'string', minLength: 1 },
@@ -36,7 +36,7 @@ interface QueryParams {
   limit: number;
 }
 
-@Dto<QueryParams>({
+@dto<QueryParams>({
   type: 'object',
   properties: {
     page: { type: 'integer', minimum: 1 },
@@ -54,8 +54,8 @@ describe('param decorators', () => {
   describe('body decorator', () => {
     it('should auto-infer DTO class from parameter type', () => {
       class TestController {
-        async create(@body() dto: TestInputDto) {
-          return dto;
+        async create(@body() data: TestInputDto) {
+          return data;
         }
       }
 
@@ -72,8 +72,8 @@ describe('param decorators', () => {
 
     it('should use explicitly provided DTO class', () => {
       class TestController {
-        async create(@body(TestInputDto) dto: any) {
-          return dto;
+        async create(@body(TestInputDto) data: any) {
+          return data;
         }
       }
 
@@ -197,10 +197,10 @@ describe('param decorators', () => {
       class TestController {
         async update(
           @param('id') id: string,
-          @body() dto: TestInputDto,
+          @body() data: TestInputDto,
           @response() res: Response,
         ) {
-          return { id, dto, res };
+          return { id, dto: data, res };
         }
       }
 
@@ -245,8 +245,8 @@ describe('extractParams', () => {
 
   it('should extract and validate body parameter', async () => {
     class TestController {
-      async create(@body() dto: TestInputDto) {
-        return dto;
+      async create(@body() data: TestInputDto) {
+        return data;
       }
     }
 
@@ -265,8 +265,8 @@ describe('extractParams', () => {
 
   it('should throw ValidationException for invalid body', async () => {
     class TestController {
-      async create(@body() dto: TestInputDto) {
-        return dto;
+      async create(@body() data: TestInputDto) {
+        return data;
       }
     }
 
@@ -343,10 +343,10 @@ describe('extractParams', () => {
     class TestController {
       async update(
         @param('id') id: string,
-        @body() dto: TestInputDto,
+        @body() data: TestInputDto,
         @response() res: Response,
       ) {
-        return { id, dto, res };
+        return { id, dto: data, res };
       }
     }
 

@@ -1,4 +1,4 @@
-import { BaseDto, Dto } from '../base';
+import { BaseDto, dto } from '../base';
 
 export interface GenerateTTSRequest {
   text: string;
@@ -8,7 +8,7 @@ export interface GenerateTTSRequest {
   speedRatio?: number;
 }
 
-@Dto<GenerateTTSRequest>({
+@dto<GenerateTTSRequest>({
   type: 'object',
   properties: {
     text: { type: 'string', minLength: 1 },

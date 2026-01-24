@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ConversationService } from '@/server/service/ConversationService';
-import { Role } from '@/shared/entities/Message';
 import pg from '@/server/service/pg';
 import { AgentIds } from '@/shared/constants';
+import { Role } from '@/shared/entities/Message';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the pg module
 vi.mock('@/server/service/pg', () => ({
@@ -10,8 +10,8 @@ vi.mock('@/server/service/pg', () => ({
     getRepository: vi.fn().mockImplementation((entity: any) => {
       if (entity.name === 'ConversationEntity') {
         return {
-          create: vi.fn(entity => entity),
-          save: vi.fn(async entity => entity),
+          create: vi.fn(e => e),
+          save: vi.fn(async e => e),
           findOneBy: vi.fn(async () => null),
           findOne: vi.fn(async () => null),
           find: vi.fn(async () => []),
@@ -19,16 +19,16 @@ vi.mock('@/server/service/pg', () => ({
         };
       } else if (entity.name === 'MessageEntity') {
         return {
-          create: vi.fn(entity => entity),
-          save: vi.fn(async entity => entity),
+          create: vi.fn(e => e),
+          save: vi.fn(async e => e),
           findOneBy: vi.fn(async () => null),
           find: vi.fn(async () => []),
           delete: vi.fn(async () => ({ affected: 0 })),
         };
       }
       return {
-        create: vi.fn(entity => entity),
-        save: vi.fn(async entity => entity),
+        create: vi.fn(e => e),
+        save: vi.fn(async e => e),
         findOneBy: vi.fn(async () => null),
         find: vi.fn(async () => []),
         delete: vi.fn(async () => ({ affected: 0 })),

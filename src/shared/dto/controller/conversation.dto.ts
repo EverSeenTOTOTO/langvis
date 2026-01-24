@@ -1,6 +1,6 @@
 import { Role } from '@/shared/entities/Message';
 import { Conversation, Message } from '@/shared/types/entities';
-import { BaseDto, Dto } from '../base';
+import { BaseDto, dto } from '../base';
 
 export interface CreateConversationRequest {
   name: string;
@@ -13,7 +13,7 @@ export interface CreateConversationRequest {
 export type ConversationConfig = CreateConversationRequest['config'];
 
 // @ts-expect-error ajv cannot handle `[key: string]: any`?
-@Dto<CreateConversationRequest>({
+@dto<CreateConversationRequest>({
   type: 'object',
   properties: {
     name: { type: 'string', minLength: 1 },
@@ -39,7 +39,7 @@ export class CreateConversationRequestDto
 
 export interface GetAllConversationsRequest {}
 
-@Dto<GetAllConversationsRequest>({
+@dto<GetAllConversationsRequest>({
   type: 'object',
   additionalProperties: false,
 })
@@ -55,7 +55,7 @@ export interface GetConversationByIdRequest {
   id: string;
 }
 
-@Dto<GetConversationByIdRequest>({
+@dto<GetConversationByIdRequest>({
   type: 'object',
   properties: {
     id: { type: 'string', format: 'uuid' },
@@ -80,7 +80,7 @@ export interface UpdateConversationRequest {
 }
 
 // @ts-expect-error ajv cannot handle `[key: string]: any`?
-@Dto<UpdateConversationRequest>({
+@dto<UpdateConversationRequest>({
   type: 'object',
   properties: {
     id: { type: 'string', format: 'uuid' },
@@ -111,7 +111,7 @@ export interface DeleteConversationRequest {
   id: string;
 }
 
-@Dto<DeleteConversationRequest>({
+@dto<DeleteConversationRequest>({
   type: 'object',
   properties: {
     id: { type: 'string', format: 'uuid' },
@@ -136,7 +136,7 @@ export interface AddMessageToConversationRequest {
   content: string;
 }
 
-@Dto<AddMessageToConversationRequest>({
+@dto<AddMessageToConversationRequest>({
   type: 'object',
   properties: {
     id: { type: 'string', format: 'uuid' },
@@ -159,7 +159,7 @@ export interface GetMessagesByConversationIdRequest {
   id: string;
 }
 
-@Dto<GetMessagesByConversationIdRequest>({
+@dto<GetMessagesByConversationIdRequest>({
   type: 'object',
   properties: {
     id: { type: 'string', format: 'uuid' },
@@ -183,7 +183,7 @@ export interface BatchDeleteMessagesInConversationRequest {
   messageIds: string[];
 }
 
-@Dto<BatchDeleteMessagesInConversationRequest>({
+@dto<BatchDeleteMessagesInConversationRequest>({
   type: 'object',
   properties: {
     id: { type: 'string', format: 'uuid' },

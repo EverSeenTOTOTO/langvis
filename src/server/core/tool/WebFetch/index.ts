@@ -28,8 +28,8 @@ export default class WebFetchTool extends Tool {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  async call(@input() input: WebFetchInput): Promise<WebFetchOutput> {
-    const { url, timeout = 30000 } = input;
+  async call(@input() data: WebFetchInput): Promise<WebFetchOutput> {
+    const { url, timeout = 30000 } = data;
 
     this.logger.info(`Fetching content from: ${url}`);
 

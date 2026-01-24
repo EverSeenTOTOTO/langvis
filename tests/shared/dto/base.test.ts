@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { describe, it, expect } from 'vitest';
 import {
-  Dto,
+  dto,
   BaseDto,
   isDtoClass,
   ValidationException,
@@ -14,7 +14,7 @@ interface TestUser {
   email?: string;
 }
 
-@Dto<TestUser>({
+@dto<TestUser>({
   type: 'object',
   properties: {
     name: { type: 'string', minLength: 1 },
@@ -32,7 +32,7 @@ class TestUserDto extends BaseDto implements TestUser {
 
 interface EmptyRequest {}
 
-@Dto<EmptyRequest>({
+@dto<EmptyRequest>({
   type: 'object',
   additionalProperties: false,
 })
