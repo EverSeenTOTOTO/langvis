@@ -3,7 +3,6 @@ import {
   StartChatRequestDto,
 } from '@/shared/dto/controller';
 import { Role } from '@/shared/entities/Message';
-import { ConversationConfig } from '@/shared/types';
 import chalk from 'chalk';
 import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
@@ -87,29 +86,14 @@ export default class ChatController {
         .json({ error: `Conversation ${conversationId} not found` });
     }
 
-    if (
-      !conversation.config ||
-      !('agent' in conversation.config) ||
-      !conversation.config.agent
-    ) {
-      return res.status(400).json({
-        error: `Conversation ${conversationId} has no agent configured`,
-      });
-    }
-
-    await this.startAgent(
-      req,
-      conversation.config as ConversationConfig,
-      dto.role,
-      dto.content,
-    );
+    await this.startAgent(req, conversation.config!, dto.role, dto.content);
 
     return res.status(200).json({ success: true });
   }
 
   private async startAgent(
     req: Request,
-    config: ConversationConfig,
+    config: Record<string, any>,
     userRole: Role,
     userContent: string,
   ) {

@@ -68,10 +68,15 @@ class MockEventSource {
   }
 }
 
-vi.mock('@/client/decorator/api', () => ({
-  getPrefetchPath: vi.fn((path: string) => `http://localhost:3000${path}`),
-  api: vi.fn(() => () => {}),
-}));
+vi.mock('@/client/decorator/api', async importOriginal => {
+  const actual =
+    await importOriginal<typeof import('@/client/decorator/api')>();
+  return {
+    ...actual,
+    getPrefetchPath: vi.fn((path: string) => `http://localhost:3000${path}`),
+    api: vi.fn(() => () => {}),
+  };
+});
 
 vi.mock('antd', () => ({
   message: {

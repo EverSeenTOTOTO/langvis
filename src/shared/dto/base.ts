@@ -1,9 +1,9 @@
-import { ClassConstructor, plainToInstance } from 'class-transformer';
-import { validateOrReject, ValidationError } from 'class-validator';
+import { JSONSchemaType } from 'ajv';
+import { ajv, getValidator } from '@/server/utils/schemaValidator';
 
 export class ValidationException extends Error {
   constructor(
-    public errors: ValidationError[],
+    public errors: string,
     message = 'Validation failed',
   ) {
     super(message);
@@ -13,45 +13,52 @@ export class ValidationException extends Error {
   toJSON() {
     return {
       message: this.message,
-      errors: this.errors.map(error => ({
-        property: error.property,
-        constraints: error.constraints,
-        children: error.children,
-      })),
+      errors: this.errors,
     };
   }
 }
 
+export const DTO_SCHEMA_KEY = Symbol('dto:schema');
+
+export interface DtoConstructor<T = any> {
+  new (): T;
+  validate(plain: unknown): Promise<T>;
+  transform(plain: unknown): T;
+}
+
+export function isDtoClass(target: any): target is DtoConstructor {
+  return (
+    typeof target === 'function' && Reflect.hasMetadata(DTO_SCHEMA_KEY, target)
+  );
+}
+
 export abstract class BaseDto {
-  static async validate<T extends BaseDto>(
-    this: ClassConstructor<T>,
-    plain: unknown,
-  ): Promise<T> {
-    const instance = plainToInstance(this, plain, {
-      excludeExtraneousValues: true,
-      exposeDefaultValues: true,
-    });
+  static validate: (plain: unknown) => Promise<any>;
+  static transform: (plain: unknown) => any;
+}
 
-    try {
-      await validateOrReject(instance, {
-        whitelist: true,
-        forbidNonWhitelisted: false,
-        skipMissingProperties: false,
-      });
-    } catch (errors) {
-      throw new ValidationException(errors as ValidationError[]);
-    }
+export function Dto<T extends object>(schema: JSONSchemaType<T>) {
+  return function <C extends new () => T>(Target: C): C & DtoConstructor<T> {
+    Reflect.defineMetadata(DTO_SCHEMA_KEY, schema, Target);
 
-    return instance;
-  }
+    const EnhancedClass = Target as C & DtoConstructor<T>;
 
-  static transform<T extends BaseDto>(
-    this: ClassConstructor<T>,
-    plain: unknown,
-  ): T {
-    return plainToInstance(this, plain, {
-      excludeExtraneousValues: true,
-      exposeDefaultValues: true,
-    });
-  }
+    EnhancedClass.validate = async function (plain: unknown): Promise<T> {
+      const validator = getValidator(schema);
+      const data = structuredClone(plain);
+      if (validator(data)) {
+        return Object.assign(new Target(), data) as T;
+      }
+      throw new ValidationException(ajv.errorsText(validator.errors));
+    };
+
+    EnhancedClass.transform = function (plain: unknown): T {
+      const data = structuredClone(plain);
+      const validator = getValidator(schema);
+      validator(data);
+      return Object.assign(new Target(), data) as T;
+    };
+
+    return EnhancedClass;
+  };
 }

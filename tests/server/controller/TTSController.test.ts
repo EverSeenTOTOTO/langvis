@@ -108,7 +108,7 @@ describe('TTSController', () => {
       } catch (error: any) {
         expect(error.name).toBe('ValidationException');
         expect(error.errors).toBeDefined();
-        expect(error.errors.some((e: any) => e.property === 'text')).toBe(true);
+        expect(error.errors).toContain('text');
       }
     });
 
@@ -123,7 +123,7 @@ describe('TTSController', () => {
       } catch (error: any) {
         expect(error.name).toBe('ValidationException');
         expect(error.errors).toBeDefined();
-        expect(error.errors.some((e: any) => e.property === 'text')).toBe(true);
+        expect(error.errors).toContain('text');
       }
     });
 

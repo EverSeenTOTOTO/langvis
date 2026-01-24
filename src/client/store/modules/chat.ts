@@ -1,8 +1,8 @@
 import { api, ApiRequest, getPrefetchPath } from '@/client/decorator/api';
 import { store } from '@/client/decorator/store';
-import {
-  CancelChatRequestDto,
-  StartChatRequestDto,
+import type {
+  CancelChatRequest,
+  StartChatRequest,
 } from '@/shared/dto/controller';
 import { SSEMessage } from '@/shared/types';
 import { isClient } from '@/shared/utils';
@@ -92,25 +92,22 @@ export class ChatStore {
     this.eventSources.delete(conversationId);
   }
 
-  @api(
-    (req: CancelChatRequestDto) => `/api/chat/cancel/${req.conversationId}`,
-    {
-      method: 'post',
-    },
-  )
+  @api((req: CancelChatRequest) => `/api/chat/cancel/${req.conversationId}`, {
+    method: 'post',
+  })
   async cancelChat(
-    _params: CancelChatRequestDto,
-    req?: ApiRequest<CancelChatRequestDto>,
+    _params: CancelChatRequest,
+    req?: ApiRequest<CancelChatRequest>,
   ) {
     await req!.send();
   }
 
-  @api((req: StartChatRequestDto) => `/api/chat/start/${req.conversationId}`, {
+  @api((req: StartChatRequest) => `/api/chat/start/${req.conversationId}`, {
     method: 'post',
   })
   async startChat(
-    _params: StartChatRequestDto,
-    req?: ApiRequest<StartChatRequestDto>,
+    _params: StartChatRequest,
+    req?: ApiRequest<StartChatRequest>,
   ) {
     const conversationId = this.conversationStore.currentConversationId;
 

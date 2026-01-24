@@ -1,47 +1,37 @@
-import { Expose } from 'class-transformer';
-import {
-  IsNotEmpty,
-  IsNumber,
-  IsOptional,
-  IsString,
-  Max,
-  Min,
-} from 'class-validator';
-import { BaseDto } from '../base';
+import { BaseDto, Dto } from '../base';
 
-export class GenerateTTSRequestDto extends BaseDto {
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
-  text!: string;
-
-  @Expose()
-  @IsString()
-  @IsOptional()
+export interface GenerateTTSRequest {
+  text: string;
   reqId?: string;
-
-  @Expose()
-  @IsString()
-  @IsOptional()
   voiceType?: string;
-
-  @Expose()
-  @IsString()
-  @IsOptional()
   emotion?: string;
-
-  @Expose()
-  @IsNumber()
-  @Min(0.5)
-  @Max(2.0)
-  @IsOptional()
   speedRatio?: number;
 }
 
-export class GenerateTTSResponseDto extends BaseDto {
-  @Expose()
-  success!: boolean;
+@Dto<GenerateTTSRequest>({
+  type: 'object',
+  properties: {
+    text: { type: 'string', minLength: 1 },
+    reqId: { type: 'string', nullable: true },
+    voiceType: { type: 'string', nullable: true },
+    emotion: { type: 'string', nullable: true },
+    speedRatio: { type: 'number', minimum: 0.5, maximum: 2.0, nullable: true },
+  },
+  required: ['text'],
+  additionalProperties: false,
+})
+export class GenerateTTSRequestDto
+  extends BaseDto
+  implements GenerateTTSRequest
+{
+  text!: string;
+  reqId?: string;
+  voiceType?: string;
+  emotion?: string;
+  speedRatio?: number;
+}
 
-  @Expose()
+export interface GenerateTTSResponse {
+  success: boolean;
   data?: any;
 }

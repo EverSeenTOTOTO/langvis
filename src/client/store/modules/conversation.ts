@@ -1,15 +1,13 @@
 import { api, ApiRequest } from '@/client/decorator/api';
 import { hydrate } from '@/client/decorator/hydrate';
 import { store } from '@/client/decorator/store';
-import {
-  AddMessageToConversationRequestDto,
-  BatchDeleteMessagesInConversationRequestDto,
-  ConversationDto,
-  CreateConversationRequestDto,
-  MessageDto,
-  UpdateConversationRequestDto,
+import type {
+  AddMessageToConversationRequest,
+  BatchDeleteMessagesInConversationRequest,
+  CreateConversationRequest,
+  UpdateConversationRequest,
 } from '@/shared/dto/controller';
-import type { Message } from '@/shared/types/entities';
+import type { Conversation, Message } from '@/shared/types/entities';
 import { Role } from '@/shared/types/entities';
 import { makeAutoObservable, reaction } from 'mobx';
 
@@ -21,13 +19,13 @@ const isActiveAssistMessage = (message?: Message) =>
 @store()
 export class ConversationStore {
   @hydrate()
-  conversations: ConversationDto[] = [];
+  conversations: Conversation[] = [];
 
   @hydrate()
   currentConversationId?: string;
 
   @hydrate()
-  messages: Record<string, MessageDto[]> = {};
+  messages: Record<string, Message[]> = {};
 
   constructor() {
     makeAutoObservable(this);
@@ -45,7 +43,7 @@ export class ConversationStore {
     this.currentConversationId = id;
   }
 
-  get currentConversation(): ConversationDto | undefined {
+  get currentConversation(): Conversation | undefined {
     return this.conversations.find(
       each => each.id === this.currentConversationId,
     );
@@ -53,13 +51,13 @@ export class ConversationStore {
 
   @api('/api/conversation', { method: 'post' })
   async createConversation(
-    _params: CreateConversationRequestDto,
-    req?: ApiRequest<CreateConversationRequestDto>,
+    _params: CreateConversationRequest,
+    req?: ApiRequest<CreateConversationRequest>,
   ) {
     const result = await req!.send();
 
     if (result) {
-      this.setCurrentConversationId((result as ConversationDto).id);
+      this.setCurrentConversationId((result as Conversation).id);
 
       await this.getAllConversations();
     }
@@ -67,7 +65,7 @@ export class ConversationStore {
 
   @api('/api/conversation')
   async getAllConversations(_params?: any, req?: ApiRequest) {
-    const result = (await req!.send()) as ConversationDto[];
+    const result = (await req!.send()) as Conversation[];
 
     if (result) {
       this.conversations = result;
@@ -84,14 +82,14 @@ export class ConversationStore {
     return result;
   }
 
-  @api((req: UpdateConversationRequestDto) => `/api/conversation/${req.id}`, {
+  @api((req: UpdateConversationRequest) => `/api/conversation/${req.id}`, {
     method: 'put',
   })
   async updateConversation(
-    _params: UpdateConversationRequestDto,
-    req?: ApiRequest<UpdateConversationRequestDto>,
+    _params: UpdateConversationRequest,
+    req?: ApiRequest<UpdateConversationRequest>,
   ) {
-    const result = (await req!.send()) as ConversationDto;
+    const result = (await req!.send()) as Conversation;
 
     await this.getAllConversations();
 
@@ -110,15 +108,15 @@ export class ConversationStore {
   }
 
   @api(
-    (req: AddMessageToConversationRequestDto) =>
+    (req: AddMessageToConversationRequest) =>
       `/api/conversation/${req.id}/messages`,
     {
       method: 'post',
     },
   )
   async addMessageToConversation(
-    params: AddMessageToConversationRequestDto,
-    req?: ApiRequest<AddMessageToConversationRequestDto>,
+    params: AddMessageToConversationRequest,
+    req?: ApiRequest<AddMessageToConversationRequest>,
   ) {
     await req!.send();
     await this.getMessagesByConversationId({ id: params.id });
@@ -137,21 +135,21 @@ export class ConversationStore {
   }
 
   @api(
-    (req: BatchDeleteMessagesInConversationRequestDto) =>
+    (req: BatchDeleteMessagesInConversationRequest) =>
       `/api/conversation/${req.id}/messages`,
     {
       method: 'delete',
     },
   )
   async batchDeleteMessagesInConversation(
-    params: BatchDeleteMessagesInConversationRequestDto,
-    req?: ApiRequest<BatchDeleteMessagesInConversationRequestDto>,
+    params: BatchDeleteMessagesInConversationRequest,
+    req?: ApiRequest<BatchDeleteMessagesInConversationRequest>,
   ) {
     await req!.send();
     await this.getMessagesByConversationId({ id: params.id });
   }
 
-  get currentMessages(): MessageDto[] {
+  get currentMessages(): Message[] {
     return this.messages[this.currentConversationId!] || [];
   }
 

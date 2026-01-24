@@ -233,7 +233,7 @@ describe('ChatController', () => {
       } catch (error: any) {
         expect(error.name).toBe('ValidationException');
         expect(error.errors).toBeDefined();
-        expect(error.errors.some((e: any) => e.property === 'role')).toBe(true);
+        expect(error.errors).toContain('role');
       }
     });
 
@@ -252,9 +252,7 @@ describe('ChatController', () => {
       } catch (error: any) {
         expect(error.name).toBe('ValidationException');
         expect(error.errors).toBeDefined();
-        expect(error.errors.some((e: any) => e.property === 'content')).toBe(
-          true,
-        );
+        expect(error.errors).toContain('content');
       }
     });
 
@@ -274,7 +272,7 @@ describe('ChatController', () => {
       } catch (error: any) {
         expect(error.name).toBe('ValidationException');
         expect(error.errors).toBeDefined();
-        expect(error.errors.some((e: any) => e.property === 'role')).toBe(true);
+        expect(error.errors).toContain('role');
       }
     });
 
@@ -305,41 +303,6 @@ describe('ChatController', () => {
       expect(mockStatus).toHaveBeenCalledWith(404);
       expect(mockJson).toHaveBeenCalledWith({
         error: `Conversation ${conversationId} not found`,
-      });
-    });
-
-    it('should return 400 if agent configuration is missing', async () => {
-      const conversationId = 'test-conversation-id';
-      const role = Role.USER;
-      const content = 'Hello';
-      const mockMessage = { id: '1', conversationId, role, content };
-      const mockConversation = {
-        id: conversationId,
-        name: 'Test Conversation',
-        config: {},
-      };
-
-      mockRequest.params = { conversationId };
-      mockRequest.body = { role, content };
-
-      mockConversationService.addMessageToConversation = vi
-        .fn()
-        .mockResolvedValue(mockMessage);
-
-      mockConversationService.getConversationById = vi
-        .fn()
-        .mockResolvedValue(mockConversation);
-
-      await chatController.chat(
-        conversationId,
-        mockRequest.body,
-        mockRequest as Request,
-        mockResponse as Response,
-      );
-
-      expect(mockStatus).toHaveBeenCalledWith(400);
-      expect(mockJson).toHaveBeenCalledWith({
-        error: 'Conversation test-conversation-id has no agent configured',
       });
     });
 
@@ -644,29 +607,6 @@ describe('ChatController', () => {
       expect(mockAgent.streamCall).not.toHaveBeenCalled();
     });
 
-    it('should handle missing agent configuration during integration', async () => {
-      const conversationWithoutAgent = {
-        id: conversationId,
-        config: {},
-      };
-      mockConversationService.getConversationById.mockResolvedValue(
-        conversationWithoutAgent,
-      );
-
-      await chatController.chat(
-        conversationId,
-        mockRequest.body,
-        mockRequest as Request,
-        mockResponse as Response,
-      );
-
-      expect(mockStatus).toHaveBeenCalledWith(400);
-      expect(mockJson).toHaveBeenCalledWith({
-        error: `Conversation ${conversationId} has no agent configured`,
-      });
-      expect(mockAgent.streamCall).not.toHaveBeenCalled();
-    });
-
     it('should verify WritableStream is properly created for agent', async () => {
       await chatController.chat(
         conversationId,
@@ -758,9 +698,7 @@ describe('ChatController', () => {
       } catch (error: any) {
         expect(error.name).toBe('ValidationException');
         expect(error.errors).toBeDefined();
-        expect(
-          error.errors.some((e: any) => e.property === 'conversationId'),
-        ).toBe(true);
+        expect(error.errors).toContain('conversationId');
       }
     });
 
@@ -782,9 +720,7 @@ describe('ChatController', () => {
       } catch (error: any) {
         expect(error.name).toBe('ValidationException');
         expect(error.errors).toBeDefined();
-        expect(error.errors.some((e: any) => e.property === 'messageId')).toBe(
-          true,
-        );
+        expect(error.errors).toContain('messageId');
       }
     });
   });

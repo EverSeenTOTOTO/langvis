@@ -1,67 +1,63 @@
-import { Expose, Type } from 'class-transformer';
-import {
-  IsArray,
-  IsEmail,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  IsUUID,
-  ValidateNested,
-} from 'class-validator';
-import { BaseDto } from '../base';
+import { BaseDto, Dto } from '../base';
 
-export class UserDto extends BaseDto {
-  @Expose()
-  @IsUUID()
-  id!: string;
-
-  @Expose()
-  @IsString()
-  name!: string;
-
-  @Expose()
-  @IsEmail()
-  email!: string;
-
-  @Expose()
-  emailVerified!: boolean;
-
-  @Expose()
-  @IsString()
-  @IsOptional()
+export interface UserData {
+  id: string;
+  name: string;
+  email: string;
+  emailVerified: boolean;
   image?: string | null;
-
-  @Expose()
-  createdAt!: Date;
-
-  @Expose()
-  updatedAt!: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export class GetAllUsersRequestDto extends BaseDto {}
+export interface GetAllUsersRequest {}
 
-export class GetAllUsersResponseDto extends BaseDto {
-  @Expose()
-  @Type(() => UserDto)
-  @ValidateNested({ each: true })
-  @IsArray()
-  users!: UserDto[];
+@Dto<GetAllUsersRequest>({
+  type: 'object',
+  additionalProperties: false,
+})
+export class GetAllUsersRequestDto
+  extends BaseDto
+  implements GetAllUsersRequest {}
+
+export interface GetAllUsersResponse {
+  users: UserData[];
 }
 
-export class GetUserByIdRequestDto extends BaseDto {
-  @Expose()
-  @IsUUID()
-  @IsNotEmpty()
+export interface GetUserByIdRequest {
+  id: string;
+}
+
+@Dto<GetUserByIdRequest>({
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+  },
+  required: ['id'],
+  additionalProperties: false,
+})
+export class GetUserByIdRequestDto
+  extends BaseDto
+  implements GetUserByIdRequest
+{
   id!: string;
 }
 
-export class GetUserByIdResponseDto extends UserDto {}
-
-export class GetUserByEmailRequestDto extends BaseDto {
-  @Expose()
-  @IsEmail()
-  @IsNotEmpty()
-  email!: string;
+export interface GetUserByEmailRequest {
+  email: string;
 }
 
-export class GetUserByEmailResponseDto extends UserDto {}
+@Dto<GetUserByEmailRequest>({
+  type: 'object',
+  properties: {
+    email: { type: 'string', format: 'email' },
+  },
+  required: ['email'],
+  additionalProperties: false,
+})
+export class GetUserByEmailRequestDto
+  extends BaseDto
+  implements GetUserByEmailRequest
+{
+  email!: string;
+}

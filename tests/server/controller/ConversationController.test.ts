@@ -131,7 +131,7 @@ describe('ConversationController', () => {
     } catch (error: any) {
       expect(error.name).toBe('ValidationException');
       expect(error.errors).toBeDefined();
-      expect(error.errors.some((e: any) => e.property === 'name')).toBe(true);
+      expect(error.errors).toContain('name');
     }
   });
 
@@ -319,9 +319,7 @@ describe('ConversationController', () => {
     } catch (error: any) {
       expect(error.name).toBe('ValidationException');
       expect(error.errors).toBeDefined();
-      expect(error.errors.some((e: any) => e.property === 'content')).toBe(
-        true,
-      );
+      expect(error.errors).toContain('content');
     }
   });
 
@@ -339,7 +337,7 @@ describe('ConversationController', () => {
     } catch (error: any) {
       expect(error.name).toBe('ValidationException');
       expect(error.errors).toBeDefined();
-      expect(error.errors.some((e: any) => e.property === 'role')).toBe(true);
+      expect(error.errors).toContain('role');
     }
   });
 
