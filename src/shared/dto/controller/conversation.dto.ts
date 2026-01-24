@@ -1,216 +1,209 @@
 import { Role } from '@/shared/entities/Message';
-import { Expose, plainToInstance, Transform, Type } from 'class-transformer';
-import {
-  IsArray,
-  IsEnum,
-  IsNotEmpty,
-  IsObject,
-  IsOptional,
-  IsString,
-  IsUUID,
-  ValidateNested,
-  validateSync,
-} from 'class-validator';
-import { BaseDto, ValidationException } from '../base';
+import { Conversation, Message } from '@/shared/types/entities';
+import { BaseDto, Dto } from '../base';
 
-export class ConversationConfigDto extends BaseDto {
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
-  agent!: string;
+export interface CreateConversationRequest {
+  name: string;
+  config: {
+    agent: string;
+    [key: string]: any;
+  };
 }
 
-export class MessageDto extends BaseDto {
-  @Expose()
-  @IsUUID()
-  id!: string;
+export type ConversationConfig = CreateConversationRequest['config'];
 
-  @Expose()
-  @IsEnum(Role)
-  role!: Role;
-
-  @Expose()
-  @IsString()
-  content!: string;
-
-  @Expose()
-  @IsObject()
-  @IsOptional()
-  meta?: Record<string, any> | null;
-
-  @Expose()
-  createdAt!: Date;
-
-  @Expose()
-  @IsUUID()
-  conversationId!: string;
-}
-
-export class ConversationDto extends BaseDto {
-  @Expose()
-  @IsUUID()
-  id!: string;
-
-  @Expose()
-  @IsString()
-  name!: string;
-
-  @Expose()
-  @Transform(
-    ({ value }) =>
-      plainToInstance(ConversationConfigDto, value, {
-        excludeExtraneousValues: false,
-      }),
-    { toClassOnly: true },
-  )
-  @ValidateNested()
-  @IsOptional()
-  config?: ConversationConfigDto | null;
-
-  @Expose()
-  createdAt!: Date;
-
-  @Expose()
-  @Type(() => MessageDto)
-  @ValidateNested({ each: true })
-  @IsArray()
-  @IsOptional()
-  messages?: MessageDto[];
-}
-
-export class CreateConversationRequestDto extends BaseDto {
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
-  name!: string;
-
-  @Expose()
-  @Transform(
-    ({ value }) => {
-      const instance = plainToInstance(ConversationConfigDto, value);
-      const errors = validateSync(instance);
-      if (errors.length > 0) {
-        throw new ValidationException(errors);
-      }
-      return value;
+// @ts-expect-error ajv cannot handle `[key: string]: any`?
+@Dto<CreateConversationRequest>({
+  type: 'object',
+  properties: {
+    name: { type: 'string', minLength: 1 },
+    config: {
+      type: 'object',
+      properties: {
+        agent: { type: 'string' },
+      },
+      required: ['agent'],
+      additionalProperties: true,
     },
-    { toClassOnly: true },
-  )
-  @IsOptional()
-  config?: Record<string, any>;
-}
-
-export class CreateConversationResponseDto extends ConversationDto {}
-
-export class GetAllConversationsRequestDto extends BaseDto {}
-
-export class GetAllConversationsResponseDto extends BaseDto {
-  @Expose()
-  @Type(() => ConversationDto)
-  @ValidateNested({ each: true })
-  @IsArray()
-  conversations!: ConversationDto[];
-}
-
-export class GetConversationByIdRequestDto extends BaseDto {
-  @Expose()
-  @IsUUID()
-  @IsNotEmpty()
-  id!: string;
-}
-
-export class GetConversationByIdResponseDto extends ConversationDto {}
-
-export class UpdateConversationRequestDto extends BaseDto {
-  @Expose()
-  @IsUUID()
-  @IsNotEmpty()
-  id!: string;
-
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
+  },
+  required: ['name', 'config'],
+  additionalProperties: false,
+})
+export class CreateConversationRequestDto
+  extends BaseDto
+  implements CreateConversationRequest
+{
   name!: string;
+  config!: CreateConversationRequest['config'];
+}
 
-  @Expose()
-  @Transform(
-    ({ value }) => {
-      const instance = plainToInstance(ConversationConfigDto, value);
-      const errors = validateSync(instance);
-      if (errors.length > 0) {
-        throw new ValidationException(errors);
-      }
-      return value;
+export interface GetAllConversationsRequest {}
+
+@Dto<GetAllConversationsRequest>({
+  type: 'object',
+  additionalProperties: false,
+})
+export class GetAllConversationsRequestDto
+  extends BaseDto
+  implements GetAllConversationsRequest {}
+
+export interface GetAllConversationsResponse {
+  conversations: Conversation[];
+}
+
+export interface GetConversationByIdRequest {
+  id: string;
+}
+
+@Dto<GetConversationByIdRequest>({
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+  },
+  required: ['id'],
+  additionalProperties: false,
+})
+export class GetConversationByIdRequestDto
+  extends BaseDto
+  implements GetConversationByIdRequest
+{
+  id!: string;
+}
+
+export interface UpdateConversationRequest {
+  id: string;
+  name: string;
+  config: {
+    agent: string;
+    [key: string]: any;
+  };
+}
+
+// @ts-expect-error ajv cannot handle `[key: string]: any`?
+@Dto<UpdateConversationRequest>({
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    name: { type: 'string', minLength: 1 },
+    config: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        agent: { type: 'string' },
+      },
+      required: ['agent'],
+      additionalProperties: true,
     },
-    { toClassOnly: true },
-  )
-  @IsOptional()
-  config?: Record<string, any>;
+  },
+  required: ['id', 'name', 'config'],
+  additionalProperties: false,
+})
+export class UpdateConversationRequestDto
+  extends BaseDto
+  implements UpdateConversationRequest
+{
+  id!: string;
+  name!: string;
+  config!: UpdateConversationRequest['config'];
 }
 
-export class UpdateConversationResponseDto extends ConversationDto {}
+export interface DeleteConversationRequest {
+  id: string;
+}
 
-export class DeleteConversationRequestDto extends BaseDto {
-  @Expose()
-  @IsUUID()
-  @IsNotEmpty()
+@Dto<DeleteConversationRequest>({
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+  },
+  required: ['id'],
+  additionalProperties: false,
+})
+export class DeleteConversationRequestDto
+  extends BaseDto
+  implements DeleteConversationRequest
+{
   id!: string;
 }
 
-export class DeleteConversationResponseDto extends BaseDto {
-  @Expose()
-  success!: boolean;
+export interface DeleteConversationResponse {
+  success: boolean;
 }
 
-export class AddMessageToConversationRequestDto extends BaseDto {
-  @Expose()
-  @IsUUID()
-  @IsNotEmpty()
-  id!: string;
+export interface AddMessageToConversationRequest {
+  id: string;
+  role: Role;
+  content: string;
+}
 
-  @Expose()
-  @IsEnum(Role)
-  @IsNotEmpty()
+@Dto<AddMessageToConversationRequest>({
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    role: { type: 'string', enum: Object.values(Role) as Role[] },
+    content: { type: 'string', minLength: 1 },
+  },
+  required: ['id', 'role', 'content'],
+  additionalProperties: false,
+})
+export class AddMessageToConversationRequestDto
+  extends BaseDto
+  implements AddMessageToConversationRequest
+{
+  id!: string;
   role!: Role;
-
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
   content!: string;
 }
 
-export class AddMessageToConversationResponseDto extends MessageDto {}
+export interface GetMessagesByConversationIdRequest {
+  id: string;
+}
 
-export class GetMessagesByConversationIdRequestDto extends BaseDto {
-  @Expose()
-  @IsUUID()
-  @IsNotEmpty()
+@Dto<GetMessagesByConversationIdRequest>({
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+  },
+  required: ['id'],
+  additionalProperties: false,
+})
+export class GetMessagesByConversationIdRequestDto
+  extends BaseDto
+  implements GetMessagesByConversationIdRequest
+{
   id!: string;
 }
 
-export class GetMessagesByConversationIdResponseDto extends BaseDto {
-  @Expose()
-  @Type(() => MessageDto)
-  @ValidateNested({ each: true })
-  @IsArray()
-  messages!: MessageDto[];
+export interface GetMessagesByConversationIdResponse {
+  messages: Message[];
 }
 
-export class BatchDeleteMessagesInConversationRequestDto extends BaseDto {
-  @Expose()
-  @IsUUID()
-  @IsNotEmpty()
-  id!: string;
+export interface BatchDeleteMessagesInConversationRequest {
+  id: string;
+  messageIds: string[];
+}
 
-  @Expose()
-  @IsArray()
-  @IsUUID(undefined, { each: true })
-  @IsNotEmpty()
+@Dto<BatchDeleteMessagesInConversationRequest>({
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    messageIds: {
+      type: 'array',
+      items: { type: 'string', format: 'uuid' },
+      minItems: 1,
+    },
+  },
+  required: ['id', 'messageIds'],
+  additionalProperties: false,
+})
+export class BatchDeleteMessagesInConversationRequestDto
+  extends BaseDto
+  implements BatchDeleteMessagesInConversationRequest
+{
+  id!: string;
   messageIds!: string[];
 }
 
-export class BatchDeleteMessagesInConversationResponseDto extends BaseDto {
-  @Expose()
-  @IsUUID()
-  id!: string;
+export interface BatchDeleteMessagesInConversationResponse {
+  id: string;
 }

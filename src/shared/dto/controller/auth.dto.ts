@@ -1,110 +1,107 @@
-import { Expose } from 'class-transformer';
-import {
-  IsEmail,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  MinLength,
-} from 'class-validator';
-import { BaseDto } from '../base';
+import { BaseDto, Dto } from '../base';
 
-export class SignInEmailRequestDto extends BaseDto {
-  @Expose()
-  @IsEmail()
-  @IsNotEmpty()
-  email!: string;
-
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
-  @MinLength(6)
-  password!: string;
-
-  @Expose()
-  @IsString()
-  @IsOptional()
+export interface SignInEmailRequest {
+  email: string;
+  password: string;
   name?: string;
 }
 
-export class SignUpEmailRequestDto extends BaseDto {
-  @Expose()
-  @IsEmail()
-  @IsNotEmpty()
+@Dto<SignInEmailRequest>({
+  type: 'object',
+  properties: {
+    email: { type: 'string', format: 'email' },
+    password: { type: 'string', minLength: 6 },
+    name: { type: 'string', nullable: true },
+  },
+  required: ['email', 'password'],
+  additionalProperties: false,
+})
+export class SignInEmailRequestDto
+  extends BaseDto
+  implements SignInEmailRequest
+{
   email!: string;
-
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
-  @MinLength(6)
   password!: string;
-
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
-  name!: string;
+  name?: string;
 }
 
-export class SignOutRequestDto extends BaseDto {}
+export interface SignUpEmailRequest {
+  email: string;
+  password: string;
+  name: string;
+}
 
-export class GetSessionRequestDto extends BaseDto {}
-
-export class AuthUserDto extends BaseDto {
-  @Expose()
-  id!: string;
-
-  @Expose()
+@Dto<SignUpEmailRequest>({
+  type: 'object',
+  properties: {
+    email: { type: 'string', format: 'email' },
+    password: { type: 'string', minLength: 6 },
+    name: { type: 'string', minLength: 1 },
+  },
+  required: ['email', 'password', 'name'],
+  additionalProperties: false,
+})
+export class SignUpEmailRequestDto
+  extends BaseDto
+  implements SignUpEmailRequest
+{
   email!: string;
-
-  @Expose()
+  password!: string;
   name!: string;
+}
 
-  @Expose()
-  emailVerified!: boolean;
+export interface SignOutRequest {}
 
-  @Expose()
+@Dto<SignOutRequest>({
+  type: 'object',
+  additionalProperties: false,
+})
+export class SignOutRequestDto extends BaseDto implements SignOutRequest {}
+
+export interface GetSessionRequest {}
+
+@Dto<GetSessionRequest>({
+  type: 'object',
+  additionalProperties: false,
+})
+export class GetSessionRequestDto
+  extends BaseDto
+  implements GetSessionRequest {}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  emailVerified: boolean;
   image?: string | null;
-
-  @Expose()
-  createdAt!: Date;
-
-  @Expose()
-  updatedAt!: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export class SignInEmailResponseDto extends BaseDto {
-  @Expose()
-  user?: AuthUserDto;
-
-  @Expose()
+export interface SignInEmailResponse {
+  user?: AuthUser;
   session?: {
     token: string;
-    expiresAt: Date;
+    expiresAt: string;
   };
 }
 
-export class SignUpEmailResponseDto extends BaseDto {
-  @Expose()
-  user?: AuthUserDto;
-
-  @Expose()
+export interface SignUpEmailResponse {
+  user?: AuthUser;
   session?: {
     token: string;
-    expiresAt: Date;
+    expiresAt: string;
   };
 }
 
-export class SignOutResponseDto extends BaseDto {
-  @Expose()
-  success!: boolean;
+export interface SignOutResponse {
+  success: boolean;
 }
 
-export class GetSessionResponseDto extends BaseDto {
-  @Expose()
-  user?: AuthUserDto;
-
-  @Expose()
+export interface GetSessionResponse {
+  user?: AuthUser;
   session?: {
     token: string;
-    expiresAt: Date;
+    expiresAt: string;
   };
 }

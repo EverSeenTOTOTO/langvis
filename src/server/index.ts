@@ -23,7 +23,6 @@ dotenv.config({
   override: true,
 });
 
-// hypothesis: client assets to be in the same directory
 export const createServer = async (): Promise<Express> => {
   const app = express();
   const dist = path.join(process.cwd(), 'dist');

@@ -1,5 +1,4 @@
 import { useStore } from '@/client/store';
-import { message } from 'antd';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -25,7 +24,6 @@ const CodeBlock = ({
 
   const handleCopy = useCallback(() => {
     copyToClipboard(code);
-    message.success('Copied');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [code, copyToClipboard]);

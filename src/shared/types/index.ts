@@ -37,8 +37,3 @@ export type SSEMessage =
   | {
       type: 'completion_done';
     };
-
-export interface ConversationConfig {
-  agent: string;
-  [key: string]: any;
-}

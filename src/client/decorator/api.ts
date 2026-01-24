@@ -1,7 +1,6 @@
-import { BaseDto } from '@/shared/dto/base';
+import type { DtoConstructor } from '@/shared/dto/base';
 import { getOwnPropertyNames, isClient, isTest } from '@/shared/utils';
 import { message } from 'antd';
-import { ClassConstructor, plainToInstance } from 'class-transformer';
 import fetchCookie from 'fetch-cookie';
 import { merge } from 'lodash-es';
 import { compile } from 'path-to-regexp';
@@ -37,7 +36,7 @@ const isFullPath = (path: string) => /^https?:\/\//.test(path);
 
 const compilePath = <P extends Record<string, any>>(url: string, req: P) => {
   const query = url.match(/\?.*/);
-  const path = url.replace(/\?.*/, ''); // Remove query string for path-to-regexp
+  const path = url.replace(/\?.*/, '');
 
   if (isFullPath(path)) {
     const url = new URL(path);
@@ -60,11 +59,10 @@ const getApiOptions = <P extends Record<string, any>>(
   }: {
     config: ApiOptions<P>;
     options?: ApiConfig['options'];
-    requestDto?: ClassConstructor<BaseDto>;
-    responseDto?: ClassConstructor<BaseDto>;
+    requestDto?: DtoConstructor;
+    responseDto?: DtoConstructor;
   },
 ) => {
-  // @api('path')
   if (typeof config === 'string') {
     return { path: compilePath(config, req), options, requestDto, responseDto };
   }
@@ -72,7 +70,6 @@ const getApiOptions = <P extends Record<string, any>>(
   if (typeof config === 'function') {
     const result = config(req);
 
-    // @api((req) => 'path')
     if (typeof result === 'string') {
       return {
         path: compilePath(result, req),
@@ -82,14 +79,12 @@ const getApiOptions = <P extends Record<string, any>>(
       };
     }
 
-    // @api((req) => ({ path: 'path', options: {} }))
     return {
       path: compilePath(result.path, req),
       options: result.options || options,
     };
   }
 
-  // @api({ path: 'path', options: {} })
   const { path } = config;
 
   return {
@@ -99,15 +94,15 @@ const getApiOptions = <P extends Record<string, any>>(
 };
 
 export class ApiRequest<P extends Record<string, any> = {}> extends Request {
-  private responseDto?: ClassConstructor<BaseDto>;
+  private responseDto?: DtoConstructor;
 
   constructor(
     req: P,
     config: {
       config: ApiOptions<P>;
       options?: ApiConfig['options'];
-      requestDto?: ClassConstructor<BaseDto>;
-      responseDto?: ClassConstructor<BaseDto>;
+      requestDto?: DtoConstructor;
+      responseDto?: DtoConstructor;
     },
   ) {
     const { path, options, requestDto, responseDto } = getApiOptions(
@@ -119,9 +114,7 @@ export class ApiRequest<P extends Record<string, any> = {}> extends Request {
 
     let bodyData = req;
     if (requestDto && ['post', 'put'].includes(options?.method || 'get')) {
-      bodyData = plainToInstance(requestDto, req, {
-        excludeExtraneousValues: true,
-      }) as P;
+      bodyData = requestDto.transform(req);
     }
 
     const extraOptions = ['post', 'put'].includes(options?.method || 'get')
@@ -164,10 +157,7 @@ export class ApiRequest<P extends Record<string, any> = {}> extends Request {
     }
 
     if (this.responseDto) {
-      return plainToInstance(this.responseDto, rsp, {
-        excludeExtraneousValues: true,
-        exposeDefaultValues: true,
-      });
+      return this.responseDto.transform(rsp);
     }
 
     return rsp;

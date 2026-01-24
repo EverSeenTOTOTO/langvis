@@ -1,5 +1,5 @@
-import { BaseDto } from '@/shared/dto/base';
-import type { ClassConstructor } from 'class-transformer';
+import type { DtoConstructor } from '@/shared/dto/base';
+import { isDtoClass } from '@/shared/dto/base';
 import type { Request, Response } from 'express';
 
 export const PARAM_METADATA_KEY = Symbol('param_metadata');
@@ -17,44 +17,42 @@ export enum ParamType {
 export interface ParamMetadata {
   index: number;
   type: ParamType;
-  dtoClass?: ClassConstructor<BaseDto>;
+  dtoClass?: DtoConstructor;
   propertyKey?: string;
 }
 
-function createParamDecorator(
+function createParamDecorator<T>(
   type: ParamType,
-  dtoClass?: ClassConstructor<BaseDto>,
+  dtoClass?: DtoConstructor<T>,
   propertyKey?: string,
 ) {
   return function (
-    target: any,
+    target: object,
     methodName: string | symbol,
     parameterIndex: number,
   ) {
     const existingParams: ParamMetadata[] =
       Reflect.getMetadata(PARAM_METADATA_KEY, target, methodName) || [];
 
-    let finalDtoClass = dtoClass;
-
-    if (
-      !finalDtoClass &&
-      (type === ParamType.BODY ||
-        type === ParamType.QUERY ||
-        type === ParamType.PARAM)
-    ) {
-      const paramTypes: any[] =
-        Reflect.getMetadata('design:paramtypes', target, methodName) || [];
-      const paramType = paramTypes[parameterIndex];
-
-      if (paramType && paramType.prototype instanceof BaseDto) {
-        finalDtoClass = paramType;
+    let resolvedDtoClass = dtoClass;
+    if (!resolvedDtoClass && type !== ParamType.PARAM) {
+      const paramTypes = Reflect.getMetadata(
+        'design:paramtypes',
+        target,
+        methodName,
+      );
+      if (paramTypes && paramTypes[parameterIndex]) {
+        const paramType = paramTypes[parameterIndex];
+        if (isDtoClass(paramType)) {
+          resolvedDtoClass = paramType;
+        }
       }
     }
 
     existingParams.push({
       index: parameterIndex,
       type,
-      dtoClass: finalDtoClass,
+      dtoClass: resolvedDtoClass as DtoConstructor,
       propertyKey,
     });
 
@@ -67,17 +65,15 @@ function createParamDecorator(
   };
 }
 
-export function body<T extends BaseDto>(dtoClass?: ClassConstructor<T>) {
+export function body<T>(dtoClass?: DtoConstructor<T>) {
   return createParamDecorator(ParamType.BODY, dtoClass);
 }
 
-export function query<T extends BaseDto>(dtoClass?: ClassConstructor<T>) {
+export function query<T>(dtoClass?: DtoConstructor<T>) {
   return createParamDecorator(ParamType.QUERY, dtoClass);
 }
 
-export function param<T extends BaseDto>(
-  propertyKeyOrDto?: string | ClassConstructor<T>,
-) {
+export function param<T>(propertyKeyOrDto?: string | DtoConstructor<T>) {
   if (typeof propertyKeyOrDto === 'string') {
     return createParamDecorator(ParamType.PARAM, undefined, propertyKeyOrDto);
   }
@@ -117,7 +113,7 @@ export async function extractParams(
     switch (meta.type) {
       case ParamType.BODY:
         if (meta.dtoClass) {
-          value = await (meta.dtoClass as any).validate(req.body);
+          value = await meta.dtoClass.validate(req.body);
         } else {
           value = req.body;
         }
@@ -125,7 +121,7 @@ export async function extractParams(
 
       case ParamType.QUERY:
         if (meta.dtoClass) {
-          value = await (meta.dtoClass as any).validate(req.query);
+          value = await meta.dtoClass.validate(req.query);
         } else {
           value = req.query;
         }
@@ -133,7 +129,7 @@ export async function extractParams(
 
       case ParamType.PARAM:
         if (meta.dtoClass) {
-          value = await (meta.dtoClass as any).validate(req.params);
+          value = await meta.dtoClass.validate(req.params);
         } else if (meta.propertyKey) {
           value = req.params[meta.propertyKey];
         } else {

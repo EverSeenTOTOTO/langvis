@@ -1,5 +1,6 @@
 import Drawer from '@/client/components/Drawer';
 import { useStore } from '@/client/store';
+import { AgentIds } from '@/shared/constants';
 import { Role } from '@/shared/types/entities';
 import { MenuOutlined } from '@ant-design/icons';
 import { Sender } from '@ant-design/x';
@@ -35,6 +36,9 @@ const Chat: React.FC = () => {
     if (!conversationStore.currentConversationId) {
       await createConversationApi[1]({
         name: settingStore.tr('New Conversation'),
+        config: {
+          agent: AgentIds.CHAT,
+        },
       });
     }
 
