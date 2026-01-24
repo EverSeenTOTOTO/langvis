@@ -69,4 +69,3 @@ export default class LlmCallTool extends Tool {
     return response;
   }
 }
-

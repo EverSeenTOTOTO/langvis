@@ -45,13 +45,12 @@ describe('Config Decorators', () => {
       class TestAgent extends Agent {
         id = AgentIds.CHAT;
         config: AgentConfig = {
-          name: { en: 'Test Agent' },
-          description: { en: 'Test description' },
+          name: 'Test Agent',
+          description: 'Test description',
         };
         logger = winston.createLogger();
       }
 
-      // Check if the class can be resolved (injectable)
       expect(() => container.resolve(TestAgent)).not.toThrow();
     });
   });
@@ -62,13 +61,12 @@ describe('Config Decorators', () => {
       class TestTool extends Tool {
         id = ToolIds.DATE_TIME;
         config: ToolConfig = {
-          name: { en: 'Test Tool' },
-          description: { en: 'Test description' },
+          name: 'Test Tool',
+          description: 'Test description',
         };
         logger = winston.createLogger();
       }
 
-      // Check if the class can be resolved (injectable)
       expect(() => container.resolve(TestTool)).not.toThrow();
     });
   });
@@ -79,15 +77,15 @@ describe('Config Decorators', () => {
       class TestAgent extends Agent {
         id = AgentIds.CHAT;
         config: AgentConfig = {
-          name: { en: 'Test Agent' },
-          description: { en: 'Test description' },
+          name: 'Test Agent',
+          description: 'Test description',
         };
         logger = winston.createLogger();
       }
 
       const configData: AgentConfig = {
-        name: { en: 'Test Agent' },
-        description: { en: 'Test description' },
+        name: 'Test Agent',
+        description: 'Test description',
         enabled: true,
       };
 
@@ -95,7 +93,6 @@ describe('Config Decorators', () => {
 
       expect(token).toBe(AgentIds.CHAT);
 
-      // Should be able to resolve the agent
       const instance = container.resolve<Agent>(AgentIds.CHAT);
       expect(instance).toBeInstanceOf(TestAgent);
       expect(instance.config).toEqual(configData);
@@ -107,8 +104,8 @@ describe('Config Decorators', () => {
       class TestTool extends Tool {
         id = ToolIds.DATE_TIME;
         config: ToolConfig = {
-          name: { en: 'Test Tool' },
-          description: { en: 'Test description' },
+          name: 'Test Tool',
+          description: 'Test description',
         };
         logger = winston.createLogger();
       }
@@ -117,24 +114,22 @@ describe('Config Decorators', () => {
       class TestAgent extends Agent {
         id = AgentIds.CHAT;
         config: AgentConfig = {
-          name: { en: 'Test Agent' },
-          description: { en: 'Test description' },
+          name: 'Test Agent',
+          description: 'Test description',
         };
         logger = winston.createLogger();
         tools: Tool[] = [];
       }
 
-      // Register tool first
       const toolConfig: ToolConfig = {
-        name: { en: 'Test Tool' },
-        description: { en: 'Test description' },
+        name: 'Test Tool',
+        description: 'Test description',
       };
       await registerTool(TestTool, toolConfig);
 
-      // Register agent with tool dependency
       const agentConfig: AgentConfig = {
-        name: { en: 'Test Agent' },
-        description: { en: 'Test description' },
+        name: 'Test Agent',
+        description: 'Test description',
         tools: [ToolIds.DATE_TIME],
       };
 
@@ -142,7 +137,6 @@ describe('Config Decorators', () => {
 
       expect(token).toBe(AgentIds.CHAT);
 
-      // Check if tools are injected
       const instance = container.resolve<Agent>(AgentIds.CHAT) as TestAgent;
       expect(instance.tools).toHaveLength(1);
       expect(instance.tools[0]).toBeInstanceOf(TestTool);
@@ -153,8 +147,8 @@ describe('Config Decorators', () => {
       class BaseAgent extends Agent {
         id = AgentIds.REACT;
         config: AgentConfig = {
-          name: { en: 'Base Agent' },
-          description: { en: 'Base description' },
+          name: 'Base Agent',
+          description: 'Base description',
           enabled: true,
         };
         logger = winston.createLogger();
@@ -164,25 +158,23 @@ describe('Config Decorators', () => {
       class ExtendedAgent extends Agent {
         id = AgentIds.CHAT;
         config: AgentConfig = {
-          name: { en: 'Extended Agent' },
-          description: { en: 'Extended description' },
+          name: 'Extended Agent',
+          description: 'Extended description',
         };
         logger = winston.createLogger();
       }
 
-      // Register base agent first
       const baseConfig: AgentConfig = {
-        name: { en: 'Base Agent' },
-        description: { en: 'Base description' },
+        name: 'Base Agent',
+        description: 'Base description',
         enabled: true,
       };
       await registerAgent(BaseAgent, baseConfig);
 
-      // Register extended agent that extends base
       const extendedConfig: AgentConfig = {
         extends: AgentIds.REACT,
-        name: { en: 'Extended Agent' },
-        description: { en: 'Extended description' },
+        name: 'Extended Agent',
+        description: 'Extended description',
       };
 
       const token = await registerAgent(ExtendedAgent, extendedConfig);
@@ -190,8 +182,8 @@ describe('Config Decorators', () => {
       expect(token).toBe(AgentIds.CHAT);
 
       const instance = container.resolve<Agent>(AgentIds.CHAT);
-      expect(instance.config.enabled).toBe(true); // Inherited from base
-      expect(instance.config.name.en).toBe('Extended Agent'); // Overridden
+      expect(instance.config.enabled).toBe(true);
+      expect(instance.config.name).toBe('Extended Agent');
     });
 
     it('should validate config when @config decorator is used on call', async () => {
@@ -199,8 +191,8 @@ describe('Config Decorators', () => {
       class TestAgent extends Agent {
         id = AgentIds.CHAT;
         config: AgentConfig = {
-          name: { en: 'Test Agent' },
-          description: { en: 'Test description' },
+          name: 'Test Agent',
+          description: 'Test description',
         };
         logger = winston.createLogger();
 
@@ -209,27 +201,23 @@ describe('Config Decorators', () => {
         }
       }
 
-      const agentConfig: AgentConfig = {
-        name: { en: 'Test Agent' },
-        description: { en: 'Test description' },
-        config: {
-          temperature: {
-            type: 'number',
-            required: true,
-            min: 0,
-            max: 1,
+      const agentConfig: AgentConfig<{ temperature: number }> = {
+        name: 'Test Agent',
+        description: 'Test description',
+        configSchema: {
+          type: 'object',
+          properties: {
+            temperature: { type: 'number', minimum: 0, maximum: 1 },
           },
+          required: ['temperature'],
         },
       };
 
       await registerAgent(TestAgent, agentConfig);
       const instance = container.resolve<Agent>(AgentIds.CHAT);
 
-      // Validation failed
       await expect(instance.call([], { temperature: 2 })).rejects.toThrow();
-      await expect(instance.call([], {})).rejects.toThrow(); // required
-
-      // Validation passed
+      await expect(instance.call([], {})).rejects.toThrow();
       await expect(instance.call([], { temperature: 0.5 })).resolves.toBe(
         'success',
       );
@@ -240,8 +228,8 @@ describe('Config Decorators', () => {
       class TestAgent extends Agent {
         id = AgentIds.CHAT;
         config: AgentConfig = {
-          name: { en: 'Test Agent' },
-          description: { en: 'Test description' },
+          name: 'Test Agent',
+          description: 'Test description',
         };
         logger = winston.createLogger();
 
@@ -254,27 +242,25 @@ describe('Config Decorators', () => {
         }
       }
 
-      const agentConfig: AgentConfig = {
-        name: { en: 'Test Agent' },
-        description: { en: 'Test description' },
-        config: {
-          mode: {
-            type: 'text',
-            required: true,
+      const agentConfig: AgentConfig<{ mode: string }> = {
+        name: 'Test Agent',
+        description: 'Test description',
+        configSchema: {
+          type: 'object',
+          properties: {
+            mode: { type: 'string' },
           },
+          required: ['mode'],
         },
       };
 
       await registerAgent(TestAgent, agentConfig);
       const instance = container.resolve<TestAgent>(AgentIds.CHAT);
 
-      // Validation failed
       await expect(instance.streamCall([], mockWriter, {})).rejects.toThrow();
       await expect(
         instance.streamCall([], mockWriter, { mode: 123 }),
-      ).rejects.toThrow(); // wrong type
-
-      // Validation passed
+      ).rejects.toThrow();
       await expect(
         instance.streamCall([], mockWriter, { mode: 'fast' }),
       ).resolves.toBe('success');
@@ -287,26 +273,25 @@ describe('Config Decorators', () => {
       class TestTool extends Tool {
         id = ToolIds.DATE_TIME;
         config: ToolConfig = {
-          name: { en: 'Test Tool' },
-          description: { en: 'Test description' },
+          name: 'Test Tool',
+          description: 'Test description',
         };
         logger = winston.createLogger();
       }
 
-      const config: ToolConfig = {
-        name: { en: 'Test Tool' },
-        description: { en: 'Test description' },
+      const toolConfig: ToolConfig = {
+        name: 'Test Tool',
+        description: 'Test description',
         enabled: true,
       };
 
-      const token = await registerTool(TestTool, config);
+      const token = await registerTool(TestTool, toolConfig);
 
       expect(token).toBe(ToolIds.DATE_TIME);
 
-      // Should be able to resolve the tool
       const instance = container.resolve<Tool>(ToolIds.DATE_TIME);
       expect(instance).toBeInstanceOf(TestTool);
-      expect(instance.config).toEqual(config);
+      expect(instance.config).toEqual(toolConfig);
       expect(instance.id).toBe(ToolIds.DATE_TIME);
     });
 
@@ -315,8 +300,8 @@ describe('Config Decorators', () => {
       class BaseTool extends Tool {
         id = ToolIds.LLM_CALL;
         config: ToolConfig = {
-          name: { en: 'Base Tool' },
-          description: { en: 'Base description' },
+          name: 'Base Tool',
+          description: 'Base description',
           enabled: true,
         };
         logger = winston.createLogger();
@@ -326,25 +311,23 @@ describe('Config Decorators', () => {
       class ExtendedTool extends Tool {
         id = ToolIds.DATE_TIME;
         config: ToolConfig = {
-          name: { en: 'Extended Tool' },
-          description: { en: 'Extended description' },
+          name: 'Extended Tool',
+          description: 'Extended description',
         };
         logger = winston.createLogger();
       }
 
-      // Register base tool first
       const baseConfig: ToolConfig = {
-        name: { en: 'Base Tool' },
-        description: { en: 'Base description' },
+        name: 'Base Tool',
+        description: 'Base description',
         enabled: true,
       };
       await registerTool(BaseTool, baseConfig);
 
-      // Register extended tool that extends base
       const extendedConfig: ToolConfig = {
         extends: ToolIds.LLM_CALL,
-        name: { en: 'Extended Tool' },
-        description: { en: 'Extended description' },
+        name: 'Extended Tool',
+        description: 'Extended description',
       };
 
       const token = await registerTool(ExtendedTool, extendedConfig);
@@ -352,8 +335,8 @@ describe('Config Decorators', () => {
       expect(token).toBe(ToolIds.DATE_TIME);
 
       const instance = container.resolve<Tool>(ToolIds.DATE_TIME);
-      expect(instance.config.enabled).toBe(true); // Inherited from base
-      expect(instance.config.name.en).toBe('Extended Tool'); // Overridden
+      expect(instance.config.enabled).toBe(true);
+      expect(instance.config.name).toBe('Extended Tool');
     });
 
     it('should validate input when @input decorator is used on call', async () => {
@@ -361,8 +344,8 @@ describe('Config Decorators', () => {
       class TestTool extends Tool {
         id = ToolIds.WEB_FETCH;
         config: ToolConfig = {
-          name: { en: 'Test Tool' },
-          description: { en: 'Test description' },
+          name: 'Test Tool',
+          description: 'Test description',
         };
         logger = winston.createLogger();
 
@@ -371,25 +354,23 @@ describe('Config Decorators', () => {
         }
       }
 
-      const config: ToolConfig = {
-        name: { en: 'Test Tool' },
-        description: { en: 'Test description' },
-        input: {
-          url: {
-            type: 'text',
-            required: true,
+      const toolConfig: ToolConfig<{ url: string }> = {
+        name: 'Test Tool',
+        description: 'Test description',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
           },
+          required: ['url'],
         },
       };
 
-      await registerTool(TestTool, config);
+      await registerTool(TestTool, toolConfig);
 
       const instance = container.resolve<Tool>(ToolIds.WEB_FETCH);
 
-      // Should throw validation error (missing url)
       await expect(instance.call({})).rejects.toThrow();
-
-      // Should succeed with valid input
       await expect(instance.call({ url: 'http://example.com' })).resolves.toBe(
         'success',
       );
@@ -400,8 +381,8 @@ describe('Config Decorators', () => {
       class TestTool extends Tool {
         id = ToolIds.WEB_FETCH;
         config: ToolConfig = {
-          name: { en: 'Test Tool' },
-          description: { en: 'Test description' },
+          name: 'Test Tool',
+          description: 'Test description',
         };
         logger = winston.createLogger();
 
@@ -410,24 +391,22 @@ describe('Config Decorators', () => {
         }
       }
 
-      const toolConfig: ToolConfig = {
-        name: { en: 'Test Tool' },
-        description: { en: 'Test description' },
-        input: {
-          query: {
-            type: 'text',
-            required: true,
+      const toolConfig: ToolConfig<{ query: string }> = {
+        name: 'Test Tool',
+        description: 'Test description',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string' },
           },
+          required: ['query'],
         },
       };
 
       await registerTool(TestTool, toolConfig);
       const instance = container.resolve<TestTool>(ToolIds.WEB_FETCH);
 
-      // Validation failed
       await expect(instance.streamCall({}, mockWriter)).rejects.toThrow();
-
-      // Validation passed
       await expect(
         instance.streamCall({ query: 'hello' }, mockWriter),
       ).resolves.toBe('success');

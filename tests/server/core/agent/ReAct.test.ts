@@ -60,8 +60,8 @@ describe('ReActAgent', () => {
     (reactAgent as any).logger = logger;
     const mockToolWithConfig = Object.create(mockTestTool);
     mockToolWithConfig.config = {
-      name: { en: 'test_tool' },
-      description: { en: 'Test tool description' },
+      name: 'test_tool',
+      description: 'Test tool description',
     };
     (reactAgent as any).tools = [mockToolWithConfig];
   });
