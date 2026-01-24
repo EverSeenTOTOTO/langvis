@@ -4,13 +4,13 @@ import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
 import dayjs from 'dayjs';
-import timezone from 'dayjs/plugin/timezone';
+import tz from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
 import { Tool } from '..';
 
 // Extend dayjs with plugins
 dayjs.extend(utc);
-dayjs.extend(timezone);
+dayjs.extend(tz);
 
 export type DateTimeInput = {
   timezone?: string;
@@ -27,9 +27,9 @@ export default class DateTimeTool extends Tool {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  async call(@input() input: DateTimeInput): Promise<DateTimeOutput> {
-    const timezone = input?.timezone;
-    const format = input?.format;
+  async call(@input() data: DateTimeInput): Promise<DateTimeOutput> {
+    const timezone = data?.timezone;
+    const format = data?.format;
 
     let date = dayjs();
 

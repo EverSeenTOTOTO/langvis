@@ -1,4 +1,4 @@
-import { BaseDto, Dto } from '../base';
+import { BaseDto, dto } from '../base';
 
 export interface UserData {
   id: string;
@@ -12,7 +12,7 @@ export interface UserData {
 
 export interface GetAllUsersRequest {}
 
-@Dto<GetAllUsersRequest>({
+@dto<GetAllUsersRequest>({
   type: 'object',
   additionalProperties: false,
 })
@@ -28,7 +28,7 @@ export interface GetUserByIdRequest {
   id: string;
 }
 
-@Dto<GetUserByIdRequest>({
+@dto<GetUserByIdRequest>({
   type: 'object',
   properties: {
     id: { type: 'string', format: 'uuid' },
@@ -47,7 +47,7 @@ export interface GetUserByEmailRequest {
   email: string;
 }
 
-@Dto<GetUserByEmailRequest>({
+@dto<GetUserByEmailRequest>({
   type: 'object',
   properties: {
     email: { type: 'string', format: 'email' },

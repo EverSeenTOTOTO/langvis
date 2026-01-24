@@ -32,6 +32,7 @@ export default [
           caughtErrorsIgnorePattern: '^_',
         },
       ],
+      '@typescript-eslint/no-shadow': 'error',
     },
   },
 ];

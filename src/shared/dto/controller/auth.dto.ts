@@ -1,4 +1,4 @@
-import { BaseDto, Dto } from '../base';
+import { BaseDto, dto } from '../base';
 
 export interface SignInEmailRequest {
   email: string;
@@ -6,7 +6,7 @@ export interface SignInEmailRequest {
   name?: string;
 }
 
-@Dto<SignInEmailRequest>({
+@dto<SignInEmailRequest>({
   type: 'object',
   properties: {
     email: { type: 'string', format: 'email' },
@@ -31,7 +31,7 @@ export interface SignUpEmailRequest {
   name: string;
 }
 
-@Dto<SignUpEmailRequest>({
+@dto<SignUpEmailRequest>({
   type: 'object',
   properties: {
     email: { type: 'string', format: 'email' },
@@ -52,7 +52,7 @@ export class SignUpEmailRequestDto
 
 export interface SignOutRequest {}
 
-@Dto<SignOutRequest>({
+@dto<SignOutRequest>({
   type: 'object',
   additionalProperties: false,
 })
@@ -60,7 +60,7 @@ export class SignOutRequestDto extends BaseDto implements SignOutRequest {}
 
 export interface GetSessionRequest {}
 
-@Dto<GetSessionRequest>({
+@dto<GetSessionRequest>({
   type: 'object',
   additionalProperties: false,
 })

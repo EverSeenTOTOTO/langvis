@@ -77,12 +77,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     setMuted(false);
   }, []);
 
-  const handleMute = (muted: boolean) => {
+  const handleMute = (isMuted: boolean) => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    audio.muted = muted;
-    setMuted(muted);
+    audio.muted = isMuted;
+    setMuted(isMuted);
   };
 
   useEffect(() => {

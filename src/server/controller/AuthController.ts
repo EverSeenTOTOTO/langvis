@@ -16,43 +16,43 @@ export default class AuthController {
 
   @api('/sign-in/email', { method: 'post' })
   async signIn(@body() dto: SignInEmailRequestDto, @response() res: Response) {
-    const { headers, response } = await this.auth!.api.signInEmail({
+    const { headers, response: rsp } = await this.auth!.api.signInEmail({
       returnHeaders: true,
       body: dto,
     });
 
     res.set('set-cookie', headers.getSetCookie());
-    return res.json(response);
+    return res.json(rsp);
   }
 
   @api('/sign-up/email', { method: 'post' })
   async signUp(@body() dto: SignUpEmailRequestDto, @response() res: Response) {
-    const { headers, response } = await this.auth!.api.signUpEmail({
+    const { headers, response: rsp } = await this.auth!.api.signUpEmail({
       returnHeaders: true,
       body: dto,
     });
 
     res.set('set-cookie', headers.getSetCookie());
-    return res.json(response);
+    return res.json(rsp);
   }
 
   @api('/sign-out', { method: 'post' })
   async signOut(@request() req: Request, @response() res: Response) {
-    const response: any = await this.auth!.api.signOut({
+    const rsp: any = await this.auth!.api.signOut({
       headers: {
         cookie: req.headers.cookie || '',
       },
     });
 
-    res.set('set-cookie', response.headers?.getSetCookie());
+    res.set('set-cookie', rsp.headers?.getSetCookie());
     return res.json({ success: true });
   }
 
   @api('/get-session')
   async getSession(@request() req: Request, @response() res: Response) {
-    const response: any = await this.auth!.api.getSession({
+    const rsp: any = await this.auth!.api.getSession({
       headers: getSessionHeaders(req),
     });
-    return res.json(response);
+    return res.json(rsp);
   }
 }

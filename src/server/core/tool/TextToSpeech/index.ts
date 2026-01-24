@@ -42,8 +42,8 @@ export default class TextToSpeechTool extends Tool {
     }
   }
 
-  async call(@input() input: TextToSpeechInput): Promise<TextToSpeechOutput> {
-    const { text, reqId, voice, emotion, speedRatio } = input;
+  async call(@input() params: TextToSpeechInput): Promise<TextToSpeechOutput> {
+    const { text, reqId, voice, emotion, speedRatio } = params;
 
     const apiBase = process.env.OPENAI_API_BASE;
     const apiKey = process.env.OPENAI_API_KEY;

@@ -37,7 +37,7 @@ export abstract class BaseDto {
   static transform: (plain: unknown) => any;
 }
 
-export function Dto<T extends object>(schema: JSONSchemaType<T>) {
+export function dto<T extends object>(schema: JSONSchemaType<T>) {
   return function <C extends new () => T>(Target: C): C & DtoConstructor<T> {
     Reflect.defineMetadata(DTO_SCHEMA_KEY, schema, Target);
 

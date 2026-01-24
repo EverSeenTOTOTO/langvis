@@ -1,11 +1,11 @@
 import { Role } from '@/shared/entities/Message';
-import { BaseDto, Dto } from '../base';
+import { BaseDto, dto } from '../base';
 
 export interface InitSSERequest {
   conversationId: string;
 }
 
-@Dto<InitSSERequest>({
+@dto<InitSSERequest>({
   type: 'object',
   properties: {
     conversationId: { type: 'string', format: 'uuid' },
@@ -23,7 +23,7 @@ export interface CancelChatRequest {
   reason?: string;
 }
 
-@Dto<CancelChatRequest>({
+@dto<CancelChatRequest>({
   type: 'object',
   properties: {
     conversationId: { type: 'string', format: 'uuid' },
@@ -49,7 +49,7 @@ export interface StartChatRequest {
   content: string;
 }
 
-@Dto<StartChatRequest>({
+@dto<StartChatRequest>({
   type: 'object',
   properties: {
     conversationId: { type: 'string', format: 'uuid' },

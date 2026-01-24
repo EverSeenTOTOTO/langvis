@@ -58,7 +58,7 @@ export default class ReActAgent extends Agent {
   async streamCall(
     messages: Message[],
     outputWriter: WritableStreamDefaultWriter<StreamChunk>,
-    @config() config?: ReActAgentConfig,
+    @config() options?: ReActAgentConfig,
   ) {
     const writer = outputWriter;
     const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
@@ -89,8 +89,8 @@ export default class ReActAgent extends Agent {
 
       const response = (await llmCallTool.call({
         messages: iterMessages,
-        model: config?.model?.code,
-        temperature: config?.model?.temperature,
+        model: options?.model?.code,
+        temperature: options?.model?.temperature,
         stop: ['Observation:', 'Observation：'],
       })) as ChatCompletion;
 

@@ -15,10 +15,10 @@ const levelColors: Record<string, typeof chalk.red> = {
   debug: chalk.blue,
 };
 
-const consoleFormat = printf(({ timestamp, level, ...meta }) => {
+const consoleFormat = printf(({ timestamp: time, level, ...meta }) => {
   const colorize = levelColors[level as string] || chalk.white;
 
-  let result = `[${chalk.gray(timestamp)}] [${colorize(level.toUpperCase())}]`;
+  let result = `[${chalk.gray(time)}] [${colorize(level.toUpperCase())}]`;
 
   if (!meta || Object.keys(meta).length === 0) {
     return result;

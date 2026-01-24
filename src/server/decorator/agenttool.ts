@@ -102,7 +102,7 @@ export const registerAgent = async <T>(
       if (instance && 'tools' in instance) {
         const toolTokens = config.tools || [];
 
-        const tools = toolTokens.map(token => container.resolve<Tool>(token));
+        const tools = toolTokens.map(t => container.resolve<Tool>(t));
 
         Reflect.set(instance, 'tools', tools);
 
