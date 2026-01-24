@@ -1,9 +1,9 @@
 import Modal, { ModalProps } from '@/client/components/Modal';
 import { useStore } from '@/client/store';
 import { AgentIds } from '@/shared/constants';
-import { AgentConfig, AtomicConfigItem, ConfigItem } from '@/shared/types';
+import { AgentConfig } from '@/shared/types';
+import { JSONSchemaType } from 'ajv';
 import {
-  Checkbox,
   Col,
   Collapse,
   Empty,
@@ -12,7 +12,6 @@ import {
   FormProps,
   Input,
   InputNumber,
-  Radio,
   Row,
   Select,
   Switch,
@@ -22,6 +21,17 @@ import type { NamePath } from 'antd/es/form/interface';
 import { observer } from 'mobx-react-lite';
 import { useEffect } from 'react';
 import { useAsyncFn, useMedia } from 'react-use';
+
+type SchemaProperty = {
+  type?: string;
+  enum?: readonly string[];
+  default?: unknown;
+  minimum?: number;
+  maximum?: number;
+  description?: string;
+  properties?: Record<string, SchemaProperty>;
+  required?: readonly string[];
+};
 
 const ConversationModal = ({
   mode,
@@ -49,123 +59,96 @@ const ConversationModal = ({
     fetchAgentApi[1]();
   }, []);
 
-  const renderFormItem = (
-    item: AtomicConfigItem & { name: NamePath },
-    children: React.ReactNode,
+  const renderSchemaField = (
+    name: NamePath,
+    prop: SchemaProperty,
+    isRequired: boolean,
   ) => {
+    const commonProps = {
+      key: JSON.stringify(name),
+      name: ['config', ...(Array.isArray(name) ? name : [name])],
+      label: Array.isArray(name) ? name[name.length - 1] : name,
+      initialValue: prop.default,
+      tooltip: prop.description,
+      rules: [{ required: isRequired }],
+    };
+
+    if (prop.type === 'object' && prop.properties) {
+      const requiredSet = new Set(prop.required ?? []);
+      return (
+        <Collapse
+          key={JSON.stringify(name)}
+          size="small"
+          bordered={false}
+          defaultActiveKey="1"
+          style={{ marginBottom: 16 }}
+          items={[
+            {
+              key: '1',
+              label: Array.isArray(name) ? name[name.length - 1] : name,
+              children: (
+                <Row gutter={12}>
+                  {Object.entries(prop.properties).map(([key, child]) => (
+                    <Col span={12} key={key}>
+                      {renderSchemaField(
+                        [...(Array.isArray(name) ? name : [name]), key],
+                        child,
+                        requiredSet.has(key),
+                      )}
+                    </Col>
+                  ))}
+                </Row>
+              ),
+            },
+          ]}
+        />
+      );
+    }
+
+    if (prop.enum) {
+      return (
+        <Form.Item {...commonProps}>
+          <Select options={prop.enum.map(v => ({ label: v, value: v }))} />
+        </Form.Item>
+      );
+    }
+
+    if (prop.type === 'number') {
+      return (
+        <Form.Item {...commonProps}>
+          <InputNumber
+            min={prop.minimum}
+            max={prop.maximum}
+            style={{ width: '100%' }}
+          />
+        </Form.Item>
+      );
+    }
+
+    if (prop.type === 'boolean') {
+      return (
+        <Form.Item {...commonProps} valuePropName="checked">
+          <Switch />
+        </Form.Item>
+      );
+    }
+
     return (
-      <Form.Item
-        key={JSON.stringify(item.name)}
-        name={[
-          'config',
-          ...(Array.isArray(item.name) ? item.name : [item.name]),
-        ]}
-        label={item.label ? settingStore.tr(item.label?.en) : undefined}
-        hidden={item.hidden}
-        required={item.required}
-        initialValue={item.initialValue}
-        tooltip={item.description?.en}
-        valuePropName={item.valuePropName || 'value'}
-        style={{ flex: item.flex }}
-        rules={[
-          {
-            required: item.required,
-          },
-        ]}
-      >
-        {children}
+      <Form.Item {...commonProps}>
+        <Input />
       </Form.Item>
     );
   };
 
-  const renderConfigItem = (item: ConfigItem & { name: NamePath }) => {
-    switch (item.type) {
-      case 'select':
-        return renderFormItem(
-          item,
-          <Select
-            mode={item.mode}
-            options={item.options}
-            placeholder={item.placeholder}
-            disabled={item.disabled}
-          />,
-        );
-      case 'text':
-        return renderFormItem(
-          item,
-          <Input
-            placeholder={item.placeholder}
-            showCount={item.showCount}
-            disabled={item.disabled}
-          />,
-        );
-      case 'checkbox-group':
-        return renderFormItem(
-          item,
-          <Checkbox.Group options={item.options} disabled={item.disabled} />,
-        );
-      case 'radio-group':
-        return renderFormItem(
-          item,
-          <Radio.Group options={item.options} disabled={item.disabled} />,
-        );
-      case 'switch':
-        return renderFormItem(
-          item,
-          <Switch
-            checkedChildren={item.checkedChildren}
-            unCheckedChildren={item.unCheckedChildren}
-            disabled={item.disabled}
-          />,
-        );
-      case 'number':
-        return renderFormItem(
-          item,
-          <InputNumber
-            controls={item.controls}
-            disabled={item.disabled}
-            max={item.max}
-            min={item.min}
-            precision={item.precision}
-            step={item.step}
-            stringMode={item.stringMode}
-            style={{ width: '100%' }}
-          />,
-        );
-      case 'group':
-        return (
-          <Collapse
-            key={JSON.stringify(item.name)}
-            size="small"
-            bordered={false}
-            defaultActiveKey="1"
-            style={{ marginBottom: 16 }}
-            items={[
-              {
-                key: '1',
-                label: item.label ? settingStore.tr(item.label?.en) : undefined,
-                children: (
-                  <Row gutter={12}>
-                    {Object.entries(item.children ?? {})?.map(
-                      ([name, child]) => (
-                        <Col span={child.span} flex={child.flex} key={name}>
-                          {renderConfigItem({
-                            ...child,
-                            name: [item.name, name],
-                          })}
-                        </Col>
-                      ),
-                    )}
-                  </Row>
-                ),
-              },
-            ]}
-          />
-        );
-      default:
-        console.warn(`Unsupport item: ${JSON.stringify(item)}`);
-        return null;
+  const renderConfigSchema = <T,>(schema?: JSONSchemaType<T>) => {
+    if (!schema?.properties) {
+      return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
     }
+
+    const requiredSet = new Set(schema.required ?? []);
+    return Object.entries(schema.properties).map(([name, prop]) =>
+      renderSchemaField(name, prop as SchemaProperty, requiredSet.has(name)),
+    );
   };
 
   useEffect(() => {
@@ -182,11 +165,8 @@ const ConversationModal = ({
       trigger={children as React.ReactElement}
       onOk={async () => {
         await form.validateFields();
-
         const values = form.getFieldsValue(true);
-
         await onFinish?.(values);
-
         return true;
       }}
       {...props}
@@ -235,7 +215,7 @@ const ConversationModal = ({
                 options={
                   fetchAgentApi[0]?.value?.map(
                     (config: AgentConfig & { id: string }) => ({
-                      label: settingStore.tr(config.name.en),
+                      label: settingStore.tr(config.name),
                       value: config.id,
                     }),
                   ) || []
@@ -245,7 +225,6 @@ const ConversationModal = ({
             <Form.Item noStyle dependencies={[['config', 'agent']]}>
               {({ getFieldValue }) => {
                 const agent = getFieldValue(['config', 'agent']);
-
                 if (!agent) return null;
 
                 const agentInfo: AgentConfig = fetchAgentApi[0]?.value?.find(
@@ -254,7 +233,7 @@ const ConversationModal = ({
 
                 return (
                   <Typography.Paragraph type="secondary">
-                    {settingStore.tr(agentInfo?.description.en || '')}
+                    {settingStore.tr(agentInfo?.description || '')}
                   </Typography.Paragraph>
                 );
               }}
@@ -264,7 +243,6 @@ const ConversationModal = ({
             <Form.Item noStyle dependencies={[['config', 'agent']]}>
               {({ getFieldValue }) => {
                 const agent = getFieldValue(['config', 'agent']);
-
                 if (!agent) {
                   return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
                 }
@@ -272,18 +250,8 @@ const ConversationModal = ({
                 const agentInfo: AgentConfig = fetchAgentApi[0]?.value?.find(
                   (a: AgentConfig & { id: string }) => a.id === agent,
                 );
-                const keys = Object.keys(agentInfo?.config ?? {});
 
-                if (!keys.length) {
-                  return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
-                }
-
-                return keys?.map(name =>
-                  renderConfigItem({
-                    name,
-                    ...agentInfo.config![name],
-                  }),
-                );
+                return renderConfigSchema(agentInfo?.configSchema);
               }}
             </Form.Item>
           </div>

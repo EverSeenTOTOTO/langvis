@@ -212,7 +212,7 @@ export default class ReActAgent extends Agent {
     try {
       tool = container.resolve<Tool>(action);
     } catch {
-      return `Tool "${action}" not found, available tools: ${this.tools.map(t => `\`${t.config?.name?.en}\``).join(', ')}`;
+      return `Tool "${action}" not found, available tools: ${this.tools.map(t => `\`${t.config?.name}\``).join(', ')}`;
     }
 
     try {

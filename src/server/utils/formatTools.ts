@@ -1,5 +1,5 @@
 import { Tool } from '@/server/core/tool';
-import { ConfigItem } from '@/shared/types';
+import type { JSONSchemaObject } from 'openai/lib/jsonschema.mjs';
 
 export function formatToolsToMarkdown(tools: Tool[]): string {
   if (!tools || tools.length === 0) {
@@ -13,20 +13,26 @@ export function formatToolsToMarkdown(tools: Tool[]): string {
 
       sections.push(`### ${tool.id}`);
       sections.push('');
-      sections.push(config.description.en);
+      sections.push(config.description);
       sections.push('');
 
-      if (config.input && Object.keys(config.input).length > 0) {
+      const schema = config.inputSchema as JSONSchemaObject;
+
+      if (schema?.properties) {
         sections.push('**Input:**');
         sections.push('');
-        sections.push(formatConfigItemsAsTable(config.input));
+        sections.push(
+          formatSchemaAsTable(schema!.properties, schema!.required as string[]),
+        );
         sections.push('');
       }
 
-      if (config.output && Object.keys(config.output).length > 0) {
+      if (schema?.properties) {
         sections.push('**Output:**');
         sections.push('');
-        sections.push(formatConfigItemsAsTable(config.output));
+        sections.push(
+          formatSchemaAsTable(schema.properties, schema.required as string[]),
+        );
         sections.push('');
       }
 
@@ -35,29 +41,24 @@ export function formatToolsToMarkdown(tools: Tool[]): string {
     .join('\n---\n\n');
 }
 
-function formatConfigItemsAsTable(items: Record<string, ConfigItem>): string {
+function formatSchemaAsTable(
+  properties: JSONSchemaObject['properties'],
+  required?: readonly string[],
+): string {
   const rows: string[] = [];
+  const requiredSet = new Set(required ?? []);
 
   rows.push('| Parameter | Required | Description |');
   rows.push('|-----------|----------|-------------|');
 
-  Object.entries(items).forEach(([key, item]) => {
-    if (item.type === 'group') {
-      rows.push(`| ${key} | group | ${item.label.en} |`);
-      if (item.children) {
-        Object.entries(item.children).forEach(([childKey, childItem]) => {
-          if (childItem.type !== 'group') {
-            const required = childItem.required ? 'Yes' : 'No';
-            const description = childItem.description?.en || '';
-            rows.push(`| ${key}.${childKey} | ${required} | ${description} |`);
-          }
-        });
-      }
-    } else {
-      const required = item.required ? 'Yes' : 'No';
-      const description = item.description?.en || '';
-      rows.push(`| ${key} | ${required} | ${description} |`);
-    }
+  if (typeof properties !== 'object' || properties === null) {
+    return rows.join('\n');
+  }
+
+  Object.entries(properties).forEach(([key, prop]) => {
+    const isRequired = requiredSet.has(key) ? 'Yes' : 'No';
+    const description = (prop as { description?: string }).description ?? '';
+    rows.push(`| ${key} | ${isRequired} | ${description} |`);
   });
 
   return rows.join('\n');

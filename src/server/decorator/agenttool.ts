@@ -1,13 +1,14 @@
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { AgentConfig, ToolConfig } from '@/shared/types';
+import { JSONSchemaType } from 'ajv';
+import chalk from 'chalk';
 import { isArray, mergeWith } from 'lodash-es';
 import { container, injectable, Lifecycle } from 'tsyringe';
 import { Agent } from '../core/agent';
 import { Tool } from '../core/tool';
 import logger from '../utils/logger';
-import chalk from 'chalk';
+import { parse } from '../utils/schemaValidator';
 import { PARAM_METADATA_KEY, ParamMetadata, ParamType } from './param';
-import { validateConfig } from '../utils/configValidation';
 
 const metaDataKey = Symbol('config');
 
@@ -35,13 +36,15 @@ const resolveConfig = (config: AgentConfig | ToolConfig) => {
   });
 };
 
-const proxyValidation = (
+const proxyValidation = <T>(
   instance: any,
   method: string,
   validationType: ParamType,
-  schema: any,
+  schema: JSONSchemaType<T> | undefined,
   token: string,
 ) => {
+  if (!schema) return;
+
   const prototype = Object.getPrototypeOf(instance);
   const validationMeta: ParamMetadata[] = Reflect.getMetadata(
     PARAM_METADATA_KEY,
@@ -56,7 +59,7 @@ const proxyValidation = (
         if (meta.type === validationType) {
           try {
             const arg = args[meta.index];
-            const validated = validateConfig(schema, arg);
+            const validated = parse(schema, arg ?? {});
             args[meta.index] = validated;
           } catch (error) {
             logger.error(
@@ -71,9 +74,9 @@ const proxyValidation = (
   }
 };
 
-export const registerAgent = async (
+export const registerAgent = async <T>(
   Clz: new (...params: any[]) => Agent,
-  config: AgentConfig,
+  config: AgentConfig<T>,
 ) => {
   const { token, type } = Reflect.getMetadata(metaDataKey, Clz);
 
@@ -82,7 +85,7 @@ export const registerAgent = async (
   });
 
   logger.info(
-    `Register agent ${chalk.cyan(config.name.en)} with token ${chalk.yellow(token)}`,
+    `Register agent ${chalk.cyan(config.name)} with token ${chalk.yellow(token)}`,
   );
 
   container.afterResolution(
@@ -104,16 +107,15 @@ export const registerAgent = async (
         Reflect.set(instance, 'tools', tools);
 
         logger.info(
-          `Injected ${tools.length} tools into agent: ${chalk.cyan(config.name.en)}`,
+          `Injected ${tools.length} tools into agent: ${chalk.cyan(config.name)}`,
         );
       }
 
-      // Proxy methods for validation
       proxyValidation(
         instance,
         'streamCall',
         ParamType.CONFIG,
-        (merged as AgentConfig).config,
+        (merged as AgentConfig<T>).configSchema,
         token,
       );
 
@@ -121,7 +123,7 @@ export const registerAgent = async (
         instance,
         'call',
         ParamType.CONFIG,
-        (merged as AgentConfig).config,
+        (merged as AgentConfig<T>).configSchema,
         token,
       );
     },
@@ -131,9 +133,9 @@ export const registerAgent = async (
   return token;
 };
 
-export const registerTool = async (
+export const registerTool = async <I, O>(
   Clz: new (...params: any[]) => Tool,
-  config: ToolConfig,
+  config: ToolConfig<I, O>,
 ) => {
   const { token, type } = Reflect.getMetadata(metaDataKey, Clz);
 
@@ -142,7 +144,7 @@ export const registerTool = async (
   });
 
   logger.info(
-    `Register tool ${chalk.cyan(config.name.en)} with token ${chalk.yellow(token)}`,
+    `Register tool ${chalk.cyan(config.name)} with token ${chalk.yellow(token)}`,
   );
 
   container.afterResolution(
@@ -155,12 +157,11 @@ export const registerTool = async (
       Reflect.set(instance, 'type', type);
       Reflect.set(instance, 'logger', logger.child({ source: token }));
 
-      // Proxy methods for validation
       proxyValidation(
         instance,
         'call',
         ParamType.INPUT,
-        (merged as ToolConfig).input,
+        (merged as ToolConfig<I, O>).inputSchema,
         token,
       );
 
@@ -168,7 +169,7 @@ export const registerTool = async (
         instance,
         'streamCall',
         ParamType.INPUT,
-        (merged as ToolConfig).input,
+        (merged as ToolConfig<I, O>).inputSchema,
         token,
       );
     },
