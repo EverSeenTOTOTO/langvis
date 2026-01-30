@@ -1,14 +1,15 @@
-import { agent } from '@/server/decorator/agenttool';
+import { agent } from '@/server/decorator/core';
 import { config } from '@/server/decorator/param';
 import { formatToolsToMarkdown } from '@/server/utils/formatTools';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
-import { Message, Role } from '@/shared/entities/Message';
+import { Role } from '@/shared/entities/Message';
 import { AgentConfig, StreamChunk } from '@/shared/types';
 import { isEmpty } from 'lodash-es';
 import type { ChatCompletion } from 'openai/resources/chat/completions';
 import { container } from 'tsyringe';
 import { Agent } from '..';
+import { Memory } from '../../memory';
 import { Tool } from '../../tool';
 import generatePrompt from './prompt';
 
@@ -56,18 +57,19 @@ export default class ReActAgent extends Agent {
   }
 
   async streamCall(
-    messages: Message[],
+    memory: Memory,
     outputWriter: WritableStreamDefaultWriter<StreamChunk>,
     @config() options?: ReActAgentConfig,
   ) {
     const writer = outputWriter;
     const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
 
+    const messages = await memory.summarize();
     const iterMessages = messages.map(msg => ({
       role: msg.role as 'user' | 'assistant' | 'system',
       content:
         msg.role === 'assistant'
-          ? // 防止提取过的content成为错误示例，还原成JSON格式
+          ? // 防止提取过的content明文成为误导示例，还原成JSON格式
             JSON.stringify(
               msg.meta?.steps?.find(
                 (each: ReActStep) => 'final_answer' in each,

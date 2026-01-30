@@ -38,6 +38,16 @@ export const config: AgentConfig<{
         required: ['code'],
         nullable: true,
       },
+      memory: {
+        type: 'object',
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['no_memory', 'chat_history_memory', 'enhanced_memory'],
+            default: 'chat_history_memory',
+          },
+        },
+      },
     },
   },
 };

@@ -1,8 +1,8 @@
-import { container, singleton } from 'tsyringe';
-import type { Express } from 'express';
-import bindApi from './api';
-import logger from '../utils/logger';
 import chalk from 'chalk';
+import type { Express } from 'express';
+import { container, singleton } from 'tsyringe';
+import logger from '../utils/logger';
+import bindApi from './api';
 
 const metaDataKey = Symbol('controller');
 
@@ -22,7 +22,9 @@ export default <C extends Record<string, any>>(
 
   bindApi(instance, namespace, app);
 
-  logger.info(`Binded with namespace: ${chalk.yellow(namespace)}`);
+  logger.info(
+    `Binded ${chalk.cyan(Clz.name)} with namespace: ${chalk.yellow(namespace)}`,
+  );
 
   return instance;
 };

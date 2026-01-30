@@ -1,11 +1,11 @@
-import { container } from 'tsyringe';
+import * as configModule from '@/server/decorator/core';
 import { ToolService } from '@/server/service/ToolService';
-import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { globby } from 'globby';
-import * as configModule from '@/server/decorator/agenttool';
+import { container } from 'tsyringe';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('globby');
-vi.mock('@/server/decorator/agenttool', async importOriginal => {
+vi.mock('@/server/decorator/core', async importOriginal => {
   const actual = await importOriginal<typeof configModule>();
   return {
     ...actual,

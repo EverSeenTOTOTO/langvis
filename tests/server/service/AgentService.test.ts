@@ -3,11 +3,11 @@ import { AgentService } from '@/server/service/AgentService';
 import { ToolService } from '@/server/service/ToolService';
 import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { globby } from 'globby';
-import * as configModule from '@/server/decorator/agenttool';
+import * as configModule from '@/server/decorator/core';
 
 vi.mock('globby');
 vi.mock('@/server/service/ToolService');
-vi.mock('@/server/decorator/agenttool', async importOriginal => {
+vi.mock('@/server/decorator/core', async importOriginal => {
   const actual = await importOriginal<typeof configModule>();
   return {
     ...actual,

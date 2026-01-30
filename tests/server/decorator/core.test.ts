@@ -1,11 +1,12 @@
 import { Agent } from '@/server/core/agent';
+import { Memory } from '@/server/core/memory';
 import { Tool } from '@/server/core/tool';
 import {
   agent,
   registerAgent,
   registerTool,
   tool,
-} from '@/server/decorator/agenttool';
+} from '@/server/decorator/core';
 import { config, input } from '@/server/decorator/param';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { AgentConfig, ToolConfig } from '@/shared/types';
@@ -196,7 +197,7 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
 
-        async call(_messages: any[], @config() _config: any): Promise<any> {
+        async call(_memory: Memory, @config() _config: any): Promise<any> {
           return 'success';
         }
       }
@@ -215,12 +216,15 @@ describe('Config Decorators', () => {
 
       await registerAgent(TestAgent, agentConfig);
       const instance = container.resolve<Agent>(AgentIds.CHAT);
+      const mockMemory = {} as Memory;
 
-      await expect(instance.call([], { temperature: 2 })).rejects.toThrow();
-      await expect(instance.call([], {})).rejects.toThrow();
-      await expect(instance.call([], { temperature: 0.5 })).resolves.toBe(
-        'success',
-      );
+      await expect(
+        instance.call(mockMemory, { temperature: 2 }),
+      ).rejects.toThrow();
+      await expect(instance.call(mockMemory, {})).rejects.toThrow();
+      await expect(
+        instance.call(mockMemory, { temperature: 0.5 }),
+      ).resolves.toBe('success');
     });
 
     it('should validate config when @config decorator is used on streamCall', async () => {
@@ -234,7 +238,7 @@ describe('Config Decorators', () => {
         logger = winston.createLogger();
 
         async streamCall(
-          _messages: any[],
+          _memory: Memory,
           _writer: any,
           @config() _config: any,
         ): Promise<any> {
@@ -256,13 +260,16 @@ describe('Config Decorators', () => {
 
       await registerAgent(TestAgent, agentConfig);
       const instance = container.resolve<TestAgent>(AgentIds.CHAT);
+      const mockMemory = {} as Memory;
 
-      await expect(instance.streamCall([], mockWriter, {})).rejects.toThrow();
       await expect(
-        instance.streamCall([], mockWriter, { mode: 123 }),
+        instance.streamCall(mockMemory, mockWriter, {}),
       ).rejects.toThrow();
       await expect(
-        instance.streamCall([], mockWriter, { mode: 'fast' }),
+        instance.streamCall(mockMemory, mockWriter, { mode: 123 }),
+      ).rejects.toThrow();
+      await expect(
+        instance.streamCall(mockMemory, mockWriter, { mode: 'fast' }),
       ).resolves.toBe('success');
     });
   });

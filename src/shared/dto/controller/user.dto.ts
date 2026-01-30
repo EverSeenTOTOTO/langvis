@@ -31,7 +31,7 @@ export interface GetUserByIdRequest {
 @dto<GetUserByIdRequest>({
   type: 'object',
   properties: {
-    id: { type: 'string', format: 'uuid' },
+    id: { type: 'string' },
   },
   required: ['id'],
   additionalProperties: false,

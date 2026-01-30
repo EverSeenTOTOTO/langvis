@@ -58,7 +58,7 @@ export interface GetConversationByIdRequest {
 @dto<GetConversationByIdRequest>({
   type: 'object',
   properties: {
-    id: { type: 'string', format: 'uuid' },
+    id: { type: 'string' },
   },
   required: ['id'],
   additionalProperties: false,
@@ -83,7 +83,7 @@ export interface UpdateConversationRequest {
 @dto<UpdateConversationRequest>({
   type: 'object',
   properties: {
-    id: { type: 'string', format: 'uuid' },
+    id: { type: 'string' },
     name: { type: 'string', minLength: 1 },
     config: {
       type: 'object',
@@ -114,7 +114,7 @@ export interface DeleteConversationRequest {
 @dto<DeleteConversationRequest>({
   type: 'object',
   properties: {
-    id: { type: 'string', format: 'uuid' },
+    id: { type: 'string' },
   },
   required: ['id'],
   additionalProperties: false,
@@ -139,7 +139,7 @@ export interface AddMessageToConversationRequest {
 @dto<AddMessageToConversationRequest>({
   type: 'object',
   properties: {
-    id: { type: 'string', format: 'uuid' },
+    id: { type: 'string' },
     role: { type: 'string', enum: Object.values(Role) as Role[] },
     content: { type: 'string', minLength: 1 },
   },
@@ -162,7 +162,7 @@ export interface GetMessagesByConversationIdRequest {
 @dto<GetMessagesByConversationIdRequest>({
   type: 'object',
   properties: {
-    id: { type: 'string', format: 'uuid' },
+    id: { type: 'string' },
   },
   required: ['id'],
   additionalProperties: false,
@@ -186,10 +186,10 @@ export interface BatchDeleteMessagesInConversationRequest {
 @dto<BatchDeleteMessagesInConversationRequest>({
   type: 'object',
   properties: {
-    id: { type: 'string', format: 'uuid' },
+    id: { type: 'string' },
     messageIds: {
       type: 'array',
-      items: { type: 'string', format: 'uuid' },
+      items: { type: 'string' },
       minItems: 1,
     },
   },

@@ -3,7 +3,7 @@ import { globby } from 'globby';
 import path from 'path';
 import { container, inject } from 'tsyringe';
 import { AgentConstructor } from '../core/agent';
-import { registerAgent } from '../decorator/agenttool';
+import { registerAgent } from '../decorator/core';
 import { service } from '../decorator/service';
 import { ToolService } from './ToolService';
 import { isProd } from '../utils';
