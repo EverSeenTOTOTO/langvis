@@ -4,7 +4,6 @@ import { StreamChunk, ToolConfig } from '@/shared/types';
 export abstract class Tool {
   abstract readonly id: string;
   abstract readonly config: ToolConfig;
-  readonly type = 'tool';
 
   protected abstract readonly logger: Logger;
 

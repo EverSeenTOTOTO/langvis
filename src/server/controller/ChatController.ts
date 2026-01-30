@@ -10,6 +10,7 @@ import type { Agent } from '../core/agent';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
+import { ChatService } from '../service/ChatService';
 import { ConversationService } from '../service/ConversationService';
 import { SSEService } from '../service/SSEService';
 
@@ -21,6 +22,9 @@ export default class ChatController {
 
     @inject(ConversationService)
     private conversationService: ConversationService,
+
+    @inject(ChatService)
+    private chatService: ChatService,
   ) {}
 
   @api('/sse/:conversationId', { method: 'get' })
@@ -52,7 +56,7 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const cancelled = await this.conversationService.cancelStream(
+    const cancelled = await this.chatService.cancelStream(
       dto.messageId,
       dto.reason,
     );
@@ -86,7 +90,10 @@ export default class ChatController {
         .json({ error: `Conversation ${conversationId} not found` });
     }
 
-    await this.startAgent(req, conversation.config!, dto.role, dto.content);
+    await this.startAgent(req, conversation.config!, {
+      role: dto.role,
+      content: dto.content,
+    });
 
     return res.status(200).json({ success: true });
   }
@@ -94,8 +101,11 @@ export default class ChatController {
   private async startAgent(
     req: Request,
     config: Record<string, any>,
-    userRole: Role,
-    userContent: string,
+    userMessage: {
+      role: Role;
+      content: string;
+      meta?: Record<string, any> | null;
+    },
   ) {
     const { conversationId } = req.params;
 
@@ -110,71 +120,31 @@ export default class ChatController {
       return;
     }
 
-    // Get existing messages from database
-    const messages =
-      await this.conversationService.getMessagesByConversationId(
-        conversationId,
-      );
-
-    // Prepare messages to batch insert with explicit timestamps to ensure order
-    const baseTimestamp = Date.now();
-    const messagesToInsert: Array<{
-      role: Role;
-      content: string;
-      meta?: Record<string, any> | null;
-      createdAt: Date;
-    }> = [];
-
-    let timestampOffset = 0;
-
-    // Add system prompt if needed
-    if (typeof agent.getSystemPrompt === 'function' && messages.length == 0) {
-      const systemPrompt = await agent.getSystemPrompt();
-      if (systemPrompt) {
-        messagesToInsert.push({
-          role: Role.SYSTEM,
-          content: systemPrompt,
-          createdAt: new Date(baseTimestamp + timestampOffset++),
-        });
-      }
-    }
-
-    // Add user message
-    messagesToInsert.push({
-      role: userRole,
-      content: userContent,
-      createdAt: new Date(baseTimestamp + timestampOffset++),
-    });
-
-    // Add initial assistant message for streaming
-    messagesToInsert.push({
-      role: Role.ASSIST,
-      content: '',
-      meta: { loading: true },
-      createdAt: new Date(baseTimestamp + timestampOffset++),
-    });
-
-    // Batch insert all messages at once
-    const insertedMessages = await this.conversationService.batchAddMessages(
-      conversationId,
-      messagesToInsert,
+    const memory = await this.chatService.buildMemory(
+      req,
+      agent,
+      config,
+      userMessage,
     );
-    messages.push(...insertedMessages);
 
-    // Get the assistant message (last inserted message) for streaming
-    const assistantMessage = insertedMessages[insertedMessages.length - 1];
+    // create empty assist message for streaming
+    const [assistantMessage] = await this.conversationService.batchAddMessages(
+      conversationId,
+      [
+        {
+          role: Role.ASSIST,
+          content: '',
+          meta: { loading: true },
+          createdAt: new Date(),
+        },
+      ],
+    );
 
-    // Create streaming writer for the assistant message
-    const writer = await this.conversationService.createStreamForMessage(
+    const writer = await this.chatService.createStreamForMessage(
       conversationId,
       assistantMessage,
     );
 
-    // Only pass messages except the empty assistant message to agent
-    const messagesForAgent = messages.slice(0, -1);
-
-    agent
-      .streamCall(messagesForAgent, writer, config)
-      .catch(e => writer.abort(e));
+    agent.streamCall(memory, writer, config).catch(e => writer.abort(e));
   }
 }

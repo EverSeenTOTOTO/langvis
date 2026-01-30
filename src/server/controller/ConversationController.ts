@@ -88,11 +88,12 @@ export default class ConversationController {
     @body() dto: AddMessageToConversationRequestDto,
     @response() res: Response,
   ) {
-    const message = await this.conversationService.addMessageToConversation(
-      id,
-      dto.role,
-      dto.content,
-    );
+    const message = await this.conversationService.batchAddMessages(id, [
+      {
+        role: dto.role,
+        content: dto.content,
+      },
+    ]);
 
     if (!message) {
       return res.status(404).json({ error: `Conversation ${id} not found` });

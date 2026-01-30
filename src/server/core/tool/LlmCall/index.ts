@@ -1,4 +1,4 @@
-import { tool } from '@/server/decorator/agenttool';
+import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import { OpenAI } from '@/server/service/openai';
 import type { Logger } from '@/server/utils/logger';

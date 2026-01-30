@@ -1,4 +1,5 @@
 import ReActAgent from '@/server/core/agent/ReAct';
+import { Memory } from '@/server/core/memory';
 import logger from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { Message, Role } from '@/shared/entities/Message';
@@ -50,6 +51,20 @@ vi.mock('tsyringe', async importOriginal => {
     injectable: () => () => {},
   };
 });
+
+const createMockMemory = (messages: Message[]): Memory => {
+  return {
+    summarize: vi.fn().mockResolvedValue(messages),
+    store: vi.fn(),
+    retrieve: vi.fn(),
+    clearByConversationId: vi.fn(),
+    clearByUserId: vi.fn(),
+    setConversationId: vi.fn(),
+    setUserId: vi.fn(),
+    conversationId: undefined,
+    userId: undefined,
+  } as unknown as Memory;
+};
 
 describe('ReActAgent', () => {
   let reactAgent: ReActAgent;
@@ -369,7 +384,10 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockWriter as any);
+      await reactAgent.streamCall(
+        createMockMemory(messages),
+        mockWriter as any,
+      );
 
       expect(mockLlmCall.call).toHaveBeenCalled();
       expect(mockWriter.write).toHaveBeenCalledWith({
@@ -423,7 +441,10 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockWriter as any);
+      await reactAgent.streamCall(
+        createMockMemory(messages),
+        mockWriter as any,
+      );
 
       expect(mockLlmCall.call).toHaveBeenCalled();
       expect(mockWriter.write).toHaveBeenCalledWith({
@@ -502,7 +523,10 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockWriter as any);
+      await reactAgent.streamCall(
+        createMockMemory(messages),
+        mockWriter as any,
+      );
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith(
@@ -592,7 +616,10 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockWriter as any);
+      await reactAgent.streamCall(
+        createMockMemory(messages),
+        mockWriter as any,
+      );
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
 
@@ -661,7 +688,10 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockWriter as any);
+      await reactAgent.streamCall(
+        createMockMemory(messages),
+        mockWriter as any,
+      );
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(reactAgent.maxIterations);
       expect(mockWriter.abort).toHaveBeenCalledWith(
@@ -708,7 +738,10 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockWriter as any);
+      await reactAgent.streamCall(
+        createMockMemory(messages),
+        mockWriter as any,
+      );
 
       expect(mockWriter.abort).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -773,7 +806,10 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockWriter as any);
+      await reactAgent.streamCall(
+        createMockMemory(messages),
+        mockWriter as any,
+      );
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith(
@@ -847,7 +883,10 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockWriter as any);
+      await reactAgent.streamCall(
+        createMockMemory(messages),
+        mockWriter as any,
+      );
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith(
@@ -924,7 +963,10 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(messages, mockWriter as any);
+      await reactAgent.streamCall(
+        createMockMemory(messages),
+        mockWriter as any,
+      );
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
       expect(mockWriter.write).toHaveBeenCalledWith(

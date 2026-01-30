@@ -12,6 +12,11 @@ export enum AgentIds {
   GIRLFRIEND = 'girlfriend_agent',
 }
 
+export enum MemoryIds {
+  NONE = 'no_memory',
+  CHAT_HISTORY = 'chat_history_memory',
+}
+
 export const InjectTokens = {
   PG: Symbol('postgres'),
   REDIS: Symbol('redis'),

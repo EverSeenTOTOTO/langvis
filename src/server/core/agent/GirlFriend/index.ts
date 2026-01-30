@@ -1,12 +1,12 @@
-import { agent } from '@/server/decorator/agenttool';
+import { agent } from '@/server/decorator/core';
 import { config } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
-import { Message } from '@/shared/entities/Message';
 import { AgentConfig, StreamChunk } from '@/shared/types';
 import { container } from 'tsyringe';
 import { v4 as uuid } from 'uuid';
 import { Agent } from '..';
+import { Memory } from '../../memory';
 import type { Tool } from '../../tool';
 import type TextToSpeechTool from '../../tool/TextToSpeech';
 import generatePrompt from './prompt';
@@ -34,12 +34,13 @@ export default class GirlFriendAgent extends Agent {
   }
 
   async streamCall(
-    messages: Message[],
+    memory: Memory,
     outputWriter: WritableStreamDefaultWriter<StreamChunk>,
     @config() options: GirlFriendConfig,
   ) {
     const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
 
+    const messages = await memory.summarize();
     const conversationMessages = messages.map(msg => ({
       role: msg.role as 'user' | 'assistant' | 'system',
       content: msg.content,

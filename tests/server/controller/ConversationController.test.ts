@@ -14,6 +14,7 @@ describe('ConversationController', () => {
     updateConversation: vi.fn(),
     deleteConversation: vi.fn(),
     addMessageToConversation: vi.fn(),
+    batchAddMessages: vi.fn(),
     getMessagesByConversationId: vi.fn(),
     batchDeleteMessagesInConversation: vi.fn(),
   };
@@ -291,9 +292,7 @@ describe('ConversationController', () => {
 
     mockReq.params = { id: '1' };
     mockReq.body = { role: Role.USER, content: 'Hello' };
-    mockConversationService.addMessageToConversation.mockResolvedValue(
-      mockMessage,
-    );
+    mockConversationService.batchAddMessages.mockResolvedValue([mockMessage]);
 
     await conversationController.addMessageToConversation(
       '1',
@@ -302,7 +301,7 @@ describe('ConversationController', () => {
     );
 
     expect(mockRes.status).toHaveBeenCalledWith(201);
-    expect(mockRes.json).toHaveBeenCalledWith(mockMessage);
+    expect(mockRes.json).toHaveBeenCalledWith([mockMessage]);
   });
 
   it('should return 400 if role or content is missing when adding a message', async () => {

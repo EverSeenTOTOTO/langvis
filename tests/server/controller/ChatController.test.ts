@@ -35,12 +35,17 @@ class MockConversationService {
   updateMessage = vi.fn();
   createMessageStream = vi.fn();
   batchAddMessages = vi.fn();
+}
+
+class MockChatService {
   createStreamForMessage = vi.fn();
   cancelStream = vi.fn();
+  buildMemory = vi.fn();
 }
 
 let mockSSEService: MockSSEService;
 let mockConversationService: MockConversationService;
+let mockChatService: MockChatService;
 
 describe('ChatController', () => {
   let chatController: ChatController;
@@ -54,9 +59,11 @@ describe('ChatController', () => {
   beforeEach(() => {
     mockSSEService = new MockSSEService();
     mockConversationService = new MockConversationService();
+    mockChatService = new MockChatService();
     chatController = new ChatController(
       mockSSEService as any,
       mockConversationService as any,
+      mockChatService as any,
     );
 
     mockJson = vi.fn(() => mockResponse as Response);
@@ -386,9 +393,12 @@ describe('ChatController', () => {
       });
 
       // Mock createStreamForMessage to return the mock WritableStream
-      mockConversationService.createStreamForMessage = vi
+      mockChatService.createStreamForMessage = vi
         .fn()
-        .mockResolvedValue(mockWritableStream);
+        .mockResolvedValue(mockWritableStream.getWriter());
+      // Mock buildMemory to return a mock memory object
+      const mockMemory = { summarize: vi.fn(), store: vi.fn() };
+      mockChatService.buildMemory = vi.fn().mockResolvedValue(mockMemory);
       // Mock container.resolve to return the mock agent
       vi.mocked(container.resolve).mockReturnValue(mockAgent);
       mockAgent.streamCall.mockResolvedValue(undefined);
@@ -446,10 +456,10 @@ describe('ChatController', () => {
       // Allow async operations to complete
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Verify that streamCall was called with Message[] and WritableStream
+      // Verify that streamCall was called with Memory and WritableStreamDefaultWriter
       expect(mockAgent.streamCall).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.any(WritableStream),
+        expect.any(Object),
+        expect.anything(),
         expect.any(Object),
       );
     });
@@ -462,11 +472,10 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      // Verify the messages were added using batch operation
+      // Verify the assistant message placeholder was added
       expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
         conversationId,
         expect.arrayContaining([
-          expect.objectContaining({ role: Role.USER, content: 'Hello' }),
           expect.objectContaining({
             role: Role.ASSIST,
             content: '',
@@ -481,8 +490,8 @@ describe('ChatController', () => {
         mockConversation.config.agent,
       );
       expect(mockAgent.streamCall).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.any(WritableStream),
+        expect.any(Object),
+        expect.anything(),
         expect.any(Object),
       );
     });
@@ -541,9 +550,13 @@ describe('ChatController', () => {
       });
 
       // Mock createStreamForMessage to return the mock WritableStream
-      mockConversationService.createStreamForMessage = vi
+      mockChatService.createStreamForMessage = vi
         .fn()
-        .mockResolvedValue(mockWritableStream);
+        .mockResolvedValue(mockWritableStream.getWriter());
+
+      // Mock buildMemory to return a mock memory object
+      const mockMemory = { summarize: vi.fn(), store: vi.fn() };
+      mockChatService.buildMemory = vi.fn().mockResolvedValue(mockMemory);
 
       vi.mocked(container.resolve).mockReturnValue(mockAgent);
       mockAgent.streamCall.mockResolvedValue(undefined);
@@ -567,11 +580,10 @@ describe('ChatController', () => {
         conversationId,
       );
 
-      // Verify batchAddMessages was called with the user message and assistant message
+      // Verify batchAddMessages was called with the assistant message placeholder
       expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
         conversationId,
         expect.arrayContaining([
-          expect.objectContaining({ role: Role.USER, content: 'Test message' }),
           expect.objectContaining({
             role: Role.ASSIST,
             content: '',
@@ -618,10 +630,10 @@ describe('ChatController', () => {
       // Allow async operations to complete
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Verify that streamCall was called with the correct types
+      // Verify that streamCall was called with the correct types (Memory, Writer, Config)
       expect(mockAgent.streamCall).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.any(WritableStream),
+        expect.any(Object),
+        expect.anything(),
         expect.any(Object),
       );
     });
@@ -637,7 +649,7 @@ describe('ChatController', () => {
         messageId: 'msg-456',
       };
 
-      mockConversationService.cancelStream = vi.fn().mockResolvedValue(true);
+      mockChatService.cancelStream = vi.fn().mockResolvedValue(true);
 
       await chatController.cancelChat(
         'conv-123',
@@ -646,7 +658,7 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockConversationService.cancelStream).toHaveBeenCalledWith(
+      expect(mockChatService.cancelStream).toHaveBeenCalledWith(
         'msg-456',
         undefined,
       );
@@ -663,7 +675,7 @@ describe('ChatController', () => {
         messageId: 'msg-456',
       };
 
-      mockConversationService.cancelStream = vi.fn().mockResolvedValue(false);
+      mockChatService.cancelStream = vi.fn().mockResolvedValue(false);
 
       await chatController.cancelChat(
         'conv-123',
@@ -672,7 +684,7 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockConversationService.cancelStream).toHaveBeenCalledWith(
+      expect(mockChatService.cancelStream).toHaveBeenCalledWith(
         'msg-456',
         undefined,
       );
@@ -688,7 +700,7 @@ describe('ChatController', () => {
         messageId: 'msg-456',
       };
 
-      mockConversationService.cancelStream = vi.fn();
+      mockChatService.cancelStream = vi.fn();
 
       const { CancelChatRequestDto } = await import('@/shared/dto/controller');
 
@@ -710,7 +722,7 @@ describe('ChatController', () => {
         conversationId: 'conv-123',
       };
 
-      mockConversationService.cancelStream = vi.fn();
+      mockChatService.cancelStream = vi.fn();
 
       const { CancelChatRequestDto } = await import('@/shared/dto/controller');
 

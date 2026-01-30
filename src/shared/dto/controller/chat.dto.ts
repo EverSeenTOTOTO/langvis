@@ -8,7 +8,7 @@ export interface InitSSERequest {
 @dto<InitSSERequest>({
   type: 'object',
   properties: {
-    conversationId: { type: 'string', format: 'uuid' },
+    conversationId: { type: 'string' },
   },
   required: ['conversationId'],
   additionalProperties: false,
@@ -26,8 +26,8 @@ export interface CancelChatRequest {
 @dto<CancelChatRequest>({
   type: 'object',
   properties: {
-    conversationId: { type: 'string', format: 'uuid' },
-    messageId: { type: 'string', format: 'uuid' },
+    conversationId: { type: 'string' },
+    messageId: { type: 'string' },
     reason: { type: 'string', nullable: true },
   },
   required: ['conversationId', 'messageId'],
@@ -52,7 +52,7 @@ export interface StartChatRequest {
 @dto<StartChatRequest>({
   type: 'object',
   properties: {
-    conversationId: { type: 'string', format: 'uuid' },
+    conversationId: { type: 'string' },
     role: { type: 'string', enum: Object.values(Role) as Role[] },
     content: { type: 'string', minLength: 1 },
   },
