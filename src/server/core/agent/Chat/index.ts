@@ -30,6 +30,7 @@ export default class ChatAgent extends Agent {
     memory: Memory,
     outputWriter: WritableStreamDefaultWriter<StreamChunk>,
     @config() options?: ChatAgentConfig,
+    signal?: AbortSignal,
   ) {
     const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
 
@@ -50,6 +51,7 @@ export default class ChatAgent extends Agent {
         messages: conversationMessages,
       },
       outputWriter,
+      signal,
     );
   }
 }

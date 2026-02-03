@@ -28,7 +28,12 @@ export default class WebFetchTool extends Tool {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  async call(@input() data: WebFetchInput): Promise<WebFetchOutput> {
+  async call(
+    @input() data: WebFetchInput,
+    signal?: AbortSignal,
+  ): Promise<WebFetchOutput> {
+    signal?.throwIfAborted();
+
     const { url, timeout = 30000 } = data;
 
     this.logger.info(`Fetching content from: ${url}`);
@@ -37,17 +42,26 @@ export default class WebFetchTool extends Tool {
       this.logger.info(`Using proxy: ${process.env.WEB_FETCH_PROXY}`);
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    signal?.addEventListener('abort', () => {
+      controller.abort(signal.reason);
+    });
+
     const fetchOptions: RequestInit = {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       },
-      signal: AbortSignal.timeout(timeout),
+      signal: controller.signal,
       // @ts-expect-error bun fetch option
       proxy: process.env.WEB_FETCH_PROXY,
     };
 
-    const response = await fetch(url, fetchOptions);
+    const response = await fetch(url, fetchOptions).finally(() => {
+      clearTimeout(timeoutId);
+    });
 
     if (!response.ok) {
       throw new Error(

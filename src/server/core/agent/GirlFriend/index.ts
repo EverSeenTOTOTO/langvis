@@ -37,6 +37,7 @@ export default class GirlFriendAgent extends Agent {
     memory: Memory,
     outputWriter: WritableStreamDefaultWriter<StreamChunk>,
     @config() options: GirlFriendConfig,
+    signal?: AbortSignal,
   ) {
     const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
 
@@ -59,13 +60,16 @@ export default class GirlFriendAgent extends Agent {
       },
       close: async () => {
         try {
-          const result = await tts.call({
-            text: content,
-            reqId: uuid(),
-            voice: options?.tts?.voice || '',
-            emotion: options?.tts?.emotion || '',
-            speedRatio: options?.tts?.speedRatio,
-          });
+          const result = await tts.call(
+            {
+              text: content,
+              reqId: uuid(),
+              voice: options?.tts?.voice || '',
+              emotion: options?.tts?.emotion || '',
+              speedRatio: options?.tts?.speedRatio,
+            },
+            signal,
+          );
           await writer.write({ meta: result });
           await writer.close();
         } catch (err) {
@@ -84,6 +88,7 @@ export default class GirlFriendAgent extends Agent {
         messages: conversationMessages,
       },
       localWriter,
+      signal,
     );
   }
 }

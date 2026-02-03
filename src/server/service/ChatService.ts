@@ -18,10 +18,7 @@ import { SSEService } from './SSEService';
 @service()
 export class ChatService {
   private readonly logger = Logger.child({ source: 'ChatService' });
-  private activeWriters: Map<
-    string,
-    { writer: WritableStreamDefaultWriter<StreamChunk>; queue: PQueue }
-  > = new Map();
+  private activeAgents: Map<string, AbortController> = new Map();
 
   constructor(
     @inject(SSEService)
@@ -54,18 +51,17 @@ export class ChatService {
       });
   }
 
-  async cancelStream(messageId: string, reason?: string): Promise<boolean> {
-    const active = this.activeWriters.get(messageId);
+  async cancelAgent(conversationId: string, reason?: string): Promise<boolean> {
+    const controller = this.activeAgents.get(conversationId);
 
-    if (!active) return false;
+    if (!controller) return false;
 
     try {
-      active.queue.clear();
-      await active.writer.abort(new Error(reason ?? 'Cancelled by user'));
+      controller.abort(new Error(reason ?? 'Cancelled by user'));
       return true;
     } catch (error) {
       this.logger.error(
-        `Failed to cancel stream for message ${messageId}:`,
+        `Failed to cancel agent for conversation ${conversationId}:`,
         error,
       );
       return false;
@@ -159,7 +155,7 @@ export class ChatService {
 
     try {
       await context.queue.onIdle();
-      this.activeWriters.delete(context.message.id);
+      this.activeAgents.delete(context.conversationId);
       await this.conversationService.updateMessage(
         context.message.id,
         context.message.content,
@@ -187,7 +183,7 @@ export class ChatService {
     },
   ): Promise<void> {
     context.queue.clear();
-    this.activeWriters.delete(context.message.id);
+    this.activeAgents.delete(context.conversationId);
 
     this.logger.error(
       `Streaming aborted for conversation ${context.conversationId}:`,
@@ -219,6 +215,7 @@ export class ChatService {
   async createStreamForMessage(
     conversationId: string,
     message: Message,
+    controller: AbortController,
   ): Promise<WritableStreamDefaultWriter<StreamChunk>> {
     const context = {
       message,
@@ -242,9 +239,10 @@ export class ChatService {
     this.logger.info(`Created writable stream for message ${message.id}`);
 
     const writer = writableStream.getWriter();
-    this.activeWriters.set(message.id, {
-      writer,
-      queue: context.queue,
+    this.activeAgents.set(conversationId, controller);
+
+    controller.signal.addEventListener('abort', () => {
+      writer.abort(controller.signal.reason);
     });
 
     return writer;

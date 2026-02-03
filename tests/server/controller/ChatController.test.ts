@@ -39,7 +39,7 @@ class MockConversationService {
 
 class MockChatService {
   createStreamForMessage = vi.fn();
-  cancelStream = vi.fn();
+  cancelAgent = vi.fn();
   buildMemory = vi.fn();
 }
 
@@ -461,6 +461,7 @@ describe('ChatController', () => {
         expect.any(Object),
         expect.anything(),
         expect.any(Object),
+        expect.anything(),
       );
     });
 
@@ -493,6 +494,7 @@ describe('ChatController', () => {
         expect.any(Object),
         expect.anything(),
         expect.any(Object),
+        expect.anything(),
       );
     });
   });
@@ -635,6 +637,7 @@ describe('ChatController', () => {
         expect.any(Object),
         expect.anything(),
         expect.any(Object),
+        expect.anything(),
       );
     });
   });
@@ -649,7 +652,7 @@ describe('ChatController', () => {
         messageId: 'msg-456',
       };
 
-      mockChatService.cancelStream = vi.fn().mockResolvedValue(true);
+      mockChatService.cancelAgent = vi.fn().mockResolvedValue(true);
 
       await chatController.cancelChat(
         'conv-123',
@@ -658,8 +661,8 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockChatService.cancelStream).toHaveBeenCalledWith(
-        'msg-456',
+      expect(mockChatService.cancelAgent).toHaveBeenCalledWith(
+        'conv-123',
         undefined,
       );
       expect(mockStatus).toHaveBeenCalledWith(200);
@@ -675,7 +678,7 @@ describe('ChatController', () => {
         messageId: 'msg-456',
       };
 
-      mockChatService.cancelStream = vi.fn().mockResolvedValue(false);
+      mockChatService.cancelAgent = vi.fn().mockResolvedValue(false);
 
       await chatController.cancelChat(
         'conv-123',
@@ -684,13 +687,13 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockChatService.cancelStream).toHaveBeenCalledWith(
-        'msg-456',
+      expect(mockChatService.cancelAgent).toHaveBeenCalledWith(
+        'conv-123',
         undefined,
       );
       expect(mockStatus).toHaveBeenCalledWith(404);
       expect(mockJson).toHaveBeenCalledWith({
-        error: 'No active stream found for message msg-456',
+        error: 'No active agent found for conversation conv-123',
       });
     });
 
@@ -700,7 +703,7 @@ describe('ChatController', () => {
         messageId: 'msg-456',
       };
 
-      mockChatService.cancelStream = vi.fn();
+      mockChatService.cancelAgent = vi.fn();
 
       const { CancelChatRequestDto } = await import('@/shared/dto/controller');
 
@@ -722,7 +725,7 @@ describe('ChatController', () => {
         conversationId: 'conv-123',
       };
 
-      mockChatService.cancelStream = vi.fn();
+      mockChatService.cancelAgent = vi.fn();
 
       const { CancelChatRequestDto } = await import('@/shared/dto/controller');
 

@@ -60,6 +60,7 @@ export default class ReActAgent extends Agent {
     memory: Memory,
     outputWriter: WritableStreamDefaultWriter<StreamChunk>,
     @config() options?: ReActAgentConfig,
+    signal?: AbortSignal,
   ) {
     const writer = outputWriter;
     const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
@@ -87,14 +88,19 @@ export default class ReActAgent extends Agent {
     };
 
     for (let i = 0; i < this.maxIterations; i++) {
+      signal?.throwIfAborted();
+
       this.logger.debug('ReAct iter messages: ', iterMessages);
 
-      const response = (await llmCallTool.call({
-        messages: iterMessages,
-        model: options?.model?.code,
-        temperature: options?.model?.temperature,
-        stop: ['Observation:', 'Observation：'],
-      })) as ChatCompletion;
+      const response = (await llmCallTool.call(
+        {
+          messages: iterMessages,
+          model: options?.model?.code,
+          temperature: options?.model?.temperature,
+          stop: ['Observation:', 'Observation：'],
+        },
+        signal,
+      )) as ChatCompletion;
 
       const content = response.choices[0]?.message?.content;
 
@@ -141,7 +147,7 @@ export default class ReActAgent extends Agent {
         await updateStep(parsed as ReActAction);
 
         try {
-          const observation = await this.executeAction(tool, input);
+          const observation = await this.executeAction(tool, input, signal);
 
           iterMessages.push({
             role: Role.USER,
@@ -209,6 +215,7 @@ export default class ReActAgent extends Agent {
   private async executeAction(
     action: string,
     actionInput: Record<string, any>,
+    signal?: AbortSignal,
   ): Promise<string> {
     let tool;
     try {
@@ -218,7 +225,7 @@ export default class ReActAgent extends Agent {
     }
 
     try {
-      const result = await tool.call(actionInput);
+      const result = await tool.call(actionInput, signal);
 
       return JSON.stringify(result);
     } catch (error) {
