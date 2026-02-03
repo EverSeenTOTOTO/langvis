@@ -42,7 +42,12 @@ export default class TextToSpeechTool extends Tool {
     }
   }
 
-  async call(@input() params: TextToSpeechInput): Promise<TextToSpeechOutput> {
+  async call(
+    @input() params: TextToSpeechInput,
+    signal?: AbortSignal,
+  ): Promise<TextToSpeechOutput> {
+    signal?.throwIfAborted();
+
     const { text, reqId, voice, emotion, speedRatio } = params;
 
     const apiBase = process.env.OPENAI_API_BASE;
@@ -76,6 +81,13 @@ export default class TextToSpeechTool extends Tool {
     this.logger.debug(`TTS API request url: ${url}`);
     // this.logger.debug(`TTS API request payload: ${JSON.stringify(payload)}`);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120_000);
+
+    signal?.addEventListener('abort', () => {
+      controller.abort(signal.reason);
+    });
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -83,7 +95,9 @@ export default class TextToSpeechTool extends Tool {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(120_000),
+      signal: controller.signal,
+    }).finally(() => {
+      clearTimeout(timeoutId);
     });
 
     if (!response.ok) {

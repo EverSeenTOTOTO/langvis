@@ -25,26 +25,34 @@ export default class LlmCallTool extends Tool {
 
   async call(
     @input() data: Partial<ChatCompletionCreateParamsNonStreaming>,
+    signal?: AbortSignal,
   ): Promise<ChatCompletion> {
-    const response = await this.openai.chat.completions.create({
-      model: data.model || process.env.OPENAI_MODEL!,
-      messages: [],
-      ...data,
-      stream: false,
-    });
+    const response = await this.openai.chat.completions.create(
+      {
+        model: data.model || process.env.OPENAI_MODEL!,
+        messages: [],
+        ...data,
+        stream: false,
+      },
+      { signal },
+    );
     return response;
   }
 
   async streamCall(
     @input() data: Partial<ChatCompletionCreateParams>,
     outputWriter: WritableStreamDefaultWriter,
+    signal?: AbortSignal,
   ): Promise<Stream<OpenAI.Chat.Completions.ChatCompletionChunk>> {
-    const response = await this.openai.chat.completions.create({
-      model: data.model || process.env.OPENAI_MODEL!,
-      messages: [],
-      ...data,
-      stream: true,
-    });
+    const response = await this.openai.chat.completions.create(
+      {
+        model: data.model || process.env.OPENAI_MODEL!,
+        messages: [],
+        ...data,
+        stream: true,
+      },
+      { signal },
+    );
 
     const writer = outputWriter;
 

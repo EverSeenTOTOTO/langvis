@@ -22,6 +22,7 @@ export abstract class Agent {
     _memory: Memory,
     _outputWriter: WritableStreamDefaultWriter<StreamChunk>,
     _config?: any,
+    _signal?: AbortSignal,
   ): Promise<unknown> {
     throw new Error(
       `${this.constructor.name}: Streaming call not implemented.`,

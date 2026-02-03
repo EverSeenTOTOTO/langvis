@@ -7,7 +7,7 @@ export abstract class Tool {
 
   protected abstract readonly logger: Logger;
 
-  async call(_input: any): Promise<unknown> {
+  async call(_input: any, _signal?: AbortSignal): Promise<unknown> {
     throw new Error(
       `${this.constructor.name}: Non-streaming call not implemented.`,
     );
@@ -16,6 +16,7 @@ export abstract class Tool {
   async streamCall(
     _input: any,
     _outputWriter: WritableStreamDefaultWriter<StreamChunk>,
+    _signal?: AbortSignal,
   ): Promise<unknown> {
     throw new Error(
       `${this.constructor.name}: Streaming call not implemented.`,

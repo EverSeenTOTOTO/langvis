@@ -56,14 +56,14 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const cancelled = await this.chatService.cancelStream(
-      dto.messageId,
+    const cancelled = await this.chatService.cancelAgent(
+      conversationId,
       dto.reason,
     );
 
     if (!cancelled) {
       return res.status(404).json({
-        error: `No active stream found for message ${dto.messageId}`,
+        error: `No active agent found for conversation ${conversationId}`,
       });
     }
 
@@ -140,11 +140,14 @@ export default class ChatController {
       ],
     );
 
+    const abortController = new AbortController();
+
     const writer = await this.chatService.createStreamForMessage(
       conversationId,
       assistantMessage,
+      abortController,
     );
 
-    agent.streamCall(memory, writer, config).catch(e => writer.abort(e));
+    agent.streamCall(memory, writer, config, abortController.signal);
   }
 }

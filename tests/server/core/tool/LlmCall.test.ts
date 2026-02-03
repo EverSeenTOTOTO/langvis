@@ -56,11 +56,14 @@ describe('LlmCallTool', () => {
 
       const result = await llmCallTool.call(input as any);
 
-      expect(mockCreate).toHaveBeenCalledWith({
-        model: 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: 'Hello' }],
-        stream: false,
-      });
+      expect(mockCreate).toHaveBeenCalledWith(
+        {
+          model: 'gpt-3.5-turbo',
+          messages: [{ role: 'user', content: 'Hello' }],
+          stream: false,
+        },
+        { signal: undefined },
+      );
       expect(result).toEqual(mockResponse);
     });
   });
@@ -97,11 +100,14 @@ describe('LlmCallTool', () => {
 
       await llmCallTool.streamCall(input, mockWriter as any);
 
-      expect(mockCreate).toHaveBeenCalledWith({
-        model: 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: 'Hello' }],
-        stream: true,
-      });
+      expect(mockCreate).toHaveBeenCalledWith(
+        {
+          model: 'gpt-3.5-turbo',
+          messages: [{ role: 'user', content: 'Hello' }],
+          stream: true,
+        },
+        { signal: undefined },
+      );
 
       expect(mockWriter.write).toHaveBeenCalledWith('Hello');
       expect(mockWriter.write).toHaveBeenCalledWith(' world');
