@@ -107,7 +107,9 @@ describe('ChatStore', () => {
       }),
     } as unknown as SettingStore;
 
-    const mockConversationStore = {} as unknown as ConversationStore;
+    const mockConversationStore = {
+      clearStreaming: vi.fn(),
+    } as unknown as ConversationStore;
 
     chatStore = new ChatStore(mockConversationStore, mockSettingStore);
   });

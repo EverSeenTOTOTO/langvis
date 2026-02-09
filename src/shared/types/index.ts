@@ -21,10 +21,16 @@ export interface ToolConfig<
   enabled?: boolean;
 }
 
-export type StreamChunk =
-  | string
-  | { content: string; meta?: Record<string, any> }
-  | { content?: string; meta: Record<string, any> };
+export type ToolEvent<T = unknown> =
+  | { type: 'delta'; data: T }
+  | { type: 'result'; result: T };
+
+export type AgentEvent =
+  | { type: 'start'; agentId: string }
+  | { type: 'delta'; content: string }
+  | { type: 'meta'; meta: Record<string, any> }
+  | { type: 'end'; agentId: string }
+  | { type: 'error'; error: Error };
 
 export type SSEMessage =
   | { type: 'heartbeat' }

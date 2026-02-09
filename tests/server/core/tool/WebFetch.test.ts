@@ -1,4 +1,5 @@
 import WebFetchTool from '@/server/core/tool/WebFetch';
+import { runTool } from '@/server/utils';
 import logger from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -33,15 +34,15 @@ describe('WebFetchTool', () => {
   });
 
   it('should reject empty URL', async () => {
-    await expect(tool.call({ url: '' })).rejects.toThrow(
+    await expect(runTool(tool.call({ url: '' }))).rejects.toThrow(
       'Failed to parse URL from ',
     );
   });
 
   it('should reject invalid URL', async () => {
-    await expect(tool.call({ url: 'not-a-valid-url' })).rejects.toThrow(
-      'Failed to parse URL from not-a-valid-url',
-    );
+    await expect(
+      runTool(tool.call({ url: 'not-a-valid-url' })),
+    ).rejects.toThrow('Failed to parse URL from not-a-valid-url');
   });
 
   it('should fetch and extract content from a valid URL', async () => {
@@ -72,7 +73,9 @@ describe('WebFetchTool', () => {
       text: async () => mockHTML,
     });
 
-    const result = await tool.call({ url: 'https://example.com/article' });
+    const result = await runTool(
+      tool.call({ url: 'https://example.com/article' }),
+    );
 
     expect(result).toHaveProperty('title');
     expect(result).toHaveProperty('textContent');
@@ -88,7 +91,7 @@ describe('WebFetchTool', () => {
     });
 
     await expect(
-      tool.call({ url: 'https://example.com/nonexistent' }),
+      runTool(tool.call({ url: 'https://example.com/nonexistent' })),
     ).rejects.toThrow('Failed to fetch URL: 404 Not Found');
   });
 
@@ -116,7 +119,9 @@ describe('WebFetchTool', () => {
       text: async () => maliciousHTML,
     });
 
-    const result = await tool.call({ url: 'https://example.com/malicious' });
+    const result = await runTool(
+      tool.call({ url: 'https://example.com/malicious' }),
+    );
 
     expect(result.textContent).not.toContain('<script>');
     expect(result.textContent).not.toContain('onclick');
@@ -134,7 +139,7 @@ describe('WebFetchTool', () => {
     });
 
     await expect(
-      tool.call({ url: 'https://example.com/slow', timeout: 100 }),
+      runTool(tool.call({ url: 'https://example.com/slow', timeout: 100 })),
     ).rejects.toThrow();
   });
 });

@@ -56,7 +56,7 @@ const proxyValidation = <T>(
 
   if (validationMeta && validationMeta.length > 0) {
     const originalMethod = instance[method].bind(instance);
-    instance[method] = async function (...args: any[]) {
+    instance[method] = async function* (...args: any[]) {
       for (const meta of validationMeta) {
         if (meta.type === validationType) {
           try {
@@ -71,7 +71,7 @@ const proxyValidation = <T>(
           }
         }
       }
-      return originalMethod(...args);
+      yield* originalMethod(...args);
     };
   }
 };
@@ -114,14 +114,6 @@ export const registerAgent = async <T>(
 
       proxyValidation(
         instance,
-        'streamCall',
-        ParamType.CONFIG,
-        (merged as AgentConfig<T>).configSchema,
-        token,
-      );
-
-      proxyValidation(
-        instance,
         'call',
         ParamType.CONFIG,
         (merged as AgentConfig<T>).configSchema,
@@ -160,14 +152,6 @@ export const registerTool = async <I, O>(
       proxyValidation(
         instance,
         'call',
-        ParamType.INPUT,
-        (merged as ToolConfig<I, O>).inputSchema,
-        token,
-      );
-
-      proxyValidation(
-        instance,
-        'streamCall',
         ParamType.INPUT,
         (merged as ToolConfig<I, O>).inputSchema,
         token,

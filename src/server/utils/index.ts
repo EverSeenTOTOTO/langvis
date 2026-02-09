@@ -1,3 +1,4 @@
+import { ToolEvent } from '@/shared/types';
 import type { Request } from 'express';
 
 export const isDev = process.env.NODE_ENV === 'development';
@@ -17,3 +18,15 @@ export const getSessionHeaders = (req: Request) => {
 
   return headers;
 };
+
+export async function runTool<T>(
+  toolGenerator: AsyncGenerator<ToolEvent<T>, T, void>,
+): Promise<T> {
+  let result: T | undefined;
+  for await (const event of toolGenerator) {
+    if (event.type === 'result') {
+      result = event.result;
+    }
+  }
+  return result!;
+}

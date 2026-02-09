@@ -46,7 +46,7 @@ export default class NoneMemory extends Memory {
   }
 
   async clearByUserId(_userId: string) {
-    throw new Error('ChatHistoryMemory does not support clearByUserId');
+    throw new Error('NoneMemory does not support clearByUserId');
   }
 
   async summarize() {

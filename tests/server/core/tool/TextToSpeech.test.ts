@@ -1,7 +1,8 @@
 import TextToSpeechTool from '@/server/core/tool/TextToSpeech';
+import { runTool } from '@/server/utils';
+import logger from '@/server/utils/logger';
 import { promises as fs } from 'fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import logger from '@/server/utils/logger';
 
 vi.mock('@/server/utils/logger', () => {
   const mockLogger = {
@@ -60,7 +61,13 @@ describe('TextToSpeechTool', () => {
       delete process.env.OPENAI_API_KEY;
 
       await expect(
-        tool.call({ voice: 'test-voice', text: 'test text', reqId: 'test-id' }),
+        runTool(
+          tool.call({
+            voice: 'test-voice',
+            text: 'test text',
+            reqId: 'test-id',
+          }),
+        ),
       ).rejects.toThrow(
         'OPENAI_API_BASE and OPENAI_API_KEY must be configured',
       );
@@ -82,11 +89,13 @@ describe('TextToSpeechTool', () => {
         }),
       });
 
-      const result = await tool.call({
-        text: 'Hello world',
-        reqId: 'test-123',
-        voice: 'test-voice',
-      });
+      const result = await runTool(
+        tool.call({
+          text: 'Hello world',
+          reqId: 'test-123',
+          voice: 'test-voice',
+        }),
+      );
 
       expect(result).toEqual({
         voice: expect.any(String),
@@ -119,7 +128,13 @@ describe('TextToSpeechTool', () => {
       });
 
       await expect(
-        tool.call({ voice: 'test-voice', text: 'test text', reqId: 'test-id' }),
+        runTool(
+          tool.call({
+            voice: 'test-voice',
+            text: 'test text',
+            reqId: 'test-id',
+          }),
+        ),
       ).rejects.toThrow('TTS API error: API Error');
     });
 
@@ -134,18 +149,14 @@ describe('TextToSpeechTool', () => {
       });
 
       await expect(
-        tool.call({ voice: 'test-voice', text: 'test text', reqId: 'test-id' }),
+        runTool(
+          tool.call({
+            voice: 'test-voice',
+            text: 'test text',
+            reqId: 'test-id',
+          }),
+        ),
       ).rejects.toThrow('TTS API request failed with status 500');
-    });
-  });
-
-  describe('streamCall', () => {
-    it('should throw not implemented error', async () => {
-      const mockStream = new WritableStream();
-      const mockWriter = mockStream.getWriter();
-      await expect(tool.streamCall({}, mockWriter)).rejects.toThrow(
-        'TextToSpeechTool: Streaming call not implemented.',
-      );
     });
   });
 });

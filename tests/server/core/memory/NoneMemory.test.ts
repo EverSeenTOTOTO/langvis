@@ -90,7 +90,7 @@ describe('NoneMemory', () => {
   describe('clearByUserId', () => {
     it('should throw error as not supported', async () => {
       await expect(memory.clearByUserId('user-123')).rejects.toThrow(
-        'ChatHistoryMemory does not support clearByUserId',
+        'NoneMemory does not support clearByUserId',
       );
     });
   });

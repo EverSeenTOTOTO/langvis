@@ -90,44 +90,22 @@ export default class ChatController {
         .json({ error: `Conversation ${conversationId} not found` });
     }
 
-    await this.startAgent(req, conversation.config!, {
-      role: dto.role,
-      content: dto.content,
-    });
-
-    return res.status(200).json({ success: true });
-  }
-
-  private async startAgent(
-    req: Request,
-    config: Record<string, any>,
-    userMessage: {
-      role: Role;
-      content: string;
-      meta?: Record<string, any> | null;
-    },
-  ) {
-    const { conversationId } = req.params;
-
-    req.log.info(
-      `Starting agent call for conversation ${conversationId}, agent: ${chalk.yellow(config.agent)}`,
-    );
-
-    const agent = container.resolve(config.agent) as Agent;
+    const agent = container.resolve(conversation.config!.agent) as Agent;
 
     if (!agent) {
-      req.log.error(`Agent ${chalk.yellow(config.agent)} not registered.`);
-      return;
+      return res.status(400).json({ error: 'Agent not found' });
     }
 
     const memory = await this.chatService.buildMemory(
       req,
       agent,
-      config,
-      userMessage,
+      conversation.config!,
+      {
+        role: dto.role,
+        content: dto.content,
+      },
     );
 
-    // create empty assist message for streaming
     const [assistantMessage] = await this.conversationService.batchAddMessages(
       conversationId,
       [
@@ -140,14 +118,28 @@ export default class ChatController {
       ],
     );
 
-    const abortController = new AbortController();
+    req.log.info(
+      `Created loading message for conversation ${conversationId}, starting agent: ${chalk.yellow(conversation.config!.agent)}`,
+    );
 
-    const writer = await this.chatService.createStreamForMessage(
+    // Return response first so client can fetch the loading message
+    res.status(200).json({ success: true });
+
+    // Then start agent streaming asynchronously
+    const abortController = new AbortController();
+    const generator = agent.call(
+      memory,
+      conversation.config!,
+      abortController.signal,
+    );
+
+    this.chatService.consumeAgentStream(
       conversationId,
       assistantMessage,
+      generator,
       abortController,
     );
 
-    agent.streamCall(memory, writer, config, abortController.signal);
+    return;
   }
 }

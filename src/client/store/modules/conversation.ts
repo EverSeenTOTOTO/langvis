@@ -16,6 +16,11 @@ const isActiveAssistMessage = (message?: Message) =>
   message.role === Role.ASSIST &&
   (message.meta?.streaming || message.meta?.loading);
 
+interface StreamingState {
+  buffer: string;
+  timer: ReturnType<typeof setInterval> | null;
+}
+
 @store()
 export class ConversationStore {
   @hydrate()
@@ -27,8 +32,12 @@ export class ConversationStore {
   @hydrate()
   messages: Record<string, Message[]> = {};
 
+  private streamingStates: Map<string, StreamingState> = new Map();
+
   constructor() {
-    makeAutoObservable(this);
+    makeAutoObservable<ConversationStore, 'streamingStates'>(this, {
+      streamingStates: false,
+    });
     reaction(
       () => this.currentConversationId,
       id => {
@@ -174,10 +183,60 @@ export class ConversationStore {
 
     if (!isActiveAssistMessage(lastMessage)) return;
 
-    messages[messages.length - 1] = {
-      ...lastMessage,
-      content: lastMessage.content + (deltaContent ?? ''),
-      meta: meta ?? lastMessage.meta,
-    };
+    if (meta) {
+      lastMessage.meta = meta;
+    }
+
+    if (deltaContent) {
+      const state = this.streamingStates.get(conversationId) ?? {
+        buffer: '',
+        timer: null,
+      };
+      state.buffer += deltaContent;
+      this.streamingStates.set(conversationId, state);
+      this.startTypewriter(conversationId);
+    }
+  }
+
+  private startTypewriter(conversationId: string) {
+    const state = this.streamingStates.get(conversationId);
+    if (!state || state.timer) return;
+
+    state.timer = setInterval(() => {
+      this.flushTypewriterChunk(conversationId);
+    }, 15);
+  }
+
+  private flushTypewriterChunk(conversationId: string) {
+    const state = this.streamingStates.get(conversationId);
+
+    if (!state || state.buffer.length === 0) {
+      this.clearStreaming(conversationId);
+      return;
+    }
+
+    const messages = this.messages[conversationId];
+    if (!messages) {
+      this.clearStreaming(conversationId);
+      return;
+    }
+
+    const lastMessage = messages[messages.length - 1];
+    if (!isActiveAssistMessage(lastMessage)) {
+      this.clearStreaming(conversationId);
+      return;
+    }
+
+    const chunk = state.buffer.slice(0, 3);
+    state.buffer = state.buffer.slice(3);
+    lastMessage.content += chunk;
+  }
+
+  clearStreaming(conversationId: string) {
+    const state = this.streamingStates.get(conversationId);
+    if (state?.timer) {
+      clearInterval(state.timer);
+    }
+    this.streamingStates.delete(conversationId);
   }
 }

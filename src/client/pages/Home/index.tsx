@@ -25,9 +25,6 @@ const Chat: React.FC = () => {
   const createConversationApi = useAsyncFn(
     conversationStore.createConversation.bind(conversationStore),
   );
-  const addMessageApi = useAsyncFn(
-    conversationStore.addMessageToConversation.bind(conversationStore),
-  );
   const chatApi = useAsyncFn(chatStore.startChat.bind(chatStore));
 
   const handleSend = async () => {
@@ -114,7 +111,6 @@ const Chat: React.FC = () => {
             loading={
               conversationStore.activeAssistMessage?.meta?.loading ||
               conversationStore.activeAssistMessage?.meta?.streaming ||
-              addMessageApi[0].loading ||
               createConversationApi[0].loading ||
               chatApi[0].loading
             }

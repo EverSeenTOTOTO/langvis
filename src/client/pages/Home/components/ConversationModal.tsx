@@ -157,7 +157,7 @@ const ConversationModal = ({
 
   return (
     <Modal
-      width={isMobile ? '100%' : '60%'}
+      width={isMobile ? '100%' : '72%'}
       title={title}
       destroyOnHidden
       okText={settingStore.tr('Save')}
@@ -175,19 +175,6 @@ const ConversationModal = ({
         <Flex vertical={isMobile}>
           <div className="config-left">
             <Form.Item
-              name="id"
-              label={settingStore.tr('Conversation ID')}
-              hidden={mode === 'create'}
-              rules={[
-                {
-                  required: mode === 'edit',
-                  message: settingStore.tr('Please enter a conversation name'),
-                },
-              ]}
-            >
-              <Input disabled />
-            </Form.Item>
-            <Form.Item
               name="name"
               label={settingStore.tr('Conversation Name')}
               rules={[
@@ -202,6 +189,14 @@ const ConversationModal = ({
               ]}
             >
               <Input placeholder={settingStore.tr('Enter conversation name')} />
+            </Form.Item>
+            <Form.Item
+              label={settingStore.tr('Conversation ID')}
+              hidden={mode === 'create'}
+            >
+              <Typography.Text type="secondary" copyable>
+                {initialValues?.id}
+              </Typography.Text>
             </Form.Item>
             <Form.Item
               name={['config', 'agent']}
@@ -262,3 +257,4 @@ const ConversationModal = ({
 };
 
 export default observer(ConversationModal);
+

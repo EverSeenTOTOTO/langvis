@@ -1,10 +1,10 @@
-import LlmCallTool from '@/server/core/tool/LlmCall';
+import LlmCallTool, { LlmCallOutput } from '@/server/core/tool/LlmCall';
+import { ToolEvent } from '@/shared/types';
 import OpenAI from 'openai';
 import type { Stream } from 'openai/core/streaming.mjs';
 import type { ChatCompletionCreateParamsStreaming } from 'openai/resources/chat/completions';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock OpenAI
 const mockCreate = vi.fn();
 vi.mock('openai', () => {
   return {
@@ -18,6 +18,21 @@ vi.mock('openai', () => {
   };
 });
 
+async function collectEvents(
+  generator: AsyncGenerator<ToolEvent<LlmCallOutput>, LlmCallOutput, void>,
+): Promise<{ deltas: string[]; result: string }> {
+  const deltas: string[] = [];
+  let result = '';
+  for await (const event of generator) {
+    if (event.type === 'delta') {
+      deltas.push(event.data);
+    } else if (event.type === 'result') {
+      result = event.result;
+    }
+  }
+  return { deltas, result };
+}
+
 describe('LlmCallTool', () => {
   let llmCallTool: LlmCallTool;
   let mockOpenAI: OpenAI;
@@ -29,48 +44,7 @@ describe('LlmCallTool', () => {
   });
 
   describe('call', () => {
-    it('should call OpenAI chat completions API with correct parameters', async () => {
-      const mockResponse = {
-        id: 'test-id',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content: 'Test response',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567890,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
-      mockCreate.mockResolvedValue(mockResponse);
-
-      const input = {
-        messages: [{ role: 'user', content: 'Hello' }],
-        model: 'gpt-3.5-turbo',
-      };
-
-      const result = await llmCallTool.call(input as any);
-
-      expect(mockCreate).toHaveBeenCalledWith(
-        {
-          model: 'gpt-3.5-turbo',
-          messages: [{ role: 'user', content: 'Hello' }],
-          stream: false,
-        },
-        { signal: undefined },
-      );
-      expect(result).toEqual(mockResponse);
-    });
-  });
-
-  describe('streamCall', () => {
-    it('should stream response and write to outputStream', async () => {
-      // Mock the stream chunks
+    it('should stream response and yield delta events', async () => {
       const mockChunks = [
         { choices: [{ delta: { content: 'Hello' }, finish_reason: null }] },
         { choices: [{ delta: { content: ' world' }, finish_reason: null }] },
@@ -87,18 +61,12 @@ describe('LlmCallTool', () => {
 
       mockCreate.mockResolvedValue(mockStream);
 
-      // Create mock writer
-      const mockWriter = {
-        write: vi.fn(),
-        close: vi.fn(),
-      };
-
       const input: Partial<ChatCompletionCreateParamsStreaming> = {
         messages: [{ role: 'user', content: 'Hello' }],
         model: 'gpt-3.5-turbo',
       };
 
-      await llmCallTool.streamCall(input, mockWriter as any);
+      const { deltas, result } = await collectEvents(llmCallTool.call(input));
 
       expect(mockCreate).toHaveBeenCalledWith(
         {
@@ -109,16 +77,13 @@ describe('LlmCallTool', () => {
         { signal: undefined },
       );
 
-      expect(mockWriter.write).toHaveBeenCalledWith('Hello');
-      expect(mockWriter.write).toHaveBeenCalledWith(' world');
-      expect(mockWriter.write).toHaveBeenCalledWith('!');
-      expect(mockWriter.close).toHaveBeenCalled();
+      expect(deltas).toEqual(['Hello', ' world', '!']);
+      expect(result).toBe('Hello world!');
     });
 
-    it('should abort writer on error', async () => {
+    it('should throw error on stream failure', async () => {
       const mockError = new Error('Test error');
 
-      // Mock the stream to throw an error
       const mockStream = {
         [Symbol.asyncIterator]: async function* () {
           yield { choices: [{ delta: { content: 'Hello' } }] };
@@ -128,21 +93,13 @@ describe('LlmCallTool', () => {
 
       mockCreate.mockResolvedValue(mockStream);
 
-      const mockWriter = {
-        write: vi.fn(),
-        close: vi.fn(),
-        abort: vi.fn(),
-      };
-
       const input: Partial<ChatCompletionCreateParamsStreaming> = {
         messages: [{ role: 'user', content: 'Hello' }],
       };
 
-      await expect(
-        llmCallTool.streamCall(input, mockWriter as any),
-      ).rejects.toThrow(mockError);
-
-      expect(mockWriter.abort).toHaveBeenCalledWith(mockError);
+      await expect(collectEvents(llmCallTool.call(input))).rejects.toThrow(
+        mockError,
+      );
     });
   });
 });

@@ -2,7 +2,7 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { ToolConfig } from '@/shared/types';
+import { ToolConfig, ToolEvent } from '@/shared/types';
 import { Readability } from '@mozilla/readability';
 import DOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
@@ -23,15 +23,15 @@ interface WebFetchOutput {
 }
 
 @tool(ToolIds.WEB_FETCH)
-export default class WebFetchTool extends Tool {
+export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  async call(
+  async *call(
     @input() data: WebFetchInput,
     signal?: AbortSignal,
-  ): Promise<WebFetchOutput> {
+  ): AsyncGenerator<ToolEvent<WebFetchOutput>, WebFetchOutput, void> {
     signal?.throwIfAborted();
 
     const { url, timeout = 30000 } = data;
@@ -122,14 +122,16 @@ export default class WebFetchTool extends Tool {
 
     this.logger.info(`Successfully extracted content from: ${url}`);
 
-    return {
+    const output: WebFetchOutput = {
       title: article.title || '',
-      // content: article.content || '',
       textContent: article.textContent || '',
       excerpt: article.excerpt || '',
       byline: article.byline || null,
       siteName: article.siteName || null,
       url,
     };
+
+    yield { type: 'result', result: output };
+    return output;
   }
 }
