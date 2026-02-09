@@ -2,11 +2,12 @@ import { agent } from '@/server/decorator/core';
 import { config } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
-import { AgentConfig, StreamChunk } from '@/shared/types';
+import { AgentConfig, AgentEvent } from '@/shared/types';
+import chalk from 'chalk';
 import { container } from 'tsyringe';
 import { Agent } from '..';
 import { Memory } from '../../memory';
-import type { Tool } from '../../tool';
+import type LlmCallTool from '../../tool/LlmCall';
 
 interface ChatAgentConfig {
   model?: {
@@ -26,13 +27,14 @@ export default class ChatAgent extends Agent {
     return `You are a helpful AI assistant. You engage in natural conversations with users, providing thoughtful and accurate responses. `;
   }
 
-  async streamCall(
+  async *call(
     memory: Memory,
-    outputWriter: WritableStreamDefaultWriter<StreamChunk>,
     @config() options?: ChatAgentConfig,
     signal?: AbortSignal,
-  ) {
-    const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
+  ): AsyncGenerator<AgentEvent, void, void> {
+    yield { type: 'start', agentId: this.id };
+
+    const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
 
     const messages = await memory.summarize();
     const conversationMessages = messages.map(msg => ({
@@ -42,16 +44,26 @@ export default class ChatAgent extends Agent {
 
     const model = options?.model?.code ?? process.env.OPENAI_MODEL;
 
-    this.logger.debug(`Chat with ${model}, messages: `, conversationMessages);
+    this.logger.debug(
+      `Chat with ${chalk.bgRed(model)}, messages: `,
+      conversationMessages,
+    );
 
-    await llmCallTool.streamCall(
+    const generator = llmCallTool.call(
       {
         model,
         temperature: options?.model?.temperature,
         messages: conversationMessages,
       },
-      outputWriter,
       signal,
     );
+
+    for await (const event of generator) {
+      if (event.type === 'delta') {
+        yield { type: 'delta', content: event.data };
+      }
+    }
+
+    yield { type: 'end', agentId: this.id };
   }
 }

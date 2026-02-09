@@ -1,15 +1,14 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
 import GirlFriendAgent from '@/server/core/agent/GirlFriend';
 import { ToolIds } from '@/shared/constants';
+import { AgentEvent } from '@/shared/types';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockLlmCallTool = {
   call: vi.fn(),
-  streamCall: vi.fn(),
 };
 
 const mockTtsTool = {
   call: vi.fn(),
-  streamCall: vi.fn(),
 };
 
 vi.mock('tsyringe', async () => {
@@ -35,6 +34,16 @@ vi.mock('tsyringe', async () => {
   };
 });
 
+async function collectEvents(
+  generator: AsyncGenerator<AgentEvent, void, void>,
+): Promise<AgentEvent[]> {
+  const events: AgentEvent[] = [];
+  for await (const event of generator) {
+    events.push(event);
+  }
+  return events;
+}
+
 describe('GirlFriendAgent', () => {
   let girlFriendAgent: GirlFriendAgent;
 
@@ -48,28 +57,62 @@ describe('GirlFriendAgent', () => {
         error: vi.fn(),
       },
     });
+    Object.defineProperty(girlFriendAgent, 'id', {
+      value: 'girlfriend',
+    });
     vi.clearAllMocks();
   });
 
-  it('should pass signal to llmCallTool.streamCall and tts.call', async () => {
+  it('should yield start, delta, meta (tts result), and end events', async () => {
     const memory = {
       summarize: vi.fn().mockResolvedValue([]),
     } as any;
-    const writer = {
-      write: vi.fn(),
-      close: vi.fn(),
+    const signal = new AbortController().signal;
+
+    mockLlmCallTool.call.mockImplementation(async function* () {
+      yield { type: 'delta', data: 'Hello' };
+      yield { type: 'delta', data: ' world' };
+      yield { type: 'result', result: 'Hello world' };
+    });
+
+    mockTtsTool.call.mockImplementation(async function* () {
+      yield {
+        type: 'result',
+        result: { voice: 'test-voice', filePath: 'tts/test.mp3' },
+      };
+    });
+
+    const events = await collectEvents(
+      girlFriendAgent.call(memory, {}, signal),
+    );
+
+    expect(events[0]).toEqual({ type: 'start', agentId: 'girlfriend' });
+    expect(events[1]).toEqual({ type: 'delta', content: 'Hello' });
+    expect(events[2]).toEqual({ type: 'delta', content: ' world' });
+    expect(events[3]).toEqual({
+      type: 'meta',
+      meta: { voice: 'test-voice', filePath: 'tts/test.mp3' },
+    });
+    expect(events[4]).toEqual({ type: 'end', agentId: 'girlfriend' });
+  });
+
+  it('should pass signal to llmCallTool.call and tts.call', async () => {
+    const memory = {
+      summarize: vi.fn().mockResolvedValue([]),
     } as any;
     const signal = new AbortController().signal;
 
-    // To mock the close event of the WritableStream
-    mockLlmCallTool.streamCall.mockImplementation(async (_options, _writer) => {
-      await _writer.close();
+    mockLlmCallTool.call.mockImplementation(async function* () {
+      yield { type: 'result', result: '' };
     });
 
-    await girlFriendAgent.streamCall(memory, writer, {}, signal);
+    mockTtsTool.call.mockImplementation(async function* () {
+      yield { type: 'result', result: {} };
+    });
 
-    expect(mockLlmCallTool.streamCall).toHaveBeenCalledWith(
-      expect.any(Object),
+    await collectEvents(girlFriendAgent.call(memory, {}, signal));
+
+    expect(mockLlmCallTool.call).toHaveBeenCalledWith(
       expect.any(Object),
       signal,
     );

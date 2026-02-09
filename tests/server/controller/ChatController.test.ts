@@ -1,12 +1,11 @@
-import { describe, it, beforeEach, vi, expect } from 'vitest';
 import ChatController from '@/server/controller/ChatController';
-import type { Request, Response } from 'express';
 import { Role } from '@/shared/entities/Message';
+import type { Request, Response } from 'express';
 import { container } from 'tsyringe';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the container and agent
 const mockAgent = {
-  streamCall: vi.fn(),
   call: vi.fn(),
 };
 
@@ -38,7 +37,7 @@ class MockConversationService {
 }
 
 class MockChatService {
-  createStreamForMessage = vi.fn();
+  consumeAgentStream = vi.fn();
   cancelAgent = vi.fn();
   buildMemory = vi.fn();
 }
@@ -192,27 +191,40 @@ describe('ChatController', () => {
       const conversationId = 'test-conversation-id';
       const role = Role.USER;
       const content = 'Hello';
-      const mockMessage = { id: '1', conversationId, role, content };
+      const mockAssistantMessage = {
+        id: '2',
+        conversationId,
+        role: Role.ASSIST,
+        content: '',
+        meta: { loading: true },
+      };
       const mockConversation = {
         id: conversationId,
         name: 'Test Conversation',
         config: { agent: 'Chat Agent' },
       };
+      const mockMemory = { id: 'memory-1' };
 
       mockRequest.params = { conversationId };
       mockRequest.body = { role, content };
 
-      mockConversationService.addMessageToConversation = vi
-        .fn()
-        .mockResolvedValue(mockMessage);
+      (container.resolve as any).mockReturnValue(mockAgent);
 
       mockConversationService.getConversationById = vi
         .fn()
         .mockResolvedValue(mockConversation);
 
-      mockConversationService.getMessagesByConversationId = vi
+      mockChatService.buildMemory = vi.fn().mockResolvedValue(mockMemory);
+
+      mockConversationService.batchAddMessages = vi
         .fn()
-        .mockResolvedValue([{ role: Role.USER, content: 'Hello' }]);
+        .mockResolvedValue([mockAssistantMessage]);
+
+      mockAgent.call = vi.fn().mockReturnValue({
+        async *[Symbol.asyncIterator]() {
+          yield { type: 'start', agentId: 'test' };
+        },
+      });
 
       await chatController.chat(
         conversationId,
@@ -223,6 +235,9 @@ describe('ChatController', () => {
 
       expect(mockStatus).toHaveBeenCalledWith(200);
       expect(mockJson).toHaveBeenCalledWith({ success: true });
+      expect(mockChatService.buildMemory).toHaveBeenCalled();
+      expect(mockConversationService.batchAddMessages).toHaveBeenCalled();
+      expect(mockChatService.consumeAgentStream).toHaveBeenCalled();
     });
 
     it('should return 400 if role is missing', async () => {
@@ -379,29 +394,22 @@ describe('ChatController', () => {
 
       mockConversationService.updateMessage.mockResolvedValue(undefined);
 
-      // Create a mock WritableStream
-      const mockWritableStream = new WritableStream({
-        write() {
-          // Mock write implementation
-        },
-        close() {
-          // Mock close implementation
-        },
-        abort() {
-          // Mock abort implementation
-        },
-      });
+      // Mock consumeAgentStream
+      mockChatService.consumeAgentStream = vi.fn().mockResolvedValue(undefined);
 
-      // Mock createStreamForMessage to return the mock WritableStream
-      mockChatService.createStreamForMessage = vi
-        .fn()
-        .mockResolvedValue(mockWritableStream.getWriter());
       // Mock buildMemory to return a mock memory object
       const mockMemory = { summarize: vi.fn(), store: vi.fn() };
       mockChatService.buildMemory = vi.fn().mockResolvedValue(mockMemory);
+
       // Mock container.resolve to return the mock agent
       vi.mocked(container.resolve).mockReturnValue(mockAgent);
-      mockAgent.streamCall.mockResolvedValue(undefined);
+
+      // Mock agent.call to return an AsyncGenerator
+      mockAgent.call.mockImplementation(async function* () {
+        yield { type: 'start', agentId: 'test' };
+        yield { type: 'delta', content: 'Hello' };
+        yield { type: 'end', agentId: 'test' };
+      });
 
       mockRequest.params = { conversationId };
       mockRequest.body = { role: Role.USER, content: 'Hello' };
@@ -419,30 +427,11 @@ describe('ChatController', () => {
       expect(mockStatus).toHaveBeenCalledWith(200);
       expect(mockJson).toHaveBeenCalledWith({ success: true });
 
-      // Verify the agent was resolved and streamCall was eventually called
+      // Verify the agent was resolved and call was eventually called
       await new Promise(resolve => setTimeout(resolve, 0));
       expect(container.resolve).toHaveBeenCalledWith(
         mockConversation.config.agent,
       );
-    });
-
-    it('should handle initial assistant message creation failure', async () => {
-      // Mock the batch message creation to fail
-      mockConversationService.batchAddMessages.mockRejectedValue(
-        new Error('Database error'),
-      );
-
-      try {
-        await chatController.chat(
-          conversationId,
-          mockRequest.body,
-          mockRequest as Request,
-          mockResponse as Response,
-        );
-      } catch (error) {
-        // Should handle the error gracefully
-        expect(error).toBeInstanceOf(Error);
-      }
     });
 
     it('should verify chat state and stream setup with correct parameters', async () => {
@@ -456,10 +445,9 @@ describe('ChatController', () => {
       // Allow async operations to complete
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Verify that streamCall was called with Memory and WritableStreamDefaultWriter
-      expect(mockAgent.streamCall).toHaveBeenCalledWith(
+      // Verify that call was called with Memory, Config, and Signal
+      expect(mockAgent.call).toHaveBeenCalledWith(
         expect.any(Object),
-        expect.anything(),
         expect.any(Object),
         expect.anything(),
       );
@@ -485,14 +473,13 @@ describe('ChatController', () => {
         ]),
       );
 
-      // Verify the agent was resolved and streamCall was eventually called
+      // Verify the agent was resolved and call was eventually called
       await new Promise(resolve => setTimeout(resolve, 50));
       expect(container.resolve).toHaveBeenCalledWith(
         mockConversation.config.agent,
       );
-      expect(mockAgent.streamCall).toHaveBeenCalledWith(
+      expect(mockAgent.call).toHaveBeenCalledWith(
         expect.any(Object),
-        expect.anything(),
         expect.any(Object),
         expect.anything(),
       );
@@ -538,30 +525,21 @@ describe('ChatController', () => {
 
       mockConversationService.updateMessage.mockResolvedValue(undefined);
 
-      // Create a mock WritableStream
-      const mockWritableStream = new WritableStream({
-        write() {
-          // Mock write implementation
-        },
-        close() {
-          // Mock close implementation
-        },
-        abort() {
-          // Mock abort implementation
-        },
-      });
-
-      // Mock createStreamForMessage to return the mock WritableStream
-      mockChatService.createStreamForMessage = vi
-        .fn()
-        .mockResolvedValue(mockWritableStream.getWriter());
+      // Mock consumeAgentStream
+      mockChatService.consumeAgentStream = vi.fn().mockResolvedValue(undefined);
 
       // Mock buildMemory to return a mock memory object
       const mockMemory = { summarize: vi.fn(), store: vi.fn() };
       mockChatService.buildMemory = vi.fn().mockResolvedValue(mockMemory);
 
       vi.mocked(container.resolve).mockReturnValue(mockAgent);
-      mockAgent.streamCall.mockResolvedValue(undefined);
+
+      // Mock agent.call to return an AsyncGenerator
+      mockAgent.call.mockImplementation(async function* () {
+        yield { type: 'start', agentId: 'test' };
+        yield { type: 'delta', content: 'Hello' };
+        yield { type: 'end', agentId: 'test' };
+      });
 
       mockRequest.params = { conversationId };
       mockRequest.body = { role: Role.USER, content: 'Test message' };
@@ -597,11 +575,11 @@ describe('ChatController', () => {
       // Allow async operations to complete
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      // Verify agent was resolved and streamCall was initiated
+      // Verify agent was resolved and call was initiated
       expect(container.resolve).toHaveBeenCalledWith(
         mockConversation.config.agent,
       );
-      expect(mockAgent.streamCall).toHaveBeenCalled();
+      expect(mockAgent.call).toHaveBeenCalled();
     });
 
     it('should handle conversation not found during integration', async () => {
@@ -618,10 +596,10 @@ describe('ChatController', () => {
       expect(mockJson).toHaveBeenCalledWith({
         error: `Conversation ${conversationId} not found`,
       });
-      expect(mockAgent.streamCall).not.toHaveBeenCalled();
+      expect(mockAgent.call).not.toHaveBeenCalled();
     });
 
-    it('should verify WritableStream is properly created for agent', async () => {
+    it('should verify agent call with correct parameters', async () => {
       await chatController.chat(
         conversationId,
         mockRequest.body,
@@ -632,10 +610,9 @@ describe('ChatController', () => {
       // Allow async operations to complete
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Verify that streamCall was called with the correct types (Memory, Writer, Config)
-      expect(mockAgent.streamCall).toHaveBeenCalledWith(
+      // Verify that call was called with Memory, Config, and Signal
+      expect(mockAgent.call).toHaveBeenCalledWith(
         expect.any(Object),
-        expect.anything(),
         expect.any(Object),
         expect.anything(),
       );
@@ -740,3 +717,4 @@ describe('ChatController', () => {
     });
   });
 });
+

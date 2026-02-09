@@ -50,5 +50,17 @@ export default class ChatHistoryMemory extends Memory {
     throw new Error('ChatHistoryMemory does not support clearByUserId');
   }
 
-  summarize = this.retrieve;
+  async summarize() {
+    const result = await this.conversationService.getMessagesByConversationId(
+      this.conversationId!,
+    );
+
+    if (result[result.length - 1]?.role === Role.ASSIST) {
+      // messages[len-1] is the streaming assist message
+      result.splice(result.length - 1, 1);
+    }
+
+    return result;
+  }
 }
+

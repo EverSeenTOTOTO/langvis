@@ -3,6 +3,7 @@ import { Memory } from '@/server/core/memory';
 import logger from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { Message, Role } from '@/shared/entities/Message';
+import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/server/utils/logger', () => {
@@ -65,6 +66,29 @@ const createMockMemory = (messages: Message[]): Memory => {
     userId: undefined,
   } as unknown as Memory;
 };
+
+async function collectEvents(
+  generator: AsyncGenerator<AgentEvent, void, void>,
+): Promise<AgentEvent[]> {
+  const events: AgentEvent[] = [];
+  for await (const event of generator) {
+    events.push(event);
+  }
+  return events;
+}
+
+function createLlmMockGenerator(content: string) {
+  return async function* () {
+    yield { type: 'delta' as const, data: content };
+    yield { type: 'result' as const, result: content };
+  };
+}
+
+function createToolMockGenerator(result: unknown) {
+  return async function* () {
+    yield { type: 'result' as const, result };
+  };
+}
 
 describe('ReActAgent', () => {
   let reactAgent: ReActAgent;
@@ -324,12 +348,15 @@ describe('ReActAgent', () => {
         'non_existent_tool',
         { param: 'value' },
       );
-      expect(result).toContain('Tool "non_existent_tool" not found');
-      expect(result).toContain('available tools: `test_tool`');
+      expect(result).toContain(
+        'Error executing tool "non_existent_tool": No matching bindings found for serviceIdentifier: non_existent_tool',
+      );
     });
 
     it('should execute tool successfully', async () => {
-      mockTestTool.call.mockResolvedValue({ result: 'success' });
+      mockTestTool.call.mockImplementation(
+        createToolMockGenerator({ result: 'success' }),
+      );
       const result = await (reactAgent as any).executeAction('test_tool', {
         param: 'value',
       });
@@ -337,7 +364,10 @@ describe('ReActAgent', () => {
     });
 
     it('should handle tool execution error', async () => {
-      mockTestTool.call.mockRejectedValue(new Error('Tool error'));
+      mockTestTool.call.mockImplementation(async function* () {
+        yield { type: 'delta' as const, data: '' };
+        throw new Error('Tool error');
+      });
       const result = await (reactAgent as any).executeAction('test_tool', {
         param: 'value',
       });
@@ -346,32 +376,11 @@ describe('ReActAgent', () => {
     });
   });
 
-  describe('streamCall', () => {
-    it('should stream final answer without thought', async () => {
-      const mockResponse = {
-        id: 'test-id',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content: '{"final_answer": "This is the final answer."}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567890,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
-      mockLlmCall.call.mockResolvedValue(mockResponse);
-
-      const mockWriter = {
-        write: vi.fn(),
-        close: vi.fn(),
-        abort: vi.fn(),
-      };
+  describe('call', () => {
+    it('should yield final answer without thought', async () => {
+      mockLlmCall.call.mockImplementation(
+        createLlmMockGenerator('{"final_answer": "This is the final answer."}'),
+      );
 
       const messages: Message[] = [
         {
@@ -384,51 +393,40 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(
-        createMockMemory(messages),
-        mockWriter as any,
+      const events = await collectEvents(
+        reactAgent.call(createMockMemory(messages)),
       );
 
       expect(mockLlmCall.call).toHaveBeenCalled();
-      expect(mockWriter.write).toHaveBeenCalledWith({
+
+      const metaEvents = events.filter(e => e.type === 'meta');
+      expect(metaEvents).toContainEqual({
+        type: 'meta',
         meta: {
           steps: [
             { thought: undefined, final_answer: 'This is the final answer.' },
           ],
         },
       });
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'This is the final answer.',
-      );
-      expect(mockWriter.close).toHaveBeenCalled();
+
+      const deltaEvents = events.filter(e => e.type === 'delta');
+      expect(deltaEvents).toContainEqual({
+        type: 'delta',
+        content: 'This is the final answer.',
+      });
+
+      expect(events[events.length - 1]).toEqual({
+        type: 'end',
+        agentId: undefined,
+      });
     });
 
-    it('should stream final answer with thought', async () => {
-      const mockResponse = {
-        id: 'test-id',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content:
-                '{"thought": "I have the answer", "final_answer": "This is the final answer."}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567890,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
-      mockLlmCall.call.mockResolvedValue(mockResponse);
-
-      const mockWriter = {
-        write: vi.fn(),
-        close: vi.fn(),
-        abort: vi.fn(),
-      };
+    it('should yield final answer with thought', async () => {
+      mockLlmCall.call.mockImplementation(
+        createLlmMockGenerator(
+          '{"thought": "I have the answer", "final_answer": "This is the final answer."}',
+        ),
+      );
 
       const messages: Message[] = [
         {
@@ -441,13 +439,15 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(
-        createMockMemory(messages),
-        mockWriter as any,
+      const events = await collectEvents(
+        reactAgent.call(createMockMemory(messages)),
       );
 
       expect(mockLlmCall.call).toHaveBeenCalled();
-      expect(mockWriter.write).toHaveBeenCalledWith({
+
+      const metaEvents = events.filter(e => e.type === 'meta');
+      expect(metaEvents).toContainEqual({
+        type: 'meta',
         meta: {
           steps: [
             {
@@ -457,60 +457,30 @@ describe('ReActAgent', () => {
           ],
         },
       });
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'This is the final answer.',
-      );
-      expect(mockWriter.close).toHaveBeenCalled();
+
+      const deltaEvents = events.filter(e => e.type === 'delta');
+      expect(deltaEvents).toContainEqual({
+        type: 'delta',
+        content: 'This is the final answer.',
+      });
     });
 
     it('should execute action and continue loop', async () => {
-      const mockActionResponse = {
-        id: 'test-id-1',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content:
-                '{"thought": "Using tool", "action": {"tool": "test_tool", "input": {"param": "value"}}}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567890,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
-      const mockFinalResponse = {
-        id: 'test-id-2',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content:
-                '{"final_answer": "This is the final answer after action."}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567891,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
       mockLlmCall.call
-        .mockResolvedValueOnce(mockActionResponse)
-        .mockResolvedValueOnce(mockFinalResponse);
+        .mockImplementationOnce(
+          createLlmMockGenerator(
+            '{"thought": "Using tool", "action": {"tool": "test_tool", "input": {"param": "value"}}}',
+          ),
+        )
+        .mockImplementationOnce(
+          createLlmMockGenerator(
+            '{"final_answer": "This is the final answer after action."}',
+          ),
+        );
 
-      mockTestTool.call.mockResolvedValue({ result: 'test result' });
-
-      const mockWriter = {
-        write: vi.fn(),
-        close: vi.fn(),
-        abort: vi.fn(),
-      };
+      mockTestTool.call.mockImplementation(
+        createToolMockGenerator({ result: 'test result' }),
+      );
 
       const messages: Message[] = [
         {
@@ -523,14 +493,16 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(
-        createMockMemory(messages),
-        mockWriter as any,
+      const events = await collectEvents(
+        reactAgent.call(createMockMemory(messages)),
       );
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
-      expect(mockWriter.write).toHaveBeenCalledWith(
+
+      const metaEvents = events.filter(e => e.type === 'meta');
+      expect(metaEvents).toContainEqual(
         expect.objectContaining({
+          type: 'meta',
           meta: {
             steps: expect.arrayContaining([
               {
@@ -541,8 +513,9 @@ describe('ReActAgent', () => {
           },
         }),
       );
-      expect(mockWriter.write).toHaveBeenCalledWith(
+      expect(metaEvents).toContainEqual(
         expect.objectContaining({
+          type: 'meta',
           meta: {
             steps: expect.arrayContaining([
               { observation: '{"result":"test result"}' },
@@ -550,60 +523,31 @@ describe('ReActAgent', () => {
           },
         }),
       );
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'This is the final answer after action.',
-      );
-      expect(mockWriter.close).toHaveBeenCalled();
+
+      const deltaEvents = events.filter(e => e.type === 'delta');
+      expect(deltaEvents).toContainEqual({
+        type: 'delta',
+        content: 'This is the final answer after action.',
+      });
     });
 
     it('should handle action execution error', async () => {
-      const mockActionResponse = {
-        id: 'test-id-1',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content:
-                '{"action": {"tool": "test_tool", "input": {"param": "value"}}}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567890,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
-      const mockFinalResponse = {
-        id: 'test-id-2',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content:
-                '{"final_answer": "This is the final answer after error."}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567891,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
       mockLlmCall.call
-        .mockResolvedValueOnce(mockActionResponse)
-        .mockResolvedValueOnce(mockFinalResponse);
+        .mockImplementationOnce(
+          createLlmMockGenerator(
+            '{"action": {"tool": "test_tool", "input": {"param": "value"}}}',
+          ),
+        )
+        .mockImplementationOnce(
+          createLlmMockGenerator(
+            '{"final_answer": "This is the final answer after error."}',
+          ),
+        );
 
-      mockTestTool.call.mockRejectedValue(new Error('Test error'));
-
-      const mockWriter = {
-        write: vi.fn(),
-        close: vi.fn(),
-        abort: vi.fn(),
-      };
+      mockTestTool.call.mockImplementation(async function* () {
+        yield { type: 'delta' as const, data: '' };
+        throw new Error('Test error');
+      });
 
       const messages: Message[] = [
         {
@@ -616,18 +560,15 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(
-        createMockMemory(messages),
-        mockWriter as any,
+      const events = await collectEvents(
+        reactAgent.call(createMockMemory(messages)),
       );
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
 
-      const metaCalls = mockWriter.write.mock.calls.filter(
-        call => call[0]?.meta?.steps,
-      );
-      const lastMetaCall = metaCalls[metaCalls.length - 1];
-      const lastSteps = lastMetaCall[0].meta.steps;
+      const metaEvents = events.filter(e => e.type === 'meta');
+      const lastMetaEvent = metaEvents[metaEvents.length - 1];
+      const lastSteps = (lastMetaEvent as any).meta.steps;
 
       expect(lastSteps).toContainEqual({
         thought: undefined,
@@ -643,39 +584,22 @@ describe('ReActAgent', () => {
         final_answer: 'This is the final answer after error.',
       });
 
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'This is the final answer after error.',
-      );
-      expect(mockWriter.close).toHaveBeenCalled();
+      const deltaEvents = events.filter(e => e.type === 'delta');
+      expect(deltaEvents).toContainEqual({
+        type: 'delta',
+        content: 'This is the final answer after error.',
+      });
     });
 
     it('should handle max iterations reached', async () => {
-      const mockActionResponse = {
-        id: 'test-id',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content:
-                '{"action": {"tool": "test_tool", "input": {"param": "value"}}}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567890,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
-      mockLlmCall.call.mockResolvedValue(mockActionResponse);
-      mockTestTool.call.mockResolvedValue({ result: 'success' });
-
-      const mockWriter = {
-        write: vi.fn(),
-        close: vi.fn(),
-        abort: vi.fn(),
-      };
+      mockLlmCall.call.mockImplementation(
+        createLlmMockGenerator(
+          '{"action": {"tool": "test_tool", "input": {"param": "value"}}}',
+        ),
+      );
+      mockTestTool.call.mockImplementation(
+        createToolMockGenerator({ result: 'success' }),
+      );
 
       const messages: Message[] = [
         {
@@ -688,44 +612,25 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(
-        createMockMemory(messages),
-        mockWriter as any,
+      const events = await collectEvents(
+        reactAgent.call(createMockMemory(messages)),
       );
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(reactAgent.maxIterations);
-      expect(mockWriter.abort).toHaveBeenCalledWith(
-        expect.objectContaining({
+
+      const errorEvents = events.filter(e => e.type === 'error');
+      expect(errorEvents).toContainEqual({
+        type: 'error',
+        error: expect.objectContaining({
           message: 'Max iterations reached',
         }),
-      );
+      });
     });
 
     it('should handle empty response content', async () => {
-      const mockResponse = {
-        id: 'test-id',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content: null,
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567890,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
-      mockLlmCall.call.mockResolvedValue(mockResponse);
-
-      const mockWriter = {
-        write: vi.fn(),
-        close: vi.fn(),
-        abort: vi.fn(),
-      };
+      mockLlmCall.call.mockImplementation(async function* () {
+        yield { type: 'result' as const, result: '' };
+      });
 
       const messages: Message[] = [
         {
@@ -738,62 +643,27 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(
-        createMockMemory(messages),
-        mockWriter as any,
+      const events = await collectEvents(
+        reactAgent.call(createMockMemory(messages)),
       );
 
-      expect(mockWriter.abort).toHaveBeenCalledWith(
-        expect.objectContaining({
+      const errorEvents = events.filter(e => e.type === 'error');
+      expect(errorEvents).toContainEqual({
+        type: 'error',
+        error: expect.objectContaining({
           message: 'No response from model',
         }),
-      );
+      });
     });
 
     it('should handle unparseable response', async () => {
-      const mockUnparseableResponse = {
-        id: 'test-id-1',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content: 'This is not parseable content',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567890,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
-      const mockFinalResponse = {
-        id: 'test-id-2',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content: '{"final_answer": "Final answer"}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567891,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
       mockLlmCall.call
-        .mockResolvedValueOnce(mockUnparseableResponse)
-        .mockResolvedValueOnce(mockFinalResponse);
-
-      const mockWriter = {
-        write: vi.fn(),
-        close: vi.fn(),
-        abort: vi.fn(),
-      };
+        .mockImplementationOnce(
+          createLlmMockGenerator('This is not parseable content'),
+        )
+        .mockImplementationOnce(
+          createLlmMockGenerator('{"final_answer": "Final answer"}'),
+        );
 
       const messages: Message[] = [
         {
@@ -806,14 +676,16 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(
-        createMockMemory(messages),
-        mockWriter as any,
+      const events = await collectEvents(
+        reactAgent.call(createMockMemory(messages)),
       );
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
-      expect(mockWriter.write).toHaveBeenCalledWith(
+
+      const metaEvents = events.filter(e => e.type === 'meta');
+      expect(metaEvents).toContainEqual(
         expect.objectContaining({
+          type: 'meta',
           meta: {
             steps: expect.arrayContaining([
               expect.objectContaining({
@@ -823,54 +695,20 @@ describe('ReActAgent', () => {
           },
         }),
       );
-      expect(mockWriter.write).toHaveBeenCalledWith('Final answer');
-      expect(mockWriter.close).toHaveBeenCalled();
+
+      const deltaEvents = events.filter(e => e.type === 'delta');
+      expect(deltaEvents).toContainEqual({
+        type: 'delta',
+        content: 'Final answer',
+      });
     });
 
     it('should handle empty parsed response during streaming', async () => {
-      const mockEmptyResponse = {
-        id: 'test-id-1',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content: '{}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567890,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
-      const mockFinalResponse = {
-        id: 'test-id-2',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content: '{"final_answer": "Final answer"}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567891,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
       mockLlmCall.call
-        .mockResolvedValueOnce(mockEmptyResponse)
-        .mockResolvedValueOnce(mockFinalResponse);
-
-      const mockWriter = {
-        write: vi.fn(),
-        close: vi.fn(),
-        abort: vi.fn(),
-      };
+        .mockImplementationOnce(createLlmMockGenerator('{}'))
+        .mockImplementationOnce(
+          createLlmMockGenerator('{"final_answer": "Final answer"}'),
+        );
 
       const messages: Message[] = [
         {
@@ -883,14 +721,16 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(
-        createMockMemory(messages),
-        mockWriter as any,
+      const events = await collectEvents(
+        reactAgent.call(createMockMemory(messages)),
       );
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
-      expect(mockWriter.write).toHaveBeenCalledWith(
+
+      const metaEvents = events.filter(e => e.type === 'meta');
+      expect(metaEvents).toContainEqual(
         expect.objectContaining({
+          type: 'meta',
           meta: {
             steps: expect.arrayContaining([
               {
@@ -901,56 +741,26 @@ describe('ReActAgent', () => {
           },
         }),
       );
-      expect(mockWriter.write).toHaveBeenCalledWith('Final answer');
-      expect(mockWriter.close).toHaveBeenCalled();
+
+      const deltaEvents = events.filter(e => e.type === 'delta');
+      expect(deltaEvents).toContainEqual({
+        type: 'delta',
+        content: 'Final answer',
+      });
     });
 
     it('should handle tool not found during action execution', async () => {
-      const mockActionResponse = {
-        id: 'test-id-1',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content:
-                '{"action": {"tool": "unknown_tool", "input": {"param": "value"}}}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567890,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
-      const mockFinalResponse = {
-        id: 'test-id-2',
-        choices: [
-          {
-            finish_reason: 'stop',
-            index: 0,
-            message: {
-              content:
-                '{"final_answer": "This is the final answer after tool not found."}',
-              role: 'assistant',
-            },
-          },
-        ],
-        created: 1234567891,
-        model: 'gpt-3.5-turbo',
-        object: 'chat.completion',
-      };
-
       mockLlmCall.call
-        .mockResolvedValueOnce(mockActionResponse)
-        .mockResolvedValueOnce(mockFinalResponse);
-
-      const mockWriter = {
-        write: vi.fn(),
-        close: vi.fn(),
-        abort: vi.fn(),
-      };
+        .mockImplementationOnce(
+          createLlmMockGenerator(
+            '{"action": {"tool": "unknown_tool", "input": {"param": "value"}}}',
+          ),
+        )
+        .mockImplementationOnce(
+          createLlmMockGenerator(
+            '{"final_answer": "This is the final answer after tool not found."}',
+          ),
+        );
 
       const messages: Message[] = [
         {
@@ -963,14 +773,16 @@ describe('ReActAgent', () => {
         },
       ];
 
-      await reactAgent.streamCall(
-        createMockMemory(messages),
-        mockWriter as any,
+      const events = await collectEvents(
+        reactAgent.call(createMockMemory(messages)),
       );
 
       expect(mockLlmCall.call).toHaveBeenCalledTimes(2);
-      expect(mockWriter.write).toHaveBeenCalledWith(
+
+      const metaEvents = events.filter(e => e.type === 'meta');
+      expect(metaEvents).toContainEqual(
         expect.objectContaining({
+          type: 'meta',
           meta: {
             steps: expect.arrayContaining([
               {
@@ -981,23 +793,26 @@ describe('ReActAgent', () => {
           },
         }),
       );
-      expect(mockWriter.write).toHaveBeenCalledWith(
+      expect(metaEvents).toContainEqual(
         expect.objectContaining({
+          type: 'meta',
           meta: {
             steps: expect.arrayContaining([
               expect.objectContaining({
                 observation: expect.stringContaining(
-                  'Tool "unknown_tool" not found',
+                  'Error executing tool "unknown_tool": No matching bindings found for serviceIdentifier: unknown_tool',
                 ),
               }),
             ]),
           },
         }),
       );
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        'This is the final answer after tool not found.',
-      );
-      expect(mockWriter.close).toHaveBeenCalled();
+
+      const deltaEvents = events.filter(e => e.type === 'delta');
+      expect(deltaEvents).toContainEqual({
+        type: 'delta',
+        content: 'This is the final answer after tool not found.',
+      });
     });
   });
 });

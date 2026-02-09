@@ -2,7 +2,7 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { ToolConfig } from '@/shared/types';
+import { ToolConfig, ToolEvent } from '@/shared/types';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { Tool } from '..';
@@ -21,7 +21,10 @@ export interface TextToSpeechOutput {
 }
 
 @tool(ToolIds.TEXT_TO_SPEECH)
-export default class TextToSpeechTool extends Tool {
+export default class TextToSpeechTool extends Tool<
+  TextToSpeechInput,
+  TextToSpeechOutput
+> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
@@ -42,10 +45,10 @@ export default class TextToSpeechTool extends Tool {
     }
   }
 
-  async call(
+  async *call(
     @input() params: TextToSpeechInput,
     signal?: AbortSignal,
-  ): Promise<TextToSpeechOutput> {
+  ): AsyncGenerator<ToolEvent<TextToSpeechOutput>, TextToSpeechOutput, void> {
     signal?.throwIfAborted();
 
     const { text, reqId, voice, emotion, speedRatio } = params;
@@ -79,7 +82,6 @@ export default class TextToSpeechTool extends Tool {
     };
 
     this.logger.debug(`TTS API request url: ${url}`);
-    // this.logger.debug(`TTS API request payload: ${JSON.stringify(payload)}`);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120_000);
@@ -158,10 +160,13 @@ export default class TextToSpeechTool extends Tool {
         `TTS completed successfully: ${reqId}, file: ${filePath}, size: ${audioBuffer.length} bytes`,
       );
 
-      return {
+      const output: TextToSpeechOutput = {
         voice,
         filePath: `tts/${filename}`,
       };
+
+      yield { type: 'result', result: output };
+      return output;
     } catch (error) {
       this.logger.error(`Failed to write MP3 file for ${reqId}: ${error}`);
       throw new Error(`Failed to save audio file: ${error}`);

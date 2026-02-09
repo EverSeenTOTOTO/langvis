@@ -90,6 +90,7 @@ export class ChatStore {
   disconnectFromSSE(conversationId: string) {
     this.eventSources.get(conversationId)?.close();
     this.eventSources.delete(conversationId);
+    this.conversationStore.clearStreaming(conversationId);
   }
 
   @api((req: CancelChatRequest) => `/api/chat/cancel/${req.conversationId}`, {

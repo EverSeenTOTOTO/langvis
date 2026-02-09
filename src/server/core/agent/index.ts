@@ -1,5 +1,5 @@
 import type { Logger } from '@/server/utils/logger';
-import { AgentConfig, StreamChunk } from '@/shared/types';
+import { AgentConfig, AgentEvent } from '@/shared/types';
 import { Memory } from '../memory';
 
 export abstract class Agent {
@@ -12,22 +12,11 @@ export abstract class Agent {
     return '';
   }
 
-  async call(_memory: Memory, _config?: any): Promise<unknown> {
-    throw new Error(
-      `${this.constructor.name}: Non-streaming call not implemented.`,
-    );
-  }
-
-  async streamCall(
-    _memory: Memory,
-    _outputWriter: WritableStreamDefaultWriter<StreamChunk>,
-    _config?: any,
-    _signal?: AbortSignal,
-  ): Promise<unknown> {
-    throw new Error(
-      `${this.constructor.name}: Streaming call not implemented.`,
-    );
-  }
+  abstract call(
+    memory: Memory,
+    config?: unknown,
+    signal?: AbortSignal,
+  ): AsyncGenerator<AgentEvent, void, void>;
 }
 
-export type AgentConstructor = new () => Agent;
+export type AgentConstructor = new (...args: any[]) => Agent;

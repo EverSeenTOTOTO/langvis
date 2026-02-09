@@ -2,12 +2,12 @@ import { agent } from '@/server/decorator/core';
 import { config } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
-import { AgentConfig, StreamChunk } from '@/shared/types';
+import { AgentConfig, AgentEvent } from '@/shared/types';
 import { container } from 'tsyringe';
 import { v4 as uuid } from 'uuid';
 import { Agent } from '..';
 import { Memory } from '../../memory';
-import type { Tool } from '../../tool';
+import type LlmCallTool from '../../tool/LlmCall';
 import type TextToSpeechTool from '../../tool/TextToSpeech';
 import generatePrompt from './prompt';
 
@@ -33,13 +33,15 @@ export default class GirlFriendAgent extends Agent {
     return generatePrompt();
   }
 
-  async streamCall(
+  async *call(
     memory: Memory,
-    outputWriter: WritableStreamDefaultWriter<StreamChunk>,
-    @config() options: GirlFriendConfig,
+    @config() options?: GirlFriendConfig,
     signal?: AbortSignal,
-  ) {
-    const llmCallTool = container.resolve<Tool>(ToolIds.LLM_CALL);
+  ): AsyncGenerator<AgentEvent, void, void> {
+    yield { type: 'start', agentId: this.id };
+
+    const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
+    const tts = container.resolve<TextToSpeechTool>(ToolIds.TEXT_TO_SPEECH);
 
     const messages = await memory.summarize();
     const conversationMessages = messages.map(msg => ({
@@ -48,47 +50,42 @@ export default class GirlFriendAgent extends Agent {
     }));
 
     this.logger.debug('GF agent messages: ', conversationMessages);
-    const writer = outputWriter;
-    const tts = container.resolve<TextToSpeechTool>(ToolIds.TEXT_TO_SPEECH);
 
     let content = '';
 
-    const localStream = new WritableStream({
-      write: async chunk => {
-        await writer.write(chunk);
-        content += chunk;
-      },
-      close: async () => {
-        try {
-          const result = await tts.call(
-            {
-              text: content,
-              reqId: uuid(),
-              voice: options?.tts?.voice || '',
-              emotion: options?.tts?.emotion || '',
-              speedRatio: options?.tts?.speedRatio,
-            },
-            signal,
-          );
-          await writer.write({ meta: result });
-          await writer.close();
-        } catch (err) {
-          writer.abort(err);
-        }
-      },
-      abort: reason => writer.abort(reason),
-    });
-
-    const localWriter = localStream.getWriter();
-
-    await llmCallTool.streamCall(
+    const llmGenerator = llmCallTool.call(
       {
         model: options?.model?.code,
         temperature: options?.model?.temperature,
         messages: conversationMessages,
       },
-      localWriter,
       signal,
     );
+
+    for await (const event of llmGenerator) {
+      if (event.type === 'delta') {
+        content += event.data;
+        yield { type: 'delta', content: event.data };
+      }
+    }
+
+    const ttsGenerator = tts.call(
+      {
+        text: content,
+        reqId: uuid(),
+        voice: options?.tts?.voice || '',
+        emotion: options?.tts?.emotion || '',
+        speedRatio: options?.tts?.speedRatio,
+      },
+      signal,
+    );
+
+    for await (const event of ttsGenerator) {
+      if (event.type === 'result') {
+        yield { type: 'meta', meta: event.result };
+      }
+    }
+
+    yield { type: 'end', agentId: this.id };
   }
 }

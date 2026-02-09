@@ -3,18 +3,16 @@ import { input } from '@/server/decorator/param';
 import { OpenAI } from '@/server/service/openai';
 import type { Logger } from '@/server/utils/logger';
 import { InjectTokens, ToolIds } from '@/shared/constants';
-import { ToolConfig } from '@/shared/types';
-import type { Stream } from 'openai/core/streaming.mjs';
-import type {
-  ChatCompletion,
-  ChatCompletionCreateParams,
-  ChatCompletionCreateParamsNonStreaming,
-} from 'openai/resources/chat/completions';
+import { ToolConfig, ToolEvent } from '@/shared/types';
+import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
 import { inject } from 'tsyringe';
 import { Tool } from '..';
 
+export type LlmCallInput = Partial<ChatCompletionCreateParams>;
+export type LlmCallOutput = string;
+
 @tool(ToolIds.LLM_CALL)
-export default class LlmCallTool extends Tool {
+export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
@@ -23,27 +21,10 @@ export default class LlmCallTool extends Tool {
     super();
   }
 
-  async call(
-    @input() data: Partial<ChatCompletionCreateParamsNonStreaming>,
+  async *call(
+    @input() data: LlmCallInput,
     signal?: AbortSignal,
-  ): Promise<ChatCompletion> {
-    const response = await this.openai.chat.completions.create(
-      {
-        model: data.model || process.env.OPENAI_MODEL!,
-        messages: [],
-        ...data,
-        stream: false,
-      },
-      { signal },
-    );
-    return response;
-  }
-
-  async streamCall(
-    @input() data: Partial<ChatCompletionCreateParams>,
-    outputWriter: WritableStreamDefaultWriter,
-    signal?: AbortSignal,
-  ): Promise<Stream<OpenAI.Chat.Completions.ChatCompletionChunk>> {
+  ): AsyncGenerator<ToolEvent<LlmCallOutput>, LlmCallOutput, void> {
     const response = await this.openai.chat.completions.create(
       {
         model: data.model || process.env.OPENAI_MODEL!,
@@ -54,25 +35,21 @@ export default class LlmCallTool extends Tool {
       { signal },
     );
 
-    const writer = outputWriter;
+    let content = '';
 
-    try {
-      for await (const chunk of response) {
-        const delta = chunk?.choices[0]?.delta?.content;
-        if (delta) {
-          await writer.write(delta);
-        }
-
-        if (chunk.choices[0]?.finish_reason) {
-          await writer.close();
-          break;
-        }
+    for await (const chunk of response) {
+      const delta = chunk?.choices[0]?.delta?.content;
+      if (delta) {
+        content += delta;
+        yield { type: 'delta', data: delta };
       }
-    } catch (error) {
-      await writer.abort(error);
-      throw error;
+
+      if (chunk.choices[0]?.finish_reason) {
+        break;
+      }
     }
 
-    return response;
+    yield { type: 'result', result: content };
+    return content;
   }
 }

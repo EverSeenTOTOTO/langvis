@@ -9,7 +9,7 @@ import {
 } from '@/server/decorator/core';
 import { config, input } from '@/server/decorator/param';
 import { AgentIds, ToolIds } from '@/shared/constants';
-import { AgentConfig, ToolConfig } from '@/shared/types';
+import { AgentConfig, AgentEvent, ToolConfig, ToolEvent } from '@/shared/types';
 import { container } from 'tsyringe';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import winston from 'winston';
@@ -28,11 +28,27 @@ vi.mock('@/server/utils/logger', () => {
   };
 });
 
-const mockWriter = {
-  write: vi.fn(),
-  abort: vi.fn(),
-  close: vi.fn(),
-};
+async function consumeAgentGenerator(
+  generator: AsyncGenerator<AgentEvent, void, void>,
+): Promise<AgentEvent[]> {
+  const events: AgentEvent[] = [];
+  for await (const event of generator) {
+    events.push(event);
+  }
+  return events;
+}
+
+async function consumeToolGenerator<T>(
+  generator: AsyncGenerator<ToolEvent<T>, T, void>,
+): Promise<T> {
+  let result: T | undefined;
+  for await (const event of generator) {
+    if (event.type === 'result') {
+      result = event.result;
+    }
+  }
+  return result!;
+}
 
 describe('Config Decorators', () => {
   beforeEach(() => {
@@ -50,6 +66,10 @@ describe('Config Decorators', () => {
           description: 'Test description',
         };
         logger = winston.createLogger();
+
+        async *call(): AsyncGenerator<AgentEvent, void, void> {
+          yield { type: 'end', agentId: this.id };
+        }
       }
 
       expect(() => container.resolve(TestAgent)).not.toThrow();
@@ -66,6 +86,11 @@ describe('Config Decorators', () => {
           description: 'Test description',
         };
         logger = winston.createLogger();
+
+        async *call(): AsyncGenerator<ToolEvent<unknown>, unknown, void> {
+          yield { type: 'result', result: null };
+          return null;
+        }
       }
 
       expect(() => container.resolve(TestTool)).not.toThrow();
@@ -82,6 +107,10 @@ describe('Config Decorators', () => {
           description: 'Test description',
         };
         logger = winston.createLogger();
+
+        async *call(): AsyncGenerator<AgentEvent, void, void> {
+          yield { type: 'end', agentId: this.id };
+        }
       }
 
       const configData: AgentConfig = {
@@ -109,6 +138,11 @@ describe('Config Decorators', () => {
           description: 'Test description',
         };
         logger = winston.createLogger();
+
+        async *call(): AsyncGenerator<ToolEvent<unknown>, unknown, void> {
+          yield { type: 'result', result: null };
+          return null;
+        }
       }
 
       @agent(AgentIds.CHAT)
@@ -120,6 +154,10 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
         tools: Tool[] = [];
+
+        async *call(): AsyncGenerator<AgentEvent, void, void> {
+          yield { type: 'end', agentId: this.id };
+        }
       }
 
       const toolConfig: ToolConfig = {
@@ -153,6 +191,10 @@ describe('Config Decorators', () => {
           enabled: true,
         };
         logger = winston.createLogger();
+
+        async *call(): AsyncGenerator<AgentEvent, void, void> {
+          yield { type: 'end', agentId: this.id };
+        }
       }
 
       @agent(AgentIds.CHAT)
@@ -163,6 +205,10 @@ describe('Config Decorators', () => {
           description: 'Extended description',
         };
         logger = winston.createLogger();
+
+        async *call(): AsyncGenerator<AgentEvent, void, void> {
+          yield { type: 'end', agentId: this.id };
+        }
       }
 
       const baseConfig: AgentConfig = {
@@ -197,8 +243,11 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
 
-        async call(_memory: Memory, @config() _config: any): Promise<any> {
-          return 'success';
+        async *call(
+          _memory: Memory,
+          @config() _config: any,
+        ): AsyncGenerator<AgentEvent, void, void> {
+          yield { type: 'delta', content: 'success' };
         }
       }
 
@@ -219,58 +268,15 @@ describe('Config Decorators', () => {
       const mockMemory = {} as Memory;
 
       await expect(
-        instance.call(mockMemory, { temperature: 2 }),
+        consumeAgentGenerator(instance.call(mockMemory, { temperature: 2 })),
       ).rejects.toThrow();
-      await expect(instance.call(mockMemory, {})).rejects.toThrow();
       await expect(
+        consumeAgentGenerator(instance.call(mockMemory, {})),
+      ).rejects.toThrow();
+      const events = await consumeAgentGenerator(
         instance.call(mockMemory, { temperature: 0.5 }),
-      ).resolves.toBe('success');
-    });
-
-    it('should validate config when @config decorator is used on streamCall', async () => {
-      @agent(AgentIds.CHAT)
-      class TestAgent extends Agent {
-        id = AgentIds.CHAT;
-        config: AgentConfig = {
-          name: 'Test Agent',
-          description: 'Test description',
-        };
-        logger = winston.createLogger();
-
-        async streamCall(
-          _memory: Memory,
-          _writer: any,
-          @config() _config: any,
-        ): Promise<any> {
-          return 'success';
-        }
-      }
-
-      const agentConfig: AgentConfig<{ mode: string }> = {
-        name: 'Test Agent',
-        description: 'Test description',
-        configSchema: {
-          type: 'object',
-          properties: {
-            mode: { type: 'string' },
-          },
-          required: ['mode'],
-        },
-      };
-
-      await registerAgent(TestAgent, agentConfig);
-      const instance = container.resolve<TestAgent>(AgentIds.CHAT);
-      const mockMemory = {} as Memory;
-
-      await expect(
-        instance.streamCall(mockMemory, mockWriter, {}),
-      ).rejects.toThrow();
-      await expect(
-        instance.streamCall(mockMemory, mockWriter, { mode: 123 }),
-      ).rejects.toThrow();
-      await expect(
-        instance.streamCall(mockMemory, mockWriter, { mode: 'fast' }),
-      ).resolves.toBe('success');
+      );
+      expect(events).toContainEqual({ type: 'delta', content: 'success' });
     });
   });
 
@@ -284,6 +290,11 @@ describe('Config Decorators', () => {
           description: 'Test description',
         };
         logger = winston.createLogger();
+
+        async *call(): AsyncGenerator<ToolEvent<unknown>, unknown, void> {
+          yield { type: 'result', result: null };
+          return null;
+        }
       }
 
       const toolConfig: ToolConfig = {
@@ -312,6 +323,11 @@ describe('Config Decorators', () => {
           enabled: true,
         };
         logger = winston.createLogger();
+
+        async *call(): AsyncGenerator<ToolEvent<unknown>, unknown, void> {
+          yield { type: 'result', result: null };
+          return null;
+        }
       }
 
       @tool(ToolIds.DATE_TIME)
@@ -322,6 +338,11 @@ describe('Config Decorators', () => {
           description: 'Extended description',
         };
         logger = winston.createLogger();
+
+        async *call(): AsyncGenerator<ToolEvent<unknown>, unknown, void> {
+          yield { type: 'result', result: null };
+          return null;
+        }
       }
 
       const baseConfig: ToolConfig = {
@@ -348,7 +369,7 @@ describe('Config Decorators', () => {
 
     it('should validate input when @input decorator is used on call', async () => {
       @tool(ToolIds.WEB_FETCH)
-      class TestTool extends Tool {
+      class TestTool extends Tool<{ url: string }, string> {
         id = ToolIds.WEB_FETCH;
         config: ToolConfig = {
           name: 'Test Tool',
@@ -356,7 +377,10 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
 
-        async call(@input() _input: any): Promise<any> {
+        async *call(
+          @input() _input: { url: string },
+        ): AsyncGenerator<ToolEvent<string>, string, void> {
+          yield { type: 'result', result: 'success' };
           return 'success';
         }
       }
@@ -375,48 +399,15 @@ describe('Config Decorators', () => {
 
       await registerTool(TestTool, toolConfig);
 
-      const instance = container.resolve<Tool>(ToolIds.WEB_FETCH);
-
-      await expect(instance.call({})).rejects.toThrow();
-      await expect(instance.call({ url: 'http://example.com' })).resolves.toBe(
-        'success',
-      );
-    });
-
-    it('should validate input when @input decorator is used on streamCall', async () => {
-      @tool(ToolIds.WEB_FETCH)
-      class TestTool extends Tool {
-        id = ToolIds.WEB_FETCH;
-        config: ToolConfig = {
-          name: 'Test Tool',
-          description: 'Test description',
-        };
-        logger = winston.createLogger();
-
-        async streamCall(@input() _input: any, _writer: any): Promise<any> {
-          return 'success';
-        }
-      }
-
-      const toolConfig: ToolConfig<{ query: string }> = {
-        name: 'Test Tool',
-        description: 'Test description',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            query: { type: 'string' },
-          },
-          required: ['query'],
-        },
-      };
-
-      await registerTool(TestTool, toolConfig);
       const instance = container.resolve<TestTool>(ToolIds.WEB_FETCH);
 
-      await expect(instance.streamCall({}, mockWriter)).rejects.toThrow();
       await expect(
-        instance.streamCall({ query: 'hello' }, mockWriter),
-      ).resolves.toBe('success');
+        consumeToolGenerator(instance.call({} as any)),
+      ).rejects.toThrow();
+      const result = await consumeToolGenerator(
+        instance.call({ url: 'http://example.com' }),
+      );
+      expect(result).toBe('success');
     });
   });
 });
