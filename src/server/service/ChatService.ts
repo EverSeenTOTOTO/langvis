@@ -73,13 +73,8 @@ export class ChatService {
     generator: AsyncGenerator<AgentEvent, void, void>,
     controller: AbortController,
   ): Promise<void> {
-    const context = {
-      message,
-      conversationId,
-      startTime: Date.now(),
-      firstChunk: true,
-      chunkStartTime: Date.now(),
-    };
+    const startTime = Date.now();
+    const state = { chunkStartTime: 0 };
 
     this.activeAgents.set(conversationId, controller);
 
@@ -88,109 +83,141 @@ export class ChatService {
         if (controller.signal.aborted) {
           break;
         }
-
-        switch (event.type) {
-          case 'start':
-            this.logger.info(
-              `Agent ${event.agentId} started for conversation ${conversationId}`,
-            );
-            break;
-
-          case 'delta':
-            if (context.firstChunk) {
-              this.logger.info(
-                `First chunk received for conversation ${conversationId}, time taken: ${Date.now() - context.startTime}ms`,
-              );
-              context.chunkStartTime = Date.now();
-              context.message.meta = {
-                ...context.message.meta,
-                streaming: true,
-                loading: false,
-              };
-              this.sseService.sendToConversation(conversationId, {
-                type: 'completion_delta',
-                meta: context.message.meta!,
-              });
-              context.firstChunk = false;
-            }
-            context.message.content += event.content;
-            this.logger.debug(
-              `Sending delta content (length: ${event.content.length}): ${event.content.substring(0, 50)}...`,
-            );
-            this.sseService.sendToConversation(conversationId, {
-              type: 'completion_delta',
-              content: event.content,
-            });
-            break;
-
-          case 'meta':
-            context.message.meta = {
-              ...context.message.meta,
-              ...event.meta,
-              loading: false,
-            };
-            this.sseService.sendToConversation(conversationId, {
-              type: 'completion_delta',
-              meta: context.message.meta!,
-            });
-            break;
-
-          case 'end': {
-            const chunkElapsed = Date.now() - context.chunkStartTime;
-            this.logger.info(
-              `Agent ${event.agentId} ended for conversation ${conversationId}, transmit time: ${chunkElapsed}ms`,
-            );
-            break;
-          }
-
-          case 'error':
-            throw event.error;
-        }
-      }
-
-      this.activeAgents.delete(conversationId);
-      await this.conversationService.updateMessage(
-        context.message.id,
-        context.message.content,
-        omit(context.message.meta, ['loading', 'streaming']),
-      );
-
-      this.logger.info(
-        `Agent call finished for conversation ${conversationId}, total time: ${Date.now() - context.startTime}ms`,
-      );
-
-      this.sseService.sendToConversation(conversationId, {
-        type: 'completion_done',
-      });
-    } catch (error) {
-      this.activeAgents.delete(conversationId);
-
-      this.logger.error(
-        `Streaming error for conversation ${conversationId}:`,
-        error,
-      );
-
-      const content = (error as Error)?.message || 'Unknown error';
-      try {
-        await this.conversationService.updateMessage(
-          context.message.id,
-          content,
-          {
-            ...context.message.meta,
-            loading: undefined,
-            streaming: undefined,
-            error: true,
-          },
+        await this.handleEvent(
+          event,
+          conversationId,
+          message,
+          startTime,
+          state,
         );
-      } catch (updateError) {
-        this.logger.error('Failed to finalize streaming message:', updateError);
       }
 
-      this.sseService.sendToConversation(conversationId, {
-        type: 'completion_error',
-        error: content,
-      });
+      await this.finalizeStream(conversationId, message, startTime);
+    } catch (error) {
+      await this.handleStreamError(conversationId, message, error);
+    } finally {
+      this.activeAgents.delete(conversationId);
     }
+  }
+
+  private async handleEvent(
+    event: AgentEvent,
+    conversationId: string,
+    message: Message,
+    startTime: number,
+    state: { chunkStartTime: number },
+  ): Promise<void> {
+    switch (event.type) {
+      case 'start':
+        this.logger.info(
+          `Agent ${event.agentId} started for conversation ${conversationId}`,
+        );
+        break;
+
+      case 'delta':
+        if (!state.chunkStartTime) {
+          this.logger.info(
+            `First chunk received for conversation ${conversationId}, time taken: ${
+              Date.now() - startTime
+            }ms`,
+          );
+          state.chunkStartTime = Date.now();
+          message.meta = {
+            ...message.meta,
+            streaming: true,
+            loading: false,
+          };
+          this.sseService.sendToConversation(conversationId, {
+            type: 'completion_delta',
+            meta: message.meta!,
+          });
+        }
+        message.content += event.content;
+        this.logger.debug(
+          `Sending delta content (length: ${event.content.length}): ${event.content.substring(
+            0,
+            50,
+          )}...`,
+        );
+        this.sseService.sendToConversation(conversationId, {
+          type: 'completion_delta',
+          content: event.content,
+        });
+        break;
+
+      case 'meta':
+        message.meta = {
+          ...message.meta,
+          ...event.meta,
+          loading: false,
+        };
+        this.sseService.sendToConversation(conversationId, {
+          type: 'completion_delta',
+          meta: message.meta!,
+        });
+        break;
+
+      case 'end': {
+        const chunkElapsed = Date.now() - state.chunkStartTime;
+        this.logger.info(
+          `Agent ${event.agentId} ended for conversation ${conversationId}, transmit time: ${chunkElapsed}ms`,
+        );
+        break;
+      }
+
+      case 'error':
+        throw event.error;
+    }
+  }
+
+  private async finalizeStream(
+    conversationId: string,
+    message: Message,
+    startTime: number,
+  ): Promise<void> {
+    await this.conversationService.updateMessage(
+      message.id,
+      message.content,
+      omit(message.meta, ['loading', 'streaming']),
+    );
+
+    this.logger.info(
+      `Agent call finished for conversation ${conversationId}, total time: ${
+        Date.now() - startTime
+      }ms`,
+    );
+
+    this.sseService.sendToConversation(conversationId, {
+      type: 'completion_done',
+    });
+  }
+
+  private async handleStreamError(
+    conversationId: string,
+    message: Message,
+    error: unknown,
+  ): Promise<void> {
+    this.logger.error(
+      `Streaming error for conversation ${conversationId}:`,
+      error,
+    );
+
+    const content = (error as Error)?.message || 'Unknown error';
+    try {
+      await this.conversationService.updateMessage(message.id, content, {
+        ...message.meta,
+        loading: undefined,
+        streaming: undefined,
+        error: true,
+      });
+    } catch (updateError) {
+      this.logger.error('Failed to finalize streaming message:', updateError);
+    }
+
+    this.sseService.sendToConversation(conversationId, {
+      type: 'completion_error',
+      error: content,
+    });
   }
 
   async buildMemory(

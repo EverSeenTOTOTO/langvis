@@ -1,5 +1,6 @@
 import { agent } from '@/server/decorator/core';
 import { config } from '@/server/decorator/param';
+import { runTool } from '@/server/utils';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { AgentConfig, AgentEvent } from '@/shared/types';
@@ -80,12 +81,7 @@ export default class GirlFriendAgent extends Agent {
       signal,
     );
 
-    for await (const event of ttsGenerator) {
-      if (event.type === 'result') {
-        yield { type: 'meta', meta: event.result };
-      }
-    }
-
+    yield { type: 'meta', meta: await runTool(ttsGenerator) };
     yield { type: 'end', agentId: this.id };
   }
 }

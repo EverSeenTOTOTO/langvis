@@ -63,4 +63,3 @@ export default class ChatHistoryMemory extends Memory {
     return result;
   }
 }
-
