@@ -257,4 +257,3 @@ const ConversationModal = ({
 };
 
 export default observer(ConversationModal);
-

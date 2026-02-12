@@ -124,7 +124,7 @@ export default class ReActAgent extends Agent {
           content: `Observation: ${observation}`,
         });
         steps.push({ observation });
-        yield { type: 'meta', meta: { steps: [...steps] } };
+        yield { type: 'meta', meta: { steps } };
         continue;
       }
 
@@ -132,7 +132,7 @@ export default class ReActAgent extends Agent {
 
       if ('final_answer' in parsed) {
         steps.push(parsed as ReActFinalAnswer);
-        yield { type: 'meta', meta: { steps: [...steps] } };
+        yield { type: 'meta', meta: { steps } };
         yield { type: 'delta', content: parsed.final_answer! };
         yield { type: 'end', agentId: this.id };
         return;
@@ -142,7 +142,7 @@ export default class ReActAgent extends Agent {
         const { tool, input } = parsed.action!;
 
         steps.push(parsed as ReActAction);
-        yield { type: 'meta', meta: { steps: [...steps] } };
+        yield { type: 'meta', meta: { steps } };
 
         try {
           const observation = await this.executeAction(tool, input, signal);
@@ -152,7 +152,7 @@ export default class ReActAgent extends Agent {
             content: `Observation: ${observation}\n`,
           });
           steps.push({ observation });
-          yield { type: 'meta', meta: { steps: [...steps] } };
+          yield { type: 'meta', meta: { steps } };
         } catch (error) {
           const observation = `Error executing action ${tool}: ${(error as Error).message}\n`;
 
@@ -161,7 +161,7 @@ export default class ReActAgent extends Agent {
             content: `Observation: ${observation}`,
           });
           steps.push({ observation });
-          yield { type: 'meta', meta: { steps: [...steps] } };
+          yield { type: 'meta', meta: { steps } };
         }
 
         continue;
@@ -169,7 +169,7 @@ export default class ReActAgent extends Agent {
 
       const observation = `Unable to parse response: ${content}. Retrying (${i}/${this.maxIterations})...\n`;
       steps.push({ observation });
-      yield { type: 'meta', meta: { steps: [...steps] } };
+      yield { type: 'meta', meta: { steps } };
     }
 
     yield { type: 'error', error: new Error('Max iterations reached') };
