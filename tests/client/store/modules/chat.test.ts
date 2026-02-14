@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatStore } from '@/client/store/modules/chat';
 import { SettingStore } from '@/client/store/modules/setting';
 import { ConversationStore } from '@/client/store/modules/conversation';
-import { SSEMessage } from '@/shared/types';
+import { AgentEvent } from '@/shared/types';
 
 class MockEventSource {
   url: string;
@@ -28,7 +28,6 @@ class MockEventSource {
     }
     this.eventListeners.get(type)!.push(listener);
 
-    // Also set the on* properties for compatibility
     if (type === 'open') {
       this.onopen = listener;
     } else if (type === 'error') {
@@ -91,9 +90,7 @@ describe('ChatStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Set up EventSource constants globally
     (global as any).EventSource = MockEventSource;
-    // Ensure the constants are available on the global EventSource
     (global as any).EventSource.CONNECTING = MockEventSource.CONNECTING;
     (global as any).EventSource.OPEN = MockEventSource.OPEN;
     (global as any).EventSource.CLOSED = MockEventSource.CLOSED;
@@ -109,6 +106,9 @@ describe('ChatStore', () => {
 
     const mockConversationStore = {
       clearStreaming: vi.fn(),
+      getMessagesByConversationId: vi.fn(),
+      updateStreamingMessage: vi.fn(),
+      currentConversationId: 'test-conversation-id',
     } as unknown as ConversationStore;
 
     chatStore = new ChatStore(mockConversationStore, mockSettingStore);
@@ -130,7 +130,6 @@ describe('ChatStore', () => {
       `http://localhost:3000/api/chat/sse/${conversationId}`,
     );
 
-    // Create a constructor function that preserves the constants
     const MockEventSourceConstructor = vi.fn(() => mockEventSource) as any;
     MockEventSourceConstructor.CONNECTING = MockEventSource.CONNECTING;
     MockEventSourceConstructor.OPEN = MockEventSource.OPEN;
@@ -140,7 +139,6 @@ describe('ChatStore', () => {
 
     const connectPromise = chatStore.connectToSSE(conversationId);
 
-    // Directly simulate the open event
     mockEventSource.simulateOpen();
 
     await expect(connectPromise).resolves.toBeUndefined();
@@ -168,7 +166,6 @@ describe('ChatStore', () => {
       `http://localhost:3000/api/chat/sse/${conversationId}`,
     );
 
-    // Create a constructor function that preserves the constants
     const MockEventSourceConstructor = vi.fn(() => mockEventSource) as any;
     MockEventSourceConstructor.CONNECTING = MockEventSource.CONNECTING;
     MockEventSourceConstructor.OPEN = MockEventSource.OPEN;
@@ -178,16 +175,15 @@ describe('ChatStore', () => {
 
     const connectPromise = chatStore.connectToSSE(conversationId);
 
-    // Directly simulate the error
     mockEventSource.simulateError(new Error('Connection failed'));
 
     await expect(connectPromise).rejects.toThrow('Connection failed');
   });
 
-  it('should handle valid SSE messages', async () => {
+  it('should handle valid SSE messages with new format', async () => {
     const conversationId = 'test-conversation-id';
-    const mockMessageData: SSEMessage = {
-      type: 'completion_delta',
+    const mockMessageData: AgentEvent = {
+      type: 'stream',
       content: 'Hello',
     };
 
@@ -197,7 +193,6 @@ describe('ChatStore', () => {
       `http://localhost:3000/api/chat/sse/${conversationId}`,
     );
 
-    // Create a constructor function that preserves the constants
     const MockEventSourceConstructor = vi.fn(() => mockEventSource) as any;
     MockEventSourceConstructor.CONNECTING = MockEventSource.CONNECTING;
     MockEventSourceConstructor.OPEN = MockEventSource.OPEN;
@@ -207,10 +202,8 @@ describe('ChatStore', () => {
 
     chatStore.connectToSSE(conversationId, onMessageMock);
 
-    // Simulate connection opening first
     mockEventSource.simulateOpen();
 
-    // Then simulate message
     mockEventSource.simulateMessage(JSON.stringify(mockMessageData));
 
     expect(onMessageMock).toHaveBeenCalledWith(mockMessageData);
@@ -224,7 +217,6 @@ describe('ChatStore', () => {
       `http://localhost:3000/api/chat/sse/${conversationId}`,
     );
 
-    // Create a constructor function that preserves the constants
     const MockEventSourceConstructor = vi.fn(() => mockEventSource) as any;
     MockEventSourceConstructor.CONNECTING = MockEventSource.CONNECTING;
     MockEventSourceConstructor.OPEN = MockEventSource.OPEN;
@@ -234,10 +226,8 @@ describe('ChatStore', () => {
 
     chatStore.connectToSSE(conversationId, () => {});
 
-    // Simulate connection opening first
     mockEventSource.simulateOpen();
 
-    // Then simulate invalid message
     mockEventSource.simulateMessage(invalidMessageData);
 
     expect(
@@ -254,7 +244,6 @@ describe('ChatStore', () => {
       `http://localhost:3000/api/chat/sse/${conversationId}`,
     );
 
-    // Create a constructor function that preserves the constants
     const MockEventSourceConstructor = vi.fn(() => mockEventSource) as any;
     MockEventSourceConstructor.CONNECTING = MockEventSource.CONNECTING;
     MockEventSourceConstructor.OPEN = MockEventSource.OPEN;
@@ -262,10 +251,8 @@ describe('ChatStore', () => {
 
     (global as any).EventSource = MockEventSourceConstructor;
 
-    // Connect to SSE first and wait for it to be established
     const connectPromise = chatStore.connectToSSE(conversationId);
 
-    // Directly simulate the connection opening
     mockEventSource.simulateOpen();
 
     await connectPromise;
@@ -274,7 +261,6 @@ describe('ChatStore', () => {
 
     chatStore.disconnectFromSSE(conversationId);
 
-    // After disconnecting, the event source should be removed from the map
     expect((chatStore as any).eventSources.has(conversationId)).toBe(false);
   });
 });

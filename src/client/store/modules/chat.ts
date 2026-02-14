@@ -4,7 +4,7 @@ import type {
   CancelChatRequest,
   StartChatRequest,
 } from '@/shared/dto/controller';
-import { SSEMessage } from '@/shared/types';
+import { AgentEvent } from '@/shared/types';
 import { isClient } from '@/shared/utils';
 import { message } from 'antd';
 import { makeAutoObservable, reaction } from 'mobx';
@@ -43,7 +43,7 @@ export class ChatStore {
 
   connectToSSE(
     conversationId: string,
-    onMessage?: (msg: SSEMessage) => void,
+    onMessage?: (msg: AgentEvent) => void,
   ): Promise<void> {
     this.disconnectFromSSE(conversationId);
 
@@ -75,7 +75,7 @@ export class ChatStore {
         resolve();
 
         try {
-          const parsedData: SSEMessage = JSON.parse(event.data);
+          const parsedData: AgentEvent = JSON.parse(event.data);
 
           onMessage?.(parsedData);
         } catch (e) {
@@ -142,7 +142,7 @@ export class ChatStore {
     });
   }
 
-  private handleSSEMessage(conversationId: string, msg: SSEMessage) {
+  private handleSSEMessage(conversationId: string, msg: AgentEvent) {
     if (this.conversationStore.currentConversationId !== conversationId) {
       console.warn(
         `Abort SSE message for non-current conversation: ${conversationId}, current: ${this.conversationStore.currentConversationId}`,
@@ -151,28 +151,23 @@ export class ChatStore {
     }
 
     switch (msg.type) {
-      case 'completion_delta':
+      case 'stream':
         this.conversationStore.updateStreamingMessage(
           conversationId,
           msg.content,
-          msg.meta,
         );
         break;
-      case 'completion_done':
-        this.disconnectFromSSE(conversationId);
-        // 刷新消息列表以获取最终的完整消息
-        this.conversationStore.getMessagesByConversationId({
-          id: conversationId,
-        });
-        break;
-      case 'completion_error': {
+      case 'final':
         this.disconnectFromSSE(conversationId);
         this.conversationStore.getMessagesByConversationId({
           id: conversationId,
         });
         break;
-      }
-      default:
+      case 'error':
+        this.disconnectFromSSE(conversationId);
+        this.conversationStore.getMessagesByConversationId({
+          id: conversationId,
+        });
         break;
     }
   }

@@ -1,4 +1,5 @@
 import TextToSpeechTool from '@/server/core/tool/TextToSpeech';
+import { ExecutionContext } from '@/server/core/context';
 import { runTool } from '@/server/utils';
 import logger from '@/server/utils/logger';
 import { promises as fs } from 'fs';
@@ -28,6 +29,10 @@ vi.mock('fs', () => ({
 }));
 
 global.fetch = vi.fn();
+
+function createMockContext(): ExecutionContext {
+  return ExecutionContext.create('test-trace-id', new AbortController().signal);
+}
 
 describe('TextToSpeechTool', () => {
   let tool: TextToSpeechTool;
@@ -60,13 +65,17 @@ describe('TextToSpeechTool', () => {
       delete process.env.OPENAI_API_BASE;
       delete process.env.OPENAI_API_KEY;
 
+      const ctx = createMockContext();
       await expect(
         runTool(
-          tool.call({
-            voice: 'test-voice',
-            text: 'test text',
-            reqId: 'test-id',
-          }),
+          tool.call(
+            {
+              voice: 'test-voice',
+              text: 'test text',
+              reqId: 'test-id',
+            },
+            ctx,
+          ),
         ),
       ).rejects.toThrow(
         'OPENAI_API_BASE and OPENAI_API_KEY must be configured',
@@ -89,12 +98,16 @@ describe('TextToSpeechTool', () => {
         }),
       });
 
+      const ctx = createMockContext();
       const result = await runTool(
-        tool.call({
-          text: 'Hello world',
-          reqId: 'test-123',
-          voice: 'test-voice',
-        }),
+        tool.call(
+          {
+            text: 'Hello world',
+            reqId: 'test-123',
+            voice: 'test-voice',
+          },
+          ctx,
+        ),
       );
 
       expect(result).toEqual({
@@ -127,13 +140,17 @@ describe('TextToSpeechTool', () => {
         }),
       });
 
+      const ctx = createMockContext();
       await expect(
         runTool(
-          tool.call({
-            voice: 'test-voice',
-            text: 'test text',
-            reqId: 'test-id',
-          }),
+          tool.call(
+            {
+              voice: 'test-voice',
+              text: 'test text',
+              reqId: 'test-id',
+            },
+            ctx,
+          ),
         ),
       ).rejects.toThrow('TTS API error: API Error');
     });
@@ -148,13 +165,17 @@ describe('TextToSpeechTool', () => {
         text: async () => 'Internal Server Error',
       });
 
+      const ctx = createMockContext();
       await expect(
         runTool(
-          tool.call({
-            voice: 'test-voice',
-            text: 'test text',
-            reqId: 'test-id',
-          }),
+          tool.call(
+            {
+              voice: 'test-voice',
+              text: 'test text',
+              reqId: 'test-id',
+            },
+            ctx,
+          ),
         ),
       ).rejects.toThrow('TTS API request failed with status 500');
     });

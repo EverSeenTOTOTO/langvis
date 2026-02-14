@@ -1,4 +1,5 @@
 import LlmCallTool, { LlmCallOutput } from '@/server/core/tool/LlmCall';
+import { ExecutionContext } from '@/server/core/context';
 import { ToolEvent } from '@/shared/types';
 import OpenAI from 'openai';
 import type { Stream } from 'openai/core/streaming.mjs';
@@ -18,19 +19,23 @@ vi.mock('openai', () => {
   };
 });
 
+function createMockContext(): ExecutionContext {
+  return ExecutionContext.create('test-trace-id', new AbortController().signal);
+}
+
 async function collectEvents(
-  generator: AsyncGenerator<ToolEvent<LlmCallOutput>, LlmCallOutput, void>,
-): Promise<{ deltas: string[]; result: string }> {
-  const deltas: string[] = [];
+  generator: AsyncGenerator<ToolEvent, LlmCallOutput, void>,
+): Promise<{ progress: string[]; result: string }> {
+  const progress: string[] = [];
   let result = '';
   for await (const event of generator) {
-    if (event.type === 'delta') {
-      deltas.push(event.data);
+    if (event.type === 'progress' && typeof event.data === 'string') {
+      progress.push(event.data);
     } else if (event.type === 'result') {
-      result = event.result;
+      result = event.output;
     }
   }
-  return { deltas, result };
+  return { progress, result };
 }
 
 describe('LlmCallTool', () => {
@@ -44,7 +49,7 @@ describe('LlmCallTool', () => {
   });
 
   describe('call', () => {
-    it('should stream response and yield delta events', async () => {
+    it('should stream response and yield progress events', async () => {
       const mockChunks = [
         { choices: [{ delta: { content: 'Hello' }, finish_reason: null }] },
         { choices: [{ delta: { content: ' world' }, finish_reason: null }] },
@@ -66,7 +71,10 @@ describe('LlmCallTool', () => {
         model: 'gpt-3.5-turbo',
       };
 
-      const { deltas, result } = await collectEvents(llmCallTool.call(input));
+      const ctx = createMockContext();
+      const { progress, result } = await collectEvents(
+        llmCallTool.call(input, ctx),
+      );
 
       expect(mockCreate).toHaveBeenCalledWith(
         {
@@ -74,10 +82,10 @@ describe('LlmCallTool', () => {
           messages: [{ role: 'user', content: 'Hello' }],
           stream: true,
         },
-        { signal: undefined },
+        { signal: ctx.signal },
       );
 
-      expect(deltas).toEqual(['Hello', ' world', '!']);
+      expect(progress).toEqual(['Hello', ' world', '!']);
       expect(result).toBe('Hello world!');
     });
 
@@ -97,7 +105,8 @@ describe('LlmCallTool', () => {
         messages: [{ role: 'user', content: 'Hello' }],
       };
 
-      await expect(collectEvents(llmCallTool.call(input))).rejects.toThrow(
+      const ctx = createMockContext();
+      await expect(collectEvents(llmCallTool.call(input, ctx))).rejects.toThrow(
         mockError,
       );
     });

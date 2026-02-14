@@ -1,6 +1,7 @@
 import ChatAgent from '@/server/core/agent/Chat';
+import { ExecutionContext } from '@/server/core/context';
 import { ToolIds } from '@/shared/constants';
-import { AgentEvent } from '@/shared/types';
+import { AgentEvent, ToolEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockLlmCallTool = {
@@ -37,6 +38,10 @@ async function collectEvents(
   return events;
 }
 
+function createMockContext(): ExecutionContext {
+  return ExecutionContext.create('test-trace-id', new AbortController().signal);
+}
+
 describe('ChatAgent', () => {
   let chatAgent: ChatAgent;
 
@@ -56,41 +61,70 @@ describe('ChatAgent', () => {
     vi.clearAllMocks();
   });
 
-  it('should yield start, delta, and end events', async () => {
+  it('should yield tool progress events and final event', async () => {
     const memory = {
       summarize: vi.fn().mockResolvedValue([]),
     } as any;
-    const signal = new AbortController().signal;
+    const ctx = createMockContext();
 
-    mockLlmCallTool.call.mockImplementation(async function* () {
-      yield { type: 'delta', data: 'Hello' };
-      yield { type: 'delta', data: ' world' };
-      yield { type: 'result', result: 'Hello world' };
+    mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
+      ToolEvent,
+      string,
+      void
+    > {
+      yield ctx.toolEvent({
+        type: 'progress',
+        toolName: 'llm-call',
+        data: 'Hello',
+      });
+      yield ctx.toolEvent({
+        type: 'progress',
+        toolName: 'llm-call',
+        data: ' world',
+      });
+      yield ctx.toolEvent({
+        type: 'result',
+        toolName: 'llm-call',
+        output: 'Hello world',
+      });
+      return 'Hello world';
     });
 
-    const events = await collectEvents(chatAgent.call(memory, {}, signal));
+    const events = await collectEvents(chatAgent.call(memory, ctx, {}));
 
-    expect(events[0]).toEqual({ type: 'start', agentId: 'chat' });
-    expect(events[1]).toEqual({ type: 'delta', content: 'Hello' });
-    expect(events[2]).toEqual({ type: 'delta', content: ' world' });
-    expect(events[3]).toEqual({ type: 'end', agentId: 'chat' });
+    expect(events[0]).toMatchObject({
+      type: 'tool_progress',
+      data: 'Hello',
+    });
+    expect(events[1]).toMatchObject({
+      type: 'tool_progress',
+      data: ' world',
+    });
+    expect(events[2]).toMatchObject({
+      type: 'tool_result',
+    });
+    expect(events[3]).toMatchObject({
+      type: 'final',
+    });
   });
 
-  it('should pass signal to llmCallTool.call', async () => {
+  it('should pass context to llmCallTool.call', async () => {
     const memory = {
       summarize: vi.fn().mockResolvedValue([]),
     } as any;
-    const signal = new AbortController().signal;
+    const ctx = createMockContext();
 
-    mockLlmCallTool.call.mockImplementation(async function* () {
-      yield { type: 'result', result: '' };
+    mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
+      ToolEvent,
+      string,
+      void
+    > {
+      yield ctx.toolEvent({ type: 'result', toolName: 'llm-call', output: '' });
+      return '';
     });
 
-    await collectEvents(chatAgent.call(memory, {}, signal));
+    await collectEvents(chatAgent.call(memory, ctx, {}));
 
-    expect(mockLlmCallTool.call).toHaveBeenCalledWith(
-      expect.any(Object),
-      signal,
-    );
+    expect(mockLlmCallTool.call).toHaveBeenCalledWith(expect.any(Object), ctx);
   });
 });

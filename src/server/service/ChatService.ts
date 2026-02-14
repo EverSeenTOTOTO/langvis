@@ -1,10 +1,10 @@
 import { Message, Role } from '@/shared/entities/Message';
-import { AgentEvent } from '@/shared/types';
 import type { Request } from 'express';
 import { globby } from 'globby';
 import { omit } from 'lodash-es';
 import { container, inject } from 'tsyringe';
 import { Agent } from '../core/agent';
+import { ExecutionContext } from '../core/context';
 import { Memory } from '../core/memory';
 import { registerMemory } from '../decorator/core';
 import { service } from '../decorator/service';
@@ -70,107 +70,44 @@ export class ChatService {
   async consumeAgentStream(
     conversationId: string,
     message: Message,
-    generator: AsyncGenerator<AgentEvent, void, void>,
-    controller: AbortController,
+    agent: Agent,
+    memory: Memory,
+    config: Record<string, unknown>,
+    traceId: string,
   ): Promise<void> {
     const startTime = Date.now();
-    const state = { chunkStartTime: 0 };
+    const controller = new AbortController();
 
     this.activeAgents.set(conversationId, controller);
 
+    const ctx = ExecutionContext.create(traceId, controller.signal);
+
     try {
+      const generator = agent.call(memory, ctx, config);
+
       for await (const event of generator) {
         if (controller.signal.aborted) {
           break;
         }
-        await this.handleEvent(
-          event,
-          conversationId,
-          message,
-          startTime,
-          state,
-        );
+
+        if (event.type === 'stream') {
+          message.content += event.content;
+        } else if (event.type === 'error') {
+          throw new Error(event.error);
+        }
+
+        this.sseService.sendToConversation(conversationId, event);
       }
 
-      await this.finalizeStream(conversationId, message, startTime);
+      await this.finalizeMessage(conversationId, message, startTime);
     } catch (error) {
-      await this.handleStreamError(conversationId, message, error);
+      await this.handleStreamError(conversationId, message, error, ctx);
     } finally {
       this.activeAgents.delete(conversationId);
     }
   }
 
-  private async handleEvent(
-    event: AgentEvent,
-    conversationId: string,
-    message: Message,
-    startTime: number,
-    state: { chunkStartTime: number },
-  ): Promise<void> {
-    switch (event.type) {
-      case 'start':
-        this.logger.info(
-          `Agent ${event.agentId} started for conversation ${conversationId}`,
-        );
-        break;
-
-      case 'delta':
-        if (!state.chunkStartTime) {
-          this.logger.info(
-            `First chunk received for conversation ${conversationId}, time taken: ${
-              Date.now() - startTime
-            }ms`,
-          );
-          state.chunkStartTime = Date.now();
-          message.meta = {
-            ...message.meta,
-            streaming: true,
-            loading: false,
-          };
-          this.sseService.sendToConversation(conversationId, {
-            type: 'completion_delta',
-            meta: message.meta!,
-          });
-        }
-        message.content += event.content;
-        this.logger.debug(
-          `Sending delta content (length: ${event.content.length}): ${event.content.substring(
-            0,
-            50,
-          )}...`,
-        );
-        this.sseService.sendToConversation(conversationId, {
-          type: 'completion_delta',
-          content: event.content,
-        });
-        break;
-
-      case 'meta':
-        message.meta = {
-          ...message.meta,
-          ...event.meta,
-          loading: false,
-        };
-        this.sseService.sendToConversation(conversationId, {
-          type: 'completion_delta',
-          meta: message.meta!,
-        });
-        break;
-
-      case 'end': {
-        const chunkElapsed = Date.now() - state.chunkStartTime;
-        this.logger.info(
-          `Agent ${event.agentId} ended for conversation ${conversationId}, transmit time: ${chunkElapsed}ms`,
-        );
-        break;
-      }
-
-      case 'error':
-        throw event.error;
-    }
-  }
-
-  private async finalizeStream(
+  private async finalizeMessage(
     conversationId: string,
     message: Message,
     startTime: number,
@@ -186,25 +123,22 @@ export class ChatService {
         Date.now() - startTime
       }ms`,
     );
-
-    this.sseService.sendToConversation(conversationId, {
-      type: 'completion_done',
-    });
   }
 
   private async handleStreamError(
     conversationId: string,
     message: Message,
     error: unknown,
+    ctx: ExecutionContext,
   ): Promise<void> {
     this.logger.error(
       `Streaming error for conversation ${conversationId}:`,
       error,
     );
 
-    const content = (error as Error)?.message || 'Unknown error';
+    const errorMessage = (error as Error)?.message || 'Unknown error';
     try {
-      await this.conversationService.updateMessage(message.id, content, {
+      await this.conversationService.updateMessage(message.id, errorMessage, {
         ...message.meta,
         loading: undefined,
         streaming: undefined,
@@ -214,10 +148,10 @@ export class ChatService {
       this.logger.error('Failed to finalize streaming message:', updateError);
     }
 
-    this.sseService.sendToConversation(conversationId, {
-      type: 'completion_error',
-      error: content,
-    });
+    this.sseService.sendToConversation(
+      conversationId,
+      ctx.agentEvent({ type: 'error', error: errorMessage }),
+    );
   }
 
   async buildMemory(

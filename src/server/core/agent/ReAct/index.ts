@@ -9,6 +9,7 @@ import { AgentConfig, AgentEvent } from '@/shared/types';
 import { isEmpty } from 'lodash-es';
 import { container } from 'tsyringe';
 import { Agent } from '..';
+import { ExecutionContext } from '../../context';
 import { Memory } from '../../memory';
 import { Tool } from '../../tool';
 import type LlmCallTool from '../../tool/LlmCall';
@@ -18,7 +19,7 @@ export type ReActAction = {
   thought?: string;
   action: {
     tool: string;
-    input: Record<string, any>;
+    input: Record<string, unknown>;
   };
 };
 
@@ -59,11 +60,9 @@ export default class ReActAgent extends Agent {
 
   async *call(
     memory: Memory,
+    ctx: ExecutionContext,
     @config() options?: ReActAgentConfig,
-    signal?: AbortSignal,
   ): AsyncGenerator<AgentEvent, void, void> {
-    yield { type: 'start', agentId: this.id };
-
     const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
 
     const messages = await memory.summarize();
@@ -80,10 +79,9 @@ export default class ReActAgent extends Agent {
             )
           : msg.content,
     }));
-    const steps: ReActStep[] = [];
 
     for (let i = 0; i < this.maxIterations; i++) {
-      signal?.throwIfAborted();
+      ctx.signal.throwIfAborted();
 
       this.logger.debug('ReAct iter messages: ', iterMessages);
 
@@ -95,12 +93,15 @@ export default class ReActAgent extends Agent {
             temperature: options?.model?.temperature,
             stop: ['Observation:', 'Observation：'],
           },
-          signal,
+          ctx,
         ),
       );
 
       if (!content) {
-        yield { type: 'error', error: new Error('No response from model') };
+        yield ctx.agentEvent({
+          type: 'error',
+          error: 'No response from model',
+        });
         return;
       }
 
@@ -123,36 +124,40 @@ export default class ReActAgent extends Agent {
           role: Role.USER,
           content: `Observation: ${observation}`,
         });
-        steps.push({ observation });
-        yield { type: 'meta', meta: { steps } };
         continue;
       }
 
       this.logger.info('ReAct parsed response: ', parsed);
 
       if ('final_answer' in parsed) {
-        steps.push(parsed as ReActFinalAnswer);
-        yield { type: 'meta', meta: { steps } };
-        yield { type: 'delta', content: parsed.final_answer! };
-        yield { type: 'end', agentId: this.id };
+        if (parsed.thought) {
+          yield ctx.agentEvent({ type: 'thought', content: parsed.thought });
+        }
+        yield ctx.agentEvent({ type: 'stream', content: parsed.final_answer! });
+        yield ctx.agentEvent({ type: 'final' });
         return;
       }
 
       if ('action' in parsed) {
         const { tool, input } = parsed.action!;
 
-        steps.push(parsed as ReActAction);
-        yield { type: 'meta', meta: { steps } };
+        if (parsed.thought) {
+          yield ctx.agentEvent({ type: 'thought', content: parsed.thought });
+        }
+
+        yield ctx.agentEvent({
+          type: 'tool_call',
+          toolName: tool,
+          toolArgs: JSON.stringify(input),
+        });
 
         try {
-          const observation = await this.executeAction(tool, input, signal);
+          const observation = yield* this.executeAction(tool, input, ctx);
 
           iterMessages.push({
             role: Role.USER,
             content: `Observation: ${observation}\n`,
           });
-          steps.push({ observation });
-          yield { type: 'meta', meta: { steps } };
         } catch (error) {
           const observation = `Error executing action ${tool}: ${(error as Error).message}\n`;
 
@@ -160,19 +165,19 @@ export default class ReActAgent extends Agent {
             role: Role.USER,
             content: `Observation: ${observation}`,
           });
-          steps.push({ observation });
-          yield { type: 'meta', meta: { steps } };
         }
 
         continue;
       }
 
       const observation = `Unable to parse response: ${content}. Retrying (${i}/${this.maxIterations})...\n`;
-      steps.push({ observation });
-      yield { type: 'meta', meta: { steps } };
+      iterMessages.push({
+        role: Role.USER,
+        content: `Observation: ${observation}`,
+      });
     }
 
-    yield { type: 'error', error: new Error('Max iterations reached') };
+    yield ctx.agentEvent({ type: 'error', error: 'Max iterations reached' });
   }
 
   private parseResponse(content: string): ReActStep {
@@ -212,15 +217,24 @@ export default class ReActAgent extends Agent {
     );
   }
 
-  private async executeAction(
+  private async *executeAction(
     action: string,
-    actionInput: Record<string, any>,
-    signal?: AbortSignal,
-  ): Promise<string> {
+    actionInput: Record<string, unknown>,
+    ctx: ExecutionContext,
+  ): AsyncGenerator<AgentEvent, string, void> {
     try {
       const tool = container.resolve<Tool>(action);
-      const result = await runTool(tool.call(actionInput, signal));
-      return JSON.stringify(result);
+      const generator = tool.call(actionInput, ctx);
+      let result: string | undefined;
+
+      for await (const toolEvent of generator) {
+        yield ctx.adaptToolEvent(toolEvent);
+        if (toolEvent.type === 'result') {
+          result = toolEvent.output;
+        }
+      }
+
+      return result ?? '';
     } catch (error) {
       return `Error executing tool "${action}": ${(error as Error).message}`;
     }

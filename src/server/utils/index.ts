@@ -20,12 +20,12 @@ export const getSessionHeaders = (req: Request) => {
 };
 
 export async function runTool<T>(
-  toolGenerator: AsyncGenerator<ToolEvent<T>, T, void>,
+  toolGenerator: AsyncGenerator<ToolEvent, T, void>,
 ): Promise<T> {
   let result: T | undefined;
   for await (const event of toolGenerator) {
     if (event.type === 'result') {
-      result = event.result;
+      result = JSON.parse(event.output) as T;
     }
   }
   return result!;

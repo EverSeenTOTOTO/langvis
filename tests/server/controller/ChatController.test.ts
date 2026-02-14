@@ -81,6 +81,7 @@ describe('ChatController', () => {
       params: {},
       body: {},
       on: vi.fn(),
+      id: 'test-request-id',
       log: {
         error: vi.fn(),
         info: vi.fn(),
@@ -379,7 +380,6 @@ describe('ChatController', () => {
 
       // Mock batchAddMessages to return inserted messages
       const mockInsertedMessages = [
-        { id: 'user-msg', conversationId, role: Role.USER, content: 'Hello' },
         {
           id: 'assistant-msg',
           conversationId,
@@ -442,14 +442,14 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      // Allow async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      // Verify that call was called with Memory, Config, and Signal
-      expect(mockAgent.call).toHaveBeenCalledWith(
+      // Verify consumeAgentStream was called with correct parameters
+      expect(mockChatService.consumeAgentStream).toHaveBeenCalledWith(
+        conversationId,
+        expect.objectContaining({ role: Role.ASSIST }),
         expect.any(Object),
         expect.any(Object),
-        expect.anything(),
+        mockConversation.config,
+        mockRequest.id,
       );
     });
 
@@ -478,10 +478,14 @@ describe('ChatController', () => {
       expect(container.resolve).toHaveBeenCalledWith(
         mockConversation.config.agent,
       );
-      expect(mockAgent.call).toHaveBeenCalledWith(
+      // Verify consumeAgentStream was called
+      expect(mockChatService.consumeAgentStream).toHaveBeenCalledWith(
+        conversationId,
+        expect.objectContaining({ role: Role.ASSIST }),
         expect.any(Object),
         expect.any(Object),
-        expect.anything(),
+        mockConversation.config,
+        mockRequest.id,
       );
     });
   });
@@ -510,15 +514,7 @@ describe('ChatController', () => {
       mockConversationService.getMessagesByConversationId.mockResolvedValue([]);
 
       // Mock batchAddMessages to return inserted messages
-      const mockInsertedMessages = [
-        {
-          id: 'user-msg',
-          conversationId,
-          role: Role.USER,
-          content: 'Test message',
-        },
-        mockInitialMessage,
-      ];
+      const mockInsertedMessages = [mockInitialMessage];
       mockConversationService.batchAddMessages.mockResolvedValue(
         mockInsertedMessages,
       );
@@ -579,7 +575,8 @@ describe('ChatController', () => {
       expect(container.resolve).toHaveBeenCalledWith(
         mockConversation.config.agent,
       );
-      expect(mockAgent.call).toHaveBeenCalled();
+      // Verify consumeAgentStream was called
+      expect(mockChatService.consumeAgentStream).toHaveBeenCalled();
     });
 
     it('should handle conversation not found during integration', async () => {
@@ -610,11 +607,14 @@ describe('ChatController', () => {
       // Allow async operations to complete
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Verify that call was called with Memory, Config, and Signal
-      expect(mockAgent.call).toHaveBeenCalledWith(
+      // Verify consumeAgentStream was called with correct parameters
+      expect(mockChatService.consumeAgentStream).toHaveBeenCalledWith(
+        conversationId,
+        expect.objectContaining({ role: Role.ASSIST }),
         expect.any(Object),
         expect.any(Object),
-        expect.anything(),
+        mockConversation.config,
+        mockRequest.id,
       );
     });
   });

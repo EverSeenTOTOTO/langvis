@@ -7,6 +7,7 @@ import { ToolConfig, ToolEvent } from '@/shared/types';
 import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
 import { inject } from 'tsyringe';
 import { Tool } from '..';
+import { ExecutionContext } from '../../context';
 
 export type LlmCallInput = Partial<ChatCompletionCreateParams>;
 export type LlmCallOutput = string;
@@ -23,8 +24,8 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
 
   async *call(
     @input() data: LlmCallInput,
-    signal?: AbortSignal,
-  ): AsyncGenerator<ToolEvent<LlmCallOutput>, LlmCallOutput, void> {
+    ctx: ExecutionContext,
+  ): AsyncGenerator<ToolEvent, LlmCallOutput, void> {
     const response = await this.openai.chat.completions.create(
       {
         model: data.model || process.env.OPENAI_MODEL!,
@@ -32,7 +33,7 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
         ...data,
         stream: true,
       },
-      { signal },
+      { signal: ctx.signal },
     );
 
     let content = '';
@@ -41,7 +42,11 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
       const delta = chunk?.choices[0]?.delta?.content;
       if (delta) {
         content += delta;
-        yield { type: 'delta', data: delta };
+        yield ctx.toolEvent({
+          type: 'progress',
+          toolName: this.id,
+          data: delta,
+        });
       }
 
       if (chunk.choices[0]?.finish_reason) {
@@ -49,7 +54,12 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
       }
     }
 
-    yield { type: 'result', result: content };
+    yield ctx.toolEvent({
+      type: 'result',
+      toolName: this.id,
+      output: content,
+    });
+
     return content;
   }
 }

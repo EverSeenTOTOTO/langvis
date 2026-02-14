@@ -1,4 +1,5 @@
 import { Agent } from '@/server/core/agent';
+import { ExecutionContext } from '@/server/core/context';
 import { Memory } from '@/server/core/memory';
 import { Tool } from '@/server/core/tool';
 import {
@@ -28,6 +29,10 @@ vi.mock('@/server/utils/logger', () => {
   };
 });
 
+function createMockContext(): ExecutionContext {
+  return ExecutionContext.create('test-trace-id', new AbortController().signal);
+}
+
 async function consumeAgentGenerator(
   generator: AsyncGenerator<AgentEvent, void, void>,
 ): Promise<AgentEvent[]> {
@@ -39,12 +44,12 @@ async function consumeAgentGenerator(
 }
 
 async function consumeToolGenerator<T>(
-  generator: AsyncGenerator<ToolEvent<T>, T, void>,
+  generator: AsyncGenerator<ToolEvent, T, void>,
 ): Promise<T> {
   let result: T | undefined;
   for await (const event of generator) {
     if (event.type === 'result') {
-      result = event.result;
+      result = JSON.parse(event.output) as T;
     }
   }
   return result!;
@@ -67,8 +72,11 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
 
-        async *call(): AsyncGenerator<AgentEvent, void, void> {
-          yield { type: 'end', agentId: this.id };
+        async *call(
+          _memory: Memory,
+          ctx: ExecutionContext,
+        ): AsyncGenerator<AgentEvent, void, void> {
+          yield ctx.agentEvent({ type: 'final' });
         }
       }
 
@@ -87,8 +95,15 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
 
-        async *call(): AsyncGenerator<ToolEvent<unknown>, unknown, void> {
-          yield { type: 'result', result: null };
+        async *call(
+          _input: unknown,
+          ctx: ExecutionContext,
+        ): AsyncGenerator<ToolEvent, unknown, void> {
+          yield ctx.toolEvent({
+            type: 'result',
+            toolName: this.id,
+            output: 'null',
+          });
           return null;
         }
       }
@@ -108,8 +123,11 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
 
-        async *call(): AsyncGenerator<AgentEvent, void, void> {
-          yield { type: 'end', agentId: this.id };
+        async *call(
+          _memory: Memory,
+          ctx: ExecutionContext,
+        ): AsyncGenerator<AgentEvent, void, void> {
+          yield ctx.agentEvent({ type: 'final' });
         }
       }
 
@@ -139,8 +157,15 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
 
-        async *call(): AsyncGenerator<ToolEvent<unknown>, unknown, void> {
-          yield { type: 'result', result: null };
+        async *call(
+          _input: unknown,
+          ctx: ExecutionContext,
+        ): AsyncGenerator<ToolEvent, unknown, void> {
+          yield ctx.toolEvent({
+            type: 'result',
+            toolName: this.id,
+            output: 'null',
+          });
           return null;
         }
       }
@@ -155,8 +180,11 @@ describe('Config Decorators', () => {
         logger = winston.createLogger();
         tools: Tool[] = [];
 
-        async *call(): AsyncGenerator<AgentEvent, void, void> {
-          yield { type: 'end', agentId: this.id };
+        async *call(
+          _memory: Memory,
+          ctx: ExecutionContext,
+        ): AsyncGenerator<AgentEvent, void, void> {
+          yield ctx.agentEvent({ type: 'final' });
         }
       }
 
@@ -192,8 +220,11 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
 
-        async *call(): AsyncGenerator<AgentEvent, void, void> {
-          yield { type: 'end', agentId: this.id };
+        async *call(
+          _memory: Memory,
+          ctx: ExecutionContext,
+        ): AsyncGenerator<AgentEvent, void, void> {
+          yield ctx.agentEvent({ type: 'final' });
         }
       }
 
@@ -206,8 +237,11 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
 
-        async *call(): AsyncGenerator<AgentEvent, void, void> {
-          yield { type: 'end', agentId: this.id };
+        async *call(
+          _memory: Memory,
+          ctx: ExecutionContext,
+        ): AsyncGenerator<AgentEvent, void, void> {
+          yield ctx.agentEvent({ type: 'final' });
         }
       }
 
@@ -245,9 +279,10 @@ describe('Config Decorators', () => {
 
         async *call(
           _memory: Memory,
+          ctx: ExecutionContext,
           @config() _config: any,
         ): AsyncGenerator<AgentEvent, void, void> {
-          yield { type: 'delta', content: 'success' };
+          yield ctx.agentEvent({ type: 'stream', content: 'success' });
         }
       }
 
@@ -266,17 +301,25 @@ describe('Config Decorators', () => {
       await registerAgent(TestAgent, agentConfig);
       const instance = container.resolve<Agent>(AgentIds.CHAT);
       const mockMemory = {} as Memory;
+      const ctx = createMockContext();
 
       await expect(
-        consumeAgentGenerator(instance.call(mockMemory, { temperature: 2 })),
+        consumeAgentGenerator(
+          instance.call(mockMemory, ctx, { temperature: 2 }),
+        ),
       ).rejects.toThrow();
       await expect(
-        consumeAgentGenerator(instance.call(mockMemory, {})),
+        consumeAgentGenerator(instance.call(mockMemory, ctx, {})),
       ).rejects.toThrow();
       const events = await consumeAgentGenerator(
-        instance.call(mockMemory, { temperature: 0.5 }),
+        instance.call(mockMemory, ctx, { temperature: 0.5 }),
       );
-      expect(events).toContainEqual({ type: 'delta', content: 'success' });
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'stream',
+          content: 'success',
+        }),
+      );
     });
   });
 
@@ -291,8 +334,15 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
 
-        async *call(): AsyncGenerator<ToolEvent<unknown>, unknown, void> {
-          yield { type: 'result', result: null };
+        async *call(
+          _input: unknown,
+          ctx: ExecutionContext,
+        ): AsyncGenerator<ToolEvent, unknown, void> {
+          yield ctx.toolEvent({
+            type: 'result',
+            toolName: this.id,
+            output: 'null',
+          });
           return null;
         }
       }
@@ -324,8 +374,15 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
 
-        async *call(): AsyncGenerator<ToolEvent<unknown>, unknown, void> {
-          yield { type: 'result', result: null };
+        async *call(
+          _input: unknown,
+          ctx: ExecutionContext,
+        ): AsyncGenerator<ToolEvent, unknown, void> {
+          yield ctx.toolEvent({
+            type: 'result',
+            toolName: this.id,
+            output: 'null',
+          });
           return null;
         }
       }
@@ -339,8 +396,15 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
 
-        async *call(): AsyncGenerator<ToolEvent<unknown>, unknown, void> {
-          yield { type: 'result', result: null };
+        async *call(
+          _input: unknown,
+          ctx: ExecutionContext,
+        ): AsyncGenerator<ToolEvent, unknown, void> {
+          yield ctx.toolEvent({
+            type: 'result',
+            toolName: this.id,
+            output: 'null',
+          });
           return null;
         }
       }
@@ -379,8 +443,13 @@ describe('Config Decorators', () => {
 
         async *call(
           @input() _input: { url: string },
-        ): AsyncGenerator<ToolEvent<string>, string, void> {
-          yield { type: 'result', result: 'success' };
+          ctx: ExecutionContext,
+        ): AsyncGenerator<ToolEvent, string, void> {
+          yield ctx.toolEvent({
+            type: 'result',
+            toolName: this.id,
+            output: '"success"',
+          });
           return 'success';
         }
       }
@@ -400,12 +469,13 @@ describe('Config Decorators', () => {
       await registerTool(TestTool, toolConfig);
 
       const instance = container.resolve<TestTool>(ToolIds.WEB_FETCH);
+      const ctx = createMockContext();
 
       await expect(
-        consumeToolGenerator(instance.call({} as any)),
+        consumeToolGenerator(instance.call({} as any, ctx)),
       ).rejects.toThrow();
       const result = await consumeToolGenerator(
-        instance.call({ url: 'http://example.com' }),
+        instance.call({ url: 'http://example.com' }, ctx),
       );
       expect(result).toBe('success');
     });

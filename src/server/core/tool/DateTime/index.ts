@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import tz from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
 import { Tool } from '..';
+import { ExecutionContext } from '../../context';
 
 dayjs.extend(utc);
 dayjs.extend(tz);
@@ -28,7 +29,8 @@ export default class DateTimeTool extends Tool<DateTimeInput, DateTimeOutput> {
 
   async *call(
     @input() data: DateTimeInput,
-  ): AsyncGenerator<ToolEvent<DateTimeOutput>, DateTimeOutput, void> {
+    ctx: ExecutionContext,
+  ): AsyncGenerator<ToolEvent, DateTimeOutput, void> {
     const timezone = data?.timezone;
     const format = data?.format;
 
@@ -41,7 +43,11 @@ export default class DateTimeTool extends Tool<DateTimeInput, DateTimeOutput> {
     const result = format ? date.format(format) : date.format();
     const output: DateTimeOutput = { result };
 
-    yield { type: 'result', result: output };
+    yield ctx.toolEvent({
+      type: 'result',
+      toolName: this.id,
+      output: JSON.stringify(output),
+    });
     return output;
   }
 }
