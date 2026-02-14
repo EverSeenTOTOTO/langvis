@@ -1,5 +1,7 @@
 import * as configModule from '@/server/decorator/core';
+import { ExecutionContext } from '@/server/core/context';
 import { ToolService } from '@/server/service/ToolService';
+import { ToolEvent } from '@/shared/types';
 import { globby } from 'globby';
 import { container } from 'tsyringe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -85,17 +87,30 @@ describe('ToolService', () => {
       const mockTool = {
         id: 'test-tool',
         config: { name: { en: 'Test', zh: '测试' } },
-        call: vi.fn().mockResolvedValue('result'),
+        call: vi.fn().mockImplementation(async function* (): AsyncGenerator<
+          ToolEvent,
+          string,
+          void
+        > {
+          yield {
+            type: 'result',
+            toolName: 'test-tool',
+            output: '"result"',
+          };
+          return 'result';
+        }),
       };
 
       toolService = container.resolve(ToolService);
-      // Directly set the private tools property after initialization
       (toolService as any).tools = ['test-tool'];
       container.register('test-tool', { useValue: mockTool });
 
       const result = await toolService.callTool('test-tool', { input: 'data' });
 
-      expect(mockTool.call).toHaveBeenCalledWith({ input: 'data' });
+      expect(mockTool.call).toHaveBeenCalledWith(
+        { input: 'data' },
+        expect.any(ExecutionContext),
+      );
       expect(result).toBe('result');
     });
 

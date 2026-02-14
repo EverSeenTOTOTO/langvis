@@ -1,6 +1,7 @@
 import GirlFriendAgent from '@/server/core/agent/GirlFriend';
+import { ExecutionContext } from '@/server/core/context';
 import { ToolIds } from '@/shared/constants';
-import { AgentEvent } from '@/shared/types';
+import { AgentEvent, ToolEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockLlmCallTool = {
@@ -44,6 +45,10 @@ async function collectEvents(
   return events;
 }
 
+function createMockContext(): ExecutionContext {
+  return ExecutionContext.create('test-trace-id', new AbortController().signal);
+}
+
 describe('GirlFriendAgent', () => {
   let girlFriendAgent: GirlFriendAgent;
 
@@ -63,59 +68,93 @@ describe('GirlFriendAgent', () => {
     vi.clearAllMocks();
   });
 
-  it('should yield start, delta, meta (tts result), and end events', async () => {
+  it('should yield tool progress events and final event', async () => {
     const memory = {
       summarize: vi.fn().mockResolvedValue([]),
     } as any;
-    const signal = new AbortController().signal;
+    const ctx = createMockContext();
 
-    mockLlmCallTool.call.mockImplementation(async function* () {
-      yield { type: 'delta', data: 'Hello' };
-      yield { type: 'delta', data: ' world' };
-      yield { type: 'result', result: 'Hello world' };
-    });
-
-    mockTtsTool.call.mockImplementation(async function* () {
-      yield {
+    mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
+      ToolEvent,
+      string,
+      void
+    > {
+      yield ctx.toolEvent({
+        type: 'progress',
+        toolName: 'llm-call',
+        data: 'Hello',
+      });
+      yield ctx.toolEvent({
+        type: 'progress',
+        toolName: 'llm-call',
+        data: ' world',
+      });
+      yield ctx.toolEvent({
         type: 'result',
-        result: { voice: 'test-voice', filePath: 'tts/test.mp3' },
-      };
+        toolName: 'llm-call',
+        output: 'Hello world',
+      });
+      return 'Hello world';
     });
 
-    const events = await collectEvents(
-      girlFriendAgent.call(memory, {}, signal),
-    );
-
-    expect(events[0]).toEqual({ type: 'start', agentId: 'girlfriend' });
-    expect(events[1]).toEqual({ type: 'delta', content: 'Hello' });
-    expect(events[2]).toEqual({ type: 'delta', content: ' world' });
-    expect(events[3]).toEqual({
-      type: 'meta',
-      meta: { voice: 'test-voice', filePath: 'tts/test.mp3' },
+    mockTtsTool.call.mockImplementation(async function* (): AsyncGenerator<
+      ToolEvent,
+      any,
+      void
+    > {
+      yield ctx.toolEvent({
+        type: 'result',
+        toolName: 'tts',
+        output: JSON.stringify({
+          voice: 'test-voice',
+          filePath: 'tts/test.mp3',
+        }),
+      });
+      return { voice: 'test-voice', filePath: 'tts/test.mp3' };
     });
-    expect(events[4]).toEqual({ type: 'end', agentId: 'girlfriend' });
+
+    const events = await collectEvents(girlFriendAgent.call(memory, ctx, {}));
+
+    expect(events[0]).toMatchObject({
+      type: 'tool_progress',
+      data: 'Hello',
+    });
+    expect(events[1]).toMatchObject({
+      type: 'tool_progress',
+      data: ' world',
+    });
+    expect(events[events.length - 1]).toMatchObject({
+      type: 'final',
+    });
   });
 
-  it('should pass signal to llmCallTool.call and tts.call', async () => {
+  it('should pass context to llmCallTool.call and tts.call', async () => {
     const memory = {
       summarize: vi.fn().mockResolvedValue([]),
     } as any;
-    const signal = new AbortController().signal;
+    const ctx = createMockContext();
 
-    mockLlmCallTool.call.mockImplementation(async function* () {
-      yield { type: 'result', result: '' };
+    mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
+      ToolEvent,
+      string,
+      void
+    > {
+      yield ctx.toolEvent({ type: 'result', toolName: 'llm-call', output: '' });
+      return '';
     });
 
-    mockTtsTool.call.mockImplementation(async function* () {
-      yield { type: 'result', result: {} };
+    mockTtsTool.call.mockImplementation(async function* (): AsyncGenerator<
+      ToolEvent,
+      any,
+      void
+    > {
+      yield ctx.toolEvent({ type: 'result', toolName: 'tts', output: '{}' });
+      return {};
     });
 
-    await collectEvents(girlFriendAgent.call(memory, {}, signal));
+    await collectEvents(girlFriendAgent.call(memory, ctx, {}));
 
-    expect(mockLlmCallTool.call).toHaveBeenCalledWith(
-      expect.any(Object),
-      signal,
-    );
-    expect(mockTtsTool.call).toHaveBeenCalledWith(expect.any(Object), signal);
+    expect(mockLlmCallTool.call).toHaveBeenCalledWith(expect.any(Object), ctx);
+    expect(mockTtsTool.call).toHaveBeenCalledWith(expect.any(Object), ctx);
   });
 });

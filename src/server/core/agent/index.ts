@@ -1,5 +1,6 @@
 import type { Logger } from '@/server/utils/logger';
 import { AgentConfig, AgentEvent } from '@/shared/types';
+import { ExecutionContext } from '../context';
 import { Memory } from '../memory';
 
 export abstract class Agent {
@@ -14,8 +15,8 @@ export abstract class Agent {
 
   abstract call(
     memory: Memory,
+    ctx: ExecutionContext,
     config?: unknown,
-    signal?: AbortSignal,
   ): AsyncGenerator<AgentEvent, void, void>;
 }
 

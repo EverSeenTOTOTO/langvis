@@ -126,18 +126,13 @@ export default class ChatController {
     res.status(200).json({ success: true });
 
     // Then start agent streaming asynchronously
-    const abortController = new AbortController();
-    const generator = agent.call(
-      memory,
-      conversation.config!,
-      abortController.signal,
-    );
-
     this.chatService.consumeAgentStream(
       conversationId,
       assistantMessage,
-      generator,
-      abortController,
+      agent,
+      memory,
+      conversation.config!,
+      req.id!,
     );
 
     return;

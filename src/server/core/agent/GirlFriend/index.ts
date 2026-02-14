@@ -7,6 +7,7 @@ import { AgentConfig, AgentEvent } from '@/shared/types';
 import { container } from 'tsyringe';
 import { v4 as uuid } from 'uuid';
 import { Agent } from '..';
+import { ExecutionContext } from '../../context';
 import { Memory } from '../../memory';
 import type LlmCallTool from '../../tool/LlmCall';
 import type TextToSpeechTool from '../../tool/TextToSpeech';
@@ -36,11 +37,9 @@ export default class GirlFriendAgent extends Agent {
 
   async *call(
     memory: Memory,
+    ctx: ExecutionContext,
     @config() options?: GirlFriendConfig,
-    signal?: AbortSignal,
   ): AsyncGenerator<AgentEvent, void, void> {
-    yield { type: 'start', agentId: this.id };
-
     const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
     const tts = container.resolve<TextToSpeechTool>(ToolIds.TEXT_TO_SPEECH);
 
@@ -60,28 +59,29 @@ export default class GirlFriendAgent extends Agent {
         temperature: options?.model?.temperature,
         messages: conversationMessages,
       },
-      signal,
+      ctx,
     );
 
-    for await (const event of llmGenerator) {
-      if (event.type === 'delta') {
-        content += event.data;
-        yield { type: 'delta', content: event.data };
+    for await (const toolEvent of llmGenerator) {
+      yield ctx.adaptToolEvent(toolEvent);
+      if (toolEvent.type === 'progress' && typeof toolEvent.data === 'string') {
+        content += toolEvent.data;
       }
     }
 
-    const ttsGenerator = tts.call(
-      {
-        text: content,
-        reqId: uuid(),
-        voice: options?.tts?.voice || '',
-        emotion: options?.tts?.emotion || '',
-        speedRatio: options?.tts?.speedRatio,
-      },
-      signal,
+    await runTool(
+      tts.call(
+        {
+          text: content,
+          reqId: uuid(),
+          voice: options?.tts?.voice || '',
+          emotion: options?.tts?.emotion || '',
+          speedRatio: options?.tts?.speedRatio,
+        },
+        ctx,
+      ),
     );
 
-    yield { type: 'meta', meta: await runTool(ttsGenerator) };
-    yield { type: 'end', agentId: this.id };
+    yield ctx.agentEvent({ type: 'final' });
   }
 }

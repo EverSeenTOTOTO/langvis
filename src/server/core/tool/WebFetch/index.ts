@@ -7,6 +7,7 @@ import { Readability } from '@mozilla/readability';
 import DOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
 import { Tool } from '..';
+import { ExecutionContext } from '../../context';
 
 interface WebFetchInput {
   url: string;
@@ -30,9 +31,9 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
 
   async *call(
     @input() data: WebFetchInput,
-    signal?: AbortSignal,
-  ): AsyncGenerator<ToolEvent<WebFetchOutput>, WebFetchOutput, void> {
-    signal?.throwIfAborted();
+    ctx: ExecutionContext,
+  ): AsyncGenerator<ToolEvent, WebFetchOutput, void> {
+    ctx.signal.throwIfAborted();
 
     const { url, timeout = 30000 } = data;
 
@@ -45,8 +46,8 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    signal?.addEventListener('abort', () => {
-      controller.abort(signal.reason);
+    ctx.signal.addEventListener('abort', () => {
+      controller.abort(ctx.signal.reason);
     });
 
     const fetchOptions: RequestInit = {
@@ -131,7 +132,11 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
       url,
     };
 
-    yield { type: 'result', result: output };
+    yield ctx.toolEvent({
+      type: 'result',
+      toolName: this.id,
+      output: JSON.stringify(output),
+    });
     return output;
   }
 }

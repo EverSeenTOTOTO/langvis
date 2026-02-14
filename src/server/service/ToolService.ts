@@ -7,6 +7,8 @@ import { registerTool } from '../decorator/core';
 import { ToolConfig } from '@/shared/types';
 import { Tool, ToolConstructor } from '../core/tool';
 import { isProd } from '../utils';
+import { ExecutionContext } from '../core/context';
+import { v4 as uuid } from 'uuid';
 
 @service()
 export class ToolService {
@@ -95,7 +97,11 @@ export class ToolService {
     return tools;
   }
 
-  async callTool(toolId: string, input: Record<string, any>): Promise<unknown> {
+  async callTool(
+    toolId: string,
+    input: Record<string, unknown>,
+    ctx?: ExecutionContext,
+  ): Promise<unknown> {
     await this.initialize();
 
     if (!this.tools.includes(toolId)) {
@@ -103,6 +109,15 @@ export class ToolService {
     }
 
     const tool = container.resolve<Tool>(toolId);
-    return await tool.call(input);
+    const execCtx =
+      ctx ?? ExecutionContext.create(uuid(), new AbortController().signal);
+
+    let result: unknown;
+    for await (const toolEvent of tool.call(input, execCtx)) {
+      if (toolEvent.type === 'result') {
+        result = JSON.parse(toolEvent.output);
+      }
+    }
+    return result;
   }
 }

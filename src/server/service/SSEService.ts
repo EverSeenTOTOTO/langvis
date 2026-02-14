@@ -1,4 +1,4 @@
-import { SSEMessage } from '@/shared/types';
+import { AgentEvent } from '@/shared/types';
 import type { Response } from 'express';
 import { service } from '../decorator/service';
 import Logger from '../utils/logger';
@@ -11,7 +11,6 @@ interface SSEConnection {
 @service()
 export class SSEService {
   private sseConnections: Map<string, SSEConnection> = new Map();
-  private heartbeats: Map<string, NodeJS.Timeout> = new Map();
   private readonly logger = Logger.child({ source: 'SSEService' });
 
   initSSEConnection(conversationId: string, response: Response) {
@@ -27,22 +26,8 @@ export class SSEService {
     };
 
     this.sseConnections.set(conversationId, connection);
-    // Setup heartbeat
-    const heartbeat = setInterval(() => {
-      if (response.writable) {
-        response.write(
-          `data: ${JSON.stringify({ type: 'heartbeat' } as SSEMessage)}\n\n`,
-        );
-        response.flush();
-      }
-    }, 10_000); // Every 10 seconds
 
-    this.heartbeats.set(conversationId, heartbeat);
-
-    response.write(
-      `data: ${JSON.stringify({ type: 'heartbeat' } as SSEMessage)}\n\n`,
-    );
-    // flush is required with compresss middleware
+    response.write('\n');
     response.flush();
 
     return connection;
@@ -53,13 +38,6 @@ export class SSEService {
 
     if (!connection) return;
 
-    const heartbeat = this.heartbeats.get(conversationId);
-
-    if (heartbeat) {
-      clearInterval(heartbeat);
-      this.heartbeats.delete(conversationId);
-    }
-
     if (!connection.response.writableEnded) {
       connection.response.end();
     }
@@ -67,7 +45,7 @@ export class SSEService {
     this.sseConnections.delete(conversationId);
   }
 
-  sendToConversation(conversationId: string, msg: SSEMessage) {
+  sendToConversation(conversationId: string, event: AgentEvent) {
     const response = this.sseConnections.get(conversationId)?.response;
 
     if (!response?.writable) {
@@ -78,7 +56,7 @@ export class SSEService {
       return;
     }
 
-    response.write(`data: ${JSON.stringify(msg)}\n\n`);
+    response.write(`data: ${JSON.stringify(event)}\n\n`);
     response.flush();
   }
 }

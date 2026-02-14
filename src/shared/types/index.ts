@@ -1,6 +1,6 @@
 import { JSONSchemaType } from 'ajv';
 
-export interface AgentConfig<Config = Record<string, any>> {
+export interface AgentConfig<Config = Record<string, unknown>> {
   extends?: string;
   name: string;
   description: string;
@@ -10,8 +10,8 @@ export interface AgentConfig<Config = Record<string, any>> {
 }
 
 export interface ToolConfig<
-  Input = Record<string, any>,
-  Output = Record<string, any>,
+  Input = Record<string, unknown>,
+  Output = Record<string, unknown>,
 > {
   extends?: string;
   name: string;
@@ -21,25 +21,21 @@ export interface ToolConfig<
   enabled?: boolean;
 }
 
-export type ToolEvent<T = unknown> =
-  | { type: 'delta'; data: T }
-  | { type: 'result'; result: T };
+/**
+ * ToolEvent - emitted by Tools, internal to agent execution
+ */
+export type ToolEvent =
+  | { type: 'progress'; toolName: string; data: unknown }
+  | { type: 'result'; toolName: string; output: string; isError?: boolean };
 
+/**
+ * AgentEvent - the single event type for SSE transmission
+ */
 export type AgentEvent =
-  | { type: 'start'; agentId: string }
-  | { type: 'delta'; content: string }
-  | { type: 'meta'; meta: Record<string, any> }
-  | { type: 'end'; agentId: string }
-  | { type: 'error'; error: Error };
-
-export type SSEMessage =
-  | { type: 'heartbeat' }
-  | { type: 'completion_error'; error: string }
-  | {
-      type: 'completion_delta';
-      content?: string;
-      meta?: Record<string, any>;
-    }
-  | {
-      type: 'completion_done';
-    };
+  | { type: 'thought'; content: string }
+  | { type: 'tool_call'; toolName: string; toolArgs: string }
+  | { type: 'tool_progress'; toolName: string; data: unknown }
+  | { type: 'tool_result'; toolName: string; output: string; isError?: boolean }
+  | { type: 'stream'; content: string }
+  | { type: 'final' }
+  | { type: 'error'; error: string };

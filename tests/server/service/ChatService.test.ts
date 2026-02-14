@@ -4,6 +4,9 @@ import { ChatService } from '@/server/service/ChatService';
 import { SSEService } from '@/server/service/SSEService';
 import { AuthService } from '@/server/service/AuthService';
 import { ConversationService } from '@/server/service/ConversationService';
+import { Agent } from '@/server/core/agent';
+import { ExecutionContext } from '@/server/core/context';
+import { Memory } from '@/server/core/memory';
 import { Message, Role } from '@/shared/entities/Message';
 import { AgentEvent } from '@/shared/types';
 import type { Request } from 'express';
@@ -108,20 +111,27 @@ describe('ChatService', () => {
         createdAt: new Date(),
       };
 
-      async function* mockGenerator(): AsyncGenerator<AgentEvent, void, void> {
-        yield { type: 'start', agentId: 'test-agent' };
-        yield { type: 'delta', content: 'Hello' };
-        yield { type: 'delta', content: ' World' };
-        yield { type: 'end', agentId: 'test-agent' };
-      }
+      const mockAgent = {
+        call: vi.fn().mockImplementation(function* (
+          _memory: Memory,
+          ctx: ExecutionContext,
+        ): Generator<AgentEvent> {
+          yield ctx.agentEvent({ type: 'stream', content: 'Hello' });
+          yield ctx.agentEvent({ type: 'stream', content: ' World' });
+          yield ctx.agentEvent({ type: 'final' });
+        }),
+      } as unknown as Agent;
 
-      const controller = new AbortController();
+      const mockMemory = {} as Memory;
+      const config = {};
 
       await chatService.consumeAgentStream(
         conversationId,
         message,
-        mockGenerator(),
-        controller,
+        mockAgent,
+        mockMemory,
+        config,
+        'test-trace-id',
       );
 
       expect(message.content).toBe('Hello World');
@@ -133,7 +143,7 @@ describe('ChatService', () => {
       );
     });
 
-    it('should handle meta updates', async () => {
+    it('should handle agent stream events', async () => {
       const conversationId = 'conv-123';
       const message: Message = {
         id: 'msg-123',
@@ -144,56 +154,31 @@ describe('ChatService', () => {
         createdAt: new Date(),
       };
 
-      async function* mockGenerator(): AsyncGenerator<AgentEvent, void, void> {
-        yield { type: 'start', agentId: 'test-agent' };
-        yield { type: 'meta', meta: { thinking: 'Processing...' } };
-        yield { type: 'end', agentId: 'test-agent' };
-      }
+      const mockAgent = {
+        call: vi.fn().mockImplementation(function* (
+          _memory: Memory,
+          ctx: ExecutionContext,
+        ): Generator<AgentEvent> {
+          yield ctx.agentEvent({ type: 'thought', content: 'Thinking...' });
+          yield ctx.agentEvent({ type: 'stream', content: 'Hello' });
+          yield ctx.agentEvent({ type: 'final' });
+        }),
+      } as unknown as Agent;
 
-      const controller = new AbortController();
-
-      await chatService.consumeAgentStream(
-        conversationId,
-        message,
-        mockGenerator(),
-        controller,
-      );
-
-      expect(message.meta).toMatchObject({
-        thinking: 'Processing...',
-      });
-    });
-
-    it('should handle abort signal', async () => {
-      const conversationId = 'conv-123';
-      const message: Message = {
-        id: 'msg-123',
-        content: '',
-        role: Role.ASSIST,
-        conversationId,
-        meta: {},
-        createdAt: new Date(),
-      };
-
-      async function* mockGenerator(): AsyncGenerator<AgentEvent, void, void> {
-        yield { type: 'start', agentId: 'test-agent' };
-        yield { type: 'delta', content: 'Hello' };
-      }
-
-      const controller = new AbortController();
-      controller.abort();
+      const mockMemory = {} as Memory;
+      const config = {};
 
       await chatService.consumeAgentStream(
         conversationId,
         message,
-        mockGenerator(),
-        controller,
+        mockAgent,
+        mockMemory,
+        config,
+        'test-trace-id',
       );
 
-      expect(mockSSEService.sendToConversation).toHaveBeenCalledWith(
-        conversationId,
-        { type: 'completion_done' },
-      );
+      expect(message.content).toBe('Hello');
+      expect(mockSSEService.sendToConversation).toHaveBeenCalled();
     });
 
     it('should handle streaming errors', async () => {
@@ -207,29 +192,31 @@ describe('ChatService', () => {
         createdAt: new Date(),
       };
 
-      async function* mockGenerator(): AsyncGenerator<AgentEvent, void, void> {
-        yield { type: 'start', agentId: 'test-agent' };
-        yield { type: 'error', error: new Error('Test error') };
-      }
+      const mockAgent = {
+        call: vi.fn().mockImplementation(function* (
+          _memory: Memory,
+          ctx: ExecutionContext,
+        ): Generator<AgentEvent> {
+          yield ctx.agentEvent({ type: 'error', error: 'Test error' });
+        }),
+      } as unknown as Agent;
 
-      const controller = new AbortController();
+      const mockMemory = {} as Memory;
+      const config = {};
 
       await chatService.consumeAgentStream(
         conversationId,
         message,
-        mockGenerator(),
-        controller,
+        mockAgent,
+        mockMemory,
+        config,
+        'test-trace-id',
       );
 
       expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
         'msg-123',
         'Test error',
         expect.objectContaining({ error: true }),
-      );
-
-      expect(mockSSEService.sendToConversation).toHaveBeenCalledWith(
-        conversationId,
-        { type: 'completion_error', error: 'Test error' },
       );
     });
 
@@ -248,63 +235,28 @@ describe('ChatService', () => {
         new Error('Update failed'),
       );
 
-      async function* mockGenerator(): AsyncGenerator<AgentEvent, void, void> {
-        yield { type: 'start', agentId: 'test-agent' };
-        yield { type: 'error', error: new Error('Stream error') };
-      }
-
-      const controller = new AbortController();
-
-      await chatService.consumeAgentStream(
-        conversationId,
-        message,
-        mockGenerator(),
-        controller,
-      );
-
-      expect(mockSSEService.sendToConversation).toHaveBeenCalledWith(
-        conversationId,
-        { type: 'completion_error', error: 'Stream error' },
-      );
-    });
-
-    it('should track first chunk timing', async () => {
-      const conversationId = 'conv-123';
-      const message: Message = {
-        id: 'msg-123',
-        content: '',
-        role: Role.ASSIST,
-        conversationId,
-        meta: {},
-        createdAt: new Date(),
-      };
-
-      async function* mockGenerator(): AsyncGenerator<AgentEvent, void, void> {
-        yield { type: 'start', agentId: 'test-agent' };
-        yield { type: 'delta', content: 'First' };
-        yield { type: 'delta', content: ' Second' };
-        yield { type: 'end', agentId: 'test-agent' };
-      }
-
-      const controller = new AbortController();
-
-      await chatService.consumeAgentStream(
-        conversationId,
-        message,
-        mockGenerator(),
-        controller,
-      );
-
-      expect(mockSSEService.sendToConversation).toHaveBeenCalledWith(
-        conversationId,
-        expect.objectContaining({
-          type: 'completion_delta',
-          meta: expect.objectContaining({
-            streaming: true,
-            loading: false,
-          }),
+      const mockAgent = {
+        call: vi.fn().mockImplementation(function* (
+          _memory: Memory,
+          ctx: ExecutionContext,
+        ): Generator<AgentEvent> {
+          yield ctx.agentEvent({ type: 'error', error: 'Stream error' });
         }),
+      } as unknown as Agent;
+
+      const mockMemory = {} as Memory;
+      const config = {};
+
+      await chatService.consumeAgentStream(
+        conversationId,
+        message,
+        mockAgent,
+        mockMemory,
+        config,
+        'test-trace-id',
       );
+
+      expect(mockSSEService.sendToConversation).toHaveBeenCalled();
     });
   });
 

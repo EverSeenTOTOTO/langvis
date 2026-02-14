@@ -6,6 +6,7 @@ import { AgentConfig, AgentEvent } from '@/shared/types';
 import chalk from 'chalk';
 import { container } from 'tsyringe';
 import { Agent } from '..';
+import { ExecutionContext } from '../../context';
 import { Memory } from '../../memory';
 import type LlmCallTool from '../../tool/LlmCall';
 
@@ -29,11 +30,9 @@ export default class ChatAgent extends Agent {
 
   async *call(
     memory: Memory,
+    ctx: ExecutionContext,
     @config() options?: ChatAgentConfig,
-    signal?: AbortSignal,
   ): AsyncGenerator<AgentEvent, void, void> {
-    yield { type: 'start', agentId: this.id };
-
     const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
 
     const messages = await memory.summarize();
@@ -55,15 +54,13 @@ export default class ChatAgent extends Agent {
         temperature: options?.model?.temperature,
         messages: conversationMessages,
       },
-      signal,
+      ctx,
     );
 
-    for await (const event of generator) {
-      if (event.type === 'delta') {
-        yield { type: 'delta', content: event.data };
-      }
+    for await (const toolEvent of generator) {
+      yield ctx.adaptToolEvent(toolEvent);
     }
 
-    yield { type: 'end', agentId: this.id };
+    yield ctx.agentEvent({ type: 'final' });
   }
 }

@@ -1,4 +1,5 @@
 import WebFetchTool from '@/server/core/tool/WebFetch';
+import { ExecutionContext } from '@/server/core/context';
 import { runTool } from '@/server/utils';
 import logger from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
@@ -18,6 +19,10 @@ vi.mock('@/server/utils/logger', () => {
   };
 });
 
+function createMockContext(): ExecutionContext {
+  return ExecutionContext.create('test-trace-id', new AbortController().signal);
+}
+
 describe('WebFetchTool', () => {
   let tool: WebFetchTool;
 
@@ -34,14 +39,16 @@ describe('WebFetchTool', () => {
   });
 
   it('should reject empty URL', async () => {
-    await expect(runTool(tool.call({ url: '' }))).rejects.toThrow(
+    const ctx = createMockContext();
+    await expect(runTool(tool.call({ url: '' }, ctx))).rejects.toThrow(
       'Failed to parse URL from ',
     );
   });
 
   it('should reject invalid URL', async () => {
+    const ctx = createMockContext();
     await expect(
-      runTool(tool.call({ url: 'not-a-valid-url' })),
+      runTool(tool.call({ url: 'not-a-valid-url' }, ctx)),
     ).rejects.toThrow('Failed to parse URL from not-a-valid-url');
   });
 
@@ -73,8 +80,9 @@ describe('WebFetchTool', () => {
       text: async () => mockHTML,
     });
 
+    const ctx = createMockContext();
     const result = await runTool(
-      tool.call({ url: 'https://example.com/article' }),
+      tool.call({ url: 'https://example.com/article' }, ctx),
     );
 
     expect(result).toHaveProperty('title');
@@ -90,8 +98,9 @@ describe('WebFetchTool', () => {
       statusText: 'Not Found',
     });
 
+    const ctx = createMockContext();
     await expect(
-      runTool(tool.call({ url: 'https://example.com/nonexistent' })),
+      runTool(tool.call({ url: 'https://example.com/nonexistent' }, ctx)),
     ).rejects.toThrow('Failed to fetch URL: 404 Not Found');
   });
 
@@ -119,8 +128,9 @@ describe('WebFetchTool', () => {
       text: async () => maliciousHTML,
     });
 
+    const ctx = createMockContext();
     const result = await runTool(
-      tool.call({ url: 'https://example.com/malicious' }),
+      tool.call({ url: 'https://example.com/malicious' }, ctx),
     );
 
     expect(result.textContent).not.toContain('<script>');
@@ -138,8 +148,11 @@ describe('WebFetchTool', () => {
       });
     });
 
+    const ctx = createMockContext();
     await expect(
-      runTool(tool.call({ url: 'https://example.com/slow', timeout: 100 })),
+      runTool(
+        tool.call({ url: 'https://example.com/slow', timeout: 100 }, ctx),
+      ),
     ).rejects.toThrow();
   });
 });

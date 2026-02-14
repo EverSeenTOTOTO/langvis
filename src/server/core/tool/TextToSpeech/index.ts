@@ -6,6 +6,7 @@ import { ToolConfig, ToolEvent } from '@/shared/types';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { Tool } from '..';
+import { ExecutionContext } from '../../context';
 
 export interface TextToSpeechInput {
   text: string;
@@ -47,9 +48,9 @@ export default class TextToSpeechTool extends Tool<
 
   async *call(
     @input() params: TextToSpeechInput,
-    signal?: AbortSignal,
-  ): AsyncGenerator<ToolEvent<TextToSpeechOutput>, TextToSpeechOutput, void> {
-    signal?.throwIfAborted();
+    ctx: ExecutionContext,
+  ): AsyncGenerator<ToolEvent, TextToSpeechOutput, void> {
+    ctx.signal.throwIfAborted();
 
     const { text, reqId, voice, emotion, speedRatio } = params;
 
@@ -86,8 +87,8 @@ export default class TextToSpeechTool extends Tool<
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
-    signal?.addEventListener('abort', () => {
-      controller.abort(signal.reason);
+    ctx.signal.addEventListener('abort', () => {
+      controller.abort(ctx.signal.reason);
     });
 
     const response = await fetch(url, {
@@ -165,7 +166,11 @@ export default class TextToSpeechTool extends Tool<
         filePath: `tts/${filename}`,
       };
 
-      yield { type: 'result', result: output };
+      yield ctx.toolEvent({
+        type: 'result',
+        toolName: this.id,
+        output: JSON.stringify(output),
+      });
       return output;
     } catch (error) {
       this.logger.error(`Failed to write MP3 file for ${reqId}: ${error}`);

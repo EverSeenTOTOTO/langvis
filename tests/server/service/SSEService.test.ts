@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SSEService } from '@/server/service/SSEService';
-import { SSEMessage } from '@/shared/types';
+import { AgentEvent } from '@/shared/types';
 import type { Response } from 'express';
 
-// Helper to create a proper mock Response object
 const createMockResponse = (): Response => {
   return {
     writeHead: vi.fn(),
@@ -15,11 +14,11 @@ const createMockResponse = (): Response => {
   } as any as Response;
 };
 
-describe('ChatService', () => {
-  let chatService: SSEService;
+describe('SSEService', () => {
+  let sseService: SSEService;
 
   beforeEach(() => {
-    chatService = new SSEService();
+    sseService = new SSEService();
     vi.clearAllMocks();
   });
 
@@ -28,7 +27,7 @@ describe('ChatService', () => {
       const conversationId = 'test-conversation-id';
       const mockResponse = createMockResponse();
 
-      const connection = chatService.initSSEConnection(
+      const connection = sseService.initSSEConnection(
         conversationId,
         mockResponse,
       );
@@ -40,9 +39,7 @@ describe('ChatService', () => {
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
       });
-      expect(mockResponse.write).toHaveBeenCalledWith(
-        `data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`,
-      );
+      expect(mockResponse.write).toHaveBeenCalledWith('\n');
     });
   });
 
@@ -51,8 +48,8 @@ describe('ChatService', () => {
       const conversationId = 'test-conversation-id';
       const mockResponse = createMockResponse();
 
-      chatService.initSSEConnection(conversationId, mockResponse);
-      chatService.closeSSEConnection(conversationId);
+      sseService.initSSEConnection(conversationId, mockResponse);
+      sseService.closeSSEConnection(conversationId);
 
       expect(mockResponse.end).toHaveBeenCalled();
     });
@@ -63,19 +60,16 @@ describe('ChatService', () => {
       const conversationId = 'test-conversation-id';
       const mockResponse = createMockResponse();
 
-      // Initialize connection
-      chatService.initSSEConnection(conversationId, mockResponse);
+      sseService.initSSEConnection(conversationId, mockResponse);
 
-      // Clear the initial "connected" message call
       (mockResponse.write as any).mockClear();
 
-      const testData: SSEMessage = {
-        type: 'completion_delta',
+      const testData: AgentEvent = {
+        type: 'stream',
         content: 'Test message',
       };
-      chatService.sendToConversation(conversationId, testData);
+      sseService.sendToConversation(conversationId, testData);
 
-      // Verify the call with specific arguments
       expect(mockResponse.write).toHaveBeenCalledWith(
         `data: ${JSON.stringify(testData)}\n\n`,
       );
