@@ -197,28 +197,46 @@ class ExecutionContext {
   readonly traceId: string;
   readonly signal: AbortSignal;
 
-  // Create pure AgentEvent
-  agentEvent(event: AgentEvent): AgentEvent {
-    return event;
-  }
+  // === AgentEvent helpers ===
+  agentThoughtEvent(content: string): AgentEvent;
+  agentStreamEvent(content: string): AgentEvent;
+  agentFinalEvent(): AgentEvent;
+  agentErrorEvent(error: string): AgentEvent;
+  agentToolCallEvent(toolName: string, toolArgs: string): AgentEvent;
+  agentToolProgressEvent(toolName: string, data: unknown): AgentEvent;
+  agentToolResultEvent(
+    toolName: string,
+    output: string,
+    isError?: boolean,
+  ): AgentEvent;
 
-  // Create pure ToolEvent
-  toolEvent(event: ToolEvent): ToolEvent {
-    return event;
-  }
+  // === ToolEvent helpers ===
+  toolProgressEvent(toolName: string, data: unknown): ToolEvent;
+  toolResultEvent(
+    toolName: string,
+    output: string,
+    isError?: boolean,
+  ): ToolEvent;
 
   // Adapt ToolEvent to AgentEvent variant
-  adaptToolEvent(event: ToolEvent): AgentEvent {
-    if (event.type === 'progress') {
-      return { type: 'tool_progress', ...event };
-    }
-    return { type: 'tool_result', ...event };
-  }
+  adaptToolEvent(event: ToolEvent): AgentEvent;
 
-  static create(traceId: string, signal: AbortSignal): ExecutionContext {
-    return new ExecutionContext(traceId, signal);
-  }
+  static create(traceId: string, controller: AbortController): ExecutionContext;
 }
 ```
 
-The ExecutionContext provides helper methods for creating and adapting events. Agents are responsible for adapting tool events before yielding them.
+The ExecutionContext provides helper methods for creating events. Agents and tools can use these concise methods to construct events:
+
+```typescript
+// In an agent
+yield ctx.agentThoughtEvent('Thinking about the question...');
+yield ctx.agentToolCallEvent('web-fetch', '{"url":"https://example.com"}');
+yield ctx.agentStreamEvent('Here is the answer...');
+yield ctx.agentFinalEvent();
+
+// In a tool
+yield ctx.toolProgressEvent(this.id, { progress: 50 });
+yield ctx.toolResultEvent(this.id, JSON.stringify(result));
+```
+
+Agents are responsible for adapting tool events before yielding them via `adaptToolEvent()`.

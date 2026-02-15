@@ -11,7 +11,7 @@ export interface GenerateTTSRequest {
 @dto<GenerateTTSRequest>({
   type: 'object',
   properties: {
-    text: { type: 'string', minLength: 1 },
+    text: { type: 'string', minLength: 1, maxLength: 1024 },
     reqId: { type: 'string', nullable: true },
     voiceType: { type: 'string', nullable: true },
     emotion: { type: 'string', nullable: true },

@@ -39,7 +39,7 @@ async function collectEvents(
 }
 
 function createMockContext(): ExecutionContext {
-  return ExecutionContext.create('test-trace-id', new AbortController().signal);
+  return ExecutionContext.create('test-trace-id', new AbortController());
 }
 
 describe('ChatAgent', () => {
@@ -72,21 +72,9 @@ describe('ChatAgent', () => {
       string,
       void
     > {
-      yield ctx.toolEvent({
-        type: 'progress',
-        toolName: 'llm-call',
-        data: 'Hello',
-      });
-      yield ctx.toolEvent({
-        type: 'progress',
-        toolName: 'llm-call',
-        data: ' world',
-      });
-      yield ctx.toolEvent({
-        type: 'result',
-        toolName: 'llm-call',
-        output: 'Hello world',
-      });
+      yield ctx.toolProgressEvent('llm-call', 'Hello');
+      yield ctx.toolProgressEvent('llm-call', ' world');
+      yield ctx.toolResultEvent('llm-call', 'Hello world');
       return 'Hello world';
     });
 
@@ -119,7 +107,7 @@ describe('ChatAgent', () => {
       string,
       void
     > {
-      yield ctx.toolEvent({ type: 'result', toolName: 'llm-call', output: '' });
+      yield ctx.toolResultEvent('llm-call', '');
       return '';
     });
 

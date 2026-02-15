@@ -69,7 +69,7 @@ const createMockMemory = (messages: Message[]): Memory => {
 };
 
 function createMockContext(): ExecutionContext {
-  return ExecutionContext.create('test-trace-id', new AbortController().signal);
+  return ExecutionContext.create('test-trace-id', new AbortController());
 }
 
 async function collectEvents(
@@ -222,7 +222,34 @@ describe('ReActAgent', () => {
       expect(result).toBe('{"result":"success"}');
     });
 
-    it('should handle tool execution error', async () => {
+    it('should throw error when tool does not return result event', async () => {
+      const ctx = createMockContext();
+      mockTestTool.call.mockImplementation(async function* (): AsyncGenerator<
+        ToolEvent,
+        void,
+        void
+      > {
+        yield {
+          type: 'progress',
+          toolName: 'test_tool',
+          data: 'some progress',
+        };
+      });
+
+      const generator = (reactAgent as any).executeAction(
+        'test_tool',
+        { param: 'value' },
+        ctx,
+      );
+
+      await expect(async () => {
+        for await (const _ of generator) {
+          // consume generator
+        }
+      }).rejects.toThrow('Tool "test_tool" did not return a result event');
+    });
+
+    it('should propagate tool execution error', async () => {
       const ctx = createMockContext();
       mockTestTool.call.mockImplementation(async function* (): AsyncGenerator<
         ToolEvent,
@@ -237,24 +264,21 @@ describe('ReActAgent', () => {
         throw new Error('Tool error');
       });
 
-      // executeAction generator catches internal errors and returns error message
       const generator = (reactAgent as any).executeAction(
         'test_tool',
         { param: 'value' },
         ctx,
       );
 
-      // Manually iterate to capture return value
       const events: AgentEvent[] = [];
-      let iterResult = await generator.next();
-      while (!iterResult.done) {
-        events.push(iterResult.value as AgentEvent);
-        iterResult = await generator.next();
-      }
+      const iterResult = await generator.next();
+      events.push(iterResult.value as AgentEvent);
 
-      // iterResult.value should contain the error message
-      expect(iterResult.value).toContain('Error executing tool "test_tool"');
-      expect(iterResult.value).toContain('Tool error');
+      await expect(async () => {
+        for await (const event of generator) {
+          events.push(event);
+        }
+      }).rejects.toThrow('Tool error');
     });
   });
 

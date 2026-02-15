@@ -166,11 +166,7 @@ export default class TextToSpeechTool extends Tool<
         filePath: `tts/${filename}`,
       };
 
-      yield ctx.toolEvent({
-        type: 'result',
-        toolName: this.id,
-        output: JSON.stringify(output),
-      });
+      yield ctx.toolResultEvent(this.id, JSON.stringify(output));
       return output;
     } catch (error) {
       this.logger.error(`Failed to write MP3 file for ${reqId}: ${error}`);

@@ -43,11 +43,7 @@ export default class DateTimeTool extends Tool<DateTimeInput, DateTimeOutput> {
     const result = format ? date.format(format) : date.format();
     const output: DateTimeOutput = { result };
 
-    yield ctx.toolEvent({
-      type: 'result',
-      toolName: this.id,
-      output: JSON.stringify(output),
-    });
+    yield ctx.toolResultEvent(this.id, JSON.stringify(output));
     return output;
   }
 }

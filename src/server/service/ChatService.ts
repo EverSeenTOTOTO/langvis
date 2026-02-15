@@ -1,7 +1,6 @@
 import { Message, Role } from '@/shared/entities/Message';
 import type { Request } from 'express';
 import { globby } from 'globby';
-import { omit } from 'lodash-es';
 import { container, inject } from 'tsyringe';
 import { Agent } from '../core/agent';
 import { ExecutionContext } from '../core/context';
@@ -17,7 +16,7 @@ import { SSEService } from './SSEService';
 @service()
 export class ChatService {
   private readonly logger = Logger.child({ source: 'ChatService' });
-  private activeAgents: Map<string, AbortController> = new Map();
+  private activeAgents: Map<string, ExecutionContext> = new Map();
 
   constructor(
     @inject(SSEService)
@@ -51,12 +50,12 @@ export class ChatService {
   }
 
   async cancelAgent(conversationId: string, reason?: string): Promise<boolean> {
-    const controller = this.activeAgents.get(conversationId);
+    const ctx = this.activeAgents.get(conversationId);
 
-    if (!controller) return false;
+    if (!ctx) return false;
 
     try {
-      controller.abort(new Error(reason ?? 'Cancelled by user'));
+      ctx.abort(reason ?? 'Cancelled by user');
       return true;
     } catch (error) {
       this.logger.error(
@@ -76,21 +75,33 @@ export class ChatService {
     traceId: string,
   ): Promise<void> {
     const startTime = Date.now();
+    let firstTokenTime: number | undefined = undefined;
+
     const controller = new AbortController();
+    const ctx = ExecutionContext.create(traceId, controller);
 
-    this.activeAgents.set(conversationId, controller);
-
-    const ctx = ExecutionContext.create(traceId, controller.signal);
+    this.activeAgents.set(conversationId, ctx);
 
     try {
       const generator = agent.call(memory, ctx, config);
 
       for await (const event of generator) {
-        if (controller.signal.aborted) {
+        if (ctx.signal.aborted) {
           break;
         }
 
+        // Update message.meta.steps in real-time
+        if ('meta' in event && event.meta?.steps) {
+          message.meta = { ...message.meta, steps: event.meta.steps };
+        }
+
         if (event.type === 'stream') {
+          const now = Date.now();
+
+          if (!firstTokenTime) {
+            firstTokenTime = now;
+          }
+
           message.content += event.content;
         } else if (event.type === 'error') {
           throw new Error(event.error);
@@ -99,7 +110,13 @@ export class ChatService {
         this.sseService.sendToConversation(conversationId, event);
       }
 
-      await this.finalizeMessage(conversationId, message, startTime);
+      await this.finalizeMessage(
+        conversationId,
+        message,
+        ctx,
+        startTime,
+        firstTokenTime,
+      );
     } catch (error) {
       await this.handleStreamError(conversationId, message, error, ctx);
     } finally {
@@ -110,18 +127,24 @@ export class ChatService {
   private async finalizeMessage(
     conversationId: string,
     message: Message,
+    ctx: ExecutionContext,
     startTime: number,
+    firstTokenTime?: number,
   ): Promise<void> {
-    await this.conversationService.updateMessage(
-      message.id,
-      message.content,
-      omit(message.meta, ['loading', 'streaming']),
-    );
+    const totalTime = Date.now() - startTime;
+    const ttft = firstTokenTime ? firstTokenTime - startTime : null;
+    const avgPerTokenTime = totalTime / message.content.length;
+
+    await this.conversationService.updateMessage(message.id, message.content, {
+      steps: ctx.steps,
+    });
 
     this.logger.info(
-      `Agent call finished for conversation ${conversationId}, total time: ${
-        Date.now() - startTime
-      }ms`,
+      `Agent call finished for conversation ${conversationId}, ` +
+        `total time: ${totalTime}ms, ` +
+        `tokens: ${message.content.length}, ` +
+        `TTFT: ${ttft ?? 'N/A'}ms, ` +
+        `avg per token: ${avgPerTokenTime.toFixed(2)}ms`,
     );
   }
 
@@ -131,11 +154,6 @@ export class ChatService {
     error: unknown,
     ctx: ExecutionContext,
   ): Promise<void> {
-    this.logger.error(
-      `Streaming error for conversation ${conversationId}:`,
-      error,
-    );
-
     const errorMessage = (error as Error)?.message || 'Unknown error';
     try {
       await this.conversationService.updateMessage(message.id, errorMessage, {
@@ -150,7 +168,7 @@ export class ChatService {
 
     this.sseService.sendToConversation(
       conversationId,
-      ctx.agentEvent({ type: 'error', error: errorMessage }),
+      ctx.agentErrorEvent(errorMessage),
     );
   }
 
@@ -172,7 +190,7 @@ export class ChatService {
     memory.setConversationId(conversationId);
     memory.setUserId(currentUserId);
 
-    const initMessages: {
+    const chatMessages: {
       role: Role;
       content: string;
       meta?: Record<string, any> | null;
@@ -184,7 +202,7 @@ export class ChatService {
     if (typeof agent.getSystemPrompt === 'function' && messages.length == 0) {
       const systemPrompt = await agent.getSystemPrompt();
       if (systemPrompt) {
-        initMessages.push({
+        chatMessages.push({
           role: Role.SYSTEM,
           content: systemPrompt,
           createdAt: new Date(),
@@ -193,12 +211,12 @@ export class ChatService {
     }
 
     // Add user message
-    initMessages.push({
+    chatMessages.push({
       ...userMessage,
       createdAt: new Date(),
     });
 
-    await memory.store(initMessages);
+    await memory.store(chatMessages);
 
     return memory;
   }

@@ -31,7 +31,7 @@ vi.mock('fs', () => ({
 global.fetch = vi.fn();
 
 function createMockContext(): ExecutionContext {
-  return ExecutionContext.create('test-trace-id', new AbortController().signal);
+  return ExecutionContext.create('test-trace-id', new AbortController());
 }
 
 describe('TextToSpeechTool', () => {

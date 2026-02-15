@@ -116,9 +116,9 @@ describe('ChatService', () => {
           _memory: Memory,
           ctx: ExecutionContext,
         ): Generator<AgentEvent> {
-          yield ctx.agentEvent({ type: 'stream', content: 'Hello' });
-          yield ctx.agentEvent({ type: 'stream', content: ' World' });
-          yield ctx.agentEvent({ type: 'final' });
+          yield ctx.agentStreamEvent('Hello');
+          yield ctx.agentStreamEvent(' World');
+          yield ctx.agentFinalEvent();
         }),
       } as unknown as Agent;
 
@@ -159,9 +159,9 @@ describe('ChatService', () => {
           _memory: Memory,
           ctx: ExecutionContext,
         ): Generator<AgentEvent> {
-          yield ctx.agentEvent({ type: 'thought', content: 'Thinking...' });
-          yield ctx.agentEvent({ type: 'stream', content: 'Hello' });
-          yield ctx.agentEvent({ type: 'final' });
+          yield ctx.agentThoughtEvent('Thinking...');
+          yield ctx.agentStreamEvent('Hello');
+          yield ctx.agentFinalEvent();
         }),
       } as unknown as Agent;
 
@@ -197,7 +197,7 @@ describe('ChatService', () => {
           _memory: Memory,
           ctx: ExecutionContext,
         ): Generator<AgentEvent> {
-          yield ctx.agentEvent({ type: 'error', error: 'Test error' });
+          yield ctx.agentErrorEvent('Test error');
         }),
       } as unknown as Agent;
 
@@ -240,7 +240,7 @@ describe('ChatService', () => {
           _memory: Memory,
           ctx: ExecutionContext,
         ): Generator<AgentEvent> {
-          yield ctx.agentEvent({ type: 'error', error: 'Stream error' });
+          yield ctx.agentErrorEvent('Stream error');
         }),
       } as unknown as Agent;
 

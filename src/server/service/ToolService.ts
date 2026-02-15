@@ -110,7 +110,7 @@ export class ToolService {
 
     const tool = container.resolve<Tool>(toolId);
     const execCtx =
-      ctx ?? ExecutionContext.create(uuid(), new AbortController().signal);
+      ctx ?? ExecutionContext.create(uuid(), new AbortController());
 
     let result: unknown;
     for await (const toolEvent of tool.call(input, execCtx)) {

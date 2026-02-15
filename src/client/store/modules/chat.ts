@@ -150,6 +150,13 @@ export class ChatStore {
       return;
     }
 
+    // Merge meta.steps from events that carry it
+    if ('meta' in msg && msg.meta?.steps) {
+      this.conversationStore.updateStreamingMessage(conversationId, undefined, {
+        steps: msg.meta.steps,
+      });
+    }
+
     switch (msg.type) {
       case 'stream':
         this.conversationStore.updateStreamingMessage(
