@@ -82,6 +82,6 @@ export default class GirlFriendAgent extends Agent {
       ),
     );
 
-    yield ctx.agentEvent({ type: 'final' });
+    yield ctx.agentFinalEvent();
   }
 }

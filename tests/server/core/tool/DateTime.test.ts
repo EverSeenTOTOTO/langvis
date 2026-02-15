@@ -4,7 +4,7 @@ import { runTool } from '@/server/utils';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 function createMockContext(): ExecutionContext {
-  return ExecutionContext.create('test-trace-id', new AbortController().signal);
+  return ExecutionContext.create('test-trace-id', new AbortController());
 }
 
 describe('DateTimeTool', () => {

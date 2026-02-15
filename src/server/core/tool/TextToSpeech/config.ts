@@ -56,6 +56,7 @@ export const config: ToolConfig<
     properties: {
       text: {
         type: 'string',
+        maxLength: 1024,
         description: 'The text content to be converted to speech.',
       },
       reqId: {

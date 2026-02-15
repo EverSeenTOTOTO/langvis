@@ -61,6 +61,6 @@ export default class ChatAgent extends Agent {
       yield ctx.adaptToolEvent(toolEvent);
     }
 
-    yield ctx.agentEvent({ type: 'final' });
+    yield ctx.agentFinalEvent();
   }
 }

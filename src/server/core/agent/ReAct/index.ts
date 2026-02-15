@@ -98,10 +98,7 @@ export default class ReActAgent extends Agent {
       );
 
       if (!content) {
-        yield ctx.agentEvent({
-          type: 'error',
-          error: 'No response from model',
-        });
+        yield ctx.agentErrorEvent('No response from model');
         return;
       }
 
@@ -131,10 +128,10 @@ export default class ReActAgent extends Agent {
 
       if ('final_answer' in parsed) {
         if (parsed.thought) {
-          yield ctx.agentEvent({ type: 'thought', content: parsed.thought });
+          yield ctx.agentThoughtEvent(parsed.thought);
         }
-        yield ctx.agentEvent({ type: 'stream', content: parsed.final_answer! });
-        yield ctx.agentEvent({ type: 'final' });
+        yield ctx.agentStreamEvent(parsed.final_answer!);
+        yield ctx.agentFinalEvent();
         return;
       }
 
@@ -142,14 +139,10 @@ export default class ReActAgent extends Agent {
         const { tool, input } = parsed.action!;
 
         if (parsed.thought) {
-          yield ctx.agentEvent({ type: 'thought', content: parsed.thought });
+          yield ctx.agentThoughtEvent(parsed.thought);
         }
 
-        yield ctx.agentEvent({
-          type: 'tool_call',
-          toolName: tool,
-          toolArgs: JSON.stringify(input),
-        });
+        yield ctx.agentToolCallEvent(tool, JSON.stringify(input));
 
         try {
           const observation = yield* this.executeAction(tool, input, ctx);
@@ -177,7 +170,7 @@ export default class ReActAgent extends Agent {
       });
     }
 
-    yield ctx.agentEvent({ type: 'error', error: 'Max iterations reached' });
+    yield ctx.agentErrorEvent('Max iterations reached');
   }
 
   private parseResponse(content: string): ReActStep {
@@ -222,21 +215,16 @@ export default class ReActAgent extends Agent {
     actionInput: Record<string, unknown>,
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, string, void> {
-    try {
-      const tool = container.resolve<Tool>(action);
-      const generator = tool.call(actionInput, ctx);
-      let result: string | undefined;
+    const tool = container.resolve<Tool>(action);
+    const generator = tool.call(actionInput, ctx);
 
-      for await (const toolEvent of generator) {
-        yield ctx.adaptToolEvent(toolEvent);
-        if (toolEvent.type === 'result') {
-          result = toolEvent.output;
-        }
+    for await (const toolEvent of generator) {
+      yield ctx.adaptToolEvent(toolEvent);
+      if (toolEvent.type === 'result') {
+        return toolEvent.output;
       }
-
-      return result ?? '';
-    } catch (error) {
-      return `Error executing tool "${action}": ${(error as Error).message}`;
     }
+
+    throw new Error(`Tool "${action}" did not return a result event`);
   }
 }

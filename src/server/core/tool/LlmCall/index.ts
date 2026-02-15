@@ -42,11 +42,7 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
       const delta = chunk?.choices[0]?.delta?.content;
       if (delta) {
         content += delta;
-        yield ctx.toolEvent({
-          type: 'progress',
-          toolName: this.id,
-          data: delta,
-        });
+        yield ctx.toolProgressEvent(this.id, delta);
       }
 
       if (chunk.choices[0]?.finish_reason) {
@@ -54,11 +50,7 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
       }
     }
 
-    yield ctx.toolEvent({
-      type: 'result',
-      toolName: this.id,
-      output: content,
-    });
+    yield ctx.toolResultEvent(this.id, content);
 
     return content;
   }

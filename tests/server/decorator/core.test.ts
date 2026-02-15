@@ -30,7 +30,7 @@ vi.mock('@/server/utils/logger', () => {
 });
 
 function createMockContext(): ExecutionContext {
-  return ExecutionContext.create('test-trace-id', new AbortController().signal);
+  return ExecutionContext.create('test-trace-id', new AbortController());
 }
 
 async function consumeAgentGenerator(
@@ -76,7 +76,7 @@ describe('Config Decorators', () => {
           _memory: Memory,
           ctx: ExecutionContext,
         ): AsyncGenerator<AgentEvent, void, void> {
-          yield ctx.agentEvent({ type: 'final' });
+          yield ctx.agentFinalEvent();
         }
       }
 
@@ -99,11 +99,7 @@ describe('Config Decorators', () => {
           _input: unknown,
           ctx: ExecutionContext,
         ): AsyncGenerator<ToolEvent, unknown, void> {
-          yield ctx.toolEvent({
-            type: 'result',
-            toolName: this.id,
-            output: 'null',
-          });
+          yield ctx.toolResultEvent(this.id, 'null');
           return null;
         }
       }
@@ -127,7 +123,7 @@ describe('Config Decorators', () => {
           _memory: Memory,
           ctx: ExecutionContext,
         ): AsyncGenerator<AgentEvent, void, void> {
-          yield ctx.agentEvent({ type: 'final' });
+          yield ctx.agentFinalEvent();
         }
       }
 
@@ -161,11 +157,7 @@ describe('Config Decorators', () => {
           _input: unknown,
           ctx: ExecutionContext,
         ): AsyncGenerator<ToolEvent, unknown, void> {
-          yield ctx.toolEvent({
-            type: 'result',
-            toolName: this.id,
-            output: 'null',
-          });
+          yield ctx.toolResultEvent(this.id, 'null');
           return null;
         }
       }
@@ -184,7 +176,7 @@ describe('Config Decorators', () => {
           _memory: Memory,
           ctx: ExecutionContext,
         ): AsyncGenerator<AgentEvent, void, void> {
-          yield ctx.agentEvent({ type: 'final' });
+          yield ctx.agentFinalEvent();
         }
       }
 
@@ -224,7 +216,7 @@ describe('Config Decorators', () => {
           _memory: Memory,
           ctx: ExecutionContext,
         ): AsyncGenerator<AgentEvent, void, void> {
-          yield ctx.agentEvent({ type: 'final' });
+          yield ctx.agentFinalEvent();
         }
       }
 
@@ -241,7 +233,7 @@ describe('Config Decorators', () => {
           _memory: Memory,
           ctx: ExecutionContext,
         ): AsyncGenerator<AgentEvent, void, void> {
-          yield ctx.agentEvent({ type: 'final' });
+          yield ctx.agentFinalEvent();
         }
       }
 
@@ -282,7 +274,7 @@ describe('Config Decorators', () => {
           ctx: ExecutionContext,
           @config() _config: any,
         ): AsyncGenerator<AgentEvent, void, void> {
-          yield ctx.agentEvent({ type: 'stream', content: 'success' });
+          yield ctx.agentStreamEvent('success');
         }
       }
 
@@ -338,11 +330,7 @@ describe('Config Decorators', () => {
           _input: unknown,
           ctx: ExecutionContext,
         ): AsyncGenerator<ToolEvent, unknown, void> {
-          yield ctx.toolEvent({
-            type: 'result',
-            toolName: this.id,
-            output: 'null',
-          });
+          yield ctx.toolResultEvent(this.id, 'null');
           return null;
         }
       }
@@ -378,11 +366,7 @@ describe('Config Decorators', () => {
           _input: unknown,
           ctx: ExecutionContext,
         ): AsyncGenerator<ToolEvent, unknown, void> {
-          yield ctx.toolEvent({
-            type: 'result',
-            toolName: this.id,
-            output: 'null',
-          });
+          yield ctx.toolResultEvent(this.id, 'null');
           return null;
         }
       }
@@ -400,11 +384,7 @@ describe('Config Decorators', () => {
           _input: unknown,
           ctx: ExecutionContext,
         ): AsyncGenerator<ToolEvent, unknown, void> {
-          yield ctx.toolEvent({
-            type: 'result',
-            toolName: this.id,
-            output: 'null',
-          });
+          yield ctx.toolResultEvent(this.id, 'null');
           return null;
         }
       }
@@ -445,11 +425,7 @@ describe('Config Decorators', () => {
           @input() _input: { url: string },
           ctx: ExecutionContext,
         ): AsyncGenerator<ToolEvent, string, void> {
-          yield ctx.toolEvent({
-            type: 'result',
-            toolName: this.id,
-            output: '"success"',
-          });
+          yield ctx.toolResultEvent(this.id, '"success"');
           return 'success';
         }
       }

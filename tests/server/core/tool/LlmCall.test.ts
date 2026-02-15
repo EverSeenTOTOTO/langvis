@@ -20,7 +20,7 @@ vi.mock('openai', () => {
 });
 
 function createMockContext(): ExecutionContext {
-  return ExecutionContext.create('test-trace-id', new AbortController().signal);
+  return ExecutionContext.create('test-trace-id', new AbortController());
 }
 
 async function collectEvents(
