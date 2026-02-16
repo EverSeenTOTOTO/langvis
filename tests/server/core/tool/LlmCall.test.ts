@@ -1,3 +1,4 @@
+import { Role } from '@/shared/types/entities';
 import LlmCallTool, { LlmCallOutput } from '@/server/core/tool/LlmCall';
 import { ExecutionContext } from '@/server/core/context';
 import { ToolEvent } from '@/shared/types';
@@ -20,7 +21,16 @@ vi.mock('openai', () => {
 });
 
 function createMockContext(): ExecutionContext {
-  return ExecutionContext.create('test-trace-id', new AbortController());
+  return ExecutionContext.create(
+    {
+      id: 'test-trace-id',
+      role: Role.ASSIST,
+      content: '',
+      conversationId: 'test-conversation',
+      createdAt: new Date(),
+    },
+    new AbortController(),
+  );
 }
 
 async function collectEvents(
@@ -32,7 +42,7 @@ async function collectEvents(
     if (event.type === 'progress' && typeof event.data === 'string') {
       progress.push(event.data);
     } else if (event.type === 'result') {
-      result = event.output;
+      result = event.output as string;
     }
   }
   return { progress, result };

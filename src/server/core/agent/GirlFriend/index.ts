@@ -40,6 +40,8 @@ export default class GirlFriendAgent extends Agent {
     ctx: ExecutionContext,
     @config() options?: GirlFriendConfig,
   ): AsyncGenerator<AgentEvent, void, void> {
+    yield ctx.agentStartEvent();
+
     const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
     const tts = container.resolve<TextToSpeechTool>(ToolIds.TEXT_TO_SPEECH);
 
@@ -51,8 +53,6 @@ export default class GirlFriendAgent extends Agent {
 
     this.logger.debug('GF agent messages: ', conversationMessages);
 
-    let content = '';
-
     const llmGenerator = llmCallTool.call(
       {
         model: options?.model?.code,
@@ -63,16 +63,17 @@ export default class GirlFriendAgent extends Agent {
     );
 
     for await (const toolEvent of llmGenerator) {
-      yield ctx.adaptToolEvent(toolEvent);
       if (toolEvent.type === 'progress' && typeof toolEvent.data === 'string') {
-        content += toolEvent.data;
+        yield ctx.agentStreamEvent(toolEvent.data);
+      } else if (toolEvent.type === 'error') {
+        yield ctx.agentErrorEvent(toolEvent.error);
       }
     }
 
-    await runTool(
+    const ttsResult = await runTool(
       tts.call(
         {
-          text: content,
+          text: ctx.content,
           reqId: uuid(),
           voice: options?.tts?.voice || '',
           emotion: options?.tts?.emotion || '',
@@ -81,6 +82,8 @@ export default class GirlFriendAgent extends Agent {
         ctx,
       ),
     );
+
+    yield ctx.agentToolResultEvent(ToolIds.TEXT_TO_SPEECH, ttsResult);
 
     yield ctx.agentFinalEvent();
   }

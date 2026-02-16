@@ -2,7 +2,6 @@ import {
   CancelChatRequestDto,
   StartChatRequestDto,
 } from '@/shared/dto/controller';
-import { Role } from '@/shared/entities/Message';
 import chalk from 'chalk';
 import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
@@ -106,34 +105,13 @@ export default class ChatController {
       },
     );
 
-    const [assistantMessage] = await this.conversationService.batchAddMessages(
-      conversationId,
-      [
-        {
-          role: Role.ASSIST,
-          content: '',
-          meta: { loading: true },
-          createdAt: new Date(),
-        },
-      ],
-    );
+    req.log.info(`Starting agent: ${chalk.yellow(conversation.config!.agent)}`);
 
-    req.log.info(
-      `Created loading message for conversation ${conversationId}, starting agent: ${chalk.yellow(conversation.config!.agent)}`,
-    );
-
-    // Return response first so client can fetch the loading message
+    // Return response first
     res.status(200).json({ success: true });
 
     // Then start agent streaming asynchronously
-    this.chatService.consumeAgentStream(
-      conversationId,
-      assistantMessage,
-      agent,
-      memory,
-      conversation.config!,
-      req.id!,
-    );
+    this.chatService.consumeAgentStream(conversation, agent, memory);
 
     return;
   }

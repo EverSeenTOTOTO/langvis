@@ -1,4 +1,5 @@
-import { Message, Role } from '@/shared/entities/Message';
+import { Role } from '@/shared/entities/Message';
+import type { Conversation } from '@/shared/types/entities';
 import type { Request } from 'express';
 import { globby } from 'globby';
 import { container, inject } from 'tsyringe';
@@ -67,82 +68,79 @@ export class ChatService {
   }
 
   async consumeAgentStream(
-    conversationId: string,
-    message: Message,
+    conversation: Conversation,
     agent: Agent,
     memory: Memory,
-    config: Record<string, unknown>,
-    traceId: string,
   ): Promise<void> {
     const startTime = Date.now();
     let firstTokenTime: number | undefined = undefined;
 
-    const controller = new AbortController();
-    const ctx = ExecutionContext.create(traceId, controller);
+    const [assistantMessage] = await this.conversationService.batchAddMessages(
+      conversation.id!,
+      [
+        {
+          role: Role.ASSIST,
+          content: '',
+          createdAt: new Date(),
+        },
+      ],
+    );
 
-    this.activeAgents.set(conversationId, ctx);
+    const controller = new AbortController();
+    const ctx = ExecutionContext.create(assistantMessage, controller);
+
+    this.activeAgents.set(conversation.id!, ctx);
 
     try {
-      const generator = agent.call(memory, ctx, config);
+      const generator = agent.call(memory, ctx, conversation.config);
 
       for await (const event of generator) {
         if (ctx.signal.aborted) {
-          break;
+          throw new Error(`Aborted: ${ctx.signal.reason}`);
         }
 
-        // Update message.meta.steps in real-time
-        if ('meta' in event && event.meta?.steps) {
-          message.meta = { ...message.meta, steps: event.meta.steps };
+        if (event.type === 'stream' && !firstTokenTime) {
+          firstTokenTime = Date.now();
         }
 
-        if (event.type === 'stream') {
-          const now = Date.now();
-
-          if (!firstTokenTime) {
-            firstTokenTime = now;
-          }
-
-          message.content += event.content;
-        } else if (event.type === 'error') {
+        if (event.type === 'error') {
           throw new Error(event.error);
         }
 
-        this.sseService.sendToConversation(conversationId, event);
+        this.sseService.sendToConversation(conversation.id!, event);
       }
 
       await this.finalizeMessage(
-        conversationId,
-        message,
+        conversation.id!,
         ctx,
         startTime,
         firstTokenTime,
       );
     } catch (error) {
-      await this.handleStreamError(conversationId, message, error, ctx);
+      await this.handleStreamError(conversation.id!, ctx, error);
     } finally {
-      this.activeAgents.delete(conversationId);
+      this.activeAgents.delete(conversation.id!);
     }
   }
 
   private async finalizeMessage(
     conversationId: string,
-    message: Message,
     ctx: ExecutionContext,
     startTime: number,
     firstTokenTime?: number,
   ): Promise<void> {
     const totalTime = Date.now() - startTime;
     const ttft = firstTokenTime ? firstTokenTime - startTime : null;
-    const avgPerTokenTime = totalTime / message.content.length;
+    const avgPerTokenTime = totalTime / ctx.content.length;
 
-    await this.conversationService.updateMessage(message.id, message.content, {
-      steps: ctx.steps,
+    await this.conversationService.updateMessage(ctx.traceId, ctx.content, {
+      events: ctx.events,
     });
 
     this.logger.info(
       `Agent call finished for conversation ${conversationId}, ` +
         `total time: ${totalTime}ms, ` +
-        `tokens: ${message.content.length}, ` +
+        `tokens: ${ctx.content.length}, ` +
         `TTFT: ${ttft ?? 'N/A'}ms, ` +
         `avg per token: ${avgPerTokenTime.toFixed(2)}ms`,
     );
@@ -150,16 +148,14 @@ export class ChatService {
 
   private async handleStreamError(
     conversationId: string,
-    message: Message,
-    error: unknown,
     ctx: ExecutionContext,
+    error: unknown,
   ): Promise<void> {
     const errorMessage = (error as Error)?.message || 'Unknown error';
+
     try {
-      await this.conversationService.updateMessage(message.id, errorMessage, {
-        ...message.meta,
-        loading: undefined,
-        streaming: undefined,
+      await this.conversationService.updateMessage(ctx.traceId, errorMessage, {
+        events: ctx.events,
         error: true,
       });
     } catch (updateError) {

@@ -1,3 +1,4 @@
+import { Role } from '@/shared/types/entities';
 import TextToSpeechTool from '@/server/core/tool/TextToSpeech';
 import { ExecutionContext } from '@/server/core/context';
 import { runTool } from '@/server/utils';
@@ -31,7 +32,16 @@ vi.mock('fs', () => ({
 global.fetch = vi.fn();
 
 function createMockContext(): ExecutionContext {
-  return ExecutionContext.create('test-trace-id', new AbortController());
+  return ExecutionContext.create(
+    {
+      id: 'test-trace-id',
+      role: Role.ASSIST,
+      content: '',
+      conversationId: 'test-conversation',
+      createdAt: new Date(),
+    },
+    new AbortController(),
+  );
 }
 
 describe('TextToSpeechTool', () => {

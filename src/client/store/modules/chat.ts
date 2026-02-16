@@ -5,34 +5,60 @@ import type {
   StartChatRequest,
 } from '@/shared/dto/controller';
 import { AgentEvent } from '@/shared/types';
+import type { Message } from '@/shared/types/entities';
+import { Role } from '@/shared/types/entities';
 import { isClient } from '@/shared/utils';
 import { message } from 'antd';
 import { makeAutoObservable, reaction } from 'mobx';
 import { inject } from 'tsyringe';
+import { v4 as uuid } from 'uuid';
 import { ConversationStore } from './conversation';
 import { SettingStore } from './setting';
+
+interface StreamingState {
+  message: Message;
+  buffer: string;
+  timer: ReturnType<typeof setInterval> | null;
+}
 
 @store()
 export class ChatStore {
   private eventSources: Map<string, EventSource> = new Map();
+  private streamingStates = new Map<string, StreamingState>();
 
   constructor(
     @inject(ConversationStore) private conversationStore: ConversationStore,
     @inject(SettingStore) private settingStore: SettingStore,
   ) {
-    makeAutoObservable(this);
+    makeAutoObservable<ChatStore, 'streamingStates'>(this, {
+      streamingStates: false,
+    });
+
     reaction(
       () => conversationStore.currentConversationId,
       (_, prevId) => {
-        if (prevId && conversationStore.activeAssistMessage) {
+        if (prevId && this.currentStreamingMessage) {
           this.cancelChat({
             conversationId: prevId,
-            messageId: conversationStore.activeAssistMessage.id,
+            messageId: this.currentStreamingMessage.id,
             reason: 'Cancelled due to conversation switch',
           });
         }
       },
     );
+  }
+
+  get currentStreamingMessage(): Message | undefined {
+    const lastMessage =
+      this.conversationStore.currentMessages[
+        this.conversationStore.currentMessages.length - 1
+      ];
+
+    const streamingMessage = this.streamingStates.get(
+      this.conversationStore.currentConversationId!,
+    )?.message;
+
+    return lastMessage?.id === streamingMessage?.id ? lastMessage : undefined;
   }
 
   isConnected(conversationId: string): boolean {
@@ -90,7 +116,6 @@ export class ChatStore {
   disconnectFromSSE(conversationId: string) {
     this.eventSources.get(conversationId)?.close();
     this.eventSources.delete(conversationId);
-    this.conversationStore.clearStreaming(conversationId);
   }
 
   @api((req: CancelChatRequest) => `/api/chat/cancel/${req.conversationId}`, {
@@ -107,7 +132,7 @@ export class ChatStore {
     method: 'post',
   })
   async startChat(
-    _params: StartChatRequest,
+    params: StartChatRequest,
     req?: ApiRequest<StartChatRequest>,
   ) {
     const conversationId = this.conversationStore.currentConversationId;
@@ -118,6 +143,8 @@ export class ChatStore {
       );
       return;
     }
+
+    this.addPendingMessages(conversationId, params.content!);
 
     if (!this.isConnected(conversationId)) {
       try {
@@ -134,15 +161,9 @@ export class ChatStore {
     }
 
     await req!.send();
-
-    if (this.conversationStore.currentConversationId !== conversationId) return;
-
-    await this.conversationStore.getMessagesByConversationId({
-      id: conversationId,
-    });
   }
 
-  private handleSSEMessage(conversationId: string, msg: AgentEvent) {
+  private async handleSSEMessage(conversationId: string, msg: AgentEvent) {
     if (this.conversationStore.currentConversationId !== conversationId) {
       console.warn(
         `Abort SSE message for non-current conversation: ${conversationId}, current: ${this.conversationStore.currentConversationId}`,
@@ -150,32 +171,174 @@ export class ChatStore {
       return;
     }
 
-    // Merge meta.steps from events that carry it
-    if ('meta' in msg && msg.meta?.steps) {
-      this.conversationStore.updateStreamingMessage(conversationId, undefined, {
-        steps: msg.meta.steps,
-      });
-    }
-
     switch (msg.type) {
+      case 'start':
+        await this.conversationStore.getMessagesByConversationId({
+          id: conversationId,
+        });
+        this.syncStreamingMessage(conversationId);
+        this.appendStreamingEvent(conversationId, msg);
+        break;
+      case 'thought':
+      case 'tool_call':
+      case 'tool_progress':
+      case 'tool_result':
+      case 'tool_error':
+        this.appendStreamingEvent(conversationId, msg);
+        break;
       case 'stream':
-        this.conversationStore.updateStreamingMessage(
-          conversationId,
-          msg.content,
-        );
+        this.appendStreamingContent(conversationId, msg.content);
         break;
       case 'final':
         this.disconnectFromSSE(conversationId);
+        await this.flushTypewriter(conversationId);
+        this.clearStreaming(conversationId);
         this.conversationStore.getMessagesByConversationId({
           id: conversationId,
         });
         break;
       case 'error':
         this.disconnectFromSSE(conversationId);
+        this.clearStreaming(conversationId);
         this.conversationStore.getMessagesByConversationId({
           id: conversationId,
         });
         break;
+    }
+  }
+
+  private addPendingMessages(
+    conversationId: string,
+    userContent: string,
+  ): void {
+    const messages = this.conversationStore.messages[conversationId] ?? [];
+
+    const assistMessage: Message = {
+      id: uuid(),
+      conversationId,
+      role: Role.ASSIST,
+      content: '',
+      meta: { events: [] },
+      createdAt: new Date(),
+    };
+
+    this.streamingStates.set(conversationId, {
+      message: assistMessage,
+      buffer: '',
+      timer: null,
+    });
+
+    messages.push(
+      {
+        id: uuid(),
+        conversationId,
+        role: Role.USER,
+        content: userContent,
+        createdAt: new Date(),
+      },
+      assistMessage,
+    );
+
+    this.conversationStore.messages[conversationId] = messages;
+  }
+
+  private syncStreamingMessage(conversationId: string): void {
+    const messages = this.conversationStore.messages[conversationId];
+    if (!messages) return;
+
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage?.role === Role.ASSIST) {
+      const state = this.streamingStates.get(conversationId);
+      if (state) {
+        state.message = lastMessage;
+      } else {
+        this.streamingStates.set(conversationId, {
+          message: lastMessage,
+          buffer: '',
+          timer: null,
+        });
+      }
+    }
+  }
+
+  private appendStreamingContent(
+    conversationId: string,
+    deltaContent: string,
+  ): void {
+    const state = this.streamingStates.get(conversationId);
+    if (!state) return;
+
+    state.buffer += deltaContent;
+
+    if (!state.timer) {
+      state.timer = setInterval(() => {
+        this.flushChunk(conversationId);
+      }, 15);
+    }
+  }
+
+  private appendStreamingEvent(
+    conversationId: string,
+    event: AgentEvent,
+  ): void {
+    const state = this.streamingStates.get(conversationId);
+    if (!state) return;
+
+    const events = [...(state.message.meta?.events ?? []), event];
+    state.message = {
+      ...state.message,
+      meta: {
+        ...state.message.meta,
+        events,
+      },
+    };
+
+    const messages = this.conversationStore.messages[conversationId];
+    if (messages) {
+      messages[messages.length - 1] = state.message;
+    }
+  }
+
+  private clearStreaming(conversationId: string): void {
+    const state = this.streamingStates.get(conversationId);
+    if (state?.timer) {
+      clearInterval(state.timer);
+    }
+    this.streamingStates.delete(conversationId);
+  }
+
+  private flushTypewriter(conversationId: string): Promise<void> {
+    return new Promise(resolve => {
+      const check = () => {
+        const state = this.streamingStates.get(conversationId);
+        if (!state || state.buffer.length === 0) {
+          resolve();
+        } else {
+          setTimeout(check, 20);
+        }
+      };
+      check();
+    });
+  }
+
+  private flushChunk(conversationId: string): void {
+    const state = this.streamingStates.get(conversationId);
+    if (!state || state.buffer.length === 0) {
+      this.clearStreaming(conversationId);
+      return;
+    }
+
+    const chunkSize = 3;
+    const chunk = state.buffer.slice(0, chunkSize);
+    state.buffer = state.buffer.slice(chunkSize);
+
+    const messages = this.conversationStore.messages[conversationId];
+    if (messages && messages.length > 0) {
+      const lastIndex = messages.length - 1;
+      messages[lastIndex] = {
+        ...messages[lastIndex],
+        content: messages[lastIndex].content + chunk,
+      };
     }
   }
 }

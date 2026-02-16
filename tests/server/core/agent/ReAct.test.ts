@@ -1,9 +1,10 @@
+import { Role } from '@/shared/types/entities';
 import ReActAgent from '@/server/core/agent/ReAct';
 import { ExecutionContext } from '@/server/core/context';
 import { Memory } from '@/server/core/memory';
 import logger from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { Message, Role } from '@/shared/entities/Message';
+import { Message } from '@/shared/entities/Message';
 import { AgentEvent, ToolEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -69,7 +70,16 @@ const createMockMemory = (messages: Message[]): Memory => {
 };
 
 function createMockContext(): ExecutionContext {
-  return ExecutionContext.create('test-trace-id', new AbortController());
+  return ExecutionContext.create(
+    {
+      id: 'test-trace-id',
+      role: Role.ASSIST,
+      content: '',
+      conversationId: 'test-conversation',
+      createdAt: new Date(),
+    },
+    new AbortController(),
+  );
 }
 
 async function collectEvents(
@@ -88,11 +98,13 @@ function createLlmMockGenerator(content: string) {
       type: 'progress',
       toolName: 'llm-call',
       data: content,
+      at: Date.now(),
     };
     yield {
       type: 'result',
       toolName: 'llm-call',
-      output: JSON.stringify(content),
+      output: content,
+      at: Date.now(),
     };
     return content;
   };
@@ -103,7 +115,8 @@ function createToolMockGenerator(result: unknown) {
     yield {
       type: 'result',
       toolName: 'test_tool',
-      output: JSON.stringify(result),
+      output: result,
+      at: Date.now(),
     };
     return result;
   };
@@ -216,7 +229,10 @@ describe('ReActAgent', () => {
       for await (const event of generator) {
         events.push(event);
         if (event.type === 'tool_result') {
-          result = event.output;
+          result =
+            typeof event.output === 'string'
+              ? event.output
+              : JSON.stringify(event.output);
         }
       }
       expect(result).toBe('{"result":"success"}');
@@ -233,6 +249,7 @@ describe('ReActAgent', () => {
           type: 'progress',
           toolName: 'test_tool',
           data: 'some progress',
+          at: Date.now(),
         };
       });
 
@@ -260,6 +277,7 @@ describe('ReActAgent', () => {
           type: 'progress',
           toolName: 'test_tool',
           data: '',
+          at: Date.now(),
         };
         throw new Error('Tool error');
       });
@@ -455,7 +473,8 @@ describe('ReActAgent', () => {
         yield {
           type: 'result',
           toolName: 'llm-call',
-          output: JSON.stringify(''),
+          output: '',
+          at: Date.now(),
         };
         return '';
       });

@@ -56,11 +56,11 @@ const Chat: React.FC = () => {
   const cancelApi = useAsyncFn(chatStore.cancelChat.bind(chatStore));
 
   const handleCancel = async () => {
-    if (!conversationStore.activeAssistMessage) return;
+    if (!chatStore.currentStreamingMessage) return;
 
     await cancelApi[1]({
       conversationId: conversationStore.currentConversationId!,
-      messageId: conversationStore.activeAssistMessage.id,
+      messageId: chatStore.currentStreamingMessage.id,
     });
   };
 
@@ -109,10 +109,9 @@ const Chat: React.FC = () => {
             }
             placeholder={settingStore.tr('Type a message...')}
             loading={
-              conversationStore.activeAssistMessage?.meta?.loading ||
-              conversationStore.activeAssistMessage?.meta?.streaming ||
               createConversationApi[0].loading ||
-              chatApi[0].loading
+              chatApi[0].loading ||
+              !!chatStore.currentStreamingMessage
             }
           />
         </div>

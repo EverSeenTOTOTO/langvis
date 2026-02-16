@@ -22,43 +22,24 @@ export interface ToolConfig<
 }
 
 /**
- * StepEvent - aggregated step stored in message.meta.steps
- */
-export type StepEvent =
-  | { type: 'thought'; content: string }
-  | {
-      type: 'tool';
-      name: string;
-      args: string;
-      output?: string;
-      error?: string;
-    };
-
-/**
- * EventMeta - metadata carried by AgentEvent for real-time sync
- */
-export interface EventMeta {
-  steps: StepEvent[];
-}
-
-/**
  * ToolEvent - emitted by Tools, internal to agent execution
  */
 export type ToolEvent =
-  | { type: 'progress'; toolName: string; data: unknown }
-  | { type: 'result'; toolName: string; output: string }
-  | { type: 'error'; toolName: string; error: string };
+  | { type: 'progress'; toolName: string; data: unknown; at: number }
+  | { type: 'result'; toolName: string; output: unknown; at: number }
+  | { type: 'error'; toolName: string; error: string; at: number };
 
 /**
  * AgentEvent - the single event type for SSE transmission
- * Non-stream events carry meta.steps for frontend to merge
+ * ExecutionContext collects non-stream events for persistence
  */
 export type AgentEvent =
-  | { type: 'thought'; content: string; meta?: EventMeta }
-  | { type: 'tool_call'; toolName: string; toolArgs: string; meta?: EventMeta }
-  | { type: 'tool_progress'; toolName: string; data: unknown }
-  | { type: 'tool_result'; toolName: string; output: string; meta?: EventMeta }
-  | { type: 'tool_error'; toolName: string; error: string; meta?: EventMeta }
-  | { type: 'stream'; content: string }
-  | { type: 'final' }
-  | { type: 'error'; error: string };
+  | { type: 'start'; at: number }
+  | { type: 'thought'; content: string; at: number }
+  | { type: 'tool_call'; toolName: string; toolArgs: string; at: number }
+  | { type: 'tool_progress'; toolName: string; data: unknown; at: number }
+  | { type: 'tool_result'; toolName: string; output: unknown; at: number }
+  | { type: 'tool_error'; toolName: string; error: string; at: number }
+  | { type: 'stream'; content: string; at: number }
+  | { type: 'final'; at: number }
+  | { type: 'error'; error: string; at: number };

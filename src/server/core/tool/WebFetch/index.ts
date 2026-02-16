@@ -132,7 +132,7 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
       url,
     };
 
-    yield ctx.toolResultEvent(this.id, JSON.stringify(output));
+    yield ctx.toolResultEvent(this.id, output);
     return output;
   }
 }

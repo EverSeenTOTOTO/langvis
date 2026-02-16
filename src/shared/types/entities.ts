@@ -1,3 +1,5 @@
+import { AgentEvent } from '.';
+
 export enum Role {
   SYSTEM = 'system',
   USER = 'user',
@@ -6,8 +8,8 @@ export enum Role {
 
 type MessageMeta<T extends Record<string, any>> = {
   loading?: boolean;
-  streaming?: boolean;
   error?: boolean;
+  events?: AgentEvent[];
 } & T;
 
 export type Message<T extends Record<string, any> = Record<string, any>> = {

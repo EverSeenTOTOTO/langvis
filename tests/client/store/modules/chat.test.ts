@@ -73,7 +73,6 @@ vi.mock('@/client/decorator/api', async importOriginal => {
   return {
     ...actual,
     getPrefetchPath: vi.fn((path: string) => `http://localhost:3000${path}`),
-    api: vi.fn(() => () => {}),
   };
 });
 
@@ -105,13 +104,21 @@ describe('ChatStore', () => {
     } as unknown as SettingStore;
 
     const mockConversationStore = {
-      clearStreaming: vi.fn(),
-      getMessagesByConversationId: vi.fn(),
-      updateStreamingMessage: vi.fn(),
+      messages: {} as Record<string, any[]>,
       currentConversationId: 'test-conversation-id',
-    } as unknown as ConversationStore;
+      getMessagesByConversationId: vi.fn(),
+    };
 
-    chatStore = new ChatStore(mockConversationStore, mockSettingStore);
+    Object.defineProperty(mockConversationStore, 'currentMessages', {
+      get() {
+        return this.messages[this.currentConversationId] ?? [];
+      },
+    });
+
+    chatStore = new ChatStore(
+      mockConversationStore as unknown as ConversationStore,
+      mockSettingStore,
+    );
   });
 
   it('should create ChatStore instance', () => {
@@ -185,6 +192,7 @@ describe('ChatStore', () => {
     const mockMessageData: AgentEvent = {
       type: 'stream',
       content: 'Hello',
+      at: Date.now(),
     };
 
     const onMessageMock = vi.fn();
@@ -261,6 +269,57 @@ describe('ChatStore', () => {
 
     chatStore.disconnectFromSSE(conversationId);
 
-    expect((chatStore as any).eventSources.has(conversationId)).toBe(false);
+    expect(chatStore.isConnected(conversationId)).toBe(false);
+  });
+
+  it('should return currentStreamingMessage when streaming', () => {
+    const conversationId = 'test-conversation-id';
+
+    mockEventSource = new MockEventSource(
+      `http://localhost:3000/api/chat/sse/${conversationId}`,
+    );
+
+    const MockEventSourceConstructor = vi.fn(() => mockEventSource) as any;
+    MockEventSourceConstructor.CONNECTING = MockEventSource.CONNECTING;
+    MockEventSourceConstructor.OPEN = MockEventSource.OPEN;
+    MockEventSourceConstructor.CLOSED = MockEventSource.CLOSED;
+
+    (global as any).EventSource = MockEventSourceConstructor;
+
+    const mockConversationStore = {
+      messages: {} as Record<string, any[]>,
+      currentConversationId: conversationId,
+      getMessagesByConversationId: vi.fn(),
+    };
+
+    Object.defineProperty(mockConversationStore, 'currentMessages', {
+      get() {
+        return this.messages[this.currentConversationId] ?? [];
+      },
+    });
+
+    const mockSettingStore = {
+      tr: vi.fn((key: string) => key),
+    } as unknown as SettingStore;
+
+    const testChatStore = new ChatStore(
+      mockConversationStore as unknown as ConversationStore,
+      mockSettingStore,
+    );
+
+    // Simulate the addPendingMessages behavior through public API mock
+    mockConversationStore.messages[conversationId] = [];
+
+    // Call addPendingMessages via reflection
+    const addPendingMessages =
+      Object.getPrototypeOf(testChatStore).addPendingMessages;
+    addPendingMessages.call(testChatStore, conversationId, 'test');
+
+    expect(testChatStore.currentStreamingMessage).toBeDefined();
+    expect(testChatStore.currentStreamingMessage?.role).toBe('assistant');
+  });
+
+  it('should return undefined for currentStreamingMessage when not streaming', () => {
+    expect(chatStore.currentStreamingMessage).toBeUndefined();
   });
 });
