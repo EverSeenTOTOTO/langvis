@@ -67,6 +67,7 @@ describe('SSEService', () => {
       const testData: AgentEvent = {
         type: 'stream',
         content: 'Test message',
+        at: Date.now(),
       };
       sseService.sendToConversation(conversationId, testData);
 

@@ -315,17 +315,3 @@ ChatService 持久化 message.meta.steps 到数据库
     ↓
 前端刷新消息列表
 ```
-
-## 文件变更清单
-
-### 后端
-
-1. `src/shared/types/index.ts` — 更新 `AgentEvent` 和 `StepEvent` 类型
-2. `src/server/core/context/index.ts` — ExecutionContext 添加 steps 聚合逻辑
-3. `src/server/service/ChatService.ts` — 实时更新 message.meta.steps
-
-### 前端
-
-1. `src/client/store/modules/chat.ts` — handleSSEMessage 添加 steps 合并逻辑
-2. `src/client/pages/Home/components/AssistantMessage.tsx` — 渲染 steps
-3. `src/client/pages/Home/components/AgentMessage/*.tsx` — Agent 特定渲染（可选优化）

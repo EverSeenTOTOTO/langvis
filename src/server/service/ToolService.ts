@@ -5,10 +5,8 @@ import Logger from '../utils/logger';
 import path from 'path';
 import { registerTool } from '../decorator/core';
 import { ToolConfig } from '@/shared/types';
-import { Tool, ToolConstructor } from '../core/tool';
+import { ToolConstructor } from '../core/tool';
 import { isProd } from '../utils';
-import { ExecutionContext } from '../core/context';
-import { v4 as uuid } from 'uuid';
 
 @service()
 export class ToolService {
@@ -95,29 +93,5 @@ export class ToolService {
     }
 
     return tools;
-  }
-
-  async callTool(
-    toolId: string,
-    input: Record<string, unknown>,
-    ctx?: ExecutionContext,
-  ): Promise<unknown> {
-    await this.initialize();
-
-    if (!this.tools.includes(toolId)) {
-      throw new Error(`Tool not found: ${toolId}`);
-    }
-
-    const tool = container.resolve<Tool>(toolId);
-    const execCtx =
-      ctx ?? ExecutionContext.create(uuid(), new AbortController());
-
-    let result: unknown;
-    for await (const toolEvent of tool.call(input, execCtx)) {
-      if (toolEvent.type === 'result') {
-        result = JSON.parse(toolEvent.output);
-      }
-    }
-    return result;
   }
 }

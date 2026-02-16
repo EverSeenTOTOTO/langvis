@@ -1,3 +1,4 @@
+import { Role } from '@/shared/types/entities';
 import GirlFriendAgent from '@/server/core/agent/GirlFriend';
 import { ExecutionContext } from '@/server/core/context';
 import { ToolIds } from '@/shared/constants';
@@ -46,7 +47,16 @@ async function collectEvents(
 }
 
 function createMockContext(): ExecutionContext {
-  return ExecutionContext.create('test-trace-id', new AbortController());
+  return ExecutionContext.create(
+    {
+      id: 'test-trace-id',
+      role: Role.ASSIST,
+      content: '',
+      conversationId: 'test-conversation',
+      createdAt: new Date(),
+    },
+    new AbortController(),
+  );
 }
 
 describe('GirlFriendAgent', () => {
@@ -68,7 +78,7 @@ describe('GirlFriendAgent', () => {
     vi.clearAllMocks();
   });
 
-  it('should yield tool progress events and final event', async () => {
+  it('should yield stream events and final event', async () => {
     const memory = {
       summarize: vi.fn().mockResolvedValue([]),
     } as any;
@@ -103,12 +113,15 @@ describe('GirlFriendAgent', () => {
     const events = await collectEvents(girlFriendAgent.call(memory, ctx, {}));
 
     expect(events[0]).toMatchObject({
-      type: 'tool_progress',
-      data: 'Hello',
+      type: 'start',
     });
     expect(events[1]).toMatchObject({
-      type: 'tool_progress',
-      data: ' world',
+      type: 'stream',
+      content: 'Hello',
+    });
+    expect(events[2]).toMatchObject({
+      type: 'stream',
+      content: ' world',
     });
     expect(events[events.length - 1]).toMatchObject({
       type: 'final',

@@ -192,13 +192,6 @@ describe('ChatController', () => {
       const conversationId = 'test-conversation-id';
       const role = Role.USER;
       const content = 'Hello';
-      const mockAssistantMessage = {
-        id: '2',
-        conversationId,
-        role: Role.ASSIST,
-        content: '',
-        meta: { loading: true },
-      };
       const mockConversation = {
         id: conversationId,
         name: 'Test Conversation',
@@ -217,10 +210,6 @@ describe('ChatController', () => {
 
       mockChatService.buildMemory = vi.fn().mockResolvedValue(mockMemory);
 
-      mockConversationService.batchAddMessages = vi
-        .fn()
-        .mockResolvedValue([mockAssistantMessage]);
-
       mockAgent.call = vi.fn().mockReturnValue({
         async *[Symbol.asyncIterator]() {
           yield { type: 'start', agentId: 'test' };
@@ -237,8 +226,11 @@ describe('ChatController', () => {
       expect(mockStatus).toHaveBeenCalledWith(200);
       expect(mockJson).toHaveBeenCalledWith({ success: true });
       expect(mockChatService.buildMemory).toHaveBeenCalled();
-      expect(mockConversationService.batchAddMessages).toHaveBeenCalled();
-      expect(mockChatService.consumeAgentStream).toHaveBeenCalled();
+      expect(mockChatService.consumeAgentStream).toHaveBeenCalledWith(
+        mockConversation,
+        mockAgent,
+        mockMemory,
+      );
     });
 
     it('should return 400 if role is missing', async () => {
@@ -357,14 +349,10 @@ describe('ChatController', () => {
 
   describe('startAgent streaming logic', () => {
     let conversationId: string;
-    let mockExistingMessages: any[];
     let mockConversation: any;
 
     beforeEach(() => {
       conversationId = 'test-conversation-id';
-      mockExistingMessages = [
-        { id: 'msg-1', role: Role.USER, content: 'Hello' },
-      ];
       mockConversation = {
         id: conversationId,
         config: { agent: 'Chat Agent' },
@@ -373,23 +361,6 @@ describe('ChatController', () => {
       // Setup mocks
       mockConversationService.getConversationById.mockResolvedValue(
         mockConversation,
-      );
-      mockConversationService.getMessagesByConversationId.mockResolvedValue(
-        mockExistingMessages,
-      );
-
-      // Mock batchAddMessages to return inserted messages
-      const mockInsertedMessages = [
-        {
-          id: 'assistant-msg',
-          conversationId,
-          role: Role.ASSIST,
-          content: '',
-          meta: { loading: true },
-        },
-      ];
-      mockConversationService.batchAddMessages.mockResolvedValue(
-        mockInsertedMessages,
       );
 
       mockConversationService.updateMessage.mockResolvedValue(undefined);
@@ -444,33 +415,18 @@ describe('ChatController', () => {
 
       // Verify consumeAgentStream was called with correct parameters
       expect(mockChatService.consumeAgentStream).toHaveBeenCalledWith(
-        conversationId,
-        expect.objectContaining({ role: Role.ASSIST }),
+        mockConversation,
         expect.any(Object),
         expect.any(Object),
-        mockConversation.config,
-        mockRequest.id,
       );
     });
 
-    it('should start agent processing that creates initial assistant message for streaming', async () => {
+    it('should start agent processing', async () => {
       await chatController.chat(
         conversationId,
         mockRequest.body,
         mockRequest as Request,
         mockResponse as Response,
-      );
-
-      // Verify the assistant message placeholder was added
-      expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
-        conversationId,
-        expect.arrayContaining([
-          expect.objectContaining({
-            role: Role.ASSIST,
-            content: '',
-            meta: { loading: true },
-          }),
-        ]),
       );
 
       // Verify the agent was resolved and call was eventually called
@@ -480,29 +436,19 @@ describe('ChatController', () => {
       );
       // Verify consumeAgentStream was called
       expect(mockChatService.consumeAgentStream).toHaveBeenCalledWith(
-        conversationId,
-        expect.objectContaining({ role: Role.ASSIST }),
+        mockConversation,
         expect.any(Object),
         expect.any(Object),
-        mockConversation.config,
-        mockRequest.id,
       );
     });
   });
 
   describe('SSE and Streaming Integration', () => {
     let conversationId: string;
-    let mockInitialMessage: any;
     let mockConversation: any;
 
     beforeEach(() => {
       conversationId = 'integration-test-conversation';
-      mockInitialMessage = {
-        id: 'integration-msg-id',
-        conversationId,
-        role: Role.ASSIST,
-        content: '',
-      };
       mockConversation = {
         id: conversationId,
         config: { agent: 'Chat Agent' },
@@ -510,13 +456,6 @@ describe('ChatController', () => {
 
       mockConversationService.getConversationById.mockResolvedValue(
         mockConversation,
-      );
-      mockConversationService.getMessagesByConversationId.mockResolvedValue([]);
-
-      // Mock batchAddMessages to return inserted messages
-      const mockInsertedMessages = [mockInitialMessage];
-      mockConversationService.batchAddMessages.mockResolvedValue(
-        mockInsertedMessages,
       );
 
       mockConversationService.updateMessage.mockResolvedValue(undefined);
@@ -554,18 +493,6 @@ describe('ChatController', () => {
       expect(mockJson).toHaveBeenCalledWith({ success: true });
       expect(mockConversationService.getConversationById).toHaveBeenCalledWith(
         conversationId,
-      );
-
-      // Verify batchAddMessages was called with the assistant message placeholder
-      expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
-        conversationId,
-        expect.arrayContaining([
-          expect.objectContaining({
-            role: Role.ASSIST,
-            content: '',
-            meta: { loading: true },
-          }),
-        ]),
       );
 
       // Allow async operations to complete
@@ -609,12 +536,9 @@ describe('ChatController', () => {
 
       // Verify consumeAgentStream was called with correct parameters
       expect(mockChatService.consumeAgentStream).toHaveBeenCalledWith(
-        conversationId,
-        expect.objectContaining({ role: Role.ASSIST }),
+        mockConversation,
         expect.any(Object),
         expect.any(Object),
-        mockConversation.config,
-        mockRequest.id,
       );
     });
   });

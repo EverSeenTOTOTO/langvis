@@ -7,7 +7,7 @@ import { ConversationService } from '@/server/service/ConversationService';
 import { Agent } from '@/server/core/agent';
 import { ExecutionContext } from '@/server/core/context';
 import { Memory } from '@/server/core/memory';
-import { Message, Role } from '@/shared/entities/Message';
+import { Role } from '@/shared/entities/Message';
 import { AgentEvent } from '@/shared/types';
 import type { Request } from 'express';
 
@@ -35,6 +35,15 @@ describe('ChatService', () => {
 
     mockConversationService = {
       updateMessage: vi.fn().mockResolvedValue(undefined),
+      batchAddMessages: vi.fn().mockResolvedValue([
+        {
+          id: 'msg-123',
+          role: Role.ASSIST,
+          content: '',
+          conversationId: 'conv-123',
+          createdAt: new Date(),
+        },
+      ]),
     };
 
     container.register(SSEService, { useValue: mockSSEService });
@@ -101,14 +110,12 @@ describe('ChatService', () => {
 
   describe('consumeAgentStream', () => {
     it('should handle complete agent stream', async () => {
-      const conversationId = 'conv-123';
-      const message: Message = {
-        id: 'msg-123',
-        content: '',
-        role: Role.ASSIST,
-        conversationId,
-        meta: {},
+      const conversation = {
+        id: 'conv-123',
+        name: 'Test',
+        config: {},
         createdAt: new Date(),
+        key: 'conv-123',
       };
 
       const mockAgent = {
@@ -123,35 +130,25 @@ describe('ChatService', () => {
       } as unknown as Agent;
 
       const mockMemory = {} as Memory;
-      const config = {};
 
-      await chatService.consumeAgentStream(
-        conversationId,
-        message,
-        mockAgent,
-        mockMemory,
-        config,
-        'test-trace-id',
-      );
+      await chatService.consumeAgentStream(conversation, mockAgent, mockMemory);
 
-      expect(message.content).toBe('Hello World');
       expect(mockSSEService.sendToConversation).toHaveBeenCalled();
+      expect(mockConversationService.batchAddMessages).toHaveBeenCalled();
       expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
         'msg-123',
         'Hello World',
-        expect.any(Object),
+        expect.objectContaining({ events: expect.any(Array) }),
       );
     });
 
     it('should handle agent stream events', async () => {
-      const conversationId = 'conv-123';
-      const message: Message = {
-        id: 'msg-123',
-        content: '',
-        role: Role.ASSIST,
-        conversationId,
-        meta: {},
+      const conversation = {
+        id: 'conv-123',
+        name: 'Test',
+        config: {},
         createdAt: new Date(),
+        key: 'conv-123',
       };
 
       const mockAgent = {
@@ -166,30 +163,24 @@ describe('ChatService', () => {
       } as unknown as Agent;
 
       const mockMemory = {} as Memory;
-      const config = {};
 
-      await chatService.consumeAgentStream(
-        conversationId,
-        message,
-        mockAgent,
-        mockMemory,
-        config,
-        'test-trace-id',
-      );
+      await chatService.consumeAgentStream(conversation, mockAgent, mockMemory);
 
-      expect(message.content).toBe('Hello');
       expect(mockSSEService.sendToConversation).toHaveBeenCalled();
+      expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
+        'msg-123',
+        'Hello',
+        expect.objectContaining({ events: expect.any(Array) }),
+      );
     });
 
     it('should handle streaming errors', async () => {
-      const conversationId = 'conv-123';
-      const message: Message = {
-        id: 'msg-123',
-        content: '',
-        role: Role.ASSIST,
-        conversationId,
-        meta: {},
+      const conversation = {
+        id: 'conv-123',
+        name: 'Test',
+        config: {},
         createdAt: new Date(),
+        key: 'conv-123',
       };
 
       const mockAgent = {
@@ -202,16 +193,8 @@ describe('ChatService', () => {
       } as unknown as Agent;
 
       const mockMemory = {} as Memory;
-      const config = {};
 
-      await chatService.consumeAgentStream(
-        conversationId,
-        message,
-        mockAgent,
-        mockMemory,
-        config,
-        'test-trace-id',
-      );
+      await chatService.consumeAgentStream(conversation, mockAgent, mockMemory);
 
       expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
         'msg-123',
@@ -221,14 +204,12 @@ describe('ChatService', () => {
     });
 
     it('should handle update message failure', async () => {
-      const conversationId = 'conv-123';
-      const message: Message = {
-        id: 'msg-123',
-        content: '',
-        role: Role.ASSIST,
-        conversationId,
-        meta: {},
+      const conversation = {
+        id: 'conv-123',
+        name: 'Test',
+        config: {},
         createdAt: new Date(),
+        key: 'conv-123',
       };
 
       mockConversationService.updateMessage.mockRejectedValue(
@@ -245,16 +226,8 @@ describe('ChatService', () => {
       } as unknown as Agent;
 
       const mockMemory = {} as Memory;
-      const config = {};
 
-      await chatService.consumeAgentStream(
-        conversationId,
-        message,
-        mockAgent,
-        mockMemory,
-        config,
-        'test-trace-id',
-      );
+      await chatService.consumeAgentStream(conversation, mockAgent, mockMemory);
 
       expect(mockSSEService.sendToConversation).toHaveBeenCalled();
     });

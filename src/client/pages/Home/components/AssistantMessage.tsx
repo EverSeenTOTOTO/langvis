@@ -2,9 +2,10 @@ import MarkdownRender from '@/client/components/MarkdownRender';
 import { useStore } from '@/client/store';
 import { AgentIds } from '@/shared/constants';
 import { Message } from '@/shared/types/entities';
+import { isMessageLoading } from '@/shared/utils';
 import { RobotOutlined } from '@ant-design/icons';
 import { Bubble } from '@ant-design/x';
-import { Avatar } from 'antd';
+import { Avatar, Flex } from 'antd';
 import { observer } from 'mobx-react-lite';
 import GirlFriendAgentMessage from './AgentMessage/GirlFriendAgent';
 import ReActAgentMessage from './AgentMessage/ReActAgent';
@@ -33,12 +34,12 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
       key={msg.id}
       placement="start"
       content={
-        <>
+        <Flex vertical gap={8} style={{ minWidth: 200 }}>
           {renderMessage(msg)}
           <MessageFooter content={msg.content} />
-        </>
+        </Flex>
       }
-      loading={msg.meta?.loading}
+      loading={isMessageLoading(msg)}
       avatar={<Avatar icon={<RobotOutlined />} />}
       styles={{
         content: {

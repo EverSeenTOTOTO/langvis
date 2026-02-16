@@ -33,6 +33,8 @@ export default class ChatAgent extends Agent {
     ctx: ExecutionContext,
     @config() options?: ChatAgentConfig,
   ): AsyncGenerator<AgentEvent, void, void> {
+    yield ctx.agentStartEvent();
+
     const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
 
     const messages = await memory.summarize();
@@ -58,7 +60,11 @@ export default class ChatAgent extends Agent {
     );
 
     for await (const toolEvent of generator) {
-      yield ctx.adaptToolEvent(toolEvent);
+      if (toolEvent.type === 'progress' && typeof toolEvent.data === 'string') {
+        yield ctx.agentStreamEvent(toolEvent.data);
+      } else if (toolEvent.type === 'error') {
+        yield ctx.agentErrorEvent(toolEvent.error);
+      }
     }
 
     yield ctx.agentFinalEvent();

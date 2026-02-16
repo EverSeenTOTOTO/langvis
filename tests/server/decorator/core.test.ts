@@ -1,3 +1,4 @@
+import { Role } from '@/shared/types/entities';
 import { Agent } from '@/server/core/agent';
 import { ExecutionContext } from '@/server/core/context';
 import { Memory } from '@/server/core/memory';
@@ -30,7 +31,16 @@ vi.mock('@/server/utils/logger', () => {
 });
 
 function createMockContext(): ExecutionContext {
-  return ExecutionContext.create('test-trace-id', new AbortController());
+  return ExecutionContext.create(
+    {
+      id: 'test-trace-id',
+      role: Role.ASSIST,
+      content: '',
+      conversationId: 'test-conversation',
+      createdAt: new Date(),
+    },
+    new AbortController(),
+  );
 }
 
 async function consumeAgentGenerator(
@@ -49,7 +59,7 @@ async function consumeToolGenerator<T>(
   let result: T | undefined;
   for await (const event of generator) {
     if (event.type === 'result') {
-      result = JSON.parse(event.output) as T;
+      result = event.output as T;
     }
   }
   return result!;
@@ -425,7 +435,7 @@ describe('Config Decorators', () => {
           @input() _input: { url: string },
           ctx: ExecutionContext,
         ): AsyncGenerator<ToolEvent, string, void> {
-          yield ctx.toolResultEvent(this.id, '"success"');
+          yield ctx.toolResultEvent(this.id, 'success');
           return 'success';
         }
       }

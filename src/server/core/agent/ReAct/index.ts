@@ -41,6 +41,47 @@ interface ReActAgentConfig {
   };
 }
 
+/**
+ * Convert AgentEvent[] to ReAct format for memory input
+ */
+function eventsToReActFormat(events: AgentEvent[]): ReActStep[] {
+  const result: ReActStep[] = [];
+  let currentThought: string | undefined;
+
+  for (const event of events) {
+    switch (event.type) {
+      case 'thought':
+        currentThought = event.content;
+        break;
+      case 'tool_call':
+        result.push({
+          thought: currentThought,
+          action: {
+            tool: event.toolName,
+            input: JSON.parse(event.toolArgs),
+          },
+        });
+        currentThought = undefined;
+        break;
+      case 'tool_result':
+        result.push({
+          observation:
+            typeof event.output === 'string'
+              ? event.output
+              : JSON.stringify(event.output),
+        });
+        break;
+      case 'tool_error':
+        result.push({
+          observation: event.error,
+        });
+        break;
+    }
+  }
+
+  return result;
+}
+
 @agent(AgentIds.REACT)
 export default class ReActAgent extends Agent {
   readonly id!: string;
@@ -63,22 +104,12 @@ export default class ReActAgent extends Agent {
     ctx: ExecutionContext,
     @config() options?: ReActAgentConfig,
   ): AsyncGenerator<AgentEvent, void, void> {
+    yield ctx.agentStartEvent();
+
     const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
 
     const messages = await memory.summarize();
-    const iterMessages = messages.map(msg => ({
-      role: msg.role as 'user' | 'assistant' | 'system',
-      content:
-        msg.role === 'assistant'
-          ? JSON.stringify(
-              msg.meta?.steps?.find(
-                (each: ReActStep) => 'final_answer' in each,
-              ) || {
-                final_answer: msg.content,
-              },
-            )
-          : msg.content,
-    }));
+    const iterMessages = this.buildIterMessages(messages);
 
     for (let i = 0; i < this.maxIterations; i++) {
       ctx.signal.throwIfAborted();
@@ -173,6 +204,31 @@ export default class ReActAgent extends Agent {
     yield ctx.agentErrorEvent('Max iterations reached');
   }
 
+  private buildIterMessages(
+    messages: Awaited<ReturnType<Memory['summarize']>>,
+  ): Array<{ role: 'user' | 'assistant' | 'system'; content: string }> {
+    return messages.map(msg => {
+      if (msg.role !== 'assistant') {
+        return { role: msg.role as 'user' | 'system', content: msg.content };
+      }
+
+      const events = msg.meta?.events as AgentEvent[] | undefined;
+      if (!events || events.length === 0) {
+        return {
+          role: 'assistant' as const,
+          content: JSON.stringify({ final_answer: msg.content }),
+        };
+      }
+
+      const steps = eventsToReActFormat(events);
+      const finalStep = steps.find(s => 'final_answer' in s);
+      return {
+        role: 'assistant' as const,
+        content: JSON.stringify(finalStep || { final_answer: '' }),
+      };
+    });
+  }
+
   private parseResponse(content: string): ReActStep {
     const cleanedContent = content
       .trim()
@@ -221,7 +277,9 @@ export default class ReActAgent extends Agent {
     for await (const toolEvent of generator) {
       yield ctx.adaptToolEvent(toolEvent);
       if (toolEvent.type === 'result') {
-        return toolEvent.output;
+        return typeof toolEvent.output === 'string'
+          ? toolEvent.output
+          : JSON.stringify(toolEvent.output);
       }
     }
 
