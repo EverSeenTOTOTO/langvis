@@ -58,7 +58,7 @@ function eventsToReActFormat(events: AgentEvent[]): ReActStep[] {
           thought: currentThought,
           action: {
             tool: event.toolName,
-            input: JSON.parse(event.toolArgs),
+            input: event.toolArgs,
           },
         });
         currentThought = undefined;
@@ -173,7 +173,7 @@ export default class ReActAgent extends Agent {
           yield ctx.agentThoughtEvent(parsed.thought);
         }
 
-        yield ctx.agentToolCallEvent(tool, JSON.stringify(input));
+        yield ctx.agentToolCallEvent(tool, input);
 
         try {
           const observation = yield* this.executeAction(tool, input, ctx);
@@ -286,3 +286,4 @@ export default class ReActAgent extends Agent {
     throw new Error(`Tool "${action}" did not return a result event`);
   }
 }
+

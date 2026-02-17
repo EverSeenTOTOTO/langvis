@@ -16,6 +16,7 @@ import { ConversationStore } from './conversation';
 import { SettingStore } from './setting';
 
 interface StreamingState {
+  eventSource: EventSource | null;
   message: Message;
   buffer: string;
   timer: ReturnType<typeof setInterval> | null;
@@ -23,7 +24,6 @@ interface StreamingState {
 
 @store()
 export class ChatStore {
-  private eventSources: Map<string, EventSource> = new Map();
   private streamingStates = new Map<string, StreamingState>();
 
   constructor(
@@ -54,6 +54,7 @@ export class ChatStore {
         this.conversationStore.currentMessages.length - 1
       ];
 
+    // not be tracked by mobx
     const streamingMessage = this.streamingStates.get(
       this.conversationStore.currentConversationId!,
     )?.message;
@@ -63,7 +64,8 @@ export class ChatStore {
 
   isConnected(conversationId: string): boolean {
     return (
-      this.eventSources.get(conversationId)?.readyState === EventSource.OPEN
+      this.streamingStates.get(conversationId)?.eventSource?.readyState ===
+      EventSource.OPEN
     );
   }
 
@@ -81,7 +83,18 @@ export class ChatStore {
       const eventSource = new EventSource(url, {
         withCredentials: true,
       });
-      this.eventSources.set(conversationId, eventSource);
+
+      const existingState = this.streamingStates.get(conversationId);
+      if (existingState) {
+        existingState.eventSource = eventSource;
+      } else {
+        this.streamingStates.set(conversationId, {
+          eventSource,
+          message: null as unknown as Message,
+          buffer: '',
+          timer: null,
+        });
+      }
 
       const timeout = setTimeout(() => {
         eventSource.close();
@@ -114,18 +127,22 @@ export class ChatStore {
   }
 
   disconnectFromSSE(conversationId: string) {
-    this.eventSources.get(conversationId)?.close();
-    this.eventSources.delete(conversationId);
+    const state = this.streamingStates.get(conversationId);
+    if (state?.eventSource) {
+      state.eventSource.close();
+      state.eventSource = null;
+    }
   }
 
   @api((req: CancelChatRequest) => `/api/chat/cancel/${req.conversationId}`, {
     method: 'post',
   })
   async cancelChat(
-    _params: CancelChatRequest,
+    params: CancelChatRequest,
     req?: ApiRequest<CancelChatRequest>,
   ) {
     await req!.send();
+    this.clearStreaming(params.conversationId);
   }
 
   @api((req: StartChatRequest) => `/api/chat/start/${req.conversationId}`, {
@@ -223,6 +240,7 @@ export class ChatStore {
     };
 
     this.streamingStates.set(conversationId, {
+      eventSource: null,
       message: assistMessage,
       buffer: '',
       timer: null,
@@ -247,17 +265,19 @@ export class ChatStore {
     if (!messages) return;
 
     const lastMessage = messages[messages.length - 1];
-    if (lastMessage?.role === Role.ASSIST) {
-      const state = this.streamingStates.get(conversationId);
-      if (state) {
-        state.message = lastMessage;
-      } else {
-        this.streamingStates.set(conversationId, {
-          message: lastMessage,
-          buffer: '',
-          timer: null,
-        });
-      }
+    const state = this.streamingStates.get(conversationId);
+
+    // assert lastMessage
+
+    if (state) {
+      state.message = lastMessage;
+    } else {
+      this.streamingStates.set(conversationId, {
+        eventSource: null,
+        message: lastMessage,
+        buffer: '',
+        timer: null,
+      });
     }
   }
 
@@ -293,8 +313,9 @@ export class ChatStore {
       },
     };
 
+    // trigger rerender
     const messages = this.conversationStore.messages[conversationId];
-    if (messages) {
+    if (messages.length) {
       messages[messages.length - 1] = state.message;
     }
   }
@@ -332,13 +353,15 @@ export class ChatStore {
     const chunk = state.buffer.slice(0, chunkSize);
     state.buffer = state.buffer.slice(chunkSize);
 
+    state.message = {
+      ...state.message,
+      content: state.message.content + chunk,
+    };
+
+    // trigger rerender
     const messages = this.conversationStore.messages[conversationId];
-    if (messages && messages.length > 0) {
-      const lastIndex = messages.length - 1;
-      messages[lastIndex] = {
-        ...messages[lastIndex],
-        content: messages[lastIndex].content + chunk,
-      };
+    if (messages.length) {
+      messages[messages.length - 1] = state.message;
     }
   }
 }

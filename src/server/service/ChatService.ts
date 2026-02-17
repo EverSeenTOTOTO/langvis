@@ -67,7 +67,7 @@ export class ChatService {
     }
   }
 
-  async consumeAgentStream(
+  async startAgent(
     conversation: Conversation,
     agent: Agent,
     memory: Memory,
@@ -87,7 +87,7 @@ export class ChatService {
     );
 
     const controller = new AbortController();
-    const ctx = ExecutionContext.create(assistantMessage, controller);
+    const ctx = new ExecutionContext(assistantMessage, controller);
 
     this.activeAgents.set(conversation.id!, ctx);
 
@@ -96,29 +96,39 @@ export class ChatService {
 
       for await (const event of generator) {
         if (ctx.signal.aborted) {
-          throw new Error(`Aborted: ${ctx.signal.reason}`);
+          break;
         }
 
         if (event.type === 'stream' && !firstTokenTime) {
           firstTokenTime = Date.now();
         }
 
-        if (event.type === 'error') {
-          throw new Error(event.error);
-        }
-
         this.sseService.sendToConversation(conversation.id!, event);
+
+        if (event.type === 'error') {
+          break;
+        }
+      }
+    } catch (err) {
+      const errorEvent = ctx.agentErrorEvent(
+        (err as Error)?.message || String(err),
+      );
+      this.sseService.sendToConversation(conversation.id!, errorEvent);
+    } finally {
+      try {
+        await this.finalizeMessage(
+          conversation.id!,
+          ctx,
+          startTime,
+          firstTokenTime,
+        );
+      } catch (finalizeError) {
+        this.logger.error(
+          `Failed to save message for conversation ${conversation.id}:`,
+          finalizeError,
+        );
       }
 
-      await this.finalizeMessage(
-        conversation.id!,
-        ctx,
-        startTime,
-        firstTokenTime,
-      );
-    } catch (error) {
-      await this.handleStreamError(conversation.id!, ctx, error);
-    } finally {
       this.activeAgents.delete(conversation.id!);
     }
   }
@@ -131,43 +141,22 @@ export class ChatService {
   ): Promise<void> {
     const totalTime = Date.now() - startTime;
     const ttft = firstTokenTime ? firstTokenTime - startTime : null;
-    const avgPerTokenTime = totalTime / ctx.content.length;
+    const avgPerTokenTime = totalTime / ctx.message.content.length;
 
-    await this.conversationService.updateMessage(ctx.traceId, ctx.content, {
-      events: ctx.events,
-    });
+    await this.conversationService.updateMessage(
+      ctx.message.id,
+      ctx.message.content,
+      ctx.message.meta,
+    );
 
     this.logger.info(
       `Agent call finished for conversation ${conversationId}, ` +
         `total time: ${totalTime}ms, ` +
-        `tokens: ${ctx.content.length}, ` +
+        `tokens: ${ctx.message.content.length}, ` +
         `TTFT: ${ttft ?? 'N/A'}ms, ` +
         `avg per token: ${avgPerTokenTime.toFixed(2)}ms`,
     );
   }
-
-  private async handleStreamError(
-    conversationId: string,
-    ctx: ExecutionContext,
-    error: unknown,
-  ): Promise<void> {
-    const errorMessage = (error as Error)?.message || 'Unknown error';
-
-    try {
-      await this.conversationService.updateMessage(ctx.traceId, errorMessage, {
-        events: ctx.events,
-        error: true,
-      });
-    } catch (updateError) {
-      this.logger.error('Failed to finalize streaming message:', updateError);
-    }
-
-    this.sseService.sendToConversation(
-      conversationId,
-      ctx.agentErrorEvent(errorMessage),
-    );
-  }
-
   async buildMemory(
     req: Request,
     agent: Agent,

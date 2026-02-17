@@ -1,54 +1,40 @@
 import AudioPlayer from '@/client/components/AudioPlayer';
 import MarkdownRender from '@/client/components/MarkdownRender';
+import { TextToSpeechOutput } from '@/server/core/tool/TextToSpeech';
 import { ToolIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
 import { Message } from '@/shared/types/entities';
 import { InfoCircleOutlined } from '@ant-design/icons';
-import { Flex, Spin, Tooltip, Typography } from 'antd';
+import { Alert, Spin, Tooltip, Typography } from 'antd';
 import './index.scss';
 
-interface TTSResult {
-  voice: string;
-  filePath: string;
-}
-
-const extractTTSInfo = (events: AgentEvent[] | undefined): TTSResult | null => {
-  if (!events) return null;
-
-  for (const event of events) {
-    if (
-      event.type === 'tool_result' &&
-      event.toolName === ToolIds.TEXT_TO_SPEECH
-    ) {
-      try {
-        return typeof event.output === 'string'
-          ? (JSON.parse(event.output) as TTSResult)
-          : (event.output as TTSResult);
-      } catch {
-        return null;
-      }
-    }
-  }
-  return null;
-};
-
 const GirFriendAgentMessage = ({ msg }: { msg: Message }) => {
-  const ttsInfo = extractTTSInfo(msg.meta?.events as AgentEvent[] | undefined);
+  const ttsCall = msg.meta?.events?.find(
+    e => e.type === 'tool_call' && e.toolName === ToolIds.TEXT_TO_SPEECH,
+  );
+  const ttsResult = msg.meta?.events?.find(
+    e => e.type === 'tool_result' && e.toolName === ToolIds.TEXT_TO_SPEECH,
+  ) as Extract<AgentEvent, { type: 'tool_result' }>;
+  const ttsError = msg.meta?.events?.find(
+    e => e.type === 'tool_error' && e.toolName === ToolIds.TEXT_TO_SPEECH,
+  ) as Extract<AgentEvent, { type: 'tool_error' }>;
+
+  const output = ttsResult?.output as TextToSpeechOutput | undefined;
 
   return (
-    <Flex vertical align="start">
-      <Spin spinning={!ttsInfo && (msg.meta?.loading || msg.meta?.streaming)}>
+    <>
+      <Spin spinning={ttsCall && !(ttsResult || ttsError)}>
         <MarkdownRender>{msg.content}</MarkdownRender>
       </Spin>
-      {ttsInfo && (
+      {ttsResult && (
         <AudioPlayer
-          src={`/api/files/play/${ttsInfo.filePath}`}
+          src={`/api/files/play/${output?.filePath}`}
           className="gf-meta-audio"
           suffix={
             <Tooltip
               classNames={{ root: 'gf-meta-tooltip' }}
               title={
-                <Typography.Text copyable>{ttsInfo.filePath}</Typography.Text>
+                <Typography.Text copyable>{output?.filePath}</Typography.Text>
               }
             >
               <InfoCircleOutlined className="gf-meta-icon" />
@@ -56,8 +42,16 @@ const GirFriendAgentMessage = ({ msg }: { msg: Message }) => {
           }
         />
       )}
-    </Flex>
+      {ttsError && (
+        <Alert
+          type="error"
+          title={ttsError.error}
+          style={{ marginBlockEnd: 8 }}
+        />
+      )}
+    </>
   );
 };
 
 export default GirFriendAgentMessage;
+

@@ -6,17 +6,11 @@ export enum Role {
   ASSIST = 'assistant',
 }
 
-type MessageMeta<T extends Record<string, any>> = {
-  loading?: boolean;
-  error?: boolean;
-  events?: AgentEvent[];
-} & T;
-
-export type Message<T extends Record<string, any> = Record<string, any>> = {
+export type Message = {
   id: string;
   role: Role;
   content: string;
-  meta?: MessageMeta<T> | null;
+  meta?: { events?: AgentEvent[] } | null;
   createdAt: Date;
   conversationId: string;
   loading?: boolean;

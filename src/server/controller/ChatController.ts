@@ -85,14 +85,16 @@ export default class ChatController {
 
     if (!conversation) {
       return res
-        .status(404)
+        .status(400)
         .json({ error: `Conversation ${conversationId} not found` });
     }
 
     const agent = container.resolve(conversation.config!.agent) as Agent;
 
     if (!agent) {
-      return res.status(400).json({ error: 'Agent not found' });
+      return res
+        .status(400)
+        .json({ error: `Agent ${conversation.config!.agent} not found` });
     }
 
     const memory = await this.chatService.buildMemory(
@@ -110,8 +112,8 @@ export default class ChatController {
     // Return response first
     res.status(200).json({ success: true });
 
-    // Then start agent streaming asynchronously
-    this.chatService.consumeAgentStream(conversation, agent, memory);
+    // Then start agent asynchronously
+    this.chatService.startAgent(conversation, agent, memory);
 
     return;
   }

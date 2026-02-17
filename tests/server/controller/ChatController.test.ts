@@ -37,7 +37,7 @@ class MockConversationService {
 }
 
 class MockChatService {
-  consumeAgentStream = vi.fn();
+  startAgent = vi.fn();
   cancelAgent = vi.fn();
   buildMemory = vi.fn();
 }
@@ -226,7 +226,7 @@ describe('ChatController', () => {
       expect(mockStatus).toHaveBeenCalledWith(200);
       expect(mockJson).toHaveBeenCalledWith({ success: true });
       expect(mockChatService.buildMemory).toHaveBeenCalled();
-      expect(mockChatService.consumeAgentStream).toHaveBeenCalledWith(
+      expect(mockChatService.startAgent).toHaveBeenCalledWith(
         mockConversation,
         mockAgent,
         mockMemory,
@@ -291,7 +291,7 @@ describe('ChatController', () => {
       }
     });
 
-    it('should return 404 if conversation is not found', async () => {
+    it('should return 400 if conversation is not found', async () => {
       const conversationId = 'nonexistent-conversation-id';
       const role = Role.USER;
       const content = 'Hello';
@@ -315,13 +315,13 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockStatus).toHaveBeenCalledWith(404);
+      expect(mockStatus).toHaveBeenCalledWith(400);
       expect(mockJson).toHaveBeenCalledWith({
         error: `Conversation ${conversationId} not found`,
       });
     });
 
-    it('should return 404 if initial message addition fails', async () => {
+    it('should return 400 if initial message addition fails', async () => {
       const conversationId = 'test-conversation-id';
       const role = Role.USER;
       const content = 'Hello';
@@ -340,7 +340,7 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockStatus).toHaveBeenCalledWith(404);
+      expect(mockStatus).toHaveBeenCalledWith(400);
       expect(mockJson).toHaveBeenCalledWith({
         error: `Conversation ${conversationId} not found`,
       });
@@ -365,8 +365,8 @@ describe('ChatController', () => {
 
       mockConversationService.updateMessage.mockResolvedValue(undefined);
 
-      // Mock consumeAgentStream
-      mockChatService.consumeAgentStream = vi.fn().mockResolvedValue(undefined);
+      // Mock startAgent
+      mockChatService.startAgent = vi.fn().mockResolvedValue(undefined);
 
       // Mock buildMemory to return a mock memory object
       const mockMemory = { summarize: vi.fn(), store: vi.fn() };
@@ -413,8 +413,8 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      // Verify consumeAgentStream was called with correct parameters
-      expect(mockChatService.consumeAgentStream).toHaveBeenCalledWith(
+      // Verify startAgent was called with correct parameters
+      expect(mockChatService.startAgent).toHaveBeenCalledWith(
         mockConversation,
         expect.any(Object),
         expect.any(Object),
@@ -434,8 +434,8 @@ describe('ChatController', () => {
       expect(container.resolve).toHaveBeenCalledWith(
         mockConversation.config.agent,
       );
-      // Verify consumeAgentStream was called
-      expect(mockChatService.consumeAgentStream).toHaveBeenCalledWith(
+      // Verify startAgent was called
+      expect(mockChatService.startAgent).toHaveBeenCalledWith(
         mockConversation,
         expect.any(Object),
         expect.any(Object),
@@ -460,8 +460,8 @@ describe('ChatController', () => {
 
       mockConversationService.updateMessage.mockResolvedValue(undefined);
 
-      // Mock consumeAgentStream
-      mockChatService.consumeAgentStream = vi.fn().mockResolvedValue(undefined);
+      // Mock startAgent
+      mockChatService.startAgent = vi.fn().mockResolvedValue(undefined);
 
       // Mock buildMemory to return a mock memory object
       const mockMemory = { summarize: vi.fn(), store: vi.fn() };
@@ -502,8 +502,8 @@ describe('ChatController', () => {
       expect(container.resolve).toHaveBeenCalledWith(
         mockConversation.config.agent,
       );
-      // Verify consumeAgentStream was called
-      expect(mockChatService.consumeAgentStream).toHaveBeenCalled();
+      // Verify startAgent was called
+      expect(mockChatService.startAgent).toHaveBeenCalled();
     });
 
     it('should handle conversation not found during integration', async () => {
@@ -516,7 +516,7 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockStatus).toHaveBeenCalledWith(404);
+      expect(mockStatus).toHaveBeenCalledWith(400);
       expect(mockJson).toHaveBeenCalledWith({
         error: `Conversation ${conversationId} not found`,
       });
@@ -534,8 +534,8 @@ describe('ChatController', () => {
       // Allow async operations to complete
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Verify consumeAgentStream was called with correct parameters
-      expect(mockChatService.consumeAgentStream).toHaveBeenCalledWith(
+      // Verify startAgent was called with correct parameters
+      expect(mockChatService.startAgent).toHaveBeenCalledWith(
         mockConversation,
         expect.any(Object),
         expect.any(Object),
