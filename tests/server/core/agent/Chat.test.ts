@@ -40,7 +40,7 @@ async function collectEvents(
 }
 
 function createMockContext(): ExecutionContext {
-  return ExecutionContext.create(
+  return new ExecutionContext(
     {
       id: 'test-trace-id',
       role: Role.ASSIST,

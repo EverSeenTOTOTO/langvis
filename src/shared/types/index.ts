@@ -36,10 +36,16 @@ export type ToolEvent =
 export type AgentEvent =
   | { type: 'start'; at: number }
   | { type: 'thought'; content: string; at: number }
-  | { type: 'tool_call'; toolName: string; toolArgs: string; at: number }
+  | {
+      type: 'tool_call';
+      toolName: string;
+      toolArgs: Record<string, unknown>;
+      at: number;
+    }
   | { type: 'tool_progress'; toolName: string; data: unknown; at: number }
   | { type: 'tool_result'; toolName: string; output: unknown; at: number }
   | { type: 'tool_error'; toolName: string; error: string; at: number }
   | { type: 'stream'; content: string; at: number }
   | { type: 'final'; at: number }
   | { type: 'error'; error: string; at: number };
+

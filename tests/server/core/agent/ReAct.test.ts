@@ -1,4 +1,3 @@
-import { Role } from '@/shared/types/entities';
 import ReActAgent from '@/server/core/agent/ReAct';
 import { ExecutionContext } from '@/server/core/context';
 import { Memory } from '@/server/core/memory';
@@ -6,6 +5,7 @@ import logger from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { Message } from '@/shared/entities/Message';
 import { AgentEvent, ToolEvent } from '@/shared/types';
+import { Role } from '@/shared/types/entities';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/server/utils/logger', () => {
@@ -70,7 +70,7 @@ const createMockMemory = (messages: Message[]): Memory => {
 };
 
 function createMockContext(): ExecutionContext {
-  return ExecutionContext.create(
+  return new ExecutionContext(
     {
       id: 'test-trace-id',
       role: Role.ASSIST,
@@ -416,7 +416,7 @@ describe('ReActAgent', () => {
       expect(actionEvents[0]).toMatchObject({
         type: 'tool_call',
         toolName: 'test_tool',
-        toolArgs: '{"param":"value"}',
+        toolArgs: { param: 'value' },
       });
 
       const streamEvents = events.filter(e => e.type === 'stream');
@@ -503,3 +503,4 @@ describe('ReActAgent', () => {
     });
   });
 });
+

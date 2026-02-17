@@ -2,9 +2,6 @@ import { AgentEvent, ToolEvent } from '@/shared/types';
 import type { Message } from '@/shared/types/entities';
 
 export class ExecutionContext {
-  content: string = '';
-  events: AgentEvent[] = [];
-
   public get signal(): AbortSignal {
     return this.controller.signal;
   }
@@ -14,25 +11,35 @@ export class ExecutionContext {
   }
 
   constructor(
-    public readonly message: Message,
+    public message: Message,
     private readonly controller: AbortController,
   ) {}
 
   // === Content management ===
 
   appendContent(text: string): void {
-    this.content += text;
+    this.message.content += text;
   }
 
   setContent(content: string): void {
-    this.content = content;
+    this.message.content = content;
   }
 
   // === Events management ===
 
+  private getEvents(): AgentEvent[] {
+    if (!this.message.meta) {
+      this.message.meta = {};
+    }
+    if (!this.message.meta.events) {
+      this.message.meta.events = [];
+    }
+    return this.message.meta.events;
+  }
+
   private pushEvent(event: AgentEvent): void {
     if (event.type !== 'stream') {
-      this.events.push(event);
+      this.getEvents().push(event);
     }
   }
 
@@ -64,10 +71,14 @@ export class ExecutionContext {
   agentErrorEvent(error: string): AgentEvent {
     const event: AgentEvent = { type: 'error', error, at: Date.now() };
     this.pushEvent(event);
+    this.setContent(error);
     return event;
   }
 
-  agentToolCallEvent(toolName: string, toolArgs: string): AgentEvent {
+  agentToolCallEvent(
+    toolName: string,
+    toolArgs: Record<string, unknown>,
+  ): AgentEvent {
     const event: AgentEvent = {
       type: 'tool_call',
       toolName,
@@ -135,14 +146,8 @@ export class ExecutionContext {
     return this.agentToolResultEvent(event.toolName, event.output);
   }
 
-  abort(reason?: string): void {
-    this.controller.abort(new Error(reason ?? 'Aborted'));
-  }
-
-  static create(
-    message: Message,
-    controller: AbortController,
-  ): ExecutionContext {
-    return new ExecutionContext(message, controller);
+  abort(reason: string): void {
+    this.controller.abort(new Error(reason));
   }
 }
+

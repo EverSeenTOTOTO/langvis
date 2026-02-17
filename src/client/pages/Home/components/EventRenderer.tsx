@@ -59,7 +59,7 @@ const EventRenderer: React.FC<{ events: AgentEvent[] }> = ({ events }) => {
           status: 'process',
           description: (
             <Typography.Text type="secondary" italic>
-              {event.toolArgs}
+              {JSON.stringify(event.toolArgs)}
             </Typography.Text>
           ),
         });
@@ -132,3 +132,4 @@ const EventRenderer: React.FC<{ events: AgentEvent[] }> = ({ events }) => {
 };
 
 export default EventRenderer;
+

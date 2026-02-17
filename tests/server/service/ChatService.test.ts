@@ -131,7 +131,7 @@ describe('ChatService', () => {
 
       const mockMemory = {} as Memory;
 
-      await chatService.consumeAgentStream(conversation, mockAgent, mockMemory);
+      await chatService.startAgent(conversation, mockAgent, mockMemory);
 
       expect(mockSSEService.sendToConversation).toHaveBeenCalled();
       expect(mockConversationService.batchAddMessages).toHaveBeenCalled();
@@ -164,7 +164,7 @@ describe('ChatService', () => {
 
       const mockMemory = {} as Memory;
 
-      await chatService.consumeAgentStream(conversation, mockAgent, mockMemory);
+      await chatService.startAgent(conversation, mockAgent, mockMemory);
 
       expect(mockSSEService.sendToConversation).toHaveBeenCalled();
       expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
@@ -194,12 +194,16 @@ describe('ChatService', () => {
 
       const mockMemory = {} as Memory;
 
-      await chatService.consumeAgentStream(conversation, mockAgent, mockMemory);
+      await chatService.startAgent(conversation, mockAgent, mockMemory);
 
       expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
         'msg-123',
         'Test error',
-        expect.objectContaining({ error: true }),
+        expect.objectContaining({
+          events: expect.arrayContaining([
+            expect.objectContaining({ type: 'error', error: 'Test error' }),
+          ]),
+        }),
       );
     });
 
@@ -221,15 +225,61 @@ describe('ChatService', () => {
           _memory: Memory,
           ctx: ExecutionContext,
         ): Generator<AgentEvent> {
-          yield ctx.agentErrorEvent('Stream error');
+          yield ctx.agentStreamEvent('Hello');
+          yield ctx.agentFinalEvent();
         }),
       } as unknown as Agent;
 
       const mockMemory = {} as Memory;
 
-      await chatService.consumeAgentStream(conversation, mockAgent, mockMemory);
+      await chatService.startAgent(conversation, mockAgent, mockMemory);
 
       expect(mockSSEService.sendToConversation).toHaveBeenCalled();
+    });
+
+    it('should convert passive exceptions to error events', async () => {
+      const conversation = {
+        id: 'conv-123',
+        name: 'Test',
+        config: {},
+        createdAt: new Date(),
+        key: 'conv-123',
+      };
+
+      const mockAgent = {
+        call: vi.fn().mockImplementation(function () {
+          const iterator = {
+            [Symbol.asyncIterator]: () => iterator,
+            next: () => Promise.reject(new Error('Network timeout')),
+          };
+          return iterator;
+        }),
+      } as unknown as Agent;
+
+      const mockMemory = {} as Memory;
+
+      await chatService.startAgent(conversation, mockAgent, mockMemory);
+
+      expect(mockSSEService.sendToConversation).toHaveBeenCalledWith(
+        'conv-123',
+        expect.objectContaining({
+          type: 'error',
+          error: 'Network timeout',
+        }),
+      );
+
+      expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
+        'msg-123',
+        'Network timeout',
+        expect.objectContaining({
+          events: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'error',
+              error: 'Network timeout',
+            }),
+          ]),
+        }),
+      );
     });
   });
 

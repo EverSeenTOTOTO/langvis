@@ -1,4 +1,4 @@
-import { Message, Role } from '../entities/Message';
+import { Message } from '../entities/Message';
 
 export const getOwnPropertyNames = <T extends object>(x: T) => {
   return [
@@ -10,8 +10,13 @@ export const getOwnPropertyNames = <T extends object>(x: T) => {
 export const isClient = () => typeof document !== 'undefined';
 export const isTest = () => import.meta.env.MODE === 'test';
 
-export const isMessageLoading = (message?: Message): boolean => {
-  if (!message || message.role !== Role.ASSIST) return false;
+export const isMessageLoading = (message?: Message) => {
+  if (!message) return false;
   const events = message.meta?.events ?? [];
-  return !(events.some(e => e.type !== 'start') || message.content.length > 0);
+  return !(
+    (events.length &&
+      !events.some(e => ['start', 'final', 'error'].includes(e.type))) ||
+    message.content.length > 0
+  );
 };
+
