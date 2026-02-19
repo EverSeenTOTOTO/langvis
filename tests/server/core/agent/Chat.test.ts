@@ -1,9 +1,8 @@
 import ChatAgent from '@/server/core/agent/Chat';
-import { ExecutionContext } from '@/server/core/context';
 import { ToolIds } from '@/shared/constants';
 import { AgentEvent, ToolEvent } from '@/shared/types';
-import { Role } from '@/shared/types/entities';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMockContext } from '../../helpers/context';
 
 const mockLlmCallTool = {
   call: vi.fn(),
@@ -37,19 +36,6 @@ async function collectEvents(
     events.push(event);
   }
   return events;
-}
-
-function createMockContext(): ExecutionContext {
-  return new ExecutionContext(
-    {
-      id: 'test-trace-id',
-      role: Role.ASSIST,
-      content: '',
-      conversationId: 'test-conversation',
-      createdAt: new Date(),
-    },
-    new AbortController(),
-  );
 }
 
 describe('ChatAgent', () => {

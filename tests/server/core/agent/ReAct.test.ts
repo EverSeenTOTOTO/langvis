@@ -1,5 +1,4 @@
 import ReActAgent from '@/server/core/agent/ReAct';
-import { ExecutionContext } from '@/server/core/context';
 import { Memory } from '@/server/core/memory';
 import logger from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
@@ -7,6 +6,7 @@ import { Message } from '@/shared/entities/Message';
 import { AgentEvent, ToolEvent } from '@/shared/types';
 import { Role } from '@/shared/types/entities';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMockContext } from '../../helpers/context';
 
 vi.mock('@/server/utils/logger', () => {
   const mockLogger = {
@@ -68,19 +68,6 @@ const createMockMemory = (messages: Message[]): Memory => {
     userId: undefined,
   } as unknown as Memory;
 };
-
-function createMockContext(): ExecutionContext {
-  return new ExecutionContext(
-    {
-      id: 'test-trace-id',
-      role: Role.ASSIST,
-      content: '',
-      conversationId: 'test-conversation',
-      createdAt: new Date(),
-    },
-    new AbortController(),
-  );
-}
 
 async function collectEvents(
   generator: AsyncGenerator<AgentEvent, void, void>,

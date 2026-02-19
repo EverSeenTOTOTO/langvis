@@ -3,7 +3,7 @@ import type { Conversation } from '@/shared/types/entities';
 import type { Request } from 'express';
 import { globby } from 'globby';
 import { container, inject } from 'tsyringe';
-import { Agent } from '../core/agent';
+import type { Agent } from '../core/agent';
 import { ExecutionContext } from '../core/context';
 import { Memory } from '../core/memory';
 import { registerMemory } from '../decorator/core';
