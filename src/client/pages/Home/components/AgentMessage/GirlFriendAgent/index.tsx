@@ -2,22 +2,25 @@ import AudioPlayer from '@/client/components/AudioPlayer';
 import MarkdownRender from '@/client/components/MarkdownRender';
 import { TextToSpeechOutput } from '@/server/core/tool/TextToSpeech';
 import { ToolIds } from '@/shared/constants';
-import { AgentEvent } from '@/shared/types';
 import { Message } from '@/shared/types/entities';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { Alert, Spin, Tooltip, Typography } from 'antd';
 import './index.scss';
 
 const GirFriendAgentMessage = ({ msg }: { msg: Message }) => {
-  const ttsCall = msg.meta?.events?.find(
-    e => e.type === 'tool_call' && e.toolName === ToolIds.TEXT_TO_SPEECH,
-  );
-  const ttsResult = msg.meta?.events?.find(
-    e => e.type === 'tool_result' && e.toolName === ToolIds.TEXT_TO_SPEECH,
-  ) as Extract<AgentEvent, { type: 'tool_result' }>;
-  const ttsError = msg.meta?.events?.find(
-    e => e.type === 'tool_error' && e.toolName === ToolIds.TEXT_TO_SPEECH,
-  ) as Extract<AgentEvent, { type: 'tool_error' }>;
+  let ttsCall, ttsResult, ttsError;
+
+  for (const e of msg.meta?.events || []) {
+    if (e.type === 'tool_call' && e.toolName === ToolIds.TEXT_TO_SPEECH) {
+      ttsCall = e;
+    }
+    if (e.type === 'tool_result' && e.toolName === ToolIds.TEXT_TO_SPEECH) {
+      ttsResult = e;
+    }
+    if (e.type === 'tool_error' && e.toolName === ToolIds.TEXT_TO_SPEECH) {
+      ttsError = e;
+    }
+  }
 
   const output = ttsResult?.output as TextToSpeechOutput | undefined;
 
@@ -54,4 +57,3 @@ const GirFriendAgentMessage = ({ msg }: { msg: Message }) => {
 };
 
 export default GirFriendAgentMessage;
-

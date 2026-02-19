@@ -6,6 +6,7 @@ import Logger from '../utils/logger';
 interface SSEConnection {
   conversationId: string;
   response: any;
+  heartbeat: NodeJS.Timeout;
 }
 
 @service()
@@ -20,11 +21,21 @@ export class SSEService {
       Connection: 'keep-alive',
     });
 
+    // Setup heartbeat
+    const heartbeat = setInterval(() => {
+      if (response.writable) {
+        response.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`);
+        response.flush();
+      }
+    }, 10_000); // Every 10 seconds
+
     const connection: SSEConnection = {
       conversationId,
       response,
+      heartbeat,
     };
 
+    response.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`);
     this.sseConnections.set(conversationId, connection);
 
     response.write('\n');
@@ -38,6 +49,9 @@ export class SSEService {
 
     if (!connection) return;
 
+    if (connection.heartbeat) {
+      clearInterval(connection.heartbeat);
+    }
     if (!connection.response.writableEnded) {
       connection.response.end();
     }
@@ -60,3 +74,4 @@ export class SSEService {
     response.flush();
   }
 }
+

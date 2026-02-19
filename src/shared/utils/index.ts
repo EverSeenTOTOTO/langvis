@@ -19,4 +19,3 @@ export const isMessageLoading = (message?: Message) => {
     message.content.length > 0
   );
 };
-

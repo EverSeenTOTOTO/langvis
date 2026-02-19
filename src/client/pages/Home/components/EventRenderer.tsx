@@ -132,4 +132,3 @@ const EventRenderer: React.FC<{ events: AgentEvent[] }> = ({ events }) => {
 };
 
 export default EventRenderer;
-

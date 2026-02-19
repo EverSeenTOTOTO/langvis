@@ -53,4 +53,3 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
 };
 
 export default observer(AssistantMessage);
-
