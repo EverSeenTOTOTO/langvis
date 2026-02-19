@@ -10,6 +10,10 @@ export const getOwnPropertyNames = <T extends object>(x: T) => {
 export const isClient = () => typeof document !== 'undefined';
 export const isTest = () => import.meta.env.MODE === 'test';
 
+export const sleep = (ms: number): Promise<void> => {
+  return new Promise(resolve => setTimeout(resolve, ms));
+};
+
 export const isMessageLoading = (message?: Message) => {
   if (!message) return false;
   const events = message.meta?.events ?? [];
@@ -19,3 +23,4 @@ export const isMessageLoading = (message?: Message) => {
     message.content.length > 0
   );
 };
+

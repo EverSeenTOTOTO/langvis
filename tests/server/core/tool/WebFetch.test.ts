@@ -1,10 +1,9 @@
-import { Role } from '@/shared/types/entities';
 import WebFetchTool from '@/server/core/tool/WebFetch';
-import { ExecutionContext } from '@/server/core/context';
 import { runTool } from '@/server/utils';
 import logger from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMockContext } from '../../helpers/context';
 
 vi.mock('@/server/utils/logger', () => {
   const mockLogger = {
@@ -19,19 +18,6 @@ vi.mock('@/server/utils/logger', () => {
     default: mockLogger,
   };
 });
-
-function createMockContext(): ExecutionContext {
-  return new ExecutionContext(
-    {
-      id: 'test-trace-id',
-      role: Role.ASSIST,
-      content: '',
-      conversationId: 'test-conversation',
-      createdAt: new Date(),
-    },
-    new AbortController(),
-  );
-}
 
 describe('WebFetchTool', () => {
   let tool: WebFetchTool;

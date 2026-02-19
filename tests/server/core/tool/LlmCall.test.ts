@@ -1,11 +1,10 @@
-import { Role } from '@/shared/types/entities';
 import LlmCallTool, { LlmCallOutput } from '@/server/core/tool/LlmCall';
-import { ExecutionContext } from '@/server/core/context';
 import { ToolEvent } from '@/shared/types';
 import OpenAI from 'openai';
 import type { Stream } from 'openai/core/streaming.mjs';
 import type { ChatCompletionCreateParamsStreaming } from 'openai/resources/chat/completions';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMockContext } from '../../helpers/context';
 
 const mockCreate = vi.fn();
 vi.mock('openai', () => {
@@ -19,19 +18,6 @@ vi.mock('openai', () => {
     })),
   };
 });
-
-function createMockContext(): ExecutionContext {
-  return new ExecutionContext(
-    {
-      id: 'test-trace-id',
-      role: Role.ASSIST,
-      content: '',
-      conversationId: 'test-conversation',
-      createdAt: new Date(),
-    },
-    new AbortController(),
-  );
-}
 
 async function collectEvents(
   generator: AsyncGenerator<ToolEvent, LlmCallOutput, void>,

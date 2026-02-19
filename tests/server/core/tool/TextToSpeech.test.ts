@@ -1,10 +1,9 @@
-import { Role } from '@/shared/types/entities';
 import TextToSpeechTool from '@/server/core/tool/TextToSpeech';
-import { ExecutionContext } from '@/server/core/context';
 import { runTool } from '@/server/utils';
 import logger from '@/server/utils/logger';
 import { promises as fs } from 'fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMockContext } from '../../helpers/context';
 
 vi.mock('@/server/utils/logger', () => {
   const mockLogger = {
@@ -30,19 +29,6 @@ vi.mock('fs', () => ({
 }));
 
 global.fetch = vi.fn();
-
-function createMockContext(): ExecutionContext {
-  return new ExecutionContext(
-    {
-      id: 'test-trace-id',
-      role: Role.ASSIST,
-      content: '',
-      conversationId: 'test-conversation',
-      createdAt: new Date(),
-    },
-    new AbortController(),
-  );
-}
 
 describe('TextToSpeechTool', () => {
   let tool: TextToSpeechTool;

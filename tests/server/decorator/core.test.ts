@@ -1,4 +1,3 @@
-import { Role } from '@/shared/types/entities';
 import { Agent } from '@/server/core/agent';
 import { ExecutionContext } from '@/server/core/context';
 import { Memory } from '@/server/core/memory';
@@ -15,6 +14,7 @@ import { AgentConfig, AgentEvent, ToolConfig, ToolEvent } from '@/shared/types';
 import { container } from 'tsyringe';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import winston from 'winston';
+import { createMockContext } from '../helpers/context';
 
 vi.mock('@/server/utils/logger', () => {
   const mockLogger = {
@@ -29,19 +29,6 @@ vi.mock('@/server/utils/logger', () => {
     default: mockLogger,
   };
 });
-
-function createMockContext(): ExecutionContext {
-  return new ExecutionContext(
-    {
-      id: 'test-trace-id',
-      role: Role.ASSIST,
-      content: '',
-      conversationId: 'test-conversation',
-      createdAt: new Date(),
-    },
-    new AbortController(),
-  );
-}
 
 async function consumeAgentGenerator(
   generator: AsyncGenerator<AgentEvent, void, void>,
