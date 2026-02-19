@@ -48,4 +48,3 @@ export type AgentEvent =
   | { type: 'stream'; content: string; at: number }
   | { type: 'final'; at: number }
   | { type: 'error'; error: string; at: number };
-

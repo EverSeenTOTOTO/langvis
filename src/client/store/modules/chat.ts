@@ -71,7 +71,7 @@ export class ChatStore {
 
   connectToSSE(
     conversationId: string,
-    onMessage?: (msg: AgentEvent) => void,
+    onMessage?: (msg: { type: 'heartbeat' } | AgentEvent) => void,
   ): Promise<void> {
     this.disconnectFromSSE(conversationId);
 
@@ -166,7 +166,11 @@ export class ChatStore {
     if (!this.isConnected(conversationId)) {
       try {
         await this.connectToSSE(conversationId, msg => {
-          this.handleSSEMessage(conversationId, msg);
+          if (msg.type === 'heartbeat') {
+            console.info(`Conversation ${conversationId} heartbeat`);
+          } else {
+            this.handleSSEMessage(conversationId, msg);
+          }
         });
       } catch (e) {
         console.error(e);
@@ -344,8 +348,13 @@ export class ChatStore {
 
   private flushChunk(conversationId: string): void {
     const state = this.streamingStates.get(conversationId);
-    if (!state || state.buffer.length === 0) {
-      this.clearStreaming(conversationId);
+    if (!state) return;
+
+    if (state.buffer.length === 0) {
+      if (state.timer) {
+        clearInterval(state.timer);
+        state.timer = null;
+      }
       return;
     }
 
@@ -365,3 +374,4 @@ export class ChatStore {
     }
   }
 }
+
