@@ -6,7 +6,7 @@ import { DataSource } from 'typeorm';
 import logger from '../utils/logger';
 import initOpenAI, { OpenAI } from './openai';
 import pg from './pg';
-import redis from './redis';
+import redis, { redisSubscriber } from './redis';
 
 export default async (_app: Express) => {
   if (!pg.isInitialized) {
@@ -14,6 +14,18 @@ export default async (_app: Express) => {
     logger.info('Initializing PostgreSQL connection...');
     await pg.initialize();
     logger.info(`PostgreSQL connected in ${Date.now() - start}ms.`);
+  }
+
+  if (!redis.isOpen) {
+    const start = Date.now();
+    logger.info('Initializing Redis connection...');
+    await redis.connect();
+    logger.info(`Redis connected in ${Date.now() - start}ms.`);
+  }
+
+  if (!redisSubscriber.isOpen) {
+    await redisSubscriber.connect();
+    logger.info('Redis subscriber connected.');
   }
 
   const openai = initOpenAI();
@@ -26,4 +38,7 @@ export default async (_app: Express) => {
   });
   container.register<DataSource>(InjectTokens.PG, { useValue: pg });
   container.register<typeof redis>(InjectTokens.REDIS, { useValue: redis });
+  container.register<typeof redisSubscriber>(InjectTokens.REDIS_SUBSCRIBER, {
+    useValue: redisSubscriber,
+  });
 };

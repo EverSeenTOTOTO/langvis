@@ -21,5 +21,6 @@ export enum MemoryIds {
 export const InjectTokens = {
   PG: Symbol('postgres'),
   REDIS: Symbol('redis'),
+  REDIS_SUBSCRIBER: Symbol('redis-subscriber'),
   OPENAI: Symbol('openai'),
 };

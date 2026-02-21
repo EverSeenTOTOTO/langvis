@@ -3,7 +3,7 @@ import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { InjectTokens, ToolIds } from '@/shared/constants';
 import { ToolConfig, ToolEvent } from '@/shared/types';
-import { sleep } from '@/shared/utils';
+import { sleepWithSignal } from '@/shared/utils';
 import { JSONSchemaType } from 'ajv';
 import type { RedisClientType } from 'redis';
 import { inject } from 'tsyringe';
@@ -12,30 +12,50 @@ import { ExecutionContext } from '../../context';
 
 const REDIS_PREFIX = 'human_input:';
 
-export interface HumanInTheLoopInput {
+function createNotifyPromise(
+  subscriber: RedisClientType<any>,
+  channel: string,
+  signal: AbortSignal,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      subscriber.unsubscribe(channel).catch(() => {});
+      reject(signal.reason);
+    };
+
+    signal.addEventListener('abort', onAbort, { once: true });
+
+    subscriber
+      .subscribe(channel, message => {
+        if (message === 'submitted') {
+          signal.removeEventListener('abort', onAbort);
+          subscriber.unsubscribe(channel).catch(() => {});
+          resolve();
+        }
+      })
+      .catch(err => {
+        signal.removeEventListener('abort', onAbort);
+        reject(err);
+      });
+  });
+}
+
+export interface HumanInTheLoopInput<I = Record<string, any>> {
   message: string;
-  formSchema: JSONSchemaType<unknown>;
+  formSchema: JSONSchemaType<I>;
   timeout?: number;
 }
 
-export interface HumanInTheLoopOutput {
+export interface HumanInTheLoopOutput<O = Record<string, any>> {
   submitted: boolean;
-  data?: Record<string, unknown>;
-}
-
-function calculateBackoffDelay(
-  attempt: number,
-  baseMs: number = 60000,
-  maxMs: number = 1800000,
-): number {
-  return Math.min(maxMs, baseMs * Math.pow(2, attempt));
+  data?: O;
 }
 
 @tool(ToolIds.HUMAN_IN_THE_LOOP)
-export default class HumanInTheLoopTool extends Tool<
-  HumanInTheLoopInput,
-  HumanInTheLoopOutput
-> {
+export default class HumanInTheLoopTool<
+  I = Record<string, any>,
+  O = Record<string, any>,
+> extends Tool<HumanInTheLoopInput<I>, HumanInTheLoopOutput<O>> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
@@ -43,17 +63,22 @@ export default class HumanInTheLoopTool extends Tool<
   constructor(
     @inject(InjectTokens.REDIS)
     private redis: RedisClientType<any>,
+    @inject(InjectTokens.REDIS_SUBSCRIBER)
+    private redisSubscriber: RedisClientType<any>,
   ) {
     super();
   }
 
   async *call(
-    @input() params: HumanInTheLoopInput,
+    @input() params: HumanInTheLoopInput<I>,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, HumanInTheLoopOutput, void> {
-    const { message, formSchema, timeout = 360_0000 } = params;
+  ): AsyncGenerator<ToolEvent, HumanInTheLoopOutput<O>, void> {
+    ctx.signal.throwIfAborted();
+
+    const { message, formSchema, timeout = 300_000 } = params;
     const conversationId = ctx.message.conversationId;
     const key = `${REDIS_PREFIX}${conversationId}`;
+    const POLL_INTERVAL = 30_000; // 30s fallback check when Pub/Sub fails
 
     await this.redis.set(
       key,
@@ -76,20 +101,32 @@ export default class HumanInTheLoopTool extends Tool<
     });
 
     const startTime = Date.now();
-    let attempt = 0;
 
     while (true) {
       const elapsed = Date.now() - startTime;
-
       if (elapsed >= timeout) {
         break;
       }
 
-      const delay = calculateBackoffDelay(attempt);
-      const waitTime = Math.min(delay, timeout - elapsed);
-      await sleep(waitTime);
+      const remainingTime = timeout - elapsed;
+      const waitTime = Math.min(POLL_INTERVAL, remainingTime);
+      const notifyPromise = createNotifyPromise(
+        this.redisSubscriber,
+        key,
+        ctx.signal,
+      );
 
-      ctx.signal.throwIfAborted();
+      try {
+        await Promise.race([
+          notifyPromise,
+          sleepWithSignal(waitTime, ctx.signal),
+        ]);
+      } catch (e) {
+        if (ctx.signal.aborted) {
+          await this.redis.del(key);
+          throw e;
+        }
+      }
 
       const data = await this.redis.get(key);
       if (data) {
@@ -100,7 +137,7 @@ export default class HumanInTheLoopTool extends Tool<
             `HumanInTheLoop request submitted: ${conversationId}`,
           );
 
-          const output: HumanInTheLoopOutput = {
+          const output: HumanInTheLoopOutput<O> = {
             submitted: true,
             data: pending.result,
           };
@@ -109,14 +146,12 @@ export default class HumanInTheLoopTool extends Tool<
           return output;
         }
       }
-
-      attempt++;
     }
 
     await this.redis.del(key);
     this.logger.info(`HumanInTheLoop request timeout: ${conversationId}`);
 
-    const output: HumanInTheLoopOutput = {
+    const output: HumanInTheLoopOutput<O> = {
       submitted: false,
     };
 
@@ -124,4 +159,3 @@ export default class HumanInTheLoopTool extends Tool<
     return output;
   }
 }
-

@@ -6,8 +6,10 @@ import { ToolConfig, ToolEvent } from '@/shared/types';
 import { Readability } from '@mozilla/readability';
 import DOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
+import { container } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../context';
+import type HumanInTheLoopTool from '../HumanInTheLoop';
 
 interface WebFetchInput {
   url: string;
@@ -29,6 +31,70 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
+  private buildFetchOptions(
+    signal: AbortSignal,
+    useProxy: boolean,
+  ): RequestInit {
+    return {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      },
+      signal,
+      // @ts-expect-error bun fetch option
+      proxy: useProxy ? process.env.WEB_FETCH_PROXY : undefined,
+    };
+  }
+
+  private async doFetch(
+    url: string,
+    signal: AbortSignal,
+    useProxy: boolean,
+  ): Promise<Response> {
+    this.logger.info(
+      `Fetching content from: ${url}${useProxy ? ' (with proxy)' : ''}`,
+    );
+
+    const response = await fetch(url, this.buildFetchOptions(signal, useProxy));
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch URL: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    return response;
+  }
+
+  private async *askProxyConfirmation(
+    ctx: ExecutionContext,
+    originalError: Error,
+  ): AsyncGenerator<ToolEvent> {
+    const humanInTheLoop = container.resolve<
+      HumanInTheLoopTool<{
+        value?: boolean;
+      }>
+    >(ToolIds.HUMAN_IN_THE_LOOP);
+
+    return yield* humanInTheLoop.call(
+      {
+        message: `Direct fetch failed: ${originalError.message}. A proxy is available. Retry with proxy?`,
+        formSchema: {
+          type: 'object',
+          properties: {
+            value: {
+              type: 'boolean',
+              nullable: true,
+              title: 'Use proxy?',
+            },
+          },
+        },
+        timeout: 60000,
+      },
+      ctx,
+    );
+  }
+
   async *call(
     @input() data: WebFetchInput,
     ctx: ExecutionContext,
@@ -36,12 +102,7 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
     ctx.signal.throwIfAborted();
 
     const { url, timeout = 30000 } = data;
-
-    this.logger.info(`Fetching content from: ${url}`);
-
-    if (process.env.WEB_FETCH_PROXY) {
-      this.logger.info(`Using proxy: ${process.env.WEB_FETCH_PROXY}`);
-    }
+    const hasProxy = Boolean(process.env.WEB_FETCH_PROXY);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -50,24 +111,41 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
       controller.abort(ctx.signal.reason);
     });
 
-    const fetchOptions: RequestInit = {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      },
-      signal: controller.signal,
-      // @ts-expect-error bun fetch option
-      proxy: process.env.WEB_FETCH_PROXY,
-    };
+    let response: Response;
 
-    const response = await fetch(url, fetchOptions).finally(() => {
+    try {
+      response = await this.doFetch(url, controller.signal, false);
+    } catch (error) {
       clearTimeout(timeoutId);
-    });
 
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch URL: ${response.status} ${response.statusText}`,
+      if (!hasProxy) {
+        throw error;
+      }
+
+      this.logger.warn(
+        `Direct fetch failed, asking user about proxy retry: ${(error as Error).message}`,
       );
+
+      const confirmed = yield* this.askProxyConfirmation(ctx, error as Error);
+
+      if (!confirmed.submitted || confirmed.data?.value !== true) {
+        throw error;
+      }
+
+      const retryController = new AbortController();
+      const retryTimeoutId = setTimeout(() => retryController.abort(), timeout);
+
+      ctx.signal.addEventListener('abort', () => {
+        retryController.abort(ctx.signal.reason);
+      });
+
+      try {
+        response = await this.doFetch(url, retryController.signal, true);
+      } finally {
+        clearTimeout(retryTimeoutId);
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     const html = await response.text();

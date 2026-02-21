@@ -9,11 +9,15 @@ export default defineConfig({
       jsc: {
         parser: {
           syntax: 'typescript',
+          tsx: true,
           decorators: true,
         },
         transform: {
           legacyDecorator: true,
           decoratorMetadata: true,
+          react: {
+            runtime: 'automatic',
+          },
         },
       },
     }),

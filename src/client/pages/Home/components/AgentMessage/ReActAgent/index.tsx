@@ -10,7 +10,9 @@ const ReActAgentMessage = ({ msg }: { msg: Message }) => {
 
   return (
     <>
-      {hasEvents && <EventRenderer events={events!} />}
+      {hasEvents && (
+        <EventRenderer events={events!} conversationId={msg.conversationId} />
+      )}
       <MarkdownRender>{msg.content}</MarkdownRender>
     </>
   );

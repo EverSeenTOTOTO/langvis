@@ -145,6 +145,29 @@ export class ChatStore {
     this.clearStreaming(params.conversationId);
   }
 
+  @api(
+    (req: { conversationId: string; data: Record<string, unknown> }) =>
+      `/api/human-input/${req.conversationId}`,
+    { method: 'post' },
+  )
+  async submitHumanInput(
+    _params: { conversationId: string; data: Record<string, unknown> },
+    req?: ApiRequest<{ conversationId: string; data: Record<string, unknown> }>,
+  ) {
+    return req!.send();
+  }
+
+  @api(
+    (req: { conversationId: string }) =>
+      `/api/human-input/${req.conversationId}`,
+  )
+  async getHumanInputStatus(
+    _params: { conversationId: string },
+    req?: ApiRequest<{ conversationId: string }>,
+  ) {
+    return req!.send();
+  }
+
   @api((req: StartChatRequest) => `/api/chat/start/${req.conversationId}`, {
     method: 'post',
   })

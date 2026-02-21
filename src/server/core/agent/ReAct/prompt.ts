@@ -41,7 +41,7 @@ interface FinalAnswerResponse {
 
 ## Guidelines
 1. **Thought is Optional**: You can omit the "thought" field if the answer is direct, but keeping it helps accuracy.
-2. **Missing Info**: If you need more info, use Option 2 with the clarification question in \`final_answer\`.
+2. **Missing Info**: If you need user input (confirmation, choice, or additional info), use \`HumanInTheLoop Tool\` to ask the user interactively.
 3. **No Tool Applies**: Use Option 2 to explain why and suggest alternatives.
 
 ## Examples
@@ -65,8 +65,24 @@ Assistant:
 }
 </example:use-tool>
 
-<example:ask-clarification>
-User: I want to book a flight.
-Assistant: { "final_answer": "请提供出发城市、目的地和期望出行日期。" }
-</example:ask-clarification>
+<example:use-human-in-the-loop>
+User: Delete all my old files.
+Assistant:
+{
+  "thought": "This is a destructive operation that needs user confirmation.",
+  "action": {
+    "tool": "HumanInTheLoop Tool",
+    "input": {
+      "message": "This will permanently delete all files older than 30 days. Do you want to proceed?",
+      "formSchema": {"type": "boolean", "title": "Confirm deletion?"}
+    }
+  }
+}
+(Observation: {"submitted": true, "data": true})
+Assistant:
+{
+  "thought": "User confirmed, proceeding with deletion.",
+  "action": { "tool": "DeleteFiles Tool", "input": {"olderThan": 30} }
+}
+</example:use-human-in-the-loop>
 `.trim();
