@@ -80,7 +80,9 @@ export default class GirlFriendAgent extends Agent {
 
     yield ctx.agentToolCallEvent(ToolIds.TEXT_TO_SPEECH, ttsArgs);
 
-    const ttsResult = await runTool(tts.call(ttsArgs, ctx));
+    const ttsResult = yield* runTool(tts.call(ttsArgs, ctx), e =>
+      ctx.adaptToolEvent(e),
+    );
 
     yield ctx.agentToolResultEvent(ToolIds.TEXT_TO_SPEECH, ttsResult);
     yield ctx.agentFinalEvent();

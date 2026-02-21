@@ -1,5 +1,4 @@
 import TextToSpeechTool from '@/server/core/tool/TextToSpeech';
-import { runTool } from '@/server/utils';
 import logger from '@/server/utils/logger';
 import { promises as fs } from 'fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,6 +28,14 @@ vi.mock('fs', () => ({
 }));
 
 global.fetch = vi.fn();
+
+async function getResult<T>(gen: AsyncGenerator<unknown, T, void>): Promise<T> {
+  let result = await gen.next();
+  while (!result.done) {
+    result = await gen.next();
+  }
+  return result.value;
+}
 
 describe('TextToSpeechTool', () => {
   let tool: TextToSpeechTool;
@@ -63,7 +70,7 @@ describe('TextToSpeechTool', () => {
 
       const ctx = createMockContext();
       await expect(
-        runTool(
+        getResult(
           tool.call(
             {
               voice: 'test-voice',
@@ -95,7 +102,7 @@ describe('TextToSpeechTool', () => {
       });
 
       const ctx = createMockContext();
-      const result = await runTool(
+      const result = await getResult(
         tool.call(
           {
             text: 'Hello world',
@@ -138,7 +145,7 @@ describe('TextToSpeechTool', () => {
 
       const ctx = createMockContext();
       await expect(
-        runTool(
+        getResult(
           tool.call(
             {
               voice: 'test-voice',
@@ -163,7 +170,7 @@ describe('TextToSpeechTool', () => {
 
       const ctx = createMockContext();
       await expect(
-        runTool(
+        getResult(
           tool.call(
             {
               voice: 'test-voice',

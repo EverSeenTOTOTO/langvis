@@ -19,13 +19,15 @@ export const getSessionHeaders = (req: Request) => {
   return headers;
 };
 
-export async function runTool<T = unknown>(
+export async function* runTool<T = unknown, E = ToolEvent>(
   toolGenerator: AsyncGenerator<ToolEvent, T, void>,
-): Promise<T> {
+  adaptor: (event: ToolEvent) => E = e => e as E,
+): AsyncGenerator<E, T, void> {
   for await (const event of toolGenerator) {
     if (event.type === 'result') {
       return event.output as T;
     }
+    yield adaptor(event);
   }
 
   throw new Error('Tool did not return a result event');
