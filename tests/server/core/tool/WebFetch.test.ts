@@ -19,6 +19,20 @@ vi.mock('@/server/utils/logger', () => {
   };
 });
 
+const mockHTML = `
+  <!DOCTYPE html>
+  <html>
+    <head><title>Test Article</title></head>
+    <body>
+      <article>
+        <h1>Test Article Title</h1>
+        <p>This is a test article with sufficient content for Readability parsing.</p>
+        <p>More content here to ensure proper article extraction.</p>
+      </article>
+    </body>
+  </html>
+`;
+
 describe('WebFetchTool', () => {
   let tool: WebFetchTool;
 
@@ -32,6 +46,7 @@ describe('WebFetchTool', () => {
       description: { en: 'Test tool' },
     };
     (tool as any).logger = logger;
+    vi.clearAllMocks();
   });
 
   it('should reject empty URL', async () => {
@@ -49,27 +64,6 @@ describe('WebFetchTool', () => {
   });
 
   it('should fetch and extract content from a valid URL', async () => {
-    const mockHTML = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Test Article - Example Site</title>
-          <meta name="author" content="Test Author">
-        </head>
-        <body>
-          <header>Site Header</header>
-          <article>
-            <h1>Test Article Title</h1>
-            <p>This is a test article with some content that is long enough for Readability to parse.</p>
-            <p>It has multiple paragraphs with sufficient content to be considered a valid article.</p>
-            <p>Adding more content here to ensure the article parser recognizes this as the main content.</p>
-            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-          </article>
-          <footer>Site Footer</footer>
-        </body>
-      </html>
-    `;
-
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -150,5 +144,65 @@ describe('WebFetchTool', () => {
         tool.call({ url: 'https://example.com/slow', timeout: 100 }, ctx),
       ),
     ).rejects.toThrow();
+  });
+});
+
+describe('WebFetchTool - proxy retry', () => {
+  let tool: WebFetchTool;
+  let originalEnv: string | undefined;
+
+  beforeEach(() => {
+    tool = new WebFetchTool();
+    // @ts-expect-error readonly
+    tool.id = ToolIds.WEB_FETCH;
+    // @ts-expect-error readonly
+    tool.config = {
+      name: { en: 'Web Fetch Tool' },
+      description: { en: 'Test tool' },
+    };
+    (tool as any).logger = logger;
+    originalEnv = process.env.WEB_FETCH_PROXY;
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    process.env.WEB_FETCH_PROXY = originalEnv;
+  });
+
+  it('should throw error directly when no proxy available', async () => {
+    delete process.env.WEB_FETCH_PROXY;
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+    });
+
+    const ctx = createMockContext();
+    await expect(
+      runTool(tool.call({ url: 'https://example.com/blocked' }, ctx)),
+    ).rejects.toThrow('Failed to fetch URL: 403 Forbidden');
+  });
+
+  it('should log warning when fetch fails with proxy available', async () => {
+    process.env.WEB_FETCH_PROXY = 'http://proxy:8080';
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+    });
+
+    const ctx = createMockContext();
+
+    try {
+      await runTool(tool.call({ url: 'https://example.com/blocked' }, ctx));
+    } catch {
+      // Expected to throw
+    }
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('asking user about proxy retry'),
+    );
   });
 });

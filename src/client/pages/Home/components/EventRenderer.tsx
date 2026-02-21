@@ -1,10 +1,21 @@
+import HumanInputForm from '@/client/components/HumanInputForm';
+import { SchemaProperty } from '@/client/components/SchemaField';
+import { ToolIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
 import { Collapse, Flex, Steps, Tag, Typography } from 'antd';
 import { StepsProps } from 'antd/lib';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 
-const EventRenderer: React.FC<{ events: AgentEvent[] }> = ({ events }) => {
+interface EventRendererProps {
+  events: AgentEvent[];
+  conversationId: string;
+}
+
+const EventRenderer: React.FC<EventRendererProps> = ({
+  events,
+  conversationId,
+}) => {
   const [activeKey, setActiveKey] = useState<string[]>([]);
 
   useEffect(() => {
@@ -14,6 +25,19 @@ const EventRenderer: React.FC<{ events: AgentEvent[] }> = ({ events }) => {
       setActiveKey(['1']);
     }
   }, [events]);
+
+  const lastEvent = events[events.length - 1];
+  const isAwaitingInput =
+    lastEvent?.type === 'tool_progress' &&
+    lastEvent?.toolName === ToolIds.HUMAN_IN_THE_LOOP &&
+    (lastEvent?.data as { status?: string })?.status === 'awaiting_input';
+
+  const awaitingInputData = isAwaitingInput
+    ? (lastEvent.data as {
+        message: string;
+        schema: SchemaProperty;
+      })
+    : null;
 
   // Build steps from events
   const steps: StepsProps['items'] = [];
@@ -106,28 +130,39 @@ const EventRenderer: React.FC<{ events: AgentEvent[] }> = ({ events }) => {
   }
 
   return (
-    <Collapse
-      size="small"
-      activeKey={activeKey}
-      onChange={keys => setActiveKey(keys as string[])}
-      items={[
-        {
-          key: '1',
-          label: (
-            <Typography.Text type="secondary">Process Details</Typography.Text>
-          ),
-          children: (
-            <Steps
-              size="small"
-              orientation="vertical"
-              current={steps.length}
-              items={steps}
-            />
-          ),
-        },
-      ]}
-      style={{ width: '100%', marginBlock: 8 }}
-    />
+    <>
+      <Collapse
+        size="small"
+        activeKey={activeKey}
+        onChange={keys => setActiveKey(keys as string[])}
+        items={[
+          {
+            key: '1',
+            label: (
+              <Typography.Text type="secondary">
+                Process Details
+              </Typography.Text>
+            ),
+            children: (
+              <Steps
+                size="small"
+                orientation="vertical"
+                current={steps.length}
+                items={steps}
+              />
+            ),
+          },
+        ]}
+        style={{ width: '100%', marginBlock: 8 }}
+      />
+      {awaitingInputData && (
+        <HumanInputForm
+          conversationId={conversationId}
+          message={awaitingInputData.message}
+          schema={awaitingInputData.schema}
+        />
+      )}
+    </>
   );
 };
 

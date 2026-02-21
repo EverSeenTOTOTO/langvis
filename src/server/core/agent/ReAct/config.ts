@@ -6,5 +6,5 @@ export const config: AgentConfig = {
   name: 'ReAct Agent',
   description:
     'An agent that uses the ReAct strategy to interact with tools and provide answers based on reasoning and actions.',
-  tools: [ToolIds.DATE_TIME, ToolIds.WEB_FETCH],
+  tools: [ToolIds.DATE_TIME, ToolIds.WEB_FETCH, ToolIds.HUMAN_IN_THE_LOOP],
 };

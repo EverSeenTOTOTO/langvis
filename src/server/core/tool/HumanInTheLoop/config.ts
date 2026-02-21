@@ -12,8 +12,34 @@ export const config: ToolConfig<
   }
 > = {
   name: 'HumanInTheLoop Tool',
-  description:
-    'Request human input during agent execution. Use this tool when you need user confirmation, decision making, or additional information to proceed. The agent will pause and wait for the user to submit the form before continuing.',
+  description: `Request human input during agent execution. This tool pauses the agent and displays a form to the user.
+
+**When to use:**
+- User confirmation needed (e.g., "Should I proceed with this action?")
+- User decision among options (e.g., "Which option do you prefer?")
+- Missing information required (e.g., "What is your preferred date?")
+- Sensitive operations requiring approval
+
+**How to construct formSchema:**
+formSchema MUST be an object with fields defined in \`properties\`. Examples:
+
+\`\`\`json
+// Simple confirmation
+{"type": "object", "properties": {"confirmed": {"type": "boolean", "title": "Confirm?"}}}
+
+// Text input
+{"type": "object", "properties": {"name": {"type": "string", "title": "Your name"}}}
+
+// Multiple choice
+{"type": "object", "properties": {"choice": {"type": "string", "enum": ["option1", "option2"], "title": "Choose one"}}}
+
+// Multiple fields
+{"type": "object", "properties": {"name": {"type": "string"}, "age": {"type": "number"}}}
+\`\`\`
+
+**Output:**
+- \`submitted: true, data: {...}\` - User submitted the form with their input (data contains the object with all field values)
+- \`submitted: false\` - User did not respond (timeout or cancelled)`,
   inputSchema: {
     type: 'object',
     properties: {
@@ -24,8 +50,10 @@ export const config: ToolConfig<
       },
       formSchema: {
         type: 'object',
-        description:
-          'JSON Schema describing the form fields to render for user input.',
+        description: `JSON Schema describing the form. MUST be type "object" with fields in "properties". Examples:
+{"type": "object", "properties": {"confirmed": {"type": "boolean", "title": "Confirm?"}}}
+{"type": "object", "properties": {"value": {"type": "string", "title": "Enter value"}}}
+{"type": "object", "properties": {"choice": {"type": "string", "enum": ["a", "b"], "title": "Select"}}}`,
       },
       timeout: {
         type: 'number',
