@@ -1,5 +1,4 @@
 import WebFetchTool from '@/server/core/tool/WebFetch';
-import { runTool } from '@/server/utils';
 import logger from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,6 +18,14 @@ vi.mock('@/server/utils/logger', () => {
   };
 });
 
+async function getResult<T>(gen: AsyncGenerator<unknown, T, void>): Promise<T> {
+  let result = await gen.next();
+  while (!result.done) {
+    result = await gen.next();
+  }
+  return result.value;
+}
+
 const mockHTML = `
   <!DOCTYPE html>
   <html>
@@ -35,6 +42,7 @@ const mockHTML = `
 
 describe('WebFetchTool', () => {
   let tool: WebFetchTool;
+  let originalProxyEnv: string | undefined;
 
   beforeEach(() => {
     tool = new WebFetchTool();
@@ -46,12 +54,18 @@ describe('WebFetchTool', () => {
       description: { en: 'Test tool' },
     };
     (tool as any).logger = logger;
+    originalProxyEnv = process.env.WEB_FETCH_PROXY;
+    delete process.env.WEB_FETCH_PROXY;
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    process.env.WEB_FETCH_PROXY = originalProxyEnv;
   });
 
   it('should reject empty URL', async () => {
     const ctx = createMockContext();
-    await expect(runTool(tool.call({ url: '' }, ctx))).rejects.toThrow(
+    await expect(getResult(tool.call({ url: '' }, ctx))).rejects.toThrow(
       'Failed to parse URL from ',
     );
   });
@@ -59,7 +73,7 @@ describe('WebFetchTool', () => {
   it('should reject invalid URL', async () => {
     const ctx = createMockContext();
     await expect(
-      runTool(tool.call({ url: 'not-a-valid-url' }, ctx)),
+      getResult(tool.call({ url: 'not-a-valid-url' }, ctx)),
     ).rejects.toThrow('Failed to parse URL from not-a-valid-url');
   });
 
@@ -71,7 +85,7 @@ describe('WebFetchTool', () => {
     });
 
     const ctx = createMockContext();
-    const result = await runTool(
+    const result = await getResult(
       tool.call({ url: 'https://example.com/article' }, ctx),
     );
 
@@ -90,7 +104,7 @@ describe('WebFetchTool', () => {
 
     const ctx = createMockContext();
     await expect(
-      runTool(tool.call({ url: 'https://example.com/nonexistent' }, ctx)),
+      getResult(tool.call({ url: 'https://example.com/nonexistent' }, ctx)),
     ).rejects.toThrow('Failed to fetch URL: 404 Not Found');
   });
 
@@ -119,7 +133,7 @@ describe('WebFetchTool', () => {
     });
 
     const ctx = createMockContext();
-    const result = await runTool(
+    const result = await getResult(
       tool.call({ url: 'https://example.com/malicious' }, ctx),
     );
 
@@ -140,7 +154,7 @@ describe('WebFetchTool', () => {
 
     const ctx = createMockContext();
     await expect(
-      runTool(
+      getResult(
         tool.call({ url: 'https://example.com/slow', timeout: 100 }, ctx),
       ),
     ).rejects.toThrow();
@@ -180,7 +194,7 @@ describe('WebFetchTool - proxy retry', () => {
 
     const ctx = createMockContext();
     await expect(
-      runTool(tool.call({ url: 'https://example.com/blocked' }, ctx)),
+      getResult(tool.call({ url: 'https://example.com/blocked' }, ctx)),
     ).rejects.toThrow('Failed to fetch URL: 403 Forbidden');
   });
 
@@ -196,7 +210,7 @@ describe('WebFetchTool - proxy retry', () => {
     const ctx = createMockContext();
 
     try {
-      await runTool(tool.call({ url: 'https://example.com/blocked' }, ctx));
+      await getResult(tool.call({ url: 'https://example.com/blocked' }, ctx));
     } catch {
       // Expected to throw
     }

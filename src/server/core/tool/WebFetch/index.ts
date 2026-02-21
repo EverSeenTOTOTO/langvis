@@ -1,5 +1,6 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
+import { runTool } from '@/server/utils';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig, ToolEvent } from '@/shared/types';
@@ -31,31 +32,24 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  private buildFetchOptions(
+  private async doFetch(
+    url: string,
     signal: AbortSignal,
-    useProxy: boolean,
-  ): RequestInit {
-    return {
+    proxy?: string,
+  ): Promise<Response> {
+    this.logger.info(
+      `Fetching content from: ${url}${proxy ? ' (with proxy)' : ''}`,
+    );
+
+    const response = await fetch(url, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       },
       signal,
       // @ts-expect-error bun fetch option
-      proxy: useProxy ? process.env.WEB_FETCH_PROXY : undefined,
-    };
-  }
-
-  private async doFetch(
-    url: string,
-    signal: AbortSignal,
-    useProxy: boolean,
-  ): Promise<Response> {
-    this.logger.info(
-      `Fetching content from: ${url}${useProxy ? ' (with proxy)' : ''}`,
-    );
-
-    const response = await fetch(url, this.buildFetchOptions(signal, useProxy));
+      proxy,
+    });
 
     if (!response.ok) {
       throw new Error(
@@ -66,35 +60,6 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
     return response;
   }
 
-  private async *askProxyConfirmation(
-    ctx: ExecutionContext,
-    originalError: Error,
-  ): AsyncGenerator<ToolEvent> {
-    const humanInTheLoop = container.resolve<
-      HumanInTheLoopTool<{
-        value?: boolean;
-      }>
-    >(ToolIds.HUMAN_IN_THE_LOOP);
-
-    return yield* humanInTheLoop.call(
-      {
-        message: `Direct fetch failed: ${originalError.message}. A proxy is available. Retry with proxy?`,
-        formSchema: {
-          type: 'object',
-          properties: {
-            value: {
-              type: 'boolean',
-              nullable: true,
-              title: 'Use proxy?',
-            },
-          },
-        },
-        timeout: 60000,
-      },
-      ctx,
-    );
-  }
-
   async *call(
     @input() data: WebFetchInput,
     ctx: ExecutionContext,
@@ -102,7 +67,6 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
     ctx.signal.throwIfAborted();
 
     const { url, timeout = 30000 } = data;
-    const hasProxy = Boolean(process.env.WEB_FETCH_PROXY);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -114,11 +78,13 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
     let response: Response;
 
     try {
-      response = await this.doFetch(url, controller.signal, false);
+      response = await this.doFetch(url, controller.signal);
     } catch (error) {
       clearTimeout(timeoutId);
 
-      if (!hasProxy) {
+      const proxy = process.env.WEB_FETCH_PROXY;
+
+      if (!proxy) {
         throw error;
       }
 
@@ -126,7 +92,29 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
         `Direct fetch failed, asking user about proxy retry: ${(error as Error).message}`,
       );
 
-      const confirmed = yield* this.askProxyConfirmation(ctx, error as Error);
+      const humanInTheLoop = container.resolve<
+        HumanInTheLoopTool<{ value?: boolean }>
+      >(ToolIds.HUMAN_IN_THE_LOOP);
+
+      const confirmed = yield* runTool(
+        humanInTheLoop.call(
+          {
+            message: `Direct fetch failed: ${(error as Error).message}. A proxy is available. Retry with proxy?`,
+            formSchema: {
+              type: 'object',
+              properties: {
+                value: {
+                  type: 'boolean',
+                  nullable: true,
+                  title: 'Use proxy?',
+                },
+              },
+            },
+            timeout: 60000,
+          },
+          ctx,
+        ),
+      );
 
       if (!confirmed.submitted || confirmed.data?.value !== true) {
         throw error;
@@ -140,7 +128,7 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
       });
 
       try {
-        response = await this.doFetch(url, retryController.signal, true);
+        response = await this.doFetch(url, retryController.signal, proxy);
       } finally {
         clearTimeout(retryTimeoutId);
       }

@@ -14,3 +14,9 @@ You should:
 - only run specific test when necessary, skip coverage when testing.
 - always run lint after code generating.
 - avoid useless comments, be clean.
+
+## Frontend Best Practices
+
+- API calls must be declared in store first, then consumed in components.
+- Prefer `useAsyncFn` from `react-use` for async state management.
+- DO NOT use raw `fetch` or `useState` for loading states (e.g. `const [loading, setLoading] = useState(false)`) in components.

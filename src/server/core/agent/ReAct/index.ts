@@ -116,7 +116,7 @@ export default class ReActAgent extends Agent {
 
       this.logger.debug('ReAct iter messages: ', iterMessages);
 
-      const content = await runTool(
+      const content = yield* runTool(
         llmCallTool.call(
           {
             messages: iterMessages,
@@ -126,6 +126,7 @@ export default class ReActAgent extends Agent {
           },
           ctx,
         ),
+        e => ctx.adaptToolEvent(e),
       );
 
       if (!content) {
