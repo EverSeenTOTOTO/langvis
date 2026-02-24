@@ -87,7 +87,7 @@ describe('ChatAgent', () => {
       type: 'stream',
       content: ' world',
     });
-    expect(events[3]).toMatchObject({
+    expect(events[4]).toMatchObject({
       type: 'final',
     });
   });
