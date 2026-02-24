@@ -1,21 +1,31 @@
 import MarkdownRender from '@/client/components/MarkdownRender';
 import { AgentEvent } from '@/shared/types';
 import { Message } from '@/shared/types/entities';
-import { observer } from 'mobx-react-lite';
 import EventRenderer from '../../EventRenderer';
 
-const ReActAgentMessage = ({ msg }: { msg: Message }) => {
+interface AgentRenderResult {
+  content: React.ReactNode;
+  isLoading: boolean;
+}
+
+const ReActAgentMessage = ({ msg }: { msg: Message }): AgentRenderResult => {
   const events = msg.meta?.events as AgentEvent[] | undefined;
   const hasEvents = events && events.length > 0;
-
-  return (
-    <>
-      {hasEvents && (
-        <EventRenderer events={events!} conversationId={msg.conversationId} />
-      )}
-      <MarkdownRender>{msg.content}</MarkdownRender>
-    </>
+  const hasFinalOrError = events?.some(e =>
+    ['final', 'error'].includes(e.type),
   );
+
+  return {
+    content: (
+      <>
+        {hasEvents && (
+          <EventRenderer events={events!} conversationId={msg.conversationId} />
+        )}
+        <MarkdownRender>{msg.content}</MarkdownRender>
+      </>
+    ),
+    isLoading: !hasEvents && msg.content.length === 0 && !hasFinalOrError,
+  };
 };
 
-export default observer(ReActAgentMessage);
+export default ReActAgentMessage;

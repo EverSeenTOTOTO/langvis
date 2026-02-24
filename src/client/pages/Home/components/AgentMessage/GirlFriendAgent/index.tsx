@@ -7,7 +7,16 @@ import { InfoCircleOutlined } from '@ant-design/icons';
 import { Alert, Spin, Tooltip, Typography } from 'antd';
 import './index.scss';
 
-const GirFriendAgentMessage = ({ msg }: { msg: Message }) => {
+interface AgentRenderResult {
+  content: React.ReactNode;
+  isLoading: boolean;
+}
+
+const GirlFriendAgentMessage = ({
+  msg,
+}: {
+  msg: Message;
+}): AgentRenderResult => {
   let ttsCall, ttsResult, ttsError;
 
   for (const e of msg.meta?.events || []) {
@@ -23,37 +32,43 @@ const GirFriendAgentMessage = ({ msg }: { msg: Message }) => {
   }
 
   const output = ttsResult?.output as TextToSpeechOutput | undefined;
-
-  return (
-    <>
-      <Spin spinning={ttsCall && !(ttsResult || ttsError)}>
-        <MarkdownRender>{msg.content}</MarkdownRender>
-      </Spin>
-      {ttsResult && (
-        <AudioPlayer
-          src={`/api/files/play/${output?.filePath}`}
-          className="gf-meta-audio"
-          suffix={
-            <Tooltip
-              classNames={{ root: 'gf-meta-tooltip' }}
-              title={
-                <Typography.Text copyable>{output?.filePath}</Typography.Text>
-              }
-            >
-              <InfoCircleOutlined className="gf-meta-icon" />
-            </Tooltip>
-          }
-        />
-      )}
-      {ttsError && (
-        <Alert
-          type="error"
-          title={ttsError.error}
-          style={{ marginBlockEnd: 8 }}
-        />
-      )}
-    </>
+  const hasFinalOrError = msg.meta?.events?.some(e =>
+    ['final', 'error'].includes(e.type),
   );
+
+  return {
+    content: (
+      <>
+        <Spin spinning={!!ttsCall && !(ttsResult || ttsError)}>
+          <MarkdownRender>{msg.content}</MarkdownRender>
+        </Spin>
+        {ttsResult && (
+          <AudioPlayer
+            src={`/api/files/play/${output?.filePath}`}
+            className="gf-meta-audio"
+            suffix={
+              <Tooltip
+                classNames={{ root: 'gf-meta-tooltip' }}
+                title={
+                  <Typography.Text copyable>{output?.filePath}</Typography.Text>
+                }
+              >
+                <InfoCircleOutlined className="gf-meta-icon" />
+              </Tooltip>
+            }
+          />
+        )}
+        {ttsError && (
+          <Alert
+            type="error"
+            title={ttsError.error}
+            style={{ marginBlockEnd: 8 }}
+          />
+        )}
+      </>
+    ),
+    isLoading: msg.content.length === 0 && !ttsResult && !hasFinalOrError,
+  };
 };
 
-export default GirFriendAgentMessage;
+export default GirlFriendAgentMessage;

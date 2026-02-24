@@ -2,7 +2,6 @@ import MarkdownRender from '@/client/components/MarkdownRender';
 import { useStore } from '@/client/store';
 import { AgentIds } from '@/shared/constants';
 import { Message } from '@/shared/types/entities';
-import { isMessageLoading } from '@/shared/utils';
 import { RobotOutlined } from '@ant-design/icons';
 import { Bubble } from '@ant-design/x';
 import { Avatar, Flex } from 'antd';
@@ -11,36 +10,49 @@ import GirlFriendAgentMessage from './AgentMessage/GirlFriendAgent';
 import ReActAgentMessage from './AgentMessage/ReActAgent';
 import MessageFooter from './MessageFooter';
 
-const renderMessage = (msg: Message) => {
+interface AgentRenderResult {
+  content: React.ReactNode;
+  isLoading: boolean;
+}
+
+const renderMessage = (msg: Message): AgentRenderResult => {
   const conversationStore = useStore('conversation');
   const currentConversation = conversationStore.currentConversation;
 
   const agent = currentConversation?.config?.agent || AgentIds.CHAT;
+  const hasFinalOrError = msg.meta?.events?.some(e =>
+    ['final', 'error'].includes(e.type),
+  );
 
   switch (agent) {
     case AgentIds.GIRLFRIEND:
-      return <GirlFriendAgentMessage msg={msg} />;
+      return GirlFriendAgentMessage({ msg });
     case AgentIds.REACT:
-      return <ReActAgentMessage msg={msg} />;
+      return ReActAgentMessage({ msg });
     case AgentIds.CHAT:
     default:
-      return <MarkdownRender>{msg.content}</MarkdownRender>;
+      return {
+        content: <MarkdownRender>{msg.content}</MarkdownRender>,
+        isLoading: msg.content.length === 0 && !hasFinalOrError,
+      };
   }
 };
 
 const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
+  const { content, isLoading } = renderMessage(msg);
   const hasError = msg.meta?.events?.some(e => e.type === 'error');
+
   return (
     <Bubble
       key={msg.id}
       placement="start"
       content={
         <Flex vertical align="start" gap={8} style={{ minWidth: 200 }}>
-          {renderMessage(msg)}
+          {content}
           <MessageFooter content={msg.content} />
         </Flex>
       }
-      loading={isMessageLoading(msg)}
+      loading={isLoading}
       avatar={<Avatar icon={<RobotOutlined />} />}
       styles={{
         content: {

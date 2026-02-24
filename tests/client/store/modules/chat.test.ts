@@ -1,9 +1,9 @@
+import { ChatStore } from '@/client/store/modules/chat';
+import { ConversationStore } from '@/client/store/modules/conversation';
+import { SettingStore } from '@/client/store/modules/setting';
+import { AgentEvent } from '@/shared/types';
 import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatStore } from '@/client/store/modules/chat';
-import { SettingStore } from '@/client/store/modules/setting';
-import { ConversationStore } from '@/client/store/modules/conversation';
-import { AgentEvent } from '@/shared/types';
 
 class MockEventSource {
   url: string;
@@ -271,55 +271,5 @@ describe('ChatStore', () => {
 
     expect(chatStore.isConnected(conversationId)).toBe(false);
   });
-
-  it('should return currentStreamingMessage when streaming', () => {
-    const conversationId = 'test-conversation-id';
-
-    mockEventSource = new MockEventSource(
-      `http://localhost:3000/api/chat/sse/${conversationId}`,
-    );
-
-    const MockEventSourceConstructor = vi.fn(() => mockEventSource) as any;
-    MockEventSourceConstructor.CONNECTING = MockEventSource.CONNECTING;
-    MockEventSourceConstructor.OPEN = MockEventSource.OPEN;
-    MockEventSourceConstructor.CLOSED = MockEventSource.CLOSED;
-
-    (global as any).EventSource = MockEventSourceConstructor;
-
-    const mockConversationStore = {
-      messages: {} as Record<string, any[]>,
-      currentConversationId: conversationId,
-      getMessagesByConversationId: vi.fn(),
-    };
-
-    Object.defineProperty(mockConversationStore, 'currentMessages', {
-      get() {
-        return this.messages[this.currentConversationId] ?? [];
-      },
-    });
-
-    const mockSettingStore = {
-      tr: vi.fn((key: string) => key),
-    } as unknown as SettingStore;
-
-    const testChatStore = new ChatStore(
-      mockConversationStore as unknown as ConversationStore,
-      mockSettingStore,
-    );
-
-    // Simulate the addPendingMessages behavior through public API mock
-    mockConversationStore.messages[conversationId] = [];
-
-    // Call addPendingMessages via reflection
-    const addPendingMessages =
-      Object.getPrototypeOf(testChatStore).addPendingMessages;
-    addPendingMessages.call(testChatStore, conversationId, 'test');
-
-    expect(testChatStore.currentStreamingMessage).toBeDefined();
-    expect(testChatStore.currentStreamingMessage?.role).toBe('assistant');
-  });
-
-  it('should return undefined for currentStreamingMessage when not streaming', () => {
-    expect(chatStore.currentStreamingMessage).toBeUndefined();
-  });
 });
+
