@@ -53,6 +53,27 @@ beforeAll(() => {
       return;
     }
 
+    if (/apiformdata/.test(req.url!)) {
+      const contentType = req.headers['content-type'] as string;
+      const isFormData = contentType?.includes('multipart/form-data');
+      let body = '';
+
+      req.on('data', chunk => {
+        body += chunk;
+      });
+      req.on('end', () => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            isFormData,
+            hasFile: body.includes('Content-Disposition'),
+            bodyPreview: body.slice(0, 200),
+          }),
+        );
+      });
+      return;
+    }
+
     await new Promise(resolve => setTimeout(resolve, 100));
 
     res.writeHead(404);
@@ -224,4 +245,32 @@ it('api', async () => {
     cookie:
       'session=eyJpZCI6Ijc3MWY5ZDdjLTEwNzUtNDljNC05YzZlLWJiNDI0ZDQ3MThkNSJ9',
   });
+});
+
+it('api with FormData auto-detection', async () => {
+  class Demo {
+    @api(`http://localhost:${port}/apiformdata`, { method: 'post' })
+    uploadWithFile(_: any, req?: ApiRequest) {
+      return req!.send();
+    }
+
+    @api(`http://localhost:${port}/apipost`, { method: 'post' })
+    uploadWithoutFile(_: any, req?: ApiRequest) {
+      return req!.send();
+    }
+  }
+
+  const demo = factory(new Demo());
+
+  // Test with File - should use FormData
+  const file = new File(['test content'], 'test.txt', { type: 'text/plain' });
+  const result1 = await demo.uploadWithFile({ file, userId: '123' });
+
+  expect(result1.isFormData).toBe(true);
+  expect(result1.hasFile).toBe(true);
+
+  // Test without File - should use JSON
+  const result2 = await demo.uploadWithoutFile({ name: 'hello' });
+
+  expect(result2).toEqual({ name: 'hello' });
 });

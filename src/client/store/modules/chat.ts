@@ -2,7 +2,10 @@ import { api, ApiRequest, getPrefetchPath } from '@/client/decorator/api';
 import { store } from '@/client/decorator/store';
 import type {
   CancelChatRequest,
+  GetHumanInputStatusRequest,
+  GetHumanInputStatusResponse,
   StartChatRequest,
+  SubmitHumanInputRequest,
 } from '@/shared/dto/controller';
 import { AgentEvent } from '@/shared/types';
 import type { Message } from '@/shared/types/entities';
@@ -146,26 +149,25 @@ export class ChatStore {
   }
 
   @api(
-    (req: { conversationId: string; data: Record<string, unknown> }) =>
-      `/api/human-input/${req.conversationId}`,
+    (req: SubmitHumanInputRequest) => `/api/human-input/${req.conversationId}`,
     { method: 'post' },
   )
   async submitHumanInput(
-    _params: { conversationId: string; data: Record<string, unknown> },
-    req?: ApiRequest<{ conversationId: string; data: Record<string, unknown> }>,
+    _params: SubmitHumanInputRequest,
+    req?: ApiRequest<SubmitHumanInputRequest>,
   ) {
     return req!.send();
   }
 
   @api(
-    (req: { conversationId: string }) =>
+    (req: GetHumanInputStatusRequest) =>
       `/api/human-input/${req.conversationId}`,
   )
   async getHumanInputStatus(
-    _params: { conversationId: string },
-    req?: ApiRequest<{ conversationId: string }>,
-  ) {
-    return req!.send();
+    _params: GetHumanInputStatusRequest,
+    req?: ApiRequest<GetHumanInputStatusRequest>,
+  ): Promise<GetHumanInputStatusResponse> {
+    return req!.send() as Promise<GetHumanInputStatusResponse>;
   }
 
   @api((req: StartChatRequest) => `/api/chat/start/${req.conversationId}`, {

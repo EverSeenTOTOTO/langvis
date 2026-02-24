@@ -51,7 +51,7 @@ describe('HumanInputController', () => {
       const res = createMockResponse();
       await controller.submitInput(
         'nonexistent-conversation',
-        { data: {} },
+        { conversationId: 'nonexistent-conversation', data: {} },
         res,
       );
 
@@ -78,6 +78,7 @@ describe('HumanInputController', () => {
       await controller.submitInput(
         'test-conversation',
         {
+          conversationId: 'test-conversation',
           data: { answer: 'yes' },
         },
         res,
@@ -109,6 +110,7 @@ describe('HumanInputController', () => {
       await controller.submitInput(
         'test-conversation',
         {
+          conversationId: 'test-conversation',
           data: { name: 'John' },
         },
         res,
@@ -138,7 +140,7 @@ describe('HumanInputController', () => {
       const res = createMockResponse();
       await controller.submitInput(
         'test-conversation',
-        { data: { confirmed: true } },
+        { conversationId: 'test-conversation', data: { confirmed: true } },
         res,
       );
 
@@ -165,6 +167,7 @@ describe('HumanInputController', () => {
       await controller.submitInput(
         'test-conversation',
         {
+          conversationId: 'test-conversation',
           data: { confirmed: true },
         },
         res,
@@ -258,7 +261,11 @@ describe('HumanInputController', () => {
   describe('Redis key format', () => {
     it('should use correct Redis key prefix for submitInput', async () => {
       const res = createMockResponse();
-      await controller.submitInput('conv-123', { data: {} }, res);
+      await controller.submitInput(
+        'conv-123',
+        { conversationId: 'conv-123', data: {} },
+        res,
+      );
       expect(mockRedis.get).toHaveBeenCalledWith(`${REDIS_PREFIX}conv-123`);
     });
 

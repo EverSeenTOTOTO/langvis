@@ -12,6 +12,8 @@ export enum ParamType {
   RESPONSE = 'response',
   CONFIG = 'config',
   INPUT = 'input',
+  FILE = 'file',
+  FILES = 'files',
 }
 
 export interface ParamMetadata {
@@ -96,6 +98,14 @@ export function input() {
   return createParamDecorator(ParamType.INPUT);
 }
 
+export function file(fieldName?: string) {
+  return createParamDecorator(ParamType.FILE, undefined, fieldName);
+}
+
+export function files(fieldName?: string) {
+  return createParamDecorator(ParamType.FILES, undefined, fieldName);
+}
+
 export async function extractParams(
   target: any,
   methodName: string | symbol,
@@ -143,6 +153,41 @@ export async function extractParams(
 
       case ParamType.RESPONSE:
         value = res;
+        break;
+
+      case ParamType.FILE:
+        if (meta.propertyKey) {
+          // Try req.file first (single mode)
+          if (req.file && req.file.fieldname === meta.propertyKey) {
+            value = req.file;
+          } else if (req.files && !Array.isArray(req.files)) {
+            // fields mode: req.files is an object { fieldName: File[] }
+            const fileArray = req.files[meta.propertyKey];
+            value = fileArray?.[0];
+          } else {
+            value = undefined;
+          }
+        } else {
+          value = req.file;
+        }
+        break;
+
+      case ParamType.FILES:
+        if (meta.propertyKey) {
+          value = req.files
+            ? Array.isArray(req.files)
+              ? req.files.filter(f => f.fieldname === meta.propertyKey)
+              : (req.files as Record<string, Express.Multer.File[]>)[
+                  meta.propertyKey
+                ] || []
+            : [];
+        } else {
+          value = Array.isArray(req.files)
+            ? req.files
+            : req.files
+              ? Object.values(req.files).flat()
+              : [];
+        }
         break;
 
       default:

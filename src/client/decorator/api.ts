@@ -1,4 +1,3 @@
-import type { DtoConstructor } from '@/shared/dto/base';
 import { getOwnPropertyNames, isClient, isTest } from '@/shared/utils';
 import { message } from 'antd';
 import fetchCookie from 'fetch-cookie';
@@ -54,17 +53,13 @@ const getApiOptions = <P extends Record<string, any>>(
   {
     config,
     options,
-    requestDto,
-    responseDto,
   }: {
     config: ApiOptions<P>;
     options?: ApiConfig['options'];
-    requestDto?: DtoConstructor;
-    responseDto?: DtoConstructor;
   },
 ) => {
   if (typeof config === 'string') {
-    return { path: compilePath(config, req), options, requestDto, responseDto };
+    return { path: compilePath(config, req), options };
   }
 
   if (typeof config === 'function') {
@@ -74,8 +69,6 @@ const getApiOptions = <P extends Record<string, any>>(
       return {
         path: compilePath(result, req),
         options,
-        requestDto,
-        responseDto,
       };
     }
 
@@ -93,40 +86,73 @@ const getApiOptions = <P extends Record<string, any>>(
   };
 };
 
-export class ApiRequest<P extends Record<string, any> = {}> extends Request {
-  private responseDto?: DtoConstructor;
+function isFileLike(value: unknown): boolean {
+  return value instanceof File || value instanceof Blob;
+}
 
+function hasFiles(obj: unknown): boolean {
+  if (isFileLike(obj)) return true;
+  if (Array.isArray(obj)) return obj.some(isFileLike);
+  if (obj && typeof obj === 'object') {
+    return Object.values(obj).some(hasFiles);
+  }
+  return false;
+}
+
+function buildFormData(data: Record<string, any>): FormData {
+  const formData = new FormData();
+
+  for (const [key, value] of Object.entries(data)) {
+    if (value == null) continue;
+
+    if (isFileLike(value)) {
+      formData.append(key, value);
+    } else if (Array.isArray(value)) {
+      for (const item of value) {
+        formData.append(key, isFileLike(item) ? item : String(item));
+      }
+    } else {
+      formData.append(key, String(value));
+    }
+  }
+
+  return formData;
+}
+
+export class ApiRequest<P extends Record<string, any> = {}> extends Request {
   constructor(
     req: P,
     config: {
       config: ApiOptions<P>;
       options?: ApiConfig['options'];
-      requestDto?: DtoConstructor;
-      responseDto?: DtoConstructor;
     },
   ) {
-    const { path, options, requestDto, responseDto } = getApiOptions(
-      req,
-      config,
-    );
+    const { path, options } = getApiOptions(req, config);
     const url =
       path.startsWith('/') && !isClient() ? getPrefetchPath(path) : path;
 
-    let bodyData = req;
-    if (requestDto && ['post', 'put'].includes(options?.method || 'get')) {
-      bodyData = requestDto.transform(req);
-    }
+    const shouldHaveBody = ['post', 'put', 'patch'].includes(
+      options?.method || 'get',
+    );
 
-    const extraOptions = ['post', 'put'].includes(options?.method || 'get')
-      ? {
-          body: JSON.stringify(bodyData),
+    let extraOptions: RequestInit | undefined;
+
+    if (shouldHaveBody) {
+      if (hasFiles(req)) {
+        extraOptions = {
+          body: buildFormData(req),
+          signal: AbortSignal.timeout(options?.timeout || 60_000),
+        };
+      } else {
+        extraOptions = {
+          body: JSON.stringify(req),
           headers: { 'Content-Type': 'application/json' },
           signal: AbortSignal.timeout(options?.timeout || 60_000),
-        }
-      : undefined;
+        };
+      }
+    }
 
     super(url, merge(options, extraOptions));
-    this.responseDto = responseDto;
   }
 
   async send() {
@@ -154,10 +180,6 @@ export class ApiRequest<P extends Record<string, any> = {}> extends Request {
       }
 
       throw e;
-    }
-
-    if (this.responseDto) {
-      return this.responseDto.transform(rsp);
     }
 
     return rsp;
