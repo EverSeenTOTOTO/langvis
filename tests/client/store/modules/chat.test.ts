@@ -272,4 +272,3 @@ describe('ChatStore', () => {
     expect(chatStore.isConnected(conversationId)).toBe(false);
   });
 });
-

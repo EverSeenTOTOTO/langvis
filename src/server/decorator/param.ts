@@ -1,6 +1,7 @@
 import type { DtoConstructor } from '@/shared/dto/base';
 import { isDtoClass } from '@/shared/dto/base';
 import type { Request, Response } from 'express';
+import multer from 'multer';
 
 export const PARAM_METADATA_KEY = Symbol('param_metadata');
 
@@ -16,17 +17,19 @@ export enum ParamType {
   FILES = 'files',
 }
 
-export interface ParamMetadata {
+export interface ParamMetadata<C = unknown> {
   index: number;
   type: ParamType;
   dtoClass?: DtoConstructor;
   propertyKey?: string;
+  config?: C;
 }
 
-function createParamDecorator<T>(
+function createParamDecorator<T, C = unknown>(
   type: ParamType,
   dtoClass?: DtoConstructor<T>,
   propertyKey?: string,
+  paramConfig?: C,
 ) {
   return function (
     target: object,
@@ -56,6 +59,7 @@ function createParamDecorator<T>(
       type,
       dtoClass: resolvedDtoClass as DtoConstructor,
       propertyKey,
+      config: paramConfig,
     });
 
     Reflect.defineMetadata(
@@ -98,12 +102,28 @@ export function input() {
   return createParamDecorator(ParamType.INPUT);
 }
 
-export function file(fieldName?: string) {
-  return createParamDecorator(ParamType.FILE, undefined, fieldName);
+export type FileUploadConfig = multer.Options;
+
+export interface FilesUploadConfig extends multer.Options {
+  maxCount?: number;
 }
 
-export function files(fieldName?: string) {
-  return createParamDecorator(ParamType.FILES, undefined, fieldName);
+export function file(name?: string, uploadConfig?: FileUploadConfig) {
+  return createParamDecorator<FileUploadConfig>(
+    ParamType.FILE,
+    undefined,
+    name,
+    uploadConfig,
+  );
+}
+
+export function files(name?: string, uploadConfig?: FilesUploadConfig) {
+  return createParamDecorator<FilesUploadConfig>(
+    ParamType.FILES,
+    undefined,
+    name,
+    uploadConfig,
+  );
 }
 
 export async function extractParams(

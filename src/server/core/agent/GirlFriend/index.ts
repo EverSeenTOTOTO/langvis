@@ -64,8 +64,8 @@ export default class GirlFriendAgent extends Agent {
     for await (const toolEvent of llmGenerator) {
       if (toolEvent.type === 'progress' && typeof toolEvent.data === 'string') {
         yield ctx.agentStreamEvent(toolEvent.data);
-      } else if (toolEvent.type === 'error') {
-        yield ctx.agentErrorEvent(toolEvent.error);
+      } else {
+        yield ctx.adaptToolEvent(toolEvent);
       }
     }
 

@@ -75,7 +75,7 @@ it('api', async () => {
 
 it('api with file upload', async () => {
   class Demo {
-    @api('/upload-single', { method: 'post', upload: { single: 'file' } })
+    @api('/upload-single', { method: 'post' })
     async uploadSingle(
       @file('file') uploadedFile: Express.Multer.File,
       @request() req: Request,
@@ -89,10 +89,7 @@ it('api with file upload', async () => {
       });
     }
 
-    @api('/upload-array', {
-      method: 'post',
-      upload: { array: { name: 'files', maxCount: 3 } },
-    })
+    @api('/upload-array', { method: 'post' })
     async uploadArray(
       @files('files') uploadedFiles: Express.Multer.File[],
       @response() res: Response,
@@ -103,15 +100,7 @@ it('api with file upload', async () => {
       });
     }
 
-    @api('/upload-fields', {
-      method: 'post',
-      upload: {
-        fields: [
-          { name: 'avatar', maxCount: 1 },
-          { name: 'gallery', maxCount: 2 },
-        ],
-      },
-    })
+    @api('/upload-fields', { method: 'post' })
     async uploadFields(
       @file('avatar') avatar: Express.Multer.File,
       @files('gallery') gallery: Express.Multer.File[],
@@ -129,6 +118,14 @@ it('api with file upload', async () => {
       @response() res: Response,
     ) {
       res.json({ filename: uploadedFile?.originalname });
+    }
+
+    @api('/upload-maxcount', { method: 'post' })
+    async uploadMaxCount(
+      @files('docs', { maxCount: 2 }) docs: Express.Multer.File[],
+      @response() res: Response,
+    ) {
+      res.json({ count: docs?.length });
     }
   }
 
@@ -196,6 +193,37 @@ it('api with file upload', async () => {
         ).then(rsp => rsp.json());
 
         expect(noFile.filename).toBeUndefined();
+
+        // Test maxCount - should accept 2 files
+        const formData5 = new FormData();
+        formData5.append('docs', new Blob(['a']), 'a.txt');
+        formData5.append('docs', new Blob(['b']), 'b.txt');
+
+        const maxCountOk = await fetch(
+          `http://localhost:${port}/upload-maxcount`,
+          {
+            method: 'post',
+            body: formData5,
+          },
+        ).then(rsp => rsp.json());
+
+        expect(maxCountOk.count).toBe(2);
+
+        // Test maxCount exceeded - should reject with 400
+        const formData6 = new FormData();
+        formData6.append('docs', new Blob(['a']), 'a.txt');
+        formData6.append('docs', new Blob(['b']), 'b.txt');
+        formData6.append('docs', new Blob(['c']), 'c.txt');
+
+        const maxCountExceeded = await fetch(
+          `http://localhost:${port}/upload-maxcount`,
+          {
+            method: 'post',
+            body: formData6,
+          },
+        ).then(rsp => ({ status: rsp.status, json: rsp.json() }));
+
+        expect(maxCountExceeded.status).toBe(400);
 
         resolve();
       } catch (error) {
