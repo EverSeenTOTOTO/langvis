@@ -1,5 +1,3 @@
-import { Message } from '../entities/Message';
-
 export const getOwnPropertyNames = <T extends object>(x: T) => {
   return [
     ...Object.getOwnPropertyNames(x),
@@ -33,20 +31,4 @@ export const sleepWithSignal = (
 
     signal?.addEventListener('abort', onAbort, { once: true });
   });
-};
-
-export const isMessageLoading = (message?: Message) => {
-  if (!message) return false;
-  const events = message.meta?.events ?? [];
-
-  if (message.content.length > 0) return false;
-
-  if (events.some(e => ['final', 'error'].includes(e.type))) return false;
-
-  const hasSpecialEvents = events.some(
-    e => !['start', 'final', 'error', 'stream'].includes(e.type),
-  );
-  if (hasSpecialEvents) return false;
-
-  return true;
 };

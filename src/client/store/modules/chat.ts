@@ -144,8 +144,17 @@ export class ChatStore {
     params: CancelChatRequest,
     req?: ApiRequest<CancelChatRequest>,
   ) {
-    await req!.send();
-    this.clearStreaming(params.conversationId);
+    // Cleanup frontend state
+    this.disconnectFromSSE(params.conversationId);
+    this.flushBufferImmediately(params.conversationId);
+
+    try {
+      await req!.send();
+    } catch (e) {
+      if (!(e instanceof Error && e.message.includes('404'))) {
+        throw e;
+      }
+    }
   }
 
   @api(
@@ -237,18 +246,11 @@ export class ChatStore {
         break;
       case 'final':
         this.disconnectFromSSE(conversationId);
-        await this.flushTypewriter(conversationId);
-        this.clearStreaming(conversationId);
-        this.conversationStore.getMessagesByConversationId({
-          id: conversationId,
-        });
+        this.waitForTypewriter(conversationId);
         break;
       case 'error':
         this.disconnectFromSSE(conversationId);
-        this.clearStreaming(conversationId);
-        this.conversationStore.getMessagesByConversationId({
-          id: conversationId,
-        });
+        this.flushBufferImmediately(conversationId);
         break;
     }
   }
@@ -259,22 +261,6 @@ export class ChatStore {
   ): void {
     const messages = this.conversationStore.messages[conversationId] ?? [];
 
-    const assistMessage: Message = {
-      id: uuid(),
-      conversationId,
-      role: Role.ASSIST,
-      content: '',
-      meta: { events: [] },
-      createdAt: new Date(),
-    };
-
-    this.streamingStates.set(conversationId, {
-      eventSource: null,
-      message: assistMessage,
-      buffer: '',
-      timer: null,
-    });
-
     messages.push(
       {
         id: uuid(),
@@ -283,7 +269,14 @@ export class ChatStore {
         content: userContent,
         createdAt: new Date(),
       },
-      assistMessage,
+      {
+        id: uuid(),
+        conversationId,
+        role: Role.ASSIST,
+        content: '',
+        meta: { events: [] },
+        createdAt: new Date(),
+      },
     );
 
     this.conversationStore.messages[conversationId] = messages;
@@ -349,26 +342,59 @@ export class ChatStore {
     }
   }
 
-  private clearStreaming(conversationId: string): void {
+  private flushBufferImmediately(conversationId: string): void {
     const state = this.streamingStates.get(conversationId);
-    if (state?.timer) {
+    if (!state) return;
+
+    if (state.timer) {
       clearInterval(state.timer);
     }
+
+    if (state.buffer.length > 0) {
+      state.message = {
+        ...state.message,
+        content: state.message.content + state.buffer,
+      };
+      state.buffer = '';
+
+      const messages = this.conversationStore.messages[conversationId];
+      if (messages.length) {
+        messages[messages.length - 1] = state.message;
+      }
+    }
+
     this.streamingStates.delete(conversationId);
   }
 
-  private flushTypewriter(conversationId: string): Promise<void> {
-    return new Promise(resolve => {
-      const check = () => {
-        const state = this.streamingStates.get(conversationId);
-        if (!state || state.buffer.length === 0) {
-          resolve();
-        } else {
-          setTimeout(check, 20);
-        }
-      };
-      check();
-    });
+  private waitForTypewriter(conversationId: string): void {
+    const state = this.streamingStates.get(conversationId);
+    if (!state) return;
+
+    // If no timer running and buffer empty, cleanup immediately
+    if (!state.timer && state.buffer.length === 0) {
+      this.streamingStates.delete(conversationId);
+      this.conversationStore.getMessagesByConversationId({
+        id: conversationId,
+      });
+      return;
+    }
+
+    // Wait for timer to finish consuming buffer
+    const checkBuffer = () => {
+      const currentState = this.streamingStates.get(conversationId);
+      if (
+        !currentState ||
+        (!currentState.timer && currentState.buffer.length === 0)
+      ) {
+        this.streamingStates.delete(conversationId);
+        this.conversationStore.getMessagesByConversationId({
+          id: conversationId,
+        });
+      } else {
+        setTimeout(checkBuffer, 50);
+      }
+    };
+    setTimeout(checkBuffer, 50);
   }
 
   private flushChunk(conversationId: string): void {
