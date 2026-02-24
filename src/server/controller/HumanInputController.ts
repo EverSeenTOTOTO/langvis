@@ -1,3 +1,4 @@
+import { SubmitHumanInputRequestDto } from '@/shared/dto/controller';
 import { InjectTokens } from '@/shared/constants';
 import { api } from '@/server/decorator/api';
 import { controller } from '@/server/decorator/controller';
@@ -7,10 +8,6 @@ import type { RedisClientType } from 'redis';
 import type { Response } from 'express';
 
 const REDIS_PREFIX = 'human_input:';
-
-interface SubmitHumanInputDto {
-  data: Record<string, unknown>;
-}
 
 @controller('/api/human-input')
 export default class HumanInputController {
@@ -22,7 +19,7 @@ export default class HumanInputController {
   @api('/:conversationId', { method: 'post' })
   async submitInput(
     @param('conversationId') conversationId: string,
-    @body() dto: SubmitHumanInputDto,
+    @body() dto: SubmitHumanInputRequestDto,
     @response() res: Response,
   ) {
     const key = `${REDIS_PREFIX}${conversationId}`;
