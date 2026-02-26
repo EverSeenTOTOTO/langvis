@@ -29,47 +29,6 @@ describe('ConversationGroupStore', () => {
     it('should initialize with empty groups', () => {
       expect(store.groups).toEqual([]);
     });
-
-    it('should return allItems sorted by order', () => {
-      store.groups = [
-        {
-          id: 'group-2',
-          name: 'Group 2',
-          order: 200,
-          userId: 'test-user',
-          createdAt: new Date(),
-        },
-        {
-          id: 'group-1',
-          name: 'Group 1',
-          order: 100,
-          userId: 'test-user',
-          createdAt: new Date(),
-        },
-      ];
-
-      const items = store.allItems;
-      expect(items).toHaveLength(2);
-      expect(items[0].data.id).toBe('group-1');
-      expect(items[1].data.id).toBe('group-2');
-    });
-
-    it('should return all items with correct type', () => {
-      store.groups = [
-        {
-          id: 'group-1',
-          name: 'Group 1',
-          order: 100,
-          userId: 'test-user',
-          createdAt: new Date(),
-          conversations: [{ id: 'conv-1', name: 'Conv 1', order: 1 } as any],
-        },
-      ];
-
-      const items = store.allItems;
-      expect(items[0].type).toBe('group');
-      expect(items[0].data.id).toBe('group-1');
-    });
   });
 
   describe('findGroupIdByConversationId', () => {

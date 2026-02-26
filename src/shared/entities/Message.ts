@@ -1,3 +1,4 @@
+import type { Message } from '@/shared/types/entities';
 import {
   Column,
   CreateDateColumn,
@@ -6,8 +7,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-
-import type { Message } from '@/shared/types/entities';
+import type { ConversationEntity } from './Conversation';
 import { Role } from '@/shared/types/entities';
 
 export { Message, Role };
@@ -37,5 +37,5 @@ export class MessageEntity implements Message {
 
   @ManyToOne('ConversationEntity', 'messages')
   @JoinColumn({ name: 'conversationId' })
-  conversation: any;
+  conversation!: ConversationEntity;
 }

@@ -14,14 +14,16 @@ import {
   App,
   Button,
   Dropdown,
+  Flex,
   Layout,
   Skeleton,
+  Tag,
+  Tooltip,
   Tree,
   theme,
   type MenuProps,
   type TreeProps,
 } from 'antd';
-import type { DataNode } from 'antd/es/tree';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAsyncFn } from 'react-use';
@@ -111,52 +113,17 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
   }, [store.currentConversationId]);
 
   // 构建 Tree 数据
-  const treeData: DataNode[] = useMemo(() => {
+  const treeData = useMemo(() => {
     return groupStore.groups
-      .map(group => ({
-        key: `group-${group.id}`,
-        title: group.name,
-        icon: <FolderOutlined />,
-        children:
-          group.conversations
-            ?.slice()
-            .sort((a, b) => a.order - b.order)
-            .map(conv => ({
-              key: conv.id,
-              title:
-                conv.name ||
-                `${settingStore.tr('Conversation')} ${conv.id.substring(0, 8)}`,
-              icon: <MessageOutlined />,
-              isLeaf: true,
-            })) || [],
-      }))
-      .sort((a, b) => {
-        const aId = (a.key as string).replace('group-', '');
-        const bId = (b.key as string).replace('group-', '');
-        const aOrder = groupStore.groups.find(g => g.id === aId)?.order ?? 0;
-        const bOrder = groupStore.groups.find(g => g.id === bId)?.order ?? 0;
-        return aOrder - bOrder;
-      });
-  }, [groupStore.groups, settingStore]);
-
-  // 自定义节点标题渲染
-  const titleRender = (node: DataNode) => {
-    const key = node.key as string;
-    const isGroup = key.startsWith('group-');
-    const id = isGroup ? key.replace('group-', '') : key;
-    const group = isGroup ? groupStore.groups.find(g => g.id === id) : null;
-    const isUngrouped = group?.name === UNGROUPED_GROUP_NAME;
-
-    const menuItems: MenuProps['items'] = isGroup
-      ? [
+      .map(group => {
+        const isUngrouped = group.name === UNGROUPED_GROUP_NAME;
+        const groupMenuItems: MenuProps['items'] = [
           {
             key: 'new-conversation',
             icon: <PlusOutlined />,
             label: settingStore.tr('New Conversation'),
             onClick: () => {
-              if (group) {
-                setCreateWithGroupId(group.id);
-              }
+              setCreateWithGroupId(group.id);
             },
           },
           ...(isUngrouped
@@ -166,48 +133,121 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
                   key: 'edit',
                   icon: <EditOutlined />,
                   label: settingStore.tr('Edit'),
-                  onClick: () => setEditingGroupId(id),
+                  onClick: () => setEditingGroupId(group.id),
                 },
                 {
                   key: 'delete',
                   icon: <DeleteOutlined />,
                   label: settingStore.tr('Delete'),
                   danger: true,
-                  onClick: () => handleDeleteGroup(id),
+                  onClick: () => handleDeleteGroup(group.id),
                 },
               ]),
-        ]
-      : [
-          {
-            key: 'edit',
-            icon: <EditOutlined />,
-            label: settingStore.tr('Edit'),
-            onClick: () => setEditingConversationId(id),
-          },
-          {
-            key: 'delete',
-            icon: <DeleteOutlined />,
-            label: settingStore.tr('Delete'),
-            danger: true,
-            onClick: () => handleDeleteConversation(id),
-          },
         ];
 
-    return (
-      <>
-        <span className="tree-node-text">{node.title as string}</span>
-        <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-          <Button
-            type="text"
-            size="small"
-            icon={<EllipsisOutlined />}
-            className="tree-node-menu-btn"
-            onClick={e => e.stopPropagation()}
-          />
-        </Dropdown>
-      </>
-    );
-  };
+        return {
+          key: `group-${group.id}`,
+          title: (
+            <>
+              <span className="tree-node-text">{group.name}</span>
+              <Dropdown menu={{ items: groupMenuItems }} trigger={['click']}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<EllipsisOutlined />}
+                  className="tree-node-menu-btn"
+                  onClick={e => e.stopPropagation()}
+                />
+              </Dropdown>
+            </>
+          ),
+          icon: <FolderOutlined />,
+          children:
+            group.conversations
+              ?.slice()
+              .sort((a, b) => a.order - b.order)
+              .map(conv => {
+                const convTitle =
+                  conv.name ||
+                  `${settingStore.tr('Conversation')} ${conv.id.substring(0, 8)}`;
+                const agentId = conv.config?.agent;
+                const modelCode = conv.config?.model?.code;
+
+                const convMenuItems: MenuProps['items'] = [
+                  {
+                    key: 'edit',
+                    icon: <EditOutlined />,
+                    label: settingStore.tr('Edit'),
+                    onClick: () => setEditingConversationId(conv.id),
+                  },
+                  {
+                    key: 'delete',
+                    icon: <DeleteOutlined />,
+                    label: settingStore.tr('Delete'),
+                    danger: true,
+                    onClick: () => handleDeleteConversation(conv.id),
+                  },
+                ];
+
+                const title =
+                  agentId || modelCode ? (
+                    <Tooltip
+                      title={
+                        <Flex gap={4}>
+                          {agentId && (
+                            <Tag color="blue" style={{ margin: 0 }}>
+                              {agentId}
+                            </Tag>
+                          )}
+                          {modelCode && (
+                            <Tag color="purple" style={{ margin: 0 }}>
+                              {modelCode}
+                            </Tag>
+                          )}
+                        </Flex>
+                      }
+                      placement="right"
+                      mouseEnterDelay={0.5}
+                    >
+                      <span className="tree-node-text">{convTitle}</span>
+                    </Tooltip>
+                  ) : (
+                    <span className="tree-node-text">{convTitle}</span>
+                  );
+                const titleMenu = (
+                  <Dropdown menu={{ items: convMenuItems }} trigger={['click']}>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<EllipsisOutlined />}
+                      className="tree-node-menu-btn"
+                      onClick={e => e.stopPropagation()}
+                    />
+                  </Dropdown>
+                );
+
+                return {
+                  key: conv.id,
+                  title: (
+                    <>
+                      {title}
+                      {titleMenu}
+                    </>
+                  ),
+                  icon: <MessageOutlined />,
+                  isLeaf: true,
+                };
+              }) || [],
+        };
+      })
+      .sort((a, b) => {
+        const aId = (a.key as string).replace('group-', '');
+        const bId = (b.key as string).replace('group-', '');
+        const aOrder = groupStore.groups.find(g => g.id === aId)?.order ?? 0;
+        const bOrder = groupStore.groups.find(g => g.id === bId)?.order ?? 0;
+        return aOrder - bOrder;
+      });
+  }, [groupStore.groups, settingStore]);
 
   const handleDeleteConversation = (conversationId: string) => {
     modal.confirm({
@@ -262,7 +302,6 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
             showLine
             blockNode
             treeData={treeData}
-            titleRender={titleRender}
             expandedKeys={expandedKeys}
             onExpand={keys => setExpandedKeys(keys as string[])}
             selectedKeys={
@@ -413,3 +452,4 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
 };
 
 export default observer(ConversationSider);
+

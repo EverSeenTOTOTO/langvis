@@ -20,12 +20,6 @@ export class ConversationGroupStore {
     makeAutoObservable(this);
   }
 
-  get allItems(): Array<{ type: 'group'; data: ConversationGroup }> {
-    return this.groups
-      .map(g => ({ type: 'group' as const, data: g }))
-      .sort((a, b) => a.data.order - b.data.order);
-  }
-
   findGroupIdByConversationId(conversationId: string): string | undefined {
     for (const group of this.groups) {
       if (group.conversations?.some(c => c.id === conversationId)) {
