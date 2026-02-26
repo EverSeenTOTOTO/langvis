@@ -102,7 +102,7 @@ const Chat: React.FC = () => {
             }
           />
         </div>
-        <div className="chat-input-placeholder" />
+        <div className="chat-placeholder" />
       </Content>
     </Layout>
   );

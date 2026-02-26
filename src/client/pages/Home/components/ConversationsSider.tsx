@@ -172,6 +172,7 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
                   `${settingStore.tr('Conversation')} ${conv.id.substring(0, 8)}`;
                 const agentId = conv.config?.agent;
                 const modelCode = conv.config?.model?.code;
+                const memoryType = conv.config?.memory?.type;
 
                 const convMenuItems: MenuProps['items'] = [
                   {
@@ -190,20 +191,13 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
                 ];
 
                 const title =
-                  agentId || modelCode ? (
+                  agentId || modelCode || memoryType ? (
                     <Tooltip
                       title={
-                        <Flex gap={4}>
-                          {agentId && (
-                            <Tag color="blue" style={{ margin: 0 }}>
-                              {agentId}
-                            </Tag>
-                          )}
-                          {modelCode && (
-                            <Tag color="purple" style={{ margin: 0 }}>
-                              {modelCode}
-                            </Tag>
-                          )}
+                        <Flex gap={4} wrap>
+                          {agentId && <Tag color="blue">{agentId}</Tag>}
+                          {modelCode && <Tag color="purple">{modelCode}</Tag>}
+                          {memoryType && <Tag color="green">{memoryType}</Tag>}
                         </Flex>
                       }
                       placement="right"
@@ -452,4 +446,3 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
 };
 
 export default observer(ConversationSider);
-

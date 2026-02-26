@@ -103,7 +103,7 @@ export class ConversationGroupService {
     return { success: true, deletedConversationIds: conversationIds };
   }
 
-  async reorderItems(
+  async reorderGroups(
     items: Array<{ id: string; type: 'group'; order: number }>,
     userId: string,
   ): Promise<void> {
