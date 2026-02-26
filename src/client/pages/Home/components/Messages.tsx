@@ -14,6 +14,7 @@ const SCROLL_THRESHOLD = 100;
 const Messages = () => {
   const conversationStore = useStore('conversation');
   const currentMessages = conversationStore.currentMessages;
+  const currentConversationId = conversationStore.currentConversationId;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollState = useScroll(containerRef);
@@ -41,6 +42,14 @@ const Messages = () => {
       setShouldAutoScroll(isNearBottom || false);
     }
   }, [scrollState.y, isNearBottom, setShouldAutoScroll]);
+
+  // Auto-scroll to bottom when switching conversations
+  useEffect(() => {
+    if (currentConversationId) {
+      setShouldAutoScroll(true);
+      scrollToBottom(false);
+    }
+  }, [currentConversationId, setShouldAutoScroll]);
 
   useEffect(() => {
     if (shouldAutoScroll) {

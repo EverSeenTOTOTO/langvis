@@ -100,7 +100,7 @@ export default class ConversationGroupController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    await this.conversationGroupService.reorderItems(dto.items, userId);
+    await this.conversationGroupService.reorderGroups(dto.items, userId);
     return res.json({ success: true });
   }
 
