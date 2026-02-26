@@ -27,7 +27,6 @@ describe('AuthStore', () => {
 
     mockUserStore = {
       currentUser: null,
-      setCurrentUser: vi.fn(),
     } as any;
 
     container.register(UserStore, { useValue: mockUserStore });
@@ -58,7 +57,7 @@ describe('AuthStore', () => {
       const result = await authStore.signUpEmail(params);
 
       expect(mockAuthClient.signUp.email).toHaveBeenCalledWith(params);
-      expect(mockUserStore.setCurrentUser).toHaveBeenCalledWith(mockUser);
+      expect(mockUserStore.currentUser).toBe(mockUser);
       expect(result.data?.user).toBe(mockUser);
     });
 
@@ -77,7 +76,7 @@ describe('AuthStore', () => {
       const result = await authStore.signUpEmail(params);
 
       expect(mockAuthClient.signUp.email).toHaveBeenCalledWith(params);
-      expect(mockUserStore.setCurrentUser).not.toHaveBeenCalled();
+      expect(mockUserStore.currentUser).toBeNull();
       expect(result.error).toBeDefined();
     });
   });
@@ -103,7 +102,7 @@ describe('AuthStore', () => {
       const result = await authStore.signInEmail(params);
 
       expect(mockAuthClient.signIn.email).toHaveBeenCalledWith(params);
-      expect(mockUserStore.setCurrentUser).toHaveBeenCalledWith(mockUser);
+      expect(mockUserStore.currentUser).toBe(mockUser);
       expect(result.data?.user).toBe(mockUser);
     });
 
@@ -121,7 +120,7 @@ describe('AuthStore', () => {
       const result = await authStore.signInEmail(params);
 
       expect(mockAuthClient.signIn.email).toHaveBeenCalledWith(params);
-      expect(mockUserStore.setCurrentUser).not.toHaveBeenCalled();
+      expect(mockUserStore.currentUser).toBeNull();
       expect(result.error).toBeDefined();
     });
   });
@@ -137,7 +136,7 @@ describe('AuthStore', () => {
       const result = await authStore.signOut(params);
 
       expect(mockAuthClient.signOut).toHaveBeenCalledWith(params);
-      expect(mockUserStore.setCurrentUser).toHaveBeenCalledWith(null);
+      expect(mockUserStore.currentUser).toBeNull();
       expect(result.data?.success).toBe(true);
     });
 
@@ -150,7 +149,7 @@ describe('AuthStore', () => {
       const params = {};
       await authStore.signOut(params);
 
-      expect(mockUserStore.setCurrentUser).toHaveBeenCalledWith(null);
+      expect(mockUserStore.currentUser).toBeNull();
     });
   });
 
@@ -170,7 +169,7 @@ describe('AuthStore', () => {
       const result = await authStore.getSession();
 
       expect(mockAuthClient.getSession).toHaveBeenCalledWith({});
-      expect(mockUserStore.setCurrentUser).toHaveBeenCalledWith(mockUser);
+      expect(mockUserStore.currentUser).toBe(mockUser);
       expect(result.data?.user).toBe(mockUser);
     });
 
@@ -182,7 +181,7 @@ describe('AuthStore', () => {
 
       await authStore.getSession();
 
-      expect(mockUserStore.setCurrentUser).toHaveBeenCalledWith(null);
+      expect(mockUserStore.currentUser).toBeNull();
     });
 
     it('should accept custom params', async () => {
@@ -211,7 +210,7 @@ describe('AuthStore', () => {
 
       await authStore.getSession();
 
-      expect(mockUserStore.setCurrentUser).toHaveBeenCalledWith(null);
+      expect(mockUserStore.currentUser).toBeNull();
     });
   });
 });

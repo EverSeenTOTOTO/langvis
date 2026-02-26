@@ -1,5 +1,5 @@
 import { CheckOutlined, CopyOutlined } from '@ant-design/icons';
-import { Button, Flex } from 'antd';
+import { Button } from 'antd';
 import { useState } from 'react';
 import { useCopyToClipboard } from 'react-use';
 
@@ -19,7 +19,7 @@ const MessageFooter: React.FC<MessageFooterProps> = ({ content, children }) => {
   };
 
   return (
-    <Flex justify="end" className="message-footer" gap={4}>
+    <>
       <Button
         color="default"
         variant="filled"
@@ -28,7 +28,7 @@ const MessageFooter: React.FC<MessageFooterProps> = ({ content, children }) => {
         size="small"
       />
       {children}
-    </Flex>
+    </>
   );
 };
 

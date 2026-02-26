@@ -66,7 +66,9 @@ const Header = () => {
             <Select
               onClick={e => e.stopPropagation()}
               value={settingStore.lang}
-              onChange={value => settingStore.setLang(value)}
+              onChange={value => {
+                settingStore.lang = value;
+              }}
               options={Object.keys(SUPPORTED_LOCALES).map(key => ({
                 label: SUPPORTED_LOCALES[key as 'zh_CN'],
                 value: key,

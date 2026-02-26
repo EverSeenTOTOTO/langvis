@@ -24,32 +24,32 @@ export class AuthStore {
 
   async signUpEmail(params: SignUpParams) {
     const result = await this.client.signUp.email(params);
-    if (result.data?.user) {
-      this.user?.setCurrentUser(result.data.user);
+    if (result.data?.user && this.user) {
+      this.user.currentUser = result.data.user;
     }
     return result;
   }
 
   async signInEmail(params: SignInParams) {
     const result = await this.client.signIn.email(params);
-    if (result.data?.user) {
-      this.user?.setCurrentUser(result.data.user);
+    if (result.data?.user && this.user) {
+      this.user.currentUser = result.data.user;
     }
     return result;
   }
 
   async signOut(params: SignOutParams) {
     const result = await this.client.signOut(params);
-    this.user?.setCurrentUser(null);
+    if (this.user) {
+      this.user.currentUser = null;
+    }
     return result;
   }
 
   async getSession(param: GetSessionParams = {}) {
     const result = await this.client.getSession(param);
-    if (result.data?.user) {
-      this.user?.setCurrentUser(result.data.user);
-    } else {
-      this.user?.setCurrentUser(null);
+    if (this.user) {
+      this.user.currentUser = result.data?.user ?? null;
     }
     return result;
   }

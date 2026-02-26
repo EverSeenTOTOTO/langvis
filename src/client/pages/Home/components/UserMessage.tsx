@@ -1,7 +1,7 @@
+import Bubble from '@/client/components/Bubble';
 import MarkdownRender from '@/client/components/MarkdownRender';
 import { Message } from '@/shared/types/entities';
 import { RedoOutlined, UserOutlined } from '@ant-design/icons';
-import { Bubble } from '@ant-design/x';
 import { Avatar, Button } from 'antd';
 import { observer } from 'mobx-react-lite';
 import MessageFooter from './MessageFooter';
@@ -14,19 +14,17 @@ const UserMessage: React.FC<{
     <Bubble
       key={msg.id}
       placement="end"
-      content={
-        <>
-          <MarkdownRender>{msg.content}</MarkdownRender>
-          <MessageFooter content={msg.content}>
-            <Button
-              color="default"
-              variant="filled"
-              icon={<RedoOutlined />}
-              onClick={() => onRetry(msg.id)}
-              size="small"
-            />
-          </MessageFooter>
-        </>
+      content={<MarkdownRender>{msg.content}</MarkdownRender>}
+      footer={
+        <MessageFooter content={msg.content}>
+          <Button
+            color="default"
+            variant="filled"
+            icon={<RedoOutlined />}
+            onClick={() => onRetry(msg.id)}
+            size="small"
+          />
+        </MessageFooter>
       }
       loading={msg.loading}
       avatar={<Avatar icon={<UserOutlined />} />}

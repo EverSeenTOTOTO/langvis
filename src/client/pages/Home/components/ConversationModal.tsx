@@ -1,3 +1,4 @@
+import InlineItem from '@/client/components/InlineItem';
 import Modal, { ModalProps } from '@/client/components/Modal';
 import SchemaField, { SchemaProperty } from '@/client/components/SchemaField';
 import { useStore } from '@/client/store';
@@ -27,12 +28,15 @@ const ConversationModal = ({
   const [form] = Form.useForm();
   const agentStore = useStore('agent');
   const settingStore = useStore('setting');
+  const groupStore = useStore('conversationGroup');
   const isMobile = useMedia('(max-width: 768px)', false);
 
   const fetchAgentApi = useAsyncFn(agentStore.getAllAgent.bind(agentStore));
+  const fetchGroupsApi = useAsyncFn(groupStore.getAllGroups.bind(groupStore));
 
   useEffect(() => {
     fetchAgentApi[1]();
+    fetchGroupsApi[1]();
   }, []);
 
   const renderConfigSchema = <T,>(schema?: JSONSchemaType<T>) => {
@@ -52,6 +56,11 @@ const ConversationModal = ({
       />
     ));
   };
+
+  // 获取当前分组名
+  const currentGroupName = groupStore.groups.find(
+    g => g.id === initialValues?.groupId,
+  )?.name;
 
   useEffect(() => {
     form.setFieldsValue(initialValues);
@@ -100,6 +109,30 @@ const ConversationModal = ({
                 {initialValues?.id}
               </Typography.Text>
             </Form.Item>
+
+            <InlineItem label={settingStore.tr('Group')} name="groupName">
+              {({ value, onChange }) =>
+                currentGroupName ? (
+                  <Typography.Text type="secondary" copyable>
+                    {currentGroupName || settingStore.tr('Ungrouped')}
+                  </Typography.Text>
+                ) : (
+                  <Select
+                    mode="tags"
+                    maxCount={1}
+                    loading={fetchGroupsApi[0].loading}
+                    placeholder={settingStore.tr('Select or create a group')}
+                    options={groupStore.groups.map(g => ({
+                      label: g.name,
+                      value: g.name,
+                    }))}
+                    value={value ? [value] : []}
+                    onChange={vals => onChange?.(vals[0])}
+                  />
+                )
+              }
+            </InlineItem>
+
             <Form.Item
               name={['config', 'agent']}
               label={settingStore.tr('Agent')}

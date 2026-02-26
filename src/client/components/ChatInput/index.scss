@@ -1,0 +1,82 @@
+@use '../../styles/mixins';
+
+.chat-input-container {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+.chat-input-header {
+  padding: 8px 12px;
+  background-color: var(--ant-color-info-bg);
+  border-radius: 8px 8px 0 0;
+}
+
+.chat-input-wrapper {
+  padding: 8px 12px;
+}
+
+.chat-input-editor-container {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.chat-input-editor-inner {
+  position: relative;
+  flex: 1;
+  min-height: 44px;
+  overflow: hidden;
+}
+
+.chat-input-content-editable {
+  min-height: 44px;
+  padding: 10px 0;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 22px;
+  word-break: break-word;
+  word-wrap: break-word;
+  resize: none;
+  outline: none;
+
+  &:empty::before {
+    color: var(--ant-color-text-placeholder);
+    pointer-events: none;
+    content: attr(aria-placeholder);
+  }
+}
+
+.chat-input-placeholder {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  color: var(--ant-color-text-placeholder);
+  pointer-events: none;
+  user-select: none;
+}
+
+.chat-input-paragraph {
+  margin: 0;
+}
+
+.chat-input-send-button {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.root-dark {
+  .chat-input-container {
+    background-color: rgb(255 255 255 / 6%);
+    border-color: rgb(255 255 255 / 12%);
+  }
+
+  .chat-input-header {
+    background-color: rgb(255 255 255 / 4%);
+  }
+}

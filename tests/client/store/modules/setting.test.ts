@@ -63,56 +63,56 @@ describe('SettingStore', () => {
     });
   });
 
-  describe('setLang', () => {
+  describe('lang property', () => {
     it('should set language to Chinese', () => {
-      settingStore.setLang('zh_CN');
+      settingStore.lang = 'zh_CN';
       expect(settingStore.lang).toBe('zh_CN');
     });
 
     it('should set language to English', () => {
-      settingStore.setLang('en_US');
+      settingStore.lang = 'en_US';
       expect(settingStore.lang).toBe('en_US');
     });
 
     it('should update language multiple times', () => {
-      settingStore.setLang('zh_CN');
+      settingStore.lang = 'zh_CN';
       expect(settingStore.lang).toBe('zh_CN');
 
-      settingStore.setLang('en_US');
+      settingStore.lang = 'en_US';
       expect(settingStore.lang).toBe('en_US');
     });
   });
 
-  describe('setLocale', () => {
+  describe('locale property', () => {
     it('should set locale to English', () => {
-      settingStore.setLocale(enUS);
+      settingStore.locale = enUS;
       expect(settingStore.locale).toEqual(enUS);
     });
 
     it('should set locale to Chinese', () => {
-      settingStore.setLocale(zhCN);
+      settingStore.locale = zhCN;
       expect(settingStore.locale).toEqual(zhCN);
     });
 
     it('should update locale', () => {
-      settingStore.setLocale(enUS);
+      settingStore.locale = enUS;
       expect(settingStore.locale).toEqual(enUS);
 
-      settingStore.setLocale(zhCN);
+      settingStore.locale = zhCN;
       expect(settingStore.locale).toEqual(zhCN);
     });
   });
 
-  describe('setTr', () => {
+  describe('tr property', () => {
     it('should set translation function', () => {
       const mockTr = vi.fn((key: string) => `translated_${key}`);
-      settingStore.setTr(mockTr as any);
+      settingStore.tr = mockTr as any;
       expect(typeof settingStore.tr).toBe('function');
     });
 
     it('should allow calling translation function', () => {
       const mockTr = vi.fn((key: string) => `translated_${key}`);
-      settingStore.setTr(mockTr as any);
+      settingStore.tr = mockTr as any;
 
       const result = settingStore.tr('test.key');
       expect(result).toBe('translated_test.key');

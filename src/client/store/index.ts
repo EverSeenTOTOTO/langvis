@@ -5,6 +5,7 @@ import composeApi from '../decorator/api';
 import composeHydrate from '../decorator/hydrate';
 import { AuthStore } from './modules/auth';
 import { ChatStore } from './modules/chat';
+import { ConversationGroupStore } from './modules/conversationGroup';
 import { ConversationStore } from './modules/conversation';
 import { SettingStore } from './modules/setting';
 import { UserStore } from './modules/user';
@@ -29,6 +30,8 @@ export class AppStore {
   user = bindStore(UserStore);
 
   conversation = bindStore(ConversationStore);
+
+  conversationGroup = bindStore(ConversationGroupStore);
 
   chat = bindStore(ChatStore);
 

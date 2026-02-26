@@ -9,19 +9,20 @@ import type {
 } from '@/shared/dto/controller';
 import type { Conversation, Message } from '@/shared/types/entities';
 import { makeAutoObservable, reaction } from 'mobx';
+import { inject } from 'tsyringe';
+import { ConversationGroupStore } from './conversationGroup';
 
 @store()
 export class ConversationStore {
-  @hydrate()
-  conversations: Conversation[] = [];
-
-  @hydrate()
   currentConversationId?: string;
 
   @hydrate()
   messages: Record<string, Message[]> = {};
 
-  constructor() {
+  constructor(
+    @inject(ConversationGroupStore)
+    private conversationGroupStore: ConversationGroupStore,
+  ) {
     makeAutoObservable(this);
 
     reaction(
@@ -34,14 +35,28 @@ export class ConversationStore {
     );
   }
 
-  setCurrentConversationId(id: string): void {
-    this.currentConversationId = id;
+  private getAllConversations(): Conversation[] {
+    return this.conversationGroupStore.groups.flatMap(
+      g => g.conversations || [],
+    );
+  }
+
+  getFirstConversationId(): string | undefined {
+    const all = this.getAllConversations();
+    return all.length > 0 ? all[0].id : undefined;
+  }
+
+  findConversationById(id: string): Conversation | undefined {
+    for (const group of this.conversationGroupStore.groups) {
+      const found = group.conversations?.find(c => c.id === id);
+      if (found) return found;
+    }
+    return undefined;
   }
 
   get currentConversation(): Conversation | undefined {
-    return this.conversations.find(
-      each => each.id === this.currentConversationId,
-    );
+    if (!this.currentConversationId) return undefined;
+    return this.findConversationById(this.currentConversationId);
   }
 
   get currentMessages(): Message[] {
@@ -52,29 +67,14 @@ export class ConversationStore {
   async createConversation(
     _params: CreateConversationRequest,
     req?: ApiRequest<CreateConversationRequest>,
-  ): Promise<void> {
+  ): Promise<Conversation | undefined> {
     const result = await req!.send();
     if (result) {
-      this.setCurrentConversationId((result as Conversation).id);
-      await this.getAllConversations();
+      await this.conversationGroupStore.getAllGroups();
+      this.currentConversationId = (result as Conversation).id;
+      return result as Conversation;
     }
-  }
-
-  @api('/api/conversation')
-  async getAllConversations(
-    _params?: unknown,
-    req?: ApiRequest,
-  ): Promise<Conversation[] | undefined> {
-    const result = (await req!.send()) as Conversation[];
-    if (!result) return;
-
-    this.conversations = result;
-
-    if (!this.conversations.find(c => c.id === this.currentConversationId)) {
-      this.setCurrentConversationId(this.conversations[0]?.id);
-    }
-
-    return result;
+    return undefined;
   }
 
   @api((req: UpdateConversationRequest) => `/api/conversation/${req.id}`, {
@@ -85,7 +85,7 @@ export class ConversationStore {
     req?: ApiRequest<UpdateConversationRequest>,
   ): Promise<Conversation | undefined> {
     const result = await req!.send();
-    await this.getAllConversations();
+    await this.conversationGroupStore.getAllGroups();
     return result as Conversation;
   }
 
@@ -93,11 +93,14 @@ export class ConversationStore {
     method: 'delete',
   })
   async deleteConversation(
-    _params: { id: string },
+    params: { id: string },
     req?: ApiRequest<{ id: string }>,
   ): Promise<void> {
     await req!.send();
-    await this.getAllConversations();
+    await this.conversationGroupStore.getAllGroups();
+    if (this.currentConversationId === params.id) {
+      this.currentConversationId = this.getFirstConversationId();
+    }
   }
 
   @api(

@@ -16,6 +16,12 @@ vi.mock('@/server/service/pg', () => ({
           findOne: vi.fn(async () => null),
           find: vi.fn(async () => []),
           delete: vi.fn(async () => ({ affected: 0 })),
+          createQueryBuilder: vi.fn(() => ({
+            where: vi.fn().mockReturnThis(),
+            andWhere: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            getRawOne: vi.fn(async () => ({ max: 0 })),
+          })),
         };
       } else if (entity.name === 'MessageEntity') {
         return {
@@ -24,6 +30,18 @@ vi.mock('@/server/service/pg', () => ({
           findOneBy: vi.fn(async () => null),
           find: vi.fn(async () => []),
           delete: vi.fn(async () => ({ affected: 0 })),
+        };
+      } else if (entity.name === 'ConversationGroupEntity') {
+        return {
+          create: vi.fn(e => e),
+          save: vi.fn(async e => e),
+          findOneBy: vi.fn(async () => null),
+          find: vi.fn(async () => []),
+          createQueryBuilder: vi.fn(() => ({
+            where: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            getRawOne: vi.fn(async () => ({ max: 0 })),
+          })),
         };
       }
       return {
@@ -52,18 +70,45 @@ describe('ConversationService', () => {
       config: { agent: AgentIds.CHAT },
       createdAt: new Date(),
       messages: [],
+      userId: 'test-user-id',
+      order: 100,
+      groupId: 'ungrouped-group-id',
     };
 
-    (pg.getRepository as any).mockReturnValue({
-      create: vi.fn().mockImplementation(entity => {
-        expect(entity.config).toEqual({ agent: AgentIds.CHAT });
-        return mockConversation;
-      }),
-      save: vi.fn().mockResolvedValue(mockConversation),
+    const mockGroup = {
+      id: 'ungrouped-group-id',
+      name: 'ungrouped',
+      userId: 'test-user-id',
+      order: 0,
+    };
+
+    (pg.getRepository as any).mockImplementation((entity: any) => {
+      if (entity.name === 'ConversationEntity') {
+        return {
+          create: vi.fn().mockImplementation(data => {
+            expect(data.config).toEqual({ agent: AgentIds.CHAT });
+            return mockConversation;
+          }),
+          save: vi.fn().mockResolvedValue(mockConversation),
+          createQueryBuilder: vi.fn(() => ({
+            where: vi.fn().mockReturnThis(),
+            andWhere: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            getRawOne: vi.fn(async () => ({ max: 0 })),
+          })),
+        };
+      } else if (entity.name === 'ConversationGroupEntity') {
+        return {
+          findOneBy: vi.fn().mockResolvedValue(mockGroup),
+        };
+      }
+      return {};
     });
 
-    const result =
-      await conversationService.createConversation('Test Conversation');
+    const result = await conversationService.createConversation(
+      'Test Conversation',
+      'test-user-id',
+    );
     expect(result).toEqual(mockConversation);
   });
 
@@ -74,22 +119,48 @@ describe('ConversationService', () => {
       config: { model: 'gpt-4', temperature: 0.7, agent: AgentIds.CHAT },
       createdAt: new Date(),
       messages: [],
+      userId: 'test-user-id',
+      order: 100,
+      groupId: 'ungrouped-group-id',
     };
 
-    (pg.getRepository as any).mockReturnValue({
-      create: vi.fn().mockImplementation(entity => {
-        expect(entity.config).toEqual({
-          model: 'gpt-4',
-          temperature: 0.7,
-          agent: AgentIds.CHAT,
-        });
-        return mockConversation;
-      }),
-      save: vi.fn().mockResolvedValue(mockConversation),
+    const mockGroup = {
+      id: 'ungrouped-group-id',
+      name: 'ungrouped',
+      userId: 'test-user-id',
+      order: 0,
+    };
+
+    (pg.getRepository as any).mockImplementation((entity: any) => {
+      if (entity.name === 'ConversationEntity') {
+        return {
+          create: vi.fn().mockImplementation(data => {
+            expect(data.config).toEqual({
+              model: 'gpt-4',
+              temperature: 0.7,
+              agent: AgentIds.CHAT,
+            });
+            return mockConversation;
+          }),
+          save: vi.fn().mockResolvedValue(mockConversation),
+          createQueryBuilder: vi.fn(() => ({
+            where: vi.fn().mockReturnThis(),
+            andWhere: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            getRawOne: vi.fn(async () => ({ max: 0 })),
+          })),
+        };
+      } else if (entity.name === 'ConversationGroupEntity') {
+        return {
+          findOneBy: vi.fn().mockResolvedValue(mockGroup),
+        };
+      }
+      return {};
     });
 
     const result = await conversationService.createConversation(
       'Test Conversation',
+      'test-user-id',
       { model: 'gpt-4', temperature: 0.7 },
     );
     expect(result).toEqual(mockConversation);
@@ -111,30 +182,6 @@ describe('ConversationService', () => {
     expect(result).toEqual(mockConversation);
   });
 
-  it('should get all conversations', async () => {
-    const mockConversations = [
-      {
-        id: '1',
-        name: 'Test Conversation 1',
-        createdAt: new Date(),
-        messages: [],
-      },
-      {
-        id: '2',
-        name: 'Test Conversation 2',
-        createdAt: new Date(),
-        messages: [],
-      },
-    ];
-
-    (pg.getRepository as any).mockReturnValue({
-      find: vi.fn().mockResolvedValue(mockConversations),
-    });
-
-    const result = await conversationService.getAllConversations();
-    expect(result).toEqual(mockConversations);
-  });
-
   it('should update a conversation', async () => {
     const mockConversation = {
       id: '1',
@@ -152,6 +199,7 @@ describe('ConversationService', () => {
     const result = await conversationService.updateConversation(
       '1',
       'Updated Conversation',
+      'test-user-id',
     );
     expect(result).toEqual(mockConversation);
   });
@@ -173,6 +221,7 @@ describe('ConversationService', () => {
     const result = await conversationService.updateConversation(
       '1',
       'Updated Conversation',
+      'test-user-id',
       { model: 'gpt-4', temperature: 0.7 },
     );
     expect(result).toEqual(mockConversation);
@@ -200,6 +249,7 @@ describe('ConversationService', () => {
     const result = await conversationService.updateConversation(
       '1',
       'Updated Conversation',
+      'test-user-id',
     );
     expect(result).toEqual(mockConversation);
   });
@@ -238,10 +288,13 @@ describe('ConversationService', () => {
       };
     });
 
-    const result = await conversationService.deleteConversation('1');
+    const result = await conversationService.deleteConversation(
+      '1',
+      'test-user-id',
+    );
     expect(result).toBe(true);
     expect(findOneMock).toHaveBeenCalledWith({
-      where: { id: '1' },
+      where: { id: '1', userId: 'test-user-id' },
       relations: ['messages'],
     });
     expect(deleteMock).toHaveBeenCalledWith('1');
@@ -301,10 +354,13 @@ describe('ConversationService', () => {
       };
     });
 
-    const result = await conversationService.deleteConversation('1');
+    const result = await conversationService.deleteConversation(
+      '1',
+      'test-user-id',
+    );
     expect(result).toBe(true);
     expect(findOneMock).toHaveBeenCalledWith({
-      where: { id: '1' },
+      where: { id: '1', userId: 'test-user-id' },
       relations: ['messages'],
     });
     expect(messageDeleteMock).toHaveBeenCalledWith({
@@ -421,5 +477,259 @@ describe('ConversationService', () => {
     await expect(
       conversationService.batchAddMessages('non-existent', messagesData),
     ).rejects.toThrow('Conversation non-existent not found');
+  });
+
+  it('should create a conversation with specific groupId', async () => {
+    const mockConversation = {
+      id: '1',
+      name: 'Test Conversation',
+      config: { agent: AgentIds.CHAT },
+      createdAt: new Date(),
+      messages: [],
+      userId: 'test-user-id',
+      order: 100,
+      groupId: 'specific-group-id',
+    };
+
+    const mockGroup = {
+      id: 'specific-group-id',
+      name: 'Specific Group',
+      userId: 'test-user-id',
+      order: 0,
+    };
+
+    (pg.getRepository as any).mockImplementation((entity: any) => {
+      if (entity.name === 'ConversationEntity') {
+        return {
+          create: vi.fn().mockReturnValue(mockConversation),
+          save: vi.fn().mockResolvedValue(mockConversation),
+          createQueryBuilder: vi.fn(() => ({
+            where: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            getRawOne: vi.fn(async () => ({ max: 0 })),
+          })),
+        };
+      } else if (entity.name === 'ConversationGroupEntity') {
+        return {
+          findOneBy: vi.fn().mockResolvedValue(mockGroup),
+        };
+      }
+      return {};
+    });
+
+    const result = await conversationService.createConversation(
+      'Test Conversation',
+      'test-user-id',
+      {},
+      'specific-group-id',
+    );
+    expect(result).toEqual(mockConversation);
+    expect(result.groupId).toBe('specific-group-id');
+  });
+
+  it('should create a conversation with groupName and find existing group', async () => {
+    const mockConversation = {
+      id: '1',
+      name: 'Test Conversation',
+      config: { agent: AgentIds.CHAT },
+      createdAt: new Date(),
+      messages: [],
+      userId: 'test-user-id',
+      order: 100,
+      groupId: 'existing-group-id',
+    };
+
+    const mockGroup = {
+      id: 'existing-group-id',
+      name: 'My Group',
+      userId: 'test-user-id',
+      order: 100,
+    };
+
+    (pg.getRepository as any).mockImplementation((entity: any) => {
+      if (entity.name === 'ConversationEntity') {
+        return {
+          create: vi.fn().mockReturnValue(mockConversation),
+          save: vi.fn().mockResolvedValue(mockConversation),
+          createQueryBuilder: vi.fn(() => ({
+            where: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            getRawOne: vi.fn(async () => ({ max: 0 })),
+          })),
+        };
+      } else if (entity.name === 'ConversationGroupEntity') {
+        return {
+          findOneBy: vi.fn().mockImplementation(async (criteria: any) => {
+            if (criteria.name === 'My Group') return mockGroup;
+            if (criteria.id === 'existing-group-id') return mockGroup;
+            return null;
+          }),
+        };
+      }
+      return {};
+    });
+
+    const result = await conversationService.createConversation(
+      'Test Conversation',
+      'test-user-id',
+      {},
+      null,
+      'My Group',
+    );
+    expect(result).toEqual(mockConversation);
+    expect(result.groupId).toBe('existing-group-id');
+  });
+
+  it('should create a conversation with groupName and create new group if not found', async () => {
+    const mockConversation = {
+      id: '1',
+      name: 'Test Conversation',
+      config: { agent: AgentIds.CHAT },
+      createdAt: new Date(),
+      messages: [],
+      userId: 'test-user-id',
+      order: 100,
+      groupId: 'new-group-id',
+    };
+
+    const newGroup = {
+      id: 'new-group-id',
+      name: 'New Group',
+      userId: 'test-user-id',
+      order: 100,
+    };
+
+    (pg.getRepository as any).mockImplementation((entity: any) => {
+      if (entity.name === 'ConversationEntity') {
+        return {
+          create: vi.fn().mockReturnValue(mockConversation),
+          save: vi.fn().mockResolvedValue(mockConversation),
+          createQueryBuilder: vi.fn(() => ({
+            where: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            getRawOne: vi.fn(async () => ({ max: 0 })),
+          })),
+        };
+      } else if (entity.name === 'ConversationGroupEntity') {
+        return {
+          // Return null for name search, but return group for id search
+          findOneBy: vi.fn().mockImplementation(async (criteria: any) => {
+            if (criteria.name) return null; // Group name not found
+            if (criteria.id === 'new-group-id') return newGroup; // Verify by id
+            return null;
+          }),
+          create: vi.fn().mockReturnValue(newGroup),
+          save: vi.fn().mockResolvedValue(newGroup),
+          createQueryBuilder: vi.fn(() => ({
+            where: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            getRawOne: vi.fn(async () => ({ max: 0 })),
+          })),
+        };
+      }
+      return {};
+    });
+
+    const result = await conversationService.createConversation(
+      'Test Conversation',
+      'test-user-id',
+      {},
+      null,
+      'New Group',
+    );
+    expect(result).toEqual(mockConversation);
+    expect(result.groupId).toBe('new-group-id');
+  });
+
+  it('should create ungrouped group when no groupId provided', async () => {
+    const mockConversation = {
+      id: '1',
+      name: 'Test Conversation',
+      config: { agent: AgentIds.CHAT },
+      createdAt: new Date(),
+      messages: [],
+      userId: 'test-user-id',
+      order: 100,
+      groupId: 'ungrouped-id',
+    };
+
+    const ungroupedGroup = {
+      id: 'ungrouped-id',
+      name: 'ungrouped',
+      userId: 'test-user-id',
+      order: 0,
+    };
+
+    (pg.getRepository as any).mockImplementation((entity: any) => {
+      if (entity.name === 'ConversationEntity') {
+        return {
+          create: vi.fn().mockReturnValue(mockConversation),
+          save: vi.fn().mockResolvedValue(mockConversation),
+          createQueryBuilder: vi.fn(() => ({
+            where: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            getRawOne: vi.fn(async () => ({ max: 0 })),
+          })),
+        };
+      } else if (entity.name === 'ConversationGroupEntity') {
+        return {
+          findOneBy: vi.fn().mockResolvedValue(ungroupedGroup),
+        };
+      }
+      return {};
+    });
+
+    const result = await conversationService.createConversation(
+      'Test Conversation',
+      'test-user-id',
+    );
+    expect(result).toEqual(mockConversation);
+    expect(result.groupId).toBe('ungrouped-id');
+  });
+
+  it('should update conversation with null groupId to use ungrouped group', async () => {
+    const mockConversation = {
+      id: '1',
+      name: 'Updated Conversation',
+      config: {},
+      createdAt: new Date(),
+      messages: [],
+      groupId: 'old-group-id',
+    };
+
+    const ungroupedGroup = {
+      id: 'ungrouped-id',
+      name: 'ungrouped',
+      userId: 'test-user-id',
+      order: 0,
+    };
+
+    (pg.getRepository as any).mockImplementation((entity: any) => {
+      if (entity.name === 'ConversationEntity') {
+        return {
+          findOneBy: vi.fn().mockResolvedValue(mockConversation),
+          save: vi.fn().mockImplementation(async (data: any) => data),
+        };
+      } else if (entity.name === 'ConversationGroupEntity') {
+        return {
+          // Return ungrouped group when searching by name or id
+          findOneBy: vi.fn().mockImplementation(async (criteria: any) => {
+            if (criteria.name === 'ungrouped') return ungroupedGroup;
+            if (criteria.id === 'ungrouped-id') return ungroupedGroup;
+            return null;
+          }),
+        };
+      }
+      return {};
+    });
+
+    const result = await conversationService.updateConversation(
+      '1',
+      'Updated Conversation',
+      'test-user-id',
+      {},
+      null, // null groupId should assign to ungrouped
+    );
+    expect(result?.groupId).toBe('ungrouped-id');
   });
 });
