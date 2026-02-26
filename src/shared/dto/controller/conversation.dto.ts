@@ -8,6 +8,8 @@ export interface CreateConversationRequest {
     agent: string;
     [key: string]: any;
   };
+  groupId?: string | null;
+  groupName?: string; // 新分组名称，若提供则自动创建分组
 }
 
 export type ConversationConfig = CreateConversationRequest['config'];
@@ -25,6 +27,8 @@ export type ConversationConfig = CreateConversationRequest['config'];
       required: ['agent'],
       additionalProperties: true,
     },
+    groupId: { type: 'string', nullable: true },
+    groupName: { type: 'string' },
   },
   required: ['name', 'config'],
   additionalProperties: false,
@@ -35,6 +39,8 @@ export class CreateConversationRequestDto
 {
   name!: string;
   config!: CreateConversationRequest['config'];
+  groupId?: string | null;
+  groupName?: string;
 }
 
 export interface GetAllConversationsRequest {}

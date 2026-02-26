@@ -86,16 +86,16 @@ export class SettingStore {
           case 'en_US':
             i18next.changeLanguage('en_US').then(() => {
               import('dayjs/locale/en');
-              this.setLocale(enUS);
-              this.setTr(i18next.getFixedT('en_US'));
+              this.locale = enUS;
+              this.tr = i18next.getFixedT('en_US');
             });
             break;
           case 'zh_CN':
           default:
             i18next.changeLanguage('zh_CN').then(() => {
               import('dayjs/locale/zh-cn');
-              this.setLocale(zhCN);
-              this.setTr(i18next.getFixedT('zh_CN'));
+              this.locale = zhCN;
+              this.tr = i18next.getFixedT('zh_CN');
             });
             break;
         }
@@ -105,17 +105,5 @@ export class SettingStore {
 
   toggleMode() {
     this.mode = this.mode === 'light' ? 'dark' : 'light';
-  }
-
-  setLang(i18n: string) {
-    this.lang = i18n;
-  }
-
-  setLocale(locale: Locale) {
-    this.locale = locale;
-  }
-
-  setTr(tr: typeof i18next.t) {
-    this.tr = tr;
   }
 }

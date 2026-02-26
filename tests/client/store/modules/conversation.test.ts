@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConversationStore } from '@/client/store/modules/conversation';
+import { ConversationGroupStore } from '@/client/store/modules/conversationGroup';
 import { Role } from '@/shared/types/entities';
 
 vi.mock('@/client/decorator/api', () => ({
@@ -18,26 +19,36 @@ vi.mock('@/client/decorator/store', () => ({
 
 describe('ConversationStore', () => {
   let store: ConversationStore;
+  let groupStore: ConversationGroupStore;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    store = new ConversationStore();
+    groupStore = new ConversationGroupStore();
+    store = new ConversationStore(groupStore);
     // Mock the method to prevent reaction from calling unmocked API
     vi.spyOn(store, 'getMessagesByConversationId').mockResolvedValue([]);
   });
 
   describe('basic getters and setters', () => {
     it('should set and get currentConversationId', () => {
-      store.setCurrentConversationId('conv-1');
+      store.currentConversationId = 'conv-1';
       expect(store.currentConversationId).toBe('conv-1');
     });
 
     it('should return current conversation', () => {
-      store.conversations = [
-        { id: 'conv-1', name: 'Test', createdAt: new Date() } as any,
-        { id: 'conv-2', name: 'Test 2', createdAt: new Date() } as any,
+      groupStore.groups = [
+        {
+          id: 'group-1',
+          name: 'Group 1',
+          order: 0,
+          userId: 'test-user',
+          createdAt: new Date(),
+          conversations: [
+            { id: 'conv-1', name: 'Test', groupId: 'group-1' } as any,
+          ],
+        },
       ];
-      store.setCurrentConversationId('conv-1');
+      store.currentConversationId = 'conv-1';
       expect(store.currentConversation?.id).toBe('conv-1');
     });
 
@@ -45,7 +56,7 @@ describe('ConversationStore', () => {
       store.messages = {
         'conv-1': [{ id: 'msg-1', role: Role.USER, content: 'Hello' } as any],
       };
-      store.setCurrentConversationId('conv-1');
+      store.currentConversationId = 'conv-1';
       expect(store.currentMessages).toHaveLength(1);
     });
   });
@@ -78,6 +89,122 @@ describe('ConversationStore', () => {
       } as any);
 
       expect(store.messages[conversationId]).toHaveLength(1);
+    });
+  });
+
+  describe('findConversationById', () => {
+    it('should find conversation in a group', () => {
+      groupStore.groups = [
+        {
+          id: 'group-1',
+          name: 'Group 1',
+          order: 100,
+          userId: 'test-user',
+          createdAt: new Date(),
+          conversations: [
+            { id: 'conv-1', name: 'Conv 1', groupId: 'group-1' } as any,
+            { id: 'conv-2', name: 'Conv 2', groupId: 'group-1' } as any,
+          ],
+        },
+        {
+          id: 'group-2',
+          name: 'Group 2',
+          order: 200,
+          userId: 'test-user',
+          createdAt: new Date(),
+          conversations: [
+            { id: 'conv-3', name: 'Conv 3', groupId: 'group-2' } as any,
+          ],
+        },
+      ];
+
+      expect(store.findConversationById('conv-1')?.name).toBe('Conv 1');
+      expect(store.findConversationById('conv-2')?.name).toBe('Conv 2');
+      expect(store.findConversationById('conv-3')?.name).toBe('Conv 3');
+    });
+
+    it('should return undefined if conversation not found', () => {
+      groupStore.groups = [
+        {
+          id: 'group-1',
+          name: 'Group 1',
+          order: 100,
+          userId: 'test-user',
+          createdAt: new Date(),
+          conversations: [],
+        },
+      ];
+
+      expect(store.findConversationById('non-existent')).toBeUndefined();
+    });
+
+    it('should return undefined if groups are empty', () => {
+      groupStore.groups = [];
+      expect(store.findConversationById('conv-1')).toBeUndefined();
+    });
+  });
+
+  describe('getFirstConversationId', () => {
+    it('should return first conversation id from groups', () => {
+      groupStore.groups = [
+        {
+          id: 'group-1',
+          name: 'Group 1',
+          order: 100,
+          userId: 'test-user',
+          createdAt: new Date(),
+          conversations: [
+            { id: 'conv-1', name: 'Conv 1', groupId: 'group-1' } as any,
+          ],
+        },
+      ];
+
+      expect(store.getFirstConversationId()).toBe('conv-1');
+    });
+
+    it('should return first conversation from first group with conversations', () => {
+      groupStore.groups = [
+        {
+          id: 'group-1',
+          name: 'Empty Group',
+          order: 100,
+          userId: 'test-user',
+          createdAt: new Date(),
+          conversations: [],
+        },
+        {
+          id: 'group-2',
+          name: 'Group 2',
+          order: 200,
+          userId: 'test-user',
+          createdAt: new Date(),
+          conversations: [
+            { id: 'conv-1', name: 'Conv 1', groupId: 'group-2' } as any,
+          ],
+        },
+      ];
+
+      expect(store.getFirstConversationId()).toBe('conv-1');
+    });
+
+    it('should return undefined if no conversations exist', () => {
+      groupStore.groups = [
+        {
+          id: 'group-1',
+          name: 'Empty Group',
+          order: 100,
+          userId: 'test-user',
+          createdAt: new Date(),
+          conversations: [],
+        },
+      ];
+
+      expect(store.getFirstConversationId()).toBeUndefined();
+    });
+
+    it('should return undefined if groups are empty', () => {
+      groupStore.groups = [];
+      expect(store.getFirstConversationId()).toBeUndefined();
     });
   });
 });

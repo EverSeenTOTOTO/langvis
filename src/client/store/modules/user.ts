@@ -9,8 +9,4 @@ export class UserStore {
   constructor() {
     makeAutoObservable(this);
   }
-
-  setCurrentUser(user: User | null) {
-    this.currentUser = user;
-  }
 }

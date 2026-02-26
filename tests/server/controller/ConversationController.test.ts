@@ -9,7 +9,6 @@ describe('ConversationController', () => {
   let mockRes: Partial<Response>;
   const mockConversationService = {
     createConversation: vi.fn(),
-    getAllConversations: vi.fn(),
     getConversationById: vi.fn(),
     updateConversation: vi.fn(),
     deleteConversation: vi.fn(),
@@ -23,7 +22,9 @@ describe('ConversationController', () => {
     conversationController = new ConversationController(
       mockConversationService as any,
     );
-    mockReq = {};
+    mockReq = {
+      user: { id: 'test-user-id' },
+    };
     mockRes = {
       status: vi.fn().mockReturnThis(),
       json: vi.fn().mockReturnThis(),
@@ -46,6 +47,7 @@ describe('ConversationController', () => {
 
     await conversationController.createConversation(
       mockReq.body,
+      mockReq as Request,
       mockRes as Response,
     );
 
@@ -71,15 +73,33 @@ describe('ConversationController', () => {
 
     await conversationController.createConversation(
       mockReq.body,
+      mockReq as Request,
       mockRes as Response,
     );
 
     expect(mockConversationService.createConversation).toHaveBeenCalledWith(
       'Test Conversation',
+      'test-user-id',
       { model: 'gpt-4', temperature: 0.7 },
+      undefined,
+      undefined,
     );
     expect(mockRes.status).toHaveBeenCalledWith(201);
     expect(mockRes.json).toHaveBeenCalledWith(mockConversation);
+  });
+
+  it('should return 401 if user not authenticated when creating a conversation', async () => {
+    mockReq.user = undefined;
+    mockReq.body = { name: 'Test Conversation' };
+
+    await conversationController.createConversation(
+      mockReq.body,
+      mockReq as Request,
+      mockRes as Response,
+    );
+
+    expect(mockRes.status).toHaveBeenCalledWith(401);
+    expect(mockRes.json).toHaveBeenCalledWith({ error: 'Unauthorized' });
   });
 
   it('should create a conversation with extra config fields preserved', async () => {
@@ -108,12 +128,16 @@ describe('ConversationController', () => {
 
     await conversationController.createConversation(
       validatedBody,
+      mockReq as Request,
       mockRes as Response,
     );
 
     expect(mockConversationService.createConversation).toHaveBeenCalledWith(
       'Test Conversation',
+      'test-user-id',
       { agent: 'gpt-4', extra: 'field' },
+      undefined,
+      undefined,
     );
     expect(mockRes.status).toHaveBeenCalledWith(201);
     expect(mockRes.json).toHaveBeenCalledWith(mockConversation);
@@ -136,29 +160,6 @@ describe('ConversationController', () => {
     }
   });
 
-  it('should get all conversations', async () => {
-    const mockConversations = [
-      {
-        id: '1',
-        name: 'Test Conversation 1',
-        createdAt: new Date(),
-      },
-      {
-        id: '2',
-        name: 'Test Conversation 2',
-        createdAt: new Date(),
-      },
-    ];
-
-    mockConversationService.getAllConversations.mockResolvedValue(
-      mockConversations,
-    );
-
-    await conversationController.getAllConversations(mockRes as Response);
-
-    expect(mockRes.json).toHaveBeenCalledWith(mockConversations);
-  });
-
   it('should get a conversation by id', async () => {
     const mockConversation = {
       id: '1',
@@ -171,7 +172,11 @@ describe('ConversationController', () => {
       mockConversation,
     );
 
-    await conversationController.getConversationById('1', mockRes as Response);
+    await conversationController.getConversationById(
+      '1',
+      mockReq as Request,
+      mockRes as Response,
+    );
 
     expect(mockRes.json).toHaveBeenCalledWith(mockConversation);
   });
@@ -180,7 +185,11 @@ describe('ConversationController', () => {
     mockReq.params = { id: '1' };
     mockConversationService.getConversationById.mockResolvedValue(null);
 
-    await conversationController.getConversationById('1', mockRes as Response);
+    await conversationController.getConversationById(
+      '1',
+      mockReq as Request,
+      mockRes as Response,
+    );
 
     expect(mockRes.status).toHaveBeenCalledWith(404);
     expect(mockRes.json).toHaveBeenCalledWith({
@@ -205,6 +214,7 @@ describe('ConversationController', () => {
     await conversationController.updateConversation(
       '1',
       mockReq.body,
+      mockReq as Request,
       mockRes as Response,
     );
 
@@ -231,12 +241,14 @@ describe('ConversationController', () => {
     await conversationController.updateConversation(
       '1',
       mockReq.body,
+      mockReq as Request,
       mockRes as Response,
     );
 
     expect(mockConversationService.updateConversation).toHaveBeenCalledWith(
       '1',
       'Updated Conversation',
+      'test-user-id',
       { model: 'gpt-4', temperature: 0.7 },
     );
     expect(mockRes.json).toHaveBeenCalledWith(mockConversation);
@@ -250,6 +262,7 @@ describe('ConversationController', () => {
     await conversationController.updateConversation(
       '1',
       mockReq.body,
+      mockReq as Request,
       mockRes as Response,
     );
 
@@ -263,7 +276,11 @@ describe('ConversationController', () => {
     mockReq.params = { id: '1' };
     mockConversationService.deleteConversation.mockResolvedValue(true);
 
-    await conversationController.deleteConversation('1', mockRes as Response);
+    await conversationController.deleteConversation(
+      '1',
+      mockReq as Request,
+      mockRes as Response,
+    );
 
     expect(mockRes.status).toHaveBeenCalledWith(200);
     expect(mockRes.json).toHaveBeenCalledWith({ success: true });
@@ -273,7 +290,11 @@ describe('ConversationController', () => {
     mockReq.params = { id: '1' };
     mockConversationService.deleteConversation.mockResolvedValue(false);
 
-    await conversationController.deleteConversation('1', mockRes as Response);
+    await conversationController.deleteConversation(
+      '1',
+      mockReq as Request,
+      mockRes as Response,
+    );
 
     expect(mockRes.status).toHaveBeenCalledWith(404);
     expect(mockRes.json).toHaveBeenCalledWith({

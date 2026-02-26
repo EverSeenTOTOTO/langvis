@@ -17,7 +17,7 @@ describe('UserStore', () => {
     });
   });
 
-  describe('setCurrentUser', () => {
+  describe('currentUser property', () => {
     it('should set current user', () => {
       const mockUser: User = {
         id: 'user-123',
@@ -28,7 +28,7 @@ describe('UserStore', () => {
         updatedAt: new Date(),
       };
 
-      userStore.setCurrentUser(mockUser);
+      userStore.currentUser = mockUser;
 
       expect(userStore.currentUser).toEqual(mockUser);
       expect(userStore.currentUser?.id).toBe('user-123');
@@ -54,10 +54,10 @@ describe('UserStore', () => {
         updatedAt: new Date(),
       };
 
-      userStore.setCurrentUser(user1);
+      userStore.currentUser = user1;
       expect(userStore.currentUser?.id).toBe('user-1');
 
-      userStore.setCurrentUser(user2);
+      userStore.currentUser = user2;
       expect(userStore.currentUser?.id).toBe('user-2');
     });
 
@@ -71,10 +71,10 @@ describe('UserStore', () => {
         updatedAt: new Date(),
       };
 
-      userStore.setCurrentUser(mockUser);
+      userStore.currentUser = mockUser;
       expect(userStore.currentUser).not.toBeNull();
 
-      userStore.setCurrentUser(null);
+      userStore.currentUser = null;
       expect(userStore.currentUser).toBeNull();
     });
   });

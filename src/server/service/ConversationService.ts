@@ -1,8 +1,9 @@
-import { AgentIds } from '@/shared/constants';
+import { AgentIds, UNGROUPED_GROUP_NAME } from '@/shared/constants';
 import {
   Conversation,
   ConversationEntity,
 } from '@/shared/entities/Conversation';
+import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
 import { Message, MessageEntity, Role } from '@/shared/entities/Message';
 import { In } from 'typeorm';
 import { service } from '../decorator/service';
@@ -10,11 +11,41 @@ import pg from './pg';
 
 @service()
 export class ConversationService {
-  // private readonly logger = Logger.child({ source: 'ConversationService' });
+  private async getOrCreateUngroupedGroup(userId: string): Promise<string> {
+    const groupRepository = pg.getRepository(ConversationGroupEntity);
+
+    const existingGroup = await groupRepository.findOneBy({
+      name: UNGROUPED_GROUP_NAME,
+      userId,
+    });
+
+    if (existingGroup) {
+      return existingGroup.id;
+    }
+
+    const maxOrder = await groupRepository
+      .createQueryBuilder('group')
+      .where('group.userId = :userId', { userId })
+      .select('MAX("order")', 'max')
+      .getRawOne();
+
+    const order = (maxOrder?.max ?? -100) + 100;
+
+    const newGroup = groupRepository.create({
+      name: UNGROUPED_GROUP_NAME,
+      userId,
+      order,
+    });
+    const savedGroup = await groupRepository.save(newGroup);
+    return savedGroup.id;
+  }
 
   async createConversation(
     name: string,
+    userId: string,
     config?: Record<string, any> | null,
+    groupId?: string | null,
+    groupName?: string,
   ): Promise<Conversation> {
     const finalConfig = config ?? {};
     if (!finalConfig.agent) {
@@ -22,30 +53,92 @@ export class ConversationService {
     }
 
     const conversationRepository = pg.getRepository(ConversationEntity);
+    const groupRepository = pg.getRepository(ConversationGroupEntity);
+
+    let resolvedGroupId = groupId;
+
+    // If groupName provided, find or create that group
+    if (groupName && !groupId) {
+      const existingGroup = await groupRepository.findOneBy({
+        name: groupName,
+        userId,
+      });
+
+      if (existingGroup) {
+        resolvedGroupId = existingGroup.id;
+      } else {
+        const maxOrder = await groupRepository
+          .createQueryBuilder('group')
+          .where('group.userId = :userId', { userId })
+          .select('MAX("order")', 'max')
+          .getRawOne();
+
+        const order = (maxOrder?.max ?? -100) + 100;
+
+        const newGroup = groupRepository.create({
+          name: groupName,
+          userId,
+          order,
+        });
+        const savedGroup = await groupRepository.save(newGroup);
+        resolvedGroupId = savedGroup.id;
+      }
+    }
+
+    // If still no groupId, use the "ungrouped" group
+    if (!resolvedGroupId) {
+      resolvedGroupId = await this.getOrCreateUngroupedGroup(userId);
+    }
+
+    // Verify group exists and belongs to user
+    const group = await groupRepository.findOneBy({
+      id: resolvedGroupId,
+      userId,
+    });
+    if (!group) {
+      throw new Error('Group not found');
+    }
+
+    // Get max order for conversations in this group
+    const maxOrder = await conversationRepository
+      .createQueryBuilder('conversation')
+      .where('conversation.groupId = :groupId', { groupId: resolvedGroupId })
+      .select('MAX("order")', 'max')
+      .getRawOne();
+
+    const order = (maxOrder?.max ?? -100) + 100;
+
     const conversation = conversationRepository.create({
       name,
       config: finalConfig,
+      userId,
+      groupId: resolvedGroupId,
+      order,
     });
     return await conversationRepository.save(conversation);
   }
 
-  async getConversationById(id: string): Promise<Conversation | null> {
+  async getConversationById(
+    id: string,
+    userId?: string,
+  ): Promise<Conversation | null> {
     const conversationRepository = pg.getRepository(ConversationEntity);
-    return await conversationRepository.findOneBy({ id });
-  }
-
-  async getAllConversations(): Promise<Conversation[]> {
-    const conversationRepository = pg.getRepository(ConversationEntity);
-    return await conversationRepository.find();
+    const where: Record<string, any> = { id };
+    if (userId) {
+      where.userId = userId;
+    }
+    return await conversationRepository.findOneBy(where);
   }
 
   async updateConversation(
     id: string,
     name: string,
+    userId: string,
     config?: Record<string, any> | null,
+    groupId?: string | null,
   ): Promise<Conversation | null> {
     const conversationRepository = pg.getRepository(ConversationEntity);
-    const conversation = await conversationRepository.findOneBy({ id });
+    const conversation = await conversationRepository.findOneBy({ id, userId });
     if (!conversation) {
       return null;
     }
@@ -53,16 +146,23 @@ export class ConversationService {
     if (config !== undefined) {
       conversation.config = config ?? null;
     }
+    if (groupId !== undefined) {
+      if (groupId) {
+        conversation.groupId = groupId;
+      } else {
+        // If groupId is null/empty, assign to the ungrouped group
+        conversation.groupId = await this.getOrCreateUngroupedGroup(userId);
+      }
+    }
     return await conversationRepository.save(conversation);
   }
 
-  async deleteConversation(id: string): Promise<boolean> {
+  async deleteConversation(id: string, userId: string): Promise<boolean> {
     const conversationRepository = pg.getRepository(ConversationEntity);
     const messageRepository = pg.getRepository(MessageEntity);
 
-    // Find the conversation with its messages
     const conversation = await conversationRepository.findOne({
-      where: { id },
+      where: { id, userId },
       relations: ['messages'],
     });
 
@@ -70,14 +170,12 @@ export class ConversationService {
       return false;
     }
 
-    // Delete all messages associated with the conversation
     if (conversation.messages && conversation.messages.length > 0) {
       await messageRepository.delete({
         conversationId: id,
       });
     }
 
-    // Delete the conversation itself
     await conversationRepository.delete(id);
     return true;
   }

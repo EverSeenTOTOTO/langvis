@@ -116,6 +116,9 @@ describe('ChatService', () => {
         config: {},
         createdAt: new Date(),
         key: 'conv-123',
+        order: 100,
+        userId: 'test-user-id',
+        groupId: 'group-123',
       };
 
       const mockAgent = {
@@ -149,6 +152,9 @@ describe('ChatService', () => {
         config: {},
         createdAt: new Date(),
         key: 'conv-123',
+        order: 100,
+        userId: 'test-user-id',
+        groupId: 'group-123',
       };
 
       const mockAgent = {
@@ -181,6 +187,9 @@ describe('ChatService', () => {
         config: {},
         createdAt: new Date(),
         key: 'conv-123',
+        order: 100,
+        userId: 'test-user-id',
+        groupId: 'group-123',
       };
 
       const mockAgent = {
@@ -214,6 +223,9 @@ describe('ChatService', () => {
         config: {},
         createdAt: new Date(),
         key: 'conv-123',
+        order: 100,
+        userId: 'test-user-id',
+        groupId: 'group-123',
       };
 
       mockConversationService.updateMessage.mockRejectedValue(
@@ -244,6 +256,9 @@ describe('ChatService', () => {
         config: {},
         createdAt: new Date(),
         key: 'conv-123',
+        order: 100,
+        userId: 'test-user-id',
+        groupId: 'group-123',
       };
 
       const mockAgent = {

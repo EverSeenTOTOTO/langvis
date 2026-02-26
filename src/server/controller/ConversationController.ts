@@ -4,11 +4,11 @@ import {
   CreateConversationRequestDto,
   UpdateConversationRequestDto,
 } from '@/shared/dto/controller';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
-import { body, param, response } from '../decorator/param';
+import { body, param, request, response } from '../decorator/param';
 import { ConversationService } from '../service/ConversationService';
 
 @controller('/api/conversation')
@@ -21,29 +21,40 @@ export default class ConversationController {
   @api('/', { method: 'post' })
   async createConversation(
     @body() dto: CreateConversationRequestDto,
+    @request() req: Request,
     @response() res: Response,
   ) {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
     const conversation = await this.conversationService.createConversation(
       dto.name,
+      userId,
       dto.config,
+      dto.groupId,
+      dto.groupName,
     );
 
     return res.status(201).json(conversation);
   }
 
-  @api('/', { method: 'get' })
-  async getAllConversations(@response() res: Response) {
-    const conversations = await this.conversationService.getAllConversations();
-
-    return res.json(conversations);
-  }
-
   @api('/:id', { method: 'get' })
   async getConversationById(
     @param('id') id: string,
+    @request() req: Request,
     @response() res: Response,
   ) {
-    const conversation = await this.conversationService.getConversationById(id);
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversation = await this.conversationService.getConversationById(
+      id,
+      userId,
+    );
 
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' });
@@ -56,11 +67,18 @@ export default class ConversationController {
   async updateConversation(
     @param('id') id: string,
     @body() dto: UpdateConversationRequestDto,
+    @request() req: Request,
     @response() res: Response,
   ) {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
     const conversation = await this.conversationService.updateConversation(
       id,
       dto.name,
+      userId,
       dto.config,
     );
 
@@ -72,8 +90,20 @@ export default class ConversationController {
   }
 
   @api('/:id', { method: 'delete' })
-  async deleteConversation(@param('id') id: string, @response() res: Response) {
-    const result = await this.conversationService.deleteConversation(id);
+  async deleteConversation(
+    @param('id') id: string,
+    @request() req: Request,
+    @response() res: Response,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const result = await this.conversationService.deleteConversation(
+      id,
+      userId,
+    );
 
     if (!result) {
       return res.status(404).json({ error: 'Conversation not found' });

@@ -1,0 +1,76 @@
+@use '../../styles/mixins';
+
+.bubble {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  max-width: 85%;
+}
+
+.bubble-end {
+  margin-left: auto;
+}
+
+.bubble-avatar {
+  flex-shrink: 0;
+}
+
+.bubble-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.bubble-content {
+  max-width: 100%;
+  padding: 8px 12px;
+  line-height: 1.5;
+  word-break: break-word;
+  word-wrap: break-word;
+  background-color: var(--ant-color-bg-container);
+  border-radius: 12px;
+  border-top-left-radius: 4px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+.bubble-content-end {
+  background-color: var(--ant-color-primary-bg);
+  border-radius: 12px;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 4px;
+}
+
+.bubble-content-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.bubble-footer {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  height: 24px;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.bubble-footer:hover,
+.bubble-content:hover + .bubble-footer {
+  opacity: 1;
+}
+
+.root-dark {
+  .bubble-content {
+    background-color: rgb(255 255 255 / 8%);
+  }
+
+  .bubble-content-end {
+    color: #fff;
+    background-color: var(--ant-color-primary);
+  }
+}

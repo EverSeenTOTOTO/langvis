@@ -3,10 +3,13 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { ConversationGroupEntity } from './ConversationGroup';
 import { MessageEntity } from './Message';
+import { UserEntity } from './User';
 
 export { Conversation };
 
@@ -21,8 +24,23 @@ export class ConversationEntity implements Conversation {
   @Column({ type: 'json', nullable: true })
   config!: Record<string, any> | null;
 
+  @Column({ type: 'uuid' })
+  groupId!: string;
+
+  @Column({ type: 'int', default: 0 })
+  order!: number;
+
+  @Column({ type: 'uuid' })
+  userId!: string;
+
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;
+
+  @ManyToOne(() => ConversationGroupEntity, group => group.conversations)
+  group!: ConversationGroupEntity;
+
+  @ManyToOne(() => UserEntity)
+  user!: typeof UserEntity;
 
   @OneToMany(() => MessageEntity, message => message.conversation)
   messages!: MessageEntity[];

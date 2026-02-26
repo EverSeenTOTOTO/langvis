@@ -1,0 +1,195 @@
+import { LoadingOutlined, SendOutlined } from '@ant-design/icons';
+import { LexicalComposer } from '@lexical/react/LexicalComposer';
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { ContentEditable } from '@lexical/react/LexicalContentEditable';
+import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
+import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
+import { PlainTextPlugin } from '@lexical/react/LexicalPlainTextPlugin';
+import { Button } from 'antd';
+import clsx from 'clsx';
+import {
+  $createParagraphNode,
+  $createTextNode,
+  $getRoot,
+  EditorState,
+} from 'lexical';
+import React, { useCallback, useEffect, useRef } from 'react';
+import './index.scss';
+
+export interface ChatInputProps {
+  value?: string;
+  onChange?: (value: string) => void;
+  onSubmit?: () => void;
+  loading?: boolean;
+  placeholder?: string;
+  header?: React.ReactNode;
+  minRows?: number;
+  maxRows?: number;
+  className?: string;
+}
+
+const theme = {
+  paragraph: 'chat-input-paragraph',
+};
+
+const InnerEditor: React.FC<{
+  value?: string;
+  onChange?: (value: string) => void;
+  onSubmit?: () => void;
+  loading?: boolean;
+  placeholder?: string;
+  minRows?: number;
+  maxRows?: number;
+}> = ({
+  value,
+  onChange,
+  onSubmit,
+  loading,
+  placeholder,
+  minRows = 2,
+  maxRows = 6,
+}) => {
+  const [editor] = useLexicalComposerContext();
+  const contentEditableRef = useRef<HTMLDivElement>(null);
+  const lineHeight = useRef<number>(22);
+  const isExternalChange = useRef(false);
+
+  useEffect(() => {
+    if (contentEditableRef.current) {
+      const computed = window.getComputedStyle(contentEditableRef.current);
+      lineHeight.current = parseFloat(computed.lineHeight) || 22;
+    }
+  }, []);
+
+  useEffect(() => {
+    editor.getEditorState().read(() => {
+      const root = $getRoot();
+      const currentText = root.getTextContent();
+      if (currentText !== value) {
+        isExternalChange.current = true;
+        editor.update(() => {
+          const editorRoot = $getRoot();
+          editorRoot.clear();
+          const paragraph = $createParagraphNode();
+          if (value) {
+            paragraph.append($createTextNode(value));
+          }
+          editorRoot.append(paragraph);
+        });
+      }
+    });
+  }, [editor, value]);
+
+  const handleChange = useCallback(
+    (editorState: EditorState) => {
+      if (isExternalChange.current) {
+        isExternalChange.current = false;
+        return;
+      }
+      editorState.read(() => {
+        const root = $getRoot();
+        const text = root.getTextContent();
+        onChange?.(text);
+      });
+    },
+    [onChange],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (!loading) {
+          onSubmit?.();
+        }
+      }
+    },
+    [loading, onSubmit],
+  );
+
+  const handleSend = useCallback(() => {
+    if (!loading && value?.trim()) {
+      onSubmit?.();
+    }
+  }, [loading, value, onSubmit]);
+
+  const calculateHeight = useCallback(() => {
+    if (!contentEditableRef.current) return;
+
+    const lines = (value || '').split('\n').length;
+    const clampedLines = Math.min(Math.max(lines, minRows), maxRows);
+    const height = clampedLines * lineHeight.current + 24;
+    contentEditableRef.current.style.height = `${height}px`;
+  }, [value, minRows, maxRows]);
+
+  useEffect(() => {
+    calculateHeight();
+  }, [calculateHeight]);
+
+  return (
+    <div className="chat-input-wrapper">
+      <div className="chat-input-editor-container">
+        <div className="chat-input-editor-inner" onKeyDown={handleKeyDown}>
+          <PlainTextPlugin
+            contentEditable={
+              <ContentEditable className="chat-input-content-editable" />
+            }
+            placeholder={
+              <div className="chat-input-placeholder">{placeholder}</div>
+            }
+            ErrorBoundary={({ children }) => <>{children}</>}
+          />
+          <HistoryPlugin />
+          <OnChangePlugin onChange={handleChange} />
+        </div>
+        <Button
+          type="primary"
+          className="chat-input-send-button"
+          icon={loading ? <LoadingOutlined spin /> : <SendOutlined />}
+          onClick={handleSend}
+          disabled={loading || !value?.trim()}
+          loading={false}
+        />
+      </div>
+    </div>
+  );
+};
+
+const ChatInput: React.FC<ChatInputProps> = ({
+  value = '',
+  onChange,
+  onSubmit,
+  loading = false,
+  placeholder = 'Type a message...',
+  header,
+  minRows = 2,
+  maxRows = 6,
+  className,
+}) => {
+  const initialConfig = {
+    namespace: 'ChatInput',
+    theme,
+    onError: (error: Error) => {
+      console.error(error);
+    },
+  };
+
+  return (
+    <div className={clsx('chat-input-container', className)}>
+      {header && <div className="chat-input-header">{header}</div>}
+      <LexicalComposer initialConfig={initialConfig}>
+        <InnerEditor
+          value={value}
+          onChange={onChange}
+          onSubmit={onSubmit}
+          loading={loading}
+          placeholder={placeholder}
+          minRows={minRows}
+          maxRows={maxRows}
+        />
+      </LexicalComposer>
+    </div>
+  );
+};
+
+export default ChatInput;

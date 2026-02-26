@@ -20,8 +20,21 @@ export type Conversation = {
   id: string;
   name: string;
   config: Record<string, any> | null;
+  groupId: string;
+  order: number;
+  userId: string;
   createdAt: Date;
   messages?: Message[];
+  group?: ConversationGroup;
+};
+
+export type ConversationGroup = {
+  id: string;
+  name: string;
+  order: number;
+  userId: string;
+  createdAt: Date;
+  conversations?: Conversation[];
 };
 
 export type User = {

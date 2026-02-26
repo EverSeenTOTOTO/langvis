@@ -1,10 +1,10 @@
+import ChatInput from '@/client/components/ChatInput';
 import Drawer from '@/client/components/Drawer';
 import { useStore } from '@/client/store';
 import { AgentIds } from '@/shared/constants';
 import { Role } from '@/shared/types/entities';
 import { MenuOutlined } from '@ant-design/icons';
-import { Sender } from '@ant-design/x';
-import { Button, Flex, Layout, message } from 'antd';
+import { Button, Layout, message } from 'antd';
 import { observer } from 'mobx-react-lite';
 import React, { useState } from 'react';
 import { useAsyncFn, useMedia } from 'react-use';
@@ -53,17 +53,6 @@ const Chat: React.FC = () => {
     });
   };
 
-  const cancelApi = useAsyncFn(chatStore.cancelChat.bind(chatStore));
-
-  const handleCancel = async () => {
-    if (!chatStore.currentStreamingMessage) return;
-
-    await cancelApi[1]({
-      conversationId: conversationStore.currentConversationId!,
-      messageId: chatStore.currentStreamingMessage.id,
-    });
-  };
-
   return (
     <Layout className="chat-page">
       {isMobile ? (
@@ -89,23 +78,21 @@ const Chat: React.FC = () => {
       <Content className="chat-content">
         <Messages />
         <div className="chat-input">
-          <Sender
+          <ChatInput
             value={value}
             onChange={setValue}
             onSubmit={handleSend}
-            onCancel={handleCancel}
-            autoSize={{ minRows: 2, maxRows: 6 }}
+            minRows={2}
+            maxRows={6}
             header={
-              <Flex className="chat-header">
-                {isMobile && (
-                  <Button
-                    className="chat-drawer-trigger"
-                    size="small"
-                    icon={<MenuOutlined />}
-                    onClick={() => setDrawerOpen(true)}
-                  />
-                )}
-              </Flex>
+              isMobile && (
+                <Button
+                  className="chat-drawer-trigger"
+                  size="small"
+                  icon={<MenuOutlined />}
+                  onClick={() => setDrawerOpen(true)}
+                />
+              )
             }
             placeholder={settingStore.tr('Type a message...')}
             loading={

@@ -24,3 +24,5 @@ export const InjectTokens = {
   REDIS_SUBSCRIBER: Symbol('redis-subscriber'),
   OPENAI: Symbol('openai'),
 };
+
+export const UNGROUPED_GROUP_NAME = 'ungrouped';
