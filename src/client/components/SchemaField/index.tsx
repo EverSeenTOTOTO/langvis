@@ -46,9 +46,9 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
   const fieldLabel =
     label ?? prop.title ?? (Array.isArray(name) ? name[name.length - 1] : name);
   const fullName: NamePath = namePrefix ? [...namePrefix, name].flat() : name;
+  const fieldKey = JSON.stringify(name);
 
   const commonProps = {
-    key: JSON.stringify(name),
     name: fullName,
     label: fieldLabel,
     initialValue: prop.default,
@@ -71,7 +71,7 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
 
     return (
       <Collapse
-        key={JSON.stringify(name)}
+        key={fieldKey}
         size="small"
         bordered={false}
         defaultActiveKey="1"
@@ -105,7 +105,7 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
 
   if (prop.enum) {
     return (
-      <Form.Item {...commonProps}>
+      <Form.Item key={fieldKey} {...commonProps}>
         <Select
           options={prop.enum.map(v => ({ label: v, value: v }))}
           placeholder={prop.description}
@@ -116,7 +116,7 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
 
   if (prop.type === 'number' || prop.type === 'integer') {
     return (
-      <Form.Item {...commonProps}>
+      <Form.Item key={fieldKey} {...commonProps}>
         <InputNumber
           min={prop.minimum}
           max={prop.maximum}
@@ -130,7 +130,7 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
 
   if (prop.type === 'boolean') {
     return (
-      <Form.Item {...commonProps} valuePropName="checked">
+      <Form.Item key={fieldKey} {...commonProps} valuePropName="checked">
         <Switch />
       </Form.Item>
     );
@@ -140,6 +140,7 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
     const isLongText = (prop.maxLength ?? 0) > 100;
     return (
       <Form.Item
+        key={fieldKey}
         {...commonProps}
         rules={[
           { required },
@@ -157,7 +158,7 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
   }
 
   return (
-    <Form.Item {...commonProps}>
+    <Form.Item key={fieldKey} {...commonProps}>
       <Input placeholder={prop.description} />
     </Form.Item>
   );

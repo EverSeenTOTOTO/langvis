@@ -90,7 +90,7 @@ export default class ConversationGroupController {
   }
 
   @api('/reorder', { method: 'post' })
-  async reorderItems(
+  async reorderGroups(
     @body() dto: ReorderItemsRequestDto,
     @request() req: Request,
     @response() res: Response,

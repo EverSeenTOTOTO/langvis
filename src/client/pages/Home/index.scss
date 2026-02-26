@@ -29,11 +29,11 @@
     .ant-tree-title {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       width: 100%;
       overflow: hidden;
 
       .tree-node-text {
+        flex: 1;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;

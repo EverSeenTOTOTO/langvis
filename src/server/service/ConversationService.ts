@@ -11,11 +11,14 @@ import pg from './pg';
 
 @service()
 export class ConversationService {
-  private async getOrCreateUngroupedGroup(userId: string): Promise<string> {
+  private async getOrCreateGroupByName(
+    groupName: string,
+    userId: string,
+  ): Promise<string> {
     const groupRepository = pg.getRepository(ConversationGroupEntity);
 
     const existingGroup = await groupRepository.findOneBy({
-      name: UNGROUPED_GROUP_NAME,
+      name: groupName,
       userId,
     });
 
@@ -32,7 +35,7 @@ export class ConversationService {
     const order = (maxOrder?.max ?? -100) + 100;
 
     const newGroup = groupRepository.create({
-      name: UNGROUPED_GROUP_NAME,
+      name: groupName,
       userId,
       order,
     });
@@ -57,37 +60,12 @@ export class ConversationService {
 
     let resolvedGroupId = groupId;
 
-    // If groupName provided, find or create that group
-    if (groupName && !groupId) {
-      const existingGroup = await groupRepository.findOneBy({
-        name: groupName,
-        userId,
-      });
-
-      if (existingGroup) {
-        resolvedGroupId = existingGroup.id;
-      } else {
-        const maxOrder = await groupRepository
-          .createQueryBuilder('group')
-          .where('group.userId = :userId', { userId })
-          .select('MAX("order")', 'max')
-          .getRawOne();
-
-        const order = (maxOrder?.max ?? -100) + 100;
-
-        const newGroup = groupRepository.create({
-          name: groupName,
-          userId,
-          order,
-        });
-        const savedGroup = await groupRepository.save(newGroup);
-        resolvedGroupId = savedGroup.id;
-      }
-    }
-
-    // If still no groupId, use the "ungrouped" group
+    // If no groupId, find or create group by name (default to ungrouped)
     if (!resolvedGroupId) {
-      resolvedGroupId = await this.getOrCreateUngroupedGroup(userId);
+      resolvedGroupId = await this.getOrCreateGroupByName(
+        groupName ?? UNGROUPED_GROUP_NAME,
+        userId,
+      );
     }
 
     // Verify group exists and belongs to user
@@ -147,12 +125,9 @@ export class ConversationService {
       conversation.config = config ?? null;
     }
     if (groupId !== undefined) {
-      if (groupId) {
-        conversation.groupId = groupId;
-      } else {
-        // If groupId is null/empty, assign to the ungrouped group
-        conversation.groupId = await this.getOrCreateUngroupedGroup(userId);
-      }
+      conversation.groupId = groupId
+        ? groupId
+        : await this.getOrCreateGroupByName(UNGROUPED_GROUP_NAME, userId);
     }
     return await conversationRepository.save(conversation);
   }
