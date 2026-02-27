@@ -5,7 +5,16 @@ import { useStore } from '@/client/store';
 import { AgentIds } from '@/shared/constants';
 import { AgentConfig } from '@/shared/types';
 import { JSONSchemaType } from 'ajv';
-import { Empty, Flex, Form, FormProps, Input, Select, Typography } from 'antd';
+import {
+  Empty,
+  Flex,
+  Form,
+  FormProps,
+  Input,
+  Select,
+  Switch,
+  Typography,
+} from 'antd';
 import { observer } from 'mobx-react-lite';
 import { useEffect } from 'react';
 import { useAsyncFn, useMedia } from 'react-use';
@@ -168,6 +177,17 @@ const ConversationModal = ({
                 );
               }}
             </Form.Item>
+
+            {mode === 'create' && (
+              <Form.Item
+                name="switchToNew"
+                label={settingStore.tr('Switch to new conversation')}
+                valuePropName="checked"
+                initialValue={true}
+              >
+                <Switch />
+              </Form.Item>
+            )}
           </div>
           <div className="config-right">
             <Form.Item noStyle dependencies={[['config', 'agent']]}>

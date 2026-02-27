@@ -25,4 +25,4 @@ export const InjectTokens = {
   OPENAI: Symbol('openai'),
 };
 
-export const UNGROUPED_GROUP_NAME = 'ungrouped';
+export const UNGROUPED_GROUP_NAME = 'Ungrouped';

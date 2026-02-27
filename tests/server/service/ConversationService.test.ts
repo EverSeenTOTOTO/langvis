@@ -699,7 +699,7 @@ describe('ConversationService', () => {
 
     const ungroupedGroup = {
       id: 'ungrouped-id',
-      name: 'ungrouped',
+      name: 'Ungrouped',
       userId: 'test-user-id',
       order: 0,
     };
@@ -714,7 +714,7 @@ describe('ConversationService', () => {
         return {
           // Return ungrouped group when searching by name or id
           findOneBy: vi.fn().mockImplementation(async (criteria: any) => {
-            if (criteria.name === 'ungrouped') return ungroupedGroup;
+            if (criteria.name === 'Ungrouped') return ungroupedGroup;
             if (criteria.id === 'ungrouped-id') return ungroupedGroup;
             return null;
           }),

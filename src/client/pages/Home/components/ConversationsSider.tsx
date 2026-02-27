@@ -190,24 +190,29 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
                   },
                 ];
 
-                const title =
-                  agentId || modelCode || memoryType ? (
-                    <Tooltip
-                      title={
-                        <Flex gap={4} wrap>
-                          {agentId && <Tag color="blue">{agentId}</Tag>}
-                          {modelCode && <Tag color="purple">{modelCode}</Tag>}
-                          {memoryType && <Tag color="green">{memoryType}</Tag>}
-                        </Flex>
-                      }
-                      placement="right"
-                      mouseEnterDelay={0.5}
-                    >
-                      <span className="tree-node-text">{convTitle}</span>
-                    </Tooltip>
-                  ) : (
+                const hasMeta = agentId || modelCode || memoryType;
+                const title = (
+                  <Tooltip
+                    title={
+                      <Flex gap={4} vertical>
+                        <span>{convTitle}</span>
+                        {hasMeta && (
+                          <Flex gap={4} wrap>
+                            {agentId && <Tag color="blue">{agentId}</Tag>}
+                            {modelCode && <Tag color="purple">{modelCode}</Tag>}
+                            {memoryType && (
+                              <Tag color="green">{memoryType}</Tag>
+                            )}
+                          </Flex>
+                        )}
+                      </Flex>
+                    }
+                    placement="right"
+                    mouseEnterDelay={0.5}
+                  >
                     <span className="tree-node-text">{convTitle}</span>
-                  );
+                  </Tooltip>
+                );
                 const titleMenu = (
                   <Dropdown menu={{ items: convMenuItems }} trigger={['click']}>
                     <Button
@@ -237,9 +242,17 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
       .sort((a, b) => {
         const aId = (a.key as string).replace('group-', '');
         const bId = (b.key as string).replace('group-', '');
-        const aOrder = groupStore.groups.find(g => g.id === aId)?.order ?? 0;
-        const bOrder = groupStore.groups.find(g => g.id === bId)?.order ?? 0;
-        return aOrder - bOrder;
+        const aGroup = groupStore.groups.find(g => g.id === aId);
+        const bGroup = groupStore.groups.find(g => g.id === bId);
+        const aIsUngrouped = aGroup?.name === UNGROUPED_GROUP_NAME;
+        const bIsUngrouped = bGroup?.name === UNGROUPED_GROUP_NAME;
+
+        // Ungrouped 始终排在最前面
+        if (aIsUngrouped && !bIsUngrouped) return -1;
+        if (!aIsUngrouped && bIsUngrouped) return 1;
+
+        // 其他情况按 order 排序
+        return (aGroup?.order ?? 0) - (bGroup?.order ?? 0);
       });
   }, [groupStore.groups, settingStore]);
 
@@ -275,7 +288,14 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
 
   const onSelect: TreeProps['onSelect'] = selectedKeys => {
     const key = selectedKeys[0] as string;
-    if (key && !key.startsWith('group-')) {
+    if (!key) return;
+
+    if (key.startsWith('group-')) {
+      // 点击分组时展开/折叠
+      setExpandedKeys(prev =>
+        prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key],
+      );
+    } else {
       store.currentConversationId = key;
       onConversationChange?.();
     }
@@ -389,7 +409,11 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
         title={settingStore.tr('New Conversation')}
         confirmLoading={createConversationApi[0].loading}
         onFinish={async values => {
-          await createConversationApi[1](values);
+          const { switchToNew, ...restValues } = values;
+          const result = await createConversationApi[1](restValues);
+          if (switchToNew && result) {
+            store.currentConversationId = (result as { id: string }).id;
+          }
         }}
         initialValues={{ name: settingStore.tr('New Conversation') }}
       >
@@ -404,7 +428,11 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
         onCancel={() => setCreateWithGroupId(null)}
         confirmLoading={createConversationApi[0].loading}
         onFinish={async values => {
-          await createConversationApi[1](values);
+          const { switchToNew, ...restValues } = values;
+          const result = await createConversationApi[1](restValues);
+          if (switchToNew && result) {
+            store.currentConversationId = (result as { id: string }).id;
+          }
           setCreateWithGroupId(null);
         }}
         initialValues={{

@@ -67,30 +67,30 @@ group!: ConversationGroupEntity;
 - **第一层**：分组排序
 - **第二层**：分组内的对话排序
 
-## 三、特殊分组：ungrouped
+## 三、特殊分组：Ungrouped
 
 ### 3.1 概念
 
-`ungrouped` 是一个**固定名称**的特殊分组，用于存放"未分组"的对话。
+`Ungrouped` 是一个**固定名称**的特殊分组，用于存放"未分组"的对话。
 
 ```typescript
-export const UNGROUPED_GROUP_NAME = 'ungrouped';
+export const UNGROUPED_GROUP_NAME = 'Ungrouped';
 ```
 
 ### 3.2 特性
 
-- **自动创建**：当用户首次创建对话且未指定分组时，系统自动创建名为 `ungrouped` 的分组
-- **常规分组**：在数据结构上，它与普通分组完全一致，只是名称固定为 `"ungrouped"`
-- **用户隔离**：每个用户都有自己独立的 `ungrouped` 分组
+- **自动创建**：当用户首次创建对话且未指定分组时，系统自动创建名为 `Ungrouped` 的分组
+- **常规分组**：在数据结构上，它与普通分组完全一致，只是名称固定为 `"Ungrouped"`
+- **用户隔离**：每个用户都有自己独立的 `Ungrouped` 分组
 
 ### 3.3 行为规则
 
 | 场景                        | 行为                                              |
 | --------------------------- | ------------------------------------------------- |
-| 创建对话，未指定 groupId    | 自动分配到用户的 `ungrouped` 分组（不存在则创建） |
-| 更新对话，groupId 设为 null | 自动分配到 `ungrouped` 分组                       |
+| 创建对话，未指定 groupId    | 自动分配到用户的 `Ungrouped` 分组（不存在则创建） |
+| 更新对话，groupId 设为 null | 自动分配到 `Ungrouped` 分组                       |
 | 创建对话，指定 groupName    | 查找或创建该名称的分组                            |
-| 删除 `ungrouped` 分组       | 与删除普通分组一致，级联删除其下所有对话          |
+| 删除 `Ungrouped` 分组       | 与删除普通分组一致，级联删除其下所有对话          |
 
 ## 四、API 设计
 
@@ -123,7 +123,7 @@ export const UNGROUPED_GROUP_NAME = 'ungrouped';
 {
   name: string;
   config?: { agent: string; [key: string]: any };
-  groupId?: string;   // 可选，不传则分配到 ungrouped 分组
+  groupId?: string;   // 可选，不传则分配到 Ungrouped 分组
   groupName?: string; // 可选，按名称查找或创建分组
 }
 ```
@@ -179,7 +179,7 @@ export const UNGROUPED_GROUP_NAME = 'ungrouped';
 ### 5.2 Tree 结构示例
 
 ```
-├── ungrouped (order: 100)
+├── Ungrouped (order: 100)
 │   ├── 对话A (order: 100)
 │   └── 对话B (order: 200)
 ├── 分组X (order: 200)
@@ -208,7 +208,7 @@ export const UNGROUPED_GROUP_NAME = 'ungrouped';
 - 位置：对话列表末尾，「New Conversation」按钮
 - 弹窗表单：
   - 名称（必填）
-  - 分组（下拉选择已有分组，默认为 `ungrouped`）
+  - 分组（下拉选择已有分组，默认为 `Ungrouped`）
   - Agent 配置
 
 ### 5.5 编辑弹窗
@@ -225,9 +225,3 @@ export const UNGROUPED_GROUP_NAME = 'ungrouped';
 ### 空分组
 
 允许保留，删除时仍需二次确认。
-
-### 历史数据迁移
-
-1. 为历史对话添加 userId
-2. 为没有分组的对话创建 `ungrouped` 分组并关联
-3. order 按创建时间排序初始化
