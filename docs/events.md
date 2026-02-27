@@ -14,10 +14,10 @@ This document outlines the design of the Server-Sent Events (SSE) streaming arch
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer           │  Responsibility                              │
 ├─────────────────────────────────────────────────────────────────┤
-│  Tool            │  yield ToolEvent (progress/result)            │
+│  Tool            │  yield ToolEvent (progress/result)           │
 │  Agent           │  yield AgentEvent (thought/tool_call/etc...) │
-│  ExecutionContext│  Helper methods to create/adapt events        │
-│  Service         │  Send AgentEvent via SSE                      │
+│  ExecutionContext│  Helper methods to create/adapt events       │
+│  Service         │  Send AgentEvent via SSE                     │
 │  Client          │  Parse AgentEvent, update UI accordingly     │
 └─────────────────────────────────────────────────────────────────┘
 ```

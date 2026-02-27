@@ -71,7 +71,6 @@ export class ConversationStore {
     const result = await req!.send();
     if (result) {
       await this.conversationGroupStore.getAllGroups();
-      this.currentConversationId = (result as Conversation).id;
       return result as Conversation;
     }
     return undefined;
