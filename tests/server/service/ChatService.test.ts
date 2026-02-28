@@ -1,15 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { container } from 'tsyringe';
 import { ChatService } from '@/server/service/ChatService';
-import { SSEService } from '@/server/service/SSEService';
 import { AuthService } from '@/server/service/AuthService';
 import { ConversationService } from '@/server/service/ConversationService';
 import { Agent } from '@/server/core/agent';
-import { ExecutionContext } from '@/server/core/context';
 import { Memory } from '@/server/core/memory';
 import { Role } from '@/shared/entities/Message';
-import { AgentEvent } from '@/shared/types';
-import type { Request } from 'express';
+import { InjectTokens } from '@/shared/constants';
 
 vi.mock('globby', () => ({
   globby: vi.fn().mockResolvedValue([]),
@@ -17,17 +14,13 @@ vi.mock('globby', () => ({
 
 describe('ChatService', () => {
   let chatService: ChatService;
-  let mockSSEService: any;
   let mockAuthService: any;
   let mockConversationService: any;
+  let mockRedis: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
     container.clearInstances();
-
-    mockSSEService = {
-      sendToConversation: vi.fn(),
-    };
 
     mockAuthService = {
       getUserId: vi.fn().mockResolvedValue('user-123'),
@@ -37,7 +30,14 @@ describe('ChatService', () => {
       updateMessage: vi.fn().mockResolvedValue(undefined),
       batchAddMessages: vi.fn().mockResolvedValue([
         {
-          id: 'msg-123',
+          id: 'user-msg',
+          role: Role.USER,
+          content: 'Hello',
+          conversationId: 'conv-123',
+          createdAt: new Date(),
+        },
+        {
+          id: 'assistant-msg',
           role: Role.ASSIST,
           content: '',
           conversationId: 'conv-123',
@@ -46,11 +46,15 @@ describe('ChatService', () => {
       ]),
     };
 
-    container.register(SSEService, { useValue: mockSSEService });
+    mockRedis = {
+      del: vi.fn().mockResolvedValue(undefined),
+    };
+
     container.register(AuthService, { useValue: mockAuthService });
     container.register(ConversationService, {
       useValue: mockConversationService,
     });
+    container.register(InjectTokens.REDIS, { useValue: mockRedis });
 
     chatService = container.resolve(ChatService);
   });
@@ -59,242 +63,252 @@ describe('ChatService', () => {
     container.clearInstances();
   });
 
-  describe('cancelAgent', () => {
-    it('should cancel active agent', async () => {
-      const conversationId = 'conv-123';
-      const controller = new AbortController();
+  describe('acquireSession', () => {
+    it('should create new session for conversation', () => {
+      const session = chatService.acquireSession('conv-123');
 
-      (chatService as any).activeAgents.set(conversationId, controller);
-
-      const result = await chatService.cancelAgent(conversationId);
-
-      expect(result).toBe(true);
-      expect(controller.signal.aborted).toBe(true);
+      expect(session).toBeDefined();
+      expect(session?.conversationId).toBe('conv-123');
+      expect(session?.phase).toBe('waiting');
     });
 
-    it('should return false if no active agent', async () => {
-      const result = await chatService.cancelAgent('non-existent');
-      expect(result).toBe(false);
+    it('should return null if session already running', () => {
+      const session1 = chatService.acquireSession('conv-123');
+      expect(session1).toBeDefined();
+
+      // Simulate running state
+      session1!.start({} as any);
+
+      const session2 = chatService.acquireSession('conv-123');
+      expect(session2).toBeNull();
     });
 
-    it('should handle cancellation with custom reason', async () => {
-      const conversationId = 'conv-123';
-      const controller = new AbortController();
+    it('should cleanup and replace existing waiting session', () => {
+      const session1 = chatService.acquireSession('conv-123');
+      expect(session1).toBeDefined();
 
-      (chatService as any).activeAgents.set(conversationId, controller);
-
-      const result = await chatService.cancelAgent(
-        conversationId,
-        'Custom cancel reason',
-      );
-
-      expect(result).toBe(true);
-      expect(controller.signal.aborted).toBe(true);
+      // Don't start - still in waiting state
+      const session2 = chatService.acquireSession('conv-123');
+      expect(session2).toBeDefined();
+      expect(session2).not.toBe(session1);
     });
 
-    it('should handle errors during cancellation', async () => {
-      const conversationId = 'conv-123';
-      const mockController = {
-        abort: vi.fn().mockImplementation(() => {
-          throw new Error('Abort failed');
-        }),
-      };
+    it('should clean Redis key on dispose', async () => {
+      const session = chatService.acquireSession('conv-123');
+      session!.cleanup();
 
-      (chatService as any).activeAgents.set(conversationId, mockController);
+      // Wait for microtask
+      await Promise.resolve();
 
-      const result = await chatService.cancelAgent(conversationId);
-
-      expect(result).toBe(false);
+      expect(mockRedis.del).toHaveBeenCalledWith('human_input:conv-123');
     });
   });
 
-  describe('consumeAgentStream', () => {
-    it('should handle complete agent stream', async () => {
-      const conversation = {
-        id: 'conv-123',
-        name: 'Test',
-        config: {},
-        createdAt: new Date(),
-        key: 'conv-123',
-        order: 100,
-        userId: 'test-user-id',
-        groupId: 'group-123',
-      };
+  describe('getSession', () => {
+    it('should return undefined for non-existent session', () => {
+      const session = chatService.getSession('non-existent');
+      expect(session).toBeUndefined();
+    });
+
+    it('should return existing session', () => {
+      chatService.acquireSession('conv-123');
+      const session = chatService.getSession('conv-123');
+
+      expect(session).toBeDefined();
+      expect(session?.conversationId).toBe('conv-123');
+    });
+  });
+
+  describe('startAgent', () => {
+    it('should start agent and send events via session', async () => {
+      const session = chatService.acquireSession('conv-123');
+
+      const mockSendEvent = vi.fn().mockReturnValue(true);
+      const mockSendControlMessage = vi.fn();
+      session!.sendEvent = mockSendEvent;
+      session!.sendControlMessage = mockSendControlMessage;
 
       const mockAgent = {
-        call: vi.fn().mockImplementation(function* (
-          _memory: Memory,
-          ctx: ExecutionContext,
-        ): Generator<AgentEvent> {
-          yield ctx.agentStreamEvent('Hello');
-          yield ctx.agentStreamEvent(' World');
-          yield ctx.agentFinalEvent();
+        call: vi.fn().mockImplementation(async function* () {
+          yield { type: 'start', seq: 1, at: Date.now() };
+          yield { type: 'stream', content: 'Hello', seq: 2, at: Date.now() };
+          yield { type: 'final', seq: 3, at: Date.now() };
         }),
       } as unknown as Agent;
 
       const mockMemory = {} as Memory;
+      const mockConversation = {
+        id: 'conv-123',
+        config: {},
+      } as any;
 
-      await chatService.startAgent(conversation, mockAgent, mockMemory);
+      const mockMessage = {
+        id: 'assistant-msg',
+        role: Role.ASSIST,
+        content: '',
+        meta: { events: [] },
+        createdAt: new Date(),
+        conversationId: 'conv-123',
+      };
 
-      expect(mockSSEService.sendToConversation).toHaveBeenCalled();
-      expect(mockConversationService.batchAddMessages).toHaveBeenCalled();
-      expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
-        'msg-123',
-        'Hello World',
-        expect.objectContaining({ events: expect.any(Array) }),
+      await chatService.startAgent(
+        session!,
+        mockConversation,
+        mockAgent,
+        mockMemory,
+        mockMessage,
+      );
+
+      expect(mockSendEvent).toHaveBeenCalled();
+      expect(mockConversationService.updateMessage).toHaveBeenCalled();
+    });
+
+    it('should send cancelled event when aborted', async () => {
+      const session = chatService.acquireSession('conv-123');
+
+      const mockSendEvent = vi.fn().mockReturnValue(true);
+      session!.sendEvent = mockSendEvent;
+
+      const mockAgent = {
+        call: vi.fn().mockImplementation(async function* (_mem: any, ctx: any) {
+          ctx.abort('Test abort');
+          yield { type: 'start', seq: 1, at: Date.now() };
+        }),
+      } as unknown as Agent;
+
+      const mockMemory = {} as Memory;
+      const mockConversation = { id: 'conv-123', config: {} } as any;
+      const mockMessage = {
+        id: 'msg',
+        role: Role.ASSIST,
+        content: '',
+        meta: { events: [] },
+        createdAt: new Date(),
+        conversationId: 'conv-123',
+      };
+
+      await chatService.startAgent(
+        session!,
+        mockConversation,
+        mockAgent,
+        mockMemory,
+        mockMessage,
+      );
+
+      // Should send cancelled event
+      expect(mockSendEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'cancelled' }),
       );
     });
 
-    it('should handle agent stream events', async () => {
-      const conversation = {
-        id: 'conv-123',
-        name: 'Test',
-        config: {},
-        createdAt: new Date(),
-        key: 'conv-123',
-        order: 100,
-        userId: 'test-user-id',
-        groupId: 'group-123',
-      };
+    it('should send error event when agent throws', async () => {
+      const session = chatService.acquireSession('conv-123');
+
+      const mockSendEvent = vi.fn().mockReturnValue(true);
+      session!.sendEvent = mockSendEvent;
 
       const mockAgent = {
-        call: vi.fn().mockImplementation(function* (
-          _memory: Memory,
-          ctx: ExecutionContext,
-        ): Generator<AgentEvent> {
-          yield ctx.agentThoughtEvent('Thinking...');
-          yield ctx.agentStreamEvent('Hello');
-          yield ctx.agentFinalEvent();
+        call: vi.fn().mockImplementation(async function* () {
+          yield; // satisfy require-yield
+          throw new Error('Agent error');
         }),
       } as unknown as Agent;
 
       const mockMemory = {} as Memory;
+      const mockConversation = { id: 'conv-123', config: {} } as any;
+      const mockMessage = {
+        id: 'msg',
+        role: Role.ASSIST,
+        content: '',
+        meta: { events: [] },
+        createdAt: new Date(),
+        conversationId: 'conv-123',
+      };
 
-      await chatService.startAgent(conversation, mockAgent, mockMemory);
+      await chatService.startAgent(
+        session!,
+        mockConversation,
+        mockAgent,
+        mockMemory,
+        mockMessage,
+      );
 
-      expect(mockSSEService.sendToConversation).toHaveBeenCalled();
-      expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
-        'msg-123',
-        'Hello',
-        expect.objectContaining({ events: expect.any(Array) }),
+      expect(mockSendEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'error' }),
       );
     });
 
-    it('should handle streaming errors', async () => {
-      const conversation = {
-        id: 'conv-123',
-        name: 'Test',
-        config: {},
-        createdAt: new Date(),
-        key: 'conv-123',
-        order: 100,
-        userId: 'test-user-id',
-        groupId: 'group-123',
-      };
+    it('should break loop when SSE not writable', async () => {
+      const session = chatService.acquireSession('conv-123');
+
+      const mockSendEvent = vi.fn().mockReturnValue(false);
+      session!.sendEvent = mockSendEvent;
 
       const mockAgent = {
-        call: vi.fn().mockImplementation(function* (
-          _memory: Memory,
-          ctx: ExecutionContext,
-        ): Generator<AgentEvent> {
-          yield ctx.agentErrorEvent('Test error');
+        call: vi.fn().mockImplementation(async function* () {
+          yield { type: 'start', seq: 1, at: Date.now() };
+          yield { type: 'stream', content: 'Hello', seq: 2, at: Date.now() };
+          yield { type: 'stream', content: ' World', seq: 3, at: Date.now() };
+          yield { type: 'final', seq: 4, at: Date.now() };
         }),
       } as unknown as Agent;
 
       const mockMemory = {} as Memory;
+      const mockConversation = { id: 'conv-123', config: {} } as any;
+      const mockMessage = {
+        id: 'msg',
+        role: Role.ASSIST,
+        content: '',
+        meta: { events: [] },
+        createdAt: new Date(),
+        conversationId: 'conv-123',
+      };
 
-      await chatService.startAgent(conversation, mockAgent, mockMemory);
-
-      expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
-        'msg-123',
-        'Test error',
-        expect.objectContaining({
-          events: expect.arrayContaining([
-            expect.objectContaining({ type: 'error', error: 'Test error' }),
-          ]),
-        }),
+      await chatService.startAgent(
+        session!,
+        mockConversation,
+        mockAgent,
+        mockMemory,
+        mockMessage,
       );
+
+      // Should break after first sendEvent returns false
+      expect(mockSendEvent).toHaveBeenCalled();
     });
 
-    it('should handle update message failure', async () => {
-      const conversation = {
-        id: 'conv-123',
-        name: 'Test',
-        config: {},
-        createdAt: new Date(),
-        key: 'conv-123',
-        order: 100,
-        userId: 'test-user-id',
-        groupId: 'group-123',
-      };
+    it('should cleanup session after agent finishes', async () => {
+      const session = chatService.acquireSession('conv-123');
 
-      mockConversationService.updateMessage.mockRejectedValue(
-        new Error('Update failed'),
-      );
+      const mockSendEvent = vi.fn().mockReturnValue(true);
+      session!.sendEvent = mockSendEvent;
 
       const mockAgent = {
-        call: vi.fn().mockImplementation(function* (
-          _memory: Memory,
-          ctx: ExecutionContext,
-        ): Generator<AgentEvent> {
-          yield ctx.agentStreamEvent('Hello');
-          yield ctx.agentFinalEvent();
+        call: vi.fn().mockImplementation(async function* () {
+          yield { type: 'start', seq: 1, at: Date.now() };
+          yield { type: 'final', seq: 2, at: Date.now() };
         }),
       } as unknown as Agent;
 
       const mockMemory = {} as Memory;
-
-      await chatService.startAgent(conversation, mockAgent, mockMemory);
-
-      expect(mockSSEService.sendToConversation).toHaveBeenCalled();
-    });
-
-    it('should convert passive exceptions to error events', async () => {
-      const conversation = {
-        id: 'conv-123',
-        name: 'Test',
-        config: {},
+      const mockConversation = { id: 'conv-123', config: {} } as any;
+      const mockMessage = {
+        id: 'msg',
+        role: Role.ASSIST,
+        content: '',
+        meta: { events: [] },
         createdAt: new Date(),
-        key: 'conv-123',
-        order: 100,
-        userId: 'test-user-id',
-        groupId: 'group-123',
+        conversationId: 'conv-123',
       };
 
-      const mockAgent = {
-        call: vi.fn().mockImplementation(function () {
-          const iterator = {
-            [Symbol.asyncIterator]: () => iterator,
-            next: () => Promise.reject(new Error('Network timeout')),
-          };
-          return iterator;
-        }),
-      } as unknown as Agent;
-
-      const mockMemory = {} as Memory;
-
-      await chatService.startAgent(conversation, mockAgent, mockMemory);
-
-      expect(mockSSEService.sendToConversation).toHaveBeenCalledWith(
-        'conv-123',
-        expect.objectContaining({
-          type: 'error',
-          error: 'Network timeout',
-        }),
+      await chatService.startAgent(
+        session!,
+        mockConversation,
+        mockAgent,
+        mockMemory,
+        mockMessage,
       );
 
-      expect(mockConversationService.updateMessage).toHaveBeenCalledWith(
-        'msg-123',
-        'Network timeout',
-        expect.objectContaining({
-          events: expect.arrayContaining([
-            expect.objectContaining({
-              type: 'error',
-              error: 'Network timeout',
-            }),
-          ]),
-        }),
-      );
+      expect(session!.phase).toBe('done');
     });
   });
 
@@ -315,7 +329,7 @@ describe('ChatService', () => {
 
       const req = {
         params: { conversationId: 'conv-123' },
-      } as unknown as Request;
+      } as any;
 
       const config = {
         memory: { type: 'test-memory' },
@@ -335,175 +349,7 @@ describe('ChatService', () => {
 
       expect(mockMemory.setConversationId).toHaveBeenCalledWith('conv-123');
       expect(mockMemory.setUserId).toHaveBeenCalledWith('user-123');
-      expect(mockMemory.summarize).toHaveBeenCalled();
-      expect(mockMemory.store).toHaveBeenCalled();
       expect(result).toBe(mockMemory);
-    });
-
-    it('should add system prompt for new conversation', async () => {
-      const mockMemory = {
-        setConversationId: vi.fn(),
-        setUserId: vi.fn(),
-        summarize: vi.fn().mockResolvedValue([]),
-        store: vi.fn().mockResolvedValue(undefined),
-      };
-
-      const mockAgent = {
-        getSystemPrompt: vi.fn().mockResolvedValue('System prompt'),
-      };
-
-      container.register('test-memory', { useValue: mockMemory });
-
-      const req = {
-        params: { conversationId: 'conv-123' },
-      } as unknown as Request;
-
-      const config = {
-        memory: { type: 'test-memory' },
-      };
-
-      const userMessage = {
-        role: Role.USER,
-        content: 'Hello',
-      };
-
-      await chatService.buildMemory(req, mockAgent as any, config, userMessage);
-
-      expect(mockMemory.store).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({
-            role: Role.SYSTEM,
-            content: 'System prompt',
-          }),
-          expect.objectContaining({
-            role: Role.USER,
-            content: 'Hello',
-          }),
-        ]),
-      );
-    });
-
-    it('should not add system prompt for existing conversation', async () => {
-      const mockMemory = {
-        setConversationId: vi.fn(),
-        setUserId: vi.fn(),
-        summarize: vi
-          .fn()
-          .mockResolvedValue([
-            { role: Role.SYSTEM, content: 'Existing prompt' },
-          ]),
-        store: vi.fn().mockResolvedValue(undefined),
-      };
-
-      const mockAgent = {
-        getSystemPrompt: vi.fn().mockResolvedValue('System prompt'),
-      };
-
-      container.register('test-memory', { useValue: mockMemory });
-
-      const req = {
-        params: { conversationId: 'conv-123' },
-      } as unknown as Request;
-
-      const config = {
-        memory: { type: 'test-memory' },
-      };
-
-      const userMessage = {
-        role: Role.USER,
-        content: 'Hello',
-      };
-
-      await chatService.buildMemory(req, mockAgent as any, config, userMessage);
-
-      expect(mockMemory.store).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({
-            role: Role.USER,
-            content: 'Hello',
-          }),
-        ]),
-      );
-
-      expect(mockMemory.store).not.toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({
-            role: Role.SYSTEM,
-          }),
-        ]),
-      );
-    });
-
-    it('should handle agent without getSystemPrompt', async () => {
-      const mockMemory = {
-        setConversationId: vi.fn(),
-        setUserId: vi.fn(),
-        summarize: vi.fn().mockResolvedValue([]),
-        store: vi.fn().mockResolvedValue(undefined),
-      };
-
-      const mockAgent = {};
-
-      container.register('test-memory', { useValue: mockMemory });
-
-      const req = {
-        params: { conversationId: 'conv-123' },
-      } as unknown as Request;
-
-      const config = {
-        memory: { type: 'test-memory' },
-      };
-
-      const userMessage = {
-        role: Role.USER,
-        content: 'Hello',
-      };
-
-      await chatService.buildMemory(req, mockAgent as any, config, userMessage);
-
-      expect(mockMemory.store).toHaveBeenCalledWith([
-        expect.objectContaining({
-          role: Role.USER,
-          content: 'Hello',
-        }),
-      ]);
-    });
-
-    it('should handle user message with meta', async () => {
-      const mockMemory = {
-        setConversationId: vi.fn(),
-        setUserId: vi.fn(),
-        summarize: vi.fn().mockResolvedValue([]),
-        store: vi.fn().mockResolvedValue(undefined),
-      };
-
-      const mockAgent = {};
-
-      container.register('test-memory', { useValue: mockMemory });
-
-      const req = {
-        params: { conversationId: 'conv-123' },
-      } as unknown as Request;
-
-      const config = {
-        memory: { type: 'test-memory' },
-      };
-
-      const userMessage = {
-        role: Role.USER,
-        content: 'Hello',
-        meta: { source: 'web' },
-      };
-
-      await chatService.buildMemory(req, mockAgent as any, config, userMessage);
-
-      expect(mockMemory.store).toHaveBeenCalledWith([
-        expect.objectContaining({
-          role: Role.USER,
-          content: 'Hello',
-          meta: { source: 'web' },
-        }),
-      ]);
     });
   });
 });

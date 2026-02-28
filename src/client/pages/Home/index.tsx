@@ -98,7 +98,7 @@ const Chat: React.FC = () => {
             loading={
               createConversationApi[0].loading ||
               chatApi[0].loading ||
-              !!chatStore.currentStreamingMessage
+              chatStore.isCurrentLoading
             }
           />
         </div>

@@ -10,10 +10,25 @@ export class ExecutionContext {
     return this.message.id;
   }
 
+  private seqCounter = 0;
+  private _currentCallId: string | null = null;
+
   constructor(
     public message: Message,
     private readonly controller: AbortController,
   ) {}
+
+  private nextSeq(): number {
+    return ++this.seqCounter;
+  }
+
+  private nextCallId(): string {
+    return `tc_${crypto.randomUUID().slice(0, 8)}`;
+  }
+
+  get currentCallId(): string {
+    return this._currentCallId!;
+  }
 
   // === Content management ===
 
@@ -46,30 +61,59 @@ export class ExecutionContext {
   // === AgentEvent helpers ===
 
   agentStartEvent(): AgentEvent {
-    const event: AgentEvent = { type: 'start', at: Date.now() };
+    const event: AgentEvent = {
+      type: 'start',
+      seq: this.nextSeq(),
+      at: Date.now(),
+    };
     this.pushEvent(event);
     return event;
   }
 
   agentThoughtEvent(content: string): AgentEvent {
-    const event: AgentEvent = { type: 'thought', content, at: Date.now() };
+    const event: AgentEvent = {
+      type: 'thought',
+      content,
+      seq: this.nextSeq(),
+      at: Date.now(),
+    };
     this.pushEvent(event);
     return event;
   }
 
   agentStreamEvent(content: string): AgentEvent {
     this.appendContent(content);
-    return { type: 'stream', content, at: Date.now() };
+    return { type: 'stream', content, seq: this.nextSeq(), at: Date.now() };
   }
 
   agentFinalEvent(): AgentEvent {
-    const event: AgentEvent = { type: 'final', at: Date.now() };
+    const event: AgentEvent = {
+      type: 'final',
+      seq: this.nextSeq(),
+      at: Date.now(),
+    };
+    this.pushEvent(event);
+    return event;
+  }
+
+  agentCancelledEvent(reason: string): AgentEvent {
+    const event: AgentEvent = {
+      type: 'cancelled',
+      reason,
+      seq: this.nextSeq(),
+      at: Date.now(),
+    };
     this.pushEvent(event);
     return event;
   }
 
   agentErrorEvent(error: string): AgentEvent {
-    const event: AgentEvent = { type: 'error', error, at: Date.now() };
+    const event: AgentEvent = {
+      type: 'error',
+      error,
+      seq: this.nextSeq(),
+      at: Date.now(),
+    };
     this.pushEvent(event);
     this.setContent(error);
     return event;
@@ -79,10 +123,15 @@ export class ExecutionContext {
     toolName: string,
     toolArgs: Record<string, unknown>,
   ): AgentEvent {
+    const callId = this.nextCallId();
+    this._currentCallId = callId;
+
     const event: AgentEvent = {
       type: 'tool_call',
+      callId,
       toolName,
       toolArgs,
+      seq: this.nextSeq(),
       at: Date.now(),
     };
     this.pushEvent(event);
@@ -90,14 +139,23 @@ export class ExecutionContext {
   }
 
   agentToolProgressEvent(toolName: string, data: unknown): AgentEvent {
-    return { type: 'tool_progress', toolName, data, at: Date.now() };
+    return {
+      type: 'tool_progress',
+      callId: this.ensureCallId(),
+      toolName,
+      data,
+      seq: this.nextSeq(),
+      at: Date.now(),
+    };
   }
 
   agentToolResultEvent(toolName: string, output: unknown): AgentEvent {
     const event: AgentEvent = {
       type: 'tool_result',
+      callId: this.ensureCallId(),
       toolName,
       output,
+      seq: this.nextSeq(),
       at: Date.now(),
     };
     this.pushEvent(event);
@@ -107,8 +165,10 @@ export class ExecutionContext {
   agentToolErrorEvent(toolName: string, error: string): AgentEvent {
     const event: AgentEvent = {
       type: 'tool_error',
+      callId: this.ensureCallId(),
       toolName,
       error,
+      seq: this.nextSeq(),
       at: Date.now(),
     };
     this.pushEvent(event);
@@ -117,33 +177,83 @@ export class ExecutionContext {
 
   // === ToolEvent helpers ===
 
+  private ensureCallId(): string {
+    if (!this._currentCallId) {
+      this._currentCallId = this.nextCallId();
+    }
+    return this._currentCallId;
+  }
+
   toolProgressEvent(toolName: string, data: unknown): ToolEvent {
-    return { type: 'progress', toolName, data, at: Date.now() };
+    return {
+      type: 'progress',
+      callId: this.ensureCallId(),
+      toolName,
+      data,
+      seq: this.nextSeq(),
+      at: Date.now(),
+    };
   }
 
   toolResultEvent(toolName: string, output: unknown): ToolEvent {
-    return { type: 'result', toolName, output, at: Date.now() };
+    return {
+      type: 'result',
+      callId: this.ensureCallId(),
+      toolName,
+      output,
+      seq: this.nextSeq(),
+      at: Date.now(),
+    };
   }
 
   toolErrorEvent(toolName: string, error: string): ToolEvent {
-    return { type: 'error', toolName, error, at: Date.now() };
+    return {
+      type: 'error',
+      callId: this.ensureCallId(),
+      toolName,
+      error,
+      seq: this.nextSeq(),
+      at: Date.now(),
+    };
   }
 
   // === Adaptation ===
 
   adaptToolEvent(event: ToolEvent): AgentEvent {
+    const seq = this.nextSeq();
+
     if (event.type === 'progress') {
       return {
         type: 'tool_progress',
+        callId: event.callId,
         toolName: event.toolName,
         data: event.data,
+        seq,
         at: event.at,
       };
     }
     if (event.type === 'error') {
-      return this.agentToolErrorEvent(event.toolName, event.error);
+      const adapted: AgentEvent = {
+        type: 'tool_error',
+        callId: event.callId,
+        toolName: event.toolName,
+        error: event.error,
+        seq,
+        at: event.at,
+      };
+      this.pushEvent(adapted);
+      return adapted;
     }
-    return this.agentToolResultEvent(event.toolName, event.output);
+    const adapted: AgentEvent = {
+      type: 'tool_result',
+      callId: event.callId,
+      toolName: event.toolName,
+      output: event.output,
+      seq,
+      at: event.at,
+    };
+    this.pushEvent(adapted);
+    return adapted;
   }
 
   abort(reason: string): void {

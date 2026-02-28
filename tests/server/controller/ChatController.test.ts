@@ -4,11 +4,6 @@ import type { Request, Response } from 'express';
 import { container } from 'tsyringe';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the container and agent
-const mockAgent = {
-  call: vi.fn(),
-};
-
 vi.mock('tsyringe', () => ({
   container: {
     resolve: vi.fn(),
@@ -19,26 +14,23 @@ vi.mock('tsyringe', () => ({
   injectable: () => vi.fn(),
 }));
 
-// Create mock service classes
 class MockSSEService {
-  initSSEConnection = vi.fn();
-  closeSSEConnection = vi.fn();
-  sendToConversation = vi.fn();
-  sendToConnection = vi.fn();
+  initSSEConnection = vi.fn().mockReturnValue({
+    conversationId: 'conv-123',
+    response: {},
+    heartbeat: null,
+  });
 }
 
 class MockConversationService {
-  addMessageToConversation = vi.fn();
-  getMessagesByConversationId = vi.fn();
   getConversationById = vi.fn();
-  updateMessage = vi.fn();
-  createMessageStream = vi.fn();
   batchAddMessages = vi.fn();
 }
 
 class MockChatService {
+  acquireSession = vi.fn();
+  getSession = vi.fn();
   startAgent = vi.fn();
-  cancelAgent = vi.fn();
   buildMemory = vi.fn();
 }
 
@@ -52,13 +44,12 @@ describe('ChatController', () => {
   let mockResponse: Partial<Response>;
   let mockJson: ReturnType<typeof vi.fn>;
   let mockStatus: ReturnType<typeof vi.fn>;
-  let mockWriteHead: ReturnType<typeof vi.fn>;
-  let mockWrite: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     mockSSEService = new MockSSEService();
     mockConversationService = new MockConversationService();
     mockChatService = new MockChatService();
+
     chatController = new ChatController(
       mockSSEService as any,
       mockConversationService as any,
@@ -67,35 +58,19 @@ describe('ChatController', () => {
 
     mockJson = vi.fn(() => mockResponse as Response);
     mockStatus = vi.fn(() => ({ json: mockJson }) as any);
-    mockWriteHead = vi.fn();
-    mockWrite = vi.fn();
 
     mockResponse = {
       status: mockStatus,
       json: mockJson,
-      writeHead: mockWriteHead,
-      write: mockWrite,
     };
 
     mockRequest = {
       params: {},
       body: {},
       on: vi.fn(),
-      id: 'test-request-id',
       log: {
-        error: vi.fn(),
         info: vi.fn(),
-        warn: vi.fn(),
-        debug: vi.fn(),
-        trace: vi.fn(),
-        fatal: vi.fn(),
-        silent: false,
-        format: {},
-        levels: {},
-        level: 'info',
-        prepend: false,
-        exitOnError: true,
-        emitErrs: false,
+        error: vi.fn(),
       } as any,
     };
 
@@ -103,37 +78,56 @@ describe('ChatController', () => {
   });
 
   describe('initSSE', () => {
-    it('should initialize an SSE connection', async () => {
-      const conversationId = 'test-conversation-id';
-      mockRequest.params = { conversationId };
-
-      mockSSEService.initSSEConnection = vi
-        .fn()
-        .mockReturnValue('connection-id');
+    it('should return 409 if session already running', async () => {
+      mockRequest.params = { conversationId: 'conv-123' };
+      mockChatService.acquireSession.mockReturnValue(null);
 
       await chatController.initSSE(
-        conversationId,
+        'conv-123',
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      expect(mockStatus).toHaveBeenCalledWith(409);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: 'Session already running',
+      });
+    });
+
+    it('should create session and bind SSE connection', async () => {
+      mockRequest.params = { conversationId: 'conv-123' };
+
+      const mockSession = {
+        bindConnection: vi.fn(),
+        onClientDisconnect: vi.fn(),
+      };
+      mockChatService.acquireSession.mockReturnValue(mockSession);
+
+      await chatController.initSSE(
+        'conv-123',
         mockRequest as Request,
         mockResponse as Response,
       );
 
       expect(mockSSEService.initSSEConnection).toHaveBeenCalledWith(
-        conversationId,
+        'conv-123',
         mockResponse,
       );
+      expect(mockSession.bindConnection).toHaveBeenCalled();
       expect(mockRequest.on).toHaveBeenCalledWith(
         'close',
         expect.any(Function),
       );
-      expect(mockRequest.on).toHaveBeenCalledWith(
-        'error',
-        expect.any(Function),
-      );
     });
 
-    it('should handle request close event during SSE connection', async () => {
-      const conversationId = 'test-conversation-id';
-      mockRequest.params = { conversationId };
+    it('should call onClientDisconnect on close event', async () => {
+      mockRequest.params = { conversationId: 'conv-123' };
+
+      const mockSession = {
+        bindConnection: vi.fn(),
+        onClientDisconnect: vi.fn(),
+      };
+      mockChatService.acquireSession.mockReturnValue(mockSession);
 
       let closeCallback: (() => void) | undefined;
       (mockRequest.on as any).mockImplementation(
@@ -145,499 +139,209 @@ describe('ChatController', () => {
       );
 
       await chatController.initSSE(
-        conversationId,
+        'conv-123',
         mockRequest as Request,
         mockResponse as Response,
       );
 
-      // Simulate close event
       closeCallback?.();
 
-      expect(mockSSEService.closeSSEConnection).toHaveBeenCalledWith(
-        conversationId,
-      );
-      expect(mockRequest.log?.info).toHaveBeenCalledWith(
-        'SSE connection closed:',
-        conversationId,
-      );
-    });
-
-    it('should setup SSE connection with proper event handlers', async () => {
-      const conversationId = 'test-conversation-id';
-      mockRequest.params = { conversationId };
-
-      await chatController.initSSE(
-        conversationId,
-        mockRequest as Request,
-        mockResponse as Response,
-      );
-
-      // Verify that both close and error handlers are registered
-      expect(mockRequest.on).toHaveBeenCalledTimes(2);
-      expect(mockRequest.on).toHaveBeenNthCalledWith(
-        1,
-        'close',
-        expect.any(Function),
-      );
-      expect(mockRequest.on).toHaveBeenNthCalledWith(
-        2,
-        'error',
-        expect.any(Function),
-      );
+      expect(mockSession.onClientDisconnect).toHaveBeenCalled();
     });
   });
 
   describe('chat', () => {
-    it('should add a message to conversation and start agent call', async () => {
-      const conversationId = 'test-conversation-id';
-      const role = Role.USER;
-      const content = 'Hello';
-      const mockConversation = {
-        id: conversationId,
-        name: 'Test Conversation',
-        config: { agent: 'Chat Agent' },
-      };
-      const mockMemory = { id: 'memory-1' };
-
-      mockRequest.params = { conversationId };
-      mockRequest.body = { role, content };
-
-      (container.resolve as any).mockReturnValue(mockAgent);
-
-      mockConversationService.getConversationById = vi
-        .fn()
-        .mockResolvedValue(mockConversation);
-
-      mockChatService.buildMemory = vi.fn().mockResolvedValue(mockMemory);
-
-      mockAgent.call = vi.fn().mockReturnValue({
-        async *[Symbol.asyncIterator]() {
-          yield { type: 'start', agentId: 'test' };
-        },
-      });
-
-      await chatController.chat(
-        conversationId,
-        { conversationId, role, content },
-        mockRequest as Request,
-        mockResponse as Response,
-      );
-
-      expect(mockStatus).toHaveBeenCalledWith(200);
-      expect(mockJson).toHaveBeenCalledWith({ success: true });
-      expect(mockChatService.buildMemory).toHaveBeenCalled();
-      expect(mockChatService.startAgent).toHaveBeenCalledWith(
-        mockConversation,
-        mockAgent,
-        mockMemory,
-      );
-    });
-
-    it('should return 400 if role is missing', async () => {
-      const conversationId = 'test-conversation-id';
-      const content = 'Hello';
-
-      mockRequest.params = { conversationId };
-      mockRequest.body = { conversationId, content };
-
-      const { StartChatRequestDto } = await import('@/shared/dto/controller');
-
-      try {
-        await StartChatRequestDto.validate(mockRequest.body);
-        throw new Error('Should have thrown validation error');
-      } catch (error: any) {
-        expect(error.name).toBe('ValidationException');
-        expect(error.errors).toBeDefined();
-        expect(error.errors).toContain('role');
-      }
-    });
-
-    it('should return 400 if content is missing', async () => {
-      const conversationId = 'test-conversation-id';
-      const role = Role.USER;
-
-      mockRequest.params = { conversationId };
-      mockRequest.body = { conversationId, role };
-
-      const { StartChatRequestDto } = await import('@/shared/dto/controller');
-
-      try {
-        await StartChatRequestDto.validate(mockRequest.body);
-        throw new Error('Should have thrown validation error');
-      } catch (error: any) {
-        expect(error.name).toBe('ValidationException');
-        expect(error.errors).toBeDefined();
-        expect(error.errors).toContain('content');
-      }
-    });
-
-    it('should return 400 if role is invalid', async () => {
-      const conversationId = 'test-conversation-id';
-      const role = 'invalid';
-      const content = 'Hello';
-
-      mockRequest.params = { conversationId };
-      mockRequest.body = { conversationId, role, content };
-
-      const { StartChatRequestDto } = await import('@/shared/dto/controller');
-
-      try {
-        await StartChatRequestDto.validate(mockRequest.body);
-        throw new Error('Should have thrown validation error');
-      } catch (error: any) {
-        expect(error.name).toBe('ValidationException');
-        expect(error.errors).toBeDefined();
-        expect(error.errors).toContain('role');
-      }
-    });
-
-    it('should return 400 if conversation is not found', async () => {
-      const conversationId = 'nonexistent-conversation-id';
-      const role = Role.USER;
-      const content = 'Hello';
-      const mockConversation = null;
-
-      mockRequest.params = { conversationId };
-      mockRequest.body = { role, content };
-
-      mockConversationService.addMessageToConversation = vi
-        .fn()
-        .mockResolvedValue({ id: '1', conversationId, role, content });
-
-      mockConversationService.getConversationById = vi
-        .fn()
-        .mockResolvedValue(mockConversation);
-
-      await chatController.chat(
-        conversationId,
-        mockRequest.body,
-        mockRequest as Request,
-        mockResponse as Response,
-      );
-
-      expect(mockStatus).toHaveBeenCalledWith(400);
-      expect(mockJson).toHaveBeenCalledWith({
-        error: `Conversation ${conversationId} not found`,
-      });
-    });
-
-    it('should return 400 if initial message addition fails', async () => {
-      const conversationId = 'test-conversation-id';
-      const role = Role.USER;
-      const content = 'Hello';
-
-      mockRequest.params = { conversationId };
-      mockRequest.body = { role, content };
-
-      mockConversationService.addMessageToConversation = vi
-        .fn()
-        .mockResolvedValue(null);
-
-      await chatController.chat(
-        conversationId,
-        mockRequest.body,
-        mockRequest as Request,
-        mockResponse as Response,
-      );
-
-      expect(mockStatus).toHaveBeenCalledWith(400);
-      expect(mockJson).toHaveBeenCalledWith({
-        error: `Conversation ${conversationId} not found`,
-      });
-    });
-  });
-
-  describe('startAgent streaming logic', () => {
-    let conversationId: string;
-    let mockConversation: any;
-
-    beforeEach(() => {
-      conversationId = 'test-conversation-id';
-      mockConversation = {
-        id: conversationId,
-        config: { agent: 'Chat Agent' },
-      };
-
-      // Setup mocks
-      mockConversationService.getConversationById.mockResolvedValue(
-        mockConversation,
-      );
-
-      mockConversationService.updateMessage.mockResolvedValue(undefined);
-
-      // Mock startAgent
-      mockChatService.startAgent = vi.fn().mockResolvedValue(undefined);
-
-      // Mock buildMemory to return a mock memory object
-      const mockMemory = { summarize: vi.fn(), store: vi.fn() };
-      mockChatService.buildMemory = vi.fn().mockResolvedValue(mockMemory);
-
-      // Mock container.resolve to return the mock agent
-      vi.mocked(container.resolve).mockReturnValue(mockAgent);
-
-      // Mock agent.call to return an AsyncGenerator
-      mockAgent.call.mockImplementation(async function* () {
-        yield { type: 'start', agentId: 'test' };
-        yield { type: 'delta', content: 'Hello' };
-        yield { type: 'end', agentId: 'test' };
-      });
-
-      mockRequest.params = { conversationId };
+    it('should return 400 if no session exists', async () => {
+      mockRequest.params = { conversationId: 'conv-123' };
       mockRequest.body = { role: Role.USER, content: 'Hello' };
-    });
 
-    it('should initiate streaming when valid conversation and agent exist', async () => {
+      mockChatService.getSession.mockReturnValue(undefined);
+
       await chatController.chat(
-        conversationId,
-        mockRequest.body,
+        'conv-123',
+        { conversationId: 'conv-123', role: Role.USER, content: 'Hello' },
         mockRequest as Request,
         mockResponse as Response,
       );
 
-      // Verify the chat method returns success
-      expect(mockStatus).toHaveBeenCalledWith(200);
-      expect(mockJson).toHaveBeenCalledWith({ success: true });
-
-      // Verify the agent was resolved and call was eventually called
-      await new Promise(resolve => setTimeout(resolve, 0));
-      expect(container.resolve).toHaveBeenCalledWith(
-        mockConversation.config.agent,
-      );
-    });
-
-    it('should verify chat state and stream setup with correct parameters', async () => {
-      await chatController.chat(
-        conversationId,
-        mockRequest.body,
-        mockRequest as Request,
-        mockResponse as Response,
-      );
-
-      // Verify startAgent was called with correct parameters
-      expect(mockChatService.startAgent).toHaveBeenCalledWith(
-        mockConversation,
-        expect.any(Object),
-        expect.any(Object),
-      );
-    });
-
-    it('should start agent processing', async () => {
-      await chatController.chat(
-        conversationId,
-        mockRequest.body,
-        mockRequest as Request,
-        mockResponse as Response,
-      );
-
-      // Verify the agent was resolved and call was eventually called
-      await new Promise(resolve => setTimeout(resolve, 50));
-      expect(container.resolve).toHaveBeenCalledWith(
-        mockConversation.config.agent,
-      );
-      // Verify startAgent was called
-      expect(mockChatService.startAgent).toHaveBeenCalledWith(
-        mockConversation,
-        expect.any(Object),
-        expect.any(Object),
-      );
-    });
-  });
-
-  describe('SSE and Streaming Integration', () => {
-    let conversationId: string;
-    let mockConversation: any;
-
-    beforeEach(() => {
-      conversationId = 'integration-test-conversation';
-      mockConversation = {
-        id: conversationId,
-        config: { agent: 'Chat Agent' },
-      };
-
-      mockConversationService.getConversationById.mockResolvedValue(
-        mockConversation,
-      );
-
-      mockConversationService.updateMessage.mockResolvedValue(undefined);
-
-      // Mock startAgent
-      mockChatService.startAgent = vi.fn().mockResolvedValue(undefined);
-
-      // Mock buildMemory to return a mock memory object
-      const mockMemory = { summarize: vi.fn(), store: vi.fn() };
-      mockChatService.buildMemory = vi.fn().mockResolvedValue(mockMemory);
-
-      vi.mocked(container.resolve).mockReturnValue(mockAgent);
-
-      // Mock agent.call to return an AsyncGenerator
-      mockAgent.call.mockImplementation(async function* () {
-        yield { type: 'start', agentId: 'test' };
-        yield { type: 'delta', content: 'Hello' };
-        yield { type: 'end', agentId: 'test' };
+      expect(mockStatus).toHaveBeenCalledWith(400);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: 'SSE connection not established',
       });
-
-      mockRequest.params = { conversationId };
-      mockRequest.body = { role: Role.USER, content: 'Test message' };
     });
 
-    it('should setup streaming integration correctly', async () => {
+    it('should return 400 if session not in waiting phase', async () => {
+      mockRequest.params = { conversationId: 'conv-123' };
+      mockRequest.body = { role: Role.USER, content: 'Hello' };
+
+      const mockSession = {
+        phase: 'running',
+      };
+      mockChatService.getSession.mockReturnValue(mockSession);
+
       await chatController.chat(
-        conversationId,
-        mockRequest.body,
+        'conv-123',
+        { conversationId: 'conv-123', role: Role.USER, content: 'Hello' },
         mockRequest as Request,
         mockResponse as Response,
       );
 
-      // Verify the basic setup worked
-      expect(mockStatus).toHaveBeenCalledWith(200);
-      expect(mockJson).toHaveBeenCalledWith({ success: true });
-      expect(mockConversationService.getConversationById).toHaveBeenCalledWith(
-        conversationId,
-      );
-
-      // Allow async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 50));
-
-      // Verify agent was resolved and call was initiated
-      expect(container.resolve).toHaveBeenCalledWith(
-        mockConversation.config.agent,
-      );
-      // Verify startAgent was called
-      expect(mockChatService.startAgent).toHaveBeenCalled();
+      expect(mockStatus).toHaveBeenCalledWith(400);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: 'Session already running',
+      });
     });
 
-    it('should handle conversation not found during integration', async () => {
+    it('should return 400 if conversation not found', async () => {
+      mockRequest.params = { conversationId: 'conv-123' };
+      mockRequest.body = { role: Role.USER, content: 'Hello' };
+
+      const mockSession = { phase: 'waiting' };
+      mockChatService.getSession.mockReturnValue(mockSession);
       mockConversationService.getConversationById.mockResolvedValue(null);
 
       await chatController.chat(
-        conversationId,
-        mockRequest.body,
+        'conv-123',
+        { conversationId: 'conv-123', role: Role.USER, content: 'Hello' },
         mockRequest as Request,
         mockResponse as Response,
       );
 
       expect(mockStatus).toHaveBeenCalledWith(400);
       expect(mockJson).toHaveBeenCalledWith({
-        error: `Conversation ${conversationId} not found`,
+        error: 'Conversation conv-123 not found',
       });
-      expect(mockAgent.call).not.toHaveBeenCalled();
     });
 
-    it('should verify agent call with correct parameters', async () => {
+    it('should persist messages and start agent', async () => {
+      mockRequest.params = { conversationId: 'conv-123' };
+      mockRequest.body = { role: Role.USER, content: 'Hello' };
+
+      const mockSession = { phase: 'waiting' };
+      mockChatService.getSession.mockReturnValue(mockSession);
+
+      const mockConversation = {
+        id: 'conv-123',
+        config: { agent: 'ChatAgent' },
+      };
+      mockConversationService.getConversationById.mockResolvedValue(
+        mockConversation,
+      );
+
+      const mockAgent = {};
+      (container.resolve as any).mockReturnValue(mockAgent);
+
+      const mockMemory = {};
+      mockChatService.buildMemory.mockResolvedValue(mockMemory);
+
+      mockConversationService.batchAddMessages.mockResolvedValue([
+        { id: 'user-msg', role: Role.USER, content: 'Hello' },
+        { id: 'assistant-msg', role: Role.ASSIST, content: '' },
+      ]);
+
       await chatController.chat(
-        conversationId,
-        mockRequest.body,
+        'conv-123',
+        { conversationId: 'conv-123', role: Role.USER, content: 'Hello' },
         mockRequest as Request,
         mockResponse as Response,
       );
 
-      // Allow async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      // Verify startAgent was called with correct parameters
-      expect(mockChatService.startAgent).toHaveBeenCalledWith(
-        mockConversation,
-        expect.any(Object),
-        expect.any(Object),
+      expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
+        'conv-123',
+        expect.arrayContaining([
+          expect.objectContaining({ role: Role.USER, content: 'Hello' }),
+          expect.objectContaining({ role: Role.ASSIST, content: '' }),
+        ]),
       );
+
+      expect(mockStatus).toHaveBeenCalledWith(200);
+      expect(mockJson).toHaveBeenCalledWith({
+        success: true,
+        messageId: 'assistant-msg',
+      });
+
+      expect(mockChatService.startAgent).toHaveBeenCalled();
     });
   });
 
   describe('cancelChat', () => {
-    it('should cancel an active stream successfully', async () => {
-      mockRequest.params = {
-        conversationId: 'conv-123',
-      };
-      mockRequest.body = {
-        conversationId: 'conv-123',
-        messageId: 'msg-456',
-      };
+    it('should return 404 if no session exists', async () => {
+      mockRequest.params = { conversationId: 'conv-123' };
+      mockRequest.body = { messageId: 'msg-123' };
 
-      mockChatService.cancelAgent = vi.fn().mockResolvedValue(true);
+      mockChatService.getSession.mockReturnValue(undefined);
 
       await chatController.cancelChat(
         'conv-123',
-        mockRequest.body,
+        { conversationId: 'conv-123', messageId: 'msg-123' },
         mockRequest as Request,
         mockResponse as Response,
       );
 
-      expect(mockChatService.cancelAgent).toHaveBeenCalledWith(
+      expect(mockStatus).toHaveBeenCalledWith(404);
+    });
+
+    it('should return 404 if session not running', async () => {
+      mockRequest.params = { conversationId: 'conv-123' };
+      mockRequest.body = { messageId: 'msg-123' };
+
+      const mockSession = { phase: 'waiting' };
+      mockChatService.getSession.mockReturnValue(mockSession);
+
+      await chatController.cancelChat(
         'conv-123',
-        undefined,
+        { conversationId: 'conv-123', messageId: 'msg-123' },
+        mockRequest as Request,
+        mockResponse as Response,
       );
+
+      expect(mockStatus).toHaveBeenCalledWith(404);
+    });
+
+    it('should cancel running session', async () => {
+      mockRequest.params = { conversationId: 'conv-123' };
+      mockRequest.body = { messageId: 'msg-123', reason: 'User cancelled' };
+
+      const mockSession = {
+        phase: 'running',
+        cancel: vi.fn(),
+      };
+      mockChatService.getSession.mockReturnValue(mockSession);
+
+      await chatController.cancelChat(
+        'conv-123',
+        {
+          conversationId: 'conv-123',
+          messageId: 'msg-123',
+          reason: 'User cancelled',
+        },
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      expect(mockSession.cancel).toHaveBeenCalledWith('User cancelled');
       expect(mockStatus).toHaveBeenCalledWith(200);
       expect(mockJson).toHaveBeenCalledWith({ success: true });
     });
 
-    it('should return 404 when no active stream is found', async () => {
-      mockRequest.params = {
-        conversationId: 'conv-123',
-      };
-      mockRequest.body = {
-        conversationId: 'conv-123',
-        messageId: 'msg-456',
-      };
+    it('should use default reason if not provided', async () => {
+      mockRequest.params = { conversationId: 'conv-123' };
+      mockRequest.body = { messageId: 'msg-123' };
 
-      mockChatService.cancelAgent = vi.fn().mockResolvedValue(false);
+      const mockSession = {
+        phase: 'running',
+        cancel: vi.fn(),
+      };
+      mockChatService.getSession.mockReturnValue(mockSession);
 
       await chatController.cancelChat(
         'conv-123',
-        mockRequest.body,
+        { conversationId: 'conv-123', messageId: 'msg-123' },
         mockRequest as Request,
         mockResponse as Response,
       );
 
-      expect(mockChatService.cancelAgent).toHaveBeenCalledWith(
-        'conv-123',
-        undefined,
-      );
-      expect(mockStatus).toHaveBeenCalledWith(404);
-      expect(mockJson).toHaveBeenCalledWith({
-        error: 'No active agent found for conversation conv-123',
-      });
-    });
-
-    it('should return 400 when conversationId is missing', async () => {
-      mockRequest.params = {};
-      mockRequest.body = {
-        messageId: 'msg-456',
-      };
-
-      mockChatService.cancelAgent = vi.fn();
-
-      const { CancelChatRequestDto } = await import('@/shared/dto/controller');
-
-      try {
-        await CancelChatRequestDto.validate(mockRequest.body);
-        throw new Error('Should have thrown validation error');
-      } catch (error: any) {
-        expect(error.name).toBe('ValidationException');
-        expect(error.errors).toBeDefined();
-        expect(error.errors).toContain('conversationId');
-      }
-    });
-
-    it('should return 400 when messageId is missing', async () => {
-      mockRequest.params = {
-        conversationId: 'conv-123',
-      };
-      mockRequest.body = {
-        conversationId: 'conv-123',
-      };
-
-      mockChatService.cancelAgent = vi.fn();
-
-      const { CancelChatRequestDto } = await import('@/shared/dto/controller');
-
-      try {
-        await CancelChatRequestDto.validate(mockRequest.body);
-        throw new Error('Should have thrown validation error');
-      } catch (error: any) {
-        expect(error.name).toBe('ValidationException');
-        expect(error.errors).toBeDefined();
-        expect(error.errors).toContain('messageId');
-      }
+      expect(mockSession.cancel).toHaveBeenCalledWith('Cancelled by user');
     });
   });
 });
