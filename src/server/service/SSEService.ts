@@ -1,33 +1,31 @@
-import { AgentEvent } from '@/shared/types';
 import type { Response } from 'express';
 import { service } from '../decorator/service';
-import Logger from '../utils/logger';
 
-interface SSEConnection {
+export interface SSEConnection {
   conversationId: string;
-  response: any;
-  heartbeat: NodeJS.Timeout;
+  response: Response;
+  heartbeat: ReturnType<typeof setInterval>;
 }
 
 @service()
 export class SSEService {
-  private sseConnections: Map<string, SSEConnection> = new Map();
-  private readonly logger = Logger.child({ source: 'SSEService' });
-
-  initSSEConnection(conversationId: string, response: Response) {
+  /**
+   * Initialize SSE connection and send 'connected' handshake event
+   * Note: Connection lifecycle is managed by ChatSession, not here
+   */
+  initSSEConnection(conversationId: string, response: Response): SSEConnection {
     response.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
     });
 
-    // Setup heartbeat
     const heartbeat = setInterval(() => {
       if (response.writable) {
         response.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`);
         response.flush();
       }
-    }, 10_000); // Every 10 seconds
+    }, 10_000);
 
     const connection: SSEConnection = {
       conversationId,
@@ -35,42 +33,12 @@ export class SSEService {
       heartbeat,
     };
 
-    response.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`);
-    this.sseConnections.set(conversationId, connection);
-
-    response.write('\n');
+    // Handshake: send connected event to confirm SSE is ready
+    response.write(
+      `data: ${JSON.stringify({ type: 'connected', conversationId })}\n\n`,
+    );
     response.flush();
 
     return connection;
-  }
-
-  closeSSEConnection(conversationId: string) {
-    const connection = this.sseConnections.get(conversationId);
-
-    if (!connection) return;
-
-    if (connection.heartbeat) {
-      clearInterval(connection.heartbeat);
-    }
-    if (!connection.response.writableEnded) {
-      connection.response.end();
-    }
-
-    this.sseConnections.delete(conversationId);
-  }
-
-  sendToConversation(conversationId: string, event: AgentEvent) {
-    const response = this.sseConnections.get(conversationId)?.response;
-
-    if (!response?.writable) {
-      this.closeSSEConnection(conversationId);
-      this.logger.warn(
-        `SSE connection for conversation ${conversationId} is not writable`,
-      );
-      return;
-    }
-
-    response.write(`data: ${JSON.stringify(event)}\n\n`);
-    response.flush();
   }
 }

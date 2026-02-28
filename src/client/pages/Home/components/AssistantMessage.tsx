@@ -1,46 +1,30 @@
 import Bubble from '@/client/components/Bubble';
-import MarkdownRender from '@/client/components/MarkdownRender';
 import { useStore } from '@/client/store';
 import { AgentIds } from '@/shared/constants';
 import { Message } from '@/shared/types/entities';
 import { RobotOutlined } from '@ant-design/icons';
 import { Avatar } from 'antd';
 import { observer } from 'mobx-react-lite';
-import GirlFriendAgentMessage from './AgentMessage/GirlFriendAgent';
-import ReActAgentMessage from './AgentMessage/ReActAgent';
+import { renderAgentMessage } from './agentRenderers';
 import MessageFooter from './MessageFooter';
 
-interface AgentRenderResult {
-  content: React.ReactNode;
-  isLoading: boolean;
-}
-
-const renderMessage = (msg: Message): AgentRenderResult => {
-  const conversationStore = useStore('conversation');
-  const currentConversation = conversationStore.currentConversation;
-
-  const agent = currentConversation?.config?.agent || AgentIds.CHAT;
-  const hasFinalOrError = msg.meta?.events?.some(e =>
-    ['final', 'error'].includes(e.type),
-  );
-
-  switch (agent) {
-    case AgentIds.GIRLFRIEND:
-      return GirlFriendAgentMessage({ msg });
-    case AgentIds.REACT:
-      return ReActAgentMessage({ msg });
-    case AgentIds.CHAT:
-    default:
-      return {
-        content: <MarkdownRender>{msg.content}</MarkdownRender>,
-        isLoading: msg.content.length === 0 && !hasFinalOrError,
-      };
-  }
-};
+// Import agent renderers to register them
+import './AgentMessage/GirlFriendAgent';
+import './AgentMessage/ReActAgent';
 
 const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
-  const { content, isLoading } = renderMessage(msg);
+  const conversationStore = useStore('conversation');
+  const chatStore = useStore('chat');
+
+  const currentConversation = conversationStore.currentConversation;
+  const agent = currentConversation?.config?.agent || AgentIds.CHAT;
+
+  const { content, showBubbleLoading } = renderAgentMessage(msg, agent);
   const hasError = msg.meta?.events?.some(e => e.type === 'error');
+
+  // Check if this message is the current streaming message
+  const isStreaming = chatStore.currentStreamingMessage?.id === msg.id;
+  const showLoading = showBubbleLoading && isStreaming;
 
   return (
     <Bubble
@@ -48,7 +32,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
       placement="start"
       content={content}
       footer={<MessageFooter content={msg.content} />}
-      loading={isLoading}
+      loading={showLoading}
       avatar={<Avatar icon={<RobotOutlined />} />}
       styles={{
         content: {

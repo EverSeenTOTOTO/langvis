@@ -2,7 +2,7 @@ import {
   CancelChatRequestDto,
   StartChatRequestDto,
 } from '@/shared/dto/controller';
-import chalk from 'chalk';
+import { Role } from '@/shared/entities/Message';
 import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
@@ -32,11 +32,24 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    this.sseService.initSSEConnection(conversationId, res);
+    // 1. Atomic acquire - can reject with 409 before writing HTTP headers
+    const session = this.chatService.acquireSession(conversationId);
+    if (!session) {
+      return res.status(409).json({ error: 'Session already running' });
+    }
+
+    // 2. Initialize SSE connection (writeHead 200, cannot change status after)
+    const sseConnection = this.sseService.initSSEConnection(
+      conversationId,
+      res,
+    );
+
+    // 3. Bind connection to session
+    session.bindConnection(sseConnection);
 
     req.on('close', () => {
       req.log.info('SSE connection closed:', conversationId);
-      this.sseService.closeSSEConnection(conversationId);
+      session.onClientDisconnect();
     });
 
     req.on('error', err => {
@@ -46,6 +59,8 @@ export default class ChatController {
         req.log.error('SSE connection error:', err);
       }
     });
+
+    return;
   }
 
   @api('/cancel/:conversationId', { method: 'post' })
@@ -55,16 +70,15 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const cancelled = await this.chatService.cancelAgent(
-      conversationId,
-      dto.reason,
-    );
+    const session = this.chatService.getSession(conversationId);
 
-    if (!cancelled) {
+    if (!session || session.phase !== 'running') {
       return res.status(404).json({
-        error: `No active agent found for conversation ${conversationId}`,
+        error: `No active session for conversation ${conversationId}`,
       });
     }
+
+    session.cancel(dto.reason ?? 'Cancelled by user');
 
     req.log.info(
       `Cancelled streaming for conversation ${conversationId}, message ${dto.messageId}`,
@@ -80,6 +94,16 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
+    const session = this.chatService.getSession(conversationId);
+
+    if (!session || session.phase !== 'waiting') {
+      return res.status(400).json({
+        error: session
+          ? 'Session already running'
+          : 'SSE connection not established',
+      });
+    }
+
     const conversation =
       await this.conversationService.getConversationById(conversationId);
 
@@ -107,13 +131,24 @@ export default class ChatController {
       },
     );
 
-    req.log.info(`Starting agent: ${chalk.yellow(conversation.config!.agent)}`);
+    // Persist messages before HTTP response
+    // batchAddMessages failure is observable via HTTP status code
+    const [, assistantMessage] =
+      await this.conversationService.batchAddMessages(conversation.id!, [
+        { role: dto.role, content: dto.content, createdAt: new Date() },
+        { role: Role.ASSIST, content: '', createdAt: new Date() },
+      ]);
 
-    // Return response first
-    res.status(200).json({ success: true });
+    res.status(200).json({ success: true, messageId: assistantMessage.id });
 
-    // Then start agent asynchronously
-    this.chatService.startAgent(conversation, agent, memory);
+    // Agent execution after HTTP response
+    this.chatService.startAgent(
+      session,
+      conversation,
+      agent,
+      memory,
+      assistantMessage,
+    );
 
     return;
   }

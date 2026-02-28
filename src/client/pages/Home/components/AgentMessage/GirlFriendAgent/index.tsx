@@ -1,56 +1,55 @@
 import AudioPlayer from '@/client/components/AudioPlayer';
 import MarkdownRender from '@/client/components/MarkdownRender';
 import { TextToSpeechOutput } from '@/server/core/tool/TextToSpeech';
-import { ToolIds } from '@/shared/constants';
-import { Message } from '@/shared/types/entities';
+import { ToolIds, AgentIds } from '@/shared/constants';
+import type { Message } from '@/shared/types/entities';
+import type { MessageRenderState } from '@/shared/utils/deriveMessageState';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { Alert, Spin, Tooltip, Typography } from 'antd';
+import {
+  registerAgentRenderer,
+  type AgentRenderResult,
+} from '../../agentRenderers';
 import './index.scss';
 
-interface AgentRenderResult {
-  content: React.ReactNode;
-  isLoading: boolean;
-}
-
-const GirlFriendAgentMessage = ({
-  msg,
-}: {
-  msg: Message;
-}): AgentRenderResult => {
-  let ttsCall, ttsResult, ttsError;
-
-  for (const e of msg.meta?.events || []) {
-    if (e.type === 'tool_call' && e.toolName === ToolIds.TEXT_TO_SPEECH) {
-      ttsCall = e;
-    }
-    if (e.type === 'tool_result' && e.toolName === ToolIds.TEXT_TO_SPEECH) {
-      ttsResult = e;
-    }
-    if (e.type === 'tool_error' && e.toolName === ToolIds.TEXT_TO_SPEECH) {
-      ttsError = e;
-    }
-  }
-
-  const output = ttsResult?.output as TextToSpeechOutput | undefined;
-  const hasFinalOrError = msg.meta?.events?.some(e =>
-    ['final', 'error'].includes(e.type),
+const GirlFriendAgentRenderer = (
+  msg: Message,
+  state: MessageRenderState,
+): AgentRenderResult => {
+  // Find TTS tool calls - get last one for rendering
+  const ttsCalls = state.toolCallTimeline.filter(
+    t => t.toolName === ToolIds.TEXT_TO_SPEECH,
   );
+  const lastTts = ttsCalls.at(-1);
+
+  // Determine TTS state
+  const isTtsPending = lastTts?.status === 'pending';
+  const ttsError = lastTts?.status === 'error' ? lastTts.error : undefined;
+  const ttsOutput =
+    lastTts?.status === 'done'
+      ? (lastTts.output as TextToSpeechOutput | undefined)
+      : undefined;
+
+  const showBubbleLoading =
+    !state.hasContent && !state.hasPendingTools && !state.isTerminal;
 
   return {
     content: (
       <>
-        <Spin spinning={!!ttsCall && !(ttsResult || ttsError)}>
+        <Spin spinning={isTtsPending}>
           <MarkdownRender>{msg.content}</MarkdownRender>
         </Spin>
-        {ttsResult && (
+        {ttsOutput && (
           <AudioPlayer
-            src={`/api/files/play/${output?.filePath}`}
+            src={`/api/files/play/${ttsOutput.filePath}`}
             className="gf-meta-audio"
             suffix={
               <Tooltip
                 classNames={{ root: 'gf-meta-tooltip' }}
                 title={
-                  <Typography.Text copyable>{output?.filePath}</Typography.Text>
+                  <Typography.Text copyable>
+                    {ttsOutput.filePath}
+                  </Typography.Text>
                 }
               >
                 <InfoCircleOutlined className="gf-meta-icon" />
@@ -59,16 +58,15 @@ const GirlFriendAgentMessage = ({
           />
         )}
         {ttsError && (
-          <Alert
-            type="error"
-            title={ttsError.error}
-            style={{ marginBlockEnd: 8 }}
-          />
+          <Alert type="error" title={ttsError} style={{ marginBlockEnd: 8 }} />
         )}
       </>
     ),
-    isLoading: msg.content.length === 0 && !ttsResult && !hasFinalOrError,
+    showBubbleLoading,
   };
 };
 
-export default GirlFriendAgentMessage;
+// Register renderer
+registerAgentRenderer(AgentIds.GIRLFRIEND, GirlFriendAgentRenderer);
+
+export default GirlFriendAgentRenderer;

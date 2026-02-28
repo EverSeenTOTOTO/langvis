@@ -1,9 +1,11 @@
 import { Role } from '@/shared/entities/Message';
-import type { Conversation } from '@/shared/types/entities';
+import { InjectTokens } from '@/shared/constants';
+import type { Conversation, Message } from '@/shared/types/entities';
 import type { Request } from 'express';
 import { globby } from 'globby';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
+import { ChatSession } from '../core/ChatSession';
 import { ExecutionContext } from '../core/context';
 import { Memory } from '../core/memory';
 import { registerMemory } from '../decorator/core';
@@ -12,22 +14,22 @@ import { isProd } from '../utils';
 import Logger from '../utils/logger';
 import { AuthService } from './AuthService';
 import { ConversationService } from './ConversationService';
-import { SSEService } from './SSEService';
+import type { RedisClientType } from 'redis';
 
 @service()
 export class ChatService {
   private readonly logger = Logger.child({ source: 'ChatService' });
-  private activeAgents: Map<string, ExecutionContext> = new Map();
+  private sessions = new Map<string, ChatSession>();
 
   constructor(
-    @inject(SSEService)
-    private sseService: SSEService,
-
     @inject(AuthService)
     private authService: AuthService,
 
     @inject(ConversationService)
     private conversationService: ConversationService,
+
+    @inject(InjectTokens.REDIS)
+    private redis: RedisClientType<any>,
   ) {
     const suffix = isProd ? '.js' : '.ts';
     const pattern = `./${isProd ? 'dist' : 'src'}/server/core/memory/*/index${suffix}`;
@@ -50,86 +52,93 @@ export class ChatService {
       });
   }
 
-  async cancelAgent(conversationId: string, reason?: string): Promise<boolean> {
-    const ctx = this.activeAgents.get(conversationId);
+  getSession(conversationId: string): ChatSession | undefined {
+    return this.sessions.get(conversationId);
+  }
 
-    if (!ctx) return false;
+  acquireSession(conversationId: string): ChatSession | null {
+    const existing = this.sessions.get(conversationId);
+    if (existing?.phase === 'running') return null;
+    if (existing) existing.cleanup();
 
-    try {
-      ctx.abort(reason ?? 'Cancelled by user');
-      return true;
-    } catch (error) {
-      this.logger.error(
-        `Failed to cancel agent for conversation ${conversationId}:`,
-        error,
-      );
-      return false;
-    }
+    const session = new ChatSession(conversationId, {
+      idleTimeoutMs: 30_000,
+      logger: this.logger,
+      onDispose: (id: string) => {
+        this.sessions.delete(id);
+        this.redis.del(`human_input:${id}`).catch(err => {
+          this.logger.warn(`Failed to clean Redis key for ${id}:`, err);
+        });
+      },
+    });
+
+    this.sessions.set(conversationId, session);
+    return session;
   }
 
   async startAgent(
+    session: ChatSession,
     conversation: Conversation,
     agent: Agent,
     memory: Memory,
+    assistantMessage: Message,
   ): Promise<void> {
-    const startTime = Date.now();
-    let firstTokenTime: number | undefined = undefined;
-
-    const [assistantMessage] = await this.conversationService.batchAddMessages(
-      conversation.id!,
-      [
-        {
-          role: Role.ASSIST,
-          content: '',
-          createdAt: new Date(),
-        },
-      ],
-    );
-
-    const controller = new AbortController();
-    const ctx = new ExecutionContext(assistantMessage, controller);
-
-    this.activeAgents.set(conversation.id!, ctx);
-
     try {
-      const generator = agent.call(memory, ctx, conversation.config);
+      const controller = new AbortController();
+      const ctx = new ExecutionContext(assistantMessage, controller);
+      session.start(ctx);
 
-      for await (const event of generator) {
-        if (ctx.signal.aborted) {
-          break;
-        }
+      const startTime = Date.now();
+      let firstTokenTime: number | undefined;
 
-        if (event.type === 'stream' && !firstTokenTime) {
-          firstTokenTime = Date.now();
-        }
-
-        this.sseService.sendToConversation(conversation.id!, event);
-
-        if (event.type === 'error') {
-          break;
-        }
-      }
-    } catch (err) {
-      const errorEvent = ctx.agentErrorEvent(
-        (err as Error)?.message || String(err),
-      );
-      this.sseService.sendToConversation(conversation.id!, errorEvent);
-    } finally {
       try {
+        for await (const event of agent.call(
+          memory,
+          ctx,
+          conversation.config,
+        )) {
+          if (ctx.signal.aborted) break;
+
+          if (event.type === 'stream' && !firstTokenTime) {
+            firstTokenTime = Date.now();
+          }
+
+          if (!session.sendEvent(event)) {
+            this.logger.warn(
+              `SSE not writable for ${conversation.id}, aborting`,
+            );
+            ctx.abort('SSE connection lost');
+            break;
+          }
+
+          if (event.type === 'error') break;
+        }
+      } catch (err) {
+        const errorEvent = ctx.agentErrorEvent(
+          (err as Error)?.message || String(err),
+        );
+        session.sendEvent(errorEvent);
+      } finally {
+        if (ctx.signal.aborted) {
+          const cancelledEvent = ctx.agentCancelledEvent(
+            (ctx.signal.reason as Error)?.message ?? 'Unknown',
+          );
+          session.sendEvent(cancelledEvent);
+        }
+
         await this.finalizeMessage(
           conversation.id!,
           ctx,
           startTime,
           firstTokenTime,
         );
-      } catch (finalizeError) {
-        this.logger.error(
-          `Failed to save message for conversation ${conversation.id}:`,
-          finalizeError,
-        );
+        session.cleanup();
       }
-
-      this.activeAgents.delete(conversation.id!);
+    } catch (err) {
+      // Outer catch: ctx not created yet, infrastructure error
+      const errorMsg = (err as Error)?.message || String(err);
+      session.sendControlMessage({ type: 'session_error', error: errorMsg });
+      session.cleanup();
     }
   }
 
@@ -157,6 +166,7 @@ export class ChatService {
         `avg per token: ${avgPerTokenTime.toFixed(2)}ms`,
     );
   }
+
   async buildMemory(
     req: Request,
     agent: Agent,
