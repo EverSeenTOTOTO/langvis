@@ -351,5 +351,41 @@ describe('ChatService', () => {
       expect(mockMemory.setUserId).toHaveBeenCalledWith('user-123');
       expect(result).toBe(mockMemory);
     });
+
+    it('should store system prompt and user message with sequential timestamps', async () => {
+      const storedMessages: any[] = [];
+      const mockMemory = {
+        setConversationId: vi.fn(),
+        setUserId: vi.fn(),
+        summarize: vi.fn().mockResolvedValue([]),
+        store: vi.fn().mockImplementation((msgs: any[]) => {
+          storedMessages.push(...msgs);
+        }),
+      };
+
+      const mockAgent = {
+        getSystemPrompt: vi.fn().mockResolvedValue('System prompt'),
+      };
+
+      container.register('test-memory-2', { useValue: mockMemory });
+
+      const req = {
+        params: { conversationId: 'conv-123' },
+      } as any;
+
+      const config = { memory: { type: 'test-memory-2' } };
+
+      await chatService.buildMemory(req, mockAgent as any, config, {
+        role: Role.USER,
+        content: 'Hello',
+      });
+
+      expect(storedMessages).toHaveLength(2);
+      expect(storedMessages[0].role).toBe(Role.SYSTEM);
+      expect(storedMessages[1].role).toBe(Role.USER);
+      expect(storedMessages[0].createdAt.getTime()).toBeLessThan(
+        storedMessages[1].createdAt.getTime(),
+      );
+    });
   });
 });

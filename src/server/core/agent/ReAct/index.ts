@@ -114,7 +114,10 @@ export default class ReActAgent extends Agent {
     for (let i = 0; i < this.maxIterations; i++) {
       ctx.signal.throwIfAborted();
 
-      this.logger.debug('ReAct iter messages: ', iterMessages);
+      this.logger.debug(
+        'ReAct iter messages: ',
+        iterMessages.filter(m => m.role !== Role.SYSTEM),
+      );
 
       const content = yield* runTool(
         llmCallTool.call(
@@ -185,6 +188,7 @@ export default class ReActAgent extends Agent {
           });
         } catch (error) {
           const observation = `Error executing action ${tool}: ${(error as Error).message}\n`;
+          yield ctx.agentToolErrorEvent(tool, observation);
 
           iterMessages.push({
             role: Role.USER,
@@ -287,3 +291,4 @@ export default class ReActAgent extends Agent {
     throw new Error(`Tool "${action}" did not return a result event`);
   }
 }
+

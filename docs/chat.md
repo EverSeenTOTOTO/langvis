@@ -12,8 +12,16 @@
 │  │   (MobX)        │    │ (per-conversation)│    │ (render state)        │  │
 │  └────────┬────────┘    └────────┬─────────┘    └───────────────────────┘  │
 │           │                      │                                          │
-│           │ EventSource          │ phase/buffer/streamingMessage            │
-│           ▼                      ▼                                          │
+│           │ EventSource          │ phase (only)                             │
+│           │                      │                                          │
+│           └──────────────────────┴────────────────────────────────────────  │
+│                                │                                            │
+│                                ▼                                            │
+│                      ┌─────────────────────┐                               │
+│                      │ ConversationStore   │                               │
+│                      │ messages[conversationId]                            │
+│                      │ (唯一数据源，MobX 观测) │                               │
+│                      └─────────────────────┘                               │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                           SSE Channel (SSEMessage)
@@ -144,10 +152,11 @@ onDispose() → delete from Map, clean Redis
 
 ```
 1. getSession() + phase 检查
-2. resolve agent, build memory
-3. batchAddMessages() → 持久化消息（HTTP 响应前）
-4. return 200 + messageId
-5. startAgent() → 异步执行
+2. resolve agent
+3. buildMemory() → memory.store() 持久化 system prompt + 用户消息
+4. batchAddMessages() → 创建空的助手消息占位（HTTP 响应前）
+5. return 200 + messageId
+6. startAgent() → 异步执行
 ```
 
 **关键文件：** `src/server/controller/ChatController.ts`
@@ -165,9 +174,17 @@ onDispose() → delete from Map, clean Redis
 | Getter                     | 说明                 |
 | -------------------------- | -------------------- |
 | `isCurrentLoading`         | 当前会话是否在加载中 |
-| `currentStreamingMessage`  | 当前正在流式的消息   |
 | `currentPhaseError`        | 当前会话的错误信息   |
 | `getState(conversationId)` | 获取指定会话状态     |
+
+**数据流：**
+
+```
+SSE 'stream' event → ChatStore.appendMessageContent() → 直接更新 messages[last].content
+SSE 'final' event → 刷新 messages (获取后端最终状态) → 进入 idle
+```
+
+消息内容直接从 SSE 事件更新到 `messages` 数组，无中间缓冲区。
 
 **核心方法：**
 
@@ -181,19 +198,15 @@ onDispose() → delete from Map, clean Redis
 
 ### 3.2 ConversationState - 会话状态容器
 
-每个会话独立的 MobX 状态容器。
+每个会话独立的 MobX 状态容器。**仅管理 phase 状态机和 SSE 连接**，无 typewriter 逻辑。
 
 **状态字段：**
 
-| 字段              | 类型                | MobX 观测 | 说明              |
-| ----------------- | ------------------- | :-------: | ----------------- |
-| phase             | ChatPhase           |    ✅     | 状态机阶段        |
-| phaseError        | string \| null      |    ✅     | 错误信息          |
-| buffer            | string              |    ✅     | Typewriter 缓冲区 |
-| pendingMessageIds | string[]            |    ✅     | 乐观插入的消息 ID |
-| streamingMessage  | Message \| null     |    ✅     | 当前流式消息      |
-| eventSource       | EventSource \| null |    ❌     | SSE 连接句柄      |
-| timer             | setInterval 句柄    |    ❌     | Typewriter 定时器 |
+| 字段        | 类型                | MobX 观测 | 说明         |
+| ----------- | ------------------- | :-------: | ------------ |
+| phase       | ChatPhase           |    ✅     | 状态机阶段   |
+| phaseError  | string \| null      |    ✅     | 错误信息     |
+| eventSource | EventSource \| null |    ❌     | SSE 连接句柄 |
 
 **Phase 状态机：**
 
@@ -208,11 +221,10 @@ onDispose() → delete from Map, clean Redis
   │         ┌─────────────┼──────────────┐
   │         │             │              │
   │         ▼             ▼              ▼
-  │     finishing      error        cancelled
-  │         │             │              │
-  │   typewriter done     │              │
-  │         │             │              │
-  └─────────┴─────────────┴──────────────┘
+  │        idle        error        cancelled
+  │      (final)          │              │
+  │                       │              │
+  └───────────────────────┴──────────────┘
 ```
 
 **关键文件：** `src/client/store/modules/ConversationState.ts`
@@ -337,6 +349,36 @@ tool_call(callId='tc_abc')
     └── tool_result(callId='tc_abc') / tool_error(callId='tc_abc')  // 终态
 ```
 
+**栈式 callId 管理：**
+
+`ExecutionContext` 内部通过 `callIdStack: string[]` 管理 callId 的生命周期，支持嵌套调用：
+
+| 操作                           | 触发方            | 栈行为                                  |
+| ------------------------------ | ----------------- | --------------------------------------- |
+| `agentToolCallEvent()`         | Agent 显式调用    | **push** 新 callId                      |
+| `agentToolResultEvent()`       | Agent 显式闭合    | 使用栈顶 callId，然后 **pop**           |
+| `agentToolErrorEvent()`        | Agent 显式闭合    | 使用栈顶 callId，然后 **pop**           |
+| `adaptToolEvent(result/error)` | Tool 事件透传闭合 | 透传 event 自带的 callId，然后 **pop**  |
+| `ensureCallId()`               | ToolEvent helpers | 栈空时 **push** 新 callId，否则复用栈顶 |
+
+**嵌套示例（A 调用中嵌套 B）：**
+
+```
+agentToolCallEvent('A')      → stack: [tc_A]
+  agentToolCallEvent('B')    → stack: [tc_A, tc_B]
+  agentToolResultEvent('B')  → stack: [tc_A]        // pop tc_B
+agentToolResultEvent('A')    → stack: []             // pop tc_A
+```
+
+**ReAct Agent 中的实际链路：**
+
+```
+ensureCallId()               → stack: [tc_llm]       // LLM call（隐式）
+agentToolCallEvent('dt')     → stack: [tc_llm, tc_dt] // date_time（显式）
+adaptToolEvent(result)       → stack: [tc_llm]        // date_time 完成，pop tc_dt
+ensureCallId()               → stack: [tc_llm]        // 下次 LLM call 复用
+```
+
 ---
 
 ## 5. 关键交互流程
@@ -351,7 +393,11 @@ Frontend                    Backend                     Agent
    │◄──connected event─────────│                          │
    │                           │                          │
    │──POST /start/{id}────────►│                          │
+   │                           │──buildMemory()           │
+   │                           │  └─memory.store()        │
+   │                           │    (system+user msgs)    │
    │                           │──batchAddMessages()      │
+   │                           │  (assistant placeholder) │
    │◄──200 + messageId─────────│                          │
    │                           │──startAgent()───────────►│
    │                           │                          │
@@ -446,12 +492,12 @@ src/
 
 ### 7.3 为什么按 phase 分路径取消？
 
-| Phase      | 处理                | 原因              |
-| ---------- | ------------------- | ----------------- |
-| connecting | 仅前端清理          | 后端无 Agent 运行 |
-| streaming  | 前端清理 + 通知后端 | Agent 正在运行    |
-| finishing  | 仅前端清理          | Agent 已结束      |
+| Phase                | 处理                | 原因              |
+| -------------------- | ------------------- | ----------------- |
+| connecting           | 仅前端清理          | 后端无 Agent 运行 |
+| streaming            | 前端清理 + 通知后端 | Agent 正在运行    |
+| idle/error/cancelled | 静默忽略            | 已结束            |
 
-### 7.4 单进程约束
+### 7.5 单进程约束
 
 `sessions` Map 是进程内存，多节点部署需引入 sticky session 或 Redis-backed registry。

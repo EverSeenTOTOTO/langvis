@@ -9,6 +9,7 @@ import { observer } from 'mobx-react-lite';
 import { Route, Routes } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import useThemeClassname from './hooks/useThemeClassname';
+import NotFound from './pages/NotFound';
 import { AppRoutes } from './routes';
 import { AppStore, useStore } from './store';
 
@@ -58,6 +59,7 @@ export const App = observer(
                   />
                 );
               })}
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </AntdApp>
         </StyleProvider>
