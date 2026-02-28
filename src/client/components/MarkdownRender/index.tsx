@@ -1,24 +1,22 @@
 import { useStore } from '@/client/store';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Highlight, themes } from 'prism-react-renderer';
 import ReactMarkdown from 'react-markdown';
 import { useCopyToClipboard } from 'react-use';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+import 'katex/dist/katex.min.css';
 import './index.scss';
 
-const CodeBlock = ({
-  language,
-  code,
-  style,
-  SyntaxHighlighter,
-}: {
+interface CodeBlockProps {
   language: string;
   code: string;
-  style: any;
-  SyntaxHighlighter: any;
-}) => {
+  isDark: boolean;
+}
+
+const CodeBlock = ({ language, code, isDark }: CodeBlockProps) => {
   const [copied, setCopied] = useState(false);
   const [, copyToClipboard] = useCopyToClipboard();
 
@@ -59,9 +57,26 @@ const CodeBlock = ({
           </svg>
         )}
       </button>
-      <SyntaxHighlighter style={style} language={language} PreTag="div">
-        {code}
-      </SyntaxHighlighter>
+      <Highlight
+        theme={isDark ? themes.nightOwl : themes.github}
+        code={code}
+        language={language}
+      >
+        {({ className, style, tokens, getLineProps, getTokenProps }) => (
+          <pre
+            className={className}
+            style={{ ...style, margin: 0, padding: '1rem' }}
+          >
+            {tokens.map((line, i) => (
+              <div key={i} {...getLineProps({ line })}>
+                {line.map((token, key) => (
+                  <span key={key} {...getTokenProps({ token })} />
+                ))}
+              </div>
+            ))}
+          </pre>
+        )}
+      </Highlight>
     </div>
   );
 };
@@ -69,62 +84,26 @@ const CodeBlock = ({
 const MarkdownRender = observer(
   ({ children: content }: { children: string }) => {
     const settingStore = useStore('setting');
+    const rehypeKatexRef = useRef<typeof import('rehype-katex').default | null>(
+      null,
+    );
     const [, forceUpdate] = useState(0);
 
-    const componentsRef = useRef<{
-      SyntaxHighlighter: any;
-      oneDark: {
-        [key: string]: React.CSSProperties;
-      };
-      oneLight: {
-        [key: string]: React.CSSProperties;
-      };
-      rehypeMathjax: any;
-    } | null>(null);
-
-    const loadComponents = useCallback(async () => {
-      if (import.meta.env.DEV) return;
-      if (!componentsRef.current) {
-        const [SyntaxHighlighter, oneDark, oneLight, rehypeMathjax] =
-          await Promise.all([
-            import('react-syntax-highlighter').then(module => module.Prism),
-            import('react-syntax-highlighter/dist/cjs/styles/prism').then(
-              module => module.oneDark,
-            ),
-            import('react-syntax-highlighter/dist/cjs/styles/prism').then(
-              module => module.oneLight,
-            ),
-            import('rehype-mathjax').then(module => module.default),
-          ]);
-        componentsRef.current = {
-          SyntaxHighlighter,
-          oneDark,
-          oneLight,
-          rehypeMathjax,
-        };
+    useEffect(() => {
+      if (rehypeKatexRef.current) return;
+      import('rehype-katex').then(module => {
+        rehypeKatexRef.current = module.default;
         forceUpdate(n => n + 1);
-      }
-    }, []);
-
-    useEffect(() => {
-      forceUpdate(n => n + 1);
-    }, [settingStore.mode]);
-
-    useEffect(() => {
-      loadComponents().catch(error => {
-        console.error('Failed to load markdown components:', error);
       });
-    }, [loadComponents]);
+      // Enable copy-tex extension for copying LaTeX source on click
+      import('katex/dist/contrib/copy-tex.mjs');
+    }, []);
 
     return (
       <div className="markdown-render">
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-          rehypePlugins={
-            componentsRef.current?.rehypeMathjax
-              ? [componentsRef.current.rehypeMathjax]
-              : []
-          }
+          rehypePlugins={rehypeKatexRef.current ? [rehypeKatexRef.current] : []}
           components={{
             a: ({ ...props }) => (
               <a {...props} target="_blank" rel="noopener noreferrer" />
@@ -132,16 +111,13 @@ const MarkdownRender = observer(
             code({ inline, className, children, ...props }: any) {
               const match = /language-(\w+)/.exec(className || '');
 
-              if (!inline && match && componentsRef.current) {
-                const { SyntaxHighlighter, oneDark, oneLight } =
-                  componentsRef.current;
+              if (!inline && match) {
                 const code = String(children).replace(/\n$/, '');
                 return (
                   <CodeBlock
                     language={match[1]}
                     code={code}
-                    style={settingStore.mode === 'dark' ? oneDark : oneLight}
-                    SyntaxHighlighter={SyntaxHighlighter}
+                    isDark={settingStore.mode === 'dark'}
                   />
                 );
               }

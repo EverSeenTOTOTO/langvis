@@ -223,16 +223,16 @@ onDispose() → delete from Map, clean Redis
 
 **派生状态：**
 
-| 字段             | 说明                                    |
-| ---------------- | --------------------------------------- |
-| hasContent       | 消息是否有文本内容                      |
-| hasEvents        | 是否有事件                              |
-| isTerminal       | 是否已结束 (final/error/cancelled)      |
-| toolCallTimeline | 按 seq 排序的工具调用时间线             |
-| pendingToolCalls | 进行中的工具调用                        |
-| hasPendingTools  | 是否有工具正在执行                      |
-| thoughts         | 思考过程事件                            |
-| rawEvents        | 原始事件数组，供特殊场景使用            |
+| 字段             | 说明                               |
+| ---------------- | ---------------------------------- |
+| hasContent       | 消息是否有文本内容                 |
+| hasEvents        | 是否有事件                         |
+| isTerminal       | 是否已结束 (final/error/cancelled) |
+| toolCallTimeline | 按 seq 排序的工具调用时间线        |
+| pendingToolCalls | 进行中的工具调用                   |
+| hasPendingTools  | 是否有工具正在执行                 |
+| thoughts         | 思考过程事件                       |
+| rawEvents        | 原始事件数组，供特殊场景使用       |
 
 **ToolCallTimeline 结构：**
 
@@ -241,8 +241,8 @@ type ToolCallTimeline = {
   callId: string;
   toolName: string;
   toolArgs: Record<string, unknown>;
-  seq: number;  // tool_call 的全局序列号，用于排序
-  at: number;   // 时间戳
+  seq: number; // tool_call 的全局序列号，用于排序
+  at: number; // 时间戳
   status: 'pending' | 'done' | 'error';
   output?: unknown;
   error?: string;
@@ -261,6 +261,7 @@ AssistantMessage 渲染 Bubble
 ```
 
 **关键文件：**
+
 - `src/shared/utils/deriveMessageState.ts`
 - `src/client/pages/Home/components/agentRenderers.tsx`
 
