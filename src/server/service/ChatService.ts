@@ -1,8 +1,9 @@
-import { Role } from '@/shared/entities/Message';
 import { InjectTokens } from '@/shared/constants';
+import { Role } from '@/shared/entities/Message';
 import type { Conversation, Message } from '@/shared/types/entities';
 import type { Request } from 'express';
 import { globby } from 'globby';
+import type { RedisClientType } from 'redis';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
 import { ChatSession } from '../core/ChatSession';
@@ -14,7 +15,6 @@ import { isProd } from '../utils';
 import Logger from '../utils/logger';
 import { AuthService } from './AuthService';
 import { ConversationService } from './ConversationService';
-import type { RedisClientType } from 'redis';
 
 @service()
 export class ChatService {
@@ -193,14 +193,17 @@ export class ChatService {
     }[] = [];
     const messages = await memory.summarize();
 
+    const baseTime = Date.now();
+    let timeOffset = 0;
+
     // Add system prompt if needed
-    if (typeof agent.getSystemPrompt === 'function' && messages.length == 0) {
+    if (typeof agent.getSystemPrompt === 'function' && messages.length === 0) {
       const systemPrompt = await agent.getSystemPrompt();
       if (systemPrompt) {
         chatMessages.push({
           role: Role.SYSTEM,
           content: systemPrompt,
-          createdAt: new Date(),
+          createdAt: new Date(baseTime + timeOffset++),
         });
       }
     }
@@ -208,7 +211,7 @@ export class ChatService {
     // Add user message
     chatMessages.push({
       ...userMessage,
-      createdAt: new Date(),
+      createdAt: new Date(baseTime + timeOffset),
     });
 
     await memory.store(chatMessages);

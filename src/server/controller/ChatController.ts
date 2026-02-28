@@ -131,13 +131,12 @@ export default class ChatController {
       },
     );
 
-    // Persist messages before HTTP response
-    // batchAddMessages failure is observable via HTTP status code
-    const [, assistantMessage] =
-      await this.conversationService.batchAddMessages(conversation.id!, [
-        { role: dto.role, content: dto.content, createdAt: new Date() },
-        { role: Role.ASSIST, content: '', createdAt: new Date() },
-      ]);
+    // Persist assistant placeholder before HTTP response
+    // User message + system prompt are already persisted by buildMemory → memory.store()
+    const [assistantMessage] = await this.conversationService.batchAddMessages(
+      conversation.id!,
+      [{ role: Role.ASSIST, content: '', createdAt: new Date() }],
+    );
 
     res.status(200).json({ success: true, messageId: assistantMessage.id });
 

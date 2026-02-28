@@ -50,9 +50,10 @@ describe('ExecutionContext', () => {
     });
   });
 
-  describe('callId', () => {
+  describe('callId stack', () => {
     it('should generate unique callId for agentToolCallEvent', () => {
       const event1 = ctx.agentToolCallEvent('tool1', {});
+      ctx.agentToolResultEvent('tool1', 'done');
       const event2 = ctx.agentToolCallEvent('tool2', {});
 
       expect((event1 as any).callId).toBeDefined();
@@ -70,6 +71,127 @@ describe('ExecutionContext', () => {
 
       expect(ctx.currentCallId).toBeDefined();
       expect(ctx.currentCallId).toMatch(/^tc_/);
+    });
+
+    it('should pop callId after agentToolResultEvent', () => {
+      ctx.agentToolCallEvent('test_tool', {});
+      ctx.agentToolResultEvent('test_tool', 'done');
+
+      expect(ctx.currentCallId).toBeUndefined();
+    });
+
+    it('should pop callId after agentToolErrorEvent', () => {
+      ctx.agentToolCallEvent('test_tool', {});
+      ctx.agentToolErrorEvent('test_tool', 'failed');
+
+      expect(ctx.currentCallId).toBeUndefined();
+    });
+
+    it('should isolate callIds between consecutive tool calls', () => {
+      const call1 = ctx.agentToolCallEvent('tool_a', {});
+      const progress1 = ctx.toolProgressEvent('tool_a', 'data');
+      ctx.agentToolResultEvent('tool_a', 'done');
+
+      const call2 = ctx.agentToolCallEvent('tool_b', {});
+      const progress2 = ctx.toolProgressEvent('tool_b', 'data');
+      ctx.agentToolResultEvent('tool_b', 'done');
+
+      expect(progress1.callId).toBe((call1 as any).callId);
+      expect(progress2.callId).toBe((call2 as any).callId);
+      expect(progress1.callId).not.toBe(progress2.callId);
+    });
+
+    it('should support nested tool calls with stack', () => {
+      const outerCall = ctx.agentToolCallEvent('outer_tool', {});
+      const outerCallId = (outerCall as any).callId;
+
+      const innerCall = ctx.agentToolCallEvent('inner_tool', {});
+      const innerCallId = (innerCall as any).callId;
+
+      expect(innerCallId).not.toBe(outerCallId);
+      expect(ctx.currentCallId).toBe(innerCallId);
+
+      ctx.agentToolResultEvent('inner_tool', 'inner_done');
+      expect(ctx.currentCallId).toBe(outerCallId);
+
+      ctx.agentToolResultEvent('outer_tool', 'outer_done');
+      expect(ctx.currentCallId).toBeUndefined();
+    });
+
+    it('should pop callId on adaptToolEvent result', () => {
+      const call = ctx.agentToolCallEvent('tool_a', {});
+      const callId = (call as any).callId;
+
+      ctx.adaptToolEvent({
+        type: 'result',
+        callId,
+        toolName: 'tool_a',
+        output: 'done',
+        seq: 0,
+        at: Date.now(),
+      });
+
+      expect(ctx.currentCallId).toBeUndefined();
+    });
+
+    it('should pop callId on adaptToolEvent error', () => {
+      const call = ctx.agentToolCallEvent('tool_a', {});
+      const callId = (call as any).callId;
+
+      ctx.adaptToolEvent({
+        type: 'error',
+        callId,
+        toolName: 'tool_a',
+        error: 'failed',
+        seq: 0,
+        at: Date.now(),
+      });
+
+      expect(ctx.currentCallId).toBeUndefined();
+    });
+
+    it('should be safe to pop on empty stack (no-op)', () => {
+      ctx.adaptToolEvent({
+        type: 'result',
+        callId: 'tc_orphan',
+        toolName: 'tool',
+        output: 'ok',
+        seq: 0,
+        at: Date.now(),
+      });
+
+      expect(ctx.currentCallId).toBeUndefined();
+    });
+
+    it('should simulate ReAct interleaved tool calls with correct callId isolation', () => {
+      // Iteration 1: LLM call via runTool (ensureCallId auto-pushes)
+      // runTool only yields progress events, result is consumed internally
+      const llmProgress1 = ctx.toolProgressEvent('llm_call', 'chunk1');
+      const llmCallId1 = llmProgress1.callId;
+      // runTool consumes result internally — toolResultEvent is NOT called at agent level
+      // Stack: [llmCallId1]
+
+      // Agent emits tool_call for date_time → pushCallId
+      const dtCall = ctx.agentToolCallEvent('date_time', {});
+      const dtCallId = (dtCall as any).callId;
+      expect(dtCallId).not.toBe(llmCallId1);
+      // Stack: [llmCallId1, dtCallId]
+
+      // date_time tool result via adaptToolEvent → popCallId
+      ctx.adaptToolEvent({
+        type: 'result',
+        callId: dtCallId,
+        toolName: 'date_time',
+        output: '2025-01-01',
+        seq: 0,
+        at: Date.now(),
+      });
+      // Stack: [llmCallId1]
+      expect(ctx.currentCallId).toBe(llmCallId1);
+
+      // Iteration 2: next LLM call reuses llmCallId1 (still on stack)
+      const llmProgress2 = ctx.toolProgressEvent('llm_call', 'chunk2');
+      expect(llmProgress2.callId).toBe(llmCallId1);
     });
   });
 

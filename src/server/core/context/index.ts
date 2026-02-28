@@ -11,7 +11,7 @@ export class ExecutionContext {
   }
 
   private seqCounter = 0;
-  private _currentCallId: string | null = null;
+  private callIdStack: string[] = [];
 
   constructor(
     public message: Message,
@@ -27,7 +27,17 @@ export class ExecutionContext {
   }
 
   get currentCallId(): string {
-    return this._currentCallId!;
+    return this.callIdStack.at(-1)!;
+  }
+
+  private pushCallId(): string {
+    const callId = this.nextCallId();
+    this.callIdStack.push(callId);
+    return callId;
+  }
+
+  private popCallId(): void {
+    this.callIdStack.pop();
   }
 
   // === Content management ===
@@ -123,8 +133,7 @@ export class ExecutionContext {
     toolName: string,
     toolArgs: Record<string, unknown>,
   ): AgentEvent {
-    const callId = this.nextCallId();
-    this._currentCallId = callId;
+    const callId = this.pushCallId();
 
     const event: AgentEvent = {
       type: 'tool_call',
@@ -159,6 +168,7 @@ export class ExecutionContext {
       at: Date.now(),
     };
     this.pushEvent(event);
+    this.popCallId();
     return event;
   }
 
@@ -172,16 +182,17 @@ export class ExecutionContext {
       at: Date.now(),
     };
     this.pushEvent(event);
+    this.popCallId();
     return event;
   }
 
   // === ToolEvent helpers ===
 
   private ensureCallId(): string {
-    if (!this._currentCallId) {
-      this._currentCallId = this.nextCallId();
+    if (this.callIdStack.length === 0) {
+      this.pushCallId();
     }
-    return this._currentCallId;
+    return this.callIdStack.at(-1)!;
   }
 
   toolProgressEvent(toolName: string, data: unknown): ToolEvent {
@@ -242,6 +253,7 @@ export class ExecutionContext {
         at: event.at,
       };
       this.pushEvent(adapted);
+      this.popCallId();
       return adapted;
     }
     const adapted: AgentEvent = {
@@ -253,6 +265,7 @@ export class ExecutionContext {
       at: event.at,
     };
     this.pushEvent(adapted);
+    this.popCallId();
     return adapted;
   }
 
@@ -260,3 +273,4 @@ export class ExecutionContext {
     this.controller.abort(new Error(reason));
   }
 }
+

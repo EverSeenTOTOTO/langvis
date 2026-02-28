@@ -22,9 +22,8 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
   const { content, showBubbleLoading } = renderAgentMessage(msg, agent);
   const hasError = msg.meta?.events?.some(e => e.type === 'error');
 
-  // Check if this message is the current streaming message
-  const isStreaming = chatStore.currentStreamingMessage?.id === msg.id;
-  const showLoading = showBubbleLoading && isStreaming;
+  // Loading state comes from phase
+  const isLoading = chatStore.isCurrentLoading;
 
   return (
     <Bubble
@@ -32,7 +31,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
       placement="start"
       content={content}
       footer={<MessageFooter content={msg.content} />}
-      loading={showLoading}
+      loading={showBubbleLoading && isLoading}
       avatar={<Avatar icon={<RobotOutlined />} />}
       styles={{
         content: {

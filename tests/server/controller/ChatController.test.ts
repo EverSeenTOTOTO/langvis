@@ -235,7 +235,6 @@ describe('ChatController', () => {
       mockChatService.buildMemory.mockResolvedValue(mockMemory);
 
       mockConversationService.batchAddMessages.mockResolvedValue([
-        { id: 'user-msg', role: Role.USER, content: 'Hello' },
         { id: 'assistant-msg', role: Role.ASSIST, content: '' },
       ]);
 
@@ -248,10 +247,7 @@ describe('ChatController', () => {
 
       expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
         'conv-123',
-        expect.arrayContaining([
-          expect.objectContaining({ role: Role.USER, content: 'Hello' }),
-          expect.objectContaining({ role: Role.ASSIST, content: '' }),
-        ]),
+        [expect.objectContaining({ role: Role.ASSIST, content: '' })],
       );
 
       expect(mockStatus).toHaveBeenCalledWith(200);

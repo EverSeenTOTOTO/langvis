@@ -5,10 +5,10 @@ import type {
   GetHumanInputStatusRequest,
   GetHumanInputStatusResponse,
   StartChatRequest,
+  StartChatResponse,
   SubmitHumanInputRequest,
 } from '@/shared/dto/controller';
 import { AgentEvent, SSEMessage } from '@/shared/types';
-import type { Message } from '@/shared/types/entities';
 import { Role } from '@/shared/types/entities';
 import { isClient } from '@/shared/utils';
 import { message } from 'antd';
@@ -35,7 +35,7 @@ export class ChatStore {
           if (prevState?.isLoading) {
             this.cancelChat({
               conversationId: prevId,
-              messageId: prevState.streamingMessage?.id ?? '',
+              messageId: '',
               reason: 'Cancelled due to conversation switch',
             });
           }
@@ -55,14 +55,6 @@ export class ChatStore {
       this.states.set(conversationId, state);
     }
     return state;
-  }
-
-  get currentStreamingMessage(): Message | undefined {
-    const conversationId = this.conversationStore.currentConversationId;
-    if (!conversationId) return undefined;
-
-    const state = this.states.get(conversationId);
-    return state?.streamingMessage ?? undefined;
   }
 
   get isCurrentLoading(): boolean {
@@ -164,7 +156,9 @@ export class ChatStore {
     // Immediately update UI
     state?.setPhase('cancelled');
     state?.closeEventSource();
-    state?.flushBufferImmediately();
+
+    // Rollback pending messages
+    this.rollbackPendingMessages(params.conversationId);
 
     // Only notify backend when phase is streaming (Agent is running)
     // connecting: no Agent running, finishing: Agent already ended
@@ -220,7 +214,16 @@ export class ChatStore {
 
     const state = this.getOrCreateState(conversationId);
     state.setPhase('connecting');
-    this.addPendingMessages(conversationId, params.content!);
+
+    // Add temporary optimistic messages for immediate UI feedback
+    const tempUserId = uuid();
+    const tempAssistantId = uuid();
+    this.addPendingMessages(
+      conversationId,
+      params.content!,
+      tempUserId,
+      tempAssistantId,
+    );
 
     try {
       await this.connectToSSE(conversationId);
@@ -238,7 +241,16 @@ export class ChatStore {
     }
 
     try {
-      await req!.send();
+      const res = (await req!.send()) as StartChatResponse;
+
+      // Replace temporary assistant message ID with the real one from backend
+      if (res.messageId) {
+        this.replaceAssistantMessageId(
+          conversationId,
+          tempAssistantId,
+          res.messageId,
+        );
+      }
     } catch (e) {
       // Check if cancelled during connecting
       if (state.phase === 'cancelled') {
@@ -250,6 +262,26 @@ export class ChatStore {
         (e as Error)?.message ?? 'Failed to start chat',
       );
     }
+  }
+
+  private appendMessageContent(conversationId: string, content: string): void {
+    const messages = this.conversationStore.messages[conversationId];
+    if (!messages || messages.length === 0) return;
+
+    const lastMessage = messages[messages.length - 1];
+    lastMessage.content += content;
+  }
+
+  private appendMessageEvent(conversationId: string, event: AgentEvent): void {
+    const messages = this.conversationStore.messages[conversationId];
+    if (!messages || messages.length === 0) return;
+
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage.meta) {
+      lastMessage.meta = { events: [] };
+    }
+    lastMessage.meta.events = lastMessage.meta.events ?? [];
+    lastMessage.meta.events.push(event);
   }
 
   private handleAgentEvent(conversationId: string, msg: AgentEvent): void {
@@ -266,12 +298,7 @@ export class ChatStore {
     switch (msg.type) {
       case 'start':
         state.transition('streaming');
-        this.conversationStore
-          .getMessagesByConversationId({ id: conversationId })
-          .then(() => {
-            this.syncStreamingMessage(conversationId);
-            state.appendEvent(msg);
-          });
+        this.appendMessageEvent(conversationId, msg);
         break;
 
       case 'thought':
@@ -279,28 +306,25 @@ export class ChatStore {
       case 'tool_progress':
       case 'tool_result':
       case 'tool_error':
-        state.appendEvent(msg);
+        this.appendMessageEvent(conversationId, msg);
         break;
 
       case 'stream':
-        state.appendBuffer(msg.content);
+        this.appendMessageContent(conversationId, msg.content);
         break;
 
       case 'final':
-        state.transition('finishing');
+        state.transition('idle');
         state.closeEventSource();
-        state.waitForTypewriter(() => {
-          state.setPhase('idle');
-          this.conversationStore.getMessagesByConversationId({
-            id: conversationId,
-          });
+        // Refresh messages to get final state from backend
+        this.conversationStore.getMessagesByConversationId({
+          id: conversationId,
         });
         break;
 
       case 'cancelled':
         state.transition('cancelled');
         state.closeEventSource();
-        state.flushBufferImmediately();
         break;
 
       case 'error':
@@ -315,42 +339,39 @@ export class ChatStore {
     if (!state) return;
 
     state.setPhase('error', errorMessage);
-    state.flushBufferImmediately();
-    state.closeEventSource();
+    this.rollbackPendingMessages(conversationId);
+  }
 
-    // Rollback pending messages if in connecting phase
-    if (state.pendingMessageIds.length > 0) {
-      const messages = this.conversationStore.messages[conversationId];
-      if (messages) {
-        const filtered = messages.filter(
-          m => !state.pendingMessageIds.includes(m.id),
-        );
-        this.conversationStore.messages[conversationId] = filtered;
-      }
-      state.clearPendingMessageIds();
+  private rollbackPendingMessages(conversationId: string): void {
+    const messages = this.conversationStore.messages[conversationId];
+    if (!messages) return;
+
+    // Remove the pending user and assistant messages (last 2 messages)
+    const lastTwo = messages.slice(-2);
+    if (lastTwo.length === 2 && lastTwo[0].role === Role.USER) {
+      messages.splice(-2);
+      this.conversationStore.messages[conversationId] = [...messages];
     }
   }
 
   private addPendingMessages(
     conversationId: string,
     userContent: string,
+    userId?: string,
+    assistantId?: string,
   ): void {
-    const state = this.getOrCreateState(conversationId);
     const messages = this.conversationStore.messages[conversationId] ?? [];
-
-    const userId = uuid();
-    const assistantId = uuid();
 
     messages.push(
       {
-        id: userId,
+        id: userId ?? uuid(),
         conversationId,
         role: Role.USER,
         content: userContent,
         createdAt: new Date(),
       },
       {
-        id: assistantId,
+        id: assistantId ?? uuid(),
         conversationId,
         role: Role.ASSIST,
         content: '',
@@ -359,20 +380,20 @@ export class ChatStore {
       },
     );
 
-    state.addPendingMessageId(userId);
-    state.addPendingMessageId(assistantId);
-
     this.conversationStore.messages[conversationId] = messages;
   }
 
-  private syncStreamingMessage(conversationId: string): void {
-    const state = this.getState(conversationId);
-    if (!state) return;
-
+  private replaceAssistantMessageId(
+    conversationId: string,
+    oldId: string,
+    newId: string,
+  ): void {
     const messages = this.conversationStore.messages[conversationId];
     if (!messages) return;
 
     const lastMessage = messages[messages.length - 1];
-    state.setStreamingMessage(lastMessage);
+    if (lastMessage && lastMessage.id === oldId) {
+      lastMessage.id = newId;
+    }
   }
 }

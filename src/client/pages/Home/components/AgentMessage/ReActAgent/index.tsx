@@ -177,7 +177,7 @@ const ReActAgentRenderer = (
   state: MessageRenderState,
 ): AgentRenderResult => {
   const showBubbleLoading =
-    !state.hasContent && !state.hasPendingTools && !state.isTerminal;
+    !state.hasContent && !state.hasEvents && !state.isTerminal;
 
   return {
     content: (

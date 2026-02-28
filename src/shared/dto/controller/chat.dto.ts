@@ -67,4 +67,5 @@ export class StartChatRequestDto extends BaseDto implements StartChatRequest {
 
 export interface StartChatResponse {
   success: boolean;
+  messageId: string;
 }
