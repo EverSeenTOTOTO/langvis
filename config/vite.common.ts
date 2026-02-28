@@ -4,12 +4,13 @@ import path from 'path';
 import postcssFlexbugsFixes from 'postcss-flexbugs-fixes';
 import postcssNormalize from 'postcss-normalize';
 import postcssPresetEnv from 'postcss-preset-env';
+import type { Plugin } from 'vite';
 
 export const paths = {
   src: path.resolve(__dirname, '..', 'src'),
   dist: path.resolve(__dirname, '..', 'dist'),
-  server: path.resolve(__dirname, '..', 'src/server/index.ts'), // 服务端代码入口
-  serverEntry: path.resolve(__dirname, '..', 'src/client/index.server.tsx'), // SSR entry
+  server: path.resolve(__dirname, '..', 'src/server/index.ts'),
+  serverEntry: path.resolve(__dirname, '..', 'src/client/index.server.tsx'),
 };
 
 export const fetchEntries = (pattern: string) =>
@@ -19,6 +20,33 @@ export const fetchEntries = (pattern: string) =>
       file,
     ]),
   );
+
+function katexFontPreload(): Plugin {
+  return {
+    name: 'katex-font-preload',
+    transformIndexHtml(html, { bundle }) {
+      if (!bundle) return html;
+
+      const katexFonts = Object.keys(bundle).filter(
+        key => key.includes('KaTeX') && key.endsWith('.woff2'),
+      );
+
+      if (katexFonts.length === 0) return html;
+
+      const preloadLinks = katexFonts
+        .map(
+          font =>
+            `<link rel="preload" href="/assets/${font}" as="font" type="font/woff2" crossorigin />`,
+        )
+        .join('\n    ');
+
+      return html.replace(
+        '<!--app-style-->',
+        `<!--app-style-->\n    ${preloadLinks}`,
+      );
+    },
+  };
+}
 
 export default ({ mode }) => ({
   build: {
@@ -48,5 +76,5 @@ export default ({ mode }) => ({
   ssr: {
     noExternal: ['tsyringe', 'react-use'],
   },
-  plugins: [react()],
+  plugins: [react(), katexFontPreload()],
 });

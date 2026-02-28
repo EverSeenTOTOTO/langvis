@@ -21,13 +21,9 @@ export default defineConfig(c => {
         output: {
           manualChunks: (id: string) => {
             if (id.includes('node_modules')) {
-              if (id.includes('react-syntax-highlighter')) {
-                return 'syntax-highlighter';
-              }
-              if (id.includes('mathjax-full')) {
-                return 'mathjax';
-              }
               if (
+                id.includes('katex') ||
+                id.includes('prism-react-renderer') ||
                 id.includes('react-markdown') ||
                 id.includes('remark-') ||
                 id.includes('rehype-') ||
