@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConversationGroupStore } from '@/client/store/modules/conversationGroup';
+import { UNGROUPED_GROUP_NAME } from '@/shared/constants';
 
 vi.mock('@/client/decorator/api', () => ({
   api: () => () => {},
@@ -80,6 +81,51 @@ describe('ConversationGroupStore', () => {
     it('should return undefined if groups are empty', () => {
       store.groups = [];
       expect(store.findGroupIdByConversationId('conv-1')).toBeUndefined();
+    });
+  });
+
+  describe('sortedGroups', () => {
+    it('should place Ungrouped first regardless of order', () => {
+      store.groups = [
+        { id: 'group-1', name: 'Group A', order: 1 } as any,
+        { id: 'group-2', name: UNGROUPED_GROUP_NAME, order: 100 } as any,
+        { id: 'group-3', name: 'Group B', order: 0 } as any,
+      ];
+
+      const sorted = store.sortedGroups;
+      expect(sorted[0].name).toBe(UNGROUPED_GROUP_NAME);
+    });
+
+    it('should sort other groups by order', () => {
+      store.groups = [
+        { id: 'group-1', name: 'Group A', order: 200 } as any,
+        { id: 'group-2', name: 'Group B', order: 50 } as any,
+        { id: 'group-3', name: 'Group C', order: 100 } as any,
+      ];
+
+      const sorted = store.sortedGroups;
+      expect(sorted[0].name).toBe('Group B');
+      expect(sorted[1].name).toBe('Group C');
+      expect(sorted[2].name).toBe('Group A');
+    });
+
+    it('should combine Ungrouped first with order sorting', () => {
+      store.groups = [
+        { id: 'group-1', name: 'Group A', order: 1 } as any,
+        { id: 'group-2', name: UNGROUPED_GROUP_NAME, order: 999 } as any,
+        { id: 'group-3', name: 'Group B', order: 0 } as any,
+        { id: 'group-4', name: 'Group C', order: 2 } as any,
+      ];
+
+      const sorted = store.sortedGroups;
+      expect(sorted[0].name).toBe(UNGROUPED_GROUP_NAME);
+      expect(sorted[1].name).toBe('Group B');
+      expect(sorted[2].name).toBe('Group A');
+      expect(sorted[3].name).toBe('Group C');
+    });
+
+    it('should return empty array when no groups', () => {
+      expect(store.sortedGroups).toEqual([]);
     });
   });
 });

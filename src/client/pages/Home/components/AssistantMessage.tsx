@@ -8,9 +8,8 @@ import { observer } from 'mobx-react-lite';
 import { renderAgentMessage } from './agentRenderers';
 import MessageFooter from './MessageFooter';
 
-// Import agent renderers to register them
-import './AgentMessage/GirlFriendAgent';
-import './AgentMessage/ReActAgent';
+// Dynamically load all agent renderers (side effect: auto-registration)
+import.meta.glob('./AgentMessage/*/index.tsx', { eager: true });
 
 const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
   const conversationStore = useStore('conversation');
@@ -22,16 +21,13 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
   const { content, showBubbleLoading } = renderAgentMessage(msg, agent);
   const hasError = msg.meta?.events?.some(e => e.type === 'error');
 
-  // Loading state comes from phase
-  const isLoading = chatStore.isCurrentLoading;
-
   return (
     <Bubble
       key={msg.id}
       placement="start"
       content={content}
       footer={<MessageFooter content={msg.content} />}
-      loading={showBubbleLoading && isLoading}
+      loading={showBubbleLoading && chatStore.isCurrentLoading}
       avatar={<Avatar icon={<RobotOutlined />} />}
       styles={{
         content: {

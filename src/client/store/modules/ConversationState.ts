@@ -2,6 +2,24 @@ import { ChatPhase } from '@/shared/types';
 import { makeAutoObservable } from 'mobx';
 
 /**
+ * Valid phase transitions:
+ *   idle → connecting
+ *   connecting → streaming | error | cancelled
+ *   streaming → finishing | error | cancelled
+ *   finishing → idle | error
+ *
+ * Terminal states (error, cancelled) can only exit via reset()
+ */
+const VALID_TRANSITIONS: Record<ChatPhase, ChatPhase[]> = {
+  idle: ['connecting'],
+  connecting: ['streaming', 'error', 'cancelled'],
+  streaming: ['finishing', 'error', 'cancelled'],
+  finishing: ['idle', 'error'],
+  error: [],
+  cancelled: [],
+};
+
+/**
  * ConversationState - runtime state container for a single conversation
  * Simplified: only manages phase and SSE connection, no typewriter
  */
@@ -27,23 +45,10 @@ export class ConversationState {
     );
   }
 
-  // === Phase transitions ===
-
-  transition(to: ChatPhase): void {
-    // Terminal states are idempotent
-    if (
-      this.phase === 'idle' ||
-      this.phase === 'error' ||
-      this.phase === 'cancelled'
-    ) {
-      if (to !== 'connecting') return;
-    }
+  transition(to: ChatPhase, error?: string): void {
+    if (!VALID_TRANSITIONS[this.phase].includes(to)) return;
 
     this.phase = to;
-  }
-
-  setPhase(phase: ChatPhase, error?: string): void {
-    this.phase = phase;
     if (error !== undefined) {
       this.phaseError = error;
     }
@@ -56,13 +61,9 @@ export class ConversationState {
   }
 
   closeEventSource(): void {
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
+    this.eventSource?.close();
+    this.eventSource = null;
   }
-
-  // === Cleanup ===
 
   reset(): void {
     this.closeEventSource();

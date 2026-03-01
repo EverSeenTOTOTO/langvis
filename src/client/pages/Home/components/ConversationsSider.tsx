@@ -114,147 +114,129 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
 
   // 构建 Tree 数据
   const treeData = useMemo(() => {
-    return groupStore.groups
-      .map(group => {
-        const isUngrouped = group.name === UNGROUPED_GROUP_NAME;
-        const groupMenuItems: MenuProps['items'] = [
-          {
-            key: 'new-conversation',
-            icon: <PlusOutlined />,
-            label: settingStore.tr('New Conversation'),
-            onClick: () => {
-              setCreateWithGroupId(group.id);
-            },
+    return groupStore.sortedGroups.map(group => {
+      const isUngrouped = group.name === UNGROUPED_GROUP_NAME;
+      const groupMenuItems: MenuProps['items'] = [
+        {
+          key: 'new-conversation',
+          icon: <PlusOutlined />,
+          label: settingStore.tr('New Conversation'),
+          onClick: () => {
+            setCreateWithGroupId(group.id);
           },
-          ...(isUngrouped
-            ? []
-            : [
+        },
+        ...(isUngrouped
+          ? []
+          : [
+              {
+                key: 'edit',
+                icon: <EditOutlined />,
+                label: settingStore.tr('Edit'),
+                onClick: () => setEditingGroupId(group.id),
+              },
+              {
+                key: 'delete',
+                icon: <DeleteOutlined />,
+                label: settingStore.tr('Delete'),
+                danger: true,
+                onClick: () => handleDeleteGroup(group.id),
+              },
+            ]),
+      ];
+
+      return {
+        key: `group-${group.id}`,
+        title: (
+          <>
+            <span className="tree-node-text">{group.name}</span>
+            <Dropdown menu={{ items: groupMenuItems }} trigger={['click']}>
+              <Button
+                type="text"
+                size="small"
+                icon={<EllipsisOutlined />}
+                className="tree-node-menu-btn"
+                onClick={e => e.stopPropagation()}
+              />
+            </Dropdown>
+          </>
+        ),
+        icon: <FolderOutlined />,
+        children:
+          group.conversations
+            ?.slice()
+            .sort((a, b) => a.order - b.order)
+            .map(conv => {
+              const convTitle =
+                conv.name ||
+                `${settingStore.tr('Conversation')} ${conv.id.substring(0, 8)}`;
+              const agentId = conv.config?.agent;
+              const modelCode = conv.config?.model?.code;
+              const memoryType = conv.config?.memory?.type;
+
+              const convMenuItems: MenuProps['items'] = [
                 {
                   key: 'edit',
                   icon: <EditOutlined />,
                   label: settingStore.tr('Edit'),
-                  onClick: () => setEditingGroupId(group.id),
+                  onClick: () => setEditingConversationId(conv.id),
                 },
                 {
                   key: 'delete',
                   icon: <DeleteOutlined />,
                   label: settingStore.tr('Delete'),
                   danger: true,
-                  onClick: () => handleDeleteGroup(group.id),
+                  onClick: () => handleDeleteConversation(conv.id),
                 },
-              ]),
-        ];
+              ];
 
-        return {
-          key: `group-${group.id}`,
-          title: (
-            <>
-              <span className="tree-node-text">{group.name}</span>
-              <Dropdown menu={{ items: groupMenuItems }} trigger={['click']}>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<EllipsisOutlined />}
-                  className="tree-node-menu-btn"
-                  onClick={e => e.stopPropagation()}
-                />
-              </Dropdown>
-            </>
-          ),
-          icon: <FolderOutlined />,
-          children:
-            group.conversations
-              ?.slice()
-              .sort((a, b) => a.order - b.order)
-              .map(conv => {
-                const convTitle =
-                  conv.name ||
-                  `${settingStore.tr('Conversation')} ${conv.id.substring(0, 8)}`;
-                const agentId = conv.config?.agent;
-                const modelCode = conv.config?.model?.code;
-                const memoryType = conv.config?.memory?.type;
+              const hasMeta = agentId || modelCode || memoryType;
+              const title = (
+                <Tooltip
+                  title={
+                    <Flex gap={4} vertical>
+                      <span>{convTitle}</span>
+                      {hasMeta && (
+                        <Flex gap={4} wrap>
+                          {agentId && <Tag color="blue">{agentId}</Tag>}
+                          {modelCode && <Tag color="purple">{modelCode}</Tag>}
+                          {memoryType && <Tag color="green">{memoryType}</Tag>}
+                        </Flex>
+                      )}
+                    </Flex>
+                  }
+                  placement="right"
+                  mouseEnterDelay={0.5}
+                >
+                  <span className="tree-node-text">{convTitle}</span>
+                </Tooltip>
+              );
+              const titleMenu = (
+                <Dropdown menu={{ items: convMenuItems }} trigger={['click']}>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<EllipsisOutlined />}
+                    className="tree-node-menu-btn"
+                    onClick={e => e.stopPropagation()}
+                  />
+                </Dropdown>
+              );
 
-                const convMenuItems: MenuProps['items'] = [
-                  {
-                    key: 'edit',
-                    icon: <EditOutlined />,
-                    label: settingStore.tr('Edit'),
-                    onClick: () => setEditingConversationId(conv.id),
-                  },
-                  {
-                    key: 'delete',
-                    icon: <DeleteOutlined />,
-                    label: settingStore.tr('Delete'),
-                    danger: true,
-                    onClick: () => handleDeleteConversation(conv.id),
-                  },
-                ];
-
-                const hasMeta = agentId || modelCode || memoryType;
-                const title = (
-                  <Tooltip
-                    title={
-                      <Flex gap={4} vertical>
-                        <span>{convTitle}</span>
-                        {hasMeta && (
-                          <Flex gap={4} wrap>
-                            {agentId && <Tag color="blue">{agentId}</Tag>}
-                            {modelCode && <Tag color="purple">{modelCode}</Tag>}
-                            {memoryType && (
-                              <Tag color="green">{memoryType}</Tag>
-                            )}
-                          </Flex>
-                        )}
-                      </Flex>
-                    }
-                    placement="right"
-                    mouseEnterDelay={0.5}
-                  >
-                    <span className="tree-node-text">{convTitle}</span>
-                  </Tooltip>
-                );
-                const titleMenu = (
-                  <Dropdown menu={{ items: convMenuItems }} trigger={['click']}>
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<EllipsisOutlined />}
-                      className="tree-node-menu-btn"
-                      onClick={e => e.stopPropagation()}
-                    />
-                  </Dropdown>
-                );
-
-                return {
-                  key: conv.id,
-                  title: (
-                    <>
-                      {title}
-                      {titleMenu}
-                    </>
-                  ),
-                  icon: <MessageOutlined />,
-                  isLeaf: true,
-                };
-              }) || [],
-        };
-      })
-      .sort((a, b) => {
-        const aId = (a.key as string).replace('group-', '');
-        const bId = (b.key as string).replace('group-', '');
-        const aGroup = groupStore.groups.find(g => g.id === aId);
-        const bGroup = groupStore.groups.find(g => g.id === bId);
-        const aIsUngrouped = aGroup?.name === UNGROUPED_GROUP_NAME;
-        const bIsUngrouped = bGroup?.name === UNGROUPED_GROUP_NAME;
-
-        // Ungrouped 始终排在最前面
-        if (aIsUngrouped && !bIsUngrouped) return -1;
-        if (!aIsUngrouped && bIsUngrouped) return 1;
-
-        // 其他情况按 order 排序
-        return (aGroup?.order ?? 0) - (bGroup?.order ?? 0);
-      });
-  }, [groupStore.groups, settingStore]);
+              return {
+                key: conv.id,
+                title: (
+                  <>
+                    {title}
+                    {titleMenu}
+                  </>
+                ),
+                icon: <MessageOutlined />,
+                isLeaf: true,
+              };
+            }) || [],
+      };
+    });
+  }, [groupStore.sortedGroups, settingStore]);
 
   const handleDeleteConversation = (conversationId: string) => {
     modal.confirm({

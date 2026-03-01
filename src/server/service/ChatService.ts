@@ -15,6 +15,7 @@ import { isProd } from '../utils';
 import Logger from '../utils/logger';
 import { AuthService } from './AuthService';
 import { ConversationService } from './ConversationService';
+import chalk from 'chalk';
 
 @service()
 export class ChatService {
@@ -83,6 +84,9 @@ export class ChatService {
     memory: Memory,
     assistantMessage: Message,
   ): Promise<void> {
+    const sessionId = session.conversationId;
+    this.logger.info(`Starting agent=${chalk.cyan(agent.id)}`, { sessionId });
+
     try {
       const controller = new AbortController();
       const ctx = new ExecutionContext(assistantMessage, controller);
@@ -101,6 +105,9 @@ export class ChatService {
 
           if (event.type === 'stream' && !firstTokenTime) {
             firstTokenTime = Date.now();
+            this.logger.info(
+              `First token received: ttft=${chalk.green(`${firstTokenTime - startTime}ms`)} sessionId=${sessionId}`,
+            );
           }
 
           if (!session.sendEvent(event)) {
@@ -114,56 +121,52 @@ export class ChatService {
           if (event.type === 'error') break;
         }
       } catch (err) {
+        this.logger.error(
+          `Agent error: ${chalk.red((err as Error)?.message || String(err))}`,
+          { sessionId },
+        );
         const errorEvent = ctx.agentErrorEvent(
           (err as Error)?.message || String(err),
         );
         session.sendEvent(errorEvent);
       } finally {
         if (ctx.signal.aborted) {
+          this.logger.info(
+            `Agent cancelled: reason=${chalk.yellow((ctx.signal.reason as Error)?.message ?? 'Unknown')} sessionId=${sessionId}`,
+          );
           const cancelledEvent = ctx.agentCancelledEvent(
             (ctx.signal.reason as Error)?.message ?? 'Unknown',
           );
           session.sendEvent(cancelledEvent);
         }
 
-        await this.finalizeMessage(
-          conversation.id!,
-          ctx,
-          startTime,
-          firstTokenTime,
+        await this.finalizeMessage(ctx);
+
+        const totalTime = Date.now() - startTime;
+        const ttft = firstTokenTime ? firstTokenTime - startTime : null;
+        const avgTokenTime = totalTime / ctx.message.content.length;
+        this.logger.info(
+          `Agent completed: totalTime=${chalk.green(`${totalTime}ms`)} tokens=${chalk.green(ctx.message.content.length)} ttft=${ttft ? chalk.green(`${ttft}ms`) : 'N/A'} avgTokenTime=${chalk.green(`${avgTokenTime.toFixed(2)}ms`)} sessionId=${sessionId}`,
         );
+
         session.cleanup();
       }
     } catch (err) {
       // Outer catch: ctx not created yet, infrastructure error
       const errorMsg = (err as Error)?.message || String(err);
+      this.logger.error(`Infrastructure error: ${chalk.red(errorMsg)}`, {
+        sessionId,
+      });
       session.sendControlMessage({ type: 'session_error', error: errorMsg });
       session.cleanup();
     }
   }
 
-  private async finalizeMessage(
-    conversationId: string,
-    ctx: ExecutionContext,
-    startTime: number,
-    firstTokenTime?: number,
-  ): Promise<void> {
-    const totalTime = Date.now() - startTime;
-    const ttft = firstTokenTime ? firstTokenTime - startTime : null;
-    const avgPerTokenTime = totalTime / ctx.message.content.length;
-
+  private async finalizeMessage(ctx: ExecutionContext): Promise<void> {
     await this.conversationService.updateMessage(
       ctx.message.id,
       ctx.message.content,
       ctx.message.meta,
-    );
-
-    this.logger.info(
-      `Agent call finished for conversation ${conversationId}, ` +
-        `total time: ${totalTime}ms, ` +
-        `tokens: ${ctx.message.content.length}, ` +
-        `TTFT: ${ttft ?? 'N/A'}ms, ` +
-        `avg per token: ${avgPerTokenTime.toFixed(2)}ms`,
     );
   }
 

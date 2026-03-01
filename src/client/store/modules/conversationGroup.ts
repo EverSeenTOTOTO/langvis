@@ -8,6 +8,7 @@ import type {
   ReorderItemsRequest,
   UpdateConversationGroupRequest,
 } from '@/shared/dto/controller';
+import { UNGROUPED_GROUP_NAME } from '@/shared/constants';
 import type { ConversationGroup } from '@/shared/types/entities';
 import { makeAutoObservable } from 'mobx';
 
@@ -18,6 +19,16 @@ export class ConversationGroupStore {
 
   constructor() {
     makeAutoObservable(this);
+  }
+
+  get sortedGroups(): ConversationGroup[] {
+    return [...this.groups].sort((a, b) => {
+      const aIsUngrouped = a.name === UNGROUPED_GROUP_NAME;
+      const bIsUngrouped = b.name === UNGROUPED_GROUP_NAME;
+      if (aIsUngrouped && !bIsUngrouped) return -1;
+      if (!aIsUngrouped && bIsUngrouped) return 1;
+      return a.order - b.order;
+    });
   }
 
   findGroupIdByConversationId(conversationId: string): string | undefined {

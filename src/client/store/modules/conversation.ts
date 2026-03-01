@@ -35,15 +35,16 @@ export class ConversationStore {
     );
   }
 
-  private getAllConversations(): Conversation[] {
-    return this.conversationGroupStore.groups.flatMap(
-      g => g.conversations || [],
-    );
-  }
-
   getFirstConversationId(): string | undefined {
-    const all = this.getAllConversations();
-    return all.length > 0 ? all[0].id : undefined;
+    for (const group of this.conversationGroupStore.sortedGroups) {
+      if (group.conversations && group.conversations.length > 0) {
+        const sortedConversations = [...group.conversations].sort(
+          (a, b) => a.order - b.order,
+        );
+        return sortedConversations[0].id;
+      }
+    }
+    return undefined;
   }
 
   findConversationById(id: string): Conversation | undefined {

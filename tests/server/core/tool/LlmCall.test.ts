@@ -1,10 +1,25 @@
 import LlmCallTool, { LlmCallOutput } from '@/server/core/tool/LlmCall';
+import logger from '@/server/utils/logger';
 import { ToolEvent } from '@/shared/types';
 import OpenAI from 'openai';
 import type { Stream } from 'openai/core/streaming.mjs';
 import type { ChatCompletionCreateParamsStreaming } from 'openai/resources/chat/completions';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext } from '../../helpers/context';
+
+vi.mock('@/server/utils/logger', () => {
+  const mockLogger = {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    child: vi.fn(),
+  };
+  mockLogger.child.mockReturnValue(mockLogger);
+  return {
+    default: mockLogger,
+  };
+});
 
 const mockCreate = vi.fn();
 vi.mock('openai', () => {
@@ -42,6 +57,7 @@ describe('LlmCallTool', () => {
     vi.clearAllMocks();
     mockOpenAI = new OpenAI({ apiKey: 'test-key' });
     llmCallTool = new LlmCallTool(mockOpenAI);
+    (llmCallTool as any).logger = logger;
   });
 
   describe('call', () => {

@@ -3,10 +3,7 @@ import HumanInputForm from '@/client/components/HumanInputForm';
 import { SchemaProperty } from '@/client/components/SchemaField';
 import { ToolIds, AgentIds } from '@/shared/constants';
 import type { Message } from '@/shared/types/entities';
-import type {
-  ToolCallTimeline,
-  MessageRenderState,
-} from '@/shared/utils/deriveMessageState';
+import type { MessageRenderState } from '@/shared/utils/deriveMessageState';
 import { Collapse, Flex, Steps, Tag, Typography } from 'antd';
 import type { StepsProps } from 'antd';
 import dayjs from 'dayjs';
@@ -17,44 +14,36 @@ import {
 } from '../../agentRenderers';
 
 interface ReActEventRendererProps {
-  toolCallTimeline: ToolCallTimeline[];
-  thoughts: MessageRenderState['thoughts'];
+  state: MessageRenderState;
   conversationId: string;
-  isTerminal: boolean;
 }
 
 const ReActEventRenderer: React.FC<ReActEventRendererProps> = ({
-  toolCallTimeline,
-  thoughts,
+  state,
   conversationId,
-  isTerminal,
 }) => {
+  const { toolCallTimeline, thoughts, isTerminated } = state;
   const [activeKey, setActiveKey] = useState<string[]>([]);
 
   useEffect(() => {
-    if (isTerminal) {
+    if (isTerminated) {
       setActiveKey([]);
     } else if (toolCallTimeline.length > 0 || thoughts.length > 0) {
       setActiveKey(['1']);
     }
-  }, [toolCallTimeline.length, thoughts.length, isTerminal]);
+  }, [toolCallTimeline.length, thoughts.length, isTerminated]);
 
   // Check for awaiting input state
   const lastToolCall = toolCallTimeline.at(-1);
-  const isAwaitingInput =
-    lastToolCall?.status === 'pending' &&
-    lastToolCall?.toolName === ToolIds.HUMAN_IN_THE_LOOP &&
-    lastToolCall?.progress.at(-1)?.data
-      ? (lastToolCall.progress.at(-1)!.data as { status?: string })?.status ===
-        'awaiting_input'
-      : false;
+  const lastProgressData = lastToolCall?.progress.at(-1)?.data as
+    | { status?: string; message?: string; schema?: SchemaProperty }
+    | undefined;
 
   const awaitingInputData =
-    isAwaitingInput && lastToolCall?.progress.at(-1)?.data
-      ? (lastToolCall.progress.at(-1)!.data as {
-          message: string;
-          schema: SchemaProperty;
-        })
+    lastToolCall?.status === 'pending' &&
+    lastToolCall?.toolName === ToolIds.HUMAN_IN_THE_LOOP &&
+    lastProgressData?.status === 'awaiting_input'
+      ? { message: lastProgressData.message!, schema: lastProgressData.schema! }
       : null;
 
   // Build steps from timeline
@@ -177,17 +166,15 @@ const ReActAgentRenderer = (
   state: MessageRenderState,
 ): AgentRenderResult => {
   const showBubbleLoading =
-    !state.hasContent && !state.hasEvents && !state.isTerminal;
+    !state.hasContent && !state.hasEvents && !state.isTerminated;
 
   return {
     content: (
       <>
         {state.hasEvents && (
           <ReActEventRenderer
-            toolCallTimeline={state.toolCallTimeline}
-            thoughts={state.thoughts}
+            state={state}
             conversationId={msg.conversationId}
-            isTerminal={state.isTerminal}
           />
         )}
         <MarkdownRender>{msg.content}</MarkdownRender>

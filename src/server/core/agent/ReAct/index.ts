@@ -291,4 +291,3 @@ export default class ReActAgent extends Agent {
     throw new Error(`Tool "${action}" did not return a result event`);
   }
 }
-
