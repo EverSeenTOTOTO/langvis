@@ -1,4 +1,8 @@
-import { LoadingOutlined, SendOutlined } from '@ant-design/icons';
+import {
+  CloseOutlined,
+  LoadingOutlined,
+  SendOutlined,
+} from '@ant-design/icons';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
@@ -20,7 +24,9 @@ export interface ChatInputProps {
   value?: string;
   onChange?: (value: string) => void;
   onSubmit?: () => void;
+  onCancel?: () => void;
   loading?: boolean;
+  cancelling?: boolean;
   placeholder?: string;
   header?: React.ReactNode;
   minRows?: number;
@@ -36,7 +42,9 @@ const InnerEditor: React.FC<{
   value?: string;
   onChange?: (value: string) => void;
   onSubmit?: () => void;
+  onCancel?: () => void;
   loading?: boolean;
+  cancelling?: boolean;
   placeholder?: string;
   minRows?: number;
   maxRows?: number;
@@ -44,7 +52,9 @@ const InnerEditor: React.FC<{
   value,
   onChange,
   onSubmit,
+  onCancel,
   loading,
+  cancelling,
   placeholder,
   minRows = 2,
   maxRows = 6,
@@ -110,6 +120,12 @@ const InnerEditor: React.FC<{
     [loading, onSubmit],
   );
 
+  const handleCancel = useCallback(() => {
+    if (loading && !cancelling) {
+      onCancel?.();
+    }
+  }, [loading, cancelling, onCancel]);
+
   const handleSend = useCallback(() => {
     if (!loading && value?.trim()) {
       onSubmit?.();
@@ -148,9 +164,17 @@ const InnerEditor: React.FC<{
         <Button
           type="primary"
           className="chat-input-send-button"
-          icon={loading ? <LoadingOutlined spin /> : <SendOutlined />}
-          onClick={handleSend}
-          disabled={loading || !value?.trim()}
+          icon={
+            cancelling ? (
+              <CloseOutlined />
+            ) : loading ? (
+              <LoadingOutlined spin />
+            ) : (
+              <SendOutlined />
+            )
+          }
+          onClick={loading && !cancelling ? handleCancel : handleSend}
+          disabled={cancelling || (!loading && !value?.trim())}
           loading={false}
         />
       </div>
@@ -162,7 +186,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
   value = '',
   onChange,
   onSubmit,
+  onCancel,
   loading = false,
+  cancelling = false,
   placeholder = 'Type a message...',
   header,
   minRows = 2,
@@ -185,7 +211,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
           value={value}
           onChange={onChange}
           onSubmit={onSubmit}
+          onCancel={onCancel}
           loading={loading}
+          cancelling={cancelling}
           placeholder={placeholder}
           minRows={minRows}
           maxRows={maxRows}

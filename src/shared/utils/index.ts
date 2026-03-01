@@ -1,3 +1,4 @@
+export * from './deriveMessageState';
 export * from './generateId';
 
 export const getOwnPropertyNames = <T extends object>(x: T) => {
