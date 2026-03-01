@@ -4,8 +4,8 @@ import { runTool } from '@/server/utils';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { AgentConfig, AgentEvent } from '@/shared/types';
+import { generateId } from '@/shared/utils';
 import { container } from 'tsyringe';
-import { v4 as uuid } from 'uuid';
 import { Agent } from '..';
 import { ExecutionContext } from '../../context';
 import { Memory } from '../../memory';
@@ -72,7 +72,7 @@ export default class GirlFriendAgent extends Agent {
     const tts = container.resolve<TextToSpeechTool>(ToolIds.TEXT_TO_SPEECH);
     const ttsArgs = {
       text: ctx.message.content,
-      reqId: uuid(),
+      reqId: generateId('req'),
       voice: options?.tts?.voice || '',
       emotion: options?.tts?.emotion || '',
       speedRatio: options?.tts?.speedRatio,

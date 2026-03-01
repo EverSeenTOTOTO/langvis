@@ -10,11 +10,10 @@ import type {
 } from '@/shared/dto/controller';
 import { AgentEvent, SSEMessage } from '@/shared/types';
 import { Role } from '@/shared/types/entities';
-import { isClient } from '@/shared/utils';
+import { generateId, isClient } from '@/shared/utils';
 import { message } from 'antd';
 import { reaction } from 'mobx';
 import { inject } from 'tsyringe';
-import { v4 as uuid } from 'uuid';
 import { ConversationStore } from './conversation';
 import { ConversationState } from './ConversationState';
 import { SettingStore } from './setting';
@@ -216,8 +215,8 @@ export class ChatStore {
     state.transition('connecting');
 
     // Add temporary optimistic messages for immediate UI feedback
-    const tempUserId = uuid();
-    const tempAssistantId = uuid();
+    const tempUserId = generateId('msg');
+    const tempAssistantId = generateId('msg');
     this.addPendingMessages(
       conversationId,
       params.content!,
@@ -364,14 +363,14 @@ export class ChatStore {
 
     messages.push(
       {
-        id: userId ?? uuid(),
+        id: userId ?? generateId('msg'),
         conversationId,
         role: Role.USER,
         content: userContent,
         createdAt: new Date(),
       },
       {
-        id: assistantId ?? uuid(),
+        id: assistantId ?? generateId('msg'),
         conversationId,
         role: Role.ASSIST,
         content: '',

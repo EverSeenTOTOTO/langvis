@@ -1,3 +1,5 @@
+export * from './generateId';
+
 export const getOwnPropertyNames = <T extends object>(x: T) => {
   return [
     ...Object.getOwnPropertyNames(x),

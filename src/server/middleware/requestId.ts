@@ -1,6 +1,6 @@
 import { Express } from 'express';
 import { container } from 'tsyringe';
-import { v4 as uuidv4 } from 'uuid';
+import { generateId } from '@/shared/utils';
 import { AuthService } from '../service/AuthService';
 import Logger from '../utils/logger';
 
@@ -23,7 +23,7 @@ export default async (app: Express) => {
       return next();
     }
 
-    const id = uuidv4();
+    const id = generateId('req');
     req.id = id;
 
     const loggerMeta: Record<string, string> = { requestId: id };

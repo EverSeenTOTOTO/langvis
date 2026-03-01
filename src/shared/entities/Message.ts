@@ -1,21 +1,30 @@
 import type { Message } from '@/shared/types/entities';
 import {
+  BeforeInsert,
   Column,
   CreateDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
 } from 'typeorm';
 import type { ConversationEntity } from './Conversation';
 import { Role } from '@/shared/types/entities';
+import { generateId } from '@/shared/utils';
 
 export { Message, Role };
 
 @Entity('messages')
 export class MessageEntity implements Message {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('varchar', { length: 16 })
   id!: string;
+
+  @BeforeInsert()
+  generateId(): void {
+    if (!this.id) {
+      this.id = generateId('msg');
+    }
+  }
 
   @Column({
     type: 'enum',
@@ -32,7 +41,7 @@ export class MessageEntity implements Message {
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'varchar', length: 16 })
   conversationId!: string;
 
   @ManyToOne('ConversationEntity', 'messages')

@@ -17,3 +17,4 @@
 - API calls must be declared in store first, then consumed in components.
 - DO NOT use raw `fetch` or `useState` for loading states (e.g. `const [loading, setLoading] = useState(false)`) in components. Prefer `useAsyncFn` from `react-use`.
 - run `timeout 10 make dev` to check if TypeORM still works once you modified entity definition.
+- **Always use `generateId(prefix)` from `@/shared/utils` for ID generation** instead of `uuid()`, `crypto.randomUUID()`, or similar. Use meaningful prefixes like `conv_`, `msg_`, `convgrp_`, `req_`, `tc_` (tool call), etc.

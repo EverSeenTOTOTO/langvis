@@ -1,12 +1,14 @@
 import type { ConversationGroup } from '@/shared/types/entities';
 import {
+  BeforeInsert,
   Column,
   CreateDateColumn,
   Entity,
   ManyToOne,
   OneToMany,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
 } from 'typeorm';
+import { generateId } from '@/shared/utils';
 import { ConversationEntity } from './Conversation';
 import { UserEntity } from './User';
 
@@ -14,8 +16,15 @@ export { ConversationGroup };
 
 @Entity('conversation_groups')
 export class ConversationGroupEntity implements ConversationGroup {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('varchar', { length: 16 })
   id!: string;
+
+  @BeforeInsert()
+  generateId(): void {
+    if (!this.id) {
+      this.id = generateId('convgrp');
+    }
+  }
 
   @Column({ type: 'varchar', length: 255 })
   name!: string;
