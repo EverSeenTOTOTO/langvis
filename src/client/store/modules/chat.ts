@@ -338,7 +338,8 @@ export class ChatStore {
     if (!state) return;
 
     state.transition('error', errorMessage);
-    this.rollbackPendingMessages(conversationId);
+    // Backend has already persisted messages, refresh to get the final state
+    this.conversationStore.getMessagesByConversationId({ id: conversationId });
   }
 
   private rollbackPendingMessages(conversationId: string): void {

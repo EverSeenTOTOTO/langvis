@@ -27,6 +27,9 @@ export type MessageRenderState = {
   hasEvents: boolean;
   isTerminated: boolean;
 
+  // Agent started but nothing visible yet (no content, no pending tools)
+  isAwaitingContent: boolean;
+
   // Core: tool calls ordered by seq
   toolCallTimeline: ToolCallTimeline[];
 
@@ -131,6 +134,8 @@ export function deriveMessageState(msg: Message): MessageRenderState {
     hasContent,
     hasEvents,
     isTerminated: isTerminal,
+    isAwaitingContent:
+      hasEvents && !isTerminal && !hasContent && !hasPendingTools,
     toolCallTimeline,
     pendingToolCalls,
     hasPendingTools,

@@ -30,7 +30,7 @@ class MockConversationService {
 class MockChatService {
   acquireSession = vi.fn();
   getSession = vi.fn();
-  startAgent = vi.fn();
+  runSession = vi.fn();
   buildMemory = vi.fn();
 }
 
@@ -99,7 +99,7 @@ describe('ChatController', () => {
 
       const mockSession = {
         bindConnection: vi.fn(),
-        onClientDisconnect: vi.fn(),
+        handleDisconnect: vi.fn(),
       };
       mockChatService.acquireSession.mockReturnValue(mockSession);
 
@@ -120,12 +120,12 @@ describe('ChatController', () => {
       );
     });
 
-    it('should call onClientDisconnect on close event', async () => {
+    it('should call handleDisconnect on close event', async () => {
       mockRequest.params = { conversationId: 'conv-123' };
 
       const mockSession = {
         bindConnection: vi.fn(),
-        onClientDisconnect: vi.fn(),
+        handleDisconnect: vi.fn(),
       };
       mockChatService.acquireSession.mockReturnValue(mockSession);
 
@@ -146,7 +146,7 @@ describe('ChatController', () => {
 
       closeCallback?.();
 
-      expect(mockSession.onClientDisconnect).toHaveBeenCalled();
+      expect(mockSession.handleDisconnect).toHaveBeenCalled();
     });
   });
 
@@ -256,7 +256,7 @@ describe('ChatController', () => {
         messageId: 'assistant-msg',
       });
 
-      expect(mockChatService.startAgent).toHaveBeenCalled();
+      expect(mockChatService.runSession).toHaveBeenCalled();
     });
   });
 

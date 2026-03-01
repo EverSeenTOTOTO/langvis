@@ -1,6 +1,6 @@
 import { InjectTokens } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
-import type { Conversation, Message } from '@/shared/types/entities';
+import type { Message } from '@/shared/types/entities';
 import type { Request } from 'express';
 import { globby } from 'globby';
 import type { RedisClientType } from 'redis';
@@ -15,7 +15,6 @@ import { isProd } from '../utils';
 import Logger from '../utils/logger';
 import { AuthService } from './AuthService';
 import { ConversationService } from './ConversationService';
-import chalk from 'chalk';
 
 @service()
 export class ChatService {
@@ -77,85 +76,25 @@ export class ChatService {
     return session;
   }
 
-  async startAgent(
+  async runSession(
     session: ChatSession,
-    conversation: Conversation,
     agent: Agent,
     memory: Memory,
     assistantMessage: Message,
+    config: unknown,
   ): Promise<void> {
-    const sessionId = session.conversationId;
-    this.logger.info(`Starting agent=${chalk.cyan(agent.id)}`, { sessionId });
+    this.logger.info(`Starting agent=${agent.id}`, {
+      sessionId: session.conversationId,
+    });
 
     try {
-      const controller = new AbortController();
-      const ctx = new ExecutionContext(assistantMessage, controller);
-      session.start(ctx);
-
-      const startTime = Date.now();
-      let firstTokenTime: number | undefined;
-
-      try {
-        for await (const event of agent.call(
-          memory,
-          ctx,
-          conversation.config,
-        )) {
-          if (ctx.signal.aborted) break;
-
-          if (event.type === 'stream' && !firstTokenTime) {
-            firstTokenTime = Date.now();
-            this.logger.info(
-              `First token received: ttft=${chalk.green(`${firstTokenTime - startTime}ms`)} sessionId=${sessionId}`,
-            );
-          }
-
-          if (!session.sendEvent(event)) {
-            this.logger.warn(
-              `SSE not writable for ${conversation.id}, aborting`,
-            );
-            ctx.abort('SSE connection lost');
-            break;
-          }
-
-          if (event.type === 'error') break;
-        }
-      } catch (err) {
-        this.logger.error(
-          `Agent error: ${chalk.red((err as Error)?.message || String(err))}`,
-          { sessionId },
-        );
-        const errorEvent = ctx.agentErrorEvent(
-          (err as Error)?.message || String(err),
-        );
-        session.sendEvent(errorEvent);
-      } finally {
-        if (ctx.signal.aborted) {
-          this.logger.info(
-            `Agent cancelled: reason=${chalk.yellow((ctx.signal.reason as Error)?.message ?? 'Unknown')} sessionId=${sessionId}`,
-          );
-          const cancelledEvent = ctx.agentCancelledEvent(
-            (ctx.signal.reason as Error)?.message ?? 'Unknown',
-          );
-          session.sendEvent(cancelledEvent);
-        }
-
-        await this.finalizeMessage(ctx);
-
-        const totalTime = Date.now() - startTime;
-        const ttft = firstTokenTime ? firstTokenTime - startTime : null;
-        const avgTokenTime = totalTime / ctx.message.content.length;
-        this.logger.info(
-          `Agent completed: totalTime=${chalk.green(`${totalTime}ms`)} tokens=${chalk.green(ctx.message.content.length)} ttft=${ttft ? chalk.green(`${ttft}ms`) : 'N/A'} avgTokenTime=${chalk.green(`${avgTokenTime.toFixed(2)}ms`)} sessionId=${sessionId}`,
-        );
-
-        session.cleanup();
-      }
+      await session.run(agent, memory, assistantMessage, config, {
+        finalizeMessage: ctx => this.finalizeMessage(ctx),
+      });
     } catch (err) {
-      // Outer catch: ctx not created yet, infrastructure error
       const errorMsg = (err as Error)?.message || String(err);
-      this.logger.error(`Infrastructure error: ${chalk.red(errorMsg)}`, {
-        sessionId,
+      this.logger.error(`Infrastructure error: ${errorMsg}`, {
+        sessionId: session.conversationId,
       });
       session.sendControlMessage({ type: 'session_error', error: errorMsg });
       session.cleanup();

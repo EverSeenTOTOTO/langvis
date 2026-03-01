@@ -372,4 +372,74 @@ describe('deriveMessageState', () => {
       expect(state.hasEvents).toBe(true);
     });
   });
+
+  describe('isAwaitingContent', () => {
+    it('should return true when agent started but no content or tools yet', () => {
+      const msg = createMessage({
+        content: '',
+        meta: {
+          events: [{ type: 'start', seq: 1, at: Date.now() }],
+        },
+      });
+      const state = deriveMessageState(msg);
+
+      expect(state.isAwaitingContent).toBe(true);
+    });
+
+    it('should return false when no events', () => {
+      const msg = createMessage({ content: '' });
+      const state = deriveMessageState(msg);
+
+      expect(state.isAwaitingContent).toBe(false);
+    });
+
+    it('should return false when content exists', () => {
+      const msg = createMessage({
+        content: 'Hello',
+        meta: {
+          events: [{ type: 'start', seq: 1, at: Date.now() }],
+        },
+      });
+      const state = deriveMessageState(msg);
+
+      expect(state.isAwaitingContent).toBe(false);
+    });
+
+    it('should return false when terminated', () => {
+      const msg = createMessage({
+        content: '',
+        meta: {
+          events: [
+            { type: 'start', seq: 1, at: Date.now() },
+            { type: 'final', seq: 2, at: Date.now() },
+          ],
+        },
+      });
+      const state = deriveMessageState(msg);
+
+      expect(state.isAwaitingContent).toBe(false);
+    });
+
+    it('should return false when tools are pending', () => {
+      const msg = createMessage({
+        content: '',
+        meta: {
+          events: [
+            { type: 'start', seq: 1, at: Date.now() },
+            {
+              type: 'tool_call',
+              callId: 'tc_1',
+              toolName: 'test_tool',
+              toolArgs: {},
+              seq: 2,
+              at: Date.now(),
+            },
+          ],
+        },
+      });
+      const state = deriveMessageState(msg);
+
+      expect(state.isAwaitingContent).toBe(false);
+    });
+  });
 });

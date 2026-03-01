@@ -1,6 +1,9 @@
 import { AgentEvent } from '@/shared/types';
+import type { Message } from '@/shared/types/entities';
+import type { Agent } from './agent';
 import { ExecutionContext } from './context';
-import Logger from '../utils/logger';
+import type { Memory } from './memory';
+import type Logger from '../utils/logger';
 import type { SSEConnection } from '../service/SSEService';
 
 export type SessionPhase = 'waiting' | 'running' | 'done';
@@ -11,6 +14,10 @@ export interface ChatSessionOptions {
   onDispose: (conversationId: string) => void;
 }
 
+export interface RunDeps {
+  finalizeMessage: (ctx: ExecutionContext) => Promise<void>;
+}
+
 const VALID_TRANSITIONS: Record<SessionPhase, SessionPhase[]> = {
   waiting: ['running', 'done'],
   running: ['done'],
@@ -18,8 +25,8 @@ const VALID_TRANSITIONS: Record<SessionPhase, SessionPhase[]> = {
 };
 
 /**
- * ChatSession - runtime state container for a single chat session
- * Manages SSE connection, abort signal, and phase transitions
+ * ChatSession - autonomous work unit for a single chat session.
+ * Owns both state (SSE connection, phase, abort signal) and behavior (Agent execution loop).
  */
 export class ChatSession {
   readonly conversationId: string;
@@ -81,9 +88,75 @@ export class ChatSession {
     this.sseConnection = connection;
   }
 
-  start(ctx: ExecutionContext): void {
+  async run(
+    agent: Agent,
+    memory: Memory,
+    assistantMessage: Message,
+    config: unknown,
+    deps: RunDeps,
+  ): Promise<void> {
+    const controller = new AbortController();
+    const ctx = new ExecutionContext(assistantMessage, controller);
     this.ctx = ctx;
     this.transition('running');
+
+    const startTime = Date.now();
+    let firstTokenTime: number | undefined;
+
+    try {
+      for await (const event of agent.call(memory, ctx, config)) {
+        if (ctx.signal.aborted) break;
+
+        if (event.type === 'stream' && !firstTokenTime) {
+          firstTokenTime = Date.now();
+          this.options.logger.info(
+            `First token: ttft=${firstTokenTime - startTime}ms session=${this.conversationId}`,
+          );
+        }
+
+        if (!this.sendEvent(event)) {
+          this.options.logger.warn(
+            `SSE not writable for ${this.conversationId}, aborting`,
+          );
+          ctx.abort('SSE connection lost');
+          break;
+        }
+
+        if (event.type === 'error') break;
+      }
+    } catch (err) {
+      this.options.logger.error(
+        `Agent error: ${(err as Error)?.message || String(err)} session=${this.conversationId}`,
+      );
+      const errorEvent = ctx.agentErrorEvent(
+        (err as Error)?.message || String(err),
+      );
+      this.sendEvent(errorEvent);
+    } finally {
+      if (ctx.signal.aborted) {
+        this.options.logger.info(
+          `Agent cancelled: reason=${(ctx.signal.reason as Error)?.message ?? 'Unknown'} session=${this.conversationId}`,
+        );
+        const cancelledEvent = ctx.agentCancelledEvent(
+          (ctx.signal.reason as Error)?.message ?? 'Unknown',
+        );
+        this.sendEvent(cancelledEvent);
+      }
+
+      await deps.finalizeMessage(ctx);
+
+      const totalTime = Date.now() - startTime;
+      const ttft = firstTokenTime ? firstTokenTime - startTime : null;
+      const avgTokenTime =
+        ctx.message.content.length > 0
+          ? totalTime / ctx.message.content.length
+          : 0;
+      this.options.logger.info(
+        `Agent completed: totalTime=${totalTime}ms tokens=${ctx.message.content.length} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${this.conversationId}`,
+      );
+
+      this.cleanup();
+    }
   }
 
   cancel(reason: string): void {
@@ -92,12 +165,7 @@ export class ChatSession {
     }
   }
 
-  /**
-   * Handle client disconnect based on current phase:
-   * - running: only cancel, cleanup happens in startAgent finally block
-   * - waiting: cleanup immediately since no startAgent to handle it
-   */
-  onClientDisconnect(): void {
+  handleDisconnect(): void {
     if (this._phase === 'running') {
       this.cancel('Client disconnected');
     } else {
@@ -108,9 +176,7 @@ export class ChatSession {
   sendEvent(event: AgentEvent): boolean {
     if (!this.sseConnection?.response?.writable) return false;
 
-    const data = `data: ${JSON.stringify(event)}
-
-`;
+    const data = `data: ${JSON.stringify(event)}\n\n`;
     const flushed = this.sseConnection.response.write(data);
     this.sseConnection.response.flush();
 
@@ -125,15 +191,10 @@ export class ChatSession {
 
   sendControlMessage(msg: { type: string; [key: string]: unknown }): void {
     if (!this.sseConnection?.response?.writable) return;
-    this.sseConnection.response.write(`data: ${JSON.stringify(msg)}
-
-`);
+    this.sseConnection.response.write(`data: ${JSON.stringify(msg)}\n\n`);
     this.sseConnection.response.flush();
   }
 
-  /**
-   * Idempotent cleanup - done → done is ignored in transition()
-   */
   cleanup(): void {
     this.transition('done');
   }

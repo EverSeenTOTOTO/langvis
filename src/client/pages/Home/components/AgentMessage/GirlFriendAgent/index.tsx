@@ -4,7 +4,7 @@ import { TextToSpeechOutput } from '@/server/core/tool/TextToSpeech';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import type { Message } from '@/shared/types/entities';
 import type { MessageRenderState } from '@/shared/utils/deriveMessageState';
-import { InfoCircleOutlined } from '@ant-design/icons';
+import { InfoCircleOutlined, LoadingOutlined } from '@ant-design/icons';
 import { Alert, Spin, Tooltip, Typography } from 'antd';
 import {
   registerAgentRenderer,
@@ -12,15 +12,21 @@ import {
 } from '../../agentRenderers';
 import './index.scss';
 
-const GirlFriendAgentRenderer = (
-  msg: Message,
+interface GirlFriendDerivedState {
+  isTtsPending: boolean;
+  ttsError: string | undefined;
+  ttsOutput: TextToSpeechOutput | undefined;
+  showBubbleLoading: boolean;
+  isProcessing: boolean;
+}
+
+function deriveGirlFriendState(
   state: MessageRenderState,
-): AgentRenderResult => {
+): GirlFriendDerivedState {
   const ttsCall = state.toolCallTimeline.find(
     t => t.toolName === ToolIds.TEXT_TO_SPEECH,
   );
 
-  // Determine TTS state
   const isTtsPending = ttsCall?.status === 'pending';
   const ttsError = ttsCall?.status === 'error' ? ttsCall.error : undefined;
   const ttsOutput =
@@ -31,22 +37,50 @@ const GirlFriendAgentRenderer = (
   const showBubbleLoading =
     !state.hasContent && !state.hasPendingTools && !state.isTerminated;
 
+  const isProcessing =
+    state.hasContent &&
+    !state.isTerminated &&
+    !isTtsPending &&
+    !ttsOutput &&
+    !ttsError;
+
+  return { isTtsPending, ttsError, ttsOutput, showBubbleLoading, isProcessing };
+}
+
+const GirlFriendAgentRenderer = (
+  msg: Message,
+  state: MessageRenderState,
+): AgentRenderResult => {
+  const derived = deriveGirlFriendState(state);
+
   return {
     content: (
       <>
-        <Spin spinning={isTtsPending}>
+        {state.isAwaitingContent && (
+          <Typography.Text type="secondary" italic>
+            <LoadingOutlined style={{ marginInlineEnd: 4 }} />
+            Thinking...
+          </Typography.Text>
+        )}
+        <Spin spinning={derived.isTtsPending}>
           <MarkdownRender>{msg.content}</MarkdownRender>
         </Spin>
-        {ttsOutput && (
+        {derived.isProcessing && (
+          <Typography.Text type="secondary" italic>
+            <LoadingOutlined style={{ marginInlineEnd: 4 }} />
+            Generating voice...
+          </Typography.Text>
+        )}
+        {derived.ttsOutput && (
           <AudioPlayer
-            src={`/api/files/play/${ttsOutput.filePath}`}
+            src={`/api/files/play/${derived.ttsOutput.filePath}`}
             className="gf-meta-audio"
             suffix={
               <Tooltip
                 classNames={{ root: 'gf-meta-tooltip' }}
                 title={
                   <Typography.Text copyable>
-                    {ttsOutput.filePath}
+                    {derived.ttsOutput.filePath}
                   </Typography.Text>
                 }
               >
@@ -55,16 +89,19 @@ const GirlFriendAgentRenderer = (
             }
           />
         )}
-        {ttsError && (
-          <Alert type="error" title={ttsError} style={{ marginBlockEnd: 8 }} />
+        {derived.ttsError && (
+          <Alert
+            type="error"
+            title={derived.ttsError}
+            style={{ marginBlockEnd: 8 }}
+          />
         )}
       </>
     ),
-    showBubbleLoading,
+    showBubbleLoading: derived.showBubbleLoading,
   };
 };
 
-// Register renderer
 registerAgentRenderer(AgentIds.GIRLFRIEND, GirlFriendAgentRenderer);
 
 export default GirlFriendAgentRenderer;

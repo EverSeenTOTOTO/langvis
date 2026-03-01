@@ -3,8 +3,8 @@ import { Role } from '@/shared/types/entities';
 import { VerticalAlignBottomOutlined } from '@ant-design/icons';
 import { Flex, FloatButton } from 'antd';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useRef } from 'react';
-import { useRafState, useScroll } from 'react-use';
+import { useEffect, useRef, useState } from 'react';
+import { useScroll } from 'react-use';
 import AssistantMessage from './AssistantMessage';
 import SystemMessage from './SystemMessage';
 import UserMessage from './UserMessage';
@@ -17,8 +17,9 @@ const Messages = () => {
   const currentConversationId = conversationStore.currentConversationId;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
   const scrollState = useScroll(containerRef);
-  const [shouldAutoScroll, setShouldAutoScroll] = useRafState(true);
 
   const handleRetry = (messageId: string) => {
     console.log('Retrying message:', messageId);
@@ -30,36 +31,43 @@ const Messages = () => {
     });
   };
 
-  const isNearBottom =
-    containerRef.current &&
-    containerRef.current.scrollHeight -
-      scrollState.y -
-      containerRef.current.clientHeight <
-      SCROLL_THRESHOLD;
+  const checkIsNearBottom = () => {
+    if (!containerRef.current) return true;
+    const { scrollHeight, scrollTop, clientHeight } = containerRef.current;
+    return scrollHeight - scrollTop - clientHeight < SCROLL_THRESHOLD;
+  };
 
+  // Handle user scroll: update auto-scroll state
   useEffect(() => {
-    if (scrollState.y > 0) {
-      setShouldAutoScroll(isNearBottom || false);
+    const isNearBottom = checkIsNearBottom();
+    setShowScrollButton(!isNearBottom);
+
+    // User scrolled up (away from bottom)
+    if (scrollState.y > 0 && !isNearBottom) {
+      shouldAutoScrollRef.current = false;
     }
-  }, [scrollState.y, isNearBottom, setShouldAutoScroll]);
+  }, [scrollState.y]);
 
   // Auto-scroll to bottom when switching conversations
   useEffect(() => {
     if (currentConversationId) {
-      setShouldAutoScroll(true);
-      scrollToBottom(false);
+      shouldAutoScrollRef.current = true;
+      // Wait for messages to render
+      requestAnimationFrame(() => scrollToBottom(false));
     }
-  }, [currentConversationId, setShouldAutoScroll]);
+  }, [currentConversationId]);
 
+  // Auto-scroll when messages change (including streaming content updates)
   useEffect(() => {
-    if (shouldAutoScroll) {
+    if (shouldAutoScrollRef.current) {
       scrollToBottom(false);
     }
-  }, [
-    currentMessages.length,
-    currentMessages[currentMessages.length - 1]?.content,
-    shouldAutoScroll,
-  ]);
+  }, [currentMessages.length, currentMessages.at(-1)?.content]);
+
+  const handleScrollToBottom = () => {
+    scrollToBottom(true);
+    shouldAutoScrollRef.current = true;
+  };
 
   return (
     <>
@@ -80,13 +88,10 @@ const Messages = () => {
         })}
         <div ref={messagesEndRef} style={{ height: 0 }} />
       </Flex>
-      {!isNearBottom && (
+      {showScrollButton && (
         <FloatButton
           icon={<VerticalAlignBottomOutlined />}
-          onClick={() => {
-            scrollToBottom(true);
-            setShouldAutoScroll(true);
-          }}
+          onClick={handleScrollToBottom}
           className="scroll-to-bottom"
         />
       )}
