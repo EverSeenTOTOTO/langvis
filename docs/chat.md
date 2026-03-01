@@ -518,3 +518,23 @@ src/
 ### 7.5 单进程约束
 
 `sessions` Map 是进程内存，多节点部署需引入 sticky session 或 Redis-backed registry。
+
+---
+
+## 8. 取消时机分析
+
+用户点击取消按钮时，系统可能处于不同阶段：
+
+| 时机 | 描述                           | 前端取消动作                       | 后端取消动作                        | 刷新页面后     |
+| ---- | ------------------------------ | ---------------------------------- | ----------------------------------- | -------------- |
+| 1    | SSE 还在连接中                 | phase→cancelled，关闭 ES，刷新     | handleDisconnect()→cleanup()        | 无消息         |
+| 2    | startChat 已响应，未收到 start | 调用 /cancel，刷新                 | ctx.abort()，发送 cancelled，持久化 | cancelled 状态 |
+| 3    | 流式输出中（content 或 tool）  | 调用 /cancel，刷新                 | ctx.abort()，发送 cancelled，持久化 | cancelled 状态 |
+| 4    | 上游流完成，SSE 传输中         | 调用 /cancel（可能返回 404），刷新 | 可能已 done，返回 404               | 最终状态       |
+| 5    | SSE 传输完成，后端持久化中     | 幂等返回（isLoading=false）        | finalizeMessage() 完成              | final 状态     |
+| 6    | 后端完成，通知前端过程中       | 幂等返回或 404                     | 已 done                             | final 状态     |
+
+**幂等性保证**：
+
+- 前端：`isLoading=false` 时 `cancelChat()` 直接返回
+- 后端：`phase≠running` 时返回 404，前端静默忽略

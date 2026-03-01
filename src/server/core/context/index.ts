@@ -272,5 +272,6 @@ export class ExecutionContext {
 
   abort(reason: string): void {
     this.controller.abort(new Error(reason));
+    this.setContent(reason);
   }
 }

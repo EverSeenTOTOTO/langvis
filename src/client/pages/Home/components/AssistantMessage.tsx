@@ -19,7 +19,9 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
   const agent = currentConversation?.config?.agent || AgentIds.CHAT;
 
   const { content, showBubbleLoading } = renderAgentMessage(msg, agent);
-  const hasError = msg.meta?.events?.some(e => e.type === 'error');
+  const hasError = msg.meta?.events?.some(
+    e => e.type === 'error' || e.type === 'cancelled',
+  );
 
   return (
     <Bubble

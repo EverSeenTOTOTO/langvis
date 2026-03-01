@@ -152,25 +152,34 @@ export class ChatStore {
   ) {
     const state = this.getState(params.conversationId);
 
+    // Idempotency: only cancel if in loading state
+    if (!state?.isLoading) {
+      return;
+    }
+
+    const wasStreaming = state.phase === 'streaming';
+
     // Immediately update UI
-    state?.transition('cancelled');
-    state?.closeEventSource();
+    state.transition('cancelled');
+    state.closeEventSource();
 
-    // Rollback pending messages
-    this.rollbackPendingMessages(params.conversationId);
-
-    // Only notify backend when phase is streaming (Agent is running)
-    // connecting: no Agent running, finishing: Agent already ended
-    if (state?.phase === 'streaming') {
+    // Only notify backend when phase was streaming (Agent is running)
+    // connecting: no Agent running
+    if (wasStreaming) {
       try {
         await req!.send();
       } catch (e) {
-        // 404 means session already gone, ignore
+        // 404 means session already gone, ignore for idempotency
         if (!(e instanceof Error && e.message.includes('404'))) {
           throw e;
         }
       }
     }
+
+    // Refresh messages to get final state from backend
+    this.conversationStore.getMessagesByConversationId({
+      id: params.conversationId,
+    });
   }
 
   @api(
@@ -324,6 +333,10 @@ export class ChatStore {
       case 'cancelled':
         state.transition('cancelled');
         state.closeEventSource();
+        // Refresh messages to get final state from backend
+        this.conversationStore.getMessagesByConversationId({
+          id: conversationId,
+        });
         break;
 
       case 'error':
@@ -340,18 +353,6 @@ export class ChatStore {
     state.transition('error', errorMessage);
     // Backend has already persisted messages, refresh to get the final state
     this.conversationStore.getMessagesByConversationId({ id: conversationId });
-  }
-
-  private rollbackPendingMessages(conversationId: string): void {
-    const messages = this.conversationStore.messages[conversationId];
-    if (!messages) return;
-
-    // Remove the pending user and assistant messages (last 2 messages)
-    const lastTwo = messages.slice(-2);
-    if (lastTwo.length === 2 && lastTwo[0].role === Role.USER) {
-      messages.splice(-2);
-      this.conversationStore.messages[conversationId] = [...messages];
-    }
   }
 
   private addPendingMessages(
