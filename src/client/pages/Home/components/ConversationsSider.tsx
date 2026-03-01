@@ -116,50 +116,64 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
   const treeData = useMemo(() => {
     return groupStore.sortedGroups.map(group => {
       const isUngrouped = group.name === UNGROUPED_GROUP_NAME;
-      const groupMenuItems: MenuProps['items'] = [
-        {
-          key: 'new-conversation',
-          icon: <PlusOutlined />,
-          label: settingStore.tr('New Conversation'),
-          onClick: () => {
-            setCreateWithGroupId(group.id);
-          },
-        },
-        ...(isUngrouped
-          ? []
-          : [
-              {
-                key: 'edit',
-                icon: <EditOutlined />,
-                label: settingStore.tr('Edit'),
-                onClick: () => setEditingGroupId(group.id),
-              },
-              {
-                key: 'delete',
-                icon: <DeleteOutlined />,
-                label: settingStore.tr('Delete'),
-                danger: true,
-                onClick: () => handleDeleteGroup(group.id),
-              },
-            ]),
-      ];
+
+      const groupTitle = isUngrouped ? (
+        <>
+          <span className="tree-node-text">{group.name}</span>
+          <Button
+            type="text"
+            size="small"
+            icon={<PlusOutlined />}
+            className="tree-node-menu-btn"
+            onClick={e => {
+              e.stopPropagation();
+              setCreateWithGroupId(group.id);
+            }}
+          />
+        </>
+      ) : (
+        <>
+          <span className="tree-node-text">{group.name}</span>
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: 'new-conversation',
+                  icon: <PlusOutlined />,
+                  label: settingStore.tr('New Conversation'),
+                  onClick: () => setCreateWithGroupId(group.id),
+                },
+                {
+                  key: 'edit',
+                  icon: <EditOutlined />,
+                  label: settingStore.tr('Edit'),
+                  onClick: () => setEditingGroupId(group.id),
+                },
+                {
+                  key: 'delete',
+                  icon: <DeleteOutlined />,
+                  label: settingStore.tr('Delete'),
+                  danger: true,
+                  onClick: () => handleDeleteGroup(group.id),
+                },
+              ],
+            }}
+            trigger={['click']}
+          >
+            <Button
+              type="text"
+              size="small"
+              icon={<EllipsisOutlined />}
+              className="tree-node-menu-btn"
+              onClick={e => e.stopPropagation()}
+            />
+          </Dropdown>
+        </>
+      );
 
       return {
         key: `group-${group.id}`,
-        title: (
-          <>
-            <span className="tree-node-text">{group.name}</span>
-            <Dropdown menu={{ items: groupMenuItems }} trigger={['click']}>
-              <Button
-                type="text"
-                size="small"
-                icon={<EllipsisOutlined />}
-                className="tree-node-menu-btn"
-                onClick={e => e.stopPropagation()}
-              />
-            </Dropdown>
-          </>
-        ),
+        title: groupTitle,
         icon: <FolderOutlined />,
         children:
           group.conversations

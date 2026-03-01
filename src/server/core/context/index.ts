@@ -1,5 +1,6 @@
 import { AgentEvent, ToolEvent } from '@/shared/types';
 import type { Message } from '@/shared/types/entities';
+import { generateId } from '@/shared/utils';
 
 export class ExecutionContext {
   public get signal(): AbortSignal {
@@ -23,7 +24,7 @@ export class ExecutionContext {
   }
 
   private nextCallId(): string {
-    return `tc_${crypto.randomUUID().slice(0, 8)}`;
+    return generateId('tc');
   }
 
   get currentCallId(): string {
