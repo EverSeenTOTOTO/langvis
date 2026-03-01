@@ -54,7 +54,7 @@ const defaultChatRenderer: AgentRenderer = (msg, state) => {
   // - No pending tools (tools have their own loading indicator)
   // - Not terminal
   const showBubbleLoading =
-    !state.hasContent && !state.hasPendingTools && !state.isTerminal;
+    !state.hasContent && !state.hasPendingTools && !state.isTerminated;
 
   return {
     content: <MarkdownRender>{msg.content}</MarkdownRender>,

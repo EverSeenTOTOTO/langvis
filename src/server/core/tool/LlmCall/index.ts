@@ -1,6 +1,7 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import { OpenAI } from '@/server/service/openai';
+import chalk from 'chalk';
 import type { Logger } from '@/server/utils/logger';
 import { InjectTokens, ToolIds } from '@/shared/constants';
 import { ToolConfig, ToolEvent } from '@/shared/types';
@@ -42,6 +43,7 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
       const delta = chunk?.choices[0]?.delta?.content;
       if (delta) {
         content += delta;
+        this.logger.debug(`LLM chunk: ${chalk.green(delta)}`);
         yield ctx.toolProgressEvent(this.id, delta);
       }
 

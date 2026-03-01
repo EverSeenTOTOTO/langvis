@@ -21,27 +21,33 @@ describe('ConversationState', () => {
     });
 
     it('should return true when connecting', () => {
-      state.setPhase('connecting');
+      state.transition('connecting');
       expect(state.isLoading).toBe(true);
     });
 
     it('should return true when streaming', () => {
-      state.setPhase('streaming');
+      state.transition('connecting');
+      state.transition('streaming');
       expect(state.isLoading).toBe(true);
     });
 
     it('should return true when finishing', () => {
-      state.setPhase('finishing');
+      state.transition('connecting');
+      state.transition('streaming');
+      state.transition('finishing');
       expect(state.isLoading).toBe(true);
     });
 
     it('should return false when error', () => {
-      state.setPhase('error', 'Test error');
+      state.transition('connecting');
+      state.transition('error', 'Test error');
       expect(state.isLoading).toBe(false);
     });
 
     it('should return false when cancelled', () => {
-      state.setPhase('cancelled');
+      state.transition('connecting');
+      state.transition('streaming');
+      state.transition('cancelled');
       expect(state.isLoading).toBe(false);
     });
   });
@@ -53,68 +59,114 @@ describe('ConversationState', () => {
     });
 
     it('should transition from connecting to streaming', () => {
-      state.setPhase('connecting');
+      state.transition('connecting');
       state.transition('streaming');
       expect(state.phase).toBe('streaming');
     });
 
+    it('should transition from connecting to error', () => {
+      state.transition('connecting');
+      state.transition('error', 'Connection failed');
+      expect(state.phase).toBe('error');
+      expect(state.phaseError).toBe('Connection failed');
+    });
+
+    it('should transition from connecting to cancelled', () => {
+      state.transition('connecting');
+      state.transition('cancelled');
+      expect(state.phase).toBe('cancelled');
+    });
+
     it('should transition from streaming to finishing', () => {
-      state.setPhase('streaming');
+      state.transition('connecting');
+      state.transition('streaming');
       state.transition('finishing');
       expect(state.phase).toBe('finishing');
     });
 
-    it('should not transition from terminal states', () => {
-      state.setPhase('error', 'Test error');
+    it('should transition from streaming to error', () => {
+      state.transition('connecting');
       state.transition('streaming');
-
+      state.transition('error', 'Stream error');
       expect(state.phase).toBe('error');
+      expect(state.phaseError).toBe('Stream error');
+    });
+
+    it('should transition from streaming to cancelled', () => {
+      state.transition('connecting');
+      state.transition('streaming');
+      state.transition('cancelled');
+      expect(state.phase).toBe('cancelled');
     });
 
     it('should transition from finishing to idle', () => {
-      state.setPhase('finishing');
+      state.transition('connecting');
+      state.transition('streaming');
+      state.transition('finishing');
       state.transition('idle');
-
       expect(state.phase).toBe('idle');
     });
-  });
 
-  describe('setPhase', () => {
-    it('should set phase and error', () => {
-      state.setPhase('error', 'Something went wrong');
-
+    it('should transition from finishing to error', () => {
+      state.transition('connecting');
+      state.transition('streaming');
+      state.transition('finishing');
+      state.transition('error', 'Finish error');
       expect(state.phase).toBe('error');
-      expect(state.phaseError).toBe('Something went wrong');
+    });
+
+    it('should not transition from idle to streaming', () => {
+      state.transition('streaming');
+      expect(state.phase).toBe('idle');
+    });
+
+    it('should not transition from terminal state error', () => {
+      state.transition('connecting');
+      state.transition('error', 'Failed');
+      state.transition('idle');
+      expect(state.phase).toBe('error');
+    });
+
+    it('should not transition from terminal state cancelled', () => {
+      state.transition('connecting');
+      state.transition('streaming');
+      state.transition('cancelled');
+      state.transition('idle');
+      expect(state.phase).toBe('cancelled');
     });
   });
 
   describe('EventSource management', () => {
     it('should set eventSource', () => {
-      const mockES = { close: vi.fn() } as any;
+      const mockES = { close: vi.fn() } as unknown as EventSource;
       state.setEventSource(mockES);
-
       expect(state.eventSource).toBe(mockES);
     });
 
     it('should close eventSource', () => {
-      const mockES = { close: vi.fn() } as any;
+      const mockES = { close: vi.fn() } as unknown as EventSource;
       state.setEventSource(mockES);
       state.closeEventSource();
-
       expect(mockES.close).toHaveBeenCalled();
       expect(state.eventSource).toBeNull();
     });
   });
 
   describe('reset', () => {
-    it('should reset all state', () => {
-      state.setPhase('streaming');
-      state.setPhase('error', 'error');
-
+    it('should reset all state from terminal state', () => {
+      state.transition('connecting');
+      state.transition('error', 'error');
       state.reset();
-
       expect(state.phase).toBe('idle');
       expect(state.phaseError).toBeNull();
+    });
+
+    it('should close eventSource on reset', () => {
+      const mockES = { close: vi.fn() } as unknown as EventSource;
+      state.setEventSource(mockES);
+      state.reset();
+      expect(mockES.close).toHaveBeenCalled();
+      expect(state.eventSource).toBeNull();
     });
   });
 });

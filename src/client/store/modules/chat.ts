@@ -154,7 +154,7 @@ export class ChatStore {
     const state = this.getState(params.conversationId);
 
     // Immediately update UI
-    state?.setPhase('cancelled');
+    state?.transition('cancelled');
     state?.closeEventSource();
 
     // Rollback pending messages
@@ -213,7 +213,7 @@ export class ChatStore {
     }
 
     const state = this.getOrCreateState(conversationId);
-    state.setPhase('connecting');
+    state.transition('connecting');
 
     // Add temporary optimistic messages for immediate UI feedback
     const tempUserId = uuid();
@@ -338,7 +338,7 @@ export class ChatStore {
     const state = this.getState(conversationId);
     if (!state) return;
 
-    state.setPhase('error', errorMessage);
+    state.transition('error', errorMessage);
     this.rollbackPendingMessages(conversationId);
   }
 

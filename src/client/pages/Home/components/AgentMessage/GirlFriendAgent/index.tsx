@@ -1,7 +1,7 @@
 import AudioPlayer from '@/client/components/AudioPlayer';
 import MarkdownRender from '@/client/components/MarkdownRender';
 import { TextToSpeechOutput } from '@/server/core/tool/TextToSpeech';
-import { ToolIds, AgentIds } from '@/shared/constants';
+import { AgentIds, ToolIds } from '@/shared/constants';
 import type { Message } from '@/shared/types/entities';
 import type { MessageRenderState } from '@/shared/utils/deriveMessageState';
 import { InfoCircleOutlined } from '@ant-design/icons';
@@ -16,22 +16,20 @@ const GirlFriendAgentRenderer = (
   msg: Message,
   state: MessageRenderState,
 ): AgentRenderResult => {
-  // Find TTS tool calls - get last one for rendering
-  const ttsCalls = state.toolCallTimeline.filter(
+  const ttsCall = state.toolCallTimeline.find(
     t => t.toolName === ToolIds.TEXT_TO_SPEECH,
   );
-  const lastTts = ttsCalls.at(-1);
 
   // Determine TTS state
-  const isTtsPending = lastTts?.status === 'pending';
-  const ttsError = lastTts?.status === 'error' ? lastTts.error : undefined;
+  const isTtsPending = ttsCall?.status === 'pending';
+  const ttsError = ttsCall?.status === 'error' ? ttsCall.error : undefined;
   const ttsOutput =
-    lastTts?.status === 'done'
-      ? (lastTts.output as TextToSpeechOutput | undefined)
+    ttsCall?.status === 'done'
+      ? (ttsCall.output as TextToSpeechOutput | undefined)
       : undefined;
 
   const showBubbleLoading =
-    !state.hasContent && !state.hasPendingTools && !state.isTerminal;
+    !state.hasContent && !state.hasPendingTools && !state.isTerminated;
 
   return {
     content: (

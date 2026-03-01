@@ -25,7 +25,7 @@ export type ThoughtItem = {
 export type MessageRenderState = {
   hasContent: boolean;
   hasEvents: boolean;
-  isTerminal: boolean;
+  isTerminated: boolean;
 
   // Core: tool calls ordered by seq
   toolCallTimeline: ToolCallTimeline[];
@@ -130,7 +130,7 @@ export function deriveMessageState(msg: Message): MessageRenderState {
   return {
     hasContent,
     hasEvents,
-    isTerminal,
+    isTerminated: isTerminal,
     toolCallTimeline,
     pendingToolCalls,
     hasPendingTools,

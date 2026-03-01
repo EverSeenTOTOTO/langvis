@@ -41,7 +41,7 @@ describe('deriveMessageState', () => {
       });
       const state = deriveMessageState(msg);
 
-      expect(state.isTerminal).toBe(false);
+      expect(state.isTerminated).toBe(false);
     });
 
     it('should return true for final event', () => {
@@ -55,7 +55,7 @@ describe('deriveMessageState', () => {
       });
       const state = deriveMessageState(msg);
 
-      expect(state.isTerminal).toBe(true);
+      expect(state.isTerminated).toBe(true);
     });
 
     it('should return true for error event', () => {
@@ -68,7 +68,7 @@ describe('deriveMessageState', () => {
       });
       const state = deriveMessageState(msg);
 
-      expect(state.isTerminal).toBe(true);
+      expect(state.isTerminated).toBe(true);
     });
 
     it('should return true for cancelled event', () => {
@@ -86,7 +86,7 @@ describe('deriveMessageState', () => {
       });
       const state = deriveMessageState(msg);
 
-      expect(state.isTerminal).toBe(true);
+      expect(state.isTerminated).toBe(true);
     });
   });
 
