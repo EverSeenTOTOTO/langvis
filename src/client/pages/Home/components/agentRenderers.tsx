@@ -3,6 +3,8 @@ import { AgentIds } from '@/shared/constants';
 import type { Message } from '@/shared/types/entities';
 import type { MessageRenderState } from '@/shared/utils/deriveMessageState';
 import { deriveMessageState } from '@/shared/utils/deriveMessageState';
+import { LoadingOutlined } from '@ant-design/icons';
+import { Typography } from 'antd';
 import type React from 'react';
 
 export type AgentRenderResult = {
@@ -57,7 +59,17 @@ const defaultChatRenderer: AgentRenderer = (msg, state) => {
     !state.hasContent && !state.hasPendingTools && !state.isTerminated;
 
   return {
-    content: <MarkdownRender>{msg.content}</MarkdownRender>,
+    content: (
+      <>
+        {state.isAwaitingContent && (
+          <Typography.Text type="secondary" italic>
+            <LoadingOutlined style={{ marginInlineEnd: 4 }} />
+            Thinking...
+          </Typography.Text>
+        )}
+        <MarkdownRender>{msg.content}</MarkdownRender>
+      </>
+    ),
     showBubbleLoading,
   };
 };

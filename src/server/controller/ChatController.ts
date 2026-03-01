@@ -49,7 +49,7 @@ export default class ChatController {
 
     req.on('close', () => {
       req.log.info('SSE connection closed:', conversationId);
-      session.onClientDisconnect();
+      session.handleDisconnect();
     });
 
     req.on('error', err => {
@@ -141,12 +141,12 @@ export default class ChatController {
     res.status(200).json({ success: true, messageId: assistantMessage.id });
 
     // Agent execution after HTTP response
-    this.chatService.startAgent(
+    this.chatService.runSession(
       session,
-      conversation,
       agent,
       memory,
       assistantMessage,
+      conversation.config,
     );
 
     return;
