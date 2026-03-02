@@ -2,9 +2,10 @@ import { useStore } from '@/client/store';
 import { Role } from '@/shared/types/entities';
 import { VerticalAlignBottomOutlined } from '@ant-design/icons';
 import { Flex, FloatButton } from 'antd';
+import { reaction } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
-import { useScroll } from 'react-use';
+import { usePrevious, useScroll } from 'react-use';
 import AssistantMessage from './AssistantMessage';
 import SystemMessage from './SystemMessage';
 import UserMessage from './UserMessage';
@@ -20,9 +21,10 @@ const Messages = () => {
   const shouldAutoScrollRef = useRef(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const scrollState = useScroll(containerRef);
+  const prevScrollY = usePrevious(scrollState.y);
 
-  const handleRetry = (messageId: string) => {
-    console.log('Retrying message:', messageId);
+  const handleRetry = (_messageId: string) => {
+    // Placeholder for retry functionality
   };
 
   const scrollToBottom = (smooth = true) => {
@@ -38,15 +40,27 @@ const Messages = () => {
   };
 
   // Handle user scroll: update auto-scroll state
+  // Only disable auto-scroll when user intentionally scrolls UP (away from bottom)
   useEffect(() => {
     const isNearBottom = checkIsNearBottom();
     setShowScrollButton(!isNearBottom);
 
-    // User scrolled up (away from bottom)
-    if (scrollState.y > 0 && !isNearBottom) {
+    const currentY = scrollState.y;
+
+    // User scrolled back to bottom - re-enable auto-scroll
+    if (isNearBottom) {
+      shouldAutoScrollRef.current = true;
+    }
+    // User scrolled UP (away from bottom) - disable auto-scroll
+    // Skip if prevScrollY is undefined (first render)
+    else if (
+      prevScrollY !== undefined &&
+      currentY < prevScrollY &&
+      currentY > 0
+    ) {
       shouldAutoScrollRef.current = false;
     }
-  }, [scrollState.y]);
+  }, [scrollState.y, prevScrollY]);
 
   // Auto-scroll to bottom when switching conversations
   useEffect(() => {
@@ -58,11 +72,27 @@ const Messages = () => {
   }, [currentConversationId]);
 
   // Auto-scroll when messages change (including streaming content updates)
+  // Use MobX reaction to properly track observable changes
   useEffect(() => {
-    if (shouldAutoScrollRef.current) {
-      scrollToBottom(false);
-    }
-  }, [currentMessages.length, currentMessages.at(-1)?.content]);
+    const dispose = reaction(
+      () => {
+        const messages = conversationStore.currentMessages;
+        const lastMsg = messages[messages.length - 1];
+        return {
+          length: messages.length,
+          lastId: lastMsg?.id,
+          lastContent: lastMsg?.content,
+          lastEventsLen: lastMsg?.meta?.events?.length,
+        };
+      },
+      () => {
+        if (shouldAutoScrollRef.current) {
+          scrollToBottom(false);
+        }
+      },
+    );
+    return dispose;
+  }, [conversationStore]);
 
   const handleScrollToBottom = () => {
     scrollToBottom(true);

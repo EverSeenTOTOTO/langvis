@@ -361,9 +361,12 @@ export class ChatStore {
     userId?: string,
     assistantId?: string,
   ): void {
-    const messages = this.conversationStore.messages[conversationId] ?? [];
+    const existingMessages =
+      this.conversationStore.messages[conversationId] ?? [];
 
-    messages.push(
+    // Create new array to trigger MobX reactivity
+    this.conversationStore.messages[conversationId] = [
+      ...existingMessages,
       {
         id: userId ?? generateId('msg'),
         conversationId,
@@ -379,9 +382,7 @@ export class ChatStore {
         meta: { events: [] },
         createdAt: new Date(),
       },
-    );
-
-    this.conversationStore.messages[conversationId] = messages;
+    ];
   }
 
   private replaceAssistantMessageId(
