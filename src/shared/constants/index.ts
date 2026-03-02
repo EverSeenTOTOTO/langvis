@@ -4,6 +4,12 @@ export enum ToolIds {
   TEXT_TO_SPEECH = 'text_to_speech_tool',
   WEB_FETCH = 'web_fetch_tool',
   HUMAN_IN_THE_LOOP = 'human_in_the_loop_tool',
+  META_EXTRACT = 'meta_extract_tool',
+  CHUNK = 'chunk_tool',
+  EMBED = 'embed_tool',
+  ARCHIVE = 'archive_tool',
+  ANALYSIS = 'analysis_tool',
+  RETRIEVE = 'retrieve_tool',
 }
 
 export enum AgentIds {
@@ -11,6 +17,7 @@ export enum AgentIds {
   CHAT = 'chat_agent',
   REACT = 'react_agent',
   GIRLFRIEND = 'girlfriend_agent',
+  DOCUMENT = 'document_agent',
 }
 
 export enum MemoryIds {
