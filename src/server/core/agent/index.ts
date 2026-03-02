@@ -1,6 +1,6 @@
 import type { Logger } from '@/server/utils/logger';
 import { AgentConfig, AgentEvent } from '@/shared/types';
-import { ExecutionContext } from '../context';
+import { ExecutionContext } from '../ExecutionContext';
 import { Memory } from '../memory';
 
 export abstract class Agent {

@@ -9,7 +9,7 @@ import DOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
 import { container } from 'tsyringe';
 import { Tool } from '..';
-import { ExecutionContext } from '../../context';
+import { ExecutionContext } from '../../ExecutionContext';
 import type HumanInTheLoopTool from '../HumanInTheLoop';
 
 interface WebFetchInput {

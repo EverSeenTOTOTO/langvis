@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ChatSession } from '@/server/core/ChatSession';
-import type { RunDeps } from '@/server/core/ChatSession';
 import type { SSEConnection } from '@/server/service/SSEService';
 import type { Agent } from '@/server/core/agent';
 import type { Memory } from '@/server/core/memory';
@@ -8,19 +7,12 @@ import { Role } from '@/shared/entities/Message';
 
 describe('ChatSession', () => {
   let session: ChatSession;
-  let mockLogger: {
-    warn: ReturnType<typeof vi.fn>;
-    info: ReturnType<typeof vi.fn>;
-    error: ReturnType<typeof vi.fn>;
-  };
   let onDispose: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mockLogger = { warn: vi.fn(), info: vi.fn(), error: vi.fn() };
     onDispose = vi.fn();
     session = new ChatSession('conv-123', {
       idleTimeoutMs: 30_000,
-      logger: mockLogger as any,
       onDispose,
     });
   });
@@ -57,9 +49,7 @@ describe('ChatSession', () => {
     conversationId: 'conv-123',
   });
 
-  const makeMockDeps = (): RunDeps => ({
-    finalizeMessage: vi.fn().mockResolvedValue(undefined),
-  });
+  const makeMockDeps = () => vi.fn().mockResolvedValue(undefined);
 
   describe('initialization', () => {
     it('should initialize with waiting phase', () => {
@@ -78,11 +68,17 @@ describe('ChatSession', () => {
         yield { type: 'final', seq: 2, at: Date.now() };
       });
 
-      const deps = makeMockDeps();
-      await session.run(agent, {} as Memory, makeMockMessage(), {}, deps);
+      const finalizeMessage = makeMockDeps();
+      await session.run(
+        agent,
+        {} as Memory,
+        makeMockMessage(),
+        {},
+        finalizeMessage,
+      );
 
       expect(session.phase).toBe('done');
-      expect(deps.finalizeMessage).toHaveBeenCalled();
+      expect(finalizeMessage).toHaveBeenCalled();
     });
 
     it('should send events via SSE', async () => {
@@ -227,10 +223,16 @@ describe('ChatSession', () => {
         throw new Error('fail');
       });
 
-      const deps = makeMockDeps();
-      await session.run(agent, {} as Memory, makeMockMessage(), {}, deps);
+      const finalizeMessage = makeMockDeps();
+      await session.run(
+        agent,
+        {} as Memory,
+        makeMockMessage(),
+        {},
+        finalizeMessage,
+      );
 
-      expect(deps.finalizeMessage).toHaveBeenCalled();
+      expect(finalizeMessage).toHaveBeenCalled();
     });
   });
 
@@ -308,7 +310,7 @@ describe('ChatSession', () => {
     });
   });
 
-  describe('sendEvent', () => {
+  describe('send', () => {
     it('should send event when connection is writable', () => {
       const conn = makeMockConnection();
       session.bindConnection(conn);
@@ -319,7 +321,7 @@ describe('ChatSession', () => {
         seq: 1,
         at: Date.now(),
       };
-      const result = session.sendEvent(event);
+      const result = session.send(event);
 
       expect(result).toBe(true);
       expect(conn.response.write).toHaveBeenCalled();
@@ -338,7 +340,7 @@ describe('ChatSession', () => {
         seq: 1,
         at: Date.now(),
       };
-      const result = session.sendEvent(event);
+      const result = session.send(event);
 
       expect(result).toBe(false);
     });
@@ -350,18 +352,18 @@ describe('ChatSession', () => {
         seq: 1,
         at: Date.now(),
       };
-      const result = session.sendEvent(event);
+      const result = session.send(event);
 
       expect(result).toBe(false);
     });
   });
 
-  describe('sendControlMessage', () => {
+  describe('send', () => {
     it('should send control message when connection is writable', () => {
       const conn = makeMockConnection();
       session.bindConnection(conn);
 
-      session.sendControlMessage({
+      session.send({
         type: 'session_error',
         error: 'Test error',
       });

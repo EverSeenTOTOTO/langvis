@@ -6,7 +6,7 @@ import { ToolConfig, ToolEvent } from '@/shared/types';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { Tool } from '..';
-import { ExecutionContext } from '../../context';
+import { ExecutionContext } from '../../ExecutionContext';
 
 export interface TextToSpeechInput {
   text: string;
