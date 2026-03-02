@@ -1,5 +1,7 @@
 import { ConversationEntity } from '@/shared/entities/Conversation';
 import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
+import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
+import { DocumentEntity } from '@/shared/entities/Document';
 import { MessageEntity } from '@/shared/entities/Message';
 import { entities, migrations } from '@hedystia/better-auth-typeorm';
 import { DataSource } from 'typeorm';
@@ -18,6 +20,8 @@ const pg = new DataSource({
     ConversationEntity,
     MessageEntity,
     ConversationGroupEntity,
+    DocumentEntity,
+    DocumentChunkEntity,
   ],
   migrations: [...migrations],
   migrationsRun: true,
