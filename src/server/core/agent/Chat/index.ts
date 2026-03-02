@@ -8,7 +8,9 @@ import { container } from 'tsyringe';
 import { Agent } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
+import { Prompt } from '../../PromptBuilder';
 import type LlmCallTool from '../../tool/LlmCall';
+import { createPrompt } from './prompt';
 
 interface ChatAgentConfig {
   model?: {
@@ -24,8 +26,8 @@ export default class ChatAgent extends Agent {
   readonly config!: AgentConfig;
   protected readonly logger!: Logger;
 
-  async getSystemPrompt(): Promise<string> {
-    return `You are a helpful AI assistant. You engage in natural conversations with users, providing thoughtful and accurate responses. `;
+  get systemPrompt(): Prompt {
+    return createPrompt(this);
   }
 
   async *call(

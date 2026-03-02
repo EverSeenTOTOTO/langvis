@@ -1,24 +1,32 @@
-export type ReActPromptOptions = {
-  background: string;
-  tools: string;
+import { formatToolsToMarkdown } from '@/server/utils/formatTools';
+import type { Agent } from '../index';
+import { Prompt } from '../../PromptBuilder';
+
+export const SECTIONS = {
+  ROLE_GOAL: 'Role & Goal',
+  BACKGROUND: 'Background',
+  TOOLS: 'Tools',
+  OUTPUT_LANGUAGE: 'Output Language',
+  OUTPUT_FORMAT: 'Output Format',
+  GUIDELINES: 'Guidelines',
+  EXAMPLES: 'Examples',
 };
 
-export default ({ background, tools }: ReActPromptOptions) =>
-  `
-# Role & Goal
-You are an AI assistant that answers questions and solves problems through reasoning and tool usage.  
-
-## Background
-${background}
-
-## Tools
-${tools}
-
-## Output Language
-- Default to Chinese unless the user requests another language.
-
-## Output Format
-Your ENTIRE response MUST be a SINGLE, VALID JSON object. Do NOT include any plain text, markdown blocks (e.g., \`\`\`json), or extraneous characters before or after the JSON.
+export const createPrompt = (agent: Agent) =>
+  Prompt.empty()
+    .with(
+      SECTIONS.ROLE_GOAL,
+      'You are an AI assistant that answers questions and solves problems through reasoning and tool usage.',
+    )
+    .with(SECTIONS.BACKGROUND, '')
+    .with(SECTIONS.TOOLS, formatToolsToMarkdown((agent as any).tools ?? []))
+    .with(
+      SECTIONS.OUTPUT_LANGUAGE,
+      '- Default to Chinese unless the user requests another language.',
+    )
+    .with(
+      SECTIONS.OUTPUT_FORMAT,
+      `Your ENTIRE response MUST be a SINGLE, VALID JSON object. Do NOT include any plain text, markdown blocks (e.g. \`\`\`json), or extraneous characters before or after the JSON.
 
 The JSON object must conform to one of the following structures:
 
@@ -37,15 +45,17 @@ interface FinalAnswerResponse {
   thought?: string; // Optional: Reasoning about the answer or what info is missing.
   final_answer: string; // The actual response content to the user.
 }
-\`\`\`
-
-## Guidelines
-1. **Thought is Optional**: You can omit the "thought" field if the answer is direct, but keeping it helps accuracy.
+\`\`\``,
+    )
+    .with(
+      SECTIONS.GUIDELINES,
+      `1. **Thought is Optional**: You can omit the "thought" field if the answer is direct, but keeping it helps accuracy.
 2. **Missing Info**: If you need user input (confirmation, choice, or additional info), use \`HumanInTheLoop Tool\` to ask the user interactively.
-3. **No Tool Applies**: Use Option 2 to explain why and suggest alternatives.
-
-## Examples
-<example:straight-to-final>
+3. **No Tool Applies**: Use Option 2 to explain why and suggest alternatives.`,
+    )
+    .with(
+      SECTIONS.EXAMPLES,
+      `<example:straight-to-final>
 User: Hi.
 Assistant: { "final_answer": "你好！有什么我可以帮你的吗？" }
 </example:straight-to-final>
@@ -84,5 +94,5 @@ Assistant:
   "thought": "User confirmed, proceeding with deletion.",
   "action": { "tool": "DeleteFiles Tool", "input": {"olderThan": 30} }
 }
-</example:use-human-in-the-loop>
-`.trim();
+</example:use-human-in-the-loop>`,
+    );

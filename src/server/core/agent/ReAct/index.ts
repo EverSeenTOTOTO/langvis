@@ -1,7 +1,6 @@
 import { agent } from '@/server/decorator/core';
 import { config } from '@/server/decorator/param';
 import { runTool } from '@/server/utils';
-import { formatToolsToMarkdown } from '@/server/utils/formatTools';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
@@ -11,9 +10,10 @@ import { container } from 'tsyringe';
 import { Agent } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
+import { Prompt } from '../../PromptBuilder';
 import { Tool } from '../../tool';
 import type LlmCallTool from '../../tool/LlmCall';
-import generatePrompt from './prompt';
+import { createPrompt } from './prompt';
 
 type ReActAction = {
   thought?: string;
@@ -49,11 +49,8 @@ export default class ReActAgent extends Agent {
 
   public tools: Tool[] = [];
 
-  async getSystemPrompt(): Promise<string> {
-    return generatePrompt({
-      background: '',
-      tools: formatToolsToMarkdown(this.tools),
-    });
+  get systemPrompt(): Prompt {
+    return createPrompt(this);
   }
 
   async *call(

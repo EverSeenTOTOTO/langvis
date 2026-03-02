@@ -251,7 +251,7 @@ describe('ChatService', () => {
       };
 
       const mockAgent = {
-        getSystemPrompt: vi.fn().mockResolvedValue('System prompt'),
+        systemPrompt: { build: () => 'System prompt' },
       };
 
       container.register('test-memory', { useValue: mockMemory });
@@ -293,7 +293,7 @@ describe('ChatService', () => {
       };
 
       const mockAgent = {
-        getSystemPrompt: vi.fn().mockResolvedValue('System prompt'),
+        systemPrompt: { build: () => 'System prompt' },
       };
 
       container.register('test-memory-2', { useValue: mockMemory });

@@ -142,8 +142,8 @@ export class ChatService {
     let timeOffset = 0;
 
     // Add system prompt if needed
-    if (typeof agent.getSystemPrompt === 'function' && messages.length === 0) {
-      const systemPrompt = await agent.getSystemPrompt();
+    if (messages.length === 0) {
+      const systemPrompt = agent.systemPrompt.build();
       if (systemPrompt) {
         chatMessages.push({
           role: Role.SYSTEM,

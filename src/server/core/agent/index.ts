@@ -2,6 +2,7 @@ import type { Logger } from '@/server/utils/logger';
 import { AgentConfig, AgentEvent } from '@/shared/types';
 import { ExecutionContext } from '../ExecutionContext';
 import { Memory } from '../memory';
+import { Prompt } from '../PromptBuilder';
 
 export abstract class Agent {
   abstract readonly id: string;
@@ -9,8 +10,8 @@ export abstract class Agent {
 
   protected abstract readonly logger: Logger;
 
-  async getSystemPrompt(): Promise<string> {
-    return '';
+  get systemPrompt(): Prompt {
+    return Prompt.empty();
   }
 
   abstract call(

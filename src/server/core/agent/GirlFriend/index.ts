@@ -9,9 +9,10 @@ import { container } from 'tsyringe';
 import { Agent } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
+import { Prompt } from '../../PromptBuilder';
 import type LlmCallTool from '../../tool/LlmCall';
 import type TextToSpeechTool from '../../tool/TextToSpeech';
-import generatePrompt from './prompt';
+import { createPrompt } from './prompt';
 
 interface GirlFriendConfig {
   model?: {
@@ -31,8 +32,8 @@ export default class GirlFriendAgent extends Agent {
   readonly config!: AgentConfig;
   protected readonly logger!: Logger;
 
-  async getSystemPrompt(): Promise<string> {
-    return generatePrompt();
+  get systemPrompt(): Prompt {
+    return createPrompt(this);
   }
 
   async *call(
