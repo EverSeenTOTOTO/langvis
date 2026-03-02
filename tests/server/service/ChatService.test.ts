@@ -112,7 +112,7 @@ describe('ChatService', () => {
           conversationId: 'conv-123',
         },
         {},
-        { finalizeMessage: vi.fn().mockResolvedValue(undefined) },
+        vi.fn().mockResolvedValue(undefined),
       );
 
       const session2 = chatService.acquireSession('conv-123');
@@ -205,11 +205,11 @@ describe('ChatService', () => {
       expect(session!.phase).toBe('done');
     });
 
-    it('should handle infrastructure errors with sendControlMessage', async () => {
+    it('should handle infrastructure errors with send', async () => {
       const session = chatService.acquireSession('conv-123');
 
-      const mockSendControlMessage = vi.fn();
-      session!.sendControlMessage = mockSendControlMessage;
+      const mockSend = vi.fn();
+      session!.send = mockSend;
 
       // Mock run to throw before agent starts (infrastructure error)
       session!.run = vi.fn().mockRejectedValue(new Error('Infra error'));
@@ -232,7 +232,7 @@ describe('ChatService', () => {
         {},
       );
 
-      expect(mockSendControlMessage).toHaveBeenCalledWith(
+      expect(mockSend).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'session_error',
           error: 'Infra error',

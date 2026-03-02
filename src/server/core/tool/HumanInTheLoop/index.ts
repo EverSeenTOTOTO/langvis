@@ -8,7 +8,7 @@ import { JSONSchemaType } from 'ajv';
 import type { RedisClientType } from 'redis';
 import { inject } from 'tsyringe';
 import { Tool } from '..';
-import { ExecutionContext } from '../../context';
+import { ExecutionContext } from '../../ExecutionContext';
 
 const REDIS_PREFIX = 'human_input:';
 

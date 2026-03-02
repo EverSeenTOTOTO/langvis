@@ -8,7 +8,7 @@ import { ToolConfig, ToolEvent } from '@/shared/types';
 import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
 import { inject } from 'tsyringe';
 import { Tool } from '..';
-import { ExecutionContext } from '../../context';
+import { ExecutionContext } from '../../ExecutionContext';
 
 export type LlmCallInput = Partial<ChatCompletionCreateParams>;
 export type LlmCallOutput = string;

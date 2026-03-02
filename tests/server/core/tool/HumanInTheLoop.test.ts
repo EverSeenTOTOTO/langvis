@@ -1,5 +1,5 @@
 import HumanInTheLoopTool from '@/server/core/tool/HumanInTheLoop';
-import { ExecutionContext } from '@/server/core/context';
+import { ExecutionContext } from '@/server/core/ExecutionContext';
 import { ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/types/entities';
 import { JSONSchemaType } from 'ajv';

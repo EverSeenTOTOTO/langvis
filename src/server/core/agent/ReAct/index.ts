@@ -9,13 +9,13 @@ import { AgentConfig, AgentEvent } from '@/shared/types';
 import { isEmpty } from 'lodash-es';
 import { container } from 'tsyringe';
 import { Agent } from '..';
-import { ExecutionContext } from '../../context';
+import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
 import { Tool } from '../../tool';
 import type LlmCallTool from '../../tool/LlmCall';
 import generatePrompt from './prompt';
 
-export type ReActAction = {
+type ReActAction = {
   thought?: string;
   action: {
     tool: string;
@@ -23,63 +23,20 @@ export type ReActAction = {
   };
 };
 
-export type ReActObservation = {
+type ReActObservation = {
   observation: string;
 };
 
-export type ReActFinalAnswer = {
-  thought?: string;
-  final_answer: string;
-};
-
-export type ReActStep = ReActAction | ReActObservation | ReActFinalAnswer;
+type ReActStep =
+  | ReActAction
+  | ReActObservation
+  | { thought?: string; final_answer: string };
 
 interface ReActAgentConfig {
   model?: {
     code?: string;
     temperature?: number;
   };
-}
-
-/**
- * Convert AgentEvent[] to ReAct format for memory input
- */
-function eventsToReActFormat(events: AgentEvent[]): ReActStep[] {
-  const result: ReActStep[] = [];
-  let currentThought: string | undefined;
-
-  for (const event of events) {
-    switch (event.type) {
-      case 'thought':
-        currentThought = event.content;
-        break;
-      case 'tool_call':
-        result.push({
-          thought: currentThought,
-          action: {
-            tool: event.toolName,
-            input: event.toolArgs,
-          },
-        });
-        currentThought = undefined;
-        break;
-      case 'tool_result':
-        result.push({
-          observation:
-            typeof event.output === 'string'
-              ? event.output
-              : JSON.stringify(event.output),
-        });
-        break;
-      case 'tool_error':
-        result.push({
-          observation: event.error,
-        });
-        break;
-    }
-  }
-
-  return result;
 }
 
 @agent(AgentIds.REACT)
@@ -217,19 +174,9 @@ export default class ReActAgent extends Agent {
         return { role: msg.role as 'user' | 'system', content: msg.content };
       }
 
-      const events = msg.meta?.events as AgentEvent[] | undefined;
-      if (!events || events.length === 0) {
-        return {
-          role: 'assistant' as const,
-          content: JSON.stringify({ final_answer: msg.content }),
-        };
-      }
-
-      const steps = eventsToReActFormat(events);
-      const finalStep = steps.find(s => 'final_answer' in s);
       return {
         role: 'assistant' as const,
-        content: JSON.stringify(finalStep || { final_answer: '' }),
+        content: JSON.stringify({ final_answer: msg.content }),
       };
     });
   }

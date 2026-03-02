@@ -1,6 +1,6 @@
 import type { Logger } from '@/server/utils/logger';
 import { ToolConfig, ToolEvent } from '@/shared/types';
-import { ExecutionContext } from '../context';
+import { ExecutionContext } from '../ExecutionContext';
 
 export abstract class Tool<I = unknown, O = unknown> {
   abstract readonly id: string;

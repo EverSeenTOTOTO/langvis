@@ -6,7 +6,7 @@ import { AgentConfig, AgentEvent } from '@/shared/types';
 import chalk from 'chalk';
 import { container } from 'tsyringe';
 import { Agent } from '..';
-import { ExecutionContext } from '../../context';
+import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
 import type LlmCallTool from '../../tool/LlmCall';
 

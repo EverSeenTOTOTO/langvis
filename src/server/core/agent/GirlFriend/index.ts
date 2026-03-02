@@ -7,7 +7,7 @@ import { AgentConfig, AgentEvent } from '@/shared/types';
 import { generateId } from '@/shared/utils';
 import { container } from 'tsyringe';
 import { Agent } from '..';
-import { ExecutionContext } from '../../context';
+import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
 import type LlmCallTool from '../../tool/LlmCall';
 import type TextToSpeechTool from '../../tool/TextToSpeech';

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ExecutionContext } from '@/server/core/context';
+import { ExecutionContext } from '@/server/core/ExecutionContext';
 import { Role } from '@/shared/entities/Message';
 
 describe('ExecutionContext', () => {

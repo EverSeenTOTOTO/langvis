@@ -1,5 +1,5 @@
 import { Role } from '@/shared/types/entities';
-import { ExecutionContext } from '@/server/core/context';
+import { ExecutionContext } from '@/server/core/ExecutionContext';
 
 export function createMockContext(): ExecutionContext {
   return new ExecutionContext(

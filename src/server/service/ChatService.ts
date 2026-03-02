@@ -7,7 +7,7 @@ import type { RedisClientType } from 'redis';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
 import { ChatSession } from '../core/ChatSession';
-import { ExecutionContext } from '../core/context';
+import { ExecutionContext } from '../core/ExecutionContext';
 import { Memory } from '../core/memory';
 import { registerMemory } from '../decorator/core';
 import { service } from '../decorator/service';
@@ -63,7 +63,6 @@ export class ChatService {
 
     const session = new ChatSession(conversationId, {
       idleTimeoutMs: 30_000,
-      logger: this.logger,
       onDispose: (id: string) => {
         this.sessions.delete(id);
         this.redis.del(`human_input:${id}`).catch(err => {
@@ -88,15 +87,19 @@ export class ChatService {
     });
 
     try {
-      await session.run(agent, memory, assistantMessage, config, {
-        finalizeMessage: ctx => this.finalizeMessage(ctx),
-      });
+      await session.run(
+        agent,
+        memory,
+        assistantMessage,
+        config,
+        this.finalizeMessage.bind(this),
+      );
     } catch (err) {
       const errorMsg = (err as Error)?.message || String(err);
       this.logger.error(`Infrastructure error: ${errorMsg}`, {
         sessionId: session.conversationId,
       });
-      session.sendControlMessage({ type: 'session_error', error: errorMsg });
+      session.send({ type: 'session_error', error: errorMsg });
       session.cleanup();
     }
   }
