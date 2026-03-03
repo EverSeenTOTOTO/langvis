@@ -68,6 +68,7 @@ describe('Config Decorators', () => {
           description: 'Test description',
         };
         logger = winston.createLogger();
+        tools: Tool[] = [];
 
         async *call(
           _memory: Memory,
@@ -115,6 +116,7 @@ describe('Config Decorators', () => {
           description: 'Test description',
         };
         logger = winston.createLogger();
+        tools: Tool[] = [];
 
         async *call(
           _memory: Memory,
@@ -208,6 +210,7 @@ describe('Config Decorators', () => {
           enabled: true,
         };
         logger = winston.createLogger();
+        tools: Tool[] = [];
 
         async *call(
           _memory: Memory,
@@ -225,6 +228,7 @@ describe('Config Decorators', () => {
           description: 'Extended description',
         };
         logger = winston.createLogger();
+        tools: Tool[] = [];
 
         async *call(
           _memory: Memory,
@@ -265,6 +269,7 @@ describe('Config Decorators', () => {
           description: 'Test description',
         };
         logger = winston.createLogger();
+        tools: Tool[] = [];
 
         async *call(
           _memory: Memory,

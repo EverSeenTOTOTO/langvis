@@ -44,13 +44,12 @@ export default class ReActAgent extends Agent {
   readonly id!: string;
   readonly config!: AgentConfig;
   protected readonly logger!: Logger;
+  readonly tools!: Tool[];
 
   readonly maxIterations = 5;
 
-  public tools: Tool[] = [];
-
   get systemPrompt(): Prompt {
-    return createPrompt(this);
+    return createPrompt(this, super.systemPrompt);
   }
 
   async *call(

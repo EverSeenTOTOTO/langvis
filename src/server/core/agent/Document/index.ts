@@ -12,7 +12,7 @@ export default class DocumentAgent extends ReActAgent {
   declare protected readonly logger: Logger;
 
   get systemPrompt(): Prompt {
-    return createPrompt(this);
+    return createPrompt(this, super.systemPrompt);
   }
 }
 

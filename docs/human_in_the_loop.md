@@ -80,13 +80,12 @@ POLL_INTERVAL = 30_000; // 30 秒兜底轮询间隔
 ```
 while (未超时) {
   subscribe(channel);                    // 订阅频道
-  await Promise.race([
-    notifyPromise,                       // 等待 Pub/Sub 通知（主要）
-    sleepWithSignal(30s)                 // 或 30s 超时（兜底）
-  ]);
+  await waitForNotification(...);        // 等待 Pub/Sub 通知或超时
   check Redis;                           // 确认提交状态
 }
 ```
+
+`waitForNotification` 内部实现了超时和取消信号处理，无论是收到通知还是超时，都会清理订阅。调用方只需在返回后检查 Redis 确认状态。
 
 ### 4. 存储方案：Redis Key + Pub/Sub Channel
 
@@ -274,4 +273,3 @@ EventRenderer 收到 SSE 事件，HumanInputForm 不再渲染
 
 - **SchemaField** (`src/client/components/SchemaField/`) - 共享组件，将 JSON Schema 渲染为 antd 表单字段
 - **HumanInputForm** (`src/client/components/HumanInputForm/`) - 人工输入表单，调用 ChatStore API
-- **EventRenderer** - 检测 `tool_progress` + `human_in_the_loop_tool` + `awaiting_input` 状态时渲染表单

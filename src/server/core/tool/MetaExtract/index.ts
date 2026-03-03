@@ -6,21 +6,29 @@ import type { ToolConfig, ToolEvent } from '@/shared/types';
 import { container } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
+import { Prompt } from '../../PromptBuilder';
 import type LlmCallTool from '../LlmCall';
 import type { MetaExtractInput, MetaExtractOutput } from './config';
 import { config } from './config';
 
-const SYSTEM_PROMPT = `You are a document analysis assistant. Analyze the document content and extract metadata.
-
-Categories and their metadata fields:
+const systemPrompt = Prompt.empty()
+  .with(
+    'Role & Goal',
+    'You are a document analysis assistant. Analyze the document content and extract metadata.',
+  )
+  .with(
+    'Categories',
+    `Categories and their metadata fields:
 - tech_blog: platform (发布平台), techStack (技术栈数组)
 - social_media: platform (来源平台), author (作者), publishedAt (发布时间)
 - paper: authors (作者数组), venue (会议/期刊), year (年份)
 - documentation: library (库名), version (版本)
 - news: source (来源), publishedAt (发布时间), region (地区)
-- other: 无额外字段
-
-Respond ONLY with valid JSON in this exact format:
+- other: 无额外字段`,
+  )
+  .with(
+    'Output Format',
+    `Respond ONLY with valid JSON in this exact format:
 {
   "title": "文档标题",
   "summary": "一句话摘要（不超过50字）",
@@ -29,7 +37,8 @@ Respond ONLY with valid JSON in this exact format:
   "metadata": {
     // 根据分类提取对应字段
   }
-}`;
+}`,
+  );
 
 @tool(ToolIds.META_EXTRACT)
 export default class MetaExtractTool extends Tool<
@@ -61,7 +70,7 @@ ${truncatedContent}`;
     const responseContent = yield* llmCallTool.call(
       {
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt.build() },
           { role: 'user', content: userPrompt },
         ],
         response_format: { type: 'json_object' },

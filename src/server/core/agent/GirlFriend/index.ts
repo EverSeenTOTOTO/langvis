@@ -10,6 +10,7 @@ import { Agent } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
 import { Prompt } from '../../PromptBuilder';
+import { Tool } from '../../tool';
 import type LlmCallTool from '../../tool/LlmCall';
 import type TextToSpeechTool from '../../tool/TextToSpeech';
 import { createPrompt } from './prompt';
@@ -31,9 +32,10 @@ export default class GirlFriendAgent extends Agent {
   readonly id!: string;
   readonly config!: AgentConfig;
   protected readonly logger!: Logger;
+  readonly tools!: Tool[];
 
   get systemPrompt(): Prompt {
-    return createPrompt(this);
+    return createPrompt(this, super.systemPrompt);
   }
 
   async *call(
