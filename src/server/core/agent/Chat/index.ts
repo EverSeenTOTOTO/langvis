@@ -9,6 +9,7 @@ import { Agent } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
 import { Prompt } from '../../PromptBuilder';
+import { Tool } from '../../tool';
 import type LlmCallTool from '../../tool/LlmCall';
 import { createPrompt } from './prompt';
 
@@ -25,9 +26,10 @@ export default class ChatAgent extends Agent {
   readonly id!: string;
   readonly config!: AgentConfig;
   protected readonly logger!: Logger;
+  readonly tools!: Tool[];
 
   get systemPrompt(): Prompt {
-    return createPrompt(this);
+    return createPrompt(this, super.systemPrompt);
   }
 
   async *call(

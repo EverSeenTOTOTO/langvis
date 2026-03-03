@@ -1,32 +1,35 @@
-import type { Agent } from '../index';
+import { formatToolsToMarkdown } from '@/server/utils/formatTools';
 import { Prompt } from '../../PromptBuilder';
-import { SECTIONS } from '../ReAct/prompt';
+import type { Agent } from '../index';
+import { ReActSections } from '../ReAct/prompt';
 
-export const createPrompt = (agent: Agent) => {
-  const parentPrompt = Reflect.get(
-    Object.getPrototypeOf(Object.getPrototypeOf(agent)),
-    'systemPrompt',
-    agent,
-  ) as Prompt;
-  return parentPrompt
+export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
+  parentPrompt
     .override(
-      SECTIONS.ROLE_GOAL,
+      ReActSections.ROLE_GOAL,
       'You are a document management assistant that helps users archive and retrieve documents.',
     )
+    .override(ReActSections.TOOLS, formatToolsToMarkdown(agent.tools ?? []))
     .insertAfter(
-      SECTIONS.ROLE_GOAL,
+      ReActSections.ROLE_GOAL,
       'Capabilities',
       `1. **Archive Documents**: Fetch content from URLs and archive them with automatic metadata extraction, chunking, and vector embeddings
 2. **Semantic Search**: Search through archived documents using natural language queries`,
     )
     .insertAfter(
       'Capabilities',
-      'Typical Workflows',
+      'Workflows',
       `### Archive a URL
-1. Use Web Fetch Tool to get content from URL
-2. Use Analysis Tool with the fetched content to archive it
+1. Use **Web Fetch Tool** to get content from URL
+2. Use **Analysis Tool** with the fetched content to archive it
 
 ### Search Documents
-1. Use Retrieve Tool with the search query directly`,
+1. Use **Retrieve Tool** with the search query directly`,
+    )
+    .override(
+      ReActSections.GUIDELINES,
+      `1. **Fetch Failures**: If a URL cannot be fetched, report the error and continue with other tasks if any
+2. **Analysis Failures**: The analysis tool supports automatic retries; if it still fails, report the error clearly
+3. **Batch Requests**: For multiple URLs, fetch them sequentially to avoid rate limiting
+4. **No Matching Documents**: If a search returns no results, suggest alternative keywords or ask the user for clarification`,
     );
-};

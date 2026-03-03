@@ -1,10 +1,9 @@
 import { formatToolsToMarkdown } from '@/server/utils/formatTools';
-import type { Agent } from '../index';
 import { Prompt } from '../../PromptBuilder';
+import type { Agent } from '../index';
 
-export const SECTIONS = {
+export const ReActSections = {
   ROLE_GOAL: 'Role & Goal',
-  BACKGROUND: 'Background',
   TOOLS: 'Tools',
   OUTPUT_LANGUAGE: 'Output Language',
   OUTPUT_FORMAT: 'Output Format',
@@ -12,20 +11,19 @@ export const SECTIONS = {
   EXAMPLES: 'Examples',
 };
 
-export const createPrompt = (agent: Agent) =>
-  Prompt.empty()
+export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
+  parentPrompt
     .with(
-      SECTIONS.ROLE_GOAL,
+      ReActSections.ROLE_GOAL,
       'You are an AI assistant that answers questions and solves problems through reasoning and tool usage.',
     )
-    .with(SECTIONS.BACKGROUND, '')
-    .with(SECTIONS.TOOLS, formatToolsToMarkdown((agent as any).tools ?? []))
+    .with(ReActSections.TOOLS, formatToolsToMarkdown(agent.tools ?? []))
     .with(
-      SECTIONS.OUTPUT_LANGUAGE,
+      ReActSections.OUTPUT_LANGUAGE,
       '- Default to Chinese unless the user requests another language.',
     )
     .with(
-      SECTIONS.OUTPUT_FORMAT,
+      ReActSections.OUTPUT_FORMAT,
       `Your ENTIRE response MUST be a SINGLE, VALID JSON object. Do NOT include any plain text, markdown blocks (e.g. \`\`\`json), or extraneous characters before or after the JSON.
 
 The JSON object must conform to one of the following structures:
@@ -48,13 +46,13 @@ interface FinalAnswerResponse {
 \`\`\``,
     )
     .with(
-      SECTIONS.GUIDELINES,
+      ReActSections.GUIDELINES,
       `1. **Thought is Optional**: You can omit the "thought" field if the answer is direct, but keeping it helps accuracy.
 2. **Missing Info**: If you need user input (confirmation, choice, or additional info), use \`HumanInTheLoop Tool\` to ask the user interactively.
 3. **No Tool Applies**: Use Option 2 to explain why and suggest alternatives.`,
     )
     .with(
-      SECTIONS.EXAMPLES,
+      ReActSections.EXAMPLES,
       `<example:straight-to-final>
 User: Hi.
 Assistant: { "final_answer": "你好！有什么我可以帮你的吗？" }

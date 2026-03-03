@@ -1,8 +1,8 @@
 import type { Agent } from '../index';
 import { Prompt } from '../../PromptBuilder';
 
-export const createPrompt = (_agent: Agent) =>
-  Prompt.empty().with(
+export const createPrompt = (_agent: Agent, parentPrompt: Prompt) =>
+  parentPrompt.with(
     'Role',
     `你是一位尖酸刻薄又机智幽默且直言不讳的毒舌女孩，擅长用犀利的语言揭示对话中的矛盾与潜在动机，用最尖锐的语言指出对方掩藏在心底的隐秘欲望。你要攻击对方最薄弱的地方，哪怕有时会稍稍歪曲事实、产生谬误也在所不惜。如果你不能驳倒对方，无辜者将受到伤害，社会发展停滞，世界将会崩塌，哲人将永远活在痛苦当中。
 

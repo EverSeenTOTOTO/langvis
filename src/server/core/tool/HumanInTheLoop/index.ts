@@ -3,7 +3,6 @@ import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { InjectTokens, ToolIds } from '@/shared/constants';
 import { ToolConfig, ToolEvent } from '@/shared/types';
-import { sleepWithSignal } from '@/shared/utils';
 import { JSONSchemaType } from 'ajv';
 import type { RedisClientType } from 'redis';
 import { inject } from 'tsyringe';
@@ -12,28 +11,38 @@ import { ExecutionContext } from '../../ExecutionContext';
 
 const REDIS_PREFIX = 'human_input:';
 
-function createNotifyPromise(
+function waitForNotification(
   subscriber: RedisClientType<any>,
   channel: string,
+  timeout: number,
   signal: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const onAbort = () => {
+      clearTimeout(timeoutId);
       subscriber.unsubscribe(channel).catch(() => {});
       reject(signal.reason);
     };
+
+    const timeoutId = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      subscriber.unsubscribe(channel).catch(() => {});
+      resolve();
+    }, timeout);
 
     signal.addEventListener('abort', onAbort, { once: true });
 
     subscriber
       .subscribe(channel, message => {
         if (message === 'submitted') {
+          clearTimeout(timeoutId);
           signal.removeEventListener('abort', onAbort);
           subscriber.unsubscribe(channel).catch(() => {});
           resolve();
         }
       })
       .catch(err => {
+        clearTimeout(timeoutId);
         signal.removeEventListener('abort', onAbort);
         reject(err);
       });
@@ -110,17 +119,14 @@ export default class HumanInTheLoopTool<
 
       const remainingTime = timeout - elapsed;
       const waitTime = Math.min(POLL_INTERVAL, remainingTime);
-      const notifyPromise = createNotifyPromise(
-        this.redisSubscriber,
-        key,
-        ctx.signal,
-      );
 
       try {
-        await Promise.race([
-          notifyPromise,
-          sleepWithSignal(waitTime, ctx.signal),
-        ]);
+        await waitForNotification(
+          this.redisSubscriber,
+          key,
+          waitTime,
+          ctx.signal,
+        );
       } catch (e) {
         if (ctx.signal.aborted) {
           await this.redis.del(key);
@@ -128,6 +134,7 @@ export default class HumanInTheLoopTool<
         }
       }
 
+      // Check Redis (works for both submitted and timeout cases)
       const data = await this.redis.get(key);
       if (data) {
         const pending = JSON.parse(data);
