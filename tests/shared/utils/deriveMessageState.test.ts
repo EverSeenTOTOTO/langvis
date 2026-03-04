@@ -134,6 +134,7 @@ describe('deriveMessageState', () => {
         status: 'done',
         output: { result: 'success' },
         progress: [],
+        thought: undefined,
       });
     });
 
@@ -328,28 +329,75 @@ describe('deriveMessageState', () => {
   });
 
   describe('thoughts', () => {
-    it('should extract thoughts from events', () => {
+    it('should associate thought with following tool_call', () => {
+      const at = Date.now();
       const msg = createMessage({
         meta: {
           events: [
-            { type: 'thought', content: 'Thinking...', seq: 1, at: 1000 },
-            { type: 'thought', content: 'Still thinking...', seq: 2, at: 2000 },
+            { type: 'thought', content: 'Thinking...', seq: 1, at },
+            {
+              type: 'tool_call',
+              callId: 'tc_1',
+              toolName: 'test_tool',
+              toolArgs: {},
+              seq: 2,
+              at: at + 100,
+            },
           ],
         },
       });
       const state = deriveMessageState(msg);
 
-      expect(state.thoughts).toHaveLength(2);
-      expect(state.thoughts[0]).toEqual({
-        content: 'Thinking...',
-        seq: 1,
-        at: 1000,
+      // Thought should be associated with the tool call, not in standalone thoughts
+      expect(state.thoughts).toHaveLength(0);
+      expect(state.toolCallTimeline[0].thought).toBe('Thinking...');
+    });
+
+    it('should keep thought as standalone when followed by final event', () => {
+      const at = Date.now();
+      const msg = createMessage({
+        meta: {
+          events: [
+            { type: 'thought', content: 'Final thought...', seq: 1, at },
+            { type: 'final', seq: 2, at: at + 100 },
+          ],
+        },
       });
-      expect(state.thoughts[1]).toEqual({
-        content: 'Still thinking...',
-        seq: 2,
-        at: 2000,
+      const state = deriveMessageState(msg);
+
+      expect(state.thoughts).toHaveLength(1);
+      expect(state.thoughts[0].content).toBe('Final thought...');
+    });
+
+    it('should keep thought as standalone when followed by stream event', () => {
+      const at = Date.now();
+      const msg = createMessage({
+        meta: {
+          events: [
+            { type: 'thought', content: 'Final thought...', seq: 1, at },
+            { type: 'stream', content: 'Answer', seq: 2, at: at + 100 },
+          ],
+        },
       });
+      const state = deriveMessageState(msg);
+
+      expect(state.thoughts).toHaveLength(1);
+      expect(state.thoughts[0].content).toBe('Final thought...');
+    });
+
+    it('should keep thought as standalone when no following event', () => {
+      const at = Date.now();
+      const msg = createMessage({
+        meta: {
+          events: [
+            { type: 'thought', content: 'Orphan thought...', seq: 1, at },
+          ],
+        },
+      });
+      const state = deriveMessageState(msg);
+
+      expect(state.thoughts).toHaveLength(1);
+      expect(state.thoughts[0].content).toBe('Orphan thought...');
     });
   });
 
