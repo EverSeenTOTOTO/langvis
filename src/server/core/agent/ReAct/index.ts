@@ -1,6 +1,5 @@
 import { agent } from '@/server/decorator/core';
 import { config } from '@/server/decorator/param';
-import { runTool } from '@/server/utils';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
@@ -72,17 +71,14 @@ export default class ReActAgent extends Agent {
         iterMessages.filter(m => m.role !== Role.SYSTEM),
       );
 
-      const content = yield* runTool(
-        llmCallTool.call(
-          {
-            messages: iterMessages,
-            model: options?.model?.code,
-            temperature: options?.model?.temperature,
-            stop: ['Observation:', 'Observation：'],
-          },
-          ctx,
-        ),
-        e => ctx.adaptToolEvent(e),
+      const content = yield* llmCallTool.call(
+        {
+          messages: iterMessages,
+          model: options?.model?.code,
+          temperature: options?.model?.temperature,
+          stop: ['Observation:', 'Observation：'],
+        },
+        ctx,
       );
 
       if (!content) {
@@ -130,24 +126,12 @@ export default class ReActAgent extends Agent {
           yield ctx.agentThoughtEvent(parsed.thought);
         }
 
-        yield ctx.agentToolCallEvent(tool, input);
+        const observation = yield* this.executeAction(tool, input, ctx);
 
-        try {
-          const observation = yield* this.executeAction(tool, input, ctx);
-
-          iterMessages.push({
-            role: Role.USER,
-            content: `Observation: ${observation}\n`,
-          });
-        } catch (error) {
-          const observation = `Error executing action ${tool}: ${(error as Error).message}\n`;
-          yield ctx.agentToolErrorEvent(tool, observation);
-
-          iterMessages.push({
-            role: Role.USER,
-            content: `Observation: ${observation}`,
-          });
-        }
+        iterMessages.push({
+          role: Role.USER,
+          content: `Observation: ${observation}\n`,
+        });
 
         continue;
       }
@@ -215,22 +199,24 @@ export default class ReActAgent extends Agent {
   }
 
   private async *executeAction(
-    action: string,
-    actionInput: Record<string, unknown>,
+    toolName: string,
+    toolInput: Record<string, unknown>,
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, string, void> {
-    const tool = container.resolve<Tool>(action);
-    const generator = tool.call(actionInput, ctx);
+    const tool = container.resolve<Tool>(toolName);
 
-    for await (const toolEvent of generator) {
-      yield ctx.adaptToolEvent(toolEvent);
-      if (toolEvent.type === 'result') {
-        return typeof toolEvent.output === 'string'
-          ? toolEvent.output
-          : JSON.stringify(toolEvent.output);
-      }
+    yield ctx.agentToolCallEvent(toolName, toolInput);
+
+    try {
+      const output = yield* tool.call(toolInput, ctx);
+      const observation =
+        typeof output === 'string' ? output : JSON.stringify(output);
+      yield ctx.agentToolResultEvent(toolName, observation);
+      return observation;
+    } catch (error) {
+      const errMsg = (error as Error).message;
+      yield ctx.agentToolErrorEvent(toolName, errMsg);
+      throw error;
     }
-
-    throw new Error(`Tool "${action}" did not return a result event`);
   }
 }

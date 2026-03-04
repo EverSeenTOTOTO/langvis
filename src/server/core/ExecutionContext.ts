@@ -1,4 +1,4 @@
-import { AgentEvent, ToolEvent } from '@/shared/types';
+import { AgentEvent } from '@/shared/types';
 import type { Message } from '@/shared/types/entities';
 import { generateId } from '@/shared/utils';
 
@@ -151,7 +151,7 @@ export class ExecutionContext {
   agentToolProgressEvent(toolName: string, data: unknown): AgentEvent {
     return {
       type: 'tool_progress',
-      callId: this.ensureCallId(),
+      callId: this.currentCallId,
       toolName,
       data,
       seq: this.nextSeq(),
@@ -162,7 +162,7 @@ export class ExecutionContext {
   agentToolResultEvent(toolName: string, output: unknown): AgentEvent {
     const event: AgentEvent = {
       type: 'tool_result',
-      callId: this.ensureCallId(),
+      callId: this.currentCallId,
       toolName,
       output,
       seq: this.nextSeq(),
@@ -176,7 +176,7 @@ export class ExecutionContext {
   agentToolErrorEvent(toolName: string, error: string): AgentEvent {
     const event: AgentEvent = {
       type: 'tool_error',
-      callId: this.ensureCallId(),
+      callId: this.currentCallId,
       toolName,
       error,
       seq: this.nextSeq(),
@@ -185,89 +185,6 @@ export class ExecutionContext {
     this.pushEvent(event);
     this.popCallId();
     return event;
-  }
-
-  // === ToolEvent helpers ===
-
-  private ensureCallId(): string {
-    if (this.callIdStack.length === 0) {
-      this.pushCallId();
-    }
-    return this.callIdStack.at(-1)!;
-  }
-
-  toolProgressEvent(toolName: string, data: unknown): ToolEvent {
-    return {
-      type: 'progress',
-      callId: this.ensureCallId(),
-      toolName,
-      data,
-      seq: this.nextSeq(),
-      at: Date.now(),
-    };
-  }
-
-  toolResultEvent(toolName: string, output: unknown): ToolEvent {
-    return {
-      type: 'result',
-      callId: this.ensureCallId(),
-      toolName,
-      output,
-      seq: this.nextSeq(),
-      at: Date.now(),
-    };
-  }
-
-  toolErrorEvent(toolName: string, error: string): ToolEvent {
-    return {
-      type: 'error',
-      callId: this.ensureCallId(),
-      toolName,
-      error,
-      seq: this.nextSeq(),
-      at: Date.now(),
-    };
-  }
-
-  // === Adaptation ===
-
-  adaptToolEvent(event: ToolEvent): AgentEvent {
-    const seq = this.nextSeq();
-
-    if (event.type === 'progress') {
-      return {
-        type: 'tool_progress',
-        callId: event.callId,
-        toolName: event.toolName,
-        data: event.data,
-        seq,
-        at: event.at,
-      };
-    }
-    if (event.type === 'error') {
-      const adapted: AgentEvent = {
-        type: 'tool_error',
-        callId: event.callId,
-        toolName: event.toolName,
-        error: event.error,
-        seq,
-        at: event.at,
-      };
-      this.pushEvent(adapted);
-      this.popCallId();
-      return adapted;
-    }
-    const adapted: AgentEvent = {
-      type: 'tool_result',
-      callId: event.callId,
-      toolName: event.toolName,
-      output: event.output,
-      seq,
-      at: event.at,
-    };
-    this.pushEvent(adapted);
-    this.popCallId();
-    return adapted;
   }
 
   abort(reason: string): void {

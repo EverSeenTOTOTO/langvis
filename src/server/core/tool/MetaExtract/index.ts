@@ -2,7 +2,7 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import type { ToolConfig, ToolEvent } from '@/shared/types';
+import type { AgentEvent, ToolConfig } from '@/shared/types';
 import { container } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
@@ -24,7 +24,7 @@ const systemPrompt = Prompt.empty()
 - paper: authors (作者数组), venue (会议/期刊), year (年份)
 - documentation: library (库名), version (版本)
 - news: source (来源), publishedAt (发布时间), region (地区)
-- other: 无额外字段`,
+- other: 自由发挥`,
   )
   .with(
     'Output Format',
@@ -52,7 +52,7 @@ export default class MetaExtractTool extends Tool<
   async *call(
     @input() data: MetaExtractInput,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, MetaExtractOutput, void> {
+  ): AsyncGenerator<AgentEvent, MetaExtractOutput, void> {
     const { content, sourceUrl, sourceType } = data;
 
     // Truncate content if too long (keep first 8000 chars)
@@ -65,7 +65,7 @@ ${sourceUrl ? `Source URL: ${sourceUrl}\n` : ''}${sourceType ? `Source Type: ${s
 Document Content:
 ${truncatedContent}`;
 
-    yield ctx.toolProgressEvent(this.id, {
+    yield ctx.agentToolProgressEvent(this.id, {
       message: `Analyzing document content (${Math.round(truncatedContent.length / 1024)}KB) via LLM...`,
       data: { sourceUrl, sourceType },
     });
@@ -105,7 +105,7 @@ ${truncatedContent}`;
       metadata: parsed.metadata || {},
     };
 
-    yield ctx.toolProgressEvent(this.id, {
+    yield ctx.agentToolProgressEvent(this.id, {
       message: `Extracted: "${output.title}" (${output.category})`,
       data: {
         title: output.title,
@@ -114,7 +114,6 @@ ${truncatedContent}`;
       },
     });
 
-    yield ctx.toolResultEvent(this.id, output);
     return output;
   }
 }

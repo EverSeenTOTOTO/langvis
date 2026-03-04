@@ -345,7 +345,53 @@ type AgentEvent =
   | { type: 'error'; error: string; seq: number; at: number };
 ```
 
-### 4.3 callId 关联机制
+### 4.3 Tool 执行模式
+
+工具执行遵循简洁的 generator 模式：
+
+**工具职责：**
+
+- `yield` - 发送 progress 事件（中间过程）
+- `return` - 返回执行结果
+- `throw` - 抛出错误
+
+**Agent 职责：**
+
+- 生成 `tool_call` 事件（调用开始）
+- 透传工具的 progress 事件
+- 生成 `tool_result` 或 `tool_error` 事件（调用结束）
+
+### 4.4 调用模式
+
+**Agent 调用工具：**
+
+```typescript
+// Agent 负责管理 callId 生命周期和事件边界
+yield ctx.agentToolCallEvent(tool, input); // push callId, emit tool_call
+const result = yield * tool.call(input, ctx); // 透传 progress
+yield ctx.agentToolResultEvent(tool, result); // pop callId, emit tool_result
+```
+
+**工具内部调用子工具：**
+
+```typescript
+// 直接 yield*，简单透传，generator 的 return 就是结果
+const subResult = yield * subTool.call(input, ctx);
+```
+
+**错误处理：**
+
+```typescript
+// 工具抛出错误，Agent 捕获并生成 tool_error 事件
+try {
+  const result = yield * tool.call(input, ctx);
+  yield ctx.agentToolResultEvent(tool, result);
+} catch (error) {
+  yield ctx.agentToolErrorEvent(tool, error.message);
+}
+```
+
+### 4.5 callId 关联机制
 
 `callId` 用于关联 `tool_call` 与后续事件：
 
@@ -359,33 +405,26 @@ tool_call(callId='tc_abc')
 
 **栈式 callId 管理：**
 
-`ExecutionContext` 内部通过 `callIdStack: string[]` 管理 callId 的生命周期，支持嵌套调用：
+`ExecutionContext` 内部通过 `callIdStack: string[]` 管理 callId 的生命周期：
 
-| 操作                           | 触发方            | 栈行为                                  |
-| ------------------------------ | ----------------- | --------------------------------------- |
-| `agentToolCallEvent()`         | Agent 显式调用    | **push** 新 callId                      |
-| `agentToolResultEvent()`       | Agent 显式闭合    | 使用栈顶 callId，然后 **pop**           |
-| `agentToolErrorEvent()`        | Agent 显式闭合    | 使用栈顶 callId，然后 **pop**           |
-| `adaptToolEvent(result/error)` | Tool 事件透传闭合 | 透传 event 自带的 callId，然后 **pop**  |
-| `ensureCallId()`               | ToolEvent helpers | 栈空时 **push** 新 callId，否则复用栈顶 |
+| 操作                       | 栈行为            |
+| -------------------------- | ----------------- |
+| `agentToolCallEvent()`     | **push** callId   |
+| `agentToolResultEvent()`   | 使用栈顶，**pop** |
+| `agentToolErrorEvent()`    | 使用栈顶，**pop** |
+| `agentToolProgressEvent()` | 使用栈顶          |
 
-**嵌套示例（A 调用中嵌套 B）：**
-
-```
-agentToolCallEvent('A')      → stack: [tc_A]
-  agentToolCallEvent('B')    → stack: [tc_A, tc_B]
-  agentToolResultEvent('B')  → stack: [tc_A]        // pop tc_B
-agentToolResultEvent('A')    → stack: []             // pop tc_A
-```
-
-**ReAct Agent 中的实际链路：**
+**嵌套调用示例：**
 
 ```
-ensureCallId()               → stack: [tc_llm]       // LLM call（隐式）
-agentToolCallEvent('dt')     → stack: [tc_llm, tc_dt] // date_time（显式）
-adaptToolEvent(result)       → stack: [tc_llm]        // date_time 完成，pop tc_dt
-ensureCallId()               → stack: [tc_llm]        // 下次 LLM call 复用
+agentToolCallEvent('analysis')      → stack: [tc_analysis]
+  analysis 内部调用 meta_extract:
+  agentToolProgressEvent('meta')    → 使用 tc_analysis
+  return metaResult                 → 不影响栈
+agentToolResultEvent('analysis')    → stack: []
 ```
+
+关键点：工具内部调用子工具不会创建新的 callId scope，所有子工具的 progress 都属于父工具的 callId。
 
 ---
 

@@ -43,11 +43,6 @@ const ConversationModal = ({
   const fetchAgentApi = useAsyncFn(agentStore.getAllAgent.bind(agentStore));
   const fetchGroupsApi = useAsyncFn(groupStore.getAllGroups.bind(groupStore));
 
-  useEffect(() => {
-    fetchAgentApi[1]();
-    fetchGroupsApi[1]();
-  }, []);
-
   const renderConfigSchema = <T,>(schema?: JSONSchemaType<T>) => {
     if (!schema?.properties) {
       return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
@@ -83,6 +78,12 @@ const ConversationModal = ({
       okText={settingStore.tr('Save')}
       cancelText={settingStore.tr('Cancel')}
       trigger={children as React.ReactElement}
+      afterOpenChange={open => {
+        if (open) {
+          fetchAgentApi[1]();
+          fetchGroupsApi[1]();
+        }
+      }}
       onOk={async () => {
         await form.validateFields();
         const values = form.getFieldsValue(true);

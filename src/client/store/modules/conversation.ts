@@ -96,9 +96,16 @@ export class ConversationStore {
     params: { id: string },
     req?: ApiRequest<{ id: string }>,
   ): Promise<void> {
+    // Clear current ID first to prevent reaction from querying deleted conversation
+    const wasCurrent = this.currentConversationId === params.id;
+    if (wasCurrent) {
+      this.currentConversationId = undefined;
+    }
+
     await req!.send();
     await this.conversationGroupStore.getAllGroups();
-    if (this.currentConversationId === params.id) {
+
+    if (wasCurrent) {
       this.currentConversationId = this.getFirstConversationId();
     }
   }

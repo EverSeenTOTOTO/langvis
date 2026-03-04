@@ -1,8 +1,9 @@
+/* eslint-disable require-yield */
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { ToolConfig, ToolEvent } from '@/shared/types';
+import { ToolConfig, AgentEvent } from '@/shared/types';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { Tool } from '..';
@@ -49,7 +50,7 @@ export default class TextToSpeechTool extends Tool<
   async *call(
     @input() params: TextToSpeechInput,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, TextToSpeechOutput, void> {
+  ): AsyncGenerator<AgentEvent, TextToSpeechOutput, void> {
     ctx.signal.throwIfAborted();
 
     const { text, reqId, voice, emotion, speedRatio } = params;
@@ -166,7 +167,7 @@ export default class TextToSpeechTool extends Tool<
         filePath: `tts/${filename}`,
       };
 
-      yield ctx.toolResultEvent(this.id, output);
+      return output;
       return output;
     } catch (error) {
       this.logger.error(`Failed to write MP3 file for ${reqId}: ${error}`);

@@ -2,7 +2,7 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import type { ToolConfig, ToolEvent } from '@/shared/types';
+import type { ToolConfig, AgentEvent } from '@/shared/types';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import type { EmbedInput, EmbedOutput } from './config';
@@ -19,7 +19,7 @@ export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
   async *call(
     @input() data: EmbedInput,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, EmbedOutput, void> {
+  ): AsyncGenerator<AgentEvent, EmbedOutput, void> {
     const { chunks, model = DEFAULT_MODEL } = data;
 
     const apiBase = process.env.OPENAI_API_BASE;
@@ -36,7 +36,7 @@ export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
       `Generating embeddings for ${chunks.length} chunks using ${model}`,
     );
 
-    yield ctx.toolProgressEvent(this.id, {
+    yield ctx.agentToolProgressEvent(this.id, {
       message: `Calling embedding API (${model}) for ${chunks.length} texts...`,
       data: { model, textCount: chunks.length },
     });
@@ -72,7 +72,7 @@ export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
       dimension: sortedData[0].embedding.length,
     };
 
-    yield ctx.toolResultEvent(this.id, output);
+    return output;
     return output;
   }
 }

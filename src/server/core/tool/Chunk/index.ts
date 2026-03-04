@@ -2,7 +2,7 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import type { ToolConfig, ToolEvent } from '@/shared/types';
+import type { ToolConfig, AgentEvent } from '@/shared/types';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import type {
@@ -127,7 +127,7 @@ export default class ChunkTool extends Tool<ChunkInput, ChunkOutput> {
   async *call(
     @input() data: ChunkInput,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, ChunkOutput, void> {
+  ): AsyncGenerator<AgentEvent, ChunkOutput, void> {
     const { content, strategy = 'paragraph', options = {} } = data;
 
     const handler = this.strategies.get(strategy);
@@ -141,7 +141,7 @@ export default class ChunkTool extends Tool<ChunkInput, ChunkOutput> {
       `Chunked content into ${chunks.length} chunks using ${strategy} strategy`,
     );
 
-    yield ctx.toolProgressEvent(this.id, {
+    yield ctx.agentToolProgressEvent(this.id, {
       message: `Split into ${chunks.length} chunks using "${strategy}" strategy`,
       data: {
         strategy,
@@ -154,7 +154,7 @@ export default class ChunkTool extends Tool<ChunkInput, ChunkOutput> {
 
     const output: ChunkOutput = { chunks };
 
-    yield ctx.toolResultEvent(this.id, output);
+    return output;
     return output;
   }
 }

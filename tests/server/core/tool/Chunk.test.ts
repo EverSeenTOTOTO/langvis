@@ -1,7 +1,7 @@
 import ChunkTool from '@/server/core/tool/Chunk';
 import type { ChunkOutput } from '@/server/core/tool/Chunk/config';
 import logger from '@/server/utils/logger';
-import { ToolEvent } from '@/shared/types';
+import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext } from '../../helpers/context';
 
@@ -20,18 +20,22 @@ vi.mock('@/server/utils/logger', () => {
 });
 
 async function collectEvents(
-  generator: AsyncGenerator<ToolEvent, ChunkOutput, void>,
+  generator: AsyncGenerator<AgentEvent, ChunkOutput, void>,
 ): Promise<{
   progress: Array<{ message?: string; data?: unknown }>;
   result: ChunkOutput | null;
 }> {
   const progress: Array<{ message?: string; data?: unknown }> = [];
   let result: ChunkOutput | null = null;
-  for await (const event of generator) {
-    if (event.type === 'progress') {
-      progress.push(event.data as { message?: string; data?: unknown });
-    } else if (event.type === 'result') {
-      result = event.output as ChunkOutput;
+
+  while (true) {
+    const { done, value } = await generator.next();
+    if (done) {
+      result = value ?? null;
+      break;
+    }
+    if (value.type === 'tool_progress') {
+      progress.push(value.data as { message?: string; data?: unknown });
     }
   }
   return { progress, result };

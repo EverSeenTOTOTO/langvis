@@ -133,7 +133,7 @@ export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
   async *call(
     @input() params: EmbedInput,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, EmbedOutput, void> {
+  ): AsyncGenerator<AgentEvent, EmbedOutput, void> {
     const { chunks, model = 'text-embedding-ada-002' } = params;
 
     const apiBase = process.env.OPENAI_API_BASE;
@@ -173,7 +173,6 @@ export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
       dimension: sortedData[0].embedding.length,
     };
 
-    yield ctx.toolResultEvent(this.id, output);
     return output;
   }
 }

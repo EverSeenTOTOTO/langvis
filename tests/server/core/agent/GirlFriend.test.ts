@@ -1,6 +1,6 @@
 import GirlFriendAgent from '@/server/core/agent/GirlFriend';
 import { ToolIds } from '@/shared/constants';
-import { AgentEvent, ToolEvent } from '@/shared/types';
+import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext } from '../../helpers/context';
 
@@ -71,22 +71,22 @@ describe('GirlFriendAgent', () => {
     const ctx = createMockContext();
 
     mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
-      ToolEvent,
+      AgentEvent,
       string,
       void
     > {
-      yield ctx.toolProgressEvent('llm-call', 'Hello');
-      yield ctx.toolProgressEvent('llm-call', ' world');
-      yield ctx.toolResultEvent('llm-call', 'Hello world');
+      yield ctx.agentToolProgressEvent('llm-call', 'Hello');
+      yield ctx.agentToolProgressEvent('llm-call', ' world');
+      yield ctx.agentToolResultEvent('llm-call', 'Hello world');
       return 'Hello world';
     });
 
     mockTtsTool.call.mockImplementation(async function* (): AsyncGenerator<
-      ToolEvent,
+      AgentEvent,
       any,
       void
     > {
-      yield ctx.toolResultEvent(
+      yield ctx.agentToolResultEvent(
         'tts',
         JSON.stringify({
           voice: 'test-voice',
@@ -121,20 +121,20 @@ describe('GirlFriendAgent', () => {
     const ctx = createMockContext();
 
     mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
-      ToolEvent,
+      AgentEvent,
       string,
       void
     > {
-      yield ctx.toolResultEvent('llm-call', '');
+      yield ctx.agentToolResultEvent('llm-call', '');
       return '';
     });
 
     mockTtsTool.call.mockImplementation(async function* (): AsyncGenerator<
-      ToolEvent,
+      AgentEvent,
       any,
       void
     > {
-      yield ctx.toolResultEvent('tts', '{}');
+      yield ctx.agentToolResultEvent('tts', '{}');
       return {};
     });
 

@@ -1,7 +1,7 @@
 import EmbedTool from '@/server/core/tool/Embed';
 import type { EmbedOutput } from '@/server/core/tool/Embed/config';
 import logger from '@/server/utils/logger';
-import { ToolEvent } from '@/shared/types';
+import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext } from '../../helpers/context';
 
@@ -22,18 +22,22 @@ vi.mock('@/server/utils/logger', () => {
 const originalEnv = process.env;
 
 async function collectEvents(
-  generator: AsyncGenerator<ToolEvent, EmbedOutput, void>,
+  generator: AsyncGenerator<AgentEvent, EmbedOutput, void>,
 ): Promise<{
   progress: Array<{ message?: string }>;
   result: EmbedOutput | null;
 }> {
   const progress: Array<{ message?: string }> = [];
   let result: EmbedOutput | null = null;
-  for await (const event of generator) {
-    if (event.type === 'progress') {
-      progress.push(event.data as { message?: string });
-    } else if (event.type === 'result') {
-      result = event.output as EmbedOutput;
+
+  while (true) {
+    const { done, value } = await generator.next();
+    if (done) {
+      result = value ?? null;
+      break;
+    }
+    if (value.type === 'tool_progress') {
+      progress.push(value.data as { message?: string });
     }
   }
   return { progress, result };

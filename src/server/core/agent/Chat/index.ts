@@ -54,20 +54,18 @@ export default class ChatAgent extends Agent {
       conversationMessages,
     );
 
-    const generator = llmCallTool.call(
+    for await (const event of llmCallTool.call(
       {
         model,
         temperature: options?.model?.temperature,
         messages: conversationMessages,
       },
       ctx,
-    );
-
-    for await (const toolEvent of generator) {
-      if (toolEvent.type === 'progress' && typeof toolEvent.data === 'string') {
-        yield ctx.agentStreamEvent(toolEvent.data);
+    )) {
+      if (event.type === 'tool_progress' && typeof event.data === 'string') {
+        yield ctx.agentStreamEvent(event.data);
       } else {
-        yield ctx.adaptToolEvent(toolEvent);
+        yield event;
       }
     }
 

@@ -4,7 +4,7 @@ import { InjectTokens, ToolIds } from '@/shared/constants';
 import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
 import { DocumentEntity } from '@/shared/entities/Document';
 import type { Logger } from '@/server/utils/logger';
-import type { ToolConfig, ToolEvent } from '@/shared/types';
+import type { ToolConfig, AgentEvent } from '@/shared/types';
 import { DataSource } from 'typeorm';
 import { inject } from 'tsyringe';
 import { Tool } from '..';
@@ -27,10 +27,10 @@ export default class ArchiveTool extends Tool<ArchiveInput, ArchiveOutput> {
   async *call(
     @input() data: ArchiveInput,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, ArchiveOutput, void> {
+  ): AsyncGenerator<AgentEvent, ArchiveOutput, void> {
     const { document, chunks } = data;
 
-    yield ctx.toolProgressEvent(this.id, {
+    yield ctx.agentToolProgressEvent(this.id, {
       message: `Saving document "${document.title}" to database...`,
       data: { title: document.title, chunkCount: chunks.length },
     });
@@ -70,14 +70,14 @@ export default class ArchiveTool extends Tool<ArchiveInput, ArchiveOutput> {
       return { documentId: doc.id, chunkCount: chunks.length };
     });
 
-    yield ctx.toolProgressEvent(this.id, {
+    yield ctx.agentToolProgressEvent(this.id, {
       message: `Document saved with ${result.chunkCount} chunks`,
       data: { documentId: result.documentId },
     });
 
     const output: ArchiveOutput = result;
 
-    yield ctx.toolResultEvent(this.id, output);
+    return output;
     return output;
   }
 }

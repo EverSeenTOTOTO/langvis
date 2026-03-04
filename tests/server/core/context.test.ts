@@ -89,16 +89,16 @@ describe('ExecutionContext', () => {
 
     it('should isolate callIds between consecutive tool calls', () => {
       const call1 = ctx.agentToolCallEvent('tool_a', {});
-      const progress1 = ctx.toolProgressEvent('tool_a', 'data');
+      const progress1 = ctx.agentToolProgressEvent('tool_a', 'data');
       ctx.agentToolResultEvent('tool_a', 'done');
 
       const call2 = ctx.agentToolCallEvent('tool_b', {});
-      const progress2 = ctx.toolProgressEvent('tool_b', 'data');
+      const progress2 = ctx.agentToolProgressEvent('tool_b', 'data');
       ctx.agentToolResultEvent('tool_b', 'done');
 
-      expect(progress1.callId).toBe((call1 as any).callId);
-      expect(progress2.callId).toBe((call2 as any).callId);
-      expect(progress1.callId).not.toBe(progress2.callId);
+      expect((progress1 as any).callId).toBe((call1 as any).callId);
+      expect((progress2 as any).callId).toBe((call2 as any).callId);
+      expect((progress1 as any).callId).not.toBe((progress2 as any).callId);
     });
 
     it('should support nested tool calls with stack', () => {
@@ -118,149 +118,72 @@ describe('ExecutionContext', () => {
       expect(ctx.currentCallId).toBeUndefined();
     });
 
-    it('should pop callId on adaptToolEvent result', () => {
-      const call = ctx.agentToolCallEvent('tool_a', {});
-      const callId = (call as any).callId;
-
-      ctx.adaptToolEvent({
-        type: 'result',
-        callId,
-        toolName: 'tool_a',
-        output: 'done',
-        seq: 0,
-        at: Date.now(),
-      });
-
-      expect(ctx.currentCallId).toBeUndefined();
-    });
-
-    it('should pop callId on adaptToolEvent error', () => {
-      const call = ctx.agentToolCallEvent('tool_a', {});
-      const callId = (call as any).callId;
-
-      ctx.adaptToolEvent({
-        type: 'error',
-        callId,
-        toolName: 'tool_a',
-        error: 'failed',
-        seq: 0,
-        at: Date.now(),
-      });
-
-      expect(ctx.currentCallId).toBeUndefined();
-    });
-
-    it('should be safe to pop on empty stack (no-op)', () => {
-      ctx.adaptToolEvent({
-        type: 'result',
-        callId: 'tc_orphan',
-        toolName: 'tool',
-        output: 'ok',
-        seq: 0,
-        at: Date.now(),
-      });
-
-      expect(ctx.currentCallId).toBeUndefined();
-    });
-
     it('should simulate ReAct interleaved tool calls with correct callId isolation', () => {
-      // Iteration 1: LLM call via runTool (ensureCallId auto-pushes)
-      // runTool only yields progress events, result is consumed internally
-      const llmProgress1 = ctx.toolProgressEvent('llm_call', 'chunk1');
-      const llmCallId1 = llmProgress1.callId;
-      // runTool consumes result internally — toolResultEvent is NOT called at agent level
-      // Stack: [llmCallId1]
+      // Iteration 1: LLM call via tool_call -> progress -> result
+      const llmCall = ctx.agentToolCallEvent('llm_call', {});
+      const llmCallId = (llmCall as any).callId;
+      const llmProgress1 = ctx.agentToolProgressEvent('llm_call', 'chunk1');
+      expect((llmProgress1 as any).callId).toBe(llmCallId);
+      ctx.agentToolResultEvent('llm_call', 'response');
+      // Stack: [] after result
 
-      // Agent emits tool_call for date_time → pushCallId
+      // Agent emits tool_call for date_time
       const dtCall = ctx.agentToolCallEvent('date_time', {});
       const dtCallId = (dtCall as any).callId;
-      expect(dtCallId).not.toBe(llmCallId1);
-      // Stack: [llmCallId1, dtCallId]
+      expect(dtCallId).not.toBe(llmCallId);
+      // Stack: [dtCallId]
 
-      // date_time tool result via adaptToolEvent → popCallId
-      ctx.adaptToolEvent({
-        type: 'result',
-        callId: dtCallId,
-        toolName: 'date_time',
-        output: '2025-01-01',
-        seq: 0,
-        at: Date.now(),
-      });
-      // Stack: [llmCallId1]
-      expect(ctx.currentCallId).toBe(llmCallId1);
+      // date_time tool result via agentToolResultEvent
+      ctx.agentToolResultEvent('date_time', '2025-01-01');
+      // Stack: [] after result
+      expect(ctx.currentCallId).toBeUndefined();
 
-      // Iteration 2: next LLM call reuses llmCallId1 (still on stack)
-      const llmProgress2 = ctx.toolProgressEvent('llm_call', 'chunk2');
-      expect(llmProgress2.callId).toBe(llmCallId1);
+      // Iteration 2: next LLM call gets new callId
+      const llmCall2 = ctx.agentToolCallEvent('llm_call', {});
+      const llmCallId2 = (llmCall2 as any).callId;
+      expect(llmCallId2).not.toBe(llmCallId);
     });
   });
 
-  describe('ToolEvent helpers', () => {
-    it('should auto-generate callId if not set', () => {
-      const event = ctx.toolProgressEvent('test_tool', 'progress');
-
-      expect(event.callId).toBeDefined();
-      expect(event.seq).toBe(1);
-    });
-
-    it('should use stored currentCallId when available', () => {
+  describe('AgentEvent helpers', () => {
+    it('should use currentCallId for agentToolProgressEvent', () => {
       const toolCallEvent = ctx.agentToolCallEvent('test_tool', {});
-      const progressEvent = ctx.toolProgressEvent('test_tool', 'data');
+      const progressEvent = ctx.agentToolProgressEvent('test_tool', 'data');
 
-      expect(progressEvent.callId).toBe((toolCallEvent as any).callId);
+      expect((progressEvent as any).callId).toBe((toolCallEvent as any).callId);
+      expect(progressEvent.type).toBe('tool_progress');
+      expect(progressEvent.seq).toBe(2);
+    });
+
+    it('should return undefined callId when agentToolProgressEvent is called without tool_call', () => {
+      // agentToolProgressEvent uses currentCallId which returns undefined when stack is empty
+      const progressEvent = ctx.agentToolProgressEvent('test_tool', 'data');
+      expect((progressEvent as any).callId).toBeUndefined();
     });
   });
 
-  describe('adaptToolEvent', () => {
-    it('should adapt progress event with callId and seq', () => {
-      const toolEvent = {
-        type: 'progress' as const,
-        callId: 'tc_custom',
-        toolName: 'test_tool',
-        data: 'progress data',
-        seq: 100,
-        at: Date.now(),
-      };
+  describe('tool result/error flow', () => {
+    it('should persist tool_result event and pop callId', () => {
+      ctx.agentToolCallEvent('test_tool', {});
+      const resultEvent = ctx.agentToolResultEvent('test_tool', {
+        result: 'success',
+      });
 
-      const agentEvent = ctx.adaptToolEvent(toolEvent);
-
-      expect(agentEvent.type).toBe('tool_progress');
-      expect((agentEvent as any).callId).toBe('tc_custom');
-      expect(agentEvent.seq).toBe(1);
+      expect(resultEvent.type).toBe('tool_result');
+      expect(mockMessage.meta.events).toContainEqual(resultEvent);
+      expect(ctx.currentCallId).toBeUndefined();
     });
 
-    it('should adapt result event and persist it', () => {
-      const toolEvent = {
-        type: 'result' as const,
-        callId: 'tc_abc',
-        toolName: 'test_tool',
-        output: { result: 'success' },
-        seq: 50,
-        at: Date.now(),
-      };
+    it('should persist tool_error event and pop callId', () => {
+      ctx.agentToolCallEvent('test_tool', {});
+      const errorEvent = ctx.agentToolErrorEvent(
+        'test_tool',
+        'Something went wrong',
+      );
 
-      const agentEvent = ctx.adaptToolEvent(toolEvent);
-
-      expect(agentEvent.type).toBe('tool_result');
-      expect((agentEvent as any).callId).toBe('tc_abc');
-      expect(mockMessage.meta.events).toContainEqual(agentEvent);
-    });
-
-    it('should adapt error event and persist it', () => {
-      const toolEvent = {
-        type: 'error' as const,
-        callId: 'tc_err',
-        toolName: 'test_tool',
-        error: 'Something went wrong',
-        seq: 75,
-        at: Date.now(),
-      };
-
-      const agentEvent = ctx.adaptToolEvent(toolEvent);
-
-      expect(agentEvent.type).toBe('tool_error');
-      expect((agentEvent as any).callId).toBe('tc_err');
-      expect(mockMessage.meta.events).toContainEqual(agentEvent);
+      expect(errorEvent.type).toBe('tool_error');
+      expect(mockMessage.meta.events).toContainEqual(errorEvent);
+      expect(ctx.currentCallId).toBeUndefined();
     });
   });
 

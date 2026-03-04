@@ -3,7 +3,7 @@ import { input } from '@/server/decorator/param';
 import { OpenAI } from '@/server/service/openai';
 import type { Logger } from '@/server/utils/logger';
 import { InjectTokens, ToolIds } from '@/shared/constants';
-import { ToolConfig, ToolEvent } from '@/shared/types';
+import { ToolConfig, AgentEvent } from '@/shared/types';
 import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
 import { inject } from 'tsyringe';
 import { Tool } from '..';
@@ -25,7 +25,7 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
   async *call(
     @input() data: LlmCallInput,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, LlmCallOutput, void> {
+  ): AsyncGenerator<AgentEvent, LlmCallOutput, void> {
     const response = await this.openai.chat.completions.create(
       {
         model: data.model || process.env.OPENAI_MODEL!,
@@ -45,14 +45,14 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
 
       if (delta) {
         content += delta;
-        yield ctx.toolProgressEvent(this.id, delta);
+        yield ctx.agentToolProgressEvent(this.id, delta);
       }
 
       if (finishReason) {
         if (finishReason === 'content_filter') {
           const error = 'Content filter triggered - response incomplete';
           this.logger.warn(`LLM stream aborted: ${error}`);
-          yield ctx.toolErrorEvent(this.id, error);
+          throw new Error(error);
           return error;
         }
 
@@ -66,7 +66,7 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
       }
     }
 
-    yield ctx.toolResultEvent(this.id, content);
+    return content;
 
     return content;
   }

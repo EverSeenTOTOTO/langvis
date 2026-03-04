@@ -1,7 +1,7 @@
 import ArchiveTool from '@/server/core/tool/Archive';
 import type { ArchiveOutput } from '@/server/core/tool/Archive/config';
 import logger from '@/server/utils/logger';
-import { ToolEvent } from '@/shared/types';
+import { AgentEvent } from '@/shared/types';
 import { DataSource } from 'typeorm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext } from '../../helpers/context';
@@ -21,18 +21,22 @@ vi.mock('@/server/utils/logger', () => {
 });
 
 async function collectEvents(
-  generator: AsyncGenerator<ToolEvent, ArchiveOutput, void>,
+  generator: AsyncGenerator<AgentEvent, ArchiveOutput, void>,
 ): Promise<{
   progress: Array<{ message?: string }>;
   result: ArchiveOutput | null;
 }> {
   const progress: Array<{ message?: string }> = [];
   let result: ArchiveOutput | null = null;
-  for await (const event of generator) {
-    if (event.type === 'progress') {
-      progress.push(event.data as { message?: string });
-    } else if (event.type === 'result') {
-      result = event.output as ArchiveOutput;
+
+  while (true) {
+    const { done, value } = await generator.next();
+    if (done) {
+      result = value ?? null;
+      break;
+    }
+    if (value.type === 'tool_progress') {
+      progress.push(value.data as { message?: string });
     }
   }
   return { progress, result };

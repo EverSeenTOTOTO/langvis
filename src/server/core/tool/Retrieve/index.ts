@@ -2,7 +2,7 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import { InjectTokens, ToolIds } from '@/shared/constants';
 import type { Logger } from '@/server/utils/logger';
-import type { ToolConfig, ToolEvent } from '@/shared/types';
+import type { AgentEvent, ToolConfig } from '@/shared/types';
 import { DataSource } from 'typeorm';
 import { container, inject } from 'tsyringe';
 import { Tool } from '..';
@@ -26,11 +26,11 @@ export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
   async *call(
     @input() data: RetrieveInput,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, RetrieveOutput, void> {
+  ): AsyncGenerator<AgentEvent, RetrieveOutput, void> {
     const { query, limit = 10, threshold } = data;
 
     // 1. Generate embedding for query
-    yield ctx.toolProgressEvent(this.id, {
+    yield ctx.agentToolProgressEvent(this.id, {
       message: `Generating embedding for query: "${query.slice(0, 50)}${query.length > 50 ? '...' : ''}"`,
       data: { queryLength: query.length },
     });
@@ -46,7 +46,7 @@ export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
     // 2. Vector similarity search using pgvector
     const vectorStr = `[${queryVector.join(',')}]`;
 
-    yield ctx.toolProgressEvent(this.id, {
+    yield ctx.agentToolProgressEvent(this.id, {
       message: `Searching vector database for top ${limit} similar chunks...`,
       data: { limit, threshold },
     });
@@ -87,7 +87,7 @@ export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
       `Found ${results.length} results for query: "${query.slice(0, 50)}..."`,
     );
 
-    yield ctx.toolProgressEvent(this.id, {
+    yield ctx.agentToolProgressEvent(this.id, {
       message: `Found ${results.length} relevant chunks from ${new Set(results.map((r: (typeof results)[0]) => r.document.id)).size} documents`,
       data: {
         resultCount: results.length,
@@ -95,10 +95,7 @@ export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
       },
     });
 
-    const output: RetrieveOutput = { results };
-
-    yield ctx.toolResultEvent(this.id, output);
-    return output;
+    return { results };
   }
 }
 

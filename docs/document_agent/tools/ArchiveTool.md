@@ -62,7 +62,7 @@ export default class ArchiveTool extends Tool<ArchiveInput, ArchiveOutput> {
   async *call(
     @input() params: ArchiveInput,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, ArchiveOutput, void> {
+  ): AsyncGenerator<AgentEvent, ArchiveOutput, void> {
     const { document, chunks } = params;
 
     // 使用事务
@@ -97,7 +97,6 @@ export default class ArchiveTool extends Tool<ArchiveInput, ArchiveOutput> {
       },
     );
 
-    yield ctx.toolResultEvent(this.id, result);
     return result;
   }
 }
