@@ -1,7 +1,6 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import { OpenAI } from '@/server/service/openai';
-import chalk from 'chalk';
 import type { Logger } from '@/server/utils/logger';
 import { InjectTokens, ToolIds } from '@/shared/constants';
 import { ToolConfig, ToolEvent } from '@/shared/types';
@@ -40,14 +39,29 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
     let content = '';
 
     for await (const chunk of response) {
-      const delta = chunk?.choices[0]?.delta?.content;
+      const choice = chunk?.choices?.[0];
+      const delta = choice?.delta?.content;
+      const finishReason = choice?.finish_reason;
+
       if (delta) {
         content += delta;
-        this.logger.debug(`LLM chunk: ${chalk.green(delta)}`);
         yield ctx.toolProgressEvent(this.id, delta);
       }
 
-      if (chunk.choices[0]?.finish_reason) {
+      if (finishReason) {
+        if (finishReason === 'content_filter') {
+          const error = 'Content filter triggered - response incomplete';
+          this.logger.warn(`LLM stream aborted: ${error}`);
+          yield ctx.toolErrorEvent(this.id, error);
+          return error;
+        }
+
+        if (finishReason === 'length') {
+          this.logger.warn(
+            'LLM stream truncated: max_tokens limit reached - response may be incomplete',
+          );
+        }
+
         break;
       }
     }

@@ -30,6 +30,11 @@ export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
     const { query, limit = 10, threshold } = data;
 
     // 1. Generate embedding for query
+    yield ctx.toolProgressEvent(this.id, {
+      message: `Generating embedding for query: "${query.slice(0, 50)}${query.length > 50 ? '...' : ''}"`,
+      data: { queryLength: query.length },
+    });
+
     const embedTool = container.resolve<EmbedTool>(ToolIds.EMBED);
     const embedResult = yield* embedTool.call(
       { chunks: [{ content: query, index: 0 }] },
@@ -40,6 +45,11 @@ export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
 
     // 2. Vector similarity search using pgvector
     const vectorStr = `[${queryVector.join(',')}]`;
+
+    yield ctx.toolProgressEvent(this.id, {
+      message: `Searching vector database for top ${limit} similar chunks...`,
+      data: { limit, threshold },
+    });
 
     const rawQuery = `
       SELECT
@@ -76,6 +86,14 @@ export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
     this.logger.info(
       `Found ${results.length} results for query: "${query.slice(0, 50)}..."`,
     );
+
+    yield ctx.toolProgressEvent(this.id, {
+      message: `Found ${results.length} relevant chunks from ${new Set(results.map((r: (typeof results)[0]) => r.document.id)).size} documents`,
+      data: {
+        resultCount: results.length,
+        topSimilarity: results[0]?.similarity?.toFixed(3),
+      },
+    });
 
     const output: RetrieveOutput = { results };
 

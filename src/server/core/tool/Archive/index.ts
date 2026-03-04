@@ -30,6 +30,11 @@ export default class ArchiveTool extends Tool<ArchiveInput, ArchiveOutput> {
   ): AsyncGenerator<ToolEvent, ArchiveOutput, void> {
     const { document, chunks } = data;
 
+    yield ctx.toolProgressEvent(this.id, {
+      message: `Saving document "${document.title}" to database...`,
+      data: { title: document.title, chunkCount: chunks.length },
+    });
+
     const result = await this.dataSource.transaction(async manager => {
       // Create document
       const doc = manager.create(DocumentEntity, {
@@ -63,6 +68,11 @@ export default class ArchiveTool extends Tool<ArchiveInput, ArchiveOutput> {
       );
 
       return { documentId: doc.id, chunkCount: chunks.length };
+    });
+
+    yield ctx.toolProgressEvent(this.id, {
+      message: `Document saved with ${result.chunkCount} chunks`,
+      data: { documentId: result.documentId },
     });
 
     const output: ArchiveOutput = result;

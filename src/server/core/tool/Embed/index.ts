@@ -36,6 +36,11 @@ export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
       `Generating embeddings for ${chunks.length} chunks using ${model}`,
     );
 
+    yield ctx.toolProgressEvent(this.id, {
+      message: `Calling embedding API (${model}) for ${chunks.length} texts...`,
+      data: { model, textCount: chunks.length },
+    });
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {

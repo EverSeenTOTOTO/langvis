@@ -65,6 +65,11 @@ ${sourceUrl ? `Source URL: ${sourceUrl}\n` : ''}${sourceType ? `Source Type: ${s
 Document Content:
 ${truncatedContent}`;
 
+    yield ctx.toolProgressEvent(this.id, {
+      message: `Analyzing document content (${Math.round(truncatedContent.length / 1024)}KB) via LLM...`,
+      data: { sourceUrl, sourceType },
+    });
+
     const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
 
     const responseContent = yield* llmCallTool.call(
@@ -99,6 +104,15 @@ ${truncatedContent}`;
       category: parsed.category || 'other',
       metadata: parsed.metadata || {},
     };
+
+    yield ctx.toolProgressEvent(this.id, {
+      message: `Extracted: "${output.title}" (${output.category})`,
+      data: {
+        title: output.title,
+        category: output.category,
+        keywordCount: output.keywords.length,
+      },
+    });
 
     yield ctx.toolResultEvent(this.id, output);
     return output;
