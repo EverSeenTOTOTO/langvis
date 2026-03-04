@@ -26,6 +26,11 @@ export default class AnalysisTool extends Tool<AnalysisInput, AnalysisOutput> {
     const { content, sourceUrl, sourceType, metadata } = data;
 
     // 1. Extract metadata
+    yield ctx.toolProgressEvent(this.id, {
+      action: 'meta_extract',
+      message: 'Extracting document metadata via LLM...',
+    });
+
     const metaExtractTool = container.resolve<MetaExtractTool>(
       ToolIds.META_EXTRACT,
     );
@@ -37,6 +42,11 @@ export default class AnalysisTool extends Tool<AnalysisInput, AnalysisOutput> {
     this.logger.info('Metadata extracted:', metaResult);
 
     // 2. Chunk content
+    yield ctx.toolProgressEvent(this.id, {
+      action: 'chunk',
+      message: `Chunking content (${Math.round(content.length / 1024)}KB) into segments...`,
+    });
+
     const chunkTool = container.resolve<ChunkTool>(ToolIds.CHUNK);
     const chunkResult = yield* chunkTool.call(
       { content, strategy: 'paragraph', options: { maxChunkSize: 1000 } },
@@ -48,6 +58,11 @@ export default class AnalysisTool extends Tool<AnalysisInput, AnalysisOutput> {
     );
 
     // 3. Generate embeddings
+    yield ctx.toolProgressEvent(this.id, {
+      action: 'embed',
+      message: `Calling embedding API for ${chunkResult.chunks.length} chunks...`,
+    });
+
     const embedTool = container.resolve<EmbedTool>(ToolIds.EMBED);
     const embedResult = yield* embedTool.call(
       { chunks: chunkResult.chunks },
@@ -59,6 +74,11 @@ export default class AnalysisTool extends Tool<AnalysisInput, AnalysisOutput> {
     );
 
     // 4. Archive to database
+    yield ctx.toolProgressEvent(this.id, {
+      action: 'archive',
+      message: `Saving document "${metaResult.title}" and ${embedResult.chunks.length} chunks to database...`,
+    });
+
     const archiveTool = container.resolve<ArchiveTool>(ToolIds.ARCHIVE);
     const archiveResult = yield* archiveTool.call(
       {

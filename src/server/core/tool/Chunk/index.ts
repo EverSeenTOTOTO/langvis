@@ -141,6 +141,17 @@ export default class ChunkTool extends Tool<ChunkInput, ChunkOutput> {
       `Chunked content into ${chunks.length} chunks using ${strategy} strategy`,
     );
 
+    yield ctx.toolProgressEvent(this.id, {
+      message: `Split into ${chunks.length} chunks using "${strategy}" strategy`,
+      data: {
+        strategy,
+        chunkCount: chunks.length,
+        avgChunkSize: Math.round(
+          chunks.reduce((sum, c) => sum + c.content.length, 0) / chunks.length,
+        ),
+      },
+    });
+
     const output: ChunkOutput = { chunks };
 
     yield ctx.toolResultEvent(this.id, output);

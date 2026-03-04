@@ -122,5 +122,79 @@ describe('LlmCallTool', () => {
         mockError,
       );
     });
+
+    it('should return error when content_filter is triggered', async () => {
+      const mockChunks = [
+        {
+          choices: [
+            { delta: { content: '{"final_answer' }, finish_reason: null },
+          ],
+        },
+        { choices: [{ delta: {}, finish_reason: 'content_filter' }] },
+      ];
+
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          for (const chunk of mockChunks) {
+            yield chunk;
+          }
+        },
+      } as unknown as Stream<any>;
+
+      mockCreate.mockResolvedValue(mockStream);
+
+      const ctx = createMockContext();
+      const events: ToolEvent[] = [];
+      let result = '';
+      for await (const event of llmCallTool.call(
+        { messages: [{ role: 'user', content: 'test' }] },
+        ctx,
+      )) {
+        events.push(event);
+        if (event.type === 'result') {
+          result = event.output as string;
+        }
+      }
+
+      expect(events.some(e => e.type === 'error')).toBe(true);
+      expect(result).toBe('');
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Content filter triggered'),
+      );
+    });
+
+    it('should warn when length limit is reached', async () => {
+      const mockChunks = [
+        {
+          choices: [
+            { delta: { content: 'Partial response' }, finish_reason: null },
+          ],
+        },
+        { choices: [{ delta: {}, finish_reason: 'length' }] },
+      ];
+
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          for (const chunk of mockChunks) {
+            yield chunk;
+          }
+        },
+      } as unknown as Stream<any>;
+
+      mockCreate.mockResolvedValue(mockStream);
+
+      const ctx = createMockContext();
+      const { result } = await collectEvents(
+        llmCallTool.call(
+          { messages: [{ role: 'user', content: 'test' }] },
+          ctx,
+        ),
+      );
+
+      expect(result).toBe('Partial response');
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('max_tokens limit reached'),
+      );
+    });
   });
 });
