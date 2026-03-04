@@ -22,37 +22,11 @@ export interface ToolConfig<
 }
 
 /**
- * ToolEvent - emitted by Tools, internal to agent execution
- */
-export type ToolEvent =
-  | {
-      type: 'progress';
-      callId: string;
-      toolName: string;
-      data: unknown;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'result';
-      callId: string;
-      toolName: string;
-      output: unknown;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'error';
-      callId: string;
-      toolName: string;
-      error: string;
-      seq: number;
-      at: number;
-    };
-
-/**
  * AgentEvent - the single event type for SSE transmission
  * ExecutionContext collects non-stream events for persistence
+ *
+ * Tools yield tool_progress events and return results via generator return.
+ * Agents manage tool_call/tool_result/tool_error events.
  */
 export type AgentEvent =
   | { type: 'start'; seq: number; at: number }

@@ -1,5 +1,5 @@
 import type { Logger } from '@/server/utils/logger';
-import { ToolConfig, ToolEvent } from '@/shared/types';
+import { AgentEvent, ToolConfig } from '@/shared/types';
 import { ExecutionContext } from '../ExecutionContext';
 
 export abstract class Tool<I = unknown, O = unknown> {
@@ -11,7 +11,8 @@ export abstract class Tool<I = unknown, O = unknown> {
   abstract call(
     input: I,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, O, void>;
+  ): AsyncGenerator<AgentEvent, O, void>;
 }
 
 export type ToolConstructor = new (...args: any[]) => Tool;
+

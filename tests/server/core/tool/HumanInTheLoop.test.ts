@@ -129,7 +129,7 @@ describe('HumanInTheLoopTool', () => {
       const firstEvent = await generator.next();
       expect(firstEvent.done).toBe(false);
       expect(firstEvent.value).toMatchObject({
-        type: 'progress',
+        type: 'tool_progress',
         toolName: ToolIds.HUMAN_IN_THE_LOOP,
         data: {
           status: 'awaiting_input',
@@ -157,7 +157,7 @@ describe('HumanInTheLoopTool', () => {
 
       const { value } = await generator.next();
       expect(value).toMatchObject({
-        type: 'progress',
+        type: 'tool_progress',
         toolName: ToolIds.HUMAN_IN_THE_LOOP,
         data: {
           status: 'awaiting_input',
@@ -205,7 +205,7 @@ describe('HumanInTheLoopTool', () => {
       );
     });
 
-    it('should yield tool_result event on successful submission', async () => {
+    it('should return result on successful submission', async () => {
       const ctx = createMockContext();
 
       const generator = tool.call(
@@ -228,13 +228,11 @@ describe('HumanInTheLoopTool', () => {
 
       await mockRedis.publish(`${REDIS_PREFIX}test-conversation`, 'submitted');
 
-      const { events } = await collectEvents(generator);
+      const { result } = await collectEvents(generator);
 
-      const resultEvent = events.find(e => (e as any).type === 'result');
-      expect(resultEvent).toMatchObject({
-        type: 'result',
-        toolName: ToolIds.HUMAN_IN_THE_LOOP,
-        output: { submitted: true, data: { confirmed: true } },
+      expect(result).toEqual({
+        submitted: true,
+        data: { confirmed: true },
       });
     });
   });

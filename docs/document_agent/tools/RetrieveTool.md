@@ -68,7 +68,7 @@ export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
   async *call(
     @input() params: RetrieveInput,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, RetrieveOutput, void> {
+  ): AsyncGenerator<AgentEvent, RetrieveOutput, void> {
     const { query, limit = 10, threshold } = params;
 
     // 复用 EmbedTool 向量化查询
@@ -109,7 +109,6 @@ export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
       })),
     };
 
-    yield ctx.toolResultEvent(this.id, output);
     return output;
   }
 }

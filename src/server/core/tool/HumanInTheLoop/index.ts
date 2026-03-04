@@ -2,7 +2,7 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { InjectTokens, ToolIds } from '@/shared/constants';
-import { ToolConfig, ToolEvent } from '@/shared/types';
+import { ToolConfig, AgentEvent } from '@/shared/types';
 import { JSONSchemaType } from 'ajv';
 import type { RedisClientType } from 'redis';
 import { inject } from 'tsyringe';
@@ -81,7 +81,7 @@ export default class HumanInTheLoopTool<
   async *call(
     @input() params: HumanInTheLoopInput<I>,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, HumanInTheLoopOutput<O>, void> {
+  ): AsyncGenerator<AgentEvent, HumanInTheLoopOutput<O>, void> {
     ctx.signal.throwIfAborted();
 
     const { message, formSchema, timeout = 300_000 } = params;
@@ -102,7 +102,7 @@ export default class HumanInTheLoopTool<
 
     this.logger.info(`HumanInTheLoop request created: ${conversationId}`);
 
-    yield ctx.toolProgressEvent(this.id, {
+    yield ctx.agentToolProgressEvent(this.id, {
       status: 'awaiting_input',
       conversationId,
       message,
@@ -149,7 +149,7 @@ export default class HumanInTheLoopTool<
             data: pending.result,
           };
 
-          yield ctx.toolResultEvent(this.id, output);
+          return output;
           return output;
         }
       }
@@ -162,7 +162,7 @@ export default class HumanInTheLoopTool<
       submitted: false,
     };
 
-    yield ctx.toolResultEvent(this.id, output);
+    return output;
     return output;
   }
 }

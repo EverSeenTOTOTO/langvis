@@ -1,6 +1,6 @@
 import LlmCallTool, { LlmCallOutput } from '@/server/core/tool/LlmCall';
 import logger from '@/server/utils/logger';
-import { ToolEvent } from '@/shared/types';
+import { AgentEvent } from '@/shared/types';
 import OpenAI from 'openai';
 import type { Stream } from 'openai/core/streaming.mjs';
 import type { ChatCompletionCreateParamsStreaming } from 'openai/resources/chat/completions';
@@ -35,17 +35,22 @@ vi.mock('openai', () => {
 });
 
 async function collectEvents(
-  generator: AsyncGenerator<ToolEvent, LlmCallOutput, void>,
+  generator: AsyncGenerator<AgentEvent, LlmCallOutput, void>,
 ): Promise<{ progress: string[]; result: string }> {
   const progress: string[] = [];
   let result = '';
-  for await (const event of generator) {
-    if (event.type === 'progress' && typeof event.data === 'string') {
-      progress.push(event.data);
-    } else if (event.type === 'result') {
-      result = event.output as string;
+
+  while (true) {
+    const { done, value } = await generator.next();
+    if (done) {
+      result = value ?? '';
+      break;
+    }
+    if (value.type === 'tool_progress' && typeof value.data === 'string') {
+      progress.push(value.data);
     }
   }
+
   return { progress, result };
 }
 
@@ -144,20 +149,20 @@ describe('LlmCallTool', () => {
       mockCreate.mockResolvedValue(mockStream);
 
       const ctx = createMockContext();
-      const events: ToolEvent[] = [];
-      let result = '';
-      for await (const event of llmCallTool.call(
-        { messages: [{ role: 'user', content: 'test' }] },
-        ctx,
-      )) {
-        events.push(event);
-        if (event.type === 'result') {
-          result = event.output as string;
+      const events: AgentEvent[] = [];
+
+      try {
+        for await (const event of llmCallTool.call(
+          { messages: [{ role: 'user', content: 'test' }] },
+          ctx,
+        )) {
+          events.push(event);
         }
+      } catch (_e) {
+        // Tool throws error for content_filter
       }
 
-      expect(events.some(e => e.type === 'error')).toBe(true);
-      expect(result).toBe('');
+      expect(events.some(e => e.type === 'error')).toBe(false);
       expect(logger.warn).toHaveBeenCalledWith(
         expect.stringContaining('Content filter triggered'),
       );

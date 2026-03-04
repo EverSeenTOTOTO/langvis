@@ -10,7 +10,7 @@ import {
 } from '@/server/decorator/core';
 import { config, input } from '@/server/decorator/param';
 import { AgentIds, ToolIds } from '@/shared/constants';
-import { AgentConfig, AgentEvent, ToolConfig, ToolEvent } from '@/shared/types';
+import { AgentConfig, AgentEvent, ToolConfig } from '@/shared/types';
 import { container } from 'tsyringe';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import winston from 'winston';
@@ -41,12 +41,14 @@ async function consumeAgentGenerator(
 }
 
 async function consumeToolGenerator<T>(
-  generator: AsyncGenerator<ToolEvent, T, void>,
+  generator: AsyncGenerator<AgentEvent, T, void>,
 ): Promise<T> {
   let result: T | undefined;
-  for await (const event of generator) {
-    if (event.type === 'result') {
-      result = event.output as T;
+  while (true) {
+    const { done, value } = await generator.next();
+    if (done) {
+      result = value;
+      break;
     }
   }
   return result!;
@@ -96,8 +98,8 @@ describe('Config Decorators', () => {
         async *call(
           _input: unknown,
           ctx: ExecutionContext,
-        ): AsyncGenerator<ToolEvent, unknown, void> {
-          yield ctx.toolResultEvent(this.id, 'null');
+        ): AsyncGenerator<AgentEvent, unknown, void> {
+          yield ctx.agentToolResultEvent(this.id, 'null');
           return null;
         }
       }
@@ -155,8 +157,8 @@ describe('Config Decorators', () => {
         async *call(
           _input: unknown,
           ctx: ExecutionContext,
-        ): AsyncGenerator<ToolEvent, unknown, void> {
-          yield ctx.toolResultEvent(this.id, 'null');
+        ): AsyncGenerator<AgentEvent, unknown, void> {
+          yield ctx.agentToolResultEvent(this.id, 'null');
           return null;
         }
       }
@@ -331,8 +333,8 @@ describe('Config Decorators', () => {
         async *call(
           _input: unknown,
           ctx: ExecutionContext,
-        ): AsyncGenerator<ToolEvent, unknown, void> {
-          yield ctx.toolResultEvent(this.id, 'null');
+        ): AsyncGenerator<AgentEvent, unknown, void> {
+          yield ctx.agentToolResultEvent(this.id, 'null');
           return null;
         }
       }
@@ -367,8 +369,8 @@ describe('Config Decorators', () => {
         async *call(
           _input: unknown,
           ctx: ExecutionContext,
-        ): AsyncGenerator<ToolEvent, unknown, void> {
-          yield ctx.toolResultEvent(this.id, 'null');
+        ): AsyncGenerator<AgentEvent, unknown, void> {
+          yield ctx.agentToolResultEvent(this.id, 'null');
           return null;
         }
       }
@@ -385,8 +387,8 @@ describe('Config Decorators', () => {
         async *call(
           _input: unknown,
           ctx: ExecutionContext,
-        ): AsyncGenerator<ToolEvent, unknown, void> {
-          yield ctx.toolResultEvent(this.id, 'null');
+        ): AsyncGenerator<AgentEvent, unknown, void> {
+          yield ctx.agentToolResultEvent(this.id, 'null');
           return null;
         }
       }
@@ -423,11 +425,12 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
 
+        // eslint-disable-next-line require-yield
         async *call(
           @input() _input: { url: string },
-          ctx: ExecutionContext,
-        ): AsyncGenerator<ToolEvent, string, void> {
-          yield ctx.toolResultEvent(this.id, 'success');
+          _ctx: ExecutionContext,
+        ): AsyncGenerator<AgentEvent, string, void> {
+          // Tool yields progress events and returns result
           return 'success';
         }
       }
@@ -459,3 +462,4 @@ describe('Config Decorators', () => {
     });
   });
 });
+

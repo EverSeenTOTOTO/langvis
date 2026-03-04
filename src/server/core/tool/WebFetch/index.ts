@@ -1,9 +1,8 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
-import { runTool } from '@/server/utils';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { ToolConfig, ToolEvent } from '@/shared/types';
+import { AgentEvent, ToolConfig } from '@/shared/types';
 import { Readability } from '@mozilla/readability';
 import DOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
@@ -63,7 +62,7 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
   async *call(
     @input() data: WebFetchInput,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, WebFetchOutput, void> {
+  ): AsyncGenerator<AgentEvent, WebFetchOutput, void> {
     ctx.signal.throwIfAborted();
 
     const { url, timeout = 30000 } = data;
@@ -96,24 +95,22 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
         HumanInTheLoopTool<{ value?: boolean }>
       >(ToolIds.HUMAN_IN_THE_LOOP);
 
-      const confirmed = yield* runTool(
-        humanInTheLoop.call(
-          {
-            message: `Direct fetch failed: ${(error as Error).message}. A proxy is available. Retry with proxy?`,
-            formSchema: {
-              type: 'object',
-              properties: {
-                value: {
-                  type: 'boolean',
-                  nullable: true,
-                  title: 'Use proxy?',
-                },
+      const confirmed = yield* humanInTheLoop.call(
+        {
+          message: `Direct fetch failed: ${(error as Error).message}. A proxy is available. Retry with proxy?`,
+          formSchema: {
+            type: 'object',
+            properties: {
+              value: {
+                type: 'boolean',
+                nullable: true,
+                title: 'Use proxy?',
               },
             },
-            timeout: 60000,
           },
-          ctx,
-        ),
+          timeout: 60000,
+        },
+        ctx,
       );
 
       if (!confirmed.submitted || confirmed.data?.value !== true) {
@@ -189,7 +186,7 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
 
     this.logger.info(`Successfully extracted content from: ${url}`);
 
-    const output: WebFetchOutput = {
+    return {
       title: article.title || '',
       textContent: article.textContent || '',
       excerpt: article.excerpt || '',
@@ -197,8 +194,5 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
       siteName: article.siteName || null,
       url,
     };
-
-    yield ctx.toolResultEvent(this.id, output);
-    return output;
   }
 }

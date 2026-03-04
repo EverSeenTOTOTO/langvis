@@ -1,8 +1,9 @@
+/* eslint-disable require-yield */
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { ToolConfig, ToolEvent } from '@/shared/types';
+import { ToolConfig, AgentEvent } from '@/shared/types';
 import dayjs from 'dayjs';
 import tz from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
@@ -29,8 +30,8 @@ export default class DateTimeTool extends Tool<DateTimeInput, DateTimeOutput> {
 
   async *call(
     @input() data: DateTimeInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, DateTimeOutput, void> {
+    _ctx: ExecutionContext,
+  ): AsyncGenerator<AgentEvent, DateTimeOutput, void> {
     const timezone = data?.timezone;
     const format = data?.format;
 
@@ -41,9 +42,6 @@ export default class DateTimeTool extends Tool<DateTimeInput, DateTimeOutput> {
     }
 
     const result = format ? date.format(format) : date.format();
-    const output: DateTimeOutput = { result };
-
-    yield ctx.toolResultEvent(this.id, output);
-    return output;
+    return { result };
   }
 }

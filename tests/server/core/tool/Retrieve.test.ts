@@ -3,7 +3,7 @@ import RetrieveTool from '@/server/core/tool/Retrieve';
 import type { RetrieveOutput } from '@/server/core/tool/Retrieve/config';
 import logger from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { ToolEvent } from '@/shared/types';
+import { AgentEvent } from '@/shared/types';
 import { DataSource } from 'typeorm';
 import { container } from 'tsyringe';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,18 +24,22 @@ vi.mock('@/server/utils/logger', () => {
 });
 
 async function collectEvents(
-  generator: AsyncGenerator<ToolEvent, RetrieveOutput, void>,
+  generator: AsyncGenerator<AgentEvent, RetrieveOutput, void>,
 ): Promise<{
   progress: Array<{ message?: string }>;
   result: RetrieveOutput | null;
 }> {
   const progress: Array<{ message?: string }> = [];
   let result: RetrieveOutput | null = null;
-  for await (const event of generator) {
-    if (event.type === 'progress') {
-      progress.push(event.data as { message?: string });
-    } else if (event.type === 'result') {
-      result = event.output as RetrieveOutput;
+
+  while (true) {
+    const { done, value } = await generator.next();
+    if (done) {
+      result = value ?? null;
+      break;
+    }
+    if (value.type === 'tool_progress') {
+      progress.push(value.data as { message?: string });
     }
   }
   return { progress, result };

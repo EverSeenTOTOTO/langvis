@@ -1,4 +1,3 @@
-import { ToolEvent } from '@/shared/types';
 import type { Request } from 'express';
 
 export const isDev = process.env.NODE_ENV === 'development';
@@ -18,17 +17,3 @@ export const getSessionHeaders = (req: Request) => {
 
   return headers;
 };
-
-export async function* runTool<T = unknown, E = ToolEvent>(
-  toolGenerator: AsyncGenerator<ToolEvent, T, void>,
-  adaptor: (event: ToolEvent) => E = e => e as E,
-): AsyncGenerator<E, T, void> {
-  for await (const event of toolGenerator) {
-    if (event.type === 'result') {
-      return event.output as T;
-    }
-    yield adaptor(event);
-  }
-
-  throw new Error('Tool did not return a result event');
-}

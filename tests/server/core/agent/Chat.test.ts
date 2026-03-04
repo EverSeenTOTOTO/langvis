@@ -1,6 +1,6 @@
 import ChatAgent from '@/server/core/agent/Chat';
 import { ToolIds } from '@/shared/constants';
-import { AgentEvent, ToolEvent } from '@/shared/types';
+import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext } from '../../helpers/context';
 
@@ -64,13 +64,13 @@ describe('ChatAgent', () => {
     const ctx = createMockContext();
 
     mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
-      ToolEvent,
+      AgentEvent,
       string,
       void
     > {
-      yield ctx.toolProgressEvent('llm-call', 'Hello');
-      yield ctx.toolProgressEvent('llm-call', ' world');
-      yield ctx.toolResultEvent('llm-call', 'Hello world');
+      yield ctx.agentToolProgressEvent('llm-call', 'Hello');
+      yield ctx.agentToolProgressEvent('llm-call', ' world');
+      yield ctx.agentToolResultEvent('llm-call', 'Hello world');
       return 'Hello world';
     });
 
@@ -99,11 +99,11 @@ describe('ChatAgent', () => {
     const ctx = createMockContext();
 
     mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
-      ToolEvent,
+      AgentEvent,
       string,
       void
     > {
-      yield ctx.toolResultEvent('llm-call', '');
+      yield ctx.agentToolResultEvent('llm-call', '');
       return '';
     });
 

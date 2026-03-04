@@ -2,7 +2,7 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import type { ToolConfig, ToolEvent } from '@/shared/types';
+import type { AgentEvent, ToolConfig } from '@/shared/types';
 import { container } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
@@ -22,11 +22,11 @@ export default class AnalysisTool extends Tool<AnalysisInput, AnalysisOutput> {
   async *call(
     @input() data: AnalysisInput,
     ctx: ExecutionContext,
-  ): AsyncGenerator<ToolEvent, AnalysisOutput, void> {
+  ): AsyncGenerator<AgentEvent, AnalysisOutput, void> {
     const { content, sourceUrl, sourceType, metadata } = data;
 
     // 1. Extract metadata
-    yield ctx.toolProgressEvent(this.id, {
+    yield ctx.agentToolProgressEvent(this.id, {
       action: 'meta_extract',
       message: 'Extracting document metadata via LLM...',
     });
@@ -42,7 +42,7 @@ export default class AnalysisTool extends Tool<AnalysisInput, AnalysisOutput> {
     this.logger.info('Metadata extracted:', metaResult);
 
     // 2. Chunk content
-    yield ctx.toolProgressEvent(this.id, {
+    yield ctx.agentToolProgressEvent(this.id, {
       action: 'chunk',
       message: `Chunking content (${Math.round(content.length / 1024)}KB) into segments...`,
     });
@@ -58,7 +58,7 @@ export default class AnalysisTool extends Tool<AnalysisInput, AnalysisOutput> {
     );
 
     // 3. Generate embeddings
-    yield ctx.toolProgressEvent(this.id, {
+    yield ctx.agentToolProgressEvent(this.id, {
       action: 'embed',
       message: `Calling embedding API for ${chunkResult.chunks.length} chunks...`,
     });
@@ -74,7 +74,7 @@ export default class AnalysisTool extends Tool<AnalysisInput, AnalysisOutput> {
     );
 
     // 4. Archive to database
-    yield ctx.toolProgressEvent(this.id, {
+    yield ctx.agentToolProgressEvent(this.id, {
       action: 'archive',
       message: `Saving document "${metaResult.title}" and ${embedResult.chunks.length} chunks to database...`,
     });
@@ -97,15 +97,12 @@ export default class AnalysisTool extends Tool<AnalysisInput, AnalysisOutput> {
       ctx,
     );
 
-    const output: AnalysisOutput = {
+    return {
       documentId: archiveResult.documentId,
       title: metaResult.title,
       category: metaResult.category,
       chunkCount: archiveResult.chunkCount,
     };
-
-    yield ctx.toolResultEvent(this.id, output);
-    return output;
   }
 }
 

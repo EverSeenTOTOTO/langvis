@@ -1,6 +1,5 @@
 import { agent } from '@/server/decorator/core';
 import { config } from '@/server/decorator/param';
-import { runTool } from '@/server/utils';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { AgentConfig, AgentEvent } from '@/shared/types';
@@ -55,20 +54,18 @@ export default class GirlFriendAgent extends Agent {
 
     this.logger.debug('GF agent messages: ', conversationMessages);
 
-    const llmGenerator = llmCallTool.call(
+    for await (const event of llmCallTool.call(
       {
         model: options?.model?.code,
         temperature: options?.model?.temperature,
         messages: conversationMessages,
       },
       ctx,
-    );
-
-    for await (const toolEvent of llmGenerator) {
-      if (toolEvent.type === 'progress' && typeof toolEvent.data === 'string') {
-        yield ctx.agentStreamEvent(toolEvent.data);
+    )) {
+      if (event.type === 'tool_progress' && typeof event.data === 'string') {
+        yield ctx.agentStreamEvent(event.data);
       } else {
-        yield ctx.adaptToolEvent(toolEvent);
+        yield event;
       }
     }
 
@@ -83,9 +80,7 @@ export default class GirlFriendAgent extends Agent {
 
     yield ctx.agentToolCallEvent(ToolIds.TEXT_TO_SPEECH, ttsArgs);
 
-    const ttsResult = yield* runTool(tts.call(ttsArgs, ctx), e =>
-      ctx.adaptToolEvent(e),
-    );
+    const ttsResult = yield* tts.call(ttsArgs, ctx);
 
     yield ctx.agentToolResultEvent(ToolIds.TEXT_TO_SPEECH, ttsResult);
     yield ctx.agentFinalEvent();

@@ -6,7 +6,7 @@ import EmbedTool from '@/server/core/tool/Embed';
 import MetaExtractTool from '@/server/core/tool/MetaExtract';
 import logger from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { ToolEvent } from '@/shared/types';
+import { AgentEvent } from '@/shared/types';
 import { container } from 'tsyringe';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext } from '../../helpers/context';
@@ -26,7 +26,7 @@ vi.mock('@/server/utils/logger', () => {
 });
 
 async function collectEvents(
-  generator: AsyncGenerator<ToolEvent, AnalysisOutput, void>,
+  generator: AsyncGenerator<AgentEvent, AnalysisOutput, void>,
 ): Promise<{
   progress: Array<{ action?: string; message?: string; toolName?: string }>;
   result: AnalysisOutput | null;
@@ -37,13 +37,17 @@ async function collectEvents(
     toolName?: string;
   }> = [];
   let result: AnalysisOutput | null = null;
-  for await (const event of generator) {
-    if (event.type === 'progress') {
+
+  while (true) {
+    const { done, value } = await generator.next();
+    if (done) {
+      result = value ?? null;
+      break;
+    }
+    if (value.type === 'tool_progress') {
       progress.push(
-        event.data as { action?: string; message?: string; toolName?: string },
+        value.data as { action?: string; message?: string; toolName?: string },
       );
-    } else if (event.type === 'result') {
-      result = event.output as AnalysisOutput;
     }
   }
   return { progress, result };
