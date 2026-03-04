@@ -8,23 +8,42 @@ import type {
   ThoughtItem,
   ToolCallTimeline,
 } from '@/shared/utils/deriveMessageState';
-import { LoadingOutlined } from '@ant-design/icons';
-import type { StepsProps } from 'antd';
-import { Collapse, Flex, Steps, Tag, Typography } from 'antd';
+import {
+  CheckCircleOutlined,
+  LoadingOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
+import { Collapse, Flex, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import {
   registerAgentRenderer,
   type AgentRenderResult,
 } from '../../agentRenderers';
+import './index.scss';
 
 type AwaitingInputData = {
   message: string;
   schema: SchemaProperty;
 };
 
+interface ProgressData {
+  status?: string;
+  message?: string;
+  schema?: SchemaProperty;
+  [key: string]: unknown;
+}
+
+interface ToolBlock {
+  toolCall: ToolCallTimeline;
+  latestProgress: ProgressData | null;
+  isPending: boolean;
+}
+
 interface ReActDerivedState {
-  steps: NonNullable<StepsProps['items']>;
+  toolBlocks: ToolBlock[];
+  /** Standalone thoughts (e.g., before final_answer) */
+  standaloneThoughts: ThoughtItem[];
   awaitingInput: AwaitingInputData | null;
   isProcessing: boolean;
   showBubbleLoading: boolean;
@@ -35,121 +54,162 @@ function deriveReActState(state: MessageRenderState): ReActDerivedState {
   const { toolCallTimeline, thoughts, isTerminated, hasContent, hasEvents } =
     state;
 
-  const lastToolCall = toolCallTimeline.at(-1);
-  const lastProgress = lastToolCall?.progress.at(-1)?.data as
-    | { status?: string; message?: string; schema?: SchemaProperty }
-    | undefined;
+  const toolBlocks: ToolBlock[] = toolCallTimeline.map(toolCall => {
+    const latestProgress = toolCall.progress.at(-1)?.data as
+      | ProgressData
+      | undefined;
+    return {
+      toolCall,
+      latestProgress: latestProgress ?? null,
+      isPending: toolCall.status === 'pending',
+    };
+  });
+
+  const lastToolCall = toolBlocks.at(-1);
+  const lastProgress = lastToolCall?.latestProgress;
 
   const awaitingInput =
-    lastToolCall?.status === 'pending' &&
-    lastToolCall?.toolName === ToolIds.HUMAN_IN_THE_LOOP &&
+    lastToolCall?.isPending &&
+    lastToolCall?.toolCall.toolName === ToolIds.HUMAN_IN_THE_LOOP &&
     lastProgress?.status === 'awaiting_input'
       ? { message: lastProgress.message!, schema: lastProgress.schema! }
       : null;
 
   const allToolsSettled =
-    toolCallTimeline.length > 0 &&
-    toolCallTimeline.every(t => t.status !== 'pending');
+    toolBlocks.length > 0 && toolBlocks.every(b => !b.isPending);
 
   const isProcessing =
-    hasEvents && !isTerminated && !awaitingInput && allToolsSettled;
-
-  const steps: NonNullable<StepsProps['items']> = [
-    ...thoughts.map(thoughtStep),
-    ...toolCallTimeline.map(toolCallStep),
-  ];
-
-  if (isProcessing) {
-    steps.push({
-      title: (
-        <Typography.Text type="secondary" italic>
-          Processing...
-        </Typography.Text>
-      ),
-      status: 'process',
-    });
-  }
+    hasEvents &&
+    !isTerminated &&
+    !awaitingInput &&
+    !allToolsSettled &&
+    !hasContent;
 
   return {
-    steps,
+    toolBlocks,
+    standaloneThoughts: thoughts,
     awaitingInput,
     isProcessing,
     showBubbleLoading: !hasContent && !hasEvents && !isTerminated,
-    shouldExpandDetails: !isTerminated && steps.length > 0,
+    shouldExpandDetails:
+      !isTerminated && (toolBlocks.length > 0 || thoughts.length > 0),
   };
 }
 
-function thoughtStep(
-  thought: ThoughtItem,
-): NonNullable<StepsProps['items']>[0] {
-  return {
-    title: 'Thinking',
-    description: (
+function getToolDisplayName(toolName: string): string {
+  const names: Record<string, string> = {
+    [ToolIds.ANALYSIS]: 'Analysis',
+    [ToolIds.META_EXTRACT]: 'Metadata Extraction',
+    [ToolIds.CHUNK]: 'Content Chunking',
+    [ToolIds.EMBED]: 'Embedding',
+    [ToolIds.ARCHIVE]: 'Archive',
+    [ToolIds.RETRIEVE]: 'Retrieve',
+    [ToolIds.HUMAN_IN_THE_LOOP]: 'Human Input',
+    [ToolIds.LLM_CALL]: 'LLM Call',
+    [ToolIds.WEB_FETCH]: 'Web Fetch',
+  };
+  return names[toolName] ?? toolName;
+}
+
+function getToolColor(toolName: string): string {
+  const colors: Record<string, string> = {
+    [ToolIds.ANALYSIS]: 'purple',
+    [ToolIds.META_EXTRACT]: 'geekblue',
+    [ToolIds.CHUNK]: 'cyan',
+    [ToolIds.EMBED]: 'blue',
+    [ToolIds.ARCHIVE]: 'green',
+    [ToolIds.RETRIEVE]: 'orange',
+    [ToolIds.HUMAN_IN_THE_LOOP]: 'gold',
+    [ToolIds.LLM_CALL]: 'magenta',
+    [ToolIds.WEB_FETCH]: 'lime',
+  };
+  return colors[toolName] ?? 'default';
+}
+
+function StandaloneThoughtBlock({ thought }: { thought: ThoughtItem }) {
+  return (
+    <div className="react-thought-block">
+      <Flex align="center" gap={8} className="react-tool-header">
+        <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
+        <Tag color="blue">Thought</Tag>
+        <Typography.Text type="secondary" className="react-tool-time">
+          {dayjs(thought.at).format('HH:mm:ss')}
+        </Typography.Text>
+      </Flex>
       <Typography.Paragraph
         type="secondary"
         italic
         ellipsis={{ rows: 2, expandable: 'collapsible' }}
+        className="react-thought-content"
       >
         {thought.content}
       </Typography.Paragraph>
-    ),
-    status: 'finish',
-  };
+    </div>
+  );
 }
 
-function toolCallStep(
-  toolCall: ToolCallTimeline,
-): NonNullable<StepsProps['items']>[0] {
-  const at = (
-    <Tag color="lime">{dayjs(toolCall.at).format('YYYY-MM-DD HH:mm:ss')}</Tag>
-  );
+function ToolBlockItem({ block }: { block: ToolBlock }) {
+  const { toolCall, latestProgress, isPending } = block;
+  const displayName = getToolDisplayName(toolCall.toolName);
+  const color = getToolColor(toolCall.toolName);
 
-  return {
-    title: (
-      <Flex align="center">
-        Tool <Tag color="orange">{toolCall.toolName}</Tag>
-        {at}
+  const Icon = isPending ? (
+    <SyncOutlined spin style={{ color: 'var(--ant-color-primary)' }} />
+  ) : toolCall.status === 'done' ? (
+    <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
+  ) : toolCall.status === 'error' ? (
+    <span style={{ color: 'var(--ant-color-error)' }}>✕</span>
+  ) : null;
+
+  return (
+    <div className="react-tool-block">
+      {toolCall.thought && (
+        <div className="react-tool-thought">
+          <Typography.Paragraph
+            type="secondary"
+            italic
+            ellipsis={{ rows: 2, expandable: 'collapsible' }}
+          >
+            💭 {toolCall.thought}
+          </Typography.Paragraph>
+        </div>
+      )}
+
+      <Flex align="center" gap={8} className="react-tool-header">
+        {Icon}
+        <Tag color={color}>{displayName}</Tag>
+        <Typography.Text type="secondary" className="react-tool-time">
+          {dayjs(toolCall.at).format('HH:mm:ss')}
+        </Typography.Text>
       </Flex>
-    ),
-    status:
-      toolCall.status === 'pending'
-        ? 'process'
-        : toolCall.status === 'done'
-          ? 'finish'
-          : toolCall.status,
-    description: (
-      <Typography.Text type="secondary" italic>
-        {JSON.stringify(toolCall.toolArgs)}
-      </Typography.Text>
-    ),
-    ...(toolCall.status === 'done' && toolCall.output
-      ? {
-          content: (
-            <Typography.Paragraph
-              type="secondary"
-              copyable
-              ellipsis={{ rows: 3, expandable: 'collapsible' }}
-            >
-              {typeof toolCall.output === 'string'
-                ? toolCall.output
-                : JSON.stringify(toolCall.output)}
-            </Typography.Paragraph>
-          ),
-        }
-      : {}),
-    ...(toolCall.status === 'error'
-      ? {
-          content: (
-            <Typography.Paragraph
-              type="danger"
-              ellipsis={{ rows: 2, expandable: 'collapsible' }}
-            >
-              {toolCall.error}
-            </Typography.Paragraph>
-          ),
-        }
-      : {}),
-  };
+
+      {latestProgress?.message && !latestProgress?.status && (
+        <Typography.Text type="secondary" className="react-tool-progress">
+          {latestProgress.message}
+        </Typography.Text>
+      )}
+
+      {toolCall.status === 'done' && toolCall.output ? (
+        <div className="react-tool-output">
+          <Typography.Paragraph
+            type="secondary"
+            copyable
+            ellipsis={{ rows: 2, expandable: 'collapsible' }}
+          >
+            {typeof toolCall.output === 'string'
+              ? toolCall.output
+              : JSON.stringify(toolCall.output, null, 2)}
+          </Typography.Paragraph>
+        </div>
+      ) : null}
+
+      {toolCall.status === 'error' && (
+        <Typography.Text type="danger" className="react-tool-error">
+          {toolCall.error}
+        </Typography.Text>
+      )}
+    </div>
+  );
 }
 
 interface ReActEventRendererProps {
@@ -168,9 +228,15 @@ const ReActEventRenderer: React.FC<ReActEventRendererProps> = ({
     setActiveKey(derived.shouldExpandDetails ? ['1'] : []);
   }, [derived.shouldExpandDetails]);
 
-  if (derived.steps.length === 0) {
+  if (
+    derived.toolBlocks.length === 0 &&
+    derived.standaloneThoughts.length === 0
+  ) {
     return null;
   }
+
+  const totalItems =
+    derived.toolBlocks.length + derived.standaloneThoughts.length;
 
   return (
     <>
@@ -183,16 +249,29 @@ const ReActEventRenderer: React.FC<ReActEventRendererProps> = ({
             key: '1',
             label: (
               <Typography.Text type="secondary">
-                Process Details
+                Process Details ({totalItems} steps)
               </Typography.Text>
             ),
             children: (
-              <Steps
-                size="small"
-                orientation="vertical"
-                current={derived.steps.length}
-                items={derived.steps}
-              />
+              <div className="react-tool-list">
+                {derived.toolBlocks.map(block => (
+                  <ToolBlockItem key={block.toolCall.callId} block={block} />
+                ))}
+                {derived.standaloneThoughts.map(thought => (
+                  <StandaloneThoughtBlock
+                    key={`thought-${thought.seq}`}
+                    thought={thought}
+                  />
+                ))}
+                {derived.isProcessing && (
+                  <div className="react-tool-processing">
+                    <LoadingOutlined style={{ marginInlineEnd: 8 }} />
+                    <Typography.Text type="secondary" italic>
+                      Processing...
+                    </Typography.Text>
+                  </div>
+                )}
+              </div>
             ),
           },
         ]}
@@ -240,5 +319,6 @@ const ReActAgentRenderer = (
 };
 
 registerAgentRenderer(AgentIds.REACT, ReActAgentRenderer);
+registerAgentRenderer(AgentIds.DOCUMENT, ReActAgentRenderer);
 
 export default ReActAgentRenderer;

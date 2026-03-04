@@ -14,6 +14,8 @@ export type ToolCallTimeline = {
   output?: unknown;
   error?: string;
   progress: Array<{ data: unknown; seq: number; at: number }>;
+  /** Thought that immediately precedes this tool call (if any) */
+  thought?: string;
 };
 
 export type ThoughtItem = {
@@ -37,7 +39,7 @@ export type MessageRenderState = {
   pendingToolCalls: ToolCallTimeline[];
   hasPendingTools: boolean;
 
-  // Non-tool events
+  /** Standalone thoughts not associated with any tool (e.g., final thought before answer) */
   thoughts: ThoughtItem[];
 
   // Raw events for special cases
@@ -64,14 +66,14 @@ export function deriveMessageState(msg: Message): MessageRenderState {
   const toolCallsMap = new Map<string, ToolCallTimeline>();
   const thoughts: ThoughtItem[] = [];
 
+  // Track pending thought that may be associated with the next tool call
+  let pendingThought: string | undefined;
+
   for (const event of events) {
     switch (event.type) {
       case 'thought':
-        thoughts.push({
-          content: event.content,
-          seq: event.seq,
-          at: event.at,
-        });
+        // Store as pending - may be associated with next tool_call or kept as standalone
+        pendingThought = event.content;
         break;
 
       case 'tool_call':
@@ -83,7 +85,11 @@ export function deriveMessageState(msg: Message): MessageRenderState {
           at: event.at,
           status: 'pending',
           progress: [],
+          // Associate the thought that immediately precedes this tool call
+          thought: pendingThought,
         });
+        // Clear pending thought after associating
+        pendingThought = undefined;
         break;
 
       case 'tool_result': {
@@ -116,10 +122,33 @@ export function deriveMessageState(msg: Message): MessageRenderState {
         break;
       }
 
+      case 'stream':
+      case 'final':
+        // These events indicate the agent is finishing
+        // Any remaining pending thought is a standalone thought (e.g., before final_answer)
+        if (pendingThought) {
+          thoughts.push({
+            content: pendingThought,
+            seq: event.seq,
+            at: event.at,
+          });
+          pendingThought = undefined;
+        }
+        break;
+
       default:
-        // start, stream, final, error, cancelled - no special handling needed
+        // start, error, cancelled - no special handling needed
         break;
     }
+  }
+
+  // Any remaining pending thought becomes a standalone thought
+  if (pendingThought) {
+    thoughts.push({
+      content: pendingThought,
+      seq: events.at(-1)?.seq ?? 0,
+      at: events.at(-1)?.at ?? Date.now(),
+    });
   }
 
   // Sort by seq to maintain temporal order
