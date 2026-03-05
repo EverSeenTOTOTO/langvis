@@ -20,8 +20,8 @@ const VALID_TRANSITIONS: Record<SessionPhase, SessionPhase[]> = {
 };
 
 /**
- * ChatSession - autonomous work unit for a single chat session.
- * Owns both state (SSE connection, phase, abort signal) and behavior (Agent execution loop).
+ * ChatSession - autonomous work unit for a single SSE chat session.
+ * Owns both state (message, SSE connection, phase) and behavior (Agent execution loop).
  */
 export class ChatSession {
   readonly conversationId: string;
@@ -30,6 +30,7 @@ export class ChatSession {
   private sseConnection: SSEConnection | null = null;
   private idleTimeout!: ReturnType<typeof setTimeout>;
 
+  private _message: Message | null = null;
   ctx: ExecutionContext | null = null;
   phase: SessionPhase = 'waiting';
 
@@ -46,6 +47,13 @@ export class ChatSession {
         this.cleanup();
       }
     }, this.options.idleTimeoutMs);
+  }
+
+  get message(): Message {
+    if (!this._message) {
+      throw new Error('Message not initialized');
+    }
+    return this._message;
   }
 
   private transition(to: SessionPhase): boolean {
@@ -83,11 +91,14 @@ export class ChatSession {
     memory: Memory,
     assistantMessage: Message,
     config: unknown,
-    finalizeMessage: (ctx: ExecutionContext) => Promise<void>,
+    finalizeMessage: (message: Message) => Promise<void>,
   ): Promise<void> {
+    this._message = assistantMessage;
+
     const controller = new AbortController();
-    const ctx = new ExecutionContext(assistantMessage, controller);
+    const ctx = new ExecutionContext(assistantMessage.id, controller);
     this.ctx = ctx;
+
     this.transition('running');
 
     const startTime = Date.now();
@@ -104,6 +115,8 @@ export class ChatSession {
           );
         }
 
+        this.handleEvent(event);
+
         if (!this.send(event)) {
           logger.warn(`SSE not writable for ${this.conversationId}, aborting`);
           ctx.abort('SSE connection lost');
@@ -119,6 +132,34 @@ export class ChatSession {
     }
   }
 
+  /**
+   * Handle event: accumulate content + persist event + send SSE
+   */
+  private handleEvent(event: AgentEvent): void {
+    // 1. Accumulate stream content to message
+    if (event.type === 'stream') {
+      this._message!.content += event.content;
+    }
+
+    // 2. Persist non-stream events to message.meta.events
+    if (event.type !== 'stream') {
+      if (!this._message!.meta) {
+        this._message!.meta = {};
+      }
+      if (!this._message!.meta.events) {
+        this._message!.meta.events = [];
+      }
+      this._message!.meta.events.push(event);
+    }
+
+    // 3. Special handling for error event - set content
+    if (event.type === 'error') {
+      this._message!.content = event.error;
+    }
+
+    // SSE sending is done separately in the run loop
+  }
+
   private handleAgentError(err: unknown, ctx: ExecutionContext): void {
     logger.error(
       `Agent error: ${(err as Error)?.message || String(err)} session=${this.conversationId}`,
@@ -126,12 +167,13 @@ export class ChatSession {
     const errorEvent = ctx.agentErrorEvent(
       (err as Error)?.message || String(err),
     );
+    this.handleEvent(errorEvent);
     this.send(errorEvent);
   }
 
   private async finalizeRun(
     ctx: ExecutionContext,
-    finalizeMessage: (ctx: ExecutionContext) => Promise<void>,
+    finalizeMessage: (message: Message) => Promise<void>,
     startTime: number,
     firstTokenTime: number | undefined,
   ): Promise<void> {
@@ -142,19 +184,20 @@ export class ChatSession {
       const cancelledEvent = ctx.agentCancelledEvent(
         (ctx.signal.reason as Error)?.message ?? 'Unknown',
       );
+      this.handleEvent(cancelledEvent);
       this.send(cancelledEvent);
     }
 
-    await finalizeMessage(ctx);
+    await finalizeMessage(this._message!);
 
     const totalTime = Date.now() - startTime;
     const ttft = firstTokenTime ? firstTokenTime - startTime : null;
     const avgTokenTime =
-      ctx.message.content.length > 0
-        ? totalTime / ctx.message.content.length
+      this._message!.content.length > 0
+        ? totalTime / this._message!.content.length
         : 0;
     logger.info(
-      `Agent completed: totalTime=${totalTime}ms tokens=${ctx.message.content.length} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${this.conversationId}`,
+      `Agent completed: totalTime=${totalTime}ms tokens=${this._message!.content.length} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${this.conversationId}`,
     );
 
     this.cleanup();

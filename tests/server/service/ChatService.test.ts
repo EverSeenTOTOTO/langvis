@@ -251,7 +251,10 @@ describe('ChatService', () => {
       };
 
       const mockAgent = {
-        systemPrompt: { build: () => 'System prompt' },
+        systemPrompt: {
+          build: () => 'System prompt',
+          with: vi.fn().mockReturnThis(),
+        },
       };
 
       container.register('test-memory', { useValue: mockMemory });
@@ -293,7 +296,10 @@ describe('ChatService', () => {
       };
 
       const mockAgent = {
-        systemPrompt: { build: () => 'System prompt' },
+        systemPrompt: {
+          build: () => 'System prompt',
+          with: vi.fn().mockReturnThis(),
+        },
       };
 
       container.register('test-memory-2', { useValue: mockMemory });
@@ -315,6 +321,122 @@ describe('ChatService', () => {
       expect(storedMessages[0].createdAt.getTime()).toBeLessThan(
         storedMessages[1].createdAt.getTime(),
       );
+    });
+
+    it('should inject Background section with conversationId and userId', async () => {
+      const mockMemory = {
+        setConversationId: vi.fn(),
+        setUserId: vi.fn(),
+        summarize: vi.fn().mockResolvedValue([]),
+        store: vi.fn().mockResolvedValue(undefined),
+      };
+
+      let capturedBackground = '';
+      const mockAgent = {
+        systemPrompt: {
+          build: vi
+            .fn()
+            .mockReturnValue(
+              '## Background\nTest Content\n\n## Role\nAssistant',
+            ),
+          with: vi.fn().mockImplementation((_name: string, content: string) => {
+            capturedBackground = content;
+            return mockAgent.systemPrompt;
+          }),
+        },
+      };
+
+      container.register('test-memory-3', { useValue: mockMemory });
+
+      const req = {
+        params: { conversationId: 'conv-456' },
+      } as any;
+
+      await chatService.buildMemory(
+        req,
+        mockAgent as any,
+        { memory: { type: 'test-memory-3' } },
+        { role: Role.USER, content: 'Hi' },
+      );
+
+      expect(mockAgent.systemPrompt.with).toHaveBeenCalledWith(
+        'Background',
+        expect.any(String),
+      );
+      expect(capturedBackground).toContain('Conversation ID: conv-456');
+      expect(capturedBackground).toContain('User ID: user-123');
+    });
+
+    it('should inject Background with only conversationId when userId is null', async () => {
+      mockAuthService.getUserId = vi.fn().mockResolvedValue(null);
+
+      const mockMemory = {
+        setConversationId: vi.fn(),
+        setUserId: vi.fn(),
+        summarize: vi.fn().mockResolvedValue([]),
+        store: vi.fn().mockResolvedValue(undefined),
+      };
+
+      let capturedBackground = '';
+      const mockAgent = {
+        systemPrompt: {
+          build: vi.fn().mockReturnValue('System'),
+          with: vi.fn().mockImplementation((_name: string, content: string) => {
+            capturedBackground = content;
+            return mockAgent.systemPrompt;
+          }),
+        },
+      };
+
+      container.register('test-memory-4', { useValue: mockMemory });
+
+      const req = {
+        params: { conversationId: 'conv-789' },
+      } as any;
+
+      await chatService.buildMemory(
+        req,
+        mockAgent as any,
+        { memory: { type: 'test-memory-4' } },
+        { role: Role.USER, content: 'Hi' },
+      );
+
+      expect(capturedBackground).toBe('Conversation ID: conv-789');
+    });
+
+    it('should inject Background with only userId when conversationId is empty', async () => {
+      const mockMemory = {
+        setConversationId: vi.fn(),
+        setUserId: vi.fn(),
+        summarize: vi.fn().mockResolvedValue([]),
+        store: vi.fn().mockResolvedValue(undefined),
+      };
+
+      let capturedBackground = '';
+      const mockAgent = {
+        systemPrompt: {
+          build: vi.fn().mockReturnValue('System'),
+          with: vi.fn().mockImplementation((_name: string, content: string) => {
+            capturedBackground = content;
+            return mockAgent.systemPrompt;
+          }),
+        },
+      };
+
+      container.register('test-memory-5', { useValue: mockMemory });
+
+      const req = {
+        params: { conversationId: '' },
+      } as any;
+
+      await chatService.buildMemory(
+        req,
+        mockAgent as any,
+        { memory: { type: 'test-memory-5' } },
+        { role: Role.USER, content: 'Hi' },
+      );
+
+      expect(capturedBackground).toBe('User ID: user-123');
     });
   });
 });

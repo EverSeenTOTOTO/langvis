@@ -15,4 +15,3 @@ export abstract class Tool<I = unknown, O = unknown> {
 }
 
 export type ToolConstructor = new (...args: any[]) => Tool;
-

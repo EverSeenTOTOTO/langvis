@@ -1,3 +1,4 @@
+/* eslint-disable require-yield */
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
@@ -6,10 +7,8 @@ import { AgentEvent, ToolConfig } from '@/shared/types';
 import { Readability } from '@mozilla/readability';
 import DOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
-import { container } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
-import type HumanInTheLoopTool from '../HumanInTheLoop';
 
 interface WebFetchInput {
   url: string;
@@ -88,34 +87,8 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
       }
 
       this.logger.warn(
-        `Direct fetch failed, asking user about proxy retry: ${(error as Error).message}`,
+        `Direct fetch failed, retrying with proxy: ${(error as Error).message}`,
       );
-
-      const humanInTheLoop = container.resolve<
-        HumanInTheLoopTool<{ value?: boolean }>
-      >(ToolIds.HUMAN_IN_THE_LOOP);
-
-      const confirmed = yield* humanInTheLoop.call(
-        {
-          message: `Direct fetch failed: ${(error as Error).message}. A proxy is available. Retry with proxy?`,
-          formSchema: {
-            type: 'object',
-            properties: {
-              value: {
-                type: 'boolean',
-                nullable: true,
-                title: 'Use proxy?',
-              },
-            },
-          },
-          timeout: 60000,
-        },
-        ctx,
-      );
-
-      if (!confirmed.submitted || confirmed.data?.value !== true) {
-        throw error;
-      }
 
       const retryController = new AbortController();
       const retryTimeoutId = setTimeout(() => retryController.abort(), timeout);

@@ -56,7 +56,9 @@ const proxyValidation = <T>(
 
   if (validationMeta && validationMeta.length > 0) {
     const originalMethod = instance[method].bind(instance);
-    instance[method] = async function* (...args: any[]): AsyncGenerator<any, any, void> {
+    instance[method] = async function* (
+      ...args: any[]
+    ): AsyncGenerator<any, any, void> {
       for (const meta of validationMeta) {
         if (meta.type === validationType) {
           try {

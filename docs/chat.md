@@ -20,7 +20,7 @@
 │                      ┌─────────────────────┐                               │
 │                      │ ConversationStore   │                               │
 │                      │ messages[conversationId]                            │
-│                      │ (唯一数据源，MobX 观测) │                               │
+│                      │ (唯一数据源，MobX 观测) │                           │
 │                      └─────────────────────┘                               │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
@@ -31,25 +31,57 @@
 │                              Backend                                         │
 │  ┌─────────────────┐    ┌──────────────────┐    ┌───────────────────────┐  │
 │  │ ChatController  │───►│   ChatService    │───►│    ChatSession        │  │
-│  │ (HTTP routes)   │    │ (session registry)│    │ (autonomous work unit)│  │
-│  └─────────────────┘    └──────────────────┘    └───────────┬───────────┘  │
-│                                                              │              │
-│                                                              │ run()        │
-│                                                              ▼              │
+│  │ (HTTP routes)   │    │ (session registry)│    │ (message, SSE, phase) │  │
+│  └───────┬─────────┘    └──────────────────┘    └───────────┬───────────┘  │
+│          │                                                 │              │
+│          │                                                 │ ctx          │
+│          ▼                                                 ▼              │
 │  ┌─────────────────┐    ┌──────────────────┐    ┌───────────────────────┐  │
 │  │    Agent        │───►│ ExecutionContext │    │       Tool            │  │
-│  │ (LLM orchestration)   │ (event factory)  │    │ (capabilities)        │  │
+│  │ (LLM orchestration)   │ (signal, events)│    │ (capabilities)        │  │
 │  └─────────────────┘    └──────────────────┘    └───────────────────────┘  │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ BackgroundTaskService (定时任务 / webhook，无 SSE)                   │    │
+│  │   └─ 直接驱动 Agent 循环，事件处理自定义（日志/回调）                 │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## 2. 后端架构
 
-### 2.1 ChatSession - 自治工作单元
+### 2.1 ExecutionContext - 纯执行上下文
 
-`ChatSession` 是单次会话运行时的完整封装，**同时拥有状态和行为**。它管理 SSE 连接、phase 状态机，并通过 `run()` 方法驱动 Agent 执行循环。
+`ExecutionContext` 是 Agent 执行过程中的轻量上下文，**仅提供控制信号和事件工厂方法**，不持有业务数据（如 message）。
 
-**设计原则：** 状态内聚的同时行为也内聚——持有 SSE 连接、ExecutionContext、取消信号的类，也应该是驱动 Agent 循环、处理异常和发送事件的类。ChatService 仅负责 session 的注册与销毁（registry），不介入执行细节。
+**设计原则：** 保持轻量和纯粹——只包含执行控制（AbortController）、追踪标识（traceId）、序号生成、callId 栈管理。不涉及数据持久化、内容累积、SSE 发送等业务逻辑。
+
+**核心职责：**
+
+| 职责        | 方法/属性                                        | 说明                        |
+| ----------- | ------------------------------------------------ | --------------------------- |
+| 控制信号    | `signal` / `abort(reason)`                       | 取消执行                    |
+| 追踪标识    | `traceId`                                        | 日志追踪，通常为 message.id |
+| 事件工厂    | `agentStartEvent()` / `agentStreamEvent()` ...   | 创建事件对象，不存储        |
+| 序号生成    | `nextSeq()` (internal)                           | 自动递增，保证事件顺序      |
+| callId 管理 | `pushCallId()` / `popCallId()` / `currentCallId` | 关联 tool_call 与后续事件   |
+
+**关键点：事件工厂只返回对象，不持久化**
+
+```typescript
+agentStreamEvent(content: string): AgentEvent {
+  return { type: 'stream', content, seq: this.nextSeq(), at: Date.now() };
+  // 不调用 appendContent，内容累积由 ChatSession 负责
+}
+```
+
+**关键文件：** `src/server/core/ExecutionContext.ts`
+
+### 2.2 ChatSession - SSE 会话管理
+
+`ChatSession` 是 SSE 实时对话场景的会话管理单元，持有 message、SSE 连接、phase 状态机，并驱动 Agent 执行循环。
+
+**设计原则：** 会话级数据内聚——message、SSE 连接、phase 状态都属于"会话"概念，由 ChatSession 统一管理。执行循环也放这里，因为事件处理逻辑（累积内容、持久化事件、发送 SSE）与会话强相关。
 
 **Phase 状态机：**
 
@@ -65,74 +97,89 @@ waiting ──────────────► running ──────
 
 **核心职责：**
 
-| 职责     | 方法                                   | 说明                            |
-| -------- | -------------------------------------- | ------------------------------- |
-| 执行编排 | `run()`                                | 驱动 Agent 循环，处理异常和取消 |
-| 状态转换 | `transition()`                         | 校验合法转换，同步关联状态      |
-| 取消信号 | `cancel()`                             | 代理到 `ctx.abort()`            |
-| 断线处理 | `handleDisconnect()`                   | 按 phase 分路径处理             |
-| 事件发送 | `sendEvent()` / `sendControlMessage()` | 写入 SSE 连接                   |
-| 资源清理 | `cleanup()`                            | 关闭连接、清理定时器            |
+| 职责     | 方法/属性                       | 说明                                 |
+| -------- | ------------------------------- | ------------------------------------ |
+| 消息管理 | `message`                       | 持有助手消息，累积内容、持久化事件   |
+| 执行编排 | `run(agent, memory, config)`    | 驱动 Agent 循环，处理事件            |
+| 事件处理 | `handleEvent(event)` (internal) | 累积内容 + 持久化事件 + 发送 SSE     |
+| 状态转换 | `transition()` (internal)       | 校验合法转换                         |
+| 取消信号 | `cancel(reason)`                | 代理到 `ctx.abort()`                 |
+| 断线处理 | `handleDisconnect()`            | 按 phase 分路径处理                  |
+| SSE 绑定 | `bindConnection(conn)`          | 绑定 SSE 连接                        |
+| 资源清理 | `cleanup()`                     | 关闭连接、清理定时器、持久化 message |
+
+**事件处理逻辑：**
+
+```typescript
+private handleEvent(event: AgentEvent): void {
+  // 1. 累积 stream 内容到 message
+  if (event.type === 'stream') {
+    this.message.content += event.content;
+  }
+  // 2. 持久化非 stream 事件到 message.meta.events
+  if (event.type !== 'stream') {
+    this.message.meta.events.push(event);
+  }
+  // 3. 发送 SSE
+  this.sendSSE(event);
+}
+```
 
 **关键文件：** `src/server/core/ChatSession.ts`
 
-### 2.2 ChatService - 会话注册表
+### 2.3 ChatService - 会话注册表
 
 管理所有活跃 session 的注册与销毁，提供原子占位操作。不介入 Agent 执行细节。
 
 **核心方法：**
 
-| 方法                             | 说明                       |
-| -------------------------------- | -------------------------- |
-| `acquireSession(conversationId)` | 原子占位，防止 TOCTOU 竞态 |
-| `getSession(conversationId)`     | 获取现有 session           |
-| `runSession(session, ...)`       | 委托 `session.run()` 执行  |
+| 方法                                      | 说明                       |
+| ----------------------------------------- | -------------------------- |
+| `acquireSession(conversationId, message)` | 原子占位，防止 TOCTOU 竞态 |
+| `getSession(conversationId)`              | 获取现有 session           |
+| `runSession(session, ...)`                | 委托 `session.run()` 执行  |
 
 **生命周期：**
 
 ```
-acquireSession() → session(phase=waiting)
+acquireSession(conversationId, message) → session(phase=waiting)
        ↓
 bindConnection(sseConnection)
        ↓
-runSession() → session.run(agent, memory, message) → phase=running
+runSession() → session.run(agent, memory, config) → phase=running
        ↓
-session.run() internally: for await → sendEvent → cleanup → phase=done
+session.run() 内部: for await → handleEvent → cleanup → phase=done
        ↓
 onDispose() → delete from Map, clean Redis
 ```
 
 **关键文件：** `src/server/service/ChatService.ts`
 
-### 2.3 ExecutionContext - 消息上下文
+### 2.4 BackgroundTaskService - 后台任务服务
 
-管理单条消息的构建、事件创建和持久化。
+用于定时任务、webhook 等无 SSE 连接的 Agent 执行场景。不持有 message，事件直接记录日志或回调。
 
-**核心职责：**
+**核心方法：**
 
-- 内容管理：`appendContent()` / `setContent()`
-- 事件工厂：`agentStartEvent()` / `agentStreamEvent()` / `agentFinalEvent()` ...
-- 序号生成：自动递增 `seq`，保证事件顺序
-- 调用追踪：`callId` 关联 tool_call 与后续事件
+| 方法                                      | 说明                  |
+| ----------------------------------------- | --------------------- |
+| `runTask(agent, memory, config, traceId)` | 执行 Agent 并处理事件 |
 
-**事件持久化规则：**
+**使用示例：**
 
-| 事件类型      | 持久化 | 原因               |
-| ------------- | :----: | ------------------ |
-| start         |   ✅   | 标记执行起点       |
-| thought       |   ✅   | 推理过程有回溯价值 |
-| tool_call     |   ✅   | 记录调用及参数     |
-| tool_progress |   ❌   | 中间态数据量大     |
-| tool_result   |   ✅   | 执行结果           |
-| tool_error    |   ✅   | 失败原因           |
-| stream        |   ❌   | 已累积到 content   |
-| final         |   ✅   | 标记执行终点       |
-| cancelled     |   ✅   | 标记取消及原因     |
-| error         |   ✅   | Agent 级错误       |
+```typescript
+const taskService = new BackgroundTaskService();
+await taskService.runTask(agent, memory, config, traceId, {
+  onEvent: event => logger.info({ event, traceId }),
+  onComplete: () => {
+    /* 回调通知 */
+  },
+});
+```
 
-**关键文件：** `src/server/core/context/index.ts`
+**关键文件：** `src/server/service/BackgroundTaskService.ts`
 
-### 2.4 ChatController - HTTP 路由
+### 2.5 ChatController - HTTP 路由
 
 **路由设计：**
 
@@ -426,6 +473,16 @@ agentToolResultEvent('analysis')    → stack: []
 
 关键点：工具内部调用子工具不会创建新的 callId scope，所有子工具的 progress 都属于父工具的 callId。
 
+**嵌套调用示例：**
+
+```
+agentToolCallEvent('a')      → stack: [a]
+agentToolCallEvent('b')      → stack: [a, b]
+agentToolProgressEvent('meta')    → 使用 b 做完callId
+agentToolResultEvent('b')    → stack: [a]
+agentToolResultEvent('b')    → stack: []
+```
+
 ---
 
 ## 5. 关键交互流程
@@ -493,15 +550,15 @@ Client                      Backend                          Agent
 src/
 ├── server/
 │   ├── core/
-│   │   ├── ChatSession.ts        # 会话状态容器
-│   │   ├── context/
-│   │   │   └── index.ts          # ExecutionContext
+│   │   ├── ChatSession.ts        # SSE 会话管理
+│   │   ├── ExecutionContext.ts   # 纯执行上下文
 │   │   ├── agent/                # Agent 实现
 │   │   └── tool/                 # Tool 实现
 │   ├── controller/
 │   │   └── ChatController.ts     # HTTP 路由
 │   └── service/
-│       ├── ChatService.ts        # 会话管理
+│       ├── ChatService.ts        # SSE 会话注册表
+│       ├── BackgroundTaskService.ts  # 后台任务服务
 │       └── SSEService.ts         # SSE 连接管理
 │
 ├── client/
@@ -535,12 +592,16 @@ src/
 
 ### 7.1.1 ChatSession vs ExecutionContext 的分离
 
-| 维度     | ChatSession                                 | ExecutionContext             |
-| -------- | ------------------------------------------- | ---------------------------- |
-| 生命周期 | SSE 建连时创建                              | `run()` 内部创建             |
-| 暴露面   | 仅 ChatService/Controller                   | 传递给所有 Agent/Tool        |
-| 关注点   | 传输层 + 执行编排（SSE、phase、Agent 循环） | 数据层（消息构建、事件工厂） |
-| 持久化   | 不持久化                                    | 事件持久化到 message.meta    |
+| 维度     | ChatSession                               | ExecutionContext           |
+| -------- | ----------------------------------------- | -------------------------- |
+| 生命周期 | SSE 建连时创建                            | ChatSession 构造时创建     |
+| 暴露面   | 仅 ChatService/Controller                 | 传递给所有 Agent/Tool      |
+| 关注点   | 会话层（message、SSE、phase、Agent 循环） | 控制层（signal、事件工厂） |
+| 持久化   | 在 cleanup() 时持久化 message             | 不持久化，仅创建事件对象   |
+
+**为什么 message 放在 ChatSession 而不是 ExecutionContext？**
+
+message 是会话级概念，与 SSE 连接、phase 状态同属一层。ExecutionContext 设计为轻量、纯粹的执行上下文，不应承载业务数据。这样 ExecutionContext 可以被后台任务复用，而 ChatSession 专注于 SSE 实时交互场景。
 
 ### 7.2 为什么 acquireSession 不接收 sseConnection？
 

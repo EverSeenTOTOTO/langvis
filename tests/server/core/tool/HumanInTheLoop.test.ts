@@ -1,7 +1,6 @@
 import HumanInTheLoopTool from '@/server/core/tool/HumanInTheLoop';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
 import { ToolIds } from '@/shared/constants';
-import { Role } from '@/shared/types/entities';
 import { JSONSchemaType } from 'ajv';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext } from '../../helpers/context';
@@ -119,6 +118,7 @@ describe('HumanInTheLoopTool', () => {
 
       const generator = tool.call(
         {
+          conversationId: 'test-conversation',
           message: 'Please enter your name',
           formSchema: objectSchemaWithName,
           timeout: 100,
@@ -151,7 +151,12 @@ describe('HumanInTheLoopTool', () => {
       const ctx = createMockContext();
 
       const generator = tool.call(
-        { message: 'Confirm?', formSchema: booleanSchema, timeout: 50 },
+        {
+          conversationId: 'test-conversation',
+          message: 'Confirm?',
+          formSchema: booleanSchema,
+          timeout: 50,
+        },
         ctx,
       );
 
@@ -170,6 +175,7 @@ describe('HumanInTheLoopTool', () => {
 
       const generator = tool.call(
         {
+          conversationId: 'test-conversation',
           message: 'Question?',
           formSchema: objectSchemaWithAnswer,
           timeout: 200,
@@ -209,7 +215,12 @@ describe('HumanInTheLoopTool', () => {
       const ctx = createMockContext();
 
       const generator = tool.call(
-        { message: 'Confirm?', formSchema: booleanSchema, timeout: 200 },
+        {
+          conversationId: 'test-conversation',
+          message: 'Confirm?',
+          formSchema: booleanSchema,
+          timeout: 200,
+        },
         ctx,
       );
 
@@ -242,7 +253,12 @@ describe('HumanInTheLoopTool', () => {
       const ctx = createMockContext();
 
       const generator = tool.call(
-        { message: 'Confirm?', formSchema: booleanSchema, timeout: 10 },
+        {
+          conversationId: 'test-conversation',
+          message: 'Confirm?',
+          formSchema: booleanSchema,
+          timeout: 10,
+        },
         ctx,
       );
 
@@ -258,7 +274,12 @@ describe('HumanInTheLoopTool', () => {
       const ctx = createMockContext();
 
       const generator = tool.call(
-        { message: 'Confirm?', formSchema: booleanSchema, timeout: 10 },
+        {
+          conversationId: 'test-conversation',
+          message: 'Confirm?',
+          formSchema: booleanSchema,
+          timeout: 10,
+        },
         ctx,
       );
 
@@ -275,19 +296,15 @@ describe('HumanInTheLoopTool', () => {
       const abortController = new AbortController();
       abortController.abort(new Error('User cancelled'));
 
-      const ctx = new ExecutionContext(
-        {
-          id: 'test-trace-id',
-          role: Role.ASSIST,
-          content: '',
-          conversationId: 'test-conversation',
-          createdAt: new Date(),
-        },
-        abortController,
-      );
+      const ctx = new ExecutionContext('test-trace-id', abortController);
 
       const generator = tool.call(
-        { message: 'Confirm?', formSchema: booleanSchema, timeout: 10000 },
+        {
+          conversationId: 'test-conversation',
+          message: 'Confirm?',
+          formSchema: booleanSchema,
+          timeout: 10000,
+        },
         ctx,
       );
 
@@ -296,19 +313,15 @@ describe('HumanInTheLoopTool', () => {
 
     it('should throw when signal is aborted during wait', async () => {
       const abortController = new AbortController();
-      const ctx = new ExecutionContext(
-        {
-          id: 'test-trace-id',
-          role: Role.ASSIST,
-          content: '',
-          conversationId: 'test-conversation',
-          createdAt: new Date(),
-        },
-        abortController,
-      );
+      const ctx = new ExecutionContext('test-trace-id', abortController);
 
       const generator = tool.call(
-        { message: 'Confirm?', formSchema: booleanSchema, timeout: 10000 },
+        {
+          conversationId: 'test-conversation',
+          message: 'Confirm?',
+          formSchema: booleanSchema,
+          timeout: 10000,
+        },
         ctx,
       );
 
@@ -323,18 +336,17 @@ describe('HumanInTheLoopTool', () => {
   describe('Redis key format', () => {
     it('should use conversationId as key suffix', async () => {
       const customCtx = new ExecutionContext(
-        {
-          id: 'custom-trace-id',
-          role: Role.ASSIST,
-          content: '',
-          conversationId: 'my-custom-conversation',
-          createdAt: new Date(),
-        },
+        'custom-trace-id',
         new AbortController(),
       );
 
       const generator = tool.call(
-        { message: 'Test', formSchema: booleanSchema, timeout: 10 },
+        {
+          conversationId: 'my-custom-conversation',
+          message: 'Test',
+          formSchema: booleanSchema,
+          timeout: 10,
+        },
         customCtx,
       );
 
@@ -353,6 +365,7 @@ describe('HumanInTheLoopTool', () => {
 
       const generator = tool.call(
         {
+          conversationId: 'test-conversation',
           message: 'Enter email',
           formSchema: objectSchemaWithEmail,
           timeout: 10,

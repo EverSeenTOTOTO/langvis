@@ -1,28 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
-import { Role } from '@/shared/entities/Message';
 
 describe('ExecutionContext', () => {
   let ctx: ExecutionContext;
-  let mockMessage: any;
   let mockController: any;
 
   beforeEach(() => {
-    mockMessage = {
-      id: 'msg-123',
-      conversationId: 'conv-123',
-      role: Role.ASSIST,
-      content: '',
-      meta: { events: [] },
-      createdAt: new Date(),
-    };
-
     mockController = {
       abort: vi.fn(),
       signal: { aborted: false, reason: null },
     };
 
-    ctx = new ExecutionContext(mockMessage, mockController);
+    ctx = new ExecutionContext('msg-123', mockController);
   });
 
   describe('seq counter', () => {
@@ -163,18 +152,17 @@ describe('ExecutionContext', () => {
   });
 
   describe('tool result/error flow', () => {
-    it('should persist tool_result event and pop callId', () => {
+    it('should return tool_result event and pop callId', () => {
       ctx.agentToolCallEvent('test_tool', {});
       const resultEvent = ctx.agentToolResultEvent('test_tool', {
         result: 'success',
       });
 
       expect(resultEvent.type).toBe('tool_result');
-      expect(mockMessage.meta.events).toContainEqual(resultEvent);
       expect(ctx.currentCallId).toBeUndefined();
     });
 
-    it('should persist tool_error event and pop callId', () => {
+    it('should return tool_error event and pop callId', () => {
       ctx.agentToolCallEvent('test_tool', {});
       const errorEvent = ctx.agentToolErrorEvent(
         'test_tool',
@@ -182,92 +170,72 @@ describe('ExecutionContext', () => {
       );
 
       expect(errorEvent.type).toBe('tool_error');
-      expect(mockMessage.meta.events).toContainEqual(errorEvent);
       expect(ctx.currentCallId).toBeUndefined();
     });
   });
 
-  describe('event persistence', () => {
-    it('should persist start event', () => {
-      ctx.agentStartEvent();
+  describe('event factory methods', () => {
+    it('should create start event', () => {
+      const event = ctx.agentStartEvent();
 
-      expect(mockMessage.meta.events).toHaveLength(1);
-      expect(mockMessage.meta.events[0].type).toBe('start');
-    });
-
-    it('should persist thought event', () => {
-      ctx.agentThoughtEvent('thinking...');
-
-      expect(mockMessage.meta.events).toHaveLength(1);
-      expect(mockMessage.meta.events[0].type).toBe('thought');
-    });
-
-    it('should persist tool_call event', () => {
-      ctx.agentToolCallEvent('test_tool', { arg: 'value' });
-
-      expect(mockMessage.meta.events).toHaveLength(1);
-      expect(mockMessage.meta.events[0].type).toBe('tool_call');
-    });
-
-    it('should NOT persist stream event', () => {
-      ctx.agentStreamEvent('content');
-
-      expect(mockMessage.meta.events).toHaveLength(0);
-    });
-
-    it('should persist final event', () => {
-      ctx.agentFinalEvent();
-
-      expect(mockMessage.meta.events).toHaveLength(1);
-      expect(mockMessage.meta.events[0].type).toBe('final');
-    });
-
-    it('should persist cancelled event', () => {
-      ctx.agentCancelledEvent('User cancelled');
-
-      expect(mockMessage.meta.events).toHaveLength(1);
-      expect(mockMessage.meta.events[0].type).toBe('cancelled');
-    });
-
-    it('should persist error event', () => {
-      ctx.agentErrorEvent('Something went wrong');
-
-      expect(mockMessage.meta.events).toHaveLength(1);
-      expect(mockMessage.meta.events[0].type).toBe('error');
-      expect(mockMessage.content).toBe('Something went wrong');
-    });
-  });
-
-  describe('cancelled event', () => {
-    it('should create cancelled event with reason', () => {
-      const event = ctx.agentCancelledEvent('User requested');
-
-      expect(event.type).toBe('cancelled');
-      expect((event as any).reason).toBe('User requested');
+      expect(event.type).toBe('start');
       expect(event.seq).toBe(1);
       expect(event.at).toBeDefined();
     });
-  });
 
-  describe('content management', () => {
-    it('should append content', () => {
-      ctx.appendContent('Hello');
-      ctx.appendContent(' World');
+    it('should create thought event', () => {
+      const event = ctx.agentThoughtEvent('thinking...');
 
-      expect(mockMessage.content).toBe('Hello World');
+      expect(event.type).toBe('thought');
+      expect((event as any).content).toBe('thinking...');
+      expect(event.seq).toBe(1);
+      expect(event.at).toBeDefined();
     });
 
-    it('should set content', () => {
-      ctx.setContent('New content');
+    it('should create stream event', () => {
+      const event = ctx.agentStreamEvent('content');
 
-      expect(mockMessage.content).toBe('New content');
+      expect(event.type).toBe('stream');
+      expect((event as any).content).toBe('content');
+      expect(event.seq).toBe(1);
+      expect(event.at).toBeDefined();
     });
 
-    it('should append content on agentStreamEvent', () => {
-      ctx.agentStreamEvent('Hello');
-      ctx.agentStreamEvent(' World');
+    it('should create tool_call event', () => {
+      const event = ctx.agentToolCallEvent('test_tool', { arg: 'value' });
 
-      expect(mockMessage.content).toBe('Hello World');
+      expect(event.type).toBe('tool_call');
+      expect((event as any).toolName).toBe('test_tool');
+      expect((event as any).toolArgs).toEqual({ arg: 'value' });
+      expect((event as any).callId).toMatch(/^tc_/);
+      expect(event.seq).toBe(1);
+      expect(event.at).toBeDefined();
+    });
+
+    it('should create final event', () => {
+      const event = ctx.agentFinalEvent();
+
+      expect(event.type).toBe('final');
+      expect(event.seq).toBe(1);
+      expect(event.at).toBeDefined();
+    });
+
+    it('should create cancelled event', () => {
+      const event = ctx.agentCancelledEvent('User cancelled');
+
+      expect(event.type).toBe('cancelled');
+      expect((event as any).reason).toBe('User cancelled');
+      expect(event.seq).toBe(1);
+      expect(event.at).toBeDefined();
+    });
+
+    it('should create error event', () => {
+      const event = ctx.agentErrorEvent('Something went wrong');
+
+      expect(event.type).toBe('error');
+      expect((event as any).error).toBe('Something went wrong');
+      expect(event.seq).toBe(1);
+      expect(event.at).toBeDefined();
     });
   });
 
@@ -284,7 +252,7 @@ describe('ExecutionContext', () => {
       expect(ctx.signal).toBe(mockController.signal);
     });
 
-    it('should expose traceId from message id', () => {
+    it('should expose traceId from constructor', () => {
       expect(ctx.traceId).toBe('msg-123');
     });
   });

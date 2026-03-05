@@ -216,7 +216,7 @@ describe('WebFetchTool - proxy retry', () => {
     }
 
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('asking user about proxy retry'),
+      expect.stringContaining('retrying with proxy'),
     );
   });
 });

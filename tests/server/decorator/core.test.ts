@@ -462,4 +462,3 @@ describe('Config Decorators', () => {
     });
   });
 });
-
