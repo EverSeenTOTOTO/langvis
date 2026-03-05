@@ -2,6 +2,7 @@ import { ToolConfig } from '@/shared/types';
 
 export const config: ToolConfig<
   {
+    conversationId: string;
     message: string;
     formSchema: Record<string, unknown>;
     timeout?: number;
@@ -43,6 +44,11 @@ formSchema MUST be an object with fields defined in \`properties\`. Examples:
   inputSchema: {
     type: 'object',
     properties: {
+      conversationId: {
+        type: 'string',
+        description:
+          'The conversation ID to associate with this input request.',
+      },
       message: {
         type: 'string',
         description:
@@ -63,7 +69,7 @@ formSchema MUST be an object with fields defined in \`properties\`. Examples:
         nullable: true,
       },
     },
-    required: ['message', 'formSchema'],
+    required: ['conversationId', 'message', 'formSchema'],
   },
   outputSchema: {
     type: 'object',

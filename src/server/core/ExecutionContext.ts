@@ -1,23 +1,29 @@
 import { AgentEvent } from '@/shared/types';
-import type { Message } from '@/shared/types/entities';
 import { generateId } from '@/shared/utils';
 
+/**
+ * ExecutionContext - pure execution context for Agent/Tool execution.
+ *
+ * Design principle: lightweight and pure - only contains execution control,
+ * trace identifiers, seq generation, and callId stack management.
+ * No data persistence, content accumulation, or SSE sending.
+ */
 export class ExecutionContext {
   public get signal(): AbortSignal {
     return this.controller.signal;
   }
 
-  public get traceId(): string {
-    return this.message.id;
-  }
+  public readonly traceId: string;
 
   private seqCounter = 0;
   private callIdStack: string[] = [];
 
   constructor(
-    public message: Message,
+    traceId: string,
     private readonly controller: AbortController,
-  ) {}
+  ) {
+    this.traceId = traceId;
+  }
 
   private nextSeq(): number {
     return ++this.seqCounter;
@@ -41,93 +47,62 @@ export class ExecutionContext {
     this.callIdStack.pop();
   }
 
-  // === Content management ===
-
-  appendContent(text: string): void {
-    this.message.content += text;
+  abort(reason: string): void {
+    this.controller.abort(new Error(reason));
   }
 
-  setContent(content: string): void {
-    this.message.content = content;
-  }
-
-  // === Events management ===
-
-  private getEvents(): AgentEvent[] {
-    if (!this.message.meta) {
-      this.message.meta = {};
-    }
-    if (!this.message.meta.events) {
-      this.message.meta.events = [];
-    }
-    return this.message.meta.events;
-  }
-
-  private pushEvent(event: AgentEvent): void {
-    if (event.type !== 'stream') {
-      this.getEvents().push(event);
-    }
-  }
-
-  // === AgentEvent helpers ===
+  // === Event factories (return event objects, no persistence) ===
 
   agentStartEvent(): AgentEvent {
-    const event: AgentEvent = {
+    return {
       type: 'start',
       seq: this.nextSeq(),
       at: Date.now(),
     };
-    this.pushEvent(event);
-    return event;
   }
 
   agentThoughtEvent(content: string): AgentEvent {
-    const event: AgentEvent = {
+    return {
       type: 'thought',
       content,
       seq: this.nextSeq(),
       at: Date.now(),
     };
-    this.pushEvent(event);
-    return event;
   }
 
   agentStreamEvent(content: string): AgentEvent {
-    this.appendContent(content);
-    return { type: 'stream', content, seq: this.nextSeq(), at: Date.now() };
+    return {
+      type: 'stream',
+      content,
+      seq: this.nextSeq(),
+      at: Date.now(),
+    };
   }
 
   agentFinalEvent(): AgentEvent {
-    const event: AgentEvent = {
+    return {
       type: 'final',
       seq: this.nextSeq(),
       at: Date.now(),
     };
-    this.pushEvent(event);
-    return event;
   }
 
   agentCancelledEvent(reason: string): AgentEvent {
-    const event: AgentEvent = {
+    return {
       type: 'cancelled',
       reason,
       seq: this.nextSeq(),
       at: Date.now(),
     };
-    this.pushEvent(event);
-    return event;
   }
 
   agentErrorEvent(error: string): AgentEvent {
-    const event: AgentEvent = {
+    return {
       type: 'error',
       error,
       seq: this.nextSeq(),
       at: Date.now(),
     };
-    this.pushEvent(event);
-    this.setContent(error);
-    return event;
   }
 
   agentToolCallEvent(
@@ -135,8 +110,7 @@ export class ExecutionContext {
     toolArgs: Record<string, unknown>,
   ): AgentEvent {
     const callId = this.pushCallId();
-
-    const event: AgentEvent = {
+    return {
       type: 'tool_call',
       callId,
       toolName,
@@ -144,8 +118,6 @@ export class ExecutionContext {
       seq: this.nextSeq(),
       at: Date.now(),
     };
-    this.pushEvent(event);
-    return event;
   }
 
   agentToolProgressEvent(toolName: string, data: unknown): AgentEvent {
@@ -168,7 +140,6 @@ export class ExecutionContext {
       seq: this.nextSeq(),
       at: Date.now(),
     };
-    this.pushEvent(event);
     this.popCallId();
     return event;
   }
@@ -182,13 +153,7 @@ export class ExecutionContext {
       seq: this.nextSeq(),
       at: Date.now(),
     };
-    this.pushEvent(event);
     this.popCallId();
     return event;
-  }
-
-  abort(reason: string): void {
-    this.controller.abort(new Error(reason));
-    this.setContent(reason);
   }
 }

@@ -7,7 +7,6 @@ import type { RedisClientType } from 'redis';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
 import { ChatSession } from '../core/ChatSession';
-import { ExecutionContext } from '../core/ExecutionContext';
 import { Memory } from '../core/memory';
 import { registerMemory } from '../decorator/core';
 import { service } from '../decorator/service';
@@ -104,11 +103,11 @@ export class ChatService {
     }
   }
 
-  private async finalizeMessage(ctx: ExecutionContext): Promise<void> {
+  private async finalizeMessage(message: Message): Promise<void> {
     await this.conversationService.updateMessage(
-      ctx.message.id,
-      ctx.message.content,
-      ctx.message.meta,
+      message.id,
+      message.content,
+      message.meta,
     );
   }
 
@@ -143,7 +142,13 @@ export class ChatService {
 
     // Add system prompt if needed
     if (messages.length === 0) {
-      const systemPrompt = agent.systemPrompt.build();
+      const systemPrompt = agent.systemPrompt
+        .with(
+          'Background',
+          `${conversationId ? `Conversation ID: ${conversationId}\n` : ''}${currentUserId ? `User ID: ${currentUserId}` : ''}`.trim(),
+        )
+        .build();
+
       if (systemPrompt) {
         chatMessages.push({
           role: Role.SYSTEM,

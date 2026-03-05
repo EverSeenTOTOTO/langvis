@@ -54,6 +54,9 @@ export default class GirlFriendAgent extends Agent {
 
     this.logger.debug('GF agent messages: ', conversationMessages);
 
+    // Track accumulated content for TTS
+    let accumulatedContent = '';
+
     for await (const event of llmCallTool.call(
       {
         model: options?.model?.code,
@@ -63,6 +66,7 @@ export default class GirlFriendAgent extends Agent {
       ctx,
     )) {
       if (event.type === 'tool_progress' && typeof event.data === 'string') {
+        accumulatedContent += event.data;
         yield ctx.agentStreamEvent(event.data);
       } else {
         yield event;
@@ -71,7 +75,7 @@ export default class GirlFriendAgent extends Agent {
 
     const tts = container.resolve<TextToSpeechTool>(ToolIds.TEXT_TO_SPEECH);
     const ttsArgs = {
-      text: ctx.message.content,
+      text: accumulatedContent,
       reqId: generateId('req'),
       voice: options?.tts?.voice || '',
       emotion: options?.tts?.emotion || '',
