@@ -151,7 +151,9 @@ describe('DocumentController', () => {
       );
 
       expect(mockRes.status).toHaveBeenCalledWith(404);
-      expect(mockRes.json).toHaveBeenCalledWith({ error: 'Document not found' });
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Document not found',
+      });
     });
 
     it('should return 401 if user not authenticated', async () => {
@@ -192,7 +194,9 @@ describe('DocumentController', () => {
       );
 
       expect(mockRes.status).toHaveBeenCalledWith(404);
-      expect(mockRes.json).toHaveBeenCalledWith({ error: 'Document not found' });
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Document not found',
+      });
     });
 
     it('should return 401 if user not authenticated', async () => {

@@ -143,7 +143,7 @@ export class ChatStore {
     this.states.get(conversationId)?.closeEventSource();
   }
 
-  @api((req: CancelChatRequest) => `/api/chat/cancel/${req.conversationId}`, {
+  @api('/api/chat/cancel/:conversationId', {
     method: 'post',
   })
   async cancelChat(
@@ -182,10 +182,7 @@ export class ChatStore {
     });
   }
 
-  @api(
-    (req: SubmitHumanInputRequest) => `/api/human-input/${req.conversationId}`,
-    { method: 'post' },
-  )
+  @api('/api/human-input/:conversationId', { method: 'post' })
   async submitHumanInput(
     _params: SubmitHumanInputRequest,
     req?: ApiRequest<SubmitHumanInputRequest>,
@@ -193,10 +190,7 @@ export class ChatStore {
     return req!.send();
   }
 
-  @api(
-    (req: GetHumanInputStatusRequest) =>
-      `/api/human-input/${req.conversationId}`,
-  )
+  @api('/api/human-input/:conversationId')
   async getHumanInputStatus(
     _params: GetHumanInputStatusRequest,
     req?: ApiRequest<GetHumanInputStatusRequest>,
@@ -204,7 +198,7 @@ export class ChatStore {
     return req!.send() as Promise<GetHumanInputStatusResponse>;
   }
 
-  @api((req: StartChatRequest) => `/api/chat/start/${req.conversationId}`, {
+  @api('/api/chat/start/:conversationId', {
     method: 'post',
   })
   async startChat(

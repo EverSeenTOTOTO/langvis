@@ -1,6 +1,11 @@
 import Ajv, { JSONSchemaType, ValidateFunction } from 'ajv';
 
-const ajv = new Ajv({ allErrors: true, strict: false, useDefaults: true });
+const ajv = new Ajv({
+  allErrors: true,
+  strict: false,
+  useDefaults: true,
+  coerceTypes: true,
+});
 
 const validatorCache = new WeakMap<object, ValidateFunction>();
 

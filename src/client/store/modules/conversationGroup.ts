@@ -58,13 +58,9 @@ export class ConversationGroupStore {
     return result;
   }
 
-  @api(
-    (req: UpdateConversationGroupRequest) =>
-      `/api/conversation-group/${req.id}`,
-    {
-      method: 'put',
-    },
-  )
+  @api('/api/conversation-group/:id', {
+    method: 'put',
+  })
   async updateGroup(
     _params: UpdateConversationGroupRequest,
     req?: ApiRequest<UpdateConversationGroupRequest>,
@@ -73,13 +69,9 @@ export class ConversationGroupStore {
     await this.getAllGroups();
   }
 
-  @api(
-    (req: DeleteConversationGroupRequest) =>
-      `/api/conversation-group/${req.id}`,
-    {
-      method: 'delete',
-    },
-  )
+  @api('/api/conversation-group/:id', {
+    method: 'delete',
+  })
   async deleteGroup(
     _params: DeleteConversationGroupRequest,
     req?: ApiRequest<DeleteConversationGroupRequest>,

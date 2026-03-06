@@ -1,5 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { container } from 'tsyringe';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
+import { InjectTokens } from '@/shared/constants';
+
+const mockRedis = {
+  setEx: () => Promise.resolve('OK'),
+  get: () => Promise.resolve(null),
+  del: () => Promise.resolve(1),
+} as any;
+
+container.register(InjectTokens.REDIS, { useValue: mockRedis });
 
 describe('ExecutionContext', () => {
   let ctx: ExecutionContext;

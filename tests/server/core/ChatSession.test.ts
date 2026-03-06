@@ -1,9 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { container } from 'tsyringe';
 import { ChatSession } from '@/server/core/ChatSession';
 import type { SSEConnection } from '@/server/service/SSEService';
 import type { Agent } from '@/server/core/agent';
 import type { Memory } from '@/server/core/memory';
 import { Role } from '@/shared/entities/Message';
+import { InjectTokens } from '@/shared/constants';
+
+const mockRedis = {
+  setEx: () => Promise.resolve('OK'),
+  get: () => Promise.resolve(null),
+  del: () => Promise.resolve(1),
+} as any;
+
+try {
+  container.resolve(InjectTokens.REDIS);
+} catch {
+  container.register(InjectTokens.REDIS, { useValue: mockRedis });
+}
 
 describe('ChatSession', () => {
   let session: ChatSession;

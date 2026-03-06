@@ -15,11 +15,7 @@ type ApiConfig = {
   options?: RequestInit & { timeout?: number };
 };
 
-export type ApiOptions<P> =
-  | string
-  | ((req: P) => string)
-  | ApiConfig
-  | ((req: P) => ApiConfig);
+export type ApiOptions = string | ApiConfig;
 
 const logError = (msg: any) => {
   if (isTest()) return;
@@ -34,18 +30,51 @@ const logError = (msg: any) => {
 const isFullPath = (path: string) => /^https?:\/\//.test(path);
 
 const compilePath = <P extends Record<string, any>>(url: string, req: P) => {
-  const query = url.match(/\?.*/);
-  const path = url.replace(/\?.*/, '');
+  const existingQuery = url.match(/\?.*/);
+  const basePath = url.replace(/\?.*/, '');
 
-  if (isFullPath(path)) {
-    const parsedUrl = new URL(path);
+  let compiledPath: string;
+  let baseUrl: string;
 
+  if (isFullPath(basePath)) {
+    const parsedUrl = new URL(basePath);
     parsedUrl.pathname = compile(parsedUrl.pathname)(req);
-
-    return `${parsedUrl.toString()}${query ? query[0] : ''}`;
+    compiledPath = parsedUrl.pathname;
+    baseUrl = parsedUrl.origin;
+  } else {
+    compiledPath = compile(basePath)(req);
+    baseUrl = '';
   }
 
-  return `${compile(path)(req)}${query ? query[0] : ''}`;
+  // Collect params used in path template (e.g., :id)
+  const usedKeys = new Set<string>();
+  const tokenRegex = /:([^/]+)/g;
+  let match;
+  while ((match = tokenRegex.exec(basePath)) !== null) {
+    usedKeys.add(match[1]);
+  }
+
+  // Append unused params as query string
+  const extraParams = Object.entries(req ?? {})
+    .filter(([key]) => !usedKeys.has(key) && req?.[key] !== undefined)
+    .map(
+      ([key, value]) =>
+        `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`,
+    )
+    .join('&');
+
+  // Merge existing query with extra params
+  const queryString = existingQuery
+    ? extraParams
+      ? `${existingQuery[0]}&${extraParams}`
+      : existingQuery[0]
+    : extraParams
+      ? `?${extraParams}`
+      : '';
+
+  const fullPath = queryString ? `${compiledPath}${queryString}` : compiledPath;
+
+  return baseUrl ? `${baseUrl}${fullPath}` : fullPath;
 };
 
 const getApiOptions = <P extends Record<string, any>>(
@@ -54,35 +83,16 @@ const getApiOptions = <P extends Record<string, any>>(
     config,
     options,
   }: {
-    config: ApiOptions<P>;
+    config: ApiOptions;
     options?: ApiConfig['options'];
   },
 ) => {
-  if (typeof config === 'string') {
-    return { path: compilePath(config, req), options };
-  }
-
-  if (typeof config === 'function') {
-    const result = config(req);
-
-    if (typeof result === 'string') {
-      return {
-        path: compilePath(result, req),
-        options,
-      };
-    }
-
-    return {
-      path: compilePath(result.path, req),
-      options: result.options || options,
-    };
-  }
-
-  const { path } = config;
+  const path = typeof config === 'string' ? config : config.path;
+  const resolvedOptions = typeof config === 'string' ? options : config.options;
 
   return {
     path: compilePath(path, req),
-    options: config.options,
+    options: resolvedOptions,
   };
 };
 
@@ -123,7 +133,7 @@ export class ApiRequest<P extends Record<string, any> = {}> extends Request {
   constructor(
     req: P,
     config: {
-      config: ApiOptions<P>;
+      config: ApiOptions;
       options?: ApiConfig['options'];
     },
   ) {
@@ -186,8 +196,8 @@ export class ApiRequest<P extends Record<string, any> = {}> extends Request {
   }
 }
 
-export function api<P extends Record<string, any> = {}>(
-  config: ApiOptions<P>,
+export function api(
+  config: ApiOptions,
   options?: ApiConfig['options'],
 ): PropertyDecorator {
   return function apiDecorator(target: any, propertyKey: string | symbol) {
@@ -203,7 +213,7 @@ export function api<P extends Record<string, any> = {}>(
 export function wrapApi<P extends Record<string, any>, R>(
   fn: (params: P, req: ApiRequest<P>) => R,
   config: {
-    config: ApiOptions<P>;
+    config: ApiOptions;
     options?: ApiConfig['options'];
   },
 ) {

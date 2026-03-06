@@ -75,8 +75,7 @@
 
     .chat-messages {
       flex: 1;
-      gap: 32px;
-      padding: 16px;
+      padding-inline: 16px;
       overflow-y: auto;
 
       .system-message {

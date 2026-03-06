@@ -205,12 +205,30 @@ export default class ReActAgent extends Agent {
   ): AsyncGenerator<AgentEvent, string, void> {
     const tool = container.resolve<Tool>(toolName);
 
-    yield ctx.agentToolCallEvent(toolName, toolInput);
+    // Auto resolve CachedReference in input
+    const resolvedInput = await ctx.autoResolveInput(toolInput);
+
+    yield ctx.agentToolCallEvent(
+      toolName,
+      resolvedInput as Record<string, unknown>,
+    );
 
     try {
-      const output = yield* tool.call(toolInput, ctx);
+      const output = yield* tool.call(
+        resolvedInput as Record<string, unknown>,
+        ctx,
+      );
+
+      // Auto compress large strings in output (skip for read_cache to avoid recursive compression)
+      const compressedOutput =
+        toolName === ToolIds.READ_CACHE
+          ? output
+          : await ctx.autoCompressOutput(output);
+
       const observation =
-        typeof output === 'string' ? output : JSON.stringify(output);
+        typeof compressedOutput === 'string'
+          ? compressedOutput
+          : JSON.stringify(compressedOutput);
       yield ctx.agentToolResultEvent(toolName, observation);
       return observation;
     } catch (error) {

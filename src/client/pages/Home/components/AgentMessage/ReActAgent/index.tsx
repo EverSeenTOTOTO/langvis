@@ -113,34 +113,30 @@ function deriveReActState(state: MessageRenderState): ReActDerivedState {
   };
 }
 
-function getToolDisplayName(toolName: string): string {
-  const names: Record<string, string> = {
-    [ToolIds.ANALYSIS]: 'Analysis',
-    [ToolIds.META_EXTRACT]: 'Metadata Extraction',
-    [ToolIds.CHUNK]: 'Content Chunking',
-    [ToolIds.EMBED]: 'Embedding',
-    [ToolIds.ARCHIVE]: 'Archive',
-    [ToolIds.RETRIEVE]: 'Retrieve',
-    [ToolIds.HUMAN_IN_THE_LOOP]: 'Human Input',
-    [ToolIds.LLM_CALL]: 'LLM Call',
-    [ToolIds.WEB_FETCH]: 'Web Fetch',
-  };
-  return names[toolName] ?? toolName;
+const TAG_COLORS = [
+  'magenta',
+  'red',
+  'volcano',
+  'orange',
+  'gold',
+  'lime',
+  'green',
+  'cyan',
+  'blue',
+  'geekblue',
+  'purple',
+];
+
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
 }
 
 function getToolColor(toolName: string): string {
-  const colors: Record<string, string> = {
-    [ToolIds.ANALYSIS]: 'purple',
-    [ToolIds.META_EXTRACT]: 'geekblue',
-    [ToolIds.CHUNK]: 'cyan',
-    [ToolIds.EMBED]: 'blue',
-    [ToolIds.ARCHIVE]: 'green',
-    [ToolIds.RETRIEVE]: 'orange',
-    [ToolIds.HUMAN_IN_THE_LOOP]: 'gold',
-    [ToolIds.LLM_CALL]: 'magenta',
-    [ToolIds.WEB_FETCH]: 'lime',
-  };
-  return colors[toolName] ?? 'default';
+  return TAG_COLORS[hashString(toolName) % TAG_COLORS.length];
 }
 
 function StandaloneThoughtBlock({ thought }: { thought: ThoughtItem }) {
@@ -223,7 +219,6 @@ function AnalysisPipeline({
 
 function ToolBlockItem({ block }: { block: ToolBlock }) {
   const { toolCall, latestProgress, isPending } = block;
-  const displayName = getToolDisplayName(toolCall.toolName);
   const color = getToolColor(toolCall.toolName);
 
   const Icon = isPending ? (
@@ -258,7 +253,7 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
 
       <Flex align="center" gap={8} className="react-tool-header">
         {Icon}
-        <Tag color={color}>{displayName}</Tag>
+        <Tag color={color}>{toolCall.toolName}</Tag>
         <Typography.Text type="secondary" className="react-tool-time">
           {dayjs(toolCall.at).format('HH:mm:ss')}
         </Typography.Text>

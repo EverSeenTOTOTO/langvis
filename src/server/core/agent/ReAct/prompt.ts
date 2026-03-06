@@ -43,7 +43,19 @@ interface FinalAnswerResponse {
   thought?: string; // Optional: Reasoning about the answer or what info is missing.
   final_answer: string; // The actual response content to the user.
 }
-\`\`\``,
+\`\`\`
+
+## Cached References
+
+When a tool returns an object containing a \`$cached\` field, it is a reference to cached content:
+
+\`\`\`json
+{ "title": "Example", "content": { "$cached": "cache_abc123", "$size": 45000, "$preview": "Lorem ipsum..." } }
+\`\`\`
+
+**Important:**
+- To pass this content to another tool, copy the entire \`$cached\` object exactly as-is into the input parameter
+- To read the full content yourself, use the \`read_cache\` tool with the \`$cached\` value as the key`,
     )
     .with(
       ReActSections.GUIDELINES,

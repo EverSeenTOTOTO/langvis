@@ -10,6 +10,7 @@ export enum ToolIds {
   ARCHIVE = 'archive_tool',
   ANALYSIS = 'analysis_tool',
   RETRIEVE = 'retrieve_tool',
+  READ_CACHE = 'read_cache_tool',
 }
 
 export enum AgentIds {

@@ -77,7 +77,7 @@ export class ConversationStore {
     return undefined;
   }
 
-  @api((req: UpdateConversationRequest) => `/api/conversation/${req.id}`, {
+  @api('/api/conversation/:id', {
     method: 'put',
   })
   async updateConversation(
@@ -89,7 +89,7 @@ export class ConversationStore {
     return result as Conversation;
   }
 
-  @api((req: { id: string }) => `/api/conversation/${req.id}`, {
+  @api('/api/conversation/:id', {
     method: 'delete',
   })
   async deleteConversation(
@@ -110,13 +110,9 @@ export class ConversationStore {
     }
   }
 
-  @api(
-    (req: AddMessageToConversationRequest) =>
-      `/api/conversation/${req.id}/messages`,
-    {
-      method: 'post',
-    },
-  )
+  @api('/api/conversation/:id/messages', {
+    method: 'post',
+  })
   async addMessageToConversation(
     params: AddMessageToConversationRequest,
     req?: ApiRequest<AddMessageToConversationRequest>,
@@ -125,7 +121,7 @@ export class ConversationStore {
     await this.getMessagesByConversationId({ id: params.id });
   }
 
-  @api((req: { id: string }) => `/api/conversation/${req.id}/messages`)
+  @api('/api/conversation/:id/messages')
   async getMessagesByConversationId(
     params: { id: string },
     req?: ApiRequest<{ id: string }>,
@@ -135,11 +131,7 @@ export class ConversationStore {
     return messages;
   }
 
-  @api(
-    (req: BatchDeleteMessagesInConversationRequest) =>
-      `/api/conversation/${req.id}/messages`,
-    { method: 'delete' },
-  )
+  @api('/api/conversation/:id/messages', { method: 'delete' })
   async batchDeleteMessagesInConversation(
     params: BatchDeleteMessagesInConversationRequest,
     req?: ApiRequest<BatchDeleteMessagesInConversationRequest>,

@@ -16,6 +16,14 @@ beforeAll(() => {
       return;
     }
 
+    // Handle /api/:type path for testing path params with extra query
+    const pathMatch = req.url!.match(/^\/api\/([^/?]+)/);
+    if (pathMatch) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ data: req.url!.split('?')[1] || pathMatch[1] }));
+      return;
+    }
+
     if (/apipost/.test(req.url!)) {
       let data = '';
 
@@ -100,10 +108,6 @@ it('wrapApi', async () => {
       return req!.send();
     }
 
-    withQuery(_: any, req?: ApiRequest) {
-      return req!.send();
-    }
-
     withParams(_: any, req?: ApiRequest) {
       return req!.send();
     }
@@ -126,27 +130,18 @@ it('wrapApi', async () => {
   expect(await apiPost('POST')).toEqual('POST');
 
   const apiHeader = wrapApi(demo.modifyHeader.bind(demo), {
-    config: () => ({
+    config: {
       path: `http://localhost:${port}/apiheader`,
       options: {
         headers: {
           'x-test': 'test',
         },
       },
-    }),
+    },
   });
 
   expect(await apiHeader({})).toEqual({
     data: 'test',
-  });
-
-  const apiQuery = wrapApi(demo.withQuery.bind(demo), {
-    config: (req: { query: string }) =>
-      `http://localhost:${port}/apiquery?test=${req.query}`,
-  });
-
-  expect(await apiQuery({ query: '42' })).toEqual({
-    data: 'test=42',
   });
 
   const apiError = wrapApi(demo.modifyHeader.bind(demo), {
@@ -210,13 +205,6 @@ it('api', async () => {
       return req!.send();
     }
 
-    @api(() => {
-      throw new Error('test');
-    })
-    error2(_: any, req?: ApiRequest) {
-      return req!.send();
-    }
-
     @api(`http://localhost:${port}/apierror`)
     error3(_: any, req?: ApiRequest) {
       return req!.send();
@@ -238,7 +226,6 @@ it('api', async () => {
   await expect(demo.error({})).rejects.toThrow(
     `Response error: http://localhost:${port}/apitimeout 404`,
   );
-  await expect(demo.error2({})).rejects.toThrow('test');
   await expect(demo.error3({})).rejects.toThrow('test');
   expect(await demo.withParams({ type: 'get' })).toEqual({ data: 'GET' });
   expect(await demo.cookie({})).toEqual({
@@ -273,4 +260,101 @@ it('api with FormData auto-detection', async () => {
   const result2 = await demo.uploadWithoutFile({ name: 'hello' });
 
   expect(result2).toEqual({ name: 'hello' });
+});
+
+it('api with extra params as query string', async () => {
+  class Demo {
+    @api(`http://localhost:${port}/apiquery`)
+    withExtraParams(_: any, req?: ApiRequest) {
+      return req!.send();
+    }
+
+    @api(`http://localhost:${port}/api/:type`)
+    withPathAndQuery(_: any, req?: ApiRequest) {
+      return req!.send();
+    }
+  }
+
+  const demo = factory(new Demo());
+
+  // Extra params should be appended as query string
+  const result1 = await demo.withExtraParams({
+    keyword: 'test',
+    category: 'tech',
+    page: 1,
+    pageSize: 10,
+  });
+
+  expect(result1.data).toContain('keyword=test');
+  expect(result1.data).toContain('category=tech');
+  expect(result1.data).toContain('page=1');
+  expect(result1.data).toContain('pageSize=10');
+
+  // Path params should not be in query string, extra params should
+  const result2 = await demo.withPathAndQuery({
+    type: 'query',
+    keyword: 'search',
+    page: 2,
+  });
+
+  expect(result2.data).toContain('keyword=search');
+  expect(result2.data).toContain('page=2');
+  expect(result2.data).not.toContain('type=query');
+
+  // Undefined values should not be in query string
+  const result3 = await demo.withExtraParams({
+    keyword: 'test',
+    category: undefined,
+    page: 1,
+    pageSize: undefined,
+  });
+
+  expect(result3.data).toContain('keyword=test');
+  expect(result3.data).toContain('page=1');
+  expect(result3.data).not.toContain('category');
+  expect(result3.data).not.toContain('pageSize');
+});
+
+it('api with null/undefined params and existingQuery merging', async () => {
+  class Demo {
+    @api(`http://localhost:${port}/apiquery`)
+    withNullParams(_: any, req?: ApiRequest) {
+      return req!.send();
+    }
+
+    @api(`http://localhost:${port}/apiquery?existing=1`)
+    withExistingQuery(_: any, req?: ApiRequest) {
+      return req!.send();
+    }
+
+    @api(`http://localhost:${port}/api/:type?sort=desc`)
+    withPathAndExistingQuery(_: any, req?: ApiRequest) {
+      return req!.send();
+    }
+  }
+
+  const demo = factory(new Demo());
+
+  // null params should not throw
+  const result1 = await demo.withNullParams(null as any);
+  expect(result1.data).toBeUndefined();
+
+  // undefined params should not throw
+  const result2 = await demo.withNullParams(undefined as any);
+  expect(result2.data).toBeUndefined();
+
+  // existingQuery should merge with extra params
+  const result3 = await demo.withExistingQuery({ page: 1, size: 10 });
+  expect(result3.data).toContain('existing=1');
+  expect(result3.data).toContain('page=1');
+  expect(result3.data).toContain('size=10');
+
+  // path params + existingQuery + extra params should all work together
+  const result4 = await demo.withPathAndExistingQuery({
+    type: 'items',
+    filter: 'active',
+  });
+  expect(result4.data).toContain('sort=desc');
+  expect(result4.data).toContain('filter=active');
+  expect(result4.data).not.toContain('type=items'); // type is path param
 });

@@ -1,29 +1,40 @@
+import { usePagination } from '@/client/hooks/usePagination';
 import { useStore } from '@/client/store';
 import type { DocumentListItem } from '@/shared/dto/controller/document.dto';
 import type { DocumentCategory as DCType } from '@/shared/entities/Document';
-import { DeleteOutlined, EyeOutlined, SearchOutlined } from '@ant-design/icons';
+import {
+  DeleteOutlined,
+  EyeOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import {
   Button,
+  Col,
   DatePicker,
+  Descriptions,
+  Form,
   Input,
+  Layout,
   Modal,
   Popconfirm,
+  Row,
   Select,
-  Space,
   Table,
   Tag,
   Tooltip,
+  Typography,
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { observer } from 'mobx-react-lite';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useAsyncFn } from 'react-use';
 import './index.scss';
 
 const { RangePicker } = DatePicker;
+const { Text, Paragraph, Title } = Typography;
 
 const CATEGORY_OPTIONS: { label: string; value: DCType }[] = [
   { label: 'Tech Blog', value: 'tech_blog' },
@@ -34,6 +45,15 @@ const CATEGORY_OPTIONS: { label: string; value: DCType }[] = [
   { label: 'Other', value: 'other' },
 ];
 
+const CATEGORY_COLORS: Record<DCType, string> = {
+  tech_blog: 'blue',
+  social_media: 'magenta',
+  paper: 'green',
+  documentation: 'purple',
+  news: 'orange',
+  other: 'default',
+};
+
 const CATEGORY_LABELS: Record<DCType, string> = {
   tech_blog: 'Tech Blog',
   social_media: 'Social Media',
@@ -43,28 +63,29 @@ const CATEGORY_LABELS: Record<DCType, string> = {
   other: 'Other',
 };
 
+const SOURCE_TYPE_COLORS: Record<string, string> = {
+  web: 'cyan',
+  file: 'geekblue',
+  text: 'volcano',
+};
+
+interface SearchParams {
+  keyword?: string;
+  category?: DCType;
+  startTime?: string;
+  endTime?: string;
+}
+
 const Documents: React.FC = () => {
   const documentStore = useStore('document');
   const settingStore = useStore('setting');
-
-  const [keyword, setKeyword] = useState(documentStore.keyword);
-  const [category, setCategory] = useState<DCType | undefined>(
-    documentStore.category,
-  );
-  const [timeRange, setTimeRange] = useState<
-    [Dayjs | null, Dayjs | null] | null
-  >(
-    documentStore.startTime && documentStore.endTime
-      ? [dayjs(documentStore.startTime), dayjs(documentStore.endTime)]
-      : null,
-  );
+  const [form] = Form.useForm();
 
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<NonNullable<
     typeof documentStore.currentDocument
   > | null>(null);
 
-  const listApi = useAsyncFn(documentStore.listDocuments.bind(documentStore));
   const detailApi = useAsyncFn(
     documentStore.getDocumentById.bind(documentStore),
   );
@@ -72,41 +93,39 @@ const Documents: React.FC = () => {
     documentStore.deleteDocument.bind(documentStore),
   );
 
-  const fetchDocuments = useCallback(async () => {
-    await listApi[1]({
-      keyword: documentStore.keyword || undefined,
-      category: documentStore.category,
-      startTime: documentStore.startTime,
-      endTime: documentStore.endTime,
-      page: 1,
-      pageSize: 10,
-    });
-  }, [listApi, documentStore]);
-
-  useEffect(() => {
-    fetchDocuments();
-  }, []);
+  const { dataSource, pagination, loading, search, reset } = usePagination<
+    SearchParams,
+    DocumentListItem
+  >({
+    fetchFn: async params => {
+      return documentStore.listDocuments({
+        keyword: params.keyword || undefined,
+        category: params.category,
+        startTime: params.startTime,
+        endTime: params.endTime,
+        page: params.page,
+        pageSize: params.pageSize,
+      });
+    },
+    defaultPageSize: 10,
+  });
 
   const handleSearch = () => {
-    documentStore.setKeyword(keyword);
-    documentStore.setCategory(category);
-    if (timeRange && timeRange[0] && timeRange[1]) {
-      documentStore.setTimeRange(
-        timeRange[0].toISOString(),
-        timeRange[1].toISOString(),
-      );
-    } else {
-      documentStore.setTimeRange(undefined, undefined);
-    }
-    fetchDocuments();
+    const values = form.getFieldsValue();
+    const startTime = values.timeRange?.[0]?.toISOString();
+    const endTime = values.timeRange?.[1]?.toISOString();
+
+    search({
+      keyword: values.keyword,
+      category: values.category,
+      startTime,
+      endTime,
+    });
   };
 
   const handleReset = () => {
-    setKeyword('');
-    setCategory(undefined);
-    setTimeRange(null);
-    documentStore.resetFilters();
-    fetchDocuments();
+    form.resetFields();
+    reset();
   };
 
   const handleViewDetail = async (id: string) => {
@@ -121,19 +140,7 @@ const Documents: React.FC = () => {
     const success = await deleteApi[1]({ id });
     if (success) {
       message.success(settingStore.tr('Document deleted successfully'));
-      fetchDocuments();
     }
-  };
-
-  const handleTableChange = async (page: number, pageSize: number) => {
-    await listApi[1]({
-      keyword: documentStore.keyword || undefined,
-      category: documentStore.category,
-      startTime: documentStore.startTime,
-      endTime: documentStore.endTime,
-      page,
-      pageSize,
-    });
   };
 
   const columns: ColumnsType<DocumentListItem> = [
@@ -171,7 +178,9 @@ const Documents: React.FC = () => {
       key: 'category',
       width: 120,
       render: (cat: DCType) => (
-        <Tag>{settingStore.tr(CATEGORY_LABELS[cat])}</Tag>
+        <Tag color={CATEGORY_COLORS[cat]}>
+          {settingStore.tr(CATEGORY_LABELS[cat])}
+        </Tag>
       ),
     },
     {
@@ -179,43 +188,45 @@ const Documents: React.FC = () => {
       dataIndex: 'keywords',
       key: 'keywords',
       width: 200,
-      render: (keywords: string[]) => (
-        <Tooltip title={keywords.join(', ')}>
-          <div
-            style={{
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {keywords.slice(0, 3).map(kw => (
-              <Tag key={kw} style={{ marginBottom: 2 }}>
+      render: (keywords: string[]) =>
+        keywords.length > 0
+          ? keywords.slice(0, 3).map((kw, idx) => (
+              <Tag
+                key={kw}
+                color={['blue', 'green', 'orange', 'purple', 'cyan'][idx % 5]}
+                style={{ marginBottom: 2 }}
+              >
                 {kw}
               </Tag>
-            ))}
-            {keywords.length > 3 && `+${keywords.length - 3}`}
-          </div>
-        </Tooltip>
-      ),
+            ))
+          : '-',
     },
     {
       title: settingStore.tr('Source Type'),
       dataIndex: 'sourceType',
       key: 'sourceType',
-      width: 100,
-      render: (type: string | null) => (type ? settingStore.tr(type) : '-'),
+      width: 120,
+      render: (type: string | null) =>
+        type ? (
+          <Tag color={SOURCE_TYPE_COLORS[type] || 'default'}>
+            {settingStore.tr(type)}
+          </Tag>
+        ) : (
+          '-'
+        ),
     },
     {
       title: settingStore.tr('Source URL'),
       dataIndex: 'sourceUrl',
       key: 'sourceUrl',
-      width: 150,
-      ellipsis: true,
+      width: 200,
       render: (url: string | null) =>
         url ? (
-          <a href={url} target="_blank" rel="noopener noreferrer">
-            {url}
-          </a>
+          <Paragraph copyable style={{ margin: 0 }}>
+            <a href={url} target="_blank" rel="noopener noreferrer">
+              {url}
+            </a>
+          </Paragraph>
         ) : (
           '-'
         ),
@@ -237,10 +248,10 @@ const Documents: React.FC = () => {
     {
       title: settingStore.tr('Actions'),
       key: 'actions',
-      width: 120,
+      width: 100,
       fixed: 'right',
       render: (_, record) => (
-        <Space>
+        <>
           <Button
             type="link"
             size="small"
@@ -257,57 +268,65 @@ const Documents: React.FC = () => {
           >
             <Button type="link" size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
-        </Space>
+        </>
       ),
     },
   ];
 
   return (
-    <div className="documents-page">
+    <Layout className="documents-page">
       <div className="documents-filter">
-        <Space wrap>
-          <Input
-            placeholder={settingStore.tr('Search by keyword')}
-            value={keyword}
-            onChange={e => setKeyword(e.target.value)}
-            style={{ width: 200 }}
-            onPressEnter={handleSearch}
-          />
-          <Select
-            placeholder={settingStore.tr('Category')}
-            value={category}
-            onChange={setCategory}
-            allowClear
-            style={{ width: 150 }}
-            options={CATEGORY_OPTIONS}
-          />
-          <RangePicker value={timeRange} onChange={setTimeRange} showTime />
-          <Button
-            type="primary"
-            icon={<SearchOutlined />}
-            onClick={handleSearch}
-            loading={listApi[0].loading}
-          >
-            {settingStore.tr('Search')}
-          </Button>
-          <Button onClick={handleReset}>{settingStore.tr('Reset')}</Button>
-        </Space>
+        <Form form={form} layout="vertical">
+          <Row gutter={[16, 12]}>
+            <Col span={6}>
+              <Form.Item name="keyword">
+                <Input
+                  placeholder={settingStore.tr('Search by keyword')}
+                  onPressEnter={handleSearch}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="category">
+                <Select
+                  placeholder={settingStore.tr('Category')}
+                  allowClear
+                  options={CATEGORY_OPTIONS}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="timeRange">
+                <RangePicker showTime style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={6} style={{ textAlign: 'right' }}>
+              <Form.Item>
+                <Button onClick={handleReset} icon={<ReloadOutlined />}>
+                  {settingStore.tr('Reset')}
+                </Button>
+                <Button
+                  style={{ marginInlineStart: 8 }}
+                  type="primary"
+                  icon={<SearchOutlined />}
+                  onClick={handleSearch}
+                  loading={loading}
+                >
+                  {settingStore.tr('Search')}
+                </Button>
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
       </div>
 
       <Table
         columns={columns}
-        dataSource={documentStore.documents.items}
+        dataSource={dataSource}
         rowKey="id"
-        loading={listApi[0].loading}
+        loading={loading}
         scroll={{ x: 1500 }}
-        pagination={{
-          current: documentStore.documents.page,
-          pageSize: documentStore.documents.pageSize,
-          total: documentStore.documents.total,
-          showSizeChanger: true,
-          showTotal: total => `Total ${total} items`,
-          onChange: handleTableChange,
-        }}
+        pagination={pagination}
       />
 
       <Modal
@@ -320,81 +339,104 @@ const Documents: React.FC = () => {
       >
         {selectedDocument && (
           <div className="document-detail">
-            <div className="detail-row">
-              <label>{settingStore.tr('Title')}:</label>
-              <span>{selectedDocument.title}</span>
-            </div>
-            <div className="detail-row">
-              <label>{settingStore.tr('Category')}:</label>
-              <Tag>
-                {settingStore.tr(CATEGORY_LABELS[selectedDocument.category])}
-              </Tag>
-              <label style={{ marginLeft: 24 }}>
-                {settingStore.tr('Source Type')}:
-              </label>
-              <span>
-                {selectedDocument.sourceType
-                  ? settingStore.tr(selectedDocument.sourceType)
-                  : '-'}
-              </span>
-            </div>
-            {selectedDocument.sourceUrl && (
-              <div className="detail-row">
-                <label>{settingStore.tr('Source URL')}:</label>
-                <a
-                  href={selectedDocument.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+            <Descriptions column={2} bordered size="small">
+              <Descriptions.Item label={settingStore.tr('Title')} span={2}>
+                <Text strong>{selectedDocument.title}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label={settingStore.tr('Category')}>
+                <Tag color={CATEGORY_COLORS[selectedDocument.category]}>
+                  {settingStore.tr(CATEGORY_LABELS[selectedDocument.category])}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label={settingStore.tr('Source Type')}>
+                {selectedDocument.sourceType ? (
+                  <Tag
+                    color={
+                      SOURCE_TYPE_COLORS[selectedDocument.sourceType] ||
+                      'default'
+                    }
+                  >
+                    {settingStore.tr(selectedDocument.sourceType)}
+                  </Tag>
+                ) : (
+                  '-'
+                )}
+              </Descriptions.Item>
+              {selectedDocument.sourceUrl && (
+                <Descriptions.Item
+                  label={settingStore.tr('Source URL')}
+                  span={2}
                 >
-                  {selectedDocument.sourceUrl}
-                </a>
-              </div>
-            )}
-            <div className="detail-row">
-              <label>{settingStore.tr('Keywords')}:</label>
-              <span>
-                {selectedDocument.keywords.map(kw => (
-                  <Tag key={kw}>{kw}</Tag>
-                ))}
-              </span>
-            </div>
-            <div className="detail-row">
-              <label>{settingStore.tr('Created At')}:</label>
-              <span>
+                  <Paragraph
+                    copyable
+                    ellipsis={{ rows: 2, expandable: true }}
+                    style={{ margin: 0 }}
+                  >
+                    <a
+                      href={selectedDocument.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {selectedDocument.sourceUrl}
+                    </a>
+                  </Paragraph>
+                </Descriptions.Item>
+              )}
+              <Descriptions.Item label={settingStore.tr('Keywords')} span={2}>
+                {selectedDocument.keywords.length > 0
+                  ? selectedDocument.keywords.map((kw, idx) => (
+                      <Tag
+                        key={kw}
+                        color={
+                          ['blue', 'green', 'orange', 'purple', 'cyan'][idx % 5]
+                        }
+                      >
+                        {kw}
+                      </Tag>
+                    ))
+                  : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={settingStore.tr('Created At')}>
                 {dayjs(selectedDocument.createdAt).format(
                   'YYYY-MM-DD HH:mm:ss',
                 )}
-              </span>
-              <label style={{ marginLeft: 24 }}>
-                {settingStore.tr('Updated At')}:
-              </label>
-              <span>
+              </Descriptions.Item>
+              <Descriptions.Item label={settingStore.tr('Updated At')}>
                 {dayjs(selectedDocument.updatedAt).format(
                   'YYYY-MM-DD HH:mm:ss',
                 )}
-              </span>
-            </div>
-            <div className="detail-row">
-              <label>{settingStore.tr('Chunk Count')}:</label>
-              <span>{selectedDocument.chunkCount}</span>
-            </div>
+              </Descriptions.Item>
+              <Descriptions.Item label={settingStore.tr('Chunk Count')}>
+                <Text strong>{selectedDocument.chunkCount}</Text>
+              </Descriptions.Item>
+            </Descriptions>
+
             <div className="detail-section">
-              <label>{settingStore.tr('Summary')}:</label>
-              <div className="detail-content">
+              <Title level={5}>{settingStore.tr('Summary')}</Title>
+              <Paragraph
+                ellipsis={{ rows: 4, expandable: true, symbol: 'more' }}
+              >
                 {selectedDocument.summary || '-'}
-              </div>
+              </Paragraph>
             </div>
+
             <div className="detail-section">
-              <label>{settingStore.tr('Raw Content')}:</label>
-              <div className="detail-content scrollable">
-                <pre>{selectedDocument.rawContent}</pre>
+              <Title level={5}>{settingStore.tr('Raw Content')}</Title>
+              <div className="detail-content">
+                <Paragraph
+                  ellipsis={{ rows: 10, expandable: true, symbol: 'more' }}
+                  style={{ margin: 0, whiteSpace: 'pre-wrap' }}
+                >
+                  {selectedDocument.rawContent}
+                </Paragraph>
               </div>
             </div>
           </div>
         )}
       </Modal>
-    </div>
+    </Layout>
   );
 };
 
 export default observer(Documents);
+
