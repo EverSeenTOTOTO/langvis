@@ -13,7 +13,7 @@ import {
   LoadingOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
-import { Collapse, Flex, Tag, Typography } from 'antd';
+import { Collapse, Flex, Steps, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import {
@@ -33,6 +33,23 @@ interface ProgressData {
   schema?: SchemaProperty;
   [key: string]: unknown;
 }
+
+type AnalysisAction = 'meta_extract' | 'chunk' | 'embed' | 'archive';
+
+interface AnalysisProgressData {
+  action: AnalysisAction;
+  message: string;
+}
+
+const ANALYSIS_PIPELINE_STEPS: Array<{
+  action: AnalysisAction;
+  label: string;
+}> = [
+  { action: 'meta_extract', label: 'Metadata' },
+  { action: 'chunk', label: 'Chunking' },
+  { action: 'embed', label: 'Embedding' },
+  { action: 'archive', label: 'Archive' },
+];
 
 interface ToolBlock {
   toolCall: ToolCallTimeline;
@@ -148,6 +165,62 @@ function StandaloneThoughtBlock({ thought }: { thought: ThoughtItem }) {
   );
 }
 
+function AnalysisPipeline({
+  progress,
+  isPending,
+}: {
+  progress: Array<{ data: unknown; seq: number; at: number }>;
+  isPending: boolean;
+}) {
+  const progressByAction = new Map<AnalysisAction, string>();
+
+  for (const p of progress) {
+    const data = p.data as AnalysisProgressData;
+    if (data?.action && data?.message) {
+      progressByAction.set(data.action, data.message);
+    }
+  }
+
+  const currentActionIndex = ANALYSIS_PIPELINE_STEPS.findIndex(
+    step => !progressByAction.has(step.action),
+  );
+  const activeStep = currentActionIndex === -1 ? 3 : currentActionIndex;
+
+  return (
+    <div className="analysis-pipeline">
+      <Steps
+        size="small"
+        current={isPending ? activeStep : 3}
+        items={ANALYSIS_PIPELINE_STEPS.map(step => {
+          const message = progressByAction.get(step.action);
+          const isComplete = progressByAction.has(step.action);
+          const isCurrent =
+            isPending && activeStep === ANALYSIS_PIPELINE_STEPS.indexOf(step);
+
+          return {
+            title: step.label,
+            status: isPending
+              ? isCurrent
+                ? 'process'
+                : isComplete
+                  ? 'finish'
+                  : 'wait'
+              : 'finish',
+            description: message && (
+              <Typography.Text
+                type="secondary"
+                className="analysis-pipeline-step-message"
+              >
+                {message}
+              </Typography.Text>
+            ),
+          };
+        })}
+      />
+    </div>
+  );
+}
+
 function ToolBlockItem({ block }: { block: ToolBlock }) {
   const { toolCall, latestProgress, isPending } = block;
   const displayName = getToolDisplayName(toolCall.toolName);
@@ -160,6 +233,14 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
   ) : toolCall.status === 'error' ? (
     <span style={{ color: 'var(--ant-color-error)' }}>✕</span>
   ) : null;
+
+  const isAnalysisTool = toolCall.toolName === ToolIds.ANALYSIS;
+  const hasAnalysisProgress =
+    isAnalysisTool &&
+    toolCall.progress.some(p => {
+      const data = p.data as AnalysisProgressData;
+      return data?.action;
+    });
 
   return (
     <div className="react-tool-block">
@@ -183,10 +264,15 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
         </Typography.Text>
       </Flex>
 
-      {latestProgress?.message && !latestProgress?.status && (
-        <Typography.Text type="secondary" className="react-tool-progress">
-          {latestProgress.message}
-        </Typography.Text>
+      {hasAnalysisProgress ? (
+        <AnalysisPipeline progress={toolCall.progress} isPending={isPending} />
+      ) : (
+        latestProgress?.message &&
+        !latestProgress?.status && (
+          <Typography.Text type="secondary" className="react-tool-progress">
+            {latestProgress.message}
+          </Typography.Text>
+        )
       )}
 
       {toolCall.status === 'done' && toolCall.output ? (

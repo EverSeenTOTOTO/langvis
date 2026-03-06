@@ -72,3 +72,30 @@
     }
   }
 }
+
+.analysis-pipeline {
+  margin-block-start: 8px;
+
+  &-step-message {
+    display: block;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .ant-steps {
+    font-size: 12px;
+  }
+
+  .ant-steps-item-title {
+    font-size: 12px;
+  }
+
+  .ant-steps-item-description {
+    max-width: none;
+    padding-block-start: 2px;
+    font-size: 11px;
+  }
+}

@@ -11,6 +11,8 @@ export default class DocumentAgent extends ReActAgent {
   declare readonly config: AgentConfig;
   declare protected readonly logger: Logger;
 
+  readonly maxIterations = 10;
+
   get systemPrompt(): Prompt {
     return createPrompt(this, super.systemPrompt);
   }

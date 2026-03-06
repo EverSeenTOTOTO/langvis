@@ -2,13 +2,11 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import type { ToolConfig, AgentEvent } from '@/shared/types';
+import type { AgentEvent, ToolConfig } from '@/shared/types';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import type { EmbedInput, EmbedOutput } from './config';
 import { config } from './config';
-
-const DEFAULT_MODEL = 'text-embedding-3-small';
 
 @tool(ToolIds.EMBED)
 export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
@@ -20,7 +18,7 @@ export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
     @input() data: EmbedInput,
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, EmbedOutput, void> {
-    const { chunks, model = DEFAULT_MODEL } = data;
+    const { chunks, model = process.env.OPENAI_EMBEDDING_MODEL! } = data;
 
     const apiBase = process.env.OPENAI_API_BASE;
     const apiKey = process.env.OPENAI_API_KEY;
@@ -29,7 +27,7 @@ export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
       throw new Error('OPENAI_API_BASE and OPENAI_API_KEY must be configured');
     }
 
-    const url = `${apiBase}/v1/embeddings`;
+    const url = `${apiBase}/embeddings`;
     const texts = chunks.map(c => c.content);
 
     this.logger.info(

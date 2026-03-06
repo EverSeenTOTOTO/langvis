@@ -45,7 +45,7 @@ export default class ReActAgent extends Agent {
   protected readonly logger!: Logger;
   readonly tools!: Tool[];
 
-  readonly maxIterations = 5;
+  readonly maxIterations: number = 5;
 
   get systemPrompt(): Prompt {
     return createPrompt(this, super.systemPrompt);

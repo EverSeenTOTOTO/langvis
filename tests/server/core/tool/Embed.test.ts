@@ -84,7 +84,6 @@ describe('EmbedTool', () => {
       expect(result).not.toBeNull();
       expect(result!.chunks).toHaveLength(1);
       expect(result!.chunks[0].embedding).toEqual(mockEmbedding);
-      expect(result!.model).toBe('text-embedding-3-small');
       expect(result!.dimension).toBe(3);
     });
 
@@ -108,7 +107,7 @@ describe('EmbedTool', () => {
 
       expect(result!.model).toBe('custom-model');
       expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.test.com/v1/embeddings',
+        'https://api.test.com/embeddings',
         expect.objectContaining({
           body: expect.stringContaining('custom-model'),
         }),
