@@ -84,10 +84,7 @@ const Messages = () => {
         })}
         <div ref={messagesEndRef} style={{ height: 0 }} />
       </Flex>
-      <FloatButton.Group
-        shape="circle"
-        className="scroll-btn-group"
-      >
+      <FloatButton.Group shape="circle" className="scroll-btn-group">
         <FloatButton
           icon={<VerticalAlignTopOutlined />}
           onClick={() => scrollToTop(true)}
@@ -106,4 +103,3 @@ const Messages = () => {
 };
 
 export default observer(Messages);
-
