@@ -1,0 +1,63 @@
+.documents-page {
+  min-height: 100vh;
+  padding: 24px;
+  background: #fff;
+
+  .documents-filter {
+    padding: 16px;
+    margin-bottom: 16px;
+    background: #fafafa;
+    border-radius: 4px;
+  }
+
+  .document-detail {
+    .detail-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      margin-bottom: 12px;
+
+      label {
+        min-width: 100px;
+        font-weight: 500;
+        color: #666;
+      }
+
+      span,
+      a {
+        flex: 1;
+        word-break: break-all;
+      }
+    }
+
+    .detail-section {
+      margin-top: 16px;
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: #666;
+      }
+
+      .detail-content {
+        padding: 12px;
+        word-break: break-all;
+        white-space: pre-wrap;
+        background: #f5f5f5;
+        border-radius: 4px;
+
+        &.scrollable {
+          max-height: 300px;
+          overflow-y: auto;
+
+          pre {
+            margin: 0;
+            word-break: break-all;
+            white-space: pre-wrap;
+          }
+        }
+      }
+    }
+  }
+}
