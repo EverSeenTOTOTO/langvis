@@ -1,11 +1,13 @@
 import { useStore } from '@/client/store';
 import { Role } from '@/shared/types/entities';
-import { VerticalAlignBottomOutlined } from '@ant-design/icons';
+import {
+  VerticalAlignBottomOutlined,
+  VerticalAlignTopOutlined,
+} from '@ant-design/icons';
 import { Flex, FloatButton } from 'antd';
-import { reaction } from 'mobx';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useRef, useState } from 'react';
-import { usePrevious, useScroll } from 'react-use';
+import { useEffect, useRef } from 'react';
+import { useRafState, useScroll } from 'react-use';
 import AssistantMessage from './AssistantMessage';
 import SystemMessage from './SystemMessage';
 import UserMessage from './UserMessage';
@@ -15,16 +17,20 @@ const SCROLL_THRESHOLD = 100;
 const Messages = () => {
   const conversationStore = useStore('conversation');
   const currentMessages = conversationStore.currentMessages;
-  const currentConversationId = conversationStore.currentConversationId;
+  const messagesStartRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const shouldAutoScrollRef = useRef(true);
-  const [showScrollButton, setShowScrollButton] = useState(false);
   const scrollState = useScroll(containerRef);
-  const prevScrollY = usePrevious(scrollState.y);
+  const [shouldAutoScroll, setShouldAutoScroll] = useRafState(true);
 
-  const handleRetry = (_messageId: string) => {
-    // Placeholder for retry functionality
+  const handleRetry = (messageId: string) => {
+    console.log('Retrying message:', messageId);
+  };
+
+  const scrollToTop = (smooth = true) => {
+    messagesStartRef.current?.scrollIntoView({
+      behavior: smooth ? 'smooth' : 'auto',
+    });
   };
 
   const scrollToBottom = (smooth = true) => {
@@ -33,75 +39,35 @@ const Messages = () => {
     });
   };
 
-  const checkIsNearBottom = () => {
-    if (!containerRef.current) return true;
-    const { scrollHeight, scrollTop, clientHeight } = containerRef.current;
-    return scrollHeight - scrollTop - clientHeight < SCROLL_THRESHOLD;
-  };
+  const isNearTop = scrollState.y < SCROLL_THRESHOLD;
 
-  // Handle user scroll: update auto-scroll state
-  // Only disable auto-scroll when user intentionally scrolls UP (away from bottom)
+  const isNearBottom =
+    containerRef.current &&
+    containerRef.current.scrollHeight -
+      scrollState.y -
+      containerRef.current.clientHeight <
+      SCROLL_THRESHOLD;
+
   useEffect(() => {
-    const isNearBottom = checkIsNearBottom();
-    setShowScrollButton(!isNearBottom);
-
-    const currentY = scrollState.y;
-
-    // User scrolled back to bottom - re-enable auto-scroll
-    if (isNearBottom) {
-      shouldAutoScrollRef.current = true;
+    if (scrollState.y > 0) {
+      setShouldAutoScroll(isNearBottom || false);
     }
-    // User scrolled UP (away from bottom) - disable auto-scroll
-    // Skip if prevScrollY is undefined (first render)
-    else if (
-      prevScrollY !== undefined &&
-      currentY < prevScrollY &&
-      currentY > 0
-    ) {
-      shouldAutoScrollRef.current = false;
-    }
-  }, [scrollState.y, prevScrollY]);
+  }, [scrollState.y, isNearBottom, setShouldAutoScroll]);
 
-  // Auto-scroll to bottom when switching conversations
   useEffect(() => {
-    if (currentConversationId) {
-      shouldAutoScrollRef.current = true;
-      // Wait for messages to render
-      requestAnimationFrame(() => scrollToBottom(false));
+    if (shouldAutoScroll) {
+      scrollToBottom(false);
     }
-  }, [currentConversationId]);
-
-  // Auto-scroll when messages change (including streaming content updates)
-  // Use MobX reaction to properly track observable changes
-  useEffect(() => {
-    const dispose = reaction(
-      () => {
-        const messages = conversationStore.currentMessages;
-        const lastMsg = messages[messages.length - 1];
-        return {
-          length: messages.length,
-          lastId: lastMsg?.id,
-          lastContent: lastMsg?.content,
-          lastEventsLen: lastMsg?.meta?.events?.length,
-        };
-      },
-      () => {
-        if (shouldAutoScrollRef.current) {
-          scrollToBottom(false);
-        }
-      },
-    );
-    return dispose;
-  }, [conversationStore]);
-
-  const handleScrollToBottom = () => {
-    scrollToBottom(true);
-    shouldAutoScrollRef.current = true;
-  };
+  }, [
+    currentMessages.length,
+    currentMessages[currentMessages.length - 1]?.content,
+    shouldAutoScroll,
+  ]);
 
   return (
     <>
       <Flex gap="middle" vertical className="chat-messages" ref={containerRef}>
+        <div ref={messagesStartRef} style={{ height: 0 }} />
         {currentMessages.map(msg => {
           switch (msg.role) {
             case Role.SYSTEM:
@@ -118,15 +84,26 @@ const Messages = () => {
         })}
         <div ref={messagesEndRef} style={{ height: 0 }} />
       </Flex>
-      {showScrollButton && (
+      <FloatButton.Group
+        shape="circle"
+        className="scroll-btn-group"
+      >
+        <FloatButton
+          icon={<VerticalAlignTopOutlined />}
+          onClick={() => scrollToTop(true)}
+          //@ts-expect-error disabled?
+          disabled={isNearTop}
+        />
         <FloatButton
           icon={<VerticalAlignBottomOutlined />}
-          onClick={handleScrollToBottom}
-          className="scroll-to-bottom"
+          onClick={() => scrollToBottom(true)}
+          //@ts-expect-error disabled?
+          disabled={isNearBottom}
         />
-      )}
+      </FloatButton.Group>
     </>
   );
 };
 
 export default observer(Messages);
+
