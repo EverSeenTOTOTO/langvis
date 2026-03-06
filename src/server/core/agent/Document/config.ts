@@ -6,5 +6,10 @@ export const config: AgentConfig = {
   name: 'Document Agent',
   description:
     'An agent for document archiving and retrieval. Can fetch documents from URLs, archive them with metadata and embeddings, and perform semantic search.',
-  tools: [ToolIds.WEB_FETCH, ToolIds.ANALYSIS, ToolIds.RETRIEVE],
+  tools: [
+    ToolIds.WEB_FETCH,
+    ToolIds.ANALYSIS,
+    ToolIds.RETRIEVE,
+    ToolIds.READ_CACHE,
+  ],
 };

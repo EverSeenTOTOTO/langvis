@@ -1,8 +1,14 @@
 import ReActAgent from '@/server/core/agent/ReAct';
-import { ToolIds } from '@/shared/constants';
+import { ExecutionContext } from '@/server/core/ExecutionContext';
+import { ToolIds, InjectTokens } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMockContext } from '../../helpers/context';
+
+const mockRedis = {
+  setEx: vi.fn().mockResolvedValue('OK'),
+  get: vi.fn().mockResolvedValue(null),
+  del: vi.fn().mockResolvedValue(1),
+};
 
 const mockLlmCallTool = {
   call: vi.fn(),
@@ -17,12 +23,15 @@ vi.mock('tsyringe', async () => {
   return {
     ...actual,
     container: {
-      resolve: vi.fn((token: string) => {
+      resolve: vi.fn((token: string | symbol) => {
         if (token === ToolIds.LLM_CALL) {
           return mockLlmCallTool;
         }
         if (token === 'nested_tool') {
           return mockNestedTool;
+        }
+        if (token === InjectTokens.REDIS) {
+          return mockRedis;
         }
         return new (class MockLogger {
           info = vi.fn();
@@ -34,6 +43,10 @@ vi.mock('tsyringe', async () => {
     },
   };
 });
+
+function createMockContext(traceId = 'test-trace-id'): ExecutionContext {
+  return new ExecutionContext(traceId, new AbortController());
+}
 
 async function collectEvents(
   generator: AsyncGenerator<AgentEvent, void, void>,
@@ -166,5 +179,182 @@ describe('ReActAgent', () => {
       content: 'Hello! How can I help you?',
     });
     expect(events.find(e => e.type === 'final')).toBeDefined();
+  });
+
+  describe('cache compression and resolution', () => {
+    it('should compress large string output from tool', async () => {
+      const memory = {
+        summarize: vi
+          .fn()
+          .mockResolvedValue([{ role: 'user', content: 'fetch large' }]),
+      } as any;
+      const ctx = createMockContext();
+
+      let llmCallCount = 0;
+
+      mockLlmCallTool.call.mockImplementation(
+        // eslint-disable-next-line require-yield
+        async function* (): AsyncGenerator<AgentEvent, string, void> {
+          llmCallCount++;
+          if (llmCallCount === 1) {
+            return JSON.stringify({
+              action: { tool: 'nested_tool', input: { query: 'test' } },
+            });
+          }
+          return JSON.stringify({ final_answer: 'done' });
+        },
+      );
+
+      const largeContent = 'a'.repeat(1500);
+      mockNestedTool.call.mockImplementation(async function* (): AsyncGenerator<
+        AgentEvent,
+        string,
+        void
+      > {
+        yield ctx.agentToolProgressEvent('nested_tool', { step: 1 });
+        return largeContent;
+      });
+
+      const events = await collectEvents(reactAgent.call(memory, ctx, {}));
+
+      const toolResultEvent = events.find(e => e.type === 'tool_result') as any;
+      const output = JSON.parse(toolResultEvent.output);
+      expect(output).toMatchObject({
+        $cached: expect.stringMatching(/^cache_/),
+        $size: 1500,
+      });
+      expect(mockRedis.setEx).toHaveBeenCalled();
+    });
+
+    it('should resolve CachedReference in tool input', async () => {
+      const memory = {
+        summarize: vi
+          .fn()
+          .mockResolvedValue([{ role: 'user', content: 'process cached' }]),
+      } as any;
+      const ctx = createMockContext();
+
+      const cachedContent = 'cached large content';
+      mockRedis.get.mockResolvedValueOnce(cachedContent);
+
+      let llmCallCount = 0;
+
+      mockLlmCallTool.call.mockImplementation(
+        // eslint-disable-next-line require-yield
+        async function* (): AsyncGenerator<AgentEvent, string, void> {
+          llmCallCount++;
+          if (llmCallCount === 1) {
+            return JSON.stringify({
+              action: {
+                tool: 'nested_tool',
+                input: {
+                  content: { $cached: 'cache_abc', $size: 100 },
+                },
+              },
+            });
+          }
+          return JSON.stringify({ final_answer: 'done' });
+        },
+      );
+
+      let receivedInput: any;
+      mockNestedTool.call.mockImplementation(async function* (
+        input: any,
+      ): AsyncGenerator<AgentEvent, string, void> {
+        receivedInput = input;
+        yield ctx.agentToolProgressEvent('nested_tool', { step: 1 });
+        return 'processed';
+      });
+
+      await collectEvents(reactAgent.call(memory, ctx, {}));
+
+      // Tool should receive resolved content, not CachedReference
+      expect(receivedInput.content).toBe(cachedContent);
+    });
+
+    it('should compress large array output', async () => {
+      const memory = {
+        summarize: vi
+          .fn()
+          .mockResolvedValue([{ role: 'user', content: 'list items' }]),
+      } as any;
+      const ctx = createMockContext();
+
+      let llmCallCount = 0;
+
+      mockLlmCallTool.call.mockImplementation(
+        // eslint-disable-next-line require-yield
+        async function* (): AsyncGenerator<AgentEvent, string, void> {
+          llmCallCount++;
+          if (llmCallCount === 1) {
+            return JSON.stringify({
+              action: { tool: 'nested_tool', input: {} },
+            });
+          }
+          return JSON.stringify({ final_answer: 'done' });
+        },
+      );
+
+      const largeArray = Array.from({ length: 25 }, (_, i) => ({ id: i }));
+      mockNestedTool.call.mockImplementation(async function* (): AsyncGenerator<
+        AgentEvent,
+        any[],
+        void
+      > {
+        yield ctx.agentToolProgressEvent('nested_tool', { step: 1 });
+        return largeArray;
+      });
+
+      const events = await collectEvents(reactAgent.call(memory, ctx, {}));
+
+      const toolResultEvent = events.find(e => e.type === 'tool_result') as any;
+      const output = JSON.parse(toolResultEvent.output);
+      expect(output).toMatchObject({
+        $cached: expect.stringMatching(/^cache_/),
+      });
+    });
+
+    it('should not compress small output', async () => {
+      const memory = {
+        summarize: vi
+          .fn()
+          .mockResolvedValue([{ role: 'user', content: 'small' }]),
+      } as any;
+      const ctx = createMockContext();
+
+      let llmCallCount = 0;
+
+      mockLlmCallTool.call.mockImplementation(
+        // eslint-disable-next-line require-yield
+        async function* (): AsyncGenerator<AgentEvent, string, void> {
+          llmCallCount++;
+          if (llmCallCount === 1) {
+            return JSON.stringify({
+              action: { tool: 'nested_tool', input: {} },
+            });
+          }
+          return JSON.stringify({ final_answer: 'done' });
+        },
+      );
+
+      const smallContent = 'small content';
+      mockNestedTool.call.mockImplementation(async function* (): AsyncGenerator<
+        AgentEvent,
+        string,
+        void
+      > {
+        yield ctx.agentToolProgressEvent('nested_tool', { step: 1 });
+        return smallContent;
+      });
+
+      vi.clearAllMocks();
+      mockRedis.setEx.mockClear();
+
+      const events = await collectEvents(reactAgent.call(memory, ctx, {}));
+
+      const toolResultEvent = events.find(e => e.type === 'tool_result') as any;
+      expect(toolResultEvent.output).toBe(smallContent);
+      expect(mockRedis.setEx).not.toHaveBeenCalled();
+    });
   });
 });

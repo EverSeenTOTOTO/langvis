@@ -1,0 +1,45 @@
+import { tool } from '@/server/decorator/core';
+import { input } from '@/server/decorator/param';
+import type { Logger } from '@/server/utils/logger';
+import { ToolIds } from '@/shared/constants';
+import { ToolConfig, AgentEvent } from '@/shared/types';
+import { Tool } from '..';
+import { ExecutionContext } from '../../ExecutionContext';
+
+export interface ReadCacheInput {
+  key: string;
+  offset?: number;
+  limit?: number;
+}
+
+export type ReadCacheOutput = string;
+
+@tool(ToolIds.READ_CACHE)
+export default class ReadCacheTool extends Tool<
+  ReadCacheInput,
+  ReadCacheOutput
+> {
+  readonly id!: string;
+  readonly config!: ToolConfig;
+  protected readonly logger!: Logger;
+
+  async *call(
+    @input() readCacheInput: ReadCacheInput,
+    ctx: ExecutionContext,
+  ): AsyncGenerator<AgentEvent, ReadCacheOutput, void> {
+    const content = await ctx.retrieve(readCacheInput.key);
+
+    if (typeof content !== 'string') {
+      throw new Error(`Cached value is not a string: ${readCacheInput.key}`);
+    }
+
+    const offset = readCacheInput.offset ?? 0;
+    const limit = readCacheInput.limit;
+    const result = limit
+      ? content.slice(offset, offset + limit)
+      : content.slice(offset);
+
+    yield ctx.agentToolProgressEvent(this.id, { size: result.length });
+    return result;
+  }
+}
