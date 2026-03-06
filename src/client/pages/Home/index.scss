@@ -120,7 +120,7 @@
       @include mixins.default-scrollbar;
     }
 
-    .scroll-to-bottom {
+    .scroll-btn-group {
       position: absolute;
       right: 24px;
       bottom: 96px;
@@ -162,7 +162,7 @@
         }
       }
 
-      .scroll-to-bottom {
+      .scroll-btn-group {
         right: 16px;
         bottom: 88px;
       }
