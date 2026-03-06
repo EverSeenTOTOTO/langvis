@@ -7,6 +7,7 @@ import { AuthStore } from './modules/auth';
 import { ChatStore } from './modules/chat';
 import { ConversationGroupStore } from './modules/conversationGroup';
 import { ConversationStore } from './modules/conversation';
+import { DocumentStore } from './modules/document';
 import { SettingStore } from './modules/setting';
 import { UserStore } from './modules/user';
 import { AgentStore } from './modules/agent';
@@ -36,6 +37,8 @@ export class AppStore {
   chat = bindStore(ChatStore);
 
   agent = bindStore(AgentStore);
+
+  document = bindStore(DocumentStore);
 
   hydrate(data: Record<string, any>) {
     Object.keys(data).forEach(key => {
