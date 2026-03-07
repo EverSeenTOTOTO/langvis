@@ -36,13 +36,16 @@ const ALLOWED_TAGS = [
 
 const ALLOWED_ATTR = ['href', 'src', 'alt', 'title', 'style'];
 
+// Create JSDOM and DOMPurify instances once at module load time
+// Creating JSDOM per call is extremely expensive
+const window = new JSDOM('').window;
+const purify = DOMPurify(window);
+
 /**
  * Sanitize HTML content using DOMPurify.
  * Preserves safe tags like links, images, and formatting while removing dangerous elements.
  */
 export function sanitizeHtml(html: string): string {
-  const window = new JSDOM('').window;
-  const purify = DOMPurify(window);
   return purify.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,

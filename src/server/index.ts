@@ -10,6 +10,7 @@ import bindControllers from './controller';
 import bindAuthMiddleware from './middleware/auth';
 import bindRequestId from './middleware/requestId';
 import bindSSRMiddleware from './middleware/ssr';
+import errorHandler from './middleware/errorHandler';
 import logger from './utils/logger';
 
 logger.info(
@@ -29,7 +30,7 @@ export const createServer = async (): Promise<Express> => {
 
   app.use(express.static(dist, { index: false }));
   app.use(bodyParser.urlencoded({ extended: false }));
-  app.use(bodyParser.json());
+  app.use(bodyParser.json({ limit: '10mb' }));
   app.use(cookieParser());
   app.use(compression());
 
@@ -38,6 +39,7 @@ export const createServer = async (): Promise<Express> => {
   await bindControllers(app);
   // must be last
   await bindSSRMiddleware(app);
+  app.use(errorHandler);
   return app;
 };
 

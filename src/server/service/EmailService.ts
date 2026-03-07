@@ -170,7 +170,17 @@ export class EmailService {
   }
 
   async processInbound(rawEmail: string): Promise<InboundEmailResult> {
-    const parsed = await simpleParser(rawEmail);
+    const parsed = await Promise.race([
+      simpleParser(rawEmail, {
+        maxHtmlLengthToParse: 10 * 1024 * 1024, // 10MB
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('Email parsing timeout after 30s')),
+          30000,
+        ),
+      ),
+    ]);
 
     this.logger.info(
       `Email parsed: messageId=${parsed.messageId}, from=${parsed.from?.value?.[0]?.address}, subject=${parsed.subject}`,
