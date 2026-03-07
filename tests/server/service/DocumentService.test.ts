@@ -61,17 +61,81 @@ describe('DocumentService', () => {
       expect(result.pageSize).toBe(10);
     });
 
-    it('should list documents with keyword filter', async () => {
+    it('should list documents with keyword filter using OR for title and keywords', async () => {
+      const mockFindAndCount = vi.fn(async () => [[], 0]);
       vi.mocked(pg.getRepository).mockReturnValueOnce({
-        findAndCount: vi.fn(async () => [[], 0]),
+        findAndCount: mockFindAndCount,
         findOneBy: vi.fn(),
         delete: vi.fn(),
       } as any);
 
-      await documentService.listDocuments({ keyword: 'test' });
+      await documentService.listDocuments({ keyword: 'react' });
 
-      // The Like function should be called with the keyword pattern
-      // This is tested implicitly through the service call
+      expect(mockFindAndCount).toHaveBeenCalled();
+      const callArg = mockFindAndCount.mock.calls[0] as any[];
+      const where = callArg[0].where;
+      // Should use array-based OR condition for title and keywords
+      expect(Array.isArray(where)).toBe(true);
+      expect(where).toHaveLength(2);
+      // First condition: title LIKE
+      expect(where[0].title._value).toBe('%react%');
+      // Second condition: keywords LIKE
+      expect(where[1].keywords._value).toBe('%react%');
+    });
+
+    it('should use fuzzy search for title field', async () => {
+      const mockFindAndCount = vi.fn(async () => [[], 0]);
+      vi.mocked(pg.getRepository).mockReturnValueOnce({
+        findAndCount: mockFindAndCount,
+        findOneBy: vi.fn(),
+        delete: vi.fn(),
+      } as any);
+
+      await documentService.listDocuments({ keyword: 'typescript' });
+
+      expect(mockFindAndCount).toHaveBeenCalled();
+      const callArg = mockFindAndCount.mock.calls[0] as any[];
+      const where = callArg[0].where;
+      // Check that fuzzy match pattern is applied
+      expect(where[0].title._value).toBe('%typescript%');
+    });
+
+    it('should use fuzzy search for keywords field', async () => {
+      const mockFindAndCount = vi.fn(async () => [[], 0]);
+      vi.mocked(pg.getRepository).mockReturnValueOnce({
+        findAndCount: mockFindAndCount,
+        findOneBy: vi.fn(),
+        delete: vi.fn(),
+      } as any);
+
+      await documentService.listDocuments({ keyword: 'nodejs' });
+
+      expect(mockFindAndCount).toHaveBeenCalled();
+      const callArg = mockFindAndCount.mock.calls[0] as any[];
+      const where = callArg[0].where;
+      // Check that fuzzy match pattern is applied to keywords
+      expect(where[1].keywords._value).toBe('%nodejs%');
+    });
+
+    it('should combine keyword with category filter', async () => {
+      const mockFindAndCount = vi.fn(async () => [[], 0]);
+      vi.mocked(pg.getRepository).mockReturnValueOnce({
+        findAndCount: mockFindAndCount,
+        findOneBy: vi.fn(),
+        delete: vi.fn(),
+      } as any);
+
+      await documentService.listDocuments({
+        keyword: 'test',
+        category: 'tech_blog',
+      });
+
+      expect(mockFindAndCount).toHaveBeenCalled();
+      const callArg = mockFindAndCount.mock.calls[0] as any[];
+      const where = callArg[0].where;
+      // Both OR conditions should have category filter
+      expect(where[0].category).toBe('tech_blog');
+      expect(where[1].category).toBe('tech_blog');
     });
 
     it('should list documents with category filter', async () => {
