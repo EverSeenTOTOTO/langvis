@@ -82,7 +82,7 @@ describe('FileService - Streaming', () => {
     it('should reject with error for invalid filename', async () => {
       await expect(
         fileService.createReadStream('../../../etc/passwd'),
-      ).rejects.toThrow('Invalid filename');
+      ).rejects.toThrow('Invalid filename: ../../../etc/passwd');
     });
   });
 });

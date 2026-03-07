@@ -51,7 +51,7 @@ export class FileService {
 
   private validatePath(filename: string): string {
     if (!this.validateFilename(filename)) {
-      throw new Error('Invalid filename');
+      throw new Error(`Invalid filename: ${filename}`);
     }
 
     const filePath = path.join(this.uploadDir, filename);
@@ -61,7 +61,7 @@ export class FileService {
     const resolvedUploadDir = path.resolve(this.uploadDir);
 
     if (!resolvedPath.startsWith(resolvedUploadDir)) {
-      throw new Error('Invalid file path');
+      throw new Error(`Invalid file path: ${filePath}`);
     }
 
     return filePath;

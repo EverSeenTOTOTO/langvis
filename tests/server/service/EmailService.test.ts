@@ -10,6 +10,7 @@ vi.mock('@/server/service/pg', () => ({
 
 vi.mock('@/shared/utils', () => ({
   generateId: vi.fn(prefix => `${prefix}_test123`),
+  isTest: vi.fn(() => true),
 }));
 
 describe('EmailService', () => {
@@ -246,3 +247,4 @@ describe('EmailService', () => {
     });
   });
 });
+

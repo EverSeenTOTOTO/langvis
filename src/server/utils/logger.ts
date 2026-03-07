@@ -1,3 +1,4 @@
+import { isTest } from '@/shared/utils';
 import chalk from 'chalk';
 import { isEmpty, isObject } from 'lodash-es';
 import winston from 'winston';
@@ -70,22 +71,6 @@ const consoleFormat = printf(({ timestamp: time, level, ...meta }) => {
   return result;
 });
 
-const dailyRotate = new winston.transports.DailyRotateFile({
-  filename: 'logs/langvis-%DATE%.log',
-  datePattern: 'YYYY-MM-DD-HH',
-  zippedArchive: true,
-  maxSize: '20m',
-  maxFiles: '14d',
-});
-const dailyRotateError = new winston.transports.DailyRotateFile({
-  level: 'error',
-  filename: 'logs/langvis-error-%DATE%.log',
-  datePattern: 'YYYY-MM-DD-HH',
-  zippedArchive: true,
-  maxSize: '20m',
-  maxFiles: '14d',
-});
-
 const logger = winston.createLogger({
   level: isProd ? 'info' : 'debug',
   format: combine(
@@ -94,7 +79,25 @@ const logger = winston.createLogger({
     }),
     consoleFormat,
   ),
-  transports: [dailyRotate, dailyRotateError],
+  transports: isTest()
+    ? [new winston.transports.Console({ silent: true })]
+    : [
+        new winston.transports.DailyRotateFile({
+          filename: 'logs/langvis-%DATE%.log',
+          datePattern: 'YYYY-MM-DD-HH',
+          zippedArchive: true,
+          maxSize: '20m',
+          maxFiles: '14d',
+        }),
+        new winston.transports.DailyRotateFile({
+          level: 'error',
+          filename: 'logs/langvis-error-%DATE%.log',
+          datePattern: 'YYYY-MM-DD-HH',
+          zippedArchive: true,
+          maxSize: '20m',
+          maxFiles: '14d',
+        }),
+      ],
 });
 
 if (!isProd) {
