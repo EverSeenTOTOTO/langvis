@@ -93,22 +93,20 @@ const Documents: React.FC = () => {
     documentStore.deleteDocument.bind(documentStore),
   );
 
-  const { dataSource, pagination, loading, search, reset } = usePagination<
-    SearchParams,
-    DocumentListItem
-  >({
-    fetchFn: async params => {
-      return documentStore.listDocuments({
-        keyword: params.keyword || undefined,
-        category: params.category,
-        startTime: params.startTime,
-        endTime: params.endTime,
-        page: params.page,
-        pageSize: params.pageSize,
-      });
-    },
-    defaultPageSize: 10,
-  });
+  const { dataSource, pagination, loading, search, reset, refresh } =
+    usePagination<SearchParams, DocumentListItem>({
+      fetchFn: async params => {
+        return documentStore.listDocuments({
+          keyword: params.keyword || undefined,
+          category: params.category,
+          startTime: params.startTime,
+          endTime: params.endTime,
+          page: params.page,
+          pageSize: params.pageSize,
+        });
+      },
+      defaultPageSize: 10,
+    });
 
   const handleSearch = () => {
     const values = form.getFieldsValue();
@@ -139,6 +137,7 @@ const Documents: React.FC = () => {
   const handleDelete = async (id: string) => {
     const success = await deleteApi[1]({ id });
     if (success) {
+      refresh();
       message.success(settingStore.tr('Document deleted successfully'));
     }
   };
@@ -334,7 +333,7 @@ const Documents: React.FC = () => {
         open={detailModalOpen}
         onCancel={() => setDetailModalOpen(false)}
         footer={null}
-        width={800}
+        width="75%"
         loading={detailApi[0].loading}
       >
         {selectedDocument && (
@@ -422,14 +421,12 @@ const Documents: React.FC = () => {
 
             <div className="detail-section">
               <Title level={5}>{settingStore.tr('Raw Content')}</Title>
-              <div className="detail-content">
-                <Paragraph
-                  ellipsis={{ rows: 10, expandable: true, symbol: 'more' }}
-                  style={{ margin: 0, whiteSpace: 'pre-wrap' }}
-                >
-                  {selectedDocument.rawContent}
-                </Paragraph>
-              </div>
+              <div
+                className="detail-content html-content"
+                dangerouslySetInnerHTML={{
+                  __html: selectedDocument.rawContent,
+                }}
+              />
             </div>
           </div>
         )}
@@ -439,4 +436,3 @@ const Documents: React.FC = () => {
 };
 
 export default observer(Documents);
-

@@ -1,8 +1,8 @@
-.documents-page {
+.emails-page {
   min-height: calc(100vh - var(--header-height));
   padding: 24px;
 
-  .documents-filter {
+  .emails-filter {
     padding: 16px;
     margin-bottom: 16px;
     background: var(--ant-color-bg-container);
@@ -13,7 +13,7 @@
     }
   }
 
-  .document-detail {
+  .email-detail {
     .detail-section {
       margin-top: 24px;
 

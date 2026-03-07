@@ -5,10 +5,10 @@ import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { AgentEvent, ToolConfig } from '@/shared/types';
 import { Readability } from '@mozilla/readability';
-import DOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
+import { sanitizeHtml } from '@/server/utils/sanitizeHtml';
 
 interface WebFetchInput {
   url: string;
@@ -108,46 +108,7 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
 
     const html = await response.text();
 
-    const dom = new JSDOM(html, { url });
-    const purify = DOMPurify(dom.window);
-
-    const sanitizedHTML = purify.sanitize(html, {
-      ALLOWED_TAGS: [
-        'p',
-        'div',
-        'span',
-        'a',
-        'img',
-        'h1',
-        'h2',
-        'h3',
-        'h4',
-        'h5',
-        'h6',
-        'ul',
-        'ol',
-        'li',
-        'br',
-        'strong',
-        'em',
-        'code',
-        'pre',
-        'blockquote',
-        'article',
-        'section',
-        'header',
-        'footer',
-        'main',
-        'table',
-        'thead',
-        'tbody',
-        'tr',
-        'th',
-        'td',
-      ],
-      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id'],
-      KEEP_CONTENT: true,
-    });
+    const sanitizedHTML = sanitizeHtml(html);
 
     const sanitizedDOM = new JSDOM(sanitizedHTML, { url });
     const reader = new Readability(sanitizedDOM.window.document);

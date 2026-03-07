@@ -15,6 +15,7 @@ const EXEMPT_PATHS = [
   '/auth/sign-up/email',
   '/auth/sign-in/email',
   '/auth/get-session',
+  '/emails/inbound',
 ];
 
 export default async (app: Express) => {

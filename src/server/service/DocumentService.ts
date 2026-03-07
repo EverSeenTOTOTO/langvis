@@ -25,14 +25,10 @@ export class DocumentService {
     const pageSize = params.pageSize ?? 10;
     const skip = (page - 1) * pageSize;
 
-    const where: Record<string, any> = {};
-
-    if (params.keyword) {
-      where.title = Like(`%${params.keyword}%`);
-    }
+    const baseConditions: Record<string, any> = {};
 
     if (params.category) {
-      where.category = params.category;
+      baseConditions.category = params.category;
     }
 
     if (params.startTime || params.endTime) {
@@ -42,12 +38,23 @@ export class DocumentService {
       const endDate = params.endTime ? new Date(params.endTime) : undefined;
 
       if (startDate && endDate) {
-        where.createdAt = Between(startDate, endDate);
+        baseConditions.createdAt = Between(startDate, endDate);
       } else if (startDate) {
-        where.createdAt = MoreThanOrEqual(startDate);
+        baseConditions.createdAt = MoreThanOrEqual(startDate);
       } else if (endDate) {
-        where.createdAt = LessThanOrEqual(endDate);
+        baseConditions.createdAt = LessThanOrEqual(endDate);
       }
+    }
+
+    // Build where conditions - use array for OR logic when keyword is provided
+    let where: Record<string, any> | Record<string, any>[];
+    if (params.keyword) {
+      where = [
+        { ...baseConditions, title: Like(`%${params.keyword}%`) },
+        { ...baseConditions, keywords: Like(`%${params.keyword}%`) },
+      ];
+    } else {
+      where = baseConditions;
     }
 
     const [items, total] = await documentRepository.findAndCount({
