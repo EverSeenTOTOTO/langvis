@@ -255,4 +255,3 @@ export class EmailService {
     return text || '';
   }
 }
-
