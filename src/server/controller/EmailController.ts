@@ -64,8 +64,6 @@ export default class EmailController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    this.logger.info('Received inbound email request');
-
     const secret = req.headers['x-inbound-secret'];
 
     if (!INBOUND_SECRET || secret !== INBOUND_SECRET) {
@@ -77,8 +75,6 @@ export default class EmailController {
       this.logger.warn('Missing raw email content');
       return res.status(400).json({ error: 'Missing raw email content' });
     }
-
-    this.logger.info(`Raw email size: ${emailBody.raw.length} bytes`);
 
     try {
       const result = await this.emailService.processInbound(emailBody.raw);
