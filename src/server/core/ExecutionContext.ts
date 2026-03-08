@@ -1,8 +1,10 @@
-import { InjectTokens } from '@/shared/constants';
+import { InjectTokens, ToolIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
 import { generateId } from '@/shared/utils';
+import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
 import type { RedisClientType } from 'redis';
 import { container } from 'tsyringe';
+import type LlmCallTool from './tool/LlmCall';
 
 export interface CachedReference {
   $cached: string;
@@ -10,13 +12,6 @@ export interface CachedReference {
   $preview?: string;
 }
 
-/**
- * ExecutionContext - pure execution context for Agent/Tool execution.
- *
- * Design principle: lightweight and pure - only contains execution control,
- * trace identifiers, seq generation, and callId stack management.
- * No data persistence, content accumulation, or SSE sending.
- */
 export class ExecutionContext {
   public get signal(): AbortSignal {
     return this.controller.signal;
@@ -167,14 +162,32 @@ export class ExecutionContext {
     return event;
   }
 
+  // === LlmCall util ===
+
+  async *callLlm(
+    options: Partial<ChatCompletionCreateParams>,
+    ignore: boolean = true,
+  ): AsyncGenerator<AgentEvent, string, void> {
+    const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
+    let content = '';
+
+    for await (const event of llmCallTool.call(options, this)) {
+      if (event.type === 'tool_progress' && typeof event.data === 'string') {
+        content += event.data;
+        if (!ignore) {
+          yield this.agentStreamEvent(event.data);
+        }
+      }
+    }
+
+    return content;
+  }
+
   // === Cache management ===
 
   private static readonly STRING_THRESHOLD = 1000;
   private static readonly COLLECTION_THRESHOLD = 20;
 
-  /**
-   * Compress a value to Redis cache
-   */
   async compress(
     value: unknown,
     options?: { preview?: number },
@@ -196,10 +209,6 @@ export class ExecutionContext {
     };
   }
 
-  /**
-   * Retrieve a cached value from Redis
-   * @throws Error if cache miss
-   */
   async retrieve(key: string): Promise<unknown> {
     const redis = container.resolve<RedisClientType>(InjectTokens.REDIS);
     const data = await redis.get(`agent:cache:${this.traceId}:${key}`);
@@ -209,9 +218,6 @@ export class ExecutionContext {
     return data;
   }
 
-  /**
-   * Clear all cached data for this session
-   */
   async clearCache(): Promise<void> {
     if (this.cachedKeys.length > 0) {
       const redis = container.resolve<RedisClientType>(InjectTokens.REDIS);
@@ -223,11 +229,6 @@ export class ExecutionContext {
 
   // === Auto compress/resolve for tool I/O ===
 
-  /**
-   * Check if a value should be compressed
-   * - string: length > 1000
-   * - array/object: keys/items > 20
-   */
   private shouldCompress(value: unknown): boolean {
     if (typeof value === 'string') {
       return value.length > ExecutionContext.STRING_THRESHOLD;
@@ -241,9 +242,6 @@ export class ExecutionContext {
     return false;
   }
 
-  /**
-   * Automatically compress large values in output
-   */
   async autoCompressOutput(output: unknown): Promise<unknown> {
     if (this.shouldCompress(output)) {
       return this.compress(output);
@@ -264,9 +262,6 @@ export class ExecutionContext {
     return output;
   }
 
-  /**
-   * Automatically resolve CachedReference in input
-   */
   async autoResolveInput(input: unknown): Promise<unknown> {
     if (input && typeof input === 'object' && !Array.isArray(input)) {
       if (

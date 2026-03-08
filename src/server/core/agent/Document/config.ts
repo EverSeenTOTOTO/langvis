@@ -11,5 +11,8 @@ export const config: AgentConfig = {
     ToolIds.ANALYSIS,
     ToolIds.RETRIEVE,
     ToolIds.READ_CACHE,
+    ToolIds.EXTRACT_LINKS,
+    ToolIds.BATCH_ARCHIVE,
+    ToolIds.HUMAN_IN_THE_LOOP,
   ],
 };

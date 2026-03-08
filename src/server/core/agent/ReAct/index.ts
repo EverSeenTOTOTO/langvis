@@ -11,7 +11,6 @@ import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
 import { Prompt } from '../../PromptBuilder';
 import { Tool } from '../../tool';
-import type LlmCallTool from '../../tool/LlmCall';
 import { createPrompt } from './prompt';
 
 type ReActAction = {
@@ -58,8 +57,6 @@ export default class ReActAgent extends Agent {
   ): AsyncGenerator<AgentEvent, void, void> {
     yield ctx.agentStartEvent();
 
-    const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
-
     const messages = await memory.summarize();
     const iterMessages = this.buildIterMessages(messages);
 
@@ -71,15 +68,12 @@ export default class ReActAgent extends Agent {
         iterMessages.filter(m => m.role !== Role.SYSTEM),
       );
 
-      const content = yield* llmCallTool.call(
-        {
-          messages: iterMessages,
-          model: options?.model?.code,
-          temperature: options?.model?.temperature,
-          stop: ['Observation:', 'Observation：'],
-        },
-        ctx,
-      );
+      const content = yield* ctx.callLlm({
+        messages: iterMessages,
+        model: options?.model?.code,
+        temperature: options?.model?.temperature,
+        stop: ['Observation:', 'Observation：'],
+      });
 
       if (!content) {
         yield ctx.agentErrorEvent('No response from model');

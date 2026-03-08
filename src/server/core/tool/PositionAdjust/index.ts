@@ -2,7 +2,7 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { AgentEvent, ToolConfig } from '@/shared/types';
+import type { AgentEvent, ToolConfig } from '@/shared/types';
 import { container } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
@@ -64,8 +64,6 @@ export default class PositionAdjustTool extends Tool<
   ): AsyncGenerator<AgentEvent, string, void> {
     const prompt = this.buildAdvicePrompt(formData);
 
-    const llmCallTool = container.resolve<any>(ToolIds.LLM_CALL);
-
     const messages = [
       {
         role: 'system' as const,
@@ -88,7 +86,7 @@ export default class PositionAdjustTool extends Tool<
       },
     ];
 
-    return yield* llmCallTool.call({ messages }, ctx);
+    return yield* ctx.callLlm({ messages });
   }
 
   private buildAdvicePrompt(formData: Record<string, any>): string {

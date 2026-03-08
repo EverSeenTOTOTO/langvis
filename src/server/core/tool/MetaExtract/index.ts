@@ -3,11 +3,9 @@ import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { AgentEvent, ToolConfig } from '@/shared/types';
-import { container } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { Prompt } from '../../PromptBuilder';
-import type LlmCallTool from '../LlmCall';
 import type { MetaExtractInput, MetaExtractOutput } from './config';
 import { config } from './config';
 
@@ -70,19 +68,14 @@ ${truncatedContent}`;
       data: { sourceUrl, sourceType },
     });
 
-    const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
-
-    const responseContent = yield* llmCallTool.call(
-      {
-        messages: [
-          { role: 'system', content: systemPrompt.build() },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.3,
-      },
-      ctx,
-    );
+    const responseContent = yield* ctx.callLlm({
+      messages: [
+        { role: 'system', content: systemPrompt.build() },
+        { role: 'user', content: userPrompt },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+    });
 
     if (!responseContent) {
       throw new Error('No response from LLM');

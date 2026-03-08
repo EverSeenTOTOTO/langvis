@@ -1,6 +1,6 @@
 import ReActAgent from '@/server/core/agent/ReAct';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
-import { ToolIds, InjectTokens } from '@/shared/constants';
+import { InjectTokens } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,10 +8,6 @@ const mockRedis = {
   setEx: vi.fn().mockResolvedValue('OK'),
   get: vi.fn().mockResolvedValue(null),
   del: vi.fn().mockResolvedValue(1),
-};
-
-const mockLlmCallTool = {
-  call: vi.fn(),
 };
 
 const mockNestedTool = {
@@ -24,9 +20,6 @@ vi.mock('tsyringe', async () => {
     ...actual,
     container: {
       resolve: vi.fn((token: string | symbol) => {
-        if (token === ToolIds.LLM_CALL) {
-          return mockLlmCallTool;
-        }
         if (token === 'nested_tool') {
           return mockNestedTool;
         }
@@ -92,23 +85,22 @@ describe('ReActAgent', () => {
     } as any;
     const ctx = createMockContext();
 
-    // Mock LLM to first return an action, then a final answer
+    // Mock callLlm to first return an action, then a final answer
     let llmCallCount = 0;
-    mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
-      AgentEvent,
-      string,
-      void
-    > {
+    vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
       llmCallCount++;
-      yield ctx.agentToolProgressEvent(ToolIds.LLM_CALL, {
-        step: llmCallCount,
-      });
       if (llmCallCount === 1) {
+        yield ctx.agentStreamEvent(
+          '{ "thought": "I need to call nested_tool", "action": { "tool": "nested_tool", "input": { "query": "test" } } }',
+        );
         return JSON.stringify({
           thought: 'I need to call nested_tool',
           action: { tool: 'nested_tool', input: { query: 'test' } },
         });
       } else {
+        yield ctx.agentStreamEvent(
+          '{ "thought": "Tool executed successfully", "final_answer": "Done" }',
+        );
         return JSON.stringify({
           thought: 'Tool executed successfully',
           final_answer: 'Done',
@@ -157,12 +149,10 @@ describe('ReActAgent', () => {
     } as any;
     const ctx = createMockContext();
 
-    mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
-      AgentEvent,
-      string,
-      void
-    > {
-      yield ctx.agentToolProgressEvent(ToolIds.LLM_CALL, { step: 1 });
+    vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
+      yield ctx.agentStreamEvent(
+        '{ "thought": "Simple greeting", "final_answer": "Hello! How can I help you?" }',
+      );
       return JSON.stringify({
         thought: 'Simple greeting',
         final_answer: 'Hello! How can I help you?',
@@ -175,7 +165,9 @@ describe('ReActAgent', () => {
     expect(events.find(e => e.type === 'thought')).toMatchObject({
       content: 'Simple greeting',
     });
-    expect(events.find(e => e.type === 'stream')).toMatchObject({
+    // callLlm yields the full JSON, then Agent yields the final_answer separately
+    const streamEvents = events.filter(e => e.type === 'stream');
+    expect(streamEvents[streamEvents.length - 1]).toMatchObject({
       content: 'Hello! How can I help you?',
     });
     expect(events.find(e => e.type === 'final')).toBeDefined();
@@ -192,14 +184,18 @@ describe('ReActAgent', () => {
 
       let llmCallCount = 0;
 
-      mockLlmCallTool.call.mockImplementation(
+      vi.spyOn(ctx, 'callLlm').mockImplementation(
         async function* (): AsyncGenerator<AgentEvent, string, void> {
           llmCallCount++;
           if (llmCallCount === 1) {
+            yield ctx.agentStreamEvent(
+              '{ "action": { "tool": "nested_tool", "input": { "query": "test" } } }',
+            );
             return JSON.stringify({
               action: { tool: 'nested_tool', input: { query: 'test' } },
             });
           }
+          yield ctx.agentStreamEvent('done');
           return JSON.stringify({ final_answer: 'done' });
         },
       );
@@ -238,10 +234,13 @@ describe('ReActAgent', () => {
 
       let llmCallCount = 0;
 
-      mockLlmCallTool.call.mockImplementation(
+      vi.spyOn(ctx, 'callLlm').mockImplementation(
         async function* (): AsyncGenerator<AgentEvent, string, void> {
           llmCallCount++;
           if (llmCallCount === 1) {
+            yield ctx.agentStreamEvent(
+              '{ "action": { "tool": "nested_tool", "input": { "content": { "$cached": "cache_abc", "$size": 100 } } } }',
+            );
             return JSON.stringify({
               action: {
                 tool: 'nested_tool',
@@ -251,6 +250,7 @@ describe('ReActAgent', () => {
               },
             });
           }
+          yield ctx.agentStreamEvent('done');
           return JSON.stringify({ final_answer: 'done' });
         },
       );
@@ -280,14 +280,18 @@ describe('ReActAgent', () => {
 
       let llmCallCount = 0;
 
-      mockLlmCallTool.call.mockImplementation(
+      vi.spyOn(ctx, 'callLlm').mockImplementation(
         async function* (): AsyncGenerator<AgentEvent, string, void> {
           llmCallCount++;
           if (llmCallCount === 1) {
+            yield ctx.agentStreamEvent(
+              '{ "action": { "tool": "nested_tool", "input": {} } }',
+            );
             return JSON.stringify({
               action: { tool: 'nested_tool', input: {} },
             });
           }
+          yield ctx.agentStreamEvent('done');
           return JSON.stringify({ final_answer: 'done' });
         },
       );
@@ -321,14 +325,18 @@ describe('ReActAgent', () => {
 
       let llmCallCount = 0;
 
-      mockLlmCallTool.call.mockImplementation(
+      vi.spyOn(ctx, 'callLlm').mockImplementation(
         async function* (): AsyncGenerator<AgentEvent, string, void> {
           llmCallCount++;
           if (llmCallCount === 1) {
+            yield ctx.agentStreamEvent(
+              '{ "action": { "tool": "nested_tool", "input": {} } }',
+            );
             return JSON.stringify({
               action: { tool: 'nested_tool', input: {} },
             });
           }
+          yield ctx.agentStreamEvent('done');
           return JSON.stringify({ final_answer: 'done' });
         },
       );

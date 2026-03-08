@@ -12,6 +12,8 @@ export enum ToolIds {
   RETRIEVE = 'retrieve_tool',
   READ_CACHE = 'read_cache_tool',
   POSITION_ADJUST = 'position_adjust_tool',
+  EXTRACT_LINKS = 'extract_links_tool',
+  BATCH_ARCHIVE = 'batch_archive_tool',
 }
 
 export enum AgentIds {

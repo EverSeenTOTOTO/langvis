@@ -78,8 +78,12 @@ export const formSchema = {
     personalEmotion: {
       type: 'string',
       title: '个人情绪',
-      enum: ['greedy', 'fearful', 'neutral', 'uncertain'],
-      enumNames: ['贪婪', '恐惧', '中性', '不确定'],
+      enum: [
+        { label: '贪婪', value: 'greedy' },
+        { label: '恐惧', value: 'fearful' },
+        { label: '中性', value: 'neutral' },
+        { label: '不确定', value: 'uncertain' },
+      ],
       default: 'neutral',
     },
     targetPosition: {

@@ -4,10 +4,6 @@ import { ToolIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockLlmCallTool = {
-  call: vi.fn(),
-};
-
 const mockPositionAdjustTool = {
   call: vi.fn(),
 };
@@ -18,9 +14,6 @@ vi.mock('tsyringe', async () => {
     ...actual,
     container: {
       resolve: vi.fn((token: string) => {
-        if (token === ToolIds.LLM_CALL) {
-          return mockLlmCallTool;
-        }
         if (token === ToolIds.POSITION_ADJUST) {
           return mockPositionAdjustTool;
         }
@@ -83,12 +76,10 @@ describe('FinancialAgent', () => {
     } as any;
     const ctx = createMockContext();
 
-    mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
-      AgentEvent,
-      string,
-      void
-    > {
-      yield ctx.agentToolProgressEvent(ToolIds.LLM_CALL, { step: 1 });
+    vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
+      yield ctx.agentStreamEvent(
+        '{ "thought": "Simple question about DCA", "final_answer": "定投是指定期定额投资..." }',
+      );
       return JSON.stringify({
         thought: 'Simple question about DCA',
         final_answer: '定投是指定期定额投资...',
@@ -101,7 +92,9 @@ describe('FinancialAgent', () => {
     expect(events.find(e => e.type === 'thought')).toMatchObject({
       content: 'Simple question about DCA',
     });
-    expect(events.find(e => e.type === 'stream')).toMatchObject({
+    // callLlm yields the full JSON, then Agent yields the final_answer separately
+    const streamEvents = events.filter(e => e.type === 'stream');
+    expect(streamEvents[streamEvents.length - 1]).toMatchObject({
       content: '定投是指定期定额投资...',
     });
     expect(events.find(e => e.type === 'final')).toBeDefined();
@@ -117,17 +110,13 @@ describe('FinancialAgent', () => {
 
     let llmCallCount = 0;
 
-    mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
-      AgentEvent,
-      string,
-      void
-    > {
+    vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
       llmCallCount++;
-      yield ctx.agentToolProgressEvent(ToolIds.LLM_CALL, {
-        step: llmCallCount,
-      });
 
       if (llmCallCount === 1) {
+        yield ctx.agentStreamEvent(
+          '{ "thought": "User needs position adjustment", "action": { "tool": "position_adjust_tool", "input": { "conversationId": "conv_123" } } }',
+        );
         return JSON.stringify({
           thought: 'User needs position adjustment',
           action: {
@@ -136,6 +125,9 @@ describe('FinancialAgent', () => {
           },
         });
       }
+      yield ctx.agentStreamEvent(
+        '{ "thought": "Position adjustment complete", "final_answer": "根据您的资产配置..." }',
+      );
       return JSON.stringify({
         thought: 'Position adjustment complete',
         final_answer: '根据您的资产配置...',
@@ -178,12 +170,10 @@ describe('FinancialAgent', () => {
     } as any;
     const ctx = createMockContext();
 
-    mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
-      AgentEvent,
-      string,
-      void
-    > {
-      yield ctx.agentToolProgressEvent(ToolIds.LLM_CALL, { step: 1 });
+    vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
+      yield ctx.agentStreamEvent(
+        '{ "thought": "Cannot recommend specific stocks", "final_answer": "抱歉，我不能推荐具体的股票代码。但我可以帮您分析资产配置策略..." }',
+      );
       return JSON.stringify({
         thought: 'Cannot recommend specific stocks',
         final_answer:

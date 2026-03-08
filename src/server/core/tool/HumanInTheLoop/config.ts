@@ -18,6 +18,7 @@ export const config: ToolConfig<
 **When to use:**
 - User confirmation needed (e.g., "Should I proceed with this action?")
 - User decision among options (e.g., "Which option do you prefer?")
+- Multi-selection from a list (e.g., "Which items to process?")
 - Missing information required (e.g., "What is your preferred date?")
 - Sensitive operations requiring approval
 
@@ -31,12 +32,29 @@ formSchema MUST be an object with fields defined in \`properties\`. Examples:
 // Text input
 {"type": "object", "properties": {"name": {"type": "string", "title": "Your name"}}}
 
-// Multiple choice
+// Single select (returns one value)
 {"type": "object", "properties": {"choice": {"type": "string", "enum": ["option1", "option2"], "title": "Choose one"}}}
+
+// Single select with labels
+{"type": "object", "properties": {"category": {"type": "string", "enum": [{"label": "Tech Blog", "value": "tech"}, {"label": "News", "value": "news"}], "title": "Category"}}}
+
+// Multi-select (returns array of values)
+{"type": "object", "properties": {"selected": {"type": "array", "enum": ["url1", "url2", "url3"], "title": "Select items"}}}
+
+// Multi-select with labels
+{"type": "object", "properties": {"links": {"type": "array", "enum": [{"label": "Article A", "value": "url-a"}, {"label": "Article B", "value": "url-b"}], "title": "Select links to archive"}}}
 
 // Multiple fields
 {"type": "object", "properties": {"name": {"type": "string"}, "age": {"type": "number"}}}
 \`\`\`
+
+**Enum format:**
+- Simple values: \`"enum": ["a", "b", "c"]\` - label equals value
+- With labels: \`"enum": [{"label": "选项A", "value": "a"}, ...]\` - for i18n or friendly names
+
+**Select vs Multi-select:**
+- \`type: "string" + enum\` → single select dropdown
+- \`type: "array" + enum\` → multi-select checkboxes
 
 **Output:**
 - \`submitted: true, data: {...}\` - User submitted the form with their input (data contains the object with all field values)
@@ -56,10 +74,7 @@ formSchema MUST be an object with fields defined in \`properties\`. Examples:
       },
       formSchema: {
         type: 'object',
-        description: `JSON Schema describing the form. MUST be type "object" with fields in "properties". Examples:
-{"type": "object", "properties": {"confirmed": {"type": "boolean", "title": "Confirm?"}}}
-{"type": "object", "properties": {"value": {"type": "string", "title": "Enter value"}}}
-{"type": "object", "properties": {"choice": {"type": "string", "enum": ["a", "b"], "title": "Select"}}}`,
+        description: `JSON Schema describing the form. MUST be type "object" with fields in "properties".`,
       },
       timeout: {
         type: 'number',

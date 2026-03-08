@@ -9,10 +9,6 @@ const mockHumanInputTool = {
   call: vi.fn(),
 };
 
-const mockLlmCallTool = {
-  call: vi.fn(),
-};
-
 vi.mock('tsyringe', async () => {
   const actual = await vi.importActual('tsyringe');
   return {
@@ -21,9 +17,6 @@ vi.mock('tsyringe', async () => {
       resolve: vi.fn((token: string | symbol) => {
         if (token === ToolIds.HUMAN_IN_THE_LOOP) {
           return mockHumanInputTool;
-        }
-        if (token === ToolIds.LLM_CALL) {
-          return mockLlmCallTool;
         }
         throw new Error(`Unknown token: ${String(token)}`);
       }),
@@ -133,8 +126,8 @@ describe('PositionAdjustTool', () => {
       });
 
       const mockAdvice = '建议减少股票仓位...';
-      mockLlmCallTool.call.mockImplementation(async function* () {
-        yield ctx.agentToolProgressEvent(ToolIds.LLM_CALL, { step: 1 });
+      vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
+        yield ctx.agentStreamEvent(mockAdvice);
         return mockAdvice;
       });
 
@@ -147,16 +140,17 @@ describe('PositionAdjustTool', () => {
         advice: mockAdvice,
       });
 
-      expect(mockLlmCallTool.call).toHaveBeenCalled();
-      const callArgs = mockLlmCallTool.call.mock.calls[0][0];
+      const callLlmSpy = vi.mocked(ctx.callLlm);
+      expect(callLlmSpy).toHaveBeenCalled();
+      const callArgs = callLlmSpy.mock.calls[0][0];
       expect(callArgs.messages).toHaveLength(2);
-      expect(callArgs.messages[0].role).toBe('system');
-      expect(callArgs.messages[1].role).toBe('user');
-      expect(callArgs.messages[1].content).toContain('总资产');
-      expect(callArgs.messages[1].content).toContain('10万');
-      expect(callArgs.messages[1].content).toContain('当前持仓');
-      expect(callArgs.messages[1].content).toContain('股票');
-      expect(callArgs.messages[1].content).toContain('5万');
+      expect(callArgs.messages![0].role).toBe('system');
+      expect(callArgs.messages![1].role).toBe('user');
+      expect(callArgs.messages![1].content).toContain('总资产');
+      expect(callArgs.messages![1].content).toContain('10万');
+      expect(callArgs.messages![1].content).toContain('当前持仓');
+      expect(callArgs.messages![1].content).toContain('股票');
+      expect(callArgs.messages![1].content).toContain('5万');
     });
 
     it('should include all form fields in prompt', async () => {
@@ -191,14 +185,15 @@ describe('PositionAdjustTool', () => {
         return { submitted: true, data: formData };
       });
 
-      mockLlmCallTool.call.mockImplementation(async function* () {
-        return 'Advice';
-      });
+      const callLlmSpy = vi
+        .spyOn(ctx, 'callLlm')
+        .mockImplementation(async function* () {
+          return 'Advice';
+        });
 
       await collectEvents(tool.call({ conversationId: 'test-conv' }, ctx));
 
-      const userMessage =
-        mockLlmCallTool.call.mock.calls[0][0].messages[1].content;
+      const userMessage = callLlmSpy.mock.calls[0][0].messages![1].content;
 
       expect(userMessage).toContain('50万');
       expect(userMessage).toContain('20万');
@@ -220,7 +215,7 @@ describe('PositionAdjustTool', () => {
         return { submitted: true, data: formData };
       });
 
-      mockLlmCallTool.call.mockImplementation(async function* () {
+      vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
         return 'Simple advice';
       });
 
