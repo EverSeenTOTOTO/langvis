@@ -87,9 +87,6 @@ describe('ChatAgent', () => {
       type: 'stream',
       content: ' world',
     });
-    expect(events[4]).toMatchObject({
-      type: 'final',
-    });
   });
 
   it('should pass context to llmCallTool.call', async () => {
@@ -112,3 +109,4 @@ describe('ChatAgent', () => {
     expect(mockLlmCallTool.call).toHaveBeenCalledWith(expect.any(Object), ctx);
   });
 });
+

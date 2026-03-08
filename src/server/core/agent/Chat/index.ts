@@ -1,16 +1,14 @@
 import { agent } from '@/server/decorator/core';
 import { config } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
-import { AgentIds, ToolIds } from '@/shared/constants';
+import { AgentIds } from '@/shared/constants';
 import { AgentConfig, AgentEvent } from '@/shared/types';
 import chalk from 'chalk';
-import { container } from 'tsyringe';
 import { Agent } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
 import { Prompt } from '../../PromptBuilder';
 import { Tool } from '../../tool';
-import type LlmCallTool from '../../tool/LlmCall';
 import { createPrompt } from './prompt';
 
 interface ChatAgentConfig {
@@ -39,8 +37,6 @@ export default class ChatAgent extends Agent {
   ): AsyncGenerator<AgentEvent, void, void> {
     yield ctx.agentStartEvent();
 
-    const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
-
     const messages = await memory.summarize();
     const conversationMessages = messages.map(msg => ({
       role: msg.role as 'user' | 'assistant' | 'system',
@@ -54,20 +50,14 @@ export default class ChatAgent extends Agent {
       conversationMessages,
     );
 
-    for await (const event of llmCallTool.call(
+    yield* ctx.callLlm(
       {
         model,
         temperature: options?.model?.temperature,
         messages: conversationMessages,
       },
-      ctx,
-    )) {
-      if (event.type === 'tool_progress' && typeof event.data === 'string') {
-        yield ctx.agentStreamEvent(event.data);
-      } else {
-        yield event;
-      }
-    }
+      false,
+    );
 
     yield ctx.agentFinalEvent();
   }

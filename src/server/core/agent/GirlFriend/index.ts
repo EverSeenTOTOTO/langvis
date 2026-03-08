@@ -10,7 +10,6 @@ import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
 import { Prompt } from '../../PromptBuilder';
 import { Tool } from '../../tool';
-import type LlmCallTool from '../../tool/LlmCall';
 import type TextToSpeechTool from '../../tool/TextToSpeech';
 import { createPrompt } from './prompt';
 
@@ -44,8 +43,6 @@ export default class GirlFriendAgent extends Agent {
   ): AsyncGenerator<AgentEvent, void, void> {
     yield ctx.agentStartEvent();
 
-    const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
-
     const messages = await memory.summarize();
     const conversationMessages = messages.map(msg => ({
       role: msg.role as 'user' | 'assistant' | 'system',
@@ -54,24 +51,14 @@ export default class GirlFriendAgent extends Agent {
 
     this.logger.debug('GF agent messages: ', conversationMessages);
 
-    // Track accumulated content for TTS
-    let accumulatedContent = '';
-
-    for await (const event of llmCallTool.call(
+    const accumulatedContent = yield* ctx.callLlm(
       {
         model: options?.model?.code,
         temperature: options?.model?.temperature,
         messages: conversationMessages,
       },
-      ctx,
-    )) {
-      if (event.type === 'tool_progress' && typeof event.data === 'string') {
-        accumulatedContent += event.data;
-        yield ctx.agentStreamEvent(event.data);
-      } else {
-        yield event;
-      }
-    }
+      false,
+    );
 
     const tts = container.resolve<TextToSpeechTool>(ToolIds.TEXT_TO_SPEECH);
     const ttsArgs = {

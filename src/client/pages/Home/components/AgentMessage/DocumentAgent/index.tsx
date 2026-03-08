@@ -5,10 +5,11 @@ import type { Message } from '@/shared/types/entities';
 import type { MessageRenderState, ThoughtItem } from '../deriveMessageState';
 import {
   CheckCircleOutlined,
+  CloseCircleOutlined,
   LoadingOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
-import { Collapse, Flex, Steps, Tag, Typography } from 'antd';
+import { Collapse, Flex, Progress, Steps, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import {
@@ -98,6 +99,78 @@ function AnalysisPipeline({
   );
 }
 
+// === Document Agent specific: Batch Archive Progress ===
+
+interface BatchArchiveProgressData {
+  current: number;
+  total: number;
+  url: string;
+  status: 'processing' | 'success' | 'failed';
+  error?: string;
+}
+
+function BatchArchiveProgress({
+  progress,
+  isPending,
+}: {
+  progress: Array<{ data: unknown; seq: number; at: number }>;
+  isPending: boolean;
+}) {
+  // Get the latest progress for each URL
+  const urlStatusMap = new Map<string, BatchArchiveProgressData>();
+
+  for (const p of progress) {
+    const data = p.data as BatchArchiveProgressData;
+    if (data?.url) {
+      urlStatusMap.set(data.url, data);
+    }
+  }
+
+  // Calculate overall progress
+  const completed = Array.from(urlStatusMap.values()).filter(
+    d => d.status === 'success' || d.status === 'failed',
+  ).length;
+
+  const latestProgress = Array.from(urlStatusMap.values()).pop();
+  const total = latestProgress?.total ?? progress.length;
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const failed = Array.from(urlStatusMap.values()).filter(
+    d => d.status === 'failed',
+  ).length;
+
+  return (
+    <div className="batch-archive-progress">
+      <Flex align="center" gap={8} style={{ marginBottom: 8 }}>
+        <Progress
+          percent={percent}
+          size="small"
+          status={isPending ? 'active' : failed > 0 ? 'exception' : 'success'}
+          style={{ flex: 1 }}
+        />
+        <Typography.Text type="secondary">
+          {completed}/{total}
+        </Typography.Text>
+      </Flex>
+
+      {latestProgress && isPending && (
+        <Typography.Text type="secondary" ellipsis style={{ fontSize: 12 }}>
+          {latestProgress.status === 'processing'
+            ? `Processing: ${latestProgress.url}`
+            : latestProgress.status === 'failed'
+              ? `Failed: ${latestProgress.error}`
+              : null}
+        </Typography.Text>
+      )}
+
+      {!isPending && (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {completed - failed} succeeded, {failed} failed
+        </Typography.Text>
+      )}
+    </div>
+  );
+}
+
 // === State derivation ===
 
 interface DocumentDerivedState {
@@ -172,7 +245,7 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
   ) : toolCall.status === 'done' ? (
     <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
   ) : toolCall.status === 'error' ? (
-    <span style={{ color: 'var(--ant-color-error)' }}>✕</span>
+    <CloseCircleOutlined style={{ color: 'var(--ant-color-error)' }} />
   ) : null;
 
   // Document Agent specific: Analysis pipeline visualization
@@ -182,6 +255,15 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
     toolCall.progress.some(p => {
       const data = p.data as AnalysisProgressData;
       return data?.action;
+    });
+
+  // Document Agent specific: Batch archive progress visualization
+  const isBatchArchiveTool = toolCall.toolName === ToolIds.BATCH_ARCHIVE;
+  const hasBatchArchiveProgress =
+    isBatchArchiveTool &&
+    toolCall.progress.some(p => {
+      const data = p.data as BatchArchiveProgressData;
+      return data?.url;
     });
 
   return (
@@ -208,6 +290,11 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
 
       {hasAnalysisProgress ? (
         <AnalysisPipeline progress={toolCall.progress} isPending={isPending} />
+      ) : hasBatchArchiveProgress ? (
+        <BatchArchiveProgress
+          progress={toolCall.progress}
+          isPending={isPending}
+        />
       ) : (
         latestProgress?.message &&
         !latestProgress?.status && (

@@ -192,4 +192,111 @@ describe('SchemaField', () => {
       },
     });
   });
+
+  it('should render array field with enum as multi-select checkboxes', () => {
+    const prop: SchemaProperty = {
+      type: 'array',
+      title: 'Select Links',
+      enum: [
+        { label: 'Link 1 - Article A', value: 'https://example.com/1' },
+        { label: 'Link 2 - Article B', value: 'https://example.com/2' },
+        { label: 'Link 3 - Article C', value: 'https://example.com/3' },
+      ],
+    };
+
+    render(
+      <Form>
+        <SchemaField name="links" prop={prop} />
+      </Form>,
+    );
+
+    // Should render checkboxes for each option
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes).toHaveLength(3);
+
+    // Check labels are rendered
+    expect(screen.getByText('Link 1 - Article A')).toBeInTheDocument();
+    expect(screen.getByText('Link 2 - Article B')).toBeInTheDocument();
+    expect(screen.getByText('Link 3 - Article C')).toBeInTheDocument();
+  });
+
+  it('should render string field with enum as single select', () => {
+    const prop: SchemaProperty = {
+      type: 'string',
+      title: 'Category',
+      enum: [
+        { label: 'Tech Blog', value: 'tech_blog' },
+        { label: 'News', value: 'news' },
+        { label: 'Paper', value: 'paper' },
+      ],
+    };
+
+    render(
+      <Form>
+        <SchemaField name="category" prop={prop} />
+      </Form>,
+    );
+
+    // Should render a select dropdown
+    const select = screen.getByRole('combobox');
+    expect(select).toBeInTheDocument();
+  });
+
+  it('should render string field with simple enum values', () => {
+    const prop: SchemaProperty = {
+      type: 'string',
+      title: 'Status',
+      enum: ['active', 'inactive', 'pending'],
+    };
+
+    render(
+      <Form>
+        <SchemaField name="status" prop={prop} />
+      </Form>,
+    );
+
+    // Should render a select dropdown
+    const select = screen.getByRole('combobox');
+    expect(select).toBeInTheDocument();
+  });
+
+  it('should produce correct form values for array with enum', async () => {
+    const user = userEvent.setup();
+    const prop: SchemaProperty = {
+      type: 'array',
+      title: 'Links',
+      enum: [
+        { label: 'Link A', value: 'url-a' },
+        { label: 'Link B', value: 'url-b' },
+        { label: 'Link C', value: 'url-c' },
+      ],
+    };
+
+    let formValues: unknown = null;
+    const onFinish = (values: unknown) => {
+      formValues = values;
+    };
+
+    const TestForm = () => (
+      <Form onFinish={onFinish}>
+        <SchemaField name="selectedLinks" prop={prop} />
+        <button type="submit">Submit</button>
+      </Form>
+    );
+
+    render(<TestForm />);
+
+    // Click first and third checkboxes
+    const checkboxes = screen.getAllByRole('checkbox');
+    await user.click(checkboxes[0]);
+    await user.click(checkboxes[2]);
+
+    // Submit the form
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    // Verify form values contain array of selected values
+    expect(formValues).toEqual({
+      selectedLinks: ['url-a', 'url-c'],
+    });
+  });
 });

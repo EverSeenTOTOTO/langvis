@@ -1,4 +1,5 @@
 import {
+  Checkbox,
   Collapse,
   Col,
   Form,
@@ -11,9 +12,17 @@ import {
 import type { NamePath } from 'antd/es/form/interface';
 import React from 'react';
 
+/** Enum item can be a primitive value or an object with label/value */
+export type EnumItem =
+  | string
+  | number
+  | boolean
+  | { label: string; value: string | number | boolean };
+
 export type SchemaProperty = {
-  type?: string;
-  enum?: readonly string[];
+  type?: 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object';
+  /** JSON Schema standard enum, supports simple values or {label, value} objects */
+  enum?: readonly EnumItem[];
   default?: unknown;
   minimum?: number;
   maximum?: number;
@@ -25,6 +34,25 @@ export type SchemaProperty = {
   required?: readonly string[];
   items?: SchemaProperty;
 };
+
+/** Normalize enum items to { label, value } format */
+function normalizeEnumItems(items: readonly EnumItem[]): {
+  label: string;
+  value: string | number | boolean;
+}[] {
+  return items.map(item => {
+    if (
+      typeof item === 'object' &&
+      item !== null &&
+      'label' in item &&
+      'value' in item
+    ) {
+      return item as { label: string; value: string | number | boolean };
+    }
+    // Primitive value: use as both label and value
+    return { label: String(item), value: item as string | number | boolean };
+  });
+}
 
 interface SchemaFieldProps {
   name: NamePath;
@@ -56,6 +84,7 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
     rules: [{ required }],
   };
 
+  // Object type: render nested properties
   if (prop.type === 'object' && prop.properties) {
     const requiredSet = new Set(prop.required ?? []);
     const children = Object.entries(prop.properties).map(([key, child]) => (
@@ -103,17 +132,66 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
     );
   }
 
-  if (prop.enum) {
+  // Array type with enum: multi-select checkboxes
+  if (prop.type === 'array' && prop.enum?.length) {
+    const options = normalizeEnumItems(prop.enum);
+    return (
+      <Form.Item key={fieldKey} {...commonProps}>
+        <Checkbox.Group options={options} />
+      </Form.Item>
+    );
+  }
+
+  // Array type with object items: render each item as nested field
+  if (prop.type === 'array' && prop.items?.type === 'object') {
+    return (
+      <Form.List key={fieldKey} name={fullName}>
+        {fields => (
+          <div>
+            {fields.map(field => (
+              <div key={field.key} style={{ marginBottom: 8 }}>
+                <SchemaField
+                  name={[field.name]}
+                  prop={prop.items!}
+                  namePrefix={namePrefix}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </Form.List>
+    );
+  }
+
+  // Array type fallback: comma-separated text input
+  if (prop.type === 'array') {
+    return (
+      <Form.Item key={fieldKey} {...commonProps}>
+        <Input placeholder={prop.description ?? 'Comma-separated values'} />
+      </Form.Item>
+    );
+  }
+
+  // String/number/integer with enum: single select
+  if (
+    prop.enum?.length &&
+    (prop.type === 'string' ||
+      prop.type === 'number' ||
+      prop.type === 'integer' ||
+      !prop.type)
+  ) {
+    const options = normalizeEnumItems(prop.enum);
     return (
       <Form.Item key={fieldKey} {...commonProps}>
         <Select
-          options={prop.enum.map(v => ({ label: v, value: v }))}
+          options={options as { label: string; value: string | number }[]}
           placeholder={prop.description}
         />
       </Form.Item>
     );
   }
 
+  // Number/integer type
   if (prop.type === 'number' || prop.type === 'integer') {
     return (
       <Form.Item key={fieldKey} {...commonProps}>
@@ -128,6 +206,7 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
     );
   }
 
+  // Boolean type
   if (prop.type === 'boolean') {
     return (
       <Form.Item key={fieldKey} {...commonProps} valuePropName="checked">
@@ -136,30 +215,23 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
     );
   }
 
-  if (prop.type === 'string') {
-    const isLongText = (prop.maxLength ?? 0) > 100;
-    return (
-      <Form.Item
-        key={fieldKey}
-        {...commonProps}
-        rules={[
-          { required },
-          ...(prop.minLength ? [{ min: prop.minLength }] : []),
-          ...(prop.maxLength ? [{ max: prop.maxLength }] : []),
-        ]}
-      >
-        {isLongText ? (
-          <Input.TextArea rows={4} placeholder={prop.description} />
-        ) : (
-          <Input placeholder={prop.description} />
-        )}
-      </Form.Item>
-    );
-  }
-
+  // String type (default)
+  const isLongText = (prop.maxLength ?? 0) > 100;
   return (
-    <Form.Item key={fieldKey} {...commonProps}>
-      <Input placeholder={prop.description} />
+    <Form.Item
+      key={fieldKey}
+      {...commonProps}
+      rules={[
+        { required },
+        ...(prop.minLength ? [{ min: prop.minLength }] : []),
+        ...(prop.maxLength ? [{ max: prop.maxLength }] : []),
+      ]}
+    >
+      {isLongText ? (
+        <Input.TextArea rows={4} placeholder={prop.description} />
+      ) : (
+        <Input placeholder={prop.description} />
+      )}
     </Form.Item>
   );
 };

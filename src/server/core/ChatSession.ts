@@ -20,10 +20,6 @@ const VALID_TRANSITIONS: Record<SessionPhase, SessionPhase[]> = {
   done: [],
 };
 
-/**
- * ChatSession - autonomous work unit for a single SSE chat session.
- * Owns both state (message, SSE connection, phase) and behavior (Agent execution loop).
- */
 export class ChatSession {
   readonly conversationId: string;
   readonly createdAt = Date.now();
@@ -133,19 +129,17 @@ export class ChatSession {
     }
   }
 
-  /**
-   * Handle event: accumulate content + persist event + send SSE
-   */
   private handleEvent(event: AgentEvent): void {
     // 1. Accumulate stream content to message
     if (event.type === 'stream') {
       this._message!.content += event.content;
     }
 
-    // 2. Persist non-stream and non-llm-progress events to message.meta.events
+    // 2. Persist non-stream and non-llm events to message.meta.events
     if (
       event.type !== 'stream' &&
-      !(event.type === 'tool_progress' && event.toolName == ToolIds.LLM_CALL)
+      (event as Extract<AgentEvent, { type: 'tool_call' }>).toolName !==
+        ToolIds.LLM_CALL
     ) {
       if (!this._message!.meta) {
         this._message!.meta = {};
