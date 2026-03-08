@@ -9,6 +9,10 @@ import { makeAutoObservable } from 'mobx';
 
 @store()
 export class DocumentStore {
+  items: ListDocumentsResponse['items'] = [];
+  total = 0;
+  loading = false;
+
   currentDocument: DocumentDetail | null = null;
 
   constructor() {
@@ -16,12 +20,19 @@ export class DocumentStore {
   }
 
   @api('/api/documents')
-  async listDocuments(
+  async list(
     _params?: ListDocumentsRequest,
     req?: ApiRequest<ListDocumentsRequest>,
   ): Promise<ListDocumentsResponse | undefined> {
-    const result = await req!.send();
-    return result as ListDocumentsResponse | undefined;
+    this.loading = true;
+    const result = (await req!.send()) as ListDocumentsResponse | undefined;
+    this.loading = false;
+
+    if (result) {
+      this.items = result.items;
+      this.total = result.total;
+    }
+    return result;
   }
 
   @api('/api/documents/:id')

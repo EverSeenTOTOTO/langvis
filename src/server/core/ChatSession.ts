@@ -1,5 +1,6 @@
-import type { Message } from '@/shared/types/entities';
+import { ToolIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
+import type { Message } from '@/shared/types/entities';
 import type { SSEConnection } from '../service/SSEService';
 import logger from '../utils/logger';
 import type { Agent } from './agent';
@@ -141,8 +142,11 @@ export class ChatSession {
       this._message!.content += event.content;
     }
 
-    // 2. Persist non-stream events to message.meta.events
-    if (event.type !== 'stream') {
+    // 2. Persist non-stream and non-llm-progress events to message.meta.events
+    if (
+      event.type !== 'stream' &&
+      !(event.type === 'tool_progress' && event.toolName == ToolIds.LLM_CALL)
+    ) {
       if (!this._message!.meta) {
         this._message!.meta = {};
       }

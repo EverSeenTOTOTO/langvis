@@ -3,7 +3,7 @@ import Drawer from '@/client/components/Drawer';
 import { useStore } from '@/client/store';
 import { AgentIds } from '@/shared/constants';
 import { Role } from '@/shared/types/entities';
-import { deriveMessageState } from '@/shared/utils';
+import { deriveMessageState } from './components/AgentMessage/deriveMessageState';
 import { MenuOutlined } from '@ant-design/icons';
 import { Button, Layout, message } from 'antd';
 import { observer } from 'mobx-react-lite';

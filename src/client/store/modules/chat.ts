@@ -12,7 +12,6 @@ import { AgentEvent, SSEMessage } from '@/shared/types';
 import { Role } from '@/shared/types/entities';
 import { generateId, isClient } from '@/shared/utils';
 import { message } from 'antd';
-import { reaction } from 'mobx';
 import { inject } from 'tsyringe';
 import { ConversationStore } from './conversation';
 import { ConversationState } from './ConversationState';
@@ -25,23 +24,7 @@ export class ChatStore {
   constructor(
     @inject(ConversationStore) private conversationStore: ConversationStore,
     @inject(SettingStore) private settingStore: SettingStore,
-  ) {
-    reaction(
-      () => conversationStore.currentConversationId,
-      (_newId, prevId) => {
-        if (prevId) {
-          const prevState = this.getState(prevId);
-          if (prevState?.isLoading) {
-            this.cancelChat({
-              conversationId: prevId,
-              messageId: '',
-              reason: 'Cancelled due to conversation switch',
-            });
-          }
-        }
-      },
-    );
-  }
+  ) {}
 
   getState(conversationId: string): ConversationState | undefined {
     return this.states.get(conversationId);

@@ -193,7 +193,6 @@ describe('ReActAgent', () => {
       let llmCallCount = 0;
 
       mockLlmCallTool.call.mockImplementation(
-        // eslint-disable-next-line require-yield
         async function* (): AsyncGenerator<AgentEvent, string, void> {
           llmCallCount++;
           if (llmCallCount === 1) {
@@ -240,7 +239,6 @@ describe('ReActAgent', () => {
       let llmCallCount = 0;
 
       mockLlmCallTool.call.mockImplementation(
-        // eslint-disable-next-line require-yield
         async function* (): AsyncGenerator<AgentEvent, string, void> {
           llmCallCount++;
           if (llmCallCount === 1) {
@@ -283,7 +281,6 @@ describe('ReActAgent', () => {
       let llmCallCount = 0;
 
       mockLlmCallTool.call.mockImplementation(
-        // eslint-disable-next-line require-yield
         async function* (): AsyncGenerator<AgentEvent, string, void> {
           llmCallCount++;
           if (llmCallCount === 1) {
@@ -325,7 +322,6 @@ describe('ReActAgent', () => {
       let llmCallCount = 0;
 
       mockLlmCallTool.call.mockImplementation(
-        // eslint-disable-next-line require-yield
         async function* (): AsyncGenerator<AgentEvent, string, void> {
           llmCallCount++;
           if (llmCallCount === 1) {

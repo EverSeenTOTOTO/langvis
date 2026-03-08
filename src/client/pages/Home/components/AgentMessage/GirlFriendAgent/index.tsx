@@ -3,7 +3,7 @@ import MarkdownRender from '@/client/components/MarkdownRender';
 import { TextToSpeechOutput } from '@/server/core/tool/TextToSpeech';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import type { Message } from '@/shared/types/entities';
-import type { MessageRenderState } from '@/shared/utils/deriveMessageState';
+import type { MessageRenderState } from '../deriveMessageState';
 import { InfoCircleOutlined, LoadingOutlined } from '@ant-design/icons';
 import { Alert, Spin, Tooltip, Typography } from 'antd';
 import {

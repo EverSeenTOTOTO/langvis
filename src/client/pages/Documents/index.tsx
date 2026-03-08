@@ -94,17 +94,7 @@ const Documents: React.FC = () => {
   );
 
   const { dataSource, pagination, loading, search, reset, refresh } =
-    usePagination<SearchParams, DocumentListItem>({
-      fetchFn: async params => {
-        return documentStore.listDocuments({
-          keyword: params.keyword || undefined,
-          category: params.category,
-          startTime: params.startTime,
-          endTime: params.endTime,
-          page: params.page,
-          pageSize: params.pageSize,
-        });
-      },
+    usePagination<SearchParams, DocumentListItem>(documentStore, {
       defaultPageSize: 10,
     });
 

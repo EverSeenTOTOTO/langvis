@@ -11,6 +11,7 @@ export enum ToolIds {
   ANALYSIS = 'analysis_tool',
   RETRIEVE = 'retrieve_tool',
   READ_CACHE = 'read_cache_tool',
+  POSITION_ADJUST = 'position_adjust_tool',
 }
 
 export enum AgentIds {
@@ -19,6 +20,7 @@ export enum AgentIds {
   REACT = 'react_agent',
   GIRLFRIEND = 'girlfriend_agent',
   DOCUMENT = 'document_agent',
+  FINANCIAL = 'financial_agent',
 }
 
 export enum MemoryIds {
