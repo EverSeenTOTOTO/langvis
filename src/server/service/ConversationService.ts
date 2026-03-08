@@ -114,6 +114,7 @@ export class ConversationService {
     userId: string,
     config?: Record<string, any> | null,
     groupId?: string | null,
+    groupName?: string,
   ): Promise<Conversation | null> {
     const conversationRepository = pg.getRepository(ConversationEntity);
     const conversation = await conversationRepository.findOneBy({ id, userId });
@@ -124,10 +125,14 @@ export class ConversationService {
     if (config !== undefined) {
       conversation.config = config ?? null;
     }
-    if (groupId !== undefined) {
-      conversation.groupId = groupId
+    if (groupId !== undefined || groupName !== undefined) {
+      const resolvedGroupId = groupId
         ? groupId
-        : await this.getOrCreateGroupByName(UNGROUPED_GROUP_NAME, userId);
+        : await this.getOrCreateGroupByName(
+            groupName ?? UNGROUPED_GROUP_NAME,
+            userId,
+          );
+      conversation.groupId = resolvedGroupId;
     }
     return await conversationRepository.save(conversation);
   }

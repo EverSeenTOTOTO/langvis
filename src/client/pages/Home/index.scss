@@ -1,14 +1,35 @@
 @use '../../styles/mixins';
 
 .chat-sider {
-  flex: 0 0 var(--menu-width) !important;
-  width: var(--menu-width) !important;
-  min-width: var(--menu-width) !important;
-  max-width: var(--menu-width) !important;
   height: 100%;
   padding: 8px;
   padding-inline: var(--ant-padding-sm);
   overflow-y: auto;
+
+  &:not(.ant-layout-sider-collapsed) {
+    flex: 0 0 var(--menu-width) !important;
+    width: var(--menu-width) !important;
+    min-width: var(--menu-width) !important;
+    max-width: var(--menu-width) !important;
+  }
+
+  &.ant-layout-sider-collapsed {
+    flex: 0 0 48px !important;
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+    padding: 4px;
+    overflow: visible;
+
+    .chat-sider-collapsed {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      height: 100%;
+      padding-block-end: 8px;
+    }
+  }
 
   .ant-conversations {
     padding-inline: 0;
@@ -49,6 +70,25 @@
     .ant-tree-treenode:hover .tree-node-menu-btn {
       opacity: 1 !important;
     }
+  }
+
+  .chat-sider-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .chat-sider-body {
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .chat-sider-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding-block-start: 8px;
+    margin-block-start: 8px;
+    border-block-start: 1px solid var(--ant-color-split);
   }
 }
 

@@ -13,6 +13,10 @@
     cursor: pointer;
   }
 
+  .nav-links {
+    margin-left: 8px;
+  }
+
   .header-divider {
     flex: 1;
     border-inline-end: 1px solid var(--ant-color-split);

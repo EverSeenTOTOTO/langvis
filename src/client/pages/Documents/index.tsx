@@ -237,7 +237,7 @@ const Documents: React.FC = () => {
     {
       title: settingStore.tr('Actions'),
       key: 'actions',
-      width: 100,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <>
@@ -246,7 +246,9 @@ const Documents: React.FC = () => {
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record.id)}
-          />
+          >
+            {settingStore.tr('View')}
+          </Button>
           <Popconfirm
             title={settingStore.tr(
               'Delete this document? This will cascade delete all embedding chunks.',
@@ -255,7 +257,9 @@ const Documents: React.FC = () => {
             okText={settingStore.tr('Yes')}
             cancelText={settingStore.tr('No')}
           >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+              {settingStore.tr('Delete')}
+            </Button>
           </Popconfirm>
         </>
       ),

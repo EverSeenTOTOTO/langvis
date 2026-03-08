@@ -80,6 +80,8 @@ export default class ConversationController {
       dto.name,
       userId,
       dto.config,
+      dto.groupId,
+      dto.groupName,
     );
 
     if (!conversation) {

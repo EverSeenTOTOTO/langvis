@@ -7,6 +7,8 @@ import {
   EditOutlined,
   EllipsisOutlined,
   FolderOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   MessageOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
@@ -50,6 +52,7 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
     null,
   );
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  const [collapsed, setCollapsed] = useState(false);
   const [paramConversationId, setParamConversationId] =
     useSearchParam('conversationId');
 
@@ -300,171 +303,211 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
   return (
     <Sider
       className="chat-sider"
+      collapsed={collapsed}
+      collapsedWidth={48}
       style={{
         background: token.colorBgContainer,
         borderRadius: token.borderRadius,
       }}
     >
-      <Skeleton loading={allGroupsApi[0].loading} active>
-        <ClientOnly fallback={<Skeleton active />}>
-          <Tree
-            showIcon
-            showLine
-            blockNode
-            treeData={treeData}
-            expandedKeys={expandedKeys}
-            onExpand={keys => setExpandedKeys(keys as string[])}
-            selectedKeys={
-              store.currentConversationId ? [store.currentConversationId] : []
-            }
-            onSelect={onSelect}
-            draggable
-            style={{ marginBlock: '6px 12px' }}
-            onDrop={info => {
-              const dropKey = info.node.key as string;
-              const dragKey = info.dragNode.key as string;
-              const dropPos = info.node.pos?.split('-').map(Number) || [];
-              const dropPosition =
-                info.dropPosition - Number(dropPos[dropPos.length - 1]);
+      {!collapsed && (
+        <div className="chat-sider-content">
+          <div className="chat-sider-body">
+            <Skeleton loading={allGroupsApi[0].loading} active>
+              <ClientOnly fallback={<Skeleton active />}>
+                <Tree
+                  showIcon
+                  showLine
+                  blockNode
+                  treeData={treeData}
+                  expandedKeys={expandedKeys}
+                  onExpand={keys => setExpandedKeys(keys as string[])}
+                  selectedKeys={
+                    store.currentConversationId
+                      ? [store.currentConversationId]
+                      : []
+                  }
+                  onSelect={onSelect}
+                  draggable
+                  style={{ marginBlock: '6px 12px' }}
+                  onDrop={info => {
+                    const dropKey = info.node.key as string;
+                    const dragKey = info.dragNode.key as string;
+                    const dropPos = info.node.pos?.split('-').map(Number) || [];
+                    const dropPosition =
+                      info.dropPosition - Number(dropPos[dropPos.length - 1]);
 
-              const isDragGroup = dragKey.startsWith('group-');
-              const isDropGroup = dropKey.startsWith('group-');
-              const dragId = isDragGroup
-                ? dragKey.replace('group-', '')
-                : dragKey;
-              const dropId = isDropGroup
-                ? dropKey.replace('group-', '')
-                : dropKey;
+                    const isDragGroup = dragKey.startsWith('group-');
+                    const isDropGroup = dropKey.startsWith('group-');
+                    const dragId = isDragGroup
+                      ? dragKey.replace('group-', '')
+                      : dragKey;
+                    const dropId = isDropGroup
+                      ? dropKey.replace('group-', '')
+                      : dropKey;
 
-              // 拖拽分组
-              if (isDragGroup && isDropGroup) {
-                const newOrder = groupStore.groups.map(g => g.order);
-                const dragIndex = groupStore.groups.findIndex(
-                  g => g.id === dragId,
-                );
-                const dropIndex = groupStore.groups.findIndex(
-                  g => g.id === dropId,
-                );
-                const targetIndex =
-                  dropPosition < 0 ? dropIndex : dropIndex + 1;
+                    // 拖拽分组
+                    if (isDragGroup && isDropGroup) {
+                      const newOrder = groupStore.groups.map(g => g.order);
+                      const dragIndex = groupStore.groups.findIndex(
+                        g => g.id === dragId,
+                      );
+                      const dropIndex = groupStore.groups.findIndex(
+                        g => g.id === dropId,
+                      );
+                      const targetIndex =
+                        dropPosition < 0 ? dropIndex : dropIndex + 1;
 
-                const [removed] = newOrder.splice(dragIndex, 1);
-                newOrder.splice(targetIndex, 0, removed);
+                      const [removed] = newOrder.splice(dragIndex, 1);
+                      newOrder.splice(targetIndex, 0, removed);
 
-                const items = groupStore.groups.map(g => ({
-                  id: g.id,
-                  type: 'group' as const,
-                  order: newOrder.indexOf(g.order),
-                }));
+                      const items = groupStore.groups.map(g => ({
+                        id: g.id,
+                        type: 'group' as const,
+                        order: newOrder.indexOf(g.order),
+                      }));
 
-                reorderApi[1]({ items });
-                return;
-              }
+                      reorderApi[1]({ items });
+                      return;
+                    }
 
-              // 拖拽对话（组内排序）
-              if (!isDragGroup && !isDropGroup) {
-                const dragGroup = groupStore.groups.find(g =>
-                  g.conversations?.some(c => c.id === dragId),
-                );
-                const dropGroup = groupStore.groups.find(g =>
-                  g.conversations?.some(c => c.id === dropId),
-                );
+                    // 拖拽对话（组内排序）
+                    if (!isDragGroup && !isDropGroup) {
+                      const dragGroup = groupStore.groups.find(g =>
+                        g.conversations?.some(c => c.id === dragId),
+                      );
+                      const dropGroup = groupStore.groups.find(g =>
+                        g.conversations?.some(c => c.id === dropId),
+                      );
 
-                if (dragGroup && dropGroup && dragGroup.id === dropGroup.id) {
-                  const conversations = dragGroup.conversations || [];
-                  const newOrder = conversations.map(c => c.order);
-                  const dragIndex = conversations.findIndex(
-                    c => c.id === dragId,
-                  );
-                  const dropIndex = conversations.findIndex(
-                    c => c.id === dropId,
-                  );
-                  const targetIndex =
-                    dropPosition < 0 ? dropIndex : dropIndex + 1;
+                      if (
+                        dragGroup &&
+                        dropGroup &&
+                        dragGroup.id === dropGroup.id
+                      ) {
+                        const conversations = dragGroup.conversations || [];
+                        const newOrder = conversations.map(c => c.order);
+                        const dragIndex = conversations.findIndex(
+                          c => c.id === dragId,
+                        );
+                        const dropIndex = conversations.findIndex(
+                          c => c.id === dropId,
+                        );
+                        const targetIndex =
+                          dropPosition < 0 ? dropIndex : dropIndex + 1;
 
-                  const [removed] = newOrder.splice(dragIndex, 1);
-                  newOrder.splice(targetIndex, 0, removed);
+                        const [removed] = newOrder.splice(dragIndex, 1);
+                        newOrder.splice(targetIndex, 0, removed);
 
-                  const items = conversations.map(c => ({
-                    id: c.id,
-                    order: newOrder.indexOf(c.order),
-                  }));
+                        const items = conversations.map(c => ({
+                          id: c.id,
+                          order: newOrder.indexOf(c.order),
+                        }));
 
-                  reorderConversationsInGroupApi[1]({
-                    groupId: dragGroup.id,
-                    items,
-                  });
+                        reorderConversationsInGroupApi[1]({
+                          groupId: dragGroup.id,
+                          items,
+                        });
+                      }
+                    }
+                  }}
+                />
+              </ClientOnly>
+            </Skeleton>
+            <ConversationModal
+              mode="create"
+              title={settingStore.tr('New Conversation')}
+              confirmLoading={createConversationApi[0].loading}
+              onFinish={async values => {
+                const { switchToNew, ...restValues } = values;
+                const result = await createConversationApi[1](restValues);
+                if (switchToNew && result) {
+                  store.currentConversationId = (result as { id: string }).id;
                 }
-              }
-            }}
+              }}
+              initialValues={{ name: settingStore.tr('New Conversation') }}
+            >
+              <Button block loading={createConversationApi[0].loading}>
+                {settingStore.tr('New Conversation')}
+              </Button>
+            </ConversationModal>
+            <ConversationModal
+              mode="create"
+              title={settingStore.tr('New Conversation')}
+              open={createWithGroupId !== null}
+              onCancel={() => setCreateWithGroupId(null)}
+              confirmLoading={createConversationApi[0].loading}
+              onFinish={async values => {
+                const { switchToNew, ...restValues } = values;
+                const result = await createConversationApi[1](restValues);
+                if (switchToNew && result) {
+                  store.currentConversationId = (result as { id: string }).id;
+                }
+                setCreateWithGroupId(null);
+              }}
+              initialValues={{
+                name: settingStore.tr('New Conversation'),
+                groupId: createWithGroupId,
+              }}
+            />
+            <ConversationModal
+              mode="edit"
+              title={settingStore.tr('Edit Conversation')}
+              open={!!editingConversationId}
+              onCancel={() => setEditingConversationId(null)}
+              onFinish={async values => {
+                await updateConversationApi[1]({
+                  id: editingConversationId!,
+                  name: values.name,
+                  config: values.config,
+                  groupName: values.groupName,
+                });
+                setEditingConversationId(null);
+              }}
+              initialValues={{
+                ...store.findConversationById(editingConversationId!),
+                groupName: groupStore.groups.find(
+                  g =>
+                    g.id ===
+                    store.findConversationById(editingConversationId!)?.groupId,
+                )?.name,
+              }}
+              confirmLoading={updateConversationApi[0].loading}
+            />
+            <GroupModal
+              title={settingStore.tr('Edit Group')}
+              open={!!editingGroupId}
+              onCancel={() => setEditingGroupId(null)}
+              initialValues={groupStore.groups.find(
+                g => g.id === editingGroupId,
+              )}
+              onFinish={async values => {
+                await updateGroupApi[1]({
+                  id: editingGroupId!,
+                  name: values.name,
+                });
+                setEditingGroupId(null);
+              }}
+            />
+          </div>
+          <div className="chat-sider-footer">
+            <Button
+              type="text"
+              icon={<MenuFoldOutlined />}
+              onClick={() => setCollapsed(true)}
+            />
+          </div>
+        </div>
+      )}
+      {collapsed && (
+        <div className="chat-sider-collapsed">
+          <Button
+            type="text"
+            icon={<MenuUnfoldOutlined />}
+            onClick={() => setCollapsed(false)}
           />
-        </ClientOnly>
-      </Skeleton>
-      <ConversationModal
-        mode="create"
-        title={settingStore.tr('New Conversation')}
-        confirmLoading={createConversationApi[0].loading}
-        onFinish={async values => {
-          const { switchToNew, ...restValues } = values;
-          const result = await createConversationApi[1](restValues);
-          if (switchToNew && result) {
-            store.currentConversationId = (result as { id: string }).id;
-          }
-        }}
-        initialValues={{ name: settingStore.tr('New Conversation') }}
-      >
-        <Button block loading={createConversationApi[0].loading}>
-          {settingStore.tr('New Conversation')}
-        </Button>
-      </ConversationModal>
-      <ConversationModal
-        mode="create"
-        title={settingStore.tr('New Conversation')}
-        open={createWithGroupId !== null}
-        onCancel={() => setCreateWithGroupId(null)}
-        confirmLoading={createConversationApi[0].loading}
-        onFinish={async values => {
-          const { switchToNew, ...restValues } = values;
-          const result = await createConversationApi[1](restValues);
-          if (switchToNew && result) {
-            store.currentConversationId = (result as { id: string }).id;
-          }
-          setCreateWithGroupId(null);
-        }}
-        initialValues={{
-          name: settingStore.tr('New Conversation'),
-          groupId: createWithGroupId,
-        }}
-      />
-      <ConversationModal
-        mode="edit"
-        title={settingStore.tr('Edit Conversation')}
-        open={!!editingConversationId}
-        onCancel={() => setEditingConversationId(null)}
-        onFinish={async values => {
-          await updateConversationApi[1]({
-            id: editingConversationId!,
-            name: values.name,
-            config: values.config,
-          });
-          setEditingConversationId(null);
-        }}
-        initialValues={store.findConversationById(editingConversationId!)}
-        confirmLoading={updateConversationApi[0].loading}
-      />
-      <GroupModal
-        title={settingStore.tr('Edit Group')}
-        open={!!editingGroupId}
-        onCancel={() => setEditingGroupId(null)}
-        initialValues={groupStore.groups.find(g => g.id === editingGroupId)}
-        onFinish={async values => {
-          await updateGroupApi[1]({
-            id: editingGroupId!,
-            name: values.name,
-          });
-          setEditingGroupId(null);
-        }}
-      />
+        </div>
+      )}
     </Sider>
   );
 };
