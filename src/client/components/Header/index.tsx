@@ -1,7 +1,9 @@
 import { useStore } from '@/client/store';
 import { SUPPORTED_LOCALES } from '@/client/store/modules/setting';
 import {
+  FileTextOutlined,
   LogoutOutlined,
+  MailOutlined,
   MoonOutlined,
   SettingOutlined,
   SunOutlined,
@@ -9,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import {
   Avatar,
+  Button,
   Dropdown,
   Flex,
   Select,
@@ -18,7 +21,7 @@ import {
 } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { observer } from 'mobx-react-lite';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import './index.scss';
 
 const { useToken } = theme;
@@ -29,7 +32,21 @@ const Header = () => {
   const settingStore = useStore('setting');
   const currentUser = userStore.currentUser;
   const navigate = useNavigate();
+  const location = useLocation();
   const { token } = useToken();
+
+  const navItems = [
+    {
+      key: '/documents',
+      icon: <FileTextOutlined />,
+      label: 'Documents',
+    },
+    {
+      key: '/emails',
+      icon: <MailOutlined />,
+      label: 'Emails',
+    },
+  ];
 
   const items: ItemType[] = [
     {
@@ -113,6 +130,19 @@ const Header = () => {
         >
           Langvis
         </Typography.Title>
+
+        <Flex gap={4} className="nav-links">
+          {navItems.map(item => (
+            <Button
+              key={item.key}
+              type={location.pathname === item.key ? 'primary' : 'text'}
+              icon={item.icon}
+              onClick={() => navigate(item.key)}
+            >
+              {item.label}
+            </Button>
+          ))}
+        </Flex>
 
         <span className="header-divider" />
 

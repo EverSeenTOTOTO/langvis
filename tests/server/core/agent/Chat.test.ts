@@ -109,4 +109,3 @@ describe('ChatAgent', () => {
     expect(mockLlmCallTool.call).toHaveBeenCalledWith(expect.any(Object), ctx);
   });
 });
-

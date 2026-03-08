@@ -61,11 +61,6 @@ const ConversationModal = ({
     ));
   };
 
-  // 获取当前分组名
-  const currentGroupName = groupStore.groups.find(
-    g => g.id === initialValues?.groupId,
-  )?.name;
-
   useEffect(() => {
     form.setFieldsValue(initialValues);
   }, [initialValues]);
@@ -121,26 +116,20 @@ const ConversationModal = ({
             </Form.Item>
 
             <InlineItem label={settingStore.tr('Group')} name="groupName">
-              {({ value, onChange }) =>
-                currentGroupName ? (
-                  <Typography.Text type="secondary" copyable>
-                    {currentGroupName || settingStore.tr('Ungrouped')}
-                  </Typography.Text>
-                ) : (
-                  <Select
-                    mode="tags"
-                    maxCount={1}
-                    loading={fetchGroupsApi[0].loading}
-                    placeholder={settingStore.tr('Select or create a group')}
-                    options={groupStore.groups.map(g => ({
-                      label: g.name,
-                      value: g.name,
-                    }))}
-                    value={value ? [value] : []}
-                    onChange={vals => onChange?.(vals[0])}
-                  />
-                )
-              }
+              {({ value, onChange }) => (
+                <Select
+                  mode="tags"
+                  maxCount={1}
+                  loading={fetchGroupsApi[0].loading}
+                  placeholder={settingStore.tr('Select or create a group')}
+                  options={groupStore.groups.map(g => ({
+                    label: g.name,
+                    value: g.name,
+                  }))}
+                  value={value ? [value] : []}
+                  onChange={vals => onChange?.(vals[0])}
+                />
+              )}
             </InlineItem>
 
             <Form.Item

@@ -21,4 +21,4 @@ export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
 - 建议仅供参考，不构成投资建议
 - 始终强调风险管理的重要性`,
     )
-    .with('Tools', formatToolsToMarkdown(agent.tools ?? []));
+    .override('Tools', formatToolsToMarkdown(agent.tools ?? []));

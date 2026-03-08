@@ -250,6 +250,8 @@ describe('ConversationController', () => {
       'Updated Conversation',
       'test-user-id',
       { model: 'gpt-4', temperature: 0.7 },
+      undefined,
+      undefined,
     );
     expect(mockRes.json).toHaveBeenCalledWith(mockConversation);
   });

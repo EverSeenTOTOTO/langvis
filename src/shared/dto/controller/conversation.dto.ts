@@ -83,6 +83,8 @@ export interface UpdateConversationRequest {
     agent: string;
     [key: string]: any;
   };
+  groupId?: string | null;
+  groupName?: string;
 }
 
 // @ts-expect-error ajv cannot handle `[key: string]: any`?
@@ -100,6 +102,8 @@ export interface UpdateConversationRequest {
       required: ['agent'],
       additionalProperties: true,
     },
+    groupId: { type: 'string', nullable: true },
+    groupName: { type: 'string' },
   },
   required: ['id', 'name', 'config'],
   additionalProperties: false,
@@ -111,6 +115,8 @@ export class UpdateConversationRequestDto
   id!: string;
   name!: string;
   config!: UpdateConversationRequest['config'];
+  groupId?: string | null;
+  groupName?: string;
 }
 
 export interface DeleteConversationRequest {

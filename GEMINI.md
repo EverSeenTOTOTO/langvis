@@ -1,21 +1,35 @@
 # Project: langvis
 
-## General Instructions
+## Toolchain
 
-- use `bun` as dep manager and script engine.
-- use`vite` as dev framework.
-- use `make` instead of npm scripts as build system, e.g. `make lint` or `make test`.
-- use `vitest` as unit test framework, especially when you want to test ONLY one case: `bunx vitest run`.
-- use `curl` instead of `web_fetch` tool to fetch websites due to security problems.
-- use `timeout 10 make dev` in case you need to test `make dev` command, as it will start a server process.
+| Purpose         | Tool     | Notes                                 |
+| --------------- | -------- | ------------------------------------- |
+| Package Manager | `bun`    | Dependency management & script engine |
+| Dev Framework   | `vite`   | Development server & build            |
+| Build System    | `make`   | Use instead of npm scripts            |
+| Test Framework  | `vitest` | Run specific tests: `bunx vitest run` |
+| HTTP Client     | `curl`   | Use instead of `web_fetch` tool       |
 
-## Best Practices
+## Code Style
 
-- only run specific test when necessary, skip coverage when testing.
-- always run lint after code generating.
-- avoid useless comments, be clean.
-- **Always use template strings (backticks) for multi-line strings or string interpolation** instead of string concatenation with `+` operator.
-- API calls must be declared in store first, then consumed in components.
-- DO NOT use raw `fetch` or `useState` for loading states (e.g. `const [loading, setLoading] = useState(false)`) in components. Prefer `useAsyncFn` from `react-use`.
-- run `timeout 10 make dev` to check if TypeORM still works once you modified entity definition.
-- **Always use `generateId(prefix)` from `@/shared/utils` for ID generation** instead of `uuid()`, `crypto.randomUUID()`, or similar. Use meaningful prefixes like `conv_`, `msg_`, `convgrp_`, `req_`, `tc_` (tool call), etc.
+- **Template Strings**: Always use backticks for multi-line strings or interpolation, never `+` concatenation.
+- **Comments**: Avoid useless comments, keep code clean and self-documenting.
+- **CSS Layout**: Use flexbox or grid. Never use `float` for layout.
+- **CSS Specificity**: Avoid `!important` unless overriding uncontrollable third-party styles.
+
+## Architecture
+
+- **API Layer**: Declare API calls in store modules first, then consume in components.
+- **Async State**: Use `useAsyncFn` from `react-use`. Never use raw `fetch` or manual `useState` for loading states.
+- **ID Generation**: Always use `generateId(prefix)` from `@/shared/utils`. Common prefixes:
+  - `conv_` - conversation
+  - `msg_` - message
+  - `convgrp_` - conversation group
+  - `req_` - request
+  - `tc_` - tool call
+
+## Testing & Validation
+
+- Run specific tests only when necessary, skip coverage.
+- Run lint after code generation: `make lint`.
+- After modifying entity definitions, verify with: `timeout 10 make dev`.
