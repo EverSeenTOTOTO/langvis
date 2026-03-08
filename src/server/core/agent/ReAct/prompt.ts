@@ -2,28 +2,19 @@ import { formatToolsToMarkdown } from '@/server/utils/formatTools';
 import { Prompt } from '../../PromptBuilder';
 import type { Agent } from '../index';
 
-export const ReActSections = {
-  ROLE_GOAL: 'Role & Goal',
-  TOOLS: 'Tools',
-  OUTPUT_LANGUAGE: 'Output Language',
-  OUTPUT_FORMAT: 'Output Format',
-  GUIDELINES: 'Guidelines',
-  EXAMPLES: 'Examples',
-};
-
 export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
   parentPrompt
     .with(
-      ReActSections.ROLE_GOAL,
+      'Role & Goal',
       'You are an AI assistant that answers questions and solves problems through reasoning and tool usage.',
     )
-    .with(ReActSections.TOOLS, formatToolsToMarkdown(agent.tools ?? []))
+    .with('Tools', formatToolsToMarkdown(agent.tools ?? []))
     .with(
-      ReActSections.OUTPUT_LANGUAGE,
+      'Output language',
       '- Default to Chinese unless the user requests another language.',
     )
     .with(
-      ReActSections.OUTPUT_FORMAT,
+      'Output format',
       `Your ENTIRE response MUST be a SINGLE, VALID JSON object. Do NOT include any plain text, markdown blocks (e.g. \`\`\`json), or extraneous characters before or after the JSON.
 
 The JSON object must conform to one of the following structures:
@@ -58,13 +49,13 @@ When a tool returns an object containing a \`$cached\` field, it is a reference 
 - To read the full content yourself, use the \`read_cache\` tool with the \`$cached\` value as the key`,
     )
     .with(
-      ReActSections.GUIDELINES,
+      'Guidelines',
       `1. **Thought is Optional**: You can omit the "thought" field if the answer is direct, but keeping it helps accuracy.
 2. **Missing Info**: If you need user input (confirmation, choice, or additional info), use \`HumanInTheLoop Tool\` to ask the user interactively.
 3. **No Tool Applies**: Use Option 2 to explain why and suggest alternatives.`,
     )
     .with(
-      ReActSections.EXAMPLES,
+      'Examples',
       `<example:straight-to-final>
 User: Hi.
 Assistant: { "final_answer": "你好！有什么我可以帮你的吗？" }

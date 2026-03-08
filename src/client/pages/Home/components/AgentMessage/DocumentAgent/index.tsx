@@ -1,6 +1,6 @@
 import HumanInputForm from '@/client/components/HumanInputForm';
 import MarkdownRender from '@/client/components/MarkdownRender';
-import { AgentIds } from '@/shared/constants';
+import { AgentIds, ToolIds } from '@/shared/constants';
 import type { Message } from '@/shared/types/entities';
 import type { MessageRenderState, ThoughtItem } from '../deriveMessageState';
 import {
@@ -8,7 +8,7 @@ import {
   LoadingOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
-import { Collapse, Flex, Tag, Typography } from 'antd';
+import { Collapse, Flex, Steps, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import {
@@ -21,9 +21,86 @@ import {
   getToolColor,
   type ToolBlock,
 } from '../utils';
-import './index.scss';
+import '../ReActAgent/index.scss';
 
-interface ReActDerivedState {
+// === Document Agent specific: Analysis Pipeline ===
+
+type AnalysisAction = 'meta_extract' | 'chunk' | 'embed' | 'archive';
+
+interface AnalysisProgressData {
+  action: AnalysisAction;
+  message: string;
+}
+
+const ANALYSIS_PIPELINE_STEPS: Array<{
+  action: AnalysisAction;
+  label: string;
+}> = [
+  { action: 'meta_extract', label: 'Metadata' },
+  { action: 'chunk', label: 'Chunking' },
+  { action: 'embed', label: 'Embedding' },
+  { action: 'archive', label: 'Archive' },
+];
+
+function AnalysisPipeline({
+  progress,
+  isPending,
+}: {
+  progress: Array<{ data: unknown; seq: number; at: number }>;
+  isPending: boolean;
+}) {
+  const progressByAction = new Map<AnalysisAction, string>();
+
+  for (const p of progress) {
+    const data = p.data as AnalysisProgressData;
+    if (data?.action && data?.message) {
+      progressByAction.set(data.action, data.message);
+    }
+  }
+
+  const currentActionIndex = ANALYSIS_PIPELINE_STEPS.findIndex(
+    step => !progressByAction.has(step.action),
+  );
+  const activeStep = currentActionIndex === -1 ? 3 : currentActionIndex;
+
+  return (
+    <div className="analysis-pipeline">
+      <Steps
+        size="small"
+        current={isPending ? activeStep : 3}
+        items={ANALYSIS_PIPELINE_STEPS.map(step => {
+          const message = progressByAction.get(step.action);
+          const isComplete = progressByAction.has(step.action);
+          const isCurrent =
+            isPending && activeStep === ANALYSIS_PIPELINE_STEPS.indexOf(step);
+
+          return {
+            title: step.label,
+            status: isPending
+              ? isCurrent
+                ? 'process'
+                : isComplete
+                  ? 'finish'
+                  : 'wait'
+              : 'finish',
+            description: message && (
+              <Typography.Text
+                type="secondary"
+                className="analysis-pipeline-step-message"
+              >
+                {message}
+              </Typography.Text>
+            ),
+          };
+        })}
+      />
+    </div>
+  );
+}
+
+// === State derivation ===
+
+interface DocumentDerivedState {
   toolBlocks: ToolBlock[];
   standaloneThoughts: ThoughtItem[];
   awaitingInput: ReturnType<typeof detectAwaitingInput>;
@@ -32,7 +109,7 @@ interface ReActDerivedState {
   shouldExpandDetails: boolean;
 }
 
-function deriveReActState(state: MessageRenderState): ReActDerivedState {
+function deriveDocumentState(state: MessageRenderState): DocumentDerivedState {
   const { toolCallTimeline, thoughts, isTerminated, hasContent, hasEvents } =
     state;
 
@@ -61,6 +138,8 @@ function deriveReActState(state: MessageRenderState): ReActDerivedState {
       !isTerminated && (toolBlocks.length > 0 || thoughts.length > 0),
   };
 }
+
+// === Sub-components ===
 
 function StandaloneThoughtBlock({ thought }: { thought: ThoughtItem }) {
   return (
@@ -96,6 +175,15 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
     <span style={{ color: 'var(--ant-color-error)' }}>✕</span>
   ) : null;
 
+  // Document Agent specific: Analysis pipeline visualization
+  const isAnalysisTool = toolCall.toolName === ToolIds.ANALYSIS;
+  const hasAnalysisProgress =
+    isAnalysisTool &&
+    toolCall.progress.some(p => {
+      const data = p.data as AnalysisProgressData;
+      return data?.action;
+    });
+
   return (
     <div className="react-tool-block">
       {toolCall.thought && (
@@ -118,10 +206,15 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
         </Typography.Text>
       </Flex>
 
-      {latestProgress?.message && !latestProgress?.status && (
-        <Typography.Text type="secondary" className="react-tool-progress">
-          {latestProgress.message}
-        </Typography.Text>
+      {hasAnalysisProgress ? (
+        <AnalysisPipeline progress={toolCall.progress} isPending={isPending} />
+      ) : (
+        latestProgress?.message &&
+        !latestProgress?.status && (
+          <Typography.Text type="secondary" className="react-tool-progress">
+            {latestProgress.message}
+          </Typography.Text>
+        )
       )}
 
       {toolCall.status === 'done' && toolCall.output !== undefined && (
@@ -147,16 +240,18 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
   );
 }
 
-interface ReActEventRendererProps {
+// === Main renderer ===
+
+interface DocumentEventRendererProps {
   state: MessageRenderState;
   conversationId: string;
 }
 
-const ReActEventRenderer: React.FC<ReActEventRendererProps> = ({
+const DocumentEventRenderer: React.FC<DocumentEventRendererProps> = ({
   state,
   conversationId,
 }) => {
-  const derived = deriveReActState(state);
+  const derived = deriveDocumentState(state);
   const [activeKey, setActiveKey] = useState<string[]>([]);
 
   useEffect(() => {
@@ -223,17 +318,17 @@ const ReActEventRenderer: React.FC<ReActEventRendererProps> = ({
   );
 };
 
-const ReActAgentRenderer = (
+const DocumentAgentRenderer = (
   msg: Message,
   state: MessageRenderState,
 ): AgentRenderResult => {
-  const { showBubbleLoading } = deriveReActState(state);
+  const { showBubbleLoading } = deriveDocumentState(state);
 
   return {
     content: (
       <>
         {state.hasEvents && (
-          <ReActEventRenderer
+          <DocumentEventRenderer
             state={state}
             conversationId={msg.conversationId}
           />
@@ -253,6 +348,6 @@ const ReActAgentRenderer = (
   };
 };
 
-registerAgentRenderer(AgentIds.REACT, ReActAgentRenderer);
+registerAgentRenderer(AgentIds.DOCUMENT, DocumentAgentRenderer);
 
-export default ReActAgentRenderer;
+export default DocumentAgentRenderer;

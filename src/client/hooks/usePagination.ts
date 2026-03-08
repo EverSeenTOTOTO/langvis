@@ -1,19 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAsyncFn } from 'react-use';
 import type { TablePaginationConfig } from 'antd/es/table';
 
-export interface PaginationResponse<T> {
-  items: T[];
+export interface PaginationStore<TItem, TFilters extends Record<string, any>> {
+  items: TItem[];
   total: number;
-  page: number;
-  pageSize: number;
+  loading: boolean;
+  list(
+    params: TFilters & { page: number; pageSize: number },
+  ): Promise<{ items: TItem[]; total: number } | undefined>;
 }
 
 export interface UsePaginationOptions<TFilters extends Record<string, any>> {
-  /** API 调用函数 */
-  fetchFn: (
-    params: TFilters & { page: number; pageSize: number },
-  ) => Promise<PaginationResponse<any> | undefined>;
   /** 默认搜索条件 */
   defaultFilters?: TFilters;
   /** 默认分页大小 */
@@ -22,9 +19,9 @@ export interface UsePaginationOptions<TFilters extends Record<string, any>> {
   immediate?: boolean;
 }
 
-export interface UsePaginationReturn<TFilters, TItem> {
+export interface UsePaginationReturn<TFilters> {
   /** 数据列表，可直接传给 Table dataSource */
-  dataSource: TItem[];
+  dataSource: any[];
   /** 分页配置，可直接传给 Table pagination */
   pagination: TablePaginationConfig;
   /** 当前生效的搜索条件 */
@@ -37,18 +34,16 @@ export interface UsePaginationReturn<TFilters, TItem> {
   search: (filters: TFilters) => void;
   /** 重置（恢复默认 filters 和分页） */
   reset: () => void;
-  /** 错误 */
-  error?: Error;
 }
 
 export function usePagination<
   TFilters extends Record<string, any>,
   TItem = any,
 >(
-  options: UsePaginationOptions<TFilters>,
-): UsePaginationReturn<TFilters, TItem> {
+  store: PaginationStore<TItem, TFilters>,
+  options: UsePaginationOptions<TFilters> = {},
+): UsePaginationReturn<TFilters> {
   const {
-    fetchFn,
     defaultFilters = {} as TFilters,
     defaultPageSize = 10,
     immediate = true,
@@ -62,11 +57,11 @@ export function usePagination<
     filters: defaultFilters,
   });
 
-  const [state, fetchData] = useAsyncFn(
+  const fetchData = useCallback(
     async (params: TFilters & { page: number; pageSize: number }) => {
-      return fetchFn(params);
+      await store.list(params);
     },
-    [fetchFn],
+    [store],
   );
 
   const refresh = useCallback(() => {
@@ -116,18 +111,17 @@ export function usePagination<
   const pagination: TablePaginationConfig = {
     current: page,
     pageSize,
-    total: state.value?.total ?? 0,
+    total: store.total,
     onChange: handlePaginationChange,
     showSizeChanger: true,
     showQuickJumper: true,
   };
 
   return {
-    dataSource: state.value?.items ?? [],
+    dataSource: store.items,
     pagination,
     filters,
-    loading: state.loading,
-    error: state.error,
+    loading: store.loading,
     refresh,
     search,
     reset,

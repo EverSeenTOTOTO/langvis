@@ -7,6 +7,7 @@ import { App as AntdApp, theme as antdTheme, ConfigProvider } from 'antd';
 import type { Request, Response } from 'express';
 import { observer } from 'mobx-react-lite';
 import { Route, Routes } from 'react-router-dom';
+import ClientOnly from './components/ClientOnly';
 import ProtectedRoute from './components/ProtectedRoute';
 import useThemeClassname from './hooks/useThemeClassname';
 import NotFound from './pages/NotFound';
@@ -43,18 +44,24 @@ export const App = observer(
               {routes.map(({ path, component: RouteComponent }) => {
                 const skipAuth = ['/login'].includes(path);
                 const withHeader = !['/login'].includes(path);
+                const isLogin = path === '/login';
+
+                const routeElement = (
+                  <ProtectedRoute skipAuth={skipAuth} withHeader={withHeader}>
+                    <RouteComponent />
+                  </ProtectedRoute>
+                );
 
                 return (
                   <Route
                     key={path}
                     path={path}
                     element={
-                      <ProtectedRoute
-                        skipAuth={skipAuth}
-                        withHeader={withHeader}
-                      >
-                        <RouteComponent />
-                      </ProtectedRoute>
+                      isLogin ? (
+                        <ClientOnly>{routeElement}</ClientOnly>
+                      ) : (
+                        routeElement
+                      )
                     }
                   />
                 );

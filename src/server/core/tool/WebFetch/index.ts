@@ -1,4 +1,3 @@
-/* eslint-disable require-yield */
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';

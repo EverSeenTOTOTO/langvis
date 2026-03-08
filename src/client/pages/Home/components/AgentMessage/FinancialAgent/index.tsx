@@ -21,9 +21,11 @@ import {
   getToolColor,
   type ToolBlock,
 } from '../utils';
-import './index.scss';
+import '../ReActAgent/index.scss';
 
-interface ReActDerivedState {
+// === State derivation ===
+
+interface FinancialDerivedState {
   toolBlocks: ToolBlock[];
   standaloneThoughts: ThoughtItem[];
   awaitingInput: ReturnType<typeof detectAwaitingInput>;
@@ -32,7 +34,9 @@ interface ReActDerivedState {
   shouldExpandDetails: boolean;
 }
 
-function deriveReActState(state: MessageRenderState): ReActDerivedState {
+function deriveFinancialState(
+  state: MessageRenderState,
+): FinancialDerivedState {
   const { toolCallTimeline, thoughts, isTerminated, hasContent, hasEvents } =
     state;
 
@@ -61,6 +65,8 @@ function deriveReActState(state: MessageRenderState): ReActDerivedState {
       !isTerminated && (toolBlocks.length > 0 || thoughts.length > 0),
   };
 }
+
+// === Sub-components ===
 
 function StandaloneThoughtBlock({ thought }: { thought: ThoughtItem }) {
   return (
@@ -147,16 +153,18 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
   );
 }
 
-interface ReActEventRendererProps {
+// === Main renderer ===
+
+interface FinancialEventRendererProps {
   state: MessageRenderState;
   conversationId: string;
 }
 
-const ReActEventRenderer: React.FC<ReActEventRendererProps> = ({
+const FinancialEventRenderer: React.FC<FinancialEventRendererProps> = ({
   state,
   conversationId,
 }) => {
-  const derived = deriveReActState(state);
+  const derived = deriveFinancialState(state);
   const [activeKey, setActiveKey] = useState<string[]>([]);
 
   useEffect(() => {
@@ -223,17 +231,17 @@ const ReActEventRenderer: React.FC<ReActEventRendererProps> = ({
   );
 };
 
-const ReActAgentRenderer = (
+const FinancialAgentRenderer = (
   msg: Message,
   state: MessageRenderState,
 ): AgentRenderResult => {
-  const { showBubbleLoading } = deriveReActState(state);
+  const { showBubbleLoading } = deriveFinancialState(state);
 
   return {
     content: (
       <>
         {state.hasEvents && (
-          <ReActEventRenderer
+          <FinancialEventRenderer
             state={state}
             conversationId={msg.conversationId}
           />
@@ -253,6 +261,6 @@ const ReActAgentRenderer = (
   };
 };
 
-registerAgentRenderer(AgentIds.REACT, ReActAgentRenderer);
+registerAgentRenderer(AgentIds.FINANCIAL, FinancialAgentRenderer);
 
-export default ReActAgentRenderer;
+export default FinancialAgentRenderer;

@@ -4,29 +4,46 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { usePagination } from '@/client/hooks/usePagination';
+import type { PaginationStore } from '@/client/hooks/usePagination';
 
 interface TestFilters {
   keyword?: string;
   category?: string;
 }
 
+interface TestItem {
+  id: number;
+}
+
+function createMockStore(
+  mockFetchFn: ReturnType<typeof vi.fn>,
+): PaginationStore<TestItem, TestFilters> {
+  return {
+    items: [],
+    total: 0,
+    loading: false,
+    list: mockFetchFn,
+  };
+}
+
 describe('usePagination', () => {
-  const mockFetchFn = vi.fn();
+  let mockFetchFn: ReturnType<typeof vi.fn>;
+  let mockStore: PaginationStore<TestItem, TestFilters>;
 
   beforeEach(() => {
-    mockFetchFn.mockReset();
+    mockFetchFn = vi.fn();
     mockFetchFn.mockResolvedValue({
       items: [{ id: 1 }, { id: 2 }],
       total: 100,
       page: 1,
       pageSize: 10,
     });
+    mockStore = createMockStore(mockFetchFn);
   });
 
   it('should return initial state correctly', () => {
     const { result } = renderHook(() =>
-      usePagination<TestFilters>({
-        fetchFn: mockFetchFn,
+      usePagination<TestFilters, TestItem>(mockStore, {
         defaultFilters: { keyword: 'test' },
         defaultPageSize: 20,
         immediate: false,
@@ -42,8 +59,7 @@ describe('usePagination', () => {
 
   it('should fetch data immediately when immediate is true', async () => {
     renderHook(() =>
-      usePagination<TestFilters>({
-        fetchFn: mockFetchFn,
+      usePagination<TestFilters, TestItem>(mockStore, {
         immediate: true,
       }),
     );
@@ -56,8 +72,7 @@ describe('usePagination', () => {
 
   it('should not fetch data when immediate is false', () => {
     renderHook(() =>
-      usePagination<TestFilters>({
-        fetchFn: mockFetchFn,
+      usePagination<TestFilters, TestItem>(mockStore, {
         immediate: false,
       }),
     );
@@ -67,8 +82,7 @@ describe('usePagination', () => {
 
   it('search should update filters and reset to page 1', async () => {
     const { result } = renderHook(() =>
-      usePagination<TestFilters>({
-        fetchFn: mockFetchFn,
+      usePagination<TestFilters, TestItem>(mockStore, {
         immediate: false,
       }),
     );
@@ -93,8 +107,7 @@ describe('usePagination', () => {
 
   it('reset should restore default values', async () => {
     const { result } = renderHook(() =>
-      usePagination<TestFilters>({
-        fetchFn: mockFetchFn,
+      usePagination<TestFilters, TestItem>(mockStore, {
         defaultFilters: { keyword: 'default' },
         defaultPageSize: 15,
         immediate: false,
@@ -116,8 +129,7 @@ describe('usePagination', () => {
 
   it('refresh should refetch with current params', async () => {
     const { result } = renderHook(() =>
-      usePagination<TestFilters>({
-        fetchFn: mockFetchFn,
+      usePagination<TestFilters, TestItem>(mockStore, {
         immediate: false,
       }),
     );
@@ -139,8 +151,7 @@ describe('usePagination', () => {
 
   it('pagination.onChange should update page', async () => {
     const { result } = renderHook(() =>
-      usePagination<TestFilters>({
-        fetchFn: mockFetchFn,
+      usePagination<TestFilters, TestItem>(mockStore, {
         immediate: false,
       }),
     );
@@ -159,8 +170,7 @@ describe('usePagination', () => {
 
   it('changing pageSize should reset to page 1', async () => {
     const { result } = renderHook(() =>
-      usePagination<TestFilters>({
-        fetchFn: mockFetchFn,
+      usePagination<TestFilters, TestItem>(mockStore, {
         immediate: false,
       }),
     );

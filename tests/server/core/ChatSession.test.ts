@@ -151,7 +151,6 @@ describe('ChatSession', () => {
       session.bindConnection(conn);
 
       const agent = makeMockAgent(async function* () {
-        yield; // satisfy require-yield
         throw new Error('Agent error');
       });
 

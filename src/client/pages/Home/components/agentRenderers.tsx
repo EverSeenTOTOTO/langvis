@@ -1,8 +1,8 @@
 import MarkdownRender from '@/client/components/MarkdownRender';
 import { AgentIds } from '@/shared/constants';
 import type { Message } from '@/shared/types/entities';
-import type { MessageRenderState } from '@/shared/utils/deriveMessageState';
-import { deriveMessageState } from '@/shared/utils/deriveMessageState';
+import type { MessageRenderState } from './AgentMessage/deriveMessageState';
+import { deriveMessageState } from './AgentMessage/deriveMessageState';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Typography } from 'antd';
 import type React from 'react';

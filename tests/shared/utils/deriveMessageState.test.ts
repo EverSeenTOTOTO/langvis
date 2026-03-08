@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveMessageState } from '@/shared/utils/deriveMessageState';
+import { deriveMessageState } from '@/client/pages/Home/components/AgentMessage/deriveMessageState';
 import { Role } from '@/shared/types/entities';
 
 describe('deriveMessageState', () => {
@@ -488,6 +488,107 @@ describe('deriveMessageState', () => {
       const state = deriveMessageState(msg);
 
       expect(state.isAwaitingContent).toBe(false);
+    });
+  });
+
+  describe('nested human-in-the-loop detection', () => {
+    it('should capture awaiting_input progress from nested tool call', () => {
+      // Scenario: PositionAdjustTool calls HumanInTheLoopTool internally
+      // The tool_call event has toolName='position_adjust_tool', but progress
+      // contains the awaiting_input status from the nested HumanInTheLoopTool
+      const msg = createMessage({
+        meta: {
+          events: [
+            { type: 'start', seq: 1, at: Date.now() },
+            {
+              type: 'tool_call',
+              callId: 'tc_1',
+              toolName: 'position_adjust_tool',
+              toolArgs: { conversationId: 'conv-1' },
+              seq: 2,
+              at: Date.now(),
+            },
+            {
+              type: 'tool_progress',
+              callId: 'tc_1',
+              toolName: 'position_adjust_tool',
+              data: {
+                status: 'awaiting_input',
+                message: '请填写以下仓位调整信息：',
+                schema: {
+                  type: 'object',
+                  properties: {
+                    totalAssets: { type: 'number' },
+                  },
+                },
+              },
+              seq: 3,
+              at: Date.now(),
+            },
+          ],
+        },
+      });
+
+      const state = deriveMessageState(msg);
+
+      // Tool call should be pending
+      expect(state.hasPendingTools).toBe(true);
+      expect(state.toolCallTimeline).toHaveLength(1);
+      expect(state.toolCallTimeline[0].toolName).toBe('position_adjust_tool');
+      expect(state.toolCallTimeline[0].status).toBe('pending');
+
+      // Progress should contain awaiting_input data
+      const progress = state.toolCallTimeline[0].progress;
+      expect(progress).toHaveLength(1);
+      expect((progress[0].data as Record<string, unknown>)?.status).toBe(
+        'awaiting_input',
+      );
+    });
+
+    it('should not confuse awaiting_input with different tool name', () => {
+      // Verify that the awaiting_input detection works regardless of the
+      // outer tool's name - it checks progress data, not tool name
+      const msg = createMessage({
+        meta: {
+          events: [
+            { type: 'start', seq: 1, at: Date.now() },
+            {
+              type: 'tool_call',
+              callId: 'tc_1',
+              toolName: 'some_other_tool', // Not human_in_the_loop_tool
+              toolArgs: {},
+              seq: 2,
+              at: Date.now(),
+            },
+            {
+              type: 'tool_progress',
+              callId: 'tc_1',
+              toolName: 'some_other_tool',
+              data: {
+                status: 'awaiting_input',
+                message: 'Input required',
+                schema: {
+                  type: 'object',
+                  properties: { name: { type: 'string' } },
+                },
+              },
+              seq: 3,
+              at: Date.now(),
+            },
+          ],
+        },
+      });
+
+      const state = deriveMessageState(msg);
+
+      // Progress should still contain awaiting_input status
+      const progress = state.toolCallTimeline[0].progress;
+      expect((progress[0].data as Record<string, unknown>)?.status).toBe(
+        'awaiting_input',
+      );
+      expect(
+        (progress[0].data as Record<string, unknown>)?.schema,
+      ).toBeDefined();
     });
   });
 });

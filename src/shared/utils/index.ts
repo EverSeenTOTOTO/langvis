@@ -1,4 +1,4 @@
-export * from './deriveMessageState';
+// deriveMessageState moved to src/client/pages/Home/components/AgentMessage/
 export * from './generateId';
 
 export const getOwnPropertyNames = <T extends object>(x: T) => {

@@ -9,6 +9,10 @@ import { makeAutoObservable } from 'mobx';
 
 @store()
 export class EmailStore {
+  items: ListEmailsResponse['items'] = [];
+  total = 0;
+  loading = false;
+
   currentEmail: EmailDetail | null = null;
 
   constructor() {
@@ -16,12 +20,19 @@ export class EmailStore {
   }
 
   @api('/api/emails')
-  async listEmails(
+  async list(
     _params?: ListEmailsRequest,
     req?: ApiRequest<ListEmailsRequest>,
   ): Promise<ListEmailsResponse | undefined> {
-    const result = await req!.send();
-    return result as ListEmailsResponse | undefined;
+    this.loading = true;
+    const result = (await req!.send()) as ListEmailsResponse | undefined;
+    this.loading = false;
+
+    if (result) {
+      this.items = result.items;
+      this.total = result.total;
+    }
+    return result;
   }
 
   @api('/api/emails/:id')

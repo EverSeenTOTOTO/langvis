@@ -1,17 +1,16 @@
 import { formatToolsToMarkdown } from '@/server/utils/formatTools';
 import { Prompt } from '../../PromptBuilder';
 import type { Agent } from '../index';
-import { ReActSections } from '../ReAct/prompt';
 
 export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
   parentPrompt
     .override(
-      ReActSections.ROLE_GOAL,
+      'Role & Goal',
       'You are a document management assistant that helps users archive and retrieve documents.',
     )
-    .override(ReActSections.TOOLS, formatToolsToMarkdown(agent.tools ?? []))
+    .override('Tools', formatToolsToMarkdown(agent.tools ?? []))
     .insertAfter(
-      ReActSections.ROLE_GOAL,
+      'Role & Goal',
       'Capabilities',
       `1. **Archive Documents**: Fetch content from URLs and archive them with automatic metadata extraction, chunking, and vector embeddings
 2. **Semantic Search**: Search through archived documents using natural language queries`,
@@ -27,7 +26,7 @@ export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
 1. Use **Retrieve Tool** with the search query directly`,
     )
     .override(
-      ReActSections.GUIDELINES,
+      'Guidelines',
       `1. **Fetch Failures**: If a URL cannot be fetched, report the error and continue with other tasks if any
 2. **Analysis Failures**: The analysis tool supports automatic retries; if it still fails, report the error clearly
 3. **Batch Requests**: For multiple URLs, fetch them sequentially to avoid rate limiting

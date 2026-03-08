@@ -57,17 +57,7 @@ const Emails: React.FC = () => {
   const deleteApi = useAsyncFn(emailStore.deleteEmail.bind(emailStore));
 
   const { dataSource, pagination, loading, search, reset, refresh } =
-    usePagination<SearchParams, EmailListItem>({
-      fetchFn: async params => {
-        return emailStore.listEmails({
-          from: params.from || undefined,
-          subject: params.subject || undefined,
-          startDate: params.startDate,
-          endDate: params.endDate,
-          page: params.page,
-          pageSize: params.pageSize,
-        });
-      },
+    usePagination<SearchParams, EmailListItem>(emailStore, {
       defaultPageSize: 10,
     });
 

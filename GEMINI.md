@@ -14,6 +14,7 @@
 - only run specific test when necessary, skip coverage when testing.
 - always run lint after code generating.
 - avoid useless comments, be clean.
+- **Always use template strings (backticks) for multi-line strings or string interpolation** instead of string concatenation with `+` operator.
 - API calls must be declared in store first, then consumed in components.
 - DO NOT use raw `fetch` or `useState` for loading states (e.g. `const [loading, setLoading] = useState(false)`) in components. Prefer `useAsyncFn` from `react-use`.
 - run `timeout 10 make dev` to check if TypeORM still works once you modified entity definition.

@@ -1,6 +1,6 @@
 import { EmailEntity } from '@/shared/entities/Email';
 import { generateId } from '@/shared/utils';
-import { simpleParser, type ParsedMail } from 'mailparser';
+import { ParsedMail, simpleParser } from 'mailparser';
 import {
   Between,
   LessThanOrEqual,

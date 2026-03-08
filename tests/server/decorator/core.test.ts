@@ -425,7 +425,6 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
 
-        // eslint-disable-next-line require-yield
         async *call(
           @input() _input: { url: string },
           _ctx: ExecutionContext,
