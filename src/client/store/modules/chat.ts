@@ -1,4 +1,4 @@
-import { api, ApiRequest, getPrefetchPath } from '@/client/decorator/api';
+import { api, ApiRequest } from '@/client/decorator/api';
 import { store } from '@/client/decorator/store';
 import type {
   CancelChatRequest,
@@ -10,120 +10,52 @@ import type {
 } from '@/shared/dto/controller';
 import { AgentEvent, SSEMessage } from '@/shared/types';
 import { Role } from '@/shared/types/entities';
-import { generateId, isClient } from '@/shared/utils';
+import { generateId } from '@/shared/utils';
 import { message } from 'antd';
 import { inject } from 'tsyringe';
+import { ChatSession } from './ChatSession';
 import { ConversationStore } from './conversation';
-import { ConversationState } from './ConversationState';
 import { SettingStore } from './setting';
 
 @store()
 export class ChatStore {
-  private states = new Map<string, ConversationState>();
+  private sessions = new Map<string, ChatSession>();
 
   constructor(
     @inject(ConversationStore) private conversationStore: ConversationStore,
     @inject(SettingStore) private settingStore: SettingStore,
   ) {}
 
-  getState(conversationId: string): ConversationState | undefined {
-    return this.states.get(conversationId);
+  getSession(conversationId: string): ChatSession | undefined {
+    return this.sessions.get(conversationId);
   }
 
-  getOrCreateState(conversationId: string): ConversationState {
-    let state = this.states.get(conversationId);
-    if (!state) {
-      state = new ConversationState();
-      this.states.set(conversationId, state);
+  acquireSession(conversationId: string): ChatSession {
+    let session = this.sessions.get(conversationId);
+    if (!session) {
+      session = new ChatSession(conversationId, {
+        onEvent: msg => this.handleEvent(conversationId, msg),
+        onError: error => this.handleError(conversationId, error),
+      });
+      this.sessions.set(conversationId, session);
     }
-    return state;
+    return session;
   }
 
   get isCurrentLoading(): boolean {
     const conversationId = this.conversationStore.currentConversationId;
     if (!conversationId) return false;
 
-    const state = this.states.get(conversationId);
-    return state?.isLoading ?? false;
+    const session = this.sessions.get(conversationId);
+    return session?.isLoading ?? false;
   }
 
   get currentPhaseError(): string | null {
     const conversationId = this.conversationStore.currentConversationId;
     if (!conversationId) return null;
 
-    const state = this.states.get(conversationId);
-    return state?.phaseError ?? null;
-  }
-
-  isConnected(conversationId: string): boolean {
-    return (
-      this.states.get(conversationId)?.eventSource?.readyState ===
-      EventSource.OPEN
-    );
-  }
-
-  connectToSSE(conversationId: string): Promise<void> {
-    const state = this.getOrCreateState(conversationId);
-    state.closeEventSource();
-
-    return new Promise((resolve, reject) => {
-      const path = `/api/chat/sse/${conversationId}`;
-      const url =
-        path.startsWith('/') && !isClient() ? getPrefetchPath(path) : path;
-
-      const eventSource = new EventSource(url, {
-        withCredentials: true,
-      });
-
-      state.setEventSource(eventSource);
-
-      const timeout = setTimeout(() => {
-        eventSource.close();
-        reject(new Error('SSE connection timeout'));
-      }, 30_000);
-
-      eventSource.addEventListener('error', () => {
-        clearTimeout(timeout);
-        eventSource.close();
-        reject(new Error('SSE connection failed'));
-      });
-
-      eventSource.addEventListener('message', event => {
-        clearTimeout(timeout);
-
-        try {
-          const msg: SSEMessage = JSON.parse(event.data);
-
-          // Wait for 'connected' handshake
-          if (msg.type === 'connected') {
-            resolve();
-            return;
-          }
-
-          if (msg.type === 'heartbeat') {
-            return;
-          }
-
-          if (msg.type === 'session_error') {
-            this.handleError(conversationId, msg.error);
-            eventSource.close();
-            reject(new Error(msg.error));
-            return;
-          }
-
-          // Business event
-          this.handleAgentEvent(conversationId, msg);
-        } catch (e) {
-          message.error(
-            `${this.settingStore.tr('Failed parsing SSE message')}: ${(e as Error).message}`,
-          );
-        }
-      });
-    });
-  }
-
-  disconnectFromSSE(conversationId: string): void {
-    this.states.get(conversationId)?.closeEventSource();
+    const session = this.sessions.get(conversationId);
+    return session?.phaseError ?? null;
   }
 
   @api('/api/chat/cancel/:conversationId', {
@@ -133,21 +65,27 @@ export class ChatStore {
     params: CancelChatRequest,
     req?: ApiRequest<CancelChatRequest>,
   ) {
-    const state = this.getState(params.conversationId);
+    const session = this.getSession(params.conversationId);
 
     // Idempotency: only cancel if in loading state
-    if (!state?.isLoading) {
+    if (!session?.isLoading) {
       return;
     }
 
-    const wasStreaming = state.phase === 'streaming';
+    const wasStreaming = session.phase === 'streaming';
 
     // Immediately update UI
-    state.transition('cancelled');
-    state.closeEventSource();
+    session.cancel();
+
+    // Add cancelled event to message for immediate UI update
+    this.appendMessageEvent(params.conversationId, {
+      type: 'cancelled',
+      reason: params.reason ?? 'Cancelled by user',
+      seq: Date.now(),
+      at: Date.now(),
+    });
 
     // Only notify backend when phase was streaming (Agent is running)
-    // connecting: no Agent running
     if (wasStreaming) {
       try {
         await req!.send();
@@ -197,27 +135,20 @@ export class ChatStore {
       return;
     }
 
-    const state = this.getOrCreateState(conversationId);
-    state.transition('connecting');
+    const session = this.acquireSession(conversationId);
 
     // Add temporary optimistic messages for immediate UI feedback
-    const tempUserId = generateId('msg');
     const tempAssistantId = generateId('msg');
     this.addPendingMessages(
       conversationId,
       params.content!,
-      tempUserId,
+      generateId('msg'),
       tempAssistantId,
     );
 
     try {
-      await this.connectToSSE(conversationId);
+      await session.connect();
     } catch (e) {
-      // Check if cancelled during connecting
-      if (state.phase === 'cancelled') {
-        return;
-      }
-
       this.handleError(
         conversationId,
         (e as Error)?.message ?? 'SSE connection failed',
@@ -237,16 +168,59 @@ export class ChatStore {
         );
       }
     } catch (e) {
-      // Check if cancelled during connecting
-      if (state.phase === 'cancelled') {
-        return;
-      }
-
       this.handleError(
         conversationId,
         (e as Error)?.message ?? 'Failed to start chat',
       );
     }
+  }
+
+  private handleEvent(conversationId: string, msg: SSEMessage): void {
+    if (this.conversationStore.currentConversationId !== conversationId) {
+      console.warn(
+        `Ignoring SSE message for non-current conversation: ${conversationId}`,
+      );
+      return;
+    }
+
+    // Only handle business events (AgentEvent)
+    const agentEvent = msg as AgentEvent;
+    if (!agentEvent.type) return;
+
+    switch (agentEvent.type) {
+      case 'start':
+      case 'thought':
+      case 'tool_call':
+      case 'tool_progress':
+      case 'tool_result':
+      case 'tool_error':
+        this.appendMessageEvent(conversationId, agentEvent);
+        break;
+
+      case 'stream':
+        this.appendMessageContent(conversationId, agentEvent.content);
+        break;
+
+      case 'final':
+      case 'cancelled':
+        // Refresh messages to get final state from backend
+        this.conversationStore.getMessagesByConversationId({
+          id: conversationId,
+        });
+        break;
+
+      case 'error':
+        this.handleError(conversationId, agentEvent.error);
+        break;
+    }
+  }
+
+  private handleError(conversationId: string, errorMessage: string): void {
+    const session = this.getSession(conversationId);
+    session?.fail(errorMessage);
+
+    // Backend has already persisted messages, refresh to get the final state
+    this.conversationStore.getMessagesByConversationId({ id: conversationId });
   }
 
   private appendMessageContent(conversationId: string, content: string): void {
@@ -267,69 +241,6 @@ export class ChatStore {
     }
     lastMessage.meta.events = lastMessage.meta.events ?? [];
     lastMessage.meta.events.push(event);
-  }
-
-  private handleAgentEvent(conversationId: string, msg: AgentEvent): void {
-    const state = this.getState(conversationId);
-    if (!state) return;
-
-    if (this.conversationStore.currentConversationId !== conversationId) {
-      console.warn(
-        `Ignoring SSE message for non-current conversation: ${conversationId}`,
-      );
-      return;
-    }
-
-    switch (msg.type) {
-      case 'start':
-        state.transition('streaming');
-        this.appendMessageEvent(conversationId, msg);
-        break;
-
-      case 'thought':
-      case 'tool_call':
-      case 'tool_progress':
-      case 'tool_result':
-      case 'tool_error':
-        this.appendMessageEvent(conversationId, msg);
-        break;
-
-      case 'stream':
-        this.appendMessageContent(conversationId, msg.content);
-        break;
-
-      case 'final':
-        state.transition('idle');
-        state.closeEventSource();
-        // Refresh messages to get final state from backend
-        this.conversationStore.getMessagesByConversationId({
-          id: conversationId,
-        });
-        break;
-
-      case 'cancelled':
-        state.transition('cancelled');
-        state.closeEventSource();
-        // Refresh messages to get final state from backend
-        this.conversationStore.getMessagesByConversationId({
-          id: conversationId,
-        });
-        break;
-
-      case 'error':
-        this.handleError(conversationId, msg.error);
-        state.closeEventSource();
-        break;
-    }
-  }
-
-  private handleError(conversationId: string, errorMessage: string): void {
-    const state = this.getState(conversationId);
-    if (!state) return;
-
-    state.transition('error', errorMessage);
-    // Backend has already persisted messages, refresh to get the final state
-    this.conversationStore.getMessagesByConversationId({ id: conversationId });
   }
 
   private addPendingMessages(
