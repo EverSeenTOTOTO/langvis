@@ -139,25 +139,10 @@ export class ConversationService {
 
   async deleteConversation(id: string, userId: string): Promise<boolean> {
     const conversationRepository = pg.getRepository(ConversationEntity);
-    const messageRepository = pg.getRepository(MessageEntity);
 
-    const conversation = await conversationRepository.findOne({
-      where: { id, userId },
-      relations: ['messages'],
-    });
+    const result = await conversationRepository.delete({ id, userId });
 
-    if (!conversation) {
-      return false;
-    }
-
-    if (conversation.messages && conversation.messages.length > 0) {
-      await messageRepository.delete({
-        conversationId: id,
-      });
-    }
-
-    await conversationRepository.delete(id);
-    return true;
+    return result.affected ? result.affected > 0 : false;
   }
 
   async batchAddMessages(

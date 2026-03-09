@@ -222,17 +222,10 @@ describe('DocumentService', () => {
 
   describe('deleteDocument', () => {
     it('should delete document and its chunks', async () => {
-      const mockDocument = { id: '1', title: 'Test' };
-
       vi.mocked(pg.getRepository).mockReturnValueOnce({
         findAndCount: vi.fn(),
-        findOneBy: vi.fn(async () => mockDocument),
+        findOneBy: vi.fn(),
         delete: vi.fn(async () => ({ affected: 1 })),
-      } as any);
-
-      vi.mocked(pg.getRepository).mockReturnValueOnce({
-        count: vi.fn(),
-        delete: vi.fn(async () => ({ affected: 5 })),
       } as any);
 
       const result = await documentService.deleteDocument('1');
@@ -243,8 +236,8 @@ describe('DocumentService', () => {
     it('should return false if document not found', async () => {
       vi.mocked(pg.getRepository).mockReturnValueOnce({
         findAndCount: vi.fn(),
-        findOneBy: vi.fn(async () => null),
-        delete: vi.fn(),
+        findOneBy: vi.fn(),
+        delete: vi.fn(async () => ({ affected: 0 })),
       } as any);
 
       const result = await documentService.deleteDocument('non-existent');

@@ -67,7 +67,5 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
     }
 
     return content;
-
-    return content;
   }
 }

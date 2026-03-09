@@ -1,6 +1,5 @@
 import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
 import { ConversationEntity } from '@/shared/entities/Conversation';
-import { In } from 'typeorm';
 import { service } from '../decorator/service';
 import pg from './pg';
 
@@ -71,8 +70,6 @@ export class ConversationGroupService {
     userId: string,
   ): Promise<{ success: boolean; deletedConversationIds: string[] }> {
     const groupRepository = pg.getRepository(ConversationGroupEntity);
-    const conversationRepository = pg.getRepository(ConversationEntity);
-    const messageRepository = pg.getRepository('MessageEntity');
 
     const group = await groupRepository.findOne({
       where: { id, userId },
@@ -85,19 +82,6 @@ export class ConversationGroupService {
 
     const conversationIds = group.conversations?.map(c => c.id) ?? [];
 
-    // Delete all messages in conversations
-    if (conversationIds.length > 0) {
-      await messageRepository.delete({
-        conversationId: In(conversationIds),
-      });
-
-      // Delete all conversations in the group
-      await conversationRepository.delete({
-        groupId: id,
-      });
-    }
-
-    // Delete the group
     await groupRepository.delete(id);
 
     return { success: true, deletedConversationIds: conversationIds };

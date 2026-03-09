@@ -31,6 +31,13 @@ export const config: ToolConfig<
           'Request timeout in milliseconds. Default is 30000 (30 seconds).',
         nullable: true,
       },
+      retry: {
+        type: 'number',
+        default: 0,
+        description:
+          'Number of retry attempts on failure. Default is 0 (no retry).',
+        nullable: true,
+      },
     },
     required: ['url'],
   },

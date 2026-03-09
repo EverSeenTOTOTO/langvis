@@ -2,23 +2,21 @@ import {
   CancelChatRequestDto,
   StartChatRequestDto,
 } from '@/shared/dto/controller';
-import { Role } from '@/shared/entities/Message';
+import { Message, Role } from '@/shared/entities/Message';
 import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
+import { PendingMessage } from '../core/PendingMessage';
+import { SSEConnection } from '../core/SSEConnection';
 import type { Agent } from '../core/agent';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
 import { ChatService } from '../service/ChatService';
 import { ConversationService } from '../service/ConversationService';
-import { SSEService } from '../service/SSEService';
 
 @controller('/api/chat')
 export default class ChatController {
   constructor(
-    @inject(SSEService)
-    private sseService: SSEService,
-
     @inject(ConversationService)
     private conversationService: ConversationService,
 
@@ -39,10 +37,7 @@ export default class ChatController {
     }
 
     // 2. Initialize SSE connection (writeHead 200, cannot change status after)
-    const sseConnection = this.sseService.initSSEConnection(
-      conversationId,
-      res,
-    );
+    const sseConnection = new SSEConnection(conversationId, res);
 
     // 3. Bind connection to session
     session.bindConnection(sseConnection);
@@ -140,14 +135,19 @@ export default class ChatController {
 
     res.status(200).json({ success: true, messageId: assistantMessage.id });
 
-    // Agent execution after HTTP response
-    this.chatService.runSession(
-      session,
-      agent,
-      memory,
+    const pendingMessage = new PendingMessage(
       assistantMessage,
-      conversation.config,
+      (message: Message) =>
+        this.conversationService.updateMessage(
+          message.id,
+          message.content,
+          message.meta,
+        ),
     );
+    session.bindPendingMessage(pendingMessage);
+
+    // Agent execution after HTTP response
+    this.chatService.runSession(session, agent, memory, conversation.config);
 
     return;
   }

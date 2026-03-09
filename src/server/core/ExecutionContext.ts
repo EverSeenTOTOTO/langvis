@@ -215,7 +215,11 @@ export class ExecutionContext {
     if (!data) {
       throw new Error(`Cache miss: ${key}`);
     }
-    return data;
+    try {
+      return JSON.parse(data);
+    } catch {
+      return data;
+    }
   }
 
   async clearCache(): Promise<void> {

@@ -44,7 +44,9 @@ export class MessageEntity implements Message {
   @Column({ type: 'varchar', length: 16 })
   conversationId!: string;
 
-  @ManyToOne('ConversationEntity', 'messages')
+  @ManyToOne('ConversationEntity', 'messages', {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'conversationId' })
   conversation!: ConversationEntity;
 }

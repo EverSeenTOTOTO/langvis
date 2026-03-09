@@ -1,10 +1,4 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  Index,
-  PrimaryColumn,
-} from 'typeorm';
+import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
 
 export interface EmailMetadata {
   [key: string]: unknown;
@@ -39,6 +33,9 @@ export class EmailEntity {
   @Column({ type: 'timestamp' })
   receivedAt!: Date;
 
+  @Column({ type: 'timestamp' })
+  createdAt!: Date;
+
   @Column({ type: 'text' })
   content!: string;
 
@@ -50,7 +47,4 @@ export class EmailEntity {
 
   @Column({ type: 'jsonb', nullable: true })
   metadata!: EmailMetadata | null;
-
-  @CreateDateColumn({ type: 'timestamp' })
-  createdAt!: Date;
 }

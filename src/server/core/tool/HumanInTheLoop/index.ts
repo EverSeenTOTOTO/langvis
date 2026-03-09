@@ -150,7 +150,6 @@ export default class HumanInTheLoopTool<
           };
 
           return output;
-          return output;
         }
       }
     }
@@ -162,7 +161,6 @@ export default class HumanInTheLoopTool<
       submitted: false,
     };
 
-    return output;
     return output;
   }
 }

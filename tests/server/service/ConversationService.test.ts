@@ -255,35 +255,15 @@ describe('ConversationService', () => {
   });
 
   it('should delete a conversation', async () => {
-    const mockConversation = {
-      id: '1',
-      name: 'Test Conversation',
-      createdAt: new Date(),
-      messages: [],
-    };
-
-    const findOneMock = vi.fn().mockImplementation(async options => {
-      if (options.where && options.where.id === '1') {
-        return mockConversation;
-      }
-      return null;
-    });
-
     const deleteMock = vi.fn().mockResolvedValue({ affected: 1 });
 
     (pg.getRepository as any).mockImplementation((entity: any) => {
       if (entity.name === 'ConversationEntity') {
         return {
-          findOne: findOneMock,
           delete: deleteMock,
-        };
-      } else if (entity.name === 'MessageEntity') {
-        return {
-          delete: vi.fn().mockResolvedValue({ affected: 0 }),
         };
       }
       return {
-        findOne: vi.fn().mockResolvedValue(null),
         delete: vi.fn().mockResolvedValue({ affected: 0 }),
       };
     });
@@ -293,63 +273,24 @@ describe('ConversationService', () => {
       'test-user-id',
     );
     expect(result).toBe(true);
-    expect(findOneMock).toHaveBeenCalledWith({
-      where: { id: '1', userId: 'test-user-id' },
-      relations: ['messages'],
+    expect(deleteMock).toHaveBeenCalledWith({
+      id: '1',
+      userId: 'test-user-id',
     });
-    expect(deleteMock).toHaveBeenCalledWith('1');
   });
 
   it('should cascade delete messages when conversation is deleted', async () => {
-    const mockMessages = [
-      {
-        id: '1',
-        conversationId: '1',
-        role: Role.USER,
-        content: 'Hello',
-        createdAt: new Date(),
-      },
-      {
-        id: '2',
-        conversationId: '1',
-        role: Role.ASSIST,
-        content: 'Hi there!',
-        createdAt: new Date(),
-      },
-    ];
-
-    const mockConversation = {
-      id: '1',
-      name: 'Test Conversation',
-      createdAt: new Date(),
-      messages: mockMessages,
-    };
-
-    const findOneMock = vi.fn().mockImplementation(async options => {
-      if (options.where && options.where.id === '1') {
-        return mockConversation;
-      }
-      return null;
-    });
-
+    // Cascade delete is handled by database (onDelete: 'CASCADE' in entity)
+    // This test verifies the delete operation is called correctly
     const deleteMock = vi.fn().mockResolvedValue({ affected: 1 });
-    const messageDeleteMock = vi
-      .fn()
-      .mockResolvedValue({ affected: mockMessages.length });
 
     (pg.getRepository as any).mockImplementation((entity: any) => {
       if (entity.name === 'ConversationEntity') {
         return {
-          findOne: findOneMock,
           delete: deleteMock,
-        };
-      } else if (entity.name === 'MessageEntity') {
-        return {
-          delete: messageDeleteMock,
         };
       }
       return {
-        findOne: vi.fn().mockResolvedValue(null),
         delete: vi.fn().mockResolvedValue({ affected: 0 }),
       };
     });
@@ -359,14 +300,10 @@ describe('ConversationService', () => {
       'test-user-id',
     );
     expect(result).toBe(true);
-    expect(findOneMock).toHaveBeenCalledWith({
-      where: { id: '1', userId: 'test-user-id' },
-      relations: ['messages'],
+    expect(deleteMock).toHaveBeenCalledWith({
+      id: '1',
+      userId: 'test-user-id',
     });
-    expect(messageDeleteMock).toHaveBeenCalledWith({
-      conversationId: '1',
-    });
-    expect(deleteMock).toHaveBeenCalledWith('1');
   });
 
   it('should get messages by conversation id', async () => {

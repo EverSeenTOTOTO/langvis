@@ -161,7 +161,7 @@ describe('WebFetchTool', () => {
   });
 });
 
-describe('WebFetchTool - proxy retry', () => {
+describe('WebFetchTool - proxy and retry', () => {
   let tool: WebFetchTool;
   let originalEnv: string | undefined;
 
@@ -183,7 +183,27 @@ describe('WebFetchTool - proxy retry', () => {
     process.env.WEB_FETCH_PROXY = originalEnv;
   });
 
-  it('should throw error directly when no proxy available', async () => {
+  it('should use proxy by default when available', async () => {
+    process.env.WEB_FETCH_PROXY = 'http://proxy:8080';
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => mockHTML,
+    });
+
+    const ctx = createMockContext();
+    await getResult(tool.call({ url: 'https://example.com/article' }, ctx));
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://example.com/article',
+      expect.objectContaining({
+        proxy: 'http://proxy:8080',
+      }),
+    );
+  });
+
+  it('should throw error when no proxy available and fetch fails', async () => {
     delete process.env.WEB_FETCH_PROXY;
 
     global.fetch = vi.fn().mockResolvedValue({
@@ -198,25 +218,70 @@ describe('WebFetchTool - proxy retry', () => {
     ).rejects.toThrow('Failed to fetch URL: 403 Forbidden');
   });
 
-  it('should log warning when fetch fails with proxy available', async () => {
-    process.env.WEB_FETCH_PROXY = 'http://proxy:8080';
+  it('should retry specified number of times on failure', async () => {
+    delete process.env.WEB_FETCH_PROXY;
+
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => mockHTML,
+      });
+
+    const ctx = createMockContext();
+    const result = await getResult(
+      tool.call({ url: 'https://example.com/flaky', retry: 1 }, ctx),
+    );
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(result.textContent).toContain('test article');
+  });
+
+  it('should log warning on retry attempts', async () => {
+    delete process.env.WEB_FETCH_PROXY;
 
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
-      status: 403,
-      statusText: 'Forbidden',
+      status: 500,
+      statusText: 'Internal Server Error',
     });
 
     const ctx = createMockContext();
+    await expect(
+      getResult(
+        tool.call({ url: 'https://example.com/failing', retry: 2 }, ctx),
+      ),
+    ).rejects.toThrow();
 
-    try {
-      await getResult(tool.call({ url: 'https://example.com/blocked' }, ctx));
-    } catch {
-      // Expected to throw
-    }
-
+    expect(logger.warn).toHaveBeenCalledTimes(2);
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('retrying with proxy'),
+      expect.stringContaining('Fetch attempt 1 failed'),
     );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Fetch attempt 2 failed'),
+    );
+  });
+
+  it('should throw after all retries exhausted', async () => {
+    delete process.env.WEB_FETCH_PROXY;
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+    });
+
+    const ctx = createMockContext();
+    await expect(
+      getResult(tool.call({ url: 'https://example.com/down', retry: 3 }, ctx)),
+    ).rejects.toThrow('Failed to fetch URL: 503 Service Unavailable');
+
+    expect(global.fetch).toHaveBeenCalledTimes(4); // initial + 3 retries
   });
 });

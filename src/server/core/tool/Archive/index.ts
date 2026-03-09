@@ -78,7 +78,6 @@ export default class ArchiveTool extends Tool<ArchiveInput, ArchiveOutput> {
     const output: ArchiveOutput = result;
 
     return output;
-    return output;
   }
 }
 

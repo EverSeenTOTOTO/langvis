@@ -130,11 +130,11 @@ Help users.`,
     });
   });
 
-  describe('override', () => {
+  describe('with - override behavior', () => {
     it('should override an existing section', () => {
       const prompt = Prompt.empty()
         .with('Role', 'Original')
-        .override('Role', 'Overridden');
+        .with('Role', 'Overridden');
 
       expect(prompt.get('Role')).toEqual({
         name: 'Role',
@@ -142,9 +142,9 @@ Help users.`,
       });
     });
 
-    it('should return new prompt without modifying original', () => {
+    it('should return new prompt without modifying original when overriding', () => {
       const original = Prompt.empty().with('Role', 'Original');
-      const overridden = original.override('Role', 'Overridden');
+      const overridden = original.with('Role', 'Overridden');
 
       expect(original.get('Role')).toEqual({
         name: 'Role',
@@ -156,10 +156,11 @@ Help users.`,
       });
     });
 
-    it('should not add section if not exists', () => {
-      const prompt = Prompt.empty().override('NonExistent', 'New content');
+    it('should add section if not exists', () => {
+      const prompt = Prompt.empty().with('NonExistent', 'New content');
 
-      expect(prompt.has('NonExistent')).toBe(false);
+      expect(prompt.has('NonExistent')).toBe(true);
+      expect(prompt.get('NonExistent')?.content).toBe('New content');
     });
   });
 
@@ -356,9 +357,9 @@ JSON`,
       expect(original.has('B')).toBe(false);
     });
 
-    it('should not mutate original on override', () => {
+    it('should not mutate original on with (override)', () => {
       const original = Prompt.empty().with('A', 'original');
-      original.override('A', 'new');
+      original.with('A', 'new');
 
       expect(original.get('A')?.content).toBe('original');
     });

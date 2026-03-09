@@ -155,7 +155,6 @@ export default class ChunkTool extends Tool<ChunkInput, ChunkOutput> {
     const output: ChunkOutput = { chunks };
 
     return output;
-    return output;
   }
 }
 
