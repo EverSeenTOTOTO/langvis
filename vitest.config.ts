@@ -28,6 +28,6 @@ export default defineConfig({
     },
     globals: true,
     environment: 'node',
-    setupFiles: 'reflect-metadata',
+    setupFiles: ['reflect-metadata', './tests/setup/eventSource.ts'],
   },
 });
