@@ -5,6 +5,7 @@ import { AuthService } from '@/server/service/AuthService';
 import { ConversationService } from '@/server/service/ConversationService';
 import { Agent } from '@/server/core/agent';
 import { Memory } from '@/server/core/memory';
+import { PendingMessage } from '@/server/core/PendingMessage';
 import { Role } from '@/shared/entities/Message';
 import { InjectTokens } from '@/shared/constants';
 
@@ -72,37 +73,22 @@ describe('ChatService', () => {
       expect(session?.phase).toBe('waiting');
     });
 
-    it('should return null if session already running', () => {
+    it('should return null if session already running', async () => {
       const session1 = chatService.acquireSession('conv-123');
       expect(session1).toBeDefined();
 
-      // Simulate running state via run()
+      // Bind mock connection and pending message
       const mockConn = {
         conversationId: 'conv-123',
-        response: {
-          writable: true,
-          write: vi.fn().mockReturnValue(true),
-          flush: vi.fn(),
-          writableEnded: false,
-          end: vi.fn(),
+        get isWritable() {
+          return true;
         },
-        heartbeat: null,
+        send: vi.fn().mockReturnValue(true),
+        close: vi.fn(),
       };
       session1!.bindConnection(mockConn as any);
 
-      const mockAgent = {
-        id: 'test',
-        call: vi.fn().mockImplementation(async function* () {
-          yield { type: 'start', seq: 1, at: Date.now() };
-          // Keep running so session stays in 'running' phase
-          await new Promise(resolve => setTimeout(resolve, 200));
-          yield { type: 'final', seq: 2, at: Date.now() };
-        }),
-      } as unknown as Agent;
-
-      const runPromise = session1!.run(
-        mockAgent,
-        {} as Memory,
+      const pendingMessage = new PendingMessage(
         {
           id: 'msg',
           role: Role.ASSIST,
@@ -111,16 +97,26 @@ describe('ChatService', () => {
           createdAt: new Date(),
           conversationId: 'conv-123',
         },
-        {},
         vi.fn().mockResolvedValue(undefined),
       );
+      session1!.bindPendingMessage(pendingMessage);
+
+      const mockAgent = {
+        id: 'test',
+        call: vi.fn().mockImplementation(async function* () {
+          yield { type: 'start', seq: 1, at: Date.now() };
+          await new Promise(resolve => setTimeout(resolve, 200));
+          yield { type: 'final', seq: 2, at: Date.now() };
+        }),
+      } as unknown as Agent;
+
+      const runPromise = session1!.run(mockAgent, {} as Memory, {});
 
       const session2 = chatService.acquireSession('conv-123');
       expect(session2).toBeNull();
 
-      // Cleanup: cancel and wait
       session1!.cancel('test done');
-      return runPromise;
+      await runPromise;
     });
 
     it('should cleanup and replace existing waiting session', () => {
@@ -171,6 +167,11 @@ describe('ChatService', () => {
           end: vi.fn(),
         },
         heartbeat: null,
+        close: vi.fn(),
+        get isWritable() {
+          return true;
+        },
+        send: vi.fn().mockReturnValue(true),
       };
       session!.bindConnection(mockConn as any);
 
@@ -192,13 +193,13 @@ describe('ChatService', () => {
         conversationId: 'conv-123',
       };
 
-      await chatService.runSession(
-        session!,
-        mockAgent,
-        {} as Memory,
+      const pendingMessage = new PendingMessage(
         mockMessage,
-        {},
+        mockConversationService.updateMessage,
       );
+      session!.bindPendingMessage(pendingMessage);
+
+      await chatService.runSession(session!, mockAgent, {} as Memory, {});
 
       expect(mockAgent.call).toHaveBeenCalled();
       expect(mockConversationService.updateMessage).toHaveBeenCalled();
@@ -215,22 +216,7 @@ describe('ChatService', () => {
       session!.run = vi.fn().mockRejectedValue(new Error('Infra error'));
 
       const mockAgent = { id: 'test' } as unknown as Agent;
-      const mockMessage = {
-        id: 'msg',
-        role: Role.ASSIST,
-        content: '',
-        meta: { events: [] },
-        createdAt: new Date(),
-        conversationId: 'conv-123',
-      };
-
-      await chatService.runSession(
-        session!,
-        mockAgent,
-        {} as Memory,
-        mockMessage,
-        {},
-      );
+      await chatService.runSession(session!, mockAgent, {} as Memory, {});
 
       expect(mockSend).toHaveBeenCalledWith(
         expect.objectContaining({

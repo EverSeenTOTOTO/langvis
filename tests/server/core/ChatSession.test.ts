@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { container } from 'tsyringe';
 import { ChatSession } from '@/server/core/ChatSession';
-import type { SSEConnection } from '@/server/service/SSEService';
+import { PendingMessage } from '@/server/core/PendingMessage';
+import type { SSEConnection } from '@/server/core/SSEConnection';
 import type { Agent } from '@/server/core/agent';
 import type { Memory } from '@/server/core/memory';
 import { Role } from '@/shared/entities/Message';
@@ -32,19 +33,42 @@ describe('ChatSession', () => {
   });
 
   const makeMockConnection = (
-    overrides: Partial<SSEConnection> = {},
-  ): SSEConnection => ({
-    conversationId: 'conv-123',
-    response: {
-      writable: true,
-      write: vi.fn().mockReturnValue(true),
-      flush: vi.fn(),
+    options: { writable?: boolean } = {},
+  ): {
+    conn: SSEConnection;
+    sentMessages: unknown[];
+  } => {
+    const sentMessages: unknown[] = [];
+    const mockResponse = {
+      writable: options.writable ?? true,
       writableEnded: false,
+      write: vi.fn((data: string) => {
+        sentMessages.push(data);
+        return options.writable ?? true;
+      }),
+      flush: vi.fn(),
       end: vi.fn(),
-    } as any,
-    heartbeat: null as any,
-    ...overrides,
-  });
+    };
+
+    const conn = {
+      conversationId: 'conv-123',
+      get isWritable() {
+        return mockResponse.writable;
+      },
+      send: vi.fn((msg: unknown) => {
+        if (!mockResponse.writable) return false;
+        mockResponse.write(`data: ${JSON.stringify(msg)}\n\n`);
+        mockResponse.flush();
+        return true;
+      }),
+      close: vi.fn(() => {
+        mockResponse.writableEnded = true;
+        mockResponse.end();
+      }),
+    } as unknown as SSEConnection;
+
+    return { conn, sentMessages };
+  };
 
   const makeMockAgent = (
     gen: (...args: any[]) => AsyncGenerator<any, void, void>,
@@ -58,12 +82,22 @@ describe('ChatSession', () => {
     id: 'msg-123',
     role: Role.ASSIST,
     content: '',
-    meta: { events: [] },
+    meta: { events: [] as any[] },
     createdAt: new Date(),
     conversationId: 'conv-123',
   });
 
-  const makeMockDeps = () => vi.fn().mockResolvedValue(undefined);
+  const makeMockPersister = () => vi.fn().mockResolvedValue(undefined);
+
+  const bindMockPendingMessage = (
+    sess: ChatSession,
+    message = makeMockMessage(),
+    persister = makeMockPersister(),
+  ) => {
+    const pending = new PendingMessage(message, persister);
+    sess.bindPendingMessage(pending);
+    return { message, persister };
+  };
 
   describe('initialization', () => {
     it('should initialize with waiting phase', () => {
@@ -75,29 +109,25 @@ describe('ChatSession', () => {
 
   describe('run', () => {
     it('should transition to running then done', async () => {
-      session.bindConnection(makeMockConnection());
+      const { conn } = makeMockConnection();
+      session.bindConnection(conn);
+      const { persister } = bindMockPendingMessage(session);
 
       const agent = makeMockAgent(async function* () {
         yield { type: 'start', seq: 1, at: Date.now() };
         yield { type: 'final', seq: 2, at: Date.now() };
       });
 
-      const finalizeMessage = makeMockDeps();
-      await session.run(
-        agent,
-        {} as Memory,
-        makeMockMessage(),
-        {},
-        finalizeMessage,
-      );
+      await session.run(agent, {} as Memory, {});
 
       expect(session.phase).toBe('done');
-      expect(finalizeMessage).toHaveBeenCalled();
+      expect(persister).toHaveBeenCalled();
     });
 
     it('should send events via SSE', async () => {
-      const conn = makeMockConnection();
+      const { conn, sentMessages } = makeMockConnection();
       session.bindConnection(conn);
+      bindMockPendingMessage(session);
 
       const agent = makeMockAgent(async function* () {
         yield { type: 'start', seq: 1, at: Date.now() };
@@ -110,75 +140,50 @@ describe('ChatSession', () => {
         yield { type: 'final', seq: 3, at: Date.now() };
       });
 
-      await session.run(
-        agent,
-        {} as Memory,
-        makeMockMessage(),
-        {},
-        makeMockDeps(),
-      );
+      await session.run(agent, {} as Memory, {});
 
-      expect(conn.response.write).toHaveBeenCalled();
+      expect(sentMessages.length).toBeGreaterThan(0);
     });
 
     it('should send cancelled event when aborted', async () => {
-      const conn = makeMockConnection();
+      const { conn, sentMessages } = makeMockConnection();
       session.bindConnection(conn);
+      bindMockPendingMessage(session);
 
       const agent = makeMockAgent(async function* (_mem: any, ctx: any) {
         ctx.abort('Test abort');
         yield { type: 'start', seq: 1, at: Date.now() };
       });
 
-      await session.run(
-        agent,
-        {} as Memory,
-        makeMockMessage(),
-        {},
-        makeMockDeps(),
-      );
+      await session.run(agent, {} as Memory, {});
 
-      const writes = (conn.response.write as ReturnType<typeof vi.fn>).mock
-        .calls;
-      const hasCancelled = writes.some((call: any[]) =>
-        call[0].includes('"type":"cancelled"'),
+      const hasCancelled = sentMessages.some((msg: any) =>
+        msg.includes('"type":"cancelled"'),
       );
       expect(hasCancelled).toBe(true);
     });
 
     it('should send error event when agent throws', async () => {
-      const conn = makeMockConnection();
+      const { conn, sentMessages } = makeMockConnection();
       session.bindConnection(conn);
+      bindMockPendingMessage(session);
 
       const agent = makeMockAgent(async function* () {
         throw new Error('Agent error');
       });
 
-      await session.run(
-        agent,
-        {} as Memory,
-        makeMockMessage(),
-        {},
-        makeMockDeps(),
-      );
+      await session.run(agent, {} as Memory, {});
 
-      const writes = (conn.response.write as ReturnType<typeof vi.fn>).mock
-        .calls;
-      const hasError = writes.some((call: any[]) =>
-        call[0].includes('"type":"error"'),
+      const hasError = sentMessages.some((msg: any) =>
+        msg.includes('"type":"error"'),
       );
       expect(hasError).toBe(true);
     });
 
     it('should abort when SSE not writable', async () => {
-      const conn = makeMockConnection({
-        response: {
-          writable: false,
-          writableEnded: false,
-          end: vi.fn(),
-        } as any,
-      });
+      const { conn } = makeMockConnection({ writable: false });
       session.bindConnection(conn);
+      bindMockPendingMessage(session);
 
       const agent = makeMockAgent(async function* () {
         yield { type: 'start', seq: 1, at: Date.now() };
@@ -191,87 +196,74 @@ describe('ChatSession', () => {
         yield { type: 'final', seq: 3, at: Date.now() };
       });
 
-      await session.run(
-        agent,
-        {} as Memory,
-        makeMockMessage(),
-        {},
-        makeMockDeps(),
-      );
+      await session.run(agent, {} as Memory, {});
 
       expect(session.phase).toBe('done');
     });
 
     it('should break loop on error event', async () => {
-      const conn = makeMockConnection();
+      const { conn, sentMessages } = makeMockConnection();
       session.bindConnection(conn);
+      bindMockPendingMessage(session);
 
       const agent = makeMockAgent(async function* () {
         yield { type: 'error', error: 'test', seq: 1, at: Date.now() };
         yield { type: 'final', seq: 2, at: Date.now() };
       });
 
-      await session.run(
-        agent,
-        {} as Memory,
-        makeMockMessage(),
-        {},
-        makeMockDeps(),
-      );
+      await session.run(agent, {} as Memory, {});
 
-      const writes = (conn.response.write as ReturnType<typeof vi.fn>).mock
-        .calls;
-      const hasFinal = writes.some((call: any[]) =>
-        call[0].includes('"type":"final"'),
+      const hasFinal = sentMessages.some((msg: any) =>
+        msg.includes('"type":"final"'),
       );
       expect(hasFinal).toBe(false);
     });
 
-    it('should call finalizeMessage even on error', async () => {
-      const conn = makeMockConnection();
+    it('should call persister even on error', async () => {
+      const { conn } = makeMockConnection();
       session.bindConnection(conn);
+      const { persister } = bindMockPendingMessage(session);
 
       const agent = makeMockAgent(async function* () {
         yield;
         throw new Error('fail');
       });
 
-      const finalizeMessage = makeMockDeps();
-      await session.run(
-        agent,
-        {} as Memory,
-        makeMockMessage(),
-        {},
-        finalizeMessage,
-      );
+      await session.run(agent, {} as Memory, {});
 
-      expect(finalizeMessage).toHaveBeenCalled();
+      expect(persister).toHaveBeenCalled();
+    });
+
+    it('should throw if PendingMessage not bound', async () => {
+      const { conn } = makeMockConnection();
+      session.bindConnection(conn);
+
+      const agent = makeMockAgent(async function* () {
+        yield { type: 'start', seq: 1, at: Date.now() };
+      });
+
+      await expect(session.run(agent, {} as Memory, {})).rejects.toThrow(
+        'PendingMessage not bound',
+      );
     });
   });
 
   describe('cancel', () => {
     it('should abort ctx when running', async () => {
-      const conn = makeMockConnection();
+      const { conn } = makeMockConnection();
       session.bindConnection(conn);
+      bindMockPendingMessage(session);
 
       let capturedCtx: any;
       const agent = makeMockAgent(async function* (_mem: any, ctx: any) {
         capturedCtx = ctx;
         yield { type: 'start', seq: 1, at: Date.now() };
-        // Simulate waiting
         await new Promise(resolve => setTimeout(resolve, 50));
         yield { type: 'final', seq: 2, at: Date.now() };
       });
 
-      const runPromise = session.run(
-        agent,
-        {} as Memory,
-        makeMockMessage(),
-        {},
-        makeMockDeps(),
-      );
+      const runPromise = session.run(agent, {} as Memory, {});
 
-      // Wait for agent to start
       await new Promise(resolve => setTimeout(resolve, 10));
       session.cancel('User cancelled');
 
@@ -281,15 +273,15 @@ describe('ChatSession', () => {
     });
 
     it('should not abort if already aborted', () => {
-      // No ctx → should not throw
       session.cancel('User cancelled');
     });
   });
 
   describe('handleDisconnect', () => {
     it('should cancel when phase is running', async () => {
-      const conn = makeMockConnection();
+      const { conn } = makeMockConnection();
       session.bindConnection(conn);
+      bindMockPendingMessage(session);
 
       let capturedCtx: any;
       const agent = makeMockAgent(async function* (_mem: any, ctx: any) {
@@ -299,13 +291,7 @@ describe('ChatSession', () => {
         yield { type: 'final', seq: 2, at: Date.now() };
       });
 
-      const runPromise = session.run(
-        agent,
-        {} as Memory,
-        makeMockMessage(),
-        {},
-        makeMockDeps(),
-      );
+      const runPromise = session.run(agent, {} as Memory, {});
 
       await new Promise(resolve => setTimeout(resolve, 10));
       session.handleDisconnect();
@@ -325,7 +311,7 @@ describe('ChatSession', () => {
 
   describe('send', () => {
     it('should send event when connection is writable', () => {
-      const conn = makeMockConnection();
+      const { conn } = makeMockConnection();
       session.bindConnection(conn);
 
       const event = {
@@ -337,14 +323,10 @@ describe('ChatSession', () => {
       const result = session.send(event);
 
       expect(result).toBe(true);
-      expect(conn.response.write).toHaveBeenCalled();
-      expect(conn.response.flush).toHaveBeenCalled();
     });
 
     it('should return false when connection is not writable', () => {
-      const conn = makeMockConnection({
-        response: { writable: false } as any,
-      });
+      const { conn } = makeMockConnection({ writable: false });
       session.bindConnection(conn);
 
       const event = {
@@ -369,11 +351,9 @@ describe('ChatSession', () => {
 
       expect(result).toBe(false);
     });
-  });
 
-  describe('send', () => {
     it('should send control message when connection is writable', () => {
-      const conn = makeMockConnection();
+      const { conn } = makeMockConnection();
       session.bindConnection(conn);
 
       session.send({
@@ -381,44 +361,24 @@ describe('ChatSession', () => {
         error: 'Test error',
       });
 
-      expect(conn.response.write).toHaveBeenCalled();
+      expect((conn as any).send).toHaveBeenCalled();
     });
   });
 
   describe('bindConnection', () => {
     it('should bind SSE connection', () => {
-      const conn = makeMockConnection();
+      const { conn } = makeMockConnection();
       session.bindConnection(conn);
-      // Should not throw
     });
   });
 
   describe('cleanup', () => {
-    it('should clear heartbeat interval and end response', () => {
-      vi.useFakeTimers();
-      const mockEnd = vi.fn();
-      const conn = makeMockConnection({
-        response: { writableEnded: false, end: mockEnd } as any,
-        heartbeat: setInterval(() => {}, 1000),
-      });
-
+    it('should close the connection', () => {
+      const { conn } = makeMockConnection();
       session.bindConnection(conn);
       session.cleanup();
 
-      expect(mockEnd).toHaveBeenCalled();
-      vi.useRealTimers();
-    });
-
-    it('should not end response if already ended', () => {
-      const mockEnd = vi.fn();
-      const conn = makeMockConnection({
-        response: { writableEnded: true, end: mockEnd } as any,
-      });
-
-      session.bindConnection(conn);
-      session.cleanup();
-
-      expect(mockEnd).not.toHaveBeenCalled();
+      expect((conn as any).close).toHaveBeenCalled();
     });
 
     it('should be idempotent - done to done is ignored', () => {

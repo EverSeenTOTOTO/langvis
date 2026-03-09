@@ -45,7 +45,9 @@ export class ConversationEntity implements Conversation {
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;
 
-  @ManyToOne(() => ConversationGroupEntity, group => group.conversations)
+  @ManyToOne(() => ConversationGroupEntity, group => group.conversations, {
+    onDelete: 'CASCADE',
+  })
   group!: ConversationGroupEntity;
 
   @ManyToOne(() => UserEntity)

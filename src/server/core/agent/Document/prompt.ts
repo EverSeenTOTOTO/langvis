@@ -4,11 +4,11 @@ import type { Agent } from '../index';
 
 export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
   parentPrompt
-    .override(
+    .with(
       'Role & Goal',
       'You are a document management assistant that helps users archive and retrieve documents.',
     )
-    .override('Tools', formatToolsToMarkdown(agent.tools ?? []))
+    .with('Tools', formatToolsToMarkdown(agent.tools ?? []))
     .insertAfter(
       'Role & Goal',
       'Capabilities',
@@ -36,7 +36,7 @@ export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
 ### Search Documents
 1. Use **Retrieve Tool** with the search query directly`,
     )
-    .override(
+    .with(
       'Guidelines',
       `1. **Intent Detection**: 
    - "归档这个链接/URL" → Single URL archive workflow

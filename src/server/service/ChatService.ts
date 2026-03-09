@@ -1,6 +1,5 @@
 import { InjectTokens } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
-import type { Message } from '@/shared/types/entities';
 import type { Request } from 'express';
 import { globby } from 'globby';
 import type { RedisClientType } from 'redis';
@@ -13,7 +12,6 @@ import { service } from '../decorator/service';
 import { isProd } from '../utils';
 import Logger from '../utils/logger';
 import { AuthService } from './AuthService';
-import { ConversationService } from './ConversationService';
 
 @service()
 export class ChatService {
@@ -23,9 +21,6 @@ export class ChatService {
   constructor(
     @inject(AuthService)
     private authService: AuthService,
-
-    @inject(ConversationService)
-    private conversationService: ConversationService,
 
     @inject(InjectTokens.REDIS)
     private redis: RedisClientType<any>,
@@ -78,7 +73,6 @@ export class ChatService {
     session: ChatSession,
     agent: Agent,
     memory: Memory,
-    assistantMessage: Message,
     config: unknown,
   ): Promise<void> {
     this.logger.info(`Starting agent=${agent.id}`, {
@@ -86,13 +80,7 @@ export class ChatService {
     });
 
     try {
-      await session.run(
-        agent,
-        memory,
-        assistantMessage,
-        config,
-        this.finalizeMessage.bind(this),
-      );
+      await session.run(agent, memory, config);
     } catch (err) {
       const errorMsg = (err as Error)?.message || String(err);
       this.logger.error(`Infrastructure error: ${errorMsg}`, {
@@ -101,14 +89,6 @@ export class ChatService {
       session.send({ type: 'session_error', error: errorMsg });
       session.cleanup();
     }
-  }
-
-  private async finalizeMessage(message: Message): Promise<void> {
-    await this.conversationService.updateMessage(
-      message.id,
-      message.content,
-      message.meta,
-    );
   }
 
   async buildMemory(

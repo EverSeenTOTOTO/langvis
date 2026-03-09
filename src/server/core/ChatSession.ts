@@ -1,7 +1,7 @@
-import { ToolIds } from '@/shared/constants';
-import { AgentEvent } from '@/shared/types';
 import type { Message } from '@/shared/types/entities';
-import type { SSEConnection } from '../service/SSEService';
+import { AgentEvent } from '@/shared/types';
+import type { PendingMessage } from './PendingMessage';
+import { SSEConnection } from './SSEConnection';
 import logger from '../utils/logger';
 import type { Agent } from './agent';
 import { ExecutionContext } from './ExecutionContext';
@@ -25,9 +25,9 @@ export class ChatSession {
   readonly createdAt = Date.now();
 
   private sseConnection: SSEConnection | null = null;
+  private pendingMessage: PendingMessage | null = null;
   private idleTimeout!: ReturnType<typeof setTimeout>;
 
-  private _message: Message | null = null;
   ctx: ExecutionContext | null = null;
   phase: SessionPhase = 'waiting';
 
@@ -47,10 +47,10 @@ export class ChatSession {
   }
 
   get message(): Message {
-    if (!this._message) {
+    if (!this.pendingMessage) {
       throw new Error('Message not initialized');
     }
-    return this._message;
+    return this.pendingMessage.toMessage();
   }
 
   private transition(to: SessionPhase): boolean {
@@ -64,15 +64,9 @@ export class ChatSession {
 
     if (to === 'done') {
       clearTimeout(this.idleTimeout);
-      if (this.sseConnection) {
-        if (this.sseConnection.heartbeat) {
-          clearInterval(this.sseConnection.heartbeat);
-        }
-        if (!this.sseConnection.response.writableEnded) {
-          this.sseConnection.response.end();
-        }
-        this.sseConnection = null;
-      }
+      this.sseConnection?.close();
+      this.sseConnection = null;
+      this.pendingMessage = null;
       this.options.onDispose(this.conversationId);
     }
 
@@ -83,17 +77,18 @@ export class ChatSession {
     this.sseConnection = connection;
   }
 
-  async run(
-    agent: Agent,
-    memory: Memory,
-    assistantMessage: Message,
-    config: unknown,
-    finalizeMessage: (message: Message) => Promise<void>,
-  ): Promise<void> {
-    this._message = assistantMessage;
+  bindPendingMessage(pendingMessage: PendingMessage): void {
+    this.pendingMessage = pendingMessage;
+  }
 
+  async run(agent: Agent, memory: Memory, config: unknown): Promise<void> {
+    if (!this.pendingMessage) {
+      throw new Error('PendingMessage not bound');
+    }
+
+    const message = this.pendingMessage.toMessage();
     const controller = new AbortController();
-    const ctx = new ExecutionContext(assistantMessage.id, controller);
+    const ctx = new ExecutionContext(message.id, controller);
     this.ctx = ctx;
 
     this.transition('running');
@@ -112,7 +107,7 @@ export class ChatSession {
           );
         }
 
-        this.handleEvent(event);
+        this.pendingMessage.handleEvent(event);
 
         if (!this.send(event)) {
           logger.warn(`SSE not writable for ${this.conversationId}, aborting`);
@@ -125,37 +120,8 @@ export class ChatSession {
     } catch (err) {
       this.handleAgentError(err, ctx);
     } finally {
-      await this.finalizeRun(ctx, finalizeMessage, startTime, firstTokenTime);
+      await this.finalizeRun(ctx, startTime, firstTokenTime);
     }
-  }
-
-  private handleEvent(event: AgentEvent): void {
-    // 1. Accumulate stream content to message
-    if (event.type === 'stream') {
-      this._message!.content += event.content;
-    }
-
-    // 2. Persist non-stream and non-llm events to message.meta.events
-    if (
-      event.type !== 'stream' &&
-      (event as Extract<AgentEvent, { type: 'tool_call' }>).toolName !==
-        ToolIds.LLM_CALL
-    ) {
-      if (!this._message!.meta) {
-        this._message!.meta = {};
-      }
-      if (!this._message!.meta.events) {
-        this._message!.meta.events = [];
-      }
-      this._message!.meta.events.push(event);
-    }
-
-    // 3. Special handling for error event - set content
-    if (event.type === 'error') {
-      this._message!.content = event.error;
-    }
-
-    // SSE sending is done separately in the run loop
   }
 
   private handleAgentError(err: unknown, ctx: ExecutionContext): void {
@@ -165,13 +131,12 @@ export class ChatSession {
     const errorEvent = ctx.agentErrorEvent(
       (err as Error)?.message || String(err),
     );
-    this.handleEvent(errorEvent);
+    this.pendingMessage!.handleEvent(errorEvent);
     this.send(errorEvent);
   }
 
   private async finalizeRun(
     ctx: ExecutionContext,
-    finalizeMessage: (message: Message) => Promise<void>,
     startTime: number,
     firstTokenTime: number | undefined,
   ): Promise<void> {
@@ -182,20 +147,20 @@ export class ChatSession {
       const cancelledEvent = ctx.agentCancelledEvent(
         (ctx.signal.reason as Error)?.message ?? 'Unknown',
       );
-      this.handleEvent(cancelledEvent);
+      this.pendingMessage!.handleEvent(cancelledEvent);
       this.send(cancelledEvent);
     }
 
-    await finalizeMessage(this._message!);
+    await this.pendingMessage!.finalize();
 
     const totalTime = Date.now() - startTime;
     const ttft = firstTokenTime ? firstTokenTime - startTime : null;
     const avgTokenTime =
-      this._message!.content.length > 0
-        ? totalTime / this._message!.content.length
+      this.pendingMessage!.contentLength > 0
+        ? totalTime / this.pendingMessage!.contentLength
         : 0;
     logger.info(
-      `Agent completed: totalTime=${totalTime}ms tokens=${this._message!.content.length} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${this.conversationId}`,
+      `Agent completed: totalTime=${totalTime}ms tokens=${this.pendingMessage!.contentLength} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${this.conversationId}`,
     );
 
     this.cleanup();
@@ -216,17 +181,8 @@ export class ChatSession {
   }
 
   send(event: AgentEvent | { type: string; [key: string]: unknown }): boolean {
-    if (!this.sseConnection?.response?.writable) return false;
-
-    const payload = `data: ${JSON.stringify(event)}\n\n`;
-    const flushed = this.sseConnection.response.write(payload);
-    this.sseConnection.response.flush();
-
-    if (!flushed) {
-      logger.warn(`Backpressure on SSE write for ${this.conversationId}`);
-    }
-
-    return !!flushed;
+    if (!this.sseConnection?.isWritable) return false;
+    return this.sseConnection.send(event as AgentEvent);
   }
 
   cleanup(): void {

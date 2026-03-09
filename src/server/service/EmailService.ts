@@ -132,6 +132,7 @@ export class EmailService {
         subject: data.subject,
         sentAt: data.sentAt,
         receivedAt: data.receivedAt,
+        createdAt: new Date(),
         content: data.content,
         attachmentCount: data.attachmentCount ?? 0,
         attachmentNames:
@@ -209,7 +210,7 @@ export class EmailService {
       fromName: parsed.from?.value?.[0]?.name,
       to: toAddress || '',
       subject: parsed.subject || '',
-      content: this.sanitizeContent(parsed.html, parsed.text),
+      content: parsed.html ? sanitizeHtml(parsed.html) : parsed.text || '',
       sentAt: parsed.date || new Date(),
       receivedAt: new Date(),
       attachmentCount: parsed.attachments?.length || 0,
@@ -253,15 +254,5 @@ export class EmailService {
   private parseAddress(header: string): string {
     const match = header.match(/<([^>]+)>/) || header.match(/(\S+@\S+)/);
     return match ? match[1] : header;
-  }
-
-  private sanitizeContent(
-    html: string | false | undefined,
-    text: string | false | undefined,
-  ): string {
-    if (html) {
-      return sanitizeHtml(html);
-    }
-    return text || '';
   }
 }

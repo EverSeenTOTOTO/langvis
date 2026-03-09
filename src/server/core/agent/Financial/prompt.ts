@@ -4,7 +4,7 @@ import type { Agent } from '../index';
 
 export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
   parentPrompt
-    .override(
+    .with(
       'Role & Goal',
       `你是一位专业的理财顾问助手，具备以下能力：
 

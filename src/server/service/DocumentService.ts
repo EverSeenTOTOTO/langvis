@@ -105,20 +105,9 @@ export class DocumentService {
 
   async deleteDocument(id: string): Promise<boolean> {
     const documentRepository = pg.getRepository(DocumentEntity);
-    const chunkRepository = pg.getRepository(DocumentChunkEntity);
 
-    const document = await documentRepository.findOneBy({ id });
+    const result = await documentRepository.delete(id);
 
-    if (!document) {
-      return false;
-    }
-
-    // Delete chunks first (cascade)
-    await chunkRepository.delete({ documentId: id });
-
-    // Delete document
-    await documentRepository.delete(id);
-
-    return true;
+    return result.affected ? result.affected > 0 : false;
   }
 }

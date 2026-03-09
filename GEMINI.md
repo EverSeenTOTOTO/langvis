@@ -27,6 +27,7 @@
   - `convgrp_` - conversation group
   - `req_` - request
   - `tc_` - tool call
+- **Prefer application-layer timestamps over database-generated ones** (e.g., avoid `@CreateDateColumn`). Use `new Date()` in service layer to ensure consistent timezone handling across all timestamp fields.
 
 ## Testing & Validation
 

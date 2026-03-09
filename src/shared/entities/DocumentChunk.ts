@@ -30,6 +30,8 @@ export class DocumentChunkEntity {
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;
 
-  @ManyToOne(() => DocumentEntity, document => document.chunks)
+  @ManyToOne(() => DocumentEntity, document => document.chunks, {
+    onDelete: 'CASCADE',
+  })
   document!: DocumentEntity;
 }

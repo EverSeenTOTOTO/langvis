@@ -14,14 +14,6 @@ vi.mock('tsyringe', () => ({
   injectable: () => vi.fn(),
 }));
 
-class MockSSEService {
-  initSSEConnection = vi.fn().mockReturnValue({
-    conversationId: 'conv-123',
-    response: {},
-    heartbeat: null,
-  });
-}
-
 class MockConversationService {
   getConversationById = vi.fn();
   batchAddMessages = vi.fn();
@@ -34,7 +26,6 @@ class MockChatService {
   buildMemory = vi.fn();
 }
 
-let mockSSEService: MockSSEService;
 let mockConversationService: MockConversationService;
 let mockChatService: MockChatService;
 
@@ -46,12 +37,10 @@ describe('ChatController', () => {
   let mockStatus: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mockSSEService = new MockSSEService();
     mockConversationService = new MockConversationService();
     mockChatService = new MockChatService();
 
     chatController = new ChatController(
-      mockSSEService as any,
       mockConversationService as any,
       mockChatService as any,
     );
@@ -62,6 +51,12 @@ describe('ChatController', () => {
     mockResponse = {
       status: mockStatus,
       json: mockJson,
+      writeHead: vi.fn().mockReturnThis(),
+      write: vi.fn().mockReturnValue(true),
+      flush: vi.fn(),
+      writableEnded: false,
+      end: vi.fn(),
+      writable: true,
     };
 
     mockRequest = {
@@ -109,10 +104,12 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockSSEService.initSSEConnection).toHaveBeenCalledWith(
-        'conv-123',
-        mockResponse,
-      );
+      // SSEConnection constructor calls writeHead
+      expect(mockResponse.writeHead).toHaveBeenCalledWith(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      });
       expect(mockSession.bindConnection).toHaveBeenCalled();
       expect(mockRequest.on).toHaveBeenCalledWith(
         'close',
@@ -217,7 +214,10 @@ describe('ChatController', () => {
       mockRequest.params = { conversationId: 'conv-123' };
       mockRequest.body = { role: Role.USER, content: 'Hello' };
 
-      const mockSession = { phase: 'waiting' };
+      const mockSession = {
+        phase: 'waiting',
+        bindPendingMessage: vi.fn(),
+      };
       mockChatService.getSession.mockReturnValue(mockSession);
 
       const mockConversation = {

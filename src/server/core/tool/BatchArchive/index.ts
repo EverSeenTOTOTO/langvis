@@ -12,7 +12,6 @@ import type {
   ArchiveResult,
   BatchArchiveInput,
   BatchArchiveOutput,
-  BatchArchiveProgress,
 } from './config';
 import { config } from './config';
 
@@ -46,7 +45,7 @@ export default class BatchArchiveTool extends Tool<
       ctx.signal.throwIfAborted();
 
       // Yield progress event - processing
-      yield this.createProgressEvent(ctx, {
+      yield ctx.agentToolProgressEvent(this.id, {
         current,
         total: urls.length,
         url,
@@ -77,7 +76,7 @@ export default class BatchArchiveTool extends Tool<
         });
 
         // Yield progress event - success
-        yield this.createProgressEvent(ctx, {
+        yield ctx.agentToolProgressEvent(this.id, {
           current,
           total: urls.length,
           url,
@@ -96,7 +95,7 @@ export default class BatchArchiveTool extends Tool<
         });
 
         // Yield progress event - failed
-        yield this.createProgressEvent(ctx, {
+        yield ctx.agentToolProgressEvent(this.id, {
           current,
           total: urls.length,
           url,
@@ -119,13 +118,6 @@ export default class BatchArchiveTool extends Tool<
       failed,
       results,
     };
-  }
-
-  private createProgressEvent(
-    ctx: ExecutionContext,
-    progress: BatchArchiveProgress,
-  ): AgentEvent {
-    return ctx.agentToolProgressEvent(this.id, progress);
   }
 }
 

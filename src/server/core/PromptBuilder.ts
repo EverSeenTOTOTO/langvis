@@ -31,11 +31,10 @@ export class Prompt {
   }
 
   with(name: string, content: string): Prompt {
+    if (this.has(name)) {
+      return this.map(s => (s.name === name ? { ...s, content } : s));
+    }
     return this.concat(Prompt.of([{ name, content }]));
-  }
-
-  override(name: string, content: string): Prompt {
-    return this.map(s => (s.name === name ? { ...s, content } : s));
   }
 
   without(name: string): Prompt {
