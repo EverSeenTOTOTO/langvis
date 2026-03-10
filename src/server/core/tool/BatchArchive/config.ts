@@ -2,6 +2,8 @@ import { ToolConfig } from '@/shared/types';
 
 export interface BatchArchiveInput {
   urls: string[];
+  /** Timeout in milliseconds for each URL (default: 120000 = 2 minutes) */
+  timeout?: number;
 }
 
 export interface ArchiveResult {
@@ -24,6 +26,8 @@ export interface BatchArchiveProgress {
   total: number;
   url: string;
   status: 'processing' | 'success' | 'failed';
+  documentId?: string;
+  title?: string;
   error?: string;
 }
 
@@ -38,6 +42,12 @@ export const config: ToolConfig<BatchArchiveInput, BatchArchiveOutput> = {
         type: 'array',
         items: { type: 'string' },
         description: 'List of URLs to archive',
+      },
+      timeout: {
+        type: 'number',
+        nullable: true,
+        description:
+          'Timeout in milliseconds for each URL (default: 120000 = 2 minutes)',
       },
     },
     required: ['urls'],

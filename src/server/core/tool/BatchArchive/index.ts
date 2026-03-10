@@ -15,6 +15,8 @@ import type {
 } from './config';
 import { config } from './config';
 
+const DEFAULT_TIMEOUT_MS = 120_000; // 2 minutes per URL
+
 @tool(ToolIds.BATCH_ARCHIVE)
 export default class BatchArchiveTool extends Tool<
   BatchArchiveInput,
@@ -30,7 +32,7 @@ export default class BatchArchiveTool extends Tool<
   ): AsyncGenerator<AgentEvent, BatchArchiveOutput, void> {
     ctx.signal.throwIfAborted();
 
-    const { urls } = data;
+    const { urls, timeout = DEFAULT_TIMEOUT_MS } = data;
     const results: ArchiveResult[] = [];
 
     this.logger.info(`Starting batch archive for ${urls.length} URLs`);
@@ -57,13 +59,14 @@ export default class BatchArchiveTool extends Tool<
         this.logger.info(`[${current}/${urls.length}] Fetching: ${url}`);
         const fetchResult = yield* webFetchTool.call({ url }, ctx);
 
-        // Step 2: Archive the content
+        // Step 2: Archive the content (with timeout)
         this.logger.info(`[${current}/${urls.length}] Archiving: ${url}`);
         const archiveResult = yield* analysisTool.call(
           {
             content: fetchResult.textContent,
             sourceUrl: url,
             sourceType: 'web',
+            timeout,
           },
           ctx,
         );
@@ -81,11 +84,14 @@ export default class BatchArchiveTool extends Tool<
           total: urls.length,
           url,
           status: 'success',
+          documentId: archiveResult.documentId,
+          title: archiveResult.title,
         });
       } catch (error) {
         const errorMsg = (error as Error).message;
+        const isTimeout = errorMsg.includes('timed out');
         this.logger.error(
-          `[${current}/${urls.length}] Failed: ${url} - ${errorMsg}`,
+          `[${current}/${urls.length}] ${isTimeout ? 'Timeout' : 'Failed'}: ${url} - ${errorMsg}`,
         );
 
         results.push({

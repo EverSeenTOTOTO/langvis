@@ -196,9 +196,34 @@ describe('EmbedTool', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          signal: ctx.signal,
+          signal: expect.any(AbortSignal),
         }),
       );
+    });
+
+    it('should timeout when fetch takes too long', async () => {
+      const mockFetch = vi.fn().mockImplementation(
+        (_url: string, options: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            const signal = options.signal;
+            // When aborted, reject with abort error
+            signal?.addEventListener('abort', () => {
+              reject(new Error('Embedding API timed out after 0.05s'));
+            });
+            // Otherwise hang forever
+          }),
+      );
+      global.fetch = mockFetch;
+
+      process.env.OPENAI_API_BASE = 'https://api.test.com';
+      process.env.OPENAI_API_KEY = 'test-key';
+
+      const chunks = [{ content: 'Test', index: 0 }];
+      const ctx = createMockContext();
+
+      await expect(
+        collectEvents(embedTool.call({ chunks, timeout: 50 }, ctx)),
+      ).rejects.toThrow('timed out');
     });
   });
 });

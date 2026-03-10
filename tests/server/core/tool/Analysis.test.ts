@@ -326,5 +326,35 @@ describe('AnalysisTool', () => {
       const chunkProgress = progress.find(p => p.action === 'chunk');
       expect(chunkProgress?.message).toContain('KB');
     });
+
+    it('should throw timeout error when timeout is exceeded', async () => {
+      // Mock MetaExtractTool to be slow
+      mockMetaExtractTool.call = vi.fn().mockImplementation(async function* () {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        yield { type: 'progress', data: {} };
+        return {
+          title: 'Slow',
+          summary: '',
+          keywords: [],
+          category: 'other',
+          metadata: {},
+        };
+      });
+
+      const ctx = createMockContext();
+
+      await expect(
+        collectEvents(
+          analysisTool.call(
+            {
+              content: 'Test',
+              sourceType: 'text',
+              timeout: 50, // 50ms timeout, will trigger before mock resolves
+            },
+            ctx,
+          ),
+        ),
+      ).rejects.toThrow('timed out');
+    });
   });
 });

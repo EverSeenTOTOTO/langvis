@@ -7,6 +7,8 @@ export interface EmbedInput {
     metadata?: Record<string, unknown>;
   }>;
   model?: string;
+  /** Timeout in milliseconds (default: 60000 = 1 minute) */
+  timeout?: number;
 }
 
 export interface EmbedOutput {
@@ -45,6 +47,11 @@ export const config: ToolConfig<EmbedInput, EmbedOutput> = {
         nullable: true,
         description:
           'Embedding model to use. Defaults to text-embedding-3-small',
+      },
+      timeout: {
+        type: 'number',
+        nullable: true,
+        description: 'Timeout in milliseconds (default: 60000 = 1 minute)',
       },
     },
     required: ['chunks'],

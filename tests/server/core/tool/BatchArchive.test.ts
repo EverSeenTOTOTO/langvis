@@ -251,4 +251,66 @@ describe('BatchArchiveTool', () => {
       expect(result.results).toHaveLength(1);
     });
   });
+
+  describe('timeout handling', () => {
+    it('should pass timeout to AnalysisTool', async () => {
+      mockWebFetchCall.mockImplementation(function* () {
+        return { title: 'Test', textContent: 'Content' };
+      });
+
+      mockAnalysisCall.mockImplementation(function* () {
+        return {
+          documentId: 'doc-1',
+          title: 'Test',
+          category: 'tech_blog',
+          chunkCount: 5,
+        };
+      });
+
+      const ctx = createMockContext();
+      const result = await getResult(
+        tool.call(
+          {
+            urls: ['https://example.com/test'],
+            timeout: 60000,
+          },
+          ctx,
+        ),
+      );
+
+      expect(result.total).toBe(1);
+      expect(result.succeeded).toBe(1);
+      // Verify timeout was passed to AnalysisTool
+      expect(mockAnalysisCall).toHaveBeenCalled();
+      const callArgs = mockAnalysisCall.mock.calls[0];
+      expect(callArgs[0]).toMatchObject({ timeout: 60000 });
+    });
+
+    it('should use default timeout when not specified', async () => {
+      mockWebFetchCall.mockImplementation(function* () {
+        return { title: 'Test', textContent: 'Content' };
+      });
+
+      mockAnalysisCall.mockImplementation(function* () {
+        return {
+          documentId: 'doc-1',
+          title: 'Test',
+          category: 'tech_blog',
+          chunkCount: 5,
+        };
+      });
+
+      const ctx = createMockContext();
+      const result = await getResult(
+        tool.call({ urls: ['https://example.com/test'] }, ctx),
+      );
+
+      expect(result.total).toBe(1);
+      expect(result.succeeded).toBe(1);
+      // Default timeout should be passed
+      expect(mockAnalysisCall).toHaveBeenCalled();
+      const callArgs = mockAnalysisCall.mock.calls[0];
+      expect(callArgs[0]).toMatchObject({ timeout: 120000 });
+    });
+  });
 });

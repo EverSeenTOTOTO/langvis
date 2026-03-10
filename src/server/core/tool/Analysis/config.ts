@@ -6,6 +6,8 @@ export interface AnalysisInput {
   sourceUrl?: string;
   sourceType: DocumentSourceType;
   metadata?: Record<string, unknown>;
+  /** Timeout in milliseconds (default: 120000 = 2 minutes) */
+  timeout?: number;
 }
 
 export interface AnalysisOutput {
@@ -39,6 +41,11 @@ export const config: ToolConfig<AnalysisInput, AnalysisOutput> = {
         type: 'object',
         nullable: true,
         description: 'Additional metadata to include',
+      },
+      timeout: {
+        type: 'number',
+        nullable: true,
+        description: 'Timeout in milliseconds (default: 120000 = 2 minutes)',
       },
     },
     required: ['content', 'sourceType'],
