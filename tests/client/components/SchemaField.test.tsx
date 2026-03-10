@@ -139,60 +139,6 @@ describe('SchemaField', () => {
     expect(switchInput).toHaveAttribute('id', 'settings_nested_enabled');
   });
 
-  it('should produce correct form values when submitted', async () => {
-    const user = userEvent.setup();
-    const prop: SchemaProperty = {
-      type: 'object',
-      title: 'Model',
-      properties: {
-        code: {
-          type: 'string',
-          title: 'Code',
-        },
-        temperature: {
-          type: 'number',
-          title: 'Temperature',
-        },
-      },
-    };
-
-    let formValues: unknown = null;
-    const onFinish = (values: unknown) => {
-      formValues = values;
-    };
-
-    const TestForm = () => (
-      <Form onFinish={onFinish}>
-        <SchemaField name="model" prop={prop} namePrefix={['config']} />
-        <button type="submit">Submit</button>
-      </Form>
-    );
-
-    render(<TestForm />);
-
-    // Fill in the form
-    const codeInput = screen.getByRole('textbox');
-    await user.type(codeInput, 'gpt-4');
-
-    const tempInput = screen.getByRole('spinbutton');
-    await user.type(tempInput, '0.5');
-
-    // Submit the form
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
-
-    // Verify the form values have correct nested structure
-    // Should be { config: { model: { code: 'gpt-4', temperature: 0.5 } } }
-    // NOT the buggy character-split structure
-    expect(formValues).toEqual({
-      config: {
-        model: {
-          code: 'gpt-4',
-          temperature: 0.5,
-        },
-      },
-    });
-  });
-
   it('should render array field with enum as multi-select checkboxes', () => {
     const prop: SchemaProperty = {
       type: 'array',

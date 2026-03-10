@@ -29,7 +29,11 @@ const logError = (msg: any) => {
 
 const isFullPath = (path: string) => /^https?:\/\//.test(path);
 
-const compilePath = <P extends Record<string, any>>(url: string, req: P) => {
+const compilePath = <P extends Record<string, any>>(
+  url: string,
+  req: P,
+  options?: RequestInit,
+) => {
   const existingQuery = url.match(/\?.*/);
   const basePath = url.replace(/\?.*/, '');
 
@@ -54,14 +58,21 @@ const compilePath = <P extends Record<string, any>>(url: string, req: P) => {
     usedKeys.add(match[1]);
   }
 
-  // Append unused params as query string
-  const extraParams = Object.entries(req ?? {})
-    .filter(([key]) => !usedKeys.has(key) && req?.[key] !== undefined)
-    .map(
-      ([key, value]) =>
-        `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`,
-    )
-    .join('&');
+  // POST/PUT/PATCH should not append unused params to query string
+  // since they are already in the request body
+  const method = (options?.method || 'get').toLowerCase();
+  const shouldSkipQuery = ['post', 'put', 'patch'].includes(method);
+
+  // Append unused params as query string (only for GET/DELETE etc.)
+  const extraParams = shouldSkipQuery
+    ? ''
+    : Object.entries(req ?? {})
+        .filter(([key]) => !usedKeys.has(key) && req?.[key] !== undefined)
+        .map(
+          ([key, value]) =>
+            `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`,
+        )
+        .join('&');
 
   // Merge existing query with extra params
   const queryString = existingQuery
@@ -91,7 +102,7 @@ const getApiOptions = <P extends Record<string, any>>(
   const resolvedOptions = typeof config === 'string' ? options : config.options;
 
   return {
-    path: compilePath(path, req),
+    path: compilePath(path, req, resolvedOptions),
     options: resolvedOptions,
   };
 };

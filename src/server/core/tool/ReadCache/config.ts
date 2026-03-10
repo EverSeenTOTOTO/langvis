@@ -12,6 +12,7 @@ export const config: ToolConfig<
   name: 'read_cache',
   description:
     'Read cached content. Use when a tool returns an object with $cached field.',
+  skipCompression: true,
   inputSchema: {
     type: 'object',
     properties: {

@@ -13,6 +13,7 @@ export const config: ToolConfig<PositionAdjustInput, PositionAdjustOutput> = {
   name: 'Position Adjust Tool',
   description:
     'Collect user position data via form and generate position adjustment advice.',
+  skipCompression: true,
   inputSchema: {
     type: 'object',
     properties: {
@@ -40,6 +41,39 @@ export const formSchema = {
       type: 'string',
       title: '总资产',
       description: '例如: 50万, 100w',
+    },
+    investmentGoal: {
+      type: 'string',
+      title: '投资目标',
+      enum: [
+        { label: '短期收益（1年内）', value: 'short_term' },
+        { label: '中期增值（1-3年）', value: 'mid_term' },
+        { label: '长期增值（3年以上）', value: 'long_term' },
+        { label: '资产保值', value: 'preserve' },
+      ],
+      default: 'mid_term',
+    },
+    riskTolerance: {
+      type: 'string',
+      title: '风险偏好',
+      enum: [
+        { label: '保守型（不愿亏损）', value: 'conservative' },
+        { label: '稳健型（可接受小幅波动）', value: 'moderate' },
+        { label: '平衡型（可接受中等波动）', value: 'balanced' },
+        { label: '激进型（追求高收益）', value: 'aggressive' },
+      ],
+      default: 'moderate',
+    },
+    investmentExperience: {
+      type: 'string',
+      title: '投资经验',
+      enum: [
+        { label: '新手（1年以下）', value: 'beginner' },
+        { label: '有一定经验（1-3年）', value: 'intermediate' },
+        { label: '经验丰富（3年以上）', value: 'experienced' },
+        { label: '专业投资者', value: 'professional' },
+      ],
+      default: 'intermediate',
     },
     currentPosition: {
       type: 'object',
@@ -119,9 +153,25 @@ export const formSchema = {
       title: '止损设置',
       description: '例如: 招商银行 30元, 茅台 1500',
     },
+    takeProfit: {
+      type: 'string',
+      title: '止盈目标',
+      description: '例如: 整体收益20%, 个股涨幅50%',
+    },
+    liquidityNeeds: {
+      type: 'string',
+      title: '资金流动性需求',
+      enum: [
+        { label: '随时可能用钱', value: 'high' },
+        { label: '半年内可能用钱', value: 'medium' },
+        { label: '长期不用', value: 'low' },
+      ],
+      default: 'low',
+    },
     notes: {
       type: 'string',
       title: '备注',
+      description: '其他需要说明的情况',
     },
   },
 };

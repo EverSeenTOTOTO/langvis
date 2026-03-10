@@ -37,6 +37,20 @@ beforeAll(() => {
       return;
     }
 
+    // Handle PUT/PATCH requests
+    if (['PUT', 'PATCH'].includes(req.method!)) {
+      let data = '';
+
+      req.on('data', chunk => {
+        data += chunk;
+      });
+      req.on('end', () => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(data);
+      });
+      return;
+    }
+
     if (/apiheader/.test(req.url!)) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ data: req.headers['x-test'] }));
@@ -313,6 +327,39 @@ it('api with extra params as query string', async () => {
   expect(result3.data).toContain('page=1');
   expect(result3.data).not.toContain('category');
   expect(result3.data).not.toContain('pageSize');
+});
+
+it('api with POST should not append query string', async () => {
+  class Demo {
+    @api(`http://localhost:${port}/apipost`, { method: 'post' })
+    postWithExtraParams(_: any, req?: ApiRequest) {
+      return req!.send();
+    }
+
+    @api(`http://localhost:${port}/apipost`, { method: 'put' })
+    putWithExtraParams(_: any, req?: ApiRequest) {
+      return req!.send();
+    }
+  }
+
+  const demo = factory(new Demo());
+
+  // POST with extra params - should be in body, not query string
+  const result1 = await demo.postWithExtraParams({
+    name: 'test',
+    value: 123,
+  });
+
+  // Body should contain the params
+  expect(result1).toEqual({ name: 'test', value: 123 });
+
+  // PUT - params should be in body, not query string
+  const result2 = await demo.putWithExtraParams({
+    name: 'updated',
+    count: 5,
+  });
+
+  expect(result2).toEqual({ name: 'updated', count: 5 });
 });
 
 it('api with null/undefined params and existingQuery merging', async () => {

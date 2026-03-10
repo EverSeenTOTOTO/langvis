@@ -216,7 +216,6 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
   }
 
   // String type (default)
-  const isLongText = (prop.maxLength ?? 0) > 100;
   return (
     <Form.Item
       key={fieldKey}
@@ -227,11 +226,11 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
         ...(prop.maxLength ? [{ max: prop.maxLength }] : []),
       ]}
     >
-      {isLongText ? (
-        <Input.TextArea rows={4} placeholder={prop.description} />
-      ) : (
-        <Input placeholder={prop.description} />
-      )}
+      <Input.TextArea
+        rows={1}
+        autoSize={{ minRows: 1, maxRows: 7 }}
+        placeholder={prop.description}
+      />
     </Form.Item>
   );
 };

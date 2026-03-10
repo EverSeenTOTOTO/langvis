@@ -1,6 +1,6 @@
 # Chat 架构文档
 
-基于 SSE (Server-Sent Events) 的流式对话系统架构。
+基于 SSE (Server-Sent Events) 的流式对话系统架构，支持断线重连与 Agent 执行解耦。
 
 ## 1. 整体架构
 
@@ -638,3 +638,486 @@ message 是会话级概念，与 SSE 连接、phase 状态同属一层。Executi
 
 - 前端：`isLoading=false` 时 `cancelChat()` 直接返回
 - 后端：`phase≠running` 时返回 404，前端静默忽略
+
+---
+
+## 9. 断线重连
+
+### 9.1 设计目标
+
+- **Agent 与 SSE 解耦**：Agent 执行不依赖 SSE 连接，断开不中断
+- **持久化会话状态**：Redis 存储会话状态，支持跨实例/重启恢复
+- **无缝重连**：用户断线后可重连到正在运行的会话
+- **会话切换支持**：切换会话时断开 SSE，Agent 继续运行，切回时检测重连
+
+### 9.2 会话状态持久化
+
+**Redis Key:** `chat_session:{conversationId}`
+
+```typescript
+interface ChatSessionState {
+  conversationId: string;
+  phase: 'waiting' | 'running' | 'done';
+  startedAt: number;
+  agentId: string | null;
+}
+```
+
+**Phase 含义：**
+
+| Phase     | 含义           | Agent 状态 | SSE 状态 |
+| --------- | -------------- | ---------- | -------- |
+| `waiting` | 已建连，未启动 | 未启动     | 可能断开 |
+| `running` | 执行中         | 正在运行   | 可能断开 |
+| `done`    | 已结束         | 已完成     | 已关闭   |
+
+**生命周期：**
+
+| 时机       | 操作                                              |
+| ---------- | ------------------------------------------------- |
+| 创建会话   | `SET chat_session:{id} { phase: 'waiting', ... }` |
+| 启动 Agent | `SET phase: 'running'`                            |
+| 完成/取消  | `SET phase: 'done'`                               |
+| 会话清理   | `DEL chat_session:{id}`                           |
+
+### 9.3 后端 API
+
+#### GET /api/chat/session/:conversationId
+
+查询会话状态，用于前端判断是否需要重连。
+
+**响应：**
+
+```typescript
+// 会话存在
+{
+  phase: 'waiting' | 'running' | 'done';
+}
+
+// 会话不存在（已结束或从未创建）
+null;
+```
+
+#### GET /api/chat/sse/:conversationId
+
+建立 SSE 连接。
+
+**响应：**
+
+| Redis 状态            | HTTP 状态 | 响应                             |
+| --------------------- | --------- | -------------------------------- |
+| 不存在                | 404       | `{ error: 'Session not found' }` |
+| `done`                | 200       | `{ type: 'session_ended' }`      |
+| `waiting` / `running` | 200       | 建立 SSE，发送 `connected` 事件  |
+
+### 9.4 后端改造点
+
+**ChatSession.send()：**
+
+```typescript
+// 改造前：SSE 不可写时中断 Agent
+if (!this.send(event)) {
+  ctx.abort('SSE connection lost');
+  break;
+}
+
+// 改造后：继续执行，事件已持久化到 PendingMessage
+if (!this.send(event)) {
+  logger.warn(`SSE not connected for ${this.conversationId}, event persisted`);
+  // 继续执行
+}
+```
+
+**ChatSession.handleDisconnect()：**
+
+```typescript
+// 改造前：断开时取消 Agent
+handleDisconnect(): void {
+  if (this.phase === 'running') {
+    this.cancel('Client disconnected');
+  } else {
+    this.cleanup();
+  }
+}
+
+// 改造后：断开时持久化消息，Agent 继续
+async handleDisconnect(): Promise<void> {
+  logger.info(`SSE disconnected for ${this.conversationId}`);
+
+  // 持久化当前消息状态（支持 human-in-the-loop 等场景）
+  if (this.pendingMessage && this.phase === 'running') {
+    await this.pendingMessage.persist();
+  }
+
+  // Agent 继续运行
+}
+```
+
+**PendingMessage 新增 persist() 方法：**
+
+```typescript
+// src/server/core/PendingMessage.ts
+
+class PendingMessage {
+  private message: Message;
+
+  // 断线时持久化当前状态
+  async persist(): Promise<void> {
+    await this.updateCallback(this.message);
+  }
+
+  // 最终持久化（Agent 完成时）
+  async finalize(): Promise<void> {
+    await this.updateCallback(this.message);
+  }
+}
+```
+
+**消息持久化时机：**
+
+| 时机       | 方法         | 说明                           |
+| ---------- | ------------ | ------------------------------ |
+| SSE 断开   | `persist()`  | 持久化当前状态，Agent 继续运行 |
+| Agent 完成 | `finalize()` | 最终持久化，清理资源           |
+
+**ChatService.acquireSession()：**
+
+```typescript
+// 改造前：已有 running 会话时拒绝
+if (existing?.phase === 'running') return null;
+
+// 改造后：已有会话直接返回（支持重连）
+if (existing) return existing;
+```
+
+### 9.5 重连场景
+
+#### 场景一：页面刷新
+
+```
+页面刷新
+    │
+    ├─ GET /api/conversation/:id/messages  →  获取最新消息
+    │
+    └─ GET /api/chat/session/:id
+            │
+            ├─ null / done → 无需重连，渲染消息最终状态
+            │
+            └─ waiting / running
+                    │
+                    └─ 建立 SSE 连接
+                            │
+                            ├─ Agent 正在运行 → 继续接收事件
+                            │
+                            └─ Agent 等待输入 → 渲染表单（human_in_the_loop）
+```
+
+#### 场景二：切换会话
+
+```
+用户从会话 A 切换到会话 B
+    │
+    ├─ 断开会话 A 的 SSE 连接
+    │     └─ 后端 Agent 继续运行，事件持久化到 DB
+    │
+    ├─ GET /api/conversation/:B/messages   →  获取会话 B 消息
+    │
+    └─ GET /api/chat/session/:B
+            │
+            ├─ null / done → 无需重连
+            │
+            └─ waiting / running
+                    │
+                    └─ 建立 SSE 连接
+```
+
+#### 场景三：切换浏览器标签页
+
+```
+用户切换到其他标签页
+    │
+    ├─ visibilitychange 事件触发
+    │
+    └─ 页面 hidden → 断开当前会话 SSE
+           │
+           └─ 后端 Agent 继续运行
+
+用户切回标签页
+    │
+    ├─ visibilitychange 事件触发
+    │
+    └─ 页面 visible → 触发重连检测
+           │
+           └─ 同页面刷新流程
+```
+
+### 9.6 前端重连逻辑
+
+```typescript
+// src/client/store/modules/chat.ts
+
+async activateConversation(conversationId: string): Promise<void> {
+  // 查询会话状态
+  const state = await this.getSessionState(conversationId);
+
+  // null 或 done → 无需重连
+  if (!state || state.phase === 'done') {
+    return;
+  }
+
+  // waiting 或 running → 建立 SSE
+  const session = this.acquireSession(conversationId);
+  await session.connect();
+}
+```
+
+**触发时机：**
+
+```typescript
+// src/client/store/modules/conversation.ts
+
+reaction(
+  () => this.currentConversationId,
+  async (newId, oldId) => {
+    // 断开旧会话的 SSE（不断开正在进行的 Agent）
+    if (oldId) {
+      chatStore.getSession(oldId)?.disconnect();
+    }
+
+    if (!newId) return;
+
+    // 刷新消息
+    await this.getMessagesByConversationId({ id: newId });
+
+    // 检查是否需要重连
+    await chatStore.activateConversation(newId);
+  },
+);
+```
+
+**标签页可见性监听：**
+
+```typescript
+// src/client/store/modules/chat.ts
+
+private handleVisibilityChange = (): void => {
+  const conversationId = this.conversationStore.currentConversationId;
+  if (!conversationId) return;
+
+  if (document.visibilityState === 'hidden') {
+    this.getSession(conversationId)?.disconnect();
+  } else {
+    this.activateConversation(conversationId);
+  }
+}
+
+// 注册监听
+constructor() {
+  document.addEventListener('visibilitychange', this.handleVisibilityChange);
+}
+```
+
+### 9.7 Human-in-the-loop 重连
+
+Human-in-the-loop 不需要特别逻辑，走同样的重连流程：
+
+```
+Agent 调用 human_in_the_loop，等待用户输入
+    │
+    ├─ 事件累积到 PendingMessage（内存）
+    │
+    └─ 用户断开 SSE（切换会话/关闭标签页）
+           │
+           ├─ handleDisconnect() 调用 persist()
+           │     └─ 消息持久化到数据库（含 awaiting_input 状态）
+           │
+           └─ Agent 继续等待输入
+
+用户重连/切回
+    │
+    ├─ GET /api/chat/session/:id → { phase: 'running' }
+    │
+    ├─ 建立 SSE 连接
+    │
+    ├─ 刷新消息列表
+    │     └─ deriveMessageState() 检测 awaiting_input
+    │
+    └─ 渲染 HumanInputForm
+           │
+           └─ 用户提交 → Agent 继续执行
+```
+
+**关键点**：断开 SSE 时调用 `persist()`，确保 `tool_progress(status: 'awaiting_input')` 事件已持久化。
+
+### 9.8 时序图
+
+```
+Frontend                    Backend Redis        Backend Agent
+    │                           │                     │
+    │──切换到会话 A──────────────│                     │
+    │                           │                     │
+    │──GET /api/chat/session/A─►│                     │
+    │◄──{ phase: 'running' }────│                     │
+    │                           │                     │
+    │──GET /api/chat/sse/A─────────────────────────►  │
+    │                           │                     │
+    │◄──── SSE: connected ────────────────────────────│
+    │                           │                     │
+    │◄──── SSE: stream/tool_call ────────────────────│── Agent 继续执行
+    │                           │                     │
+    │──切换到会话 B──────────────│                     │
+    │                           │                     │
+    │──disconnect() 会话 A SSE   │                     │
+    │                           │                     │
+    │──GET /api/chat/session/B─►│                     │
+    │◄──{ phase: 'done' }───────│                     │
+    │                           │                     │
+    │──无需重连                  │                     │
+```
+
+### 9.9 并发连接策略
+
+当用户在多个标签页/设备访问同一会话时：
+
+```
+标签页 A：SSE 连接中，Agent 正在运行
+    │
+    └─ 标签页 B 打开同一会话
+           │
+           └─ GET /api/chat/sse/:id
+                  │
+                  └─ bindConnection() 绑定新 SSE
+                         │
+                         └─ 踢掉标签页 A 的 SSE
+                                │
+                                └─ 发送 session_replaced 事件
+```
+
+**策略：新连接踢掉旧连接**
+
+```typescript
+// ChatSession.bindConnection()
+bindConnection(connection: SSEConnection): void {
+  // 踢掉旧连接
+  if (this.sseConnection) {
+    this.sseConnection.send({ type: 'session_replaced' });
+    this.sseConnection.close();
+  }
+  this.sseConnection = connection;
+}
+```
+
+**前端处理 session_replaced：**
+
+```typescript
+// ChatSession.handleEvent()
+case 'session_replaced':
+  // 被新连接替换，断开本地 SSE
+  this.transition('idle');
+  this.closeEventSource();
+  // 可选：提示用户"会话已在其他标签页打开"
+  break;
+```
+
+---
+
+## 10. Agent 会话触发机制
+
+### 10.1 设计目标
+
+- **通用触发函数**：点击按钮 → 新标签页打开会话 → 自动发起 Agent 对话
+- **后端预创建**：后端创建会话和消息，前端只需"重连"
+- **支持配置**：是否自动发送
+
+### 10.2 API 设计
+
+**POST /api/chat/resume/:conversationId**
+
+会话和消息已创建，只需启动 Agent。
+
+请求：无 body
+
+响应：
+
+```typescript
+{
+  success: boolean;
+  messageId: string;
+}
+```
+
+逻辑：
+
+1. 验证会话存在且 Redis 状态为 'waiting'
+2. 从数据库读取最新用户消息
+3. 构建 Memory
+4. 启动 Agent 执行
+5. 更新 Redis 状态为 'running'
+
+### 10.3 前端触发函数
+
+```typescript
+interface OpenConversationOptions {
+  conversationId: string;
+  autoSend?: boolean; // 默认 true
+}
+
+function openAgentConversation(options: OpenConversationOptions): void {
+  const url = `/chat?conversationId=${options.conversationId}${options.autoSend === false ? '&autoSend=0' : ''}`;
+  window.open(url, '_blank');
+}
+```
+
+### 10.4 会话页面 autoSend 支持
+
+URL 参数：
+
+- `conversationId`: 会话 ID
+- `autoSend`: 是否自动发送（默认 true）
+
+页面加载流程：
+
+1. 刷新消息列表
+2. 建立 SSE 连接
+3. 若 `autoSend=true` 且无助手消息 → 调用 `POST /api/chat/resume/:conversationId`
+4. 接收 SSE 事件，实时更新 UI
+
+### 10.5 与断线重连的关系
+
+`openAgentConversation` 创建的会话，本质上是"等待重连"的会话：
+
+```
+后端 archive API
+    │
+    ├─ 创建 conversation + messages
+    ├─ 写入 Redis: { phase: 'waiting', agentId: 'document' }
+    └─ 返回 conversationId
+           │
+           └─ 前端 openAgentConversation()
+                  │
+                  └─ 打开新标签页
+                         │
+                         └─ 页面加载，走 activateConversation() 流程
+                                │
+                                ├─ GET /api/chat/session/:id → { phase: 'waiting' }
+                                │
+                                ├─ 建立 SSE 连接
+                                │
+                                └─ autoSend=true → 调用 resume API
+                                       │
+                                       └─ Agent 启动，phase → 'running'
+```
+
+**与普通重连的区别：**
+
+| 场景 | Redis phase | 前端行为 |
+|------|-------------|----------|
+| 普通重连 | `running` | 建立 SSE，继续接收事件 |
+| Agent 触发 | `waiting` | 建立 SSE + 调用 resume API |
+| 已结束 | `done` 或 `null` | 无需 SSE，渲染最终状态 |
+
+**共享的核心流程：**
+
+1. `GET /api/chat/session/:id` 查询状态
+2. `activateConversation()` 判断是否需要 SSE
+3. 重连/新建 SSE 连接

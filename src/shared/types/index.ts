@@ -19,6 +19,8 @@ export interface ToolConfig<
   inputSchema?: JSONSchemaType<Input>;
   outputSchema?: JSONSchemaType<Output>;
   enabled?: boolean;
+  /** Skip automatic output compression */
+  skipCompression?: boolean;
 }
 
 /**
