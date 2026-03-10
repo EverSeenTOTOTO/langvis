@@ -106,15 +106,19 @@ interface BatchArchiveProgressData {
   total: number;
   url: string;
   status: 'processing' | 'success' | 'failed';
+  documentId?: string;
+  title?: string;
   error?: string;
 }
 
 function BatchArchiveProgress({
   progress,
   isPending,
+  nestedAnalysisProgress,
 }: {
   progress: Array<{ data: unknown; seq: number; at: number }>;
   isPending: boolean;
+  nestedAnalysisProgress?: Array<{ data: unknown; seq: number; at: number }>;
 }) {
   // Get the latest progress for each URL
   const urlStatusMap = new Map<string, BatchArchiveProgressData>();
@@ -134,9 +138,41 @@ function BatchArchiveProgress({
   const latestProgress = Array.from(urlStatusMap.values()).pop();
   const total = latestProgress?.total ?? progress.length;
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const failed = Array.from(urlStatusMap.values()).filter(
+  const failedList = Array.from(urlStatusMap.values()).filter(
     d => d.status === 'failed',
-  ).length;
+  );
+  const failed = failedList.length;
+
+  // Get current processing URL and its analysis step
+  const processingUrl =
+    latestProgress?.status === 'processing' ? latestProgress.url : null;
+
+  // Get current analysis step message from nested progress
+  const currentStep = nestedAnalysisProgress
+    ? (() => {
+        const progressByAction = new Map<AnalysisAction, string>();
+        for (const p of nestedAnalysisProgress) {
+          const data = p.data as AnalysisProgressData;
+          if (data?.action && data?.message) {
+            progressByAction.set(data.action, data.message);
+          }
+        }
+        // Find the first incomplete step
+        for (const step of ANALYSIS_PIPELINE_STEPS) {
+          if (!progressByAction.has(step.action)) {
+            // Return the previous step's message (the one currently running)
+            const prevIndex = ANALYSIS_PIPELINE_STEPS.indexOf(step) - 1;
+            if (prevIndex >= 0) {
+              return progressByAction.get(
+                ANALYSIS_PIPELINE_STEPS[prevIndex].action,
+              );
+            }
+            return null;
+          }
+        }
+        return null;
+      })()
+    : null;
 
   return (
     <div className="batch-archive-progress">
@@ -152,20 +188,56 @@ function BatchArchiveProgress({
         </Typography.Text>
       </Flex>
 
-      {latestProgress && isPending && (
-        <Typography.Text type="secondary" ellipsis style={{ fontSize: 12 }}>
-          {latestProgress.status === 'processing'
-            ? `Processing: ${latestProgress.url}`
-            : latestProgress.status === 'failed'
-              ? `Failed: ${latestProgress.error}`
-              : null}
-        </Typography.Text>
+      {/* Show processing URL with current step */}
+      {isPending && processingUrl && (
+        <div style={{ marginBottom: 4 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            Processing: {processingUrl}
+          </Typography.Text>
+          {currentStep && (
+            <Typography.Text
+              type="secondary"
+              style={{ fontSize: 11, marginLeft: 8 }}
+            >
+              ({currentStep})
+            </Typography.Text>
+          )}
+        </div>
       )}
 
       {!isPending && (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {completed - failed} succeeded, {failed} failed
         </Typography.Text>
+      )}
+
+      {/* Show failed URLs */}
+      {!isPending && failedList.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          {failedList.map(item => (
+            <div key={item.url} style={{ marginBottom: 4 }}>
+              <CloseCircleOutlined
+                style={{ color: 'var(--ant-color-error)', marginRight: 4 }}
+              />
+              <Typography.Link
+                href={item.url}
+                target="_blank"
+                ellipsis
+                style={{ fontSize: 11, maxWidth: 200 }}
+              >
+                {item.url}
+              </Typography.Link>
+              {item.error && (
+                <Typography.Text
+                  type="danger"
+                  style={{ fontSize: 11, marginLeft: 4 }}
+                >
+                  ({item.error})
+                </Typography.Text>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -266,6 +338,15 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
       return data?.url;
     });
 
+  // Extract nested analysis_tool progress from batch_archive_tool progress
+  // (since nested tools share the same callId, filter by 'action' field)
+  const nestedAnalysisProgress = isBatchArchiveTool
+    ? toolCall.progress.filter(p => {
+        const data = p.data as { action?: string };
+        return data?.action;
+      })
+    : undefined;
+
   return (
     <div className="react-tool-block">
       {toolCall.thought && (
@@ -294,6 +375,7 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
         <BatchArchiveProgress
           progress={toolCall.progress}
           isPending={isPending}
+          nestedAnalysisProgress={nestedAnalysisProgress}
         />
       ) : (
         latestProgress?.message &&

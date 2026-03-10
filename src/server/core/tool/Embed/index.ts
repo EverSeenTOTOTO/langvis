@@ -3,10 +3,13 @@ import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { AgentEvent, ToolConfig } from '@/shared/types';
+import { createTimeoutController } from '@/server/utils/abort';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import type { EmbedInput, EmbedOutput } from './config';
 import { config } from './config';
+
+const DEFAULT_TIMEOUT_MS = 60_000; // 1 minute
 
 @tool(ToolIds.EMBED)
 export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
@@ -18,7 +21,11 @@ export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
     @input() data: EmbedInput,
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, EmbedOutput, void> {
-    const { chunks, model = process.env.OPENAI_EMBEDDING_MODEL! } = data;
+    const {
+      chunks,
+      model = process.env.OPENAI_EMBEDDING_MODEL!,
+      timeout = DEFAULT_TIMEOUT_MS,
+    } = data;
 
     const apiBase = process.env.OPENAI_API_BASE;
     const apiKey = process.env.OPENAI_API_KEY;
@@ -39,39 +46,44 @@ export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
       data: { model, textCount: chunks.length },
     });
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ model, input: texts }),
-      signal: ctx.signal,
-    });
+    const [controller, cleanup] = createTimeoutController(timeout, ctx.signal);
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Embedding API failed: ${response.status} - ${text}`);
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model, input: texts }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Embedding API failed: ${response.status} - ${text}`);
+      }
+
+      const result = (await response.json()) as {
+        data: Array<{ embedding: number[]; index: number }>;
+      };
+
+      // Sort by index to ensure correct order
+      const sortedData = result.data.sort((a, b) => a.index - b.index);
+
+      const output: EmbedOutput = {
+        chunks: chunks.map((chunk, i) => ({
+          ...chunk,
+          embedding: sortedData[i].embedding,
+        })),
+        model,
+        dimension: sortedData[0].embedding.length,
+      };
+
+      return output;
+    } finally {
+      cleanup();
     }
-
-    const result = (await response.json()) as {
-      data: Array<{ embedding: number[]; index: number }>;
-    };
-
-    // Sort by index to ensure correct order
-    const sortedData = result.data.sort((a, b) => a.index - b.index);
-
-    const output: EmbedOutput = {
-      chunks: chunks.map((chunk, i) => ({
-        ...chunk,
-        embedding: sortedData[i].embedding,
-      })),
-      model,
-      dimension: sortedData[0].embedding.length,
-    };
-
-    return output;
-    return output;
   }
 }
 

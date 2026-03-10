@@ -53,7 +53,6 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
           const error = 'Content filter triggered - response incomplete';
           this.logger.warn(`LLM stream aborted: ${error}`);
           throw new Error(error);
-          return error;
         }
 
         if (finishReason === 'length') {

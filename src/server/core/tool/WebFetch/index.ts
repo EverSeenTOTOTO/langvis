@@ -3,6 +3,7 @@ import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { AgentEvent, ToolConfig } from '@/shared/types';
+import { createTimeoutController } from '@/server/utils/abort';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import { Tool } from '..';
@@ -72,17 +73,13 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
     for (let attempt = 0; attempt <= retry; attempt++) {
       ctx.signal.throwIfAborted();
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-      ctx.signal.addEventListener('abort', () => {
-        controller.abort(ctx.signal.reason);
-      });
+      const [controller, cleanup] = createTimeoutController(
+        timeout,
+        ctx.signal,
+      );
 
       try {
         const response = await this.doFetch(url, controller.signal, proxy);
-
-        clearTimeout(timeoutId);
 
         const html = await response.text();
 
@@ -107,7 +104,6 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
           url,
         };
       } catch (error) {
-        clearTimeout(timeoutId);
         lastError = error as Error;
 
         if (attempt < retry) {
@@ -115,6 +111,8 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
             `Fetch attempt ${attempt + 1} failed, retrying: ${(error as Error).message}`,
           );
         }
+      } finally {
+        cleanup();
       }
     }
 

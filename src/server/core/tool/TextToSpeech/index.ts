@@ -3,6 +3,7 @@ import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig, AgentEvent } from '@/shared/types';
+import { createTimeoutController } from '@/server/utils/abort';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { Tool } from '..';
@@ -20,6 +21,8 @@ export interface TextToSpeechOutput {
   voice: string;
   filePath: string;
 }
+
+const DEFAULT_TIMEOUT_MS = 120_000; // 2 minutes
 
 @tool(ToolIds.TEXT_TO_SPEECH)
 export default class TextToSpeechTool extends Tool<
@@ -84,93 +87,90 @@ export default class TextToSpeechTool extends Tool<
 
     this.logger.debug(`TTS API request url: ${url}`);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120_000);
-
-    ctx.signal.addEventListener('abort', () => {
-      controller.abort(ctx.signal.reason);
-    });
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    }).finally(() => {
-      clearTimeout(timeoutId);
-    });
-
-    if (!response.ok) {
-      const responseText = await response.text();
-      this.logger.error(
-        `TTS API failed - Status: ${response.status}, Response: ${responseText.slice(0, 500)}`,
-      );
-      throw new Error(
-        `TTS API request failed with status ${response.status}: ${responseText.slice(0, 200)}`,
-      );
-    }
-
-    const data = await response.json();
-
-    if (data.error) {
-      const errorMsg =
-        data.error.message_cn || data.error.message || 'Unknown error';
-      this.logger.error(`TTS API error for ${reqId}: ${errorMsg}`);
-      throw new Error(`TTS API error: ${errorMsg}`);
-    }
-
-    if (data.code !== 3000) {
-      const errorMsg = data.message || `Unknown error, code: ${data.code}`;
-      this.logger.error(`TTS API failed for ${reqId}: ${errorMsg}`);
-      throw new Error(`TTS API failed: ${errorMsg}`);
-    }
-
-    if (!data.data) {
-      this.logger.error(`No audio data in response for ${reqId}`);
-      throw new Error('No audio data received from TTS API');
-    }
-
-    let audioBuffer: Buffer;
-    try {
-      audioBuffer = Buffer.from(data.data, 'base64');
-      if (audioBuffer.length === 0) {
-        throw new Error('Decoded audio data is empty');
-      }
-    } catch (error) {
-      this.logger.error(
-        `Failed to decode base64 audio data for ${reqId}: ${error}`,
-      );
-      throw new Error(`Failed to decode audio data: ${error}`);
-    }
-
-    const filename = `${reqId}.mp3`;
-    const filePath = path.join(this.ttsDir, filename);
+    const [controller, cleanup] = createTimeoutController(
+      DEFAULT_TIMEOUT_MS,
+      ctx.signal,
+    );
 
     try {
-      await fs.writeFile(filePath, audioBuffer);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
 
-      const stats = await fs.stat(filePath);
-      if (stats.size === 0) {
-        throw new Error('Failed to write audio file or file is empty');
+      if (!response.ok) {
+        const responseText = await response.text();
+        this.logger.error(
+          `TTS API failed - Status: ${response.status}, Response: ${responseText.slice(0, 500)}`,
+        );
+        throw new Error(
+          `TTS API request failed with status ${response.status}: ${responseText.slice(0, 200)}`,
+        );
       }
 
-      this.logger.info(
-        `TTS completed successfully: ${reqId}, file: ${filePath}, size: ${audioBuffer.length} bytes`,
-      );
+      const data = await response.json();
 
-      const output: TextToSpeechOutput = {
-        voice,
-        filePath: `tts/${filename}`,
-      };
+      if (data.error) {
+        const errorMsg =
+          data.error.message_cn || data.error.message || 'Unknown error';
+        this.logger.error(`TTS API error for ${reqId}: ${errorMsg}`);
+        throw new Error(`TTS API error: ${errorMsg}`);
+      }
 
-      return output;
-      return output;
-    } catch (error) {
-      this.logger.error(`Failed to write MP3 file for ${reqId}: ${error}`);
-      throw new Error(`Failed to save audio file: ${error}`);
+      if (data.code !== 3000) {
+        const errorMsg = data.message || `Unknown error, code: ${data.code}`;
+        this.logger.error(`TTS API failed for ${reqId}: ${errorMsg}`);
+        throw new Error(`TTS API failed: ${errorMsg}`);
+      }
+
+      if (!data.data) {
+        this.logger.error(`No audio data in response for ${reqId}`);
+        throw new Error('No audio data received from TTS API');
+      }
+
+      let audioBuffer: Buffer;
+      try {
+        audioBuffer = Buffer.from(data.data, 'base64');
+        if (audioBuffer.length === 0) {
+          throw new Error('Decoded audio data is empty');
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to decode base64 audio data for ${reqId}: ${error}`,
+        );
+        throw new Error(`Failed to decode audio data: ${error}`);
+      }
+
+      const filename = `${reqId}.mp3`;
+      const filePath = path.join(this.ttsDir, filename);
+
+      try {
+        await fs.writeFile(filePath, audioBuffer);
+
+        const stats = await fs.stat(filePath);
+        if (stats.size === 0) {
+          throw new Error('Failed to write audio file or file is empty');
+        }
+
+        this.logger.info(
+          `TTS completed successfully: ${reqId}, file: ${filePath}, size: ${audioBuffer.length} bytes`,
+        );
+
+        return {
+          voice,
+          filePath: `tts/${filename}`,
+        };
+      } catch (error) {
+        this.logger.error(`Failed to write MP3 file for ${reqId}: ${error}`);
+        throw new Error(`Failed to save audio file: ${error}`);
+      }
+    } finally {
+      cleanup();
     }
   }
 }

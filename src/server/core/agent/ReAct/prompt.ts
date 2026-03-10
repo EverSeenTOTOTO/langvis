@@ -66,7 +66,7 @@ User: What time is it in Tokyo?
 Assistant:
 {
   "thought": "Need to check current time for Tokyo timezone.",
-  "action": { "tool": "DateTime Tool", "input": {"timezone": "Asia/Tokyo"} }
+  "action": { "tool": "date_time_tool", "input": {"timezone": "Asia/Tokyo"} }
 }
 (Observation received)
 Assistant:
@@ -82,18 +82,24 @@ Assistant:
 {
   "thought": "This is a destructive operation that needs user confirmation.",
   "action": {
-    "tool": "HumanInTheLoop Tool",
+    "tool": "human_in_the_loop_tool",
     "input": {
+      "conversationId": "conv_abc123",
       "message": "This will permanently delete all files older than 30 days. Do you want to proceed?",
-      "formSchema": {"type": "boolean", "title": "Confirm deletion?"}
+      "formSchema": {
+        "type": "object",
+        "properties": {
+          "confirmed": {"type": "boolean", "title": "Confirm deletion?"}
+        }
+      }
     }
   }
 }
-(Observation: {"submitted": true, "data": true})
+(Observation: {"submitted": true, "data": {"confirmed": true}})
 Assistant:
 {
   "thought": "User confirmed, proceeding with deletion.",
-  "action": { "tool": "DeleteFiles Tool", "input": {"olderThan": 30} }
+  "action": { "tool": "delete_file_tool", "input": { "olderThan": 30} }
 }
 </example:use-human-in-the-loop>`,
     );
