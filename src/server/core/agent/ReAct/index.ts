@@ -1,7 +1,7 @@
 import { agent } from '@/server/decorator/core';
 import { config } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
-import { AgentIds, ToolIds } from '@/shared/constants';
+import { AgentIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import { AgentConfig, AgentEvent } from '@/shared/types';
 import { isEmpty } from 'lodash-es';
@@ -213,11 +213,10 @@ export default class ReActAgent extends Agent {
         ctx,
       );
 
-      // Auto compress large strings in output (skip for read_cache to avoid recursive compression)
-      const compressedOutput =
-        toolName === ToolIds.READ_CACHE
-          ? output
-          : await ctx.autoCompressOutput(output);
+      // Auto compress large strings in output (skip if tool opts out)
+      const compressedOutput = tool.config?.skipCompression
+        ? output
+        : await ctx.autoCompressOutput(output);
 
       const observation =
         typeof compressedOutput === 'string'

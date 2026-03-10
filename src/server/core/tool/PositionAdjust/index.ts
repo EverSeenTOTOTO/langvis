@@ -49,7 +49,7 @@ export default class PositionAdjustTool extends Tool<
 
     const formData = humanInput.data;
 
-    this.logger.info('持仓信息已收集，提交模型分析中……');
+    this.logger.info('持仓信息已收集，提交模型分析中：', formData);
 
     const advice = yield* this.generateAdvice(formData, ctx);
 
@@ -69,11 +69,15 @@ export default class PositionAdjustTool extends Tool<
         '你是一位专业的理财顾问助手。根据用户提供的资产状况、市场温度、风险偏好，给出仓位调整建议。',
       )
       .with(
+        'User Context',
+        '用户是一位理性投资者，只会参考你的意见做出最终决策。请给出明确、可操作的建议，而不是模棱两可的说法。',
+      )
+      .with(
         'Guidelines',
         `- 不提供具体的投资建议（不推荐具体股票代码）
 - 建议仅供参考，不构成投资建议
 - 始终强调风险管理的重要性
-- 用清晰、结构化的方式表达建议`,
+- 给出明确的操作方向建议：买入/卖出/持有，并说明理由`,
       )
       .with(
         'Key Tasks',
@@ -100,6 +104,45 @@ export default class PositionAdjustTool extends Tool<
 
     if (formData.totalAssets) {
       prompt = prompt.with('总资产', formData.totalAssets);
+    }
+
+    if (formData.investmentGoal) {
+      const goalMap: Record<string, string> = {
+        short_term: '短期收益（1年内）',
+        mid_term: '中期增值（1-3年）',
+        long_term: '长期增值（3年以上）',
+        preserve: '资产保值',
+      };
+      prompt = prompt.with(
+        '投资目标',
+        goalMap[formData.investmentGoal] || formData.investmentGoal,
+      );
+    }
+
+    if (formData.riskTolerance) {
+      const riskMap: Record<string, string> = {
+        conservative: '保守型（不愿亏损）',
+        moderate: '稳健型（可接受小幅波动）',
+        balanced: '平衡型（可接受中等波动）',
+        aggressive: '激进型（追求高收益）',
+      };
+      prompt = prompt.with(
+        '风险偏好',
+        riskMap[formData.riskTolerance] || formData.riskTolerance,
+      );
+    }
+
+    if (formData.investmentExperience) {
+      const expMap: Record<string, string> = {
+        beginner: '新手（1年以下）',
+        intermediate: '有一定经验（1-3年）',
+        experienced: '经验丰富（3年以上）',
+        professional: '专业投资者',
+      };
+      prompt = prompt.with(
+        '投资经验',
+        expMap[formData.investmentExperience] || formData.investmentExperience,
+      );
     }
 
     if (formData.currentPosition) {
@@ -149,18 +192,36 @@ export default class PositionAdjustTool extends Tool<
       prompt = prompt.with('止损设置', formData.stopLoss);
     }
 
+    if (formData.takeProfit) {
+      prompt = prompt.with('止盈目标', formData.takeProfit);
+    }
+
+    if (formData.liquidityNeeds) {
+      const liqMap: Record<string, string> = {
+        high: '随时可能用钱',
+        medium: '半年内可能用钱',
+        low: '长期不用',
+      };
+      prompt = prompt.with(
+        '资金流动性需求',
+        liqMap[formData.liquidityNeeds] || formData.liquidityNeeds,
+      );
+    }
+
     if (formData.notes) {
       prompt = prompt.with('备注', formData.notes);
     }
 
     prompt = prompt.with(
       'Output Requirements',
-      `请给出具体的仓位调整建议，包括：
-1. 当前仓位分析
-2. 目标仓位合理性评估（是否合理，为什么）
-3. 更合理的仓位配置建议（如适用）
-4. 调整方向建议
-5. 风险提示`,
+      `请给出明确的仓位调整建议，包括：
+1. **操作方向**：明确指出每个资产类别的操作建议（买入/卖出/持有），不要说模棱两可的话
+2. **当前仓位分析**：评估当前仓位配置是否合理
+3. **目标仓位评估**：用户设定的目标是否合理，为什么
+4. **具体调整建议**：如果不合理，给出更合理的配置建议
+5. **风险提示**：潜在风险及应对措施
+
+注意：用户是理性投资者，只会参考你的意见。请直接给出判断，不要用"建议考虑"、"可能需要"等模糊表述。`,
     );
 
     return prompt.build();
