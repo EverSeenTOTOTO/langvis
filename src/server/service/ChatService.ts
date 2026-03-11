@@ -1,4 +1,4 @@
-import { InjectTokens } from '@/shared/constants';
+import { InjectTokens, RedisKeys } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { Request } from 'express';
 import { globby } from 'globby';
@@ -64,7 +64,7 @@ export class ChatService {
   async getSessionState(
     conversationId: string,
   ): Promise<ChatSessionState | null> {
-    const data = await this.redis.get(`chat_session:${conversationId}`);
+    const data = await this.redis.get(RedisKeys.CHAT_SESSION(conversationId));
     return data ? JSON.parse(data) : null;
   }
 
@@ -76,7 +76,7 @@ export class ChatService {
     const state = await this.getSessionState(conversationId);
     if (!state) return;
     await this.redis.set(
-      `chat_session:${conversationId}`,
+      RedisKeys.CHAT_SESSION(conversationId),
       JSON.stringify({ ...state, phase, agentId: agentId ?? state.agentId }),
       { EX: 3600 },
     );
@@ -91,8 +91,8 @@ export class ChatService {
       idleTimeoutMs: 30_000,
       onDispose: async (id: string) => {
         this.sessions.delete(id);
-        await this.redis.del(`chat_session:${id}`);
-        await this.redis.del(`human_input:${id}`);
+        await this.redis.del(RedisKeys.CHAT_SESSION(id));
+        await this.redis.del(RedisKeys.HUMAN_INPUT(id));
       },
       onPhaseChange: async (id: string, phase: SessionPhase) => {
         await this.updateSessionPhase(id, phase);
@@ -104,7 +104,7 @@ export class ChatService {
     // Persist session state to Redis for reconnection support
     this.redis
       .set(
-        `chat_session:${conversationId}`,
+        RedisKeys.CHAT_SESSION(conversationId),
         JSON.stringify({
           conversationId,
           phase: 'waiting',

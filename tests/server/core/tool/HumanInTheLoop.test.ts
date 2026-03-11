@@ -1,11 +1,9 @@
 import HumanInTheLoopTool from '@/server/core/tool/HumanInTheLoop';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
-import { ToolIds } from '@/shared/constants';
+import { RedisKeys, ToolIds } from '@/shared/constants';
 import { JSONSchemaType } from 'ajv';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext } from '../../helpers/context';
-
-const REDIS_PREFIX = 'human_input:';
 
 function createMockRedis(
   subscriberNotify?: (channel: string, message: string) => void,
@@ -140,7 +138,7 @@ describe('HumanInTheLoopTool', () => {
       });
 
       expect(mockRedis.set).toHaveBeenCalledWith(
-        `${REDIS_PREFIX}test-conversation`,
+        RedisKeys.HUMAN_INPUT('test-conversation'),
         expect.stringContaining('"submitted":false'),
       );
 
@@ -187,7 +185,7 @@ describe('HumanInTheLoopTool', () => {
 
       // Simulate submission: update Redis and publish notification
       mockRedis._store.set(
-        `${REDIS_PREFIX}test-conversation`,
+        RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
           formSchema: objectSchemaWithAnswer,
@@ -198,7 +196,10 @@ describe('HumanInTheLoopTool', () => {
       );
 
       // Trigger Pub/Sub notification
-      await mockRedis.publish(`${REDIS_PREFIX}test-conversation`, 'submitted');
+      await mockRedis.publish(
+        RedisKeys.HUMAN_INPUT('test-conversation'),
+        'submitted',
+      );
 
       const { result } = await collectEvents(generator);
 
@@ -207,7 +208,7 @@ describe('HumanInTheLoopTool', () => {
         data: { answer: 'yes' },
       });
       expect(mockRedis.del).toHaveBeenCalledWith(
-        `${REDIS_PREFIX}test-conversation`,
+        RedisKeys.HUMAN_INPUT('test-conversation'),
       );
     });
 
@@ -227,7 +228,7 @@ describe('HumanInTheLoopTool', () => {
       await generator.next();
 
       mockRedis._store.set(
-        `${REDIS_PREFIX}test-conversation`,
+        RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
           formSchema: booleanSchema,
@@ -237,7 +238,10 @@ describe('HumanInTheLoopTool', () => {
         }),
       );
 
-      await mockRedis.publish(`${REDIS_PREFIX}test-conversation`, 'submitted');
+      await mockRedis.publish(
+        RedisKeys.HUMAN_INPUT('test-conversation'),
+        'submitted',
+      );
 
       const { result } = await collectEvents(generator);
 
@@ -266,7 +270,7 @@ describe('HumanInTheLoopTool', () => {
 
       expect(result).toEqual({ submitted: false });
       expect(mockRedis.del).toHaveBeenCalledWith(
-        `${REDIS_PREFIX}test-conversation`,
+        RedisKeys.HUMAN_INPUT('test-conversation'),
       );
     });
 
@@ -286,7 +290,7 @@ describe('HumanInTheLoopTool', () => {
       await collectEvents(generator);
 
       expect(mockRedis.del).toHaveBeenCalledWith(
-        `${REDIS_PREFIX}test-conversation`,
+        RedisKeys.HUMAN_INPUT('test-conversation'),
       );
     });
   });
@@ -353,7 +357,7 @@ describe('HumanInTheLoopTool', () => {
       await generator.next();
 
       expect(mockRedis.set).toHaveBeenCalledWith(
-        `${REDIS_PREFIX}my-custom-conversation`,
+        RedisKeys.HUMAN_INPUT('my-custom-conversation'),
         expect.any(String),
       );
     });
@@ -376,7 +380,7 @@ describe('HumanInTheLoopTool', () => {
       await generator.next();
 
       const storedData = JSON.parse(
-        mockRedis._store.get(`${REDIS_PREFIX}test-conversation`)!,
+        mockRedis._store.get(RedisKeys.HUMAN_INPUT('test-conversation'))!,
       );
 
       expect(storedData).toMatchObject({

@@ -4,10 +4,6 @@ import logger from '../utils/logger';
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 
-/**
- * Encapsulates SSE connection lifecycle and technical details.
- * Responsible for: writeHead, heartbeat, sending events, and cleanup.
- */
 export class SSEConnection {
   private heartbeat: ReturnType<typeof setInterval>;
   private closed = false;
@@ -35,9 +31,6 @@ export class SSEConnection {
     this.send({ type: 'connected', conversationId });
   }
 
-  /**
-   * Send an SSE message. Returns false if connection is not writable.
-   */
   send(message: SSEMessage): boolean {
     if (this.closed || !this.response.writable) return false;
 
@@ -54,16 +47,10 @@ export class SSEConnection {
     return !!flushed;
   }
 
-  /**
-   * Check if the underlying connection is still writable.
-   */
   get isWritable(): boolean {
     return !this.closed && this.response.writable;
   }
 
-  /**
-   * Close the SSE connection and stop heartbeat.
-   */
   close(): void {
     if (this.closed) return;
     this.closed = true;

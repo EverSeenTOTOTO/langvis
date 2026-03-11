@@ -29,7 +29,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
       placement="start"
       content={content}
       footer={<MessageFooter content={msg.content} />}
-      loading={showBubbleLoading && chatStore.isCurrentLoading}
+      loading={showBubbleLoading && chatStore.currentSession?.isLoading}
       avatar={<Avatar icon={<RobotOutlined />} />}
       styles={{
         content: {

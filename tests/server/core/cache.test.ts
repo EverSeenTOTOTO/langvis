@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { container } from 'tsyringe';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
-import { InjectTokens } from '@/shared/constants';
+import { InjectTokens, RedisKeys } from '@/shared/constants';
 
 describe('ExecutionContext Cache Management', () => {
   let ctx: ExecutionContext;
@@ -41,7 +41,7 @@ describe('ExecutionContext Cache Management', () => {
         $preview: 'a'.repeat(200),
       });
       expect(mockRedis.setEx).toHaveBeenCalledWith(
-        expect.stringContaining('agent:cache:test-trace-id:'),
+        expect.stringContaining(RedisKeys.AGENT_CACHE('test-trace-id', '')),
         3600,
         longString,
       );
@@ -55,7 +55,7 @@ describe('ExecutionContext Cache Management', () => {
       expect(result.$cached).toMatch(/^cache_/);
       expect(result.$size).toBeGreaterThan(0);
       expect(mockRedis.setEx).toHaveBeenCalledWith(
-        expect.stringContaining('agent:cache:test-trace-id:'),
+        expect.stringContaining(RedisKeys.AGENT_CACHE('test-trace-id', '')),
         3600,
         JSON.stringify(largeArray),
       );
@@ -78,7 +78,7 @@ describe('ExecutionContext Cache Management', () => {
 
       expect(result).toBe('cached content');
       expect(mockRedis.get).toHaveBeenCalledWith(
-        'agent:cache:test-trace-id:cache_abc123',
+        RedisKeys.AGENT_CACHE('test-trace-id', 'cache_abc123'),
       );
     });
 
@@ -102,8 +102,8 @@ describe('ExecutionContext Cache Management', () => {
       expect(mockRedis.del).toHaveBeenCalledTimes(1);
       expect(mockRedis.del).toHaveBeenCalledWith(
         expect.arrayContaining([
-          expect.stringContaining('agent:cache:test-trace-id:'),
-          expect.stringContaining('agent:cache:test-trace-id:'),
+          expect.stringContaining(RedisKeys.AGENT_CACHE('test-trace-id', '')),
+          expect.stringContaining(RedisKeys.AGENT_CACHE('test-trace-id', '')),
         ]),
       );
     });

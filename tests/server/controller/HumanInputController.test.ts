@@ -1,7 +1,6 @@
 import HumanInputController from '@/server/controller/HumanInputController';
+import { RedisKeys } from '@/shared/constants';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const REDIS_PREFIX = 'human_input:';
 
 function createMockRedis() {
   const store = new Map<string, string>();
@@ -64,7 +63,7 @@ describe('HumanInputController', () => {
 
     it('should return 400 when request already submitted', async () => {
       mockRedis._store.set(
-        `${REDIS_PREFIX}test-conversation`,
+        RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
           message: 'Test message',
@@ -93,7 +92,7 @@ describe('HumanInputController', () => {
 
     it('should successfully submit data', async () => {
       mockRedis._store.set(
-        `${REDIS_PREFIX}test-conversation`,
+        RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
           message: 'Test message',
@@ -119,7 +118,7 @@ describe('HumanInputController', () => {
       expect(res.json).toHaveBeenCalledWith({ success: true });
 
       const stored = JSON.parse(
-        mockRedis._store.get(`${REDIS_PREFIX}test-conversation`)!,
+        mockRedis._store.get(RedisKeys.HUMAN_INPUT('test-conversation'))!,
       );
       expect(stored.submitted).toBe(true);
       expect(stored.result).toEqual({ name: 'John' });
@@ -127,7 +126,7 @@ describe('HumanInputController', () => {
 
     it('should publish notification after submission', async () => {
       mockRedis._store.set(
-        `${REDIS_PREFIX}test-conversation`,
+        RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
           message: 'Test message',
@@ -145,7 +144,7 @@ describe('HumanInputController', () => {
       );
 
       expect(mockRedis.publish).toHaveBeenCalledWith(
-        `${REDIS_PREFIX}test-conversation`,
+        RedisKeys.HUMAN_INPUT('test-conversation'),
         'submitted',
       );
     });
@@ -159,7 +158,7 @@ describe('HumanInputController', () => {
         createdAt: 1234567890,
       };
       mockRedis._store.set(
-        `${REDIS_PREFIX}test-conversation`,
+        RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify(originalData),
       );
 
@@ -174,7 +173,7 @@ describe('HumanInputController', () => {
       );
 
       const stored = JSON.parse(
-        mockRedis._store.get(`${REDIS_PREFIX}test-conversation`)!,
+        mockRedis._store.get(RedisKeys.HUMAN_INPUT('test-conversation'))!,
       );
       expect(stored.message).toBe('Please confirm this action');
       expect(stored.formSchema).toEqual({ type: 'boolean' });
@@ -192,7 +191,7 @@ describe('HumanInputController', () => {
 
     it('should return request status when exists and not submitted', async () => {
       mockRedis._store.set(
-        `${REDIS_PREFIX}test-conversation`,
+        RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
           message: 'Please confirm',
@@ -215,7 +214,7 @@ describe('HumanInputController', () => {
 
     it('should return request status when already submitted', async () => {
       mockRedis._store.set(
-        `${REDIS_PREFIX}test-conversation`,
+        RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
           message: 'Please confirm',
@@ -238,7 +237,7 @@ describe('HumanInputController', () => {
 
     it('should not expose result data in status response', async () => {
       mockRedis._store.set(
-        `${REDIS_PREFIX}test-conversation`,
+        RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
           message: 'Enter password',
@@ -266,13 +265,17 @@ describe('HumanInputController', () => {
         { conversationId: 'conv-123', data: {} },
         res,
       );
-      expect(mockRedis.get).toHaveBeenCalledWith(`${REDIS_PREFIX}conv-123`);
+      expect(mockRedis.get).toHaveBeenCalledWith(
+        RedisKeys.HUMAN_INPUT('conv-123'),
+      );
     });
 
     it('should use correct Redis key prefix for getStatus', async () => {
       const res = createMockResponse();
       await controller.getStatus('conv-456', res);
-      expect(mockRedis.get).toHaveBeenCalledWith(`${REDIS_PREFIX}conv-456`);
+      expect(mockRedis.get).toHaveBeenCalledWith(
+        RedisKeys.HUMAN_INPUT('conv-456'),
+      );
     });
   });
 });

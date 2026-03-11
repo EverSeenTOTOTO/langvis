@@ -10,7 +10,7 @@ import type {
 } from '@/shared/dto/controller';
 import { AgentEvent, SSEMessage } from '@/shared/types';
 import { Role } from '@/shared/types/entities';
-import { generateId } from '@/shared/utils';
+import { generateId, isClient } from '@/shared/utils';
 import { message } from 'antd';
 import { makeAutoObservable, reaction } from 'mobx';
 import { inject } from 'tsyringe';
@@ -28,10 +28,10 @@ export class ChatStore {
   ) {
     makeAutoObservable(this);
 
-    if (typeof document !== 'undefined') {
+    if (isClient()) {
       document.addEventListener(
         'visibilitychange',
-        this.handleVisibilityChange,
+        this.handleVisibilityChange.bind(this),
       );
     }
 
@@ -98,20 +98,10 @@ export class ChatStore {
     return session;
   }
 
-  get isCurrentLoading(): boolean {
+  get currentSession(): ChatSession | undefined {
     const conversationId = this.conversationStore.currentConversationId;
-    if (!conversationId) return false;
-
-    const session = this.sessions.get(conversationId);
-    return session?.isLoading ?? false;
-  }
-
-  get currentPhaseError(): string | null {
-    const conversationId = this.conversationStore.currentConversationId;
-    if (!conversationId) return null;
-
-    const session = this.sessions.get(conversationId);
-    return session?.phaseError ?? null;
+    if (!conversationId) return undefined;
+    return this.sessions.get(conversationId);
   }
 
   @api('/api/chat/cancel/:conversationId', {
@@ -172,7 +162,7 @@ export class ChatStore {
     _params: GetHumanInputStatusRequest,
     req?: ApiRequest<GetHumanInputStatusRequest>,
   ): Promise<GetHumanInputStatusResponse> {
-    return req!.send() as Promise<GetHumanInputStatusResponse>;
+    return req!.send();
   }
 
   @api('/api/chat/start/:conversationId', {

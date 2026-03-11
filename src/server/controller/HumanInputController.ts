@@ -1,13 +1,11 @@
 import { SubmitHumanInputRequestDto } from '@/shared/dto/controller';
-import { InjectTokens } from '@/shared/constants';
+import { InjectTokens, RedisKeys } from '@/shared/constants';
 import { api } from '@/server/decorator/api';
 import { controller } from '@/server/decorator/controller';
 import { body, param, response } from '@/server/decorator/param';
 import { inject } from 'tsyringe';
 import type { RedisClientType } from 'redis';
 import type { Response } from 'express';
-
-const REDIS_PREFIX = 'human_input:';
 
 @controller('/api/human-input')
 export default class HumanInputController {
@@ -22,7 +20,7 @@ export default class HumanInputController {
     @body() dto: SubmitHumanInputRequestDto,
     @response() res: Response,
   ) {
-    const key = `${REDIS_PREFIX}${conversationId}`;
+    const key = RedisKeys.HUMAN_INPUT(conversationId);
     const data = await this.redis.get(key);
 
     if (!data) {
@@ -55,7 +53,7 @@ export default class HumanInputController {
     @param('conversationId') conversationId: string,
     @response() res: Response,
   ) {
-    const key = `${REDIS_PREFIX}${conversationId}`;
+    const key = RedisKeys.HUMAN_INPUT(conversationId);
     const data = await this.redis.get(key);
 
     if (!data) {

@@ -38,3 +38,10 @@ export const InjectTokens = {
 };
 
 export const UNGROUPED_GROUP_NAME = 'Ungrouped';
+
+export const RedisKeys = {
+  HUMAN_INPUT: (conversationId: string) => `human_input:${conversationId}`,
+  CHAT_SESSION: (conversationId: string) => `chat_session:${conversationId}`,
+  AGENT_CACHE: (traceId: string, key: string) =>
+    `agent:cache:${traceId}:${key}`,
+};

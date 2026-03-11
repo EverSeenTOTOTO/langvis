@@ -3,15 +3,6 @@ import { isClient } from '@/shared/utils';
 import { makeAutoObservable } from 'mobx';
 import { getPrefetchPath } from '../../decorator/api';
 
-/**
- * Valid phase transitions:
- *   idle → connecting
- *   connecting → streaming | error | cancelled
- *   streaming → finishing | error | cancelled
- *   finishing → idle | error
- *
- * Terminal states (error, cancelled) can only exit via reset()
- */
 const VALID_TRANSITIONS: Record<ChatPhase, ChatPhase[]> = {
   idle: ['connecting'],
   connecting: ['streaming', 'error', 'cancelled'],
@@ -26,10 +17,6 @@ export interface ChatSessionOptions {
   onError: (error: string) => void;
 }
 
-/**
- * ChatSession - frontend session state manager
- * Manages phase transitions and SSE connection lifecycle
- */
 export class ChatSession {
   readonly conversationId: string;
 
@@ -58,11 +45,6 @@ export class ChatSession {
     );
   }
 
-  // === High-level state transitions ===
-
-  /**
-   * Connect to SSE endpoint. Transitions: idle → connecting
-   */
   connect(): Promise<void> {
     this.reset();
     this.transition('connecting');
@@ -127,9 +109,6 @@ export class ChatSession {
     });
   }
 
-  /**
-   * Cancel the session. Transitions: * → cancelled
-   */
   cancel(): void {
     if (!this.isLoading) return;
 
@@ -137,9 +116,6 @@ export class ChatSession {
     this.closeEventSource();
   }
 
-  /**
-   * Handle incoming agent event, may trigger phase transitions
-   */
   private handleEvent(msg: SSEMessage & { type: string }): void {
     switch (msg.type) {
       case 'start':
@@ -170,9 +146,6 @@ export class ChatSession {
     this.options.onEvent(msg as SSEMessage);
   }
 
-  /**
-   * Handle error from external source. Transitions: * → error
-   */
   fail(error: string): void {
     if (this.phase === 'cancelled') return;
 
@@ -180,16 +153,10 @@ export class ChatSession {
     this.closeEventSource();
   }
 
-  /**
-   * Disconnect SSE without changing phase
-   */
   disconnect(): void {
     this.closeEventSource();
   }
 
-  /**
-   * Check if SSE is connected
-   */
   isConnected(): boolean {
     return this.eventSource?.readyState === EventSource.OPEN;
   }

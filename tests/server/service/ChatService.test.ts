@@ -7,7 +7,7 @@ import { Agent } from '@/server/core/agent';
 import { Memory } from '@/server/core/memory';
 import { PendingMessage } from '@/server/core/PendingMessage';
 import { Role } from '@/shared/entities/Message';
-import { InjectTokens } from '@/shared/constants';
+import { InjectTokens, RedisKeys } from '@/shared/constants';
 
 vi.mock('globby', () => ({
   globby: vi.fn().mockResolvedValue([]),
@@ -136,7 +136,9 @@ describe('ChatService', () => {
 
       await Promise.resolve();
 
-      expect(mockRedis.del).toHaveBeenCalledWith('human_input:conv-123');
+      expect(mockRedis.del).toHaveBeenCalledWith(
+        RedisKeys.HUMAN_INPUT('conv-123'),
+      );
     });
   });
 
