@@ -11,7 +11,7 @@ export type MessagePersister = (message: Message) => Promise<unknown>;
 export class PendingMessage {
   constructor(
     private message: Message,
-    private persist: MessagePersister,
+    private persistCallback: MessagePersister,
   ) {}
 
   /**
@@ -52,16 +52,10 @@ export class PendingMessage {
     return this.message.content.length;
   }
 
-  /**
-   * Persist the message.
-   */
-  async finalize(): Promise<void> {
-    await this.persist(this.message);
+  async persist(): Promise<void> {
+    await this.persistCallback(this.message);
   }
 
-  /**
-   * Get the underlying message.
-   */
   toMessage(): Message {
     return this.message;
   }

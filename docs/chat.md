@@ -1059,30 +1059,15 @@ case 'session_replaced':
 ```typescript
 interface OpenConversationOptions {
   conversationId: string;
-  autoSend?: boolean; // 默认 true
 }
 
 function openAgentConversation(options: OpenConversationOptions): void {
-  const url = `/chat?conversationId=${options.conversationId}${options.autoSend === false ? '&autoSend=0' : ''}`;
+  const url = `/chat?conversationId=${options.conversationId}`;
   window.open(url, '_blank');
 }
 ```
 
-### 10.4 会话页面 autoSend 支持
-
-URL 参数：
-
-- `conversationId`: 会话 ID
-- `autoSend`: 是否自动发送（默认 true）
-
-页面加载流程：
-
-1. 刷新消息列表
-2. 建立 SSE 连接
-3. 若 `autoSend=true` 且无助手消息 → 调用 `POST /api/chat/resume/:conversationId`
-4. 接收 SSE 事件，实时更新 UI
-
-### 10.5 与断线重连的关系
+### 10.4 与断线重连的关系
 
 `openAgentConversation` 创建的会话，本质上是"等待重连"的会话：
 
@@ -1103,18 +1088,18 @@ URL 参数：
                                 │
                                 ├─ 建立 SSE 连接
                                 │
-                                └─ autoSend=true → 调用 resume API
+                                └─ 调用 resume API
                                        │
                                        └─ Agent 启动，phase → 'running'
 ```
 
 **与普通重连的区别：**
 
-| 场景 | Redis phase | 前端行为 |
-|------|-------------|----------|
-| 普通重连 | `running` | 建立 SSE，继续接收事件 |
-| Agent 触发 | `waiting` | 建立 SSE + 调用 resume API |
-| 已结束 | `done` 或 `null` | 无需 SSE，渲染最终状态 |
+| 场景       | Redis phase      | 前端行为                   |
+| ---------- | ---------------- | -------------------------- |
+| 普通重连   | `running`        | 建立 SSE，继续接收事件     |
+| Agent 触发 | `waiting`        | 建立 SSE + 调用 resume API |
+| 已结束     | `done` 或 `null` | 无需 SSE，渲染最终状态     |
 
 **共享的核心流程：**
 

@@ -160,9 +160,13 @@ export class ChatSession {
         this.transition('error', msg.error);
         this.closeEventSource();
         break;
+
+      case 'session_replaced':
+        this.transition('idle');
+        this.closeEventSource();
+        break;
     }
 
-    // Notify callback after state transition
     this.options.onEvent(msg as SSEMessage);
   }
 

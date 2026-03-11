@@ -77,6 +77,7 @@ export type AgentEvent =
 export type SSEMessage =
   | { type: 'connected'; conversationId: string }
   | { type: 'heartbeat' }
+  | { type: 'session_replaced' }
   | { type: 'session_error'; error: string }
   | AgentEvent;
 
