@@ -24,6 +24,7 @@ class MockChatService {
   getSession = vi.fn();
   runSession = vi.fn();
   buildMemory = vi.fn();
+  getSessionState = vi.fn();
 }
 
 let mockConversationService: MockConversationService;
@@ -73,8 +74,26 @@ describe('ChatController', () => {
   });
 
   describe('initSSE', () => {
+    it('should return session_ended if phase is done', async () => {
+      mockRequest.params = { conversationId: 'conv-123' };
+      mockChatService.getSessionState.mockResolvedValue({ phase: 'done' });
+
+      await chatController.initSSE(
+        'conv-123',
+        mockRequest as Request,
+        mockResponse as Response,
+      );
+
+      expect(mockStatus).toHaveBeenCalledWith(200);
+      expect(mockJson).toHaveBeenCalledWith({
+        type: 'session_ended',
+        conversationId: 'conv-123',
+      });
+    });
+
     it('should return 409 if session already running', async () => {
       mockRequest.params = { conversationId: 'conv-123' };
+      mockChatService.getSessionState.mockResolvedValue({ phase: 'waiting' });
       mockChatService.acquireSession.mockReturnValue(null);
 
       await chatController.initSSE(
@@ -91,6 +110,7 @@ describe('ChatController', () => {
 
     it('should create session and bind SSE connection', async () => {
       mockRequest.params = { conversationId: 'conv-123' };
+      mockChatService.getSessionState.mockResolvedValue({ phase: 'waiting' });
 
       const mockSession = {
         bindConnection: vi.fn(),
@@ -119,6 +139,7 @@ describe('ChatController', () => {
 
     it('should call handleDisconnect on close event', async () => {
       mockRequest.params = { conversationId: 'conv-123' };
+      mockChatService.getSessionState.mockResolvedValue({ phase: 'waiting' });
 
       const mockSession = {
         bindConnection: vi.fn(),

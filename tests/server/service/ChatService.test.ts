@@ -49,6 +49,8 @@ describe('ChatService', () => {
 
     mockRedis = {
       del: vi.fn().mockResolvedValue(undefined),
+      set: vi.fn().mockResolvedValue(undefined),
+      get: vi.fn().mockResolvedValue(null),
     };
 
     container.register(AuthService, { useValue: mockAuthService });
@@ -113,19 +115,19 @@ describe('ChatService', () => {
       const runPromise = session1!.run(mockAgent, {} as Memory, {});
 
       const session2 = chatService.acquireSession('conv-123');
-      expect(session2).toBeNull();
+      expect(session2).toBe(session1); // Reconnection returns same session
 
       session1!.cancel('test done');
       await runPromise;
     });
 
-    it('should cleanup and replace existing waiting session', () => {
+    it('should return existing waiting session for reconnection', () => {
       const session1 = chatService.acquireSession('conv-123');
       expect(session1).toBeDefined();
 
       const session2 = chatService.acquireSession('conv-123');
       expect(session2).toBeDefined();
-      expect(session2).not.toBe(session1);
+      expect(session2).toBe(session1); // Same session for reconnection
     });
 
     it('should clean Redis key on dispose', async () => {

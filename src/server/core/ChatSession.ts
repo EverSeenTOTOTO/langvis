@@ -12,6 +12,10 @@ export type SessionPhase = 'waiting' | 'running' | 'done';
 export interface ChatSessionOptions {
   idleTimeoutMs: number;
   onDispose: (conversationId: string) => void;
+  onPhaseChange?: (
+    conversationId: string,
+    phase: SessionPhase,
+  ) => Promise<void>;
 }
 
 const VALID_TRANSITIONS: Record<SessionPhase, SessionPhase[]> = {
@@ -70,10 +74,19 @@ export class ChatSession {
       this.options.onDispose(this.conversationId);
     }
 
+    // Notify phase change for Redis persistence
+    this.options.onPhaseChange?.(this.conversationId, to);
+
     return true;
   }
 
   bindConnection(connection: SSEConnection): void {
+    // Kick old connection if exists
+    if (this.sseConnection) {
+      this.sseConnection.send({ type: 'session_replaced' });
+      this.sseConnection.close();
+      logger.info(`Kicked old SSE connection for ${this.conversationId}`);
+    }
     this.sseConnection = connection;
   }
 
@@ -110,9 +123,9 @@ export class ChatSession {
         this.pendingMessage.handleEvent(event);
 
         if (!this.send(event)) {
-          logger.warn(`SSE not writable for ${this.conversationId}, aborting`);
-          ctx.abort('SSE connection lost');
-          break;
+          logger.warn(
+            `SSE not connected for ${this.conversationId}, event persisted`,
+          );
         }
 
         if (event.type === 'error') break;
@@ -151,7 +164,7 @@ export class ChatSession {
       this.send(cancelledEvent);
     }
 
-    await this.pendingMessage!.finalize();
+    await this.pendingMessage!.persist();
 
     const totalTime = Date.now() - startTime;
     const ttft = firstTokenTime ? firstTokenTime - startTime : null;
@@ -173,9 +186,16 @@ export class ChatSession {
   }
 
   handleDisconnect(): void {
-    if (this.phase === 'running') {
-      this.cancel('Client disconnected');
-    } else {
+    logger.info(`SSE disconnected for ${this.conversationId}`);
+
+    if (this.phase === 'running' && this.pendingMessage) {
+      // Persist message state for reconnection (human-in-the-loop etc)
+      this.pendingMessage.persist().catch(err => {
+        logger.error(`Failed to persist message on disconnect:`, err);
+      });
+    }
+
+    if (this.phase === 'waiting') {
       this.cleanup();
     }
   }

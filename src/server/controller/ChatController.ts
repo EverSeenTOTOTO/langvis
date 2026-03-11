@@ -30,16 +30,18 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    // 1. Atomic acquire - can reject with 409 before writing HTTP headers
+    const sessionState = await this.chatService.getSessionState(conversationId);
+
+    if (sessionState?.phase === 'done') {
+      return res.status(200).json({ type: 'session_ended', conversationId });
+    }
+
     const session = this.chatService.acquireSession(conversationId);
     if (!session) {
       return res.status(409).json({ error: 'Session already running' });
     }
 
-    // 2. Initialize SSE connection (writeHead 200, cannot change status after)
     const sseConnection = new SSEConnection(conversationId, res);
-
-    // 3. Bind connection to session
     session.bindConnection(sseConnection);
 
     req.on('close', () => {
@@ -126,8 +128,6 @@ export default class ChatController {
       },
     );
 
-    // Persist assistant placeholder before HTTP response
-    // User message + system prompt are already persisted by buildMemory → memory.store()
     const [assistantMessage] = await this.conversationService.batchAddMessages(
       conversation.id!,
       [{ role: Role.ASSIST, content: '', createdAt: new Date() }],
@@ -146,9 +146,17 @@ export default class ChatController {
     );
     session.bindPendingMessage(pendingMessage);
 
-    // Agent execution after HTTP response
     this.chatService.runSession(session, agent, memory, conversation.config);
 
     return;
+  }
+
+  @api('/session/:conversationId')
+  async getSessionState(
+    @param('conversationId') conversationId: string,
+    @response() res: Response,
+  ) {
+    const state = await this.chatService.getSessionState(conversationId);
+    return res.status(200).json(state ? { phase: state.phase } : null);
   }
 }

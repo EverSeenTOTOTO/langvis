@@ -8,7 +8,7 @@ import type {
   UpdateConversationRequest,
 } from '@/shared/dto/controller';
 import type { Conversation, Message } from '@/shared/types/entities';
-import { makeAutoObservable, reaction } from 'mobx';
+import { makeAutoObservable } from 'mobx';
 import { inject } from 'tsyringe';
 import { ConversationGroupStore } from './conversationGroup';
 
@@ -24,15 +24,6 @@ export class ConversationStore {
     private conversationGroupStore: ConversationGroupStore,
   ) {
     makeAutoObservable(this);
-
-    reaction(
-      () => this.currentConversationId,
-      id => {
-        if (id) {
-          this.getMessagesByConversationId({ id });
-        }
-      },
-    );
   }
 
   getFirstConversationId(): string | undefined {

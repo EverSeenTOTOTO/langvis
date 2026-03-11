@@ -12,6 +12,7 @@ import { AgentEvent, SSEMessage } from '@/shared/types';
 import { Role } from '@/shared/types/entities';
 import { generateId } from '@/shared/utils';
 import { message } from 'antd';
+import { makeAutoObservable, reaction } from 'mobx';
 import { inject } from 'tsyringe';
 import { ChatSession } from './ChatSession';
 import { ConversationStore } from './conversation';
@@ -24,7 +25,62 @@ export class ChatStore {
   constructor(
     @inject(ConversationStore) private conversationStore: ConversationStore,
     @inject(SettingStore) private settingStore: SettingStore,
-  ) {}
+  ) {
+    makeAutoObservable(this);
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener(
+        'visibilitychange',
+        this.handleVisibilityChange,
+      );
+    }
+
+    reaction(
+      () => this.conversationStore.currentConversationId,
+      async (newId, oldId) => {
+        if (oldId) {
+          this.getSession(oldId)?.disconnect();
+        }
+
+        if (!newId) return;
+
+        await this.conversationStore.getMessagesByConversationId({ id: newId });
+        await this.activateConversation(newId);
+      },
+    );
+  }
+
+  private handleVisibilityChange = (): void => {
+    const conversationId = this.conversationStore.currentConversationId;
+    if (!conversationId) return;
+
+    if (document.visibilityState === 'hidden') {
+      this.getSession(conversationId)?.disconnect();
+    } else {
+      this.activateConversation(conversationId);
+    }
+  };
+
+  @api('/api/chat/session/:conversationId')
+  async getSessionState(
+    _params: { conversationId: string },
+    req?: ApiRequest<{ conversationId: string }>,
+  ): Promise<{ phase: 'waiting' | 'running' | 'done' } | null> {
+    return req!.send() as Promise<{
+      phase: 'waiting' | 'running' | 'done';
+    } | null>;
+  }
+
+  async activateConversation(conversationId: string): Promise<void> {
+    const state = await this.getSessionState({ conversationId });
+
+    if (!state || state.phase === 'done') {
+      return;
+    }
+
+    const session = this.acquireSession(conversationId);
+    await session.connect();
+  }
 
   getSession(conversationId: string): ChatSession | undefined {
     return this.sessions.get(conversationId);

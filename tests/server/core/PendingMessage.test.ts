@@ -195,7 +195,7 @@ describe('PendingMessage', () => {
         at: Date.now(),
       });
 
-      await pending.finalize();
+      await pending.persist();
 
       expect(persister).toHaveBeenCalledWith(msg);
       expect(persister).toHaveBeenCalledTimes(1);

@@ -278,14 +278,22 @@ describe('ChatSession', () => {
   });
 
   describe('handleDisconnect', () => {
-    it('should cancel when phase is running', async () => {
+    it('should persist message and not cancel when phase is running', async () => {
       const { conn } = makeMockConnection();
       session.bindConnection(conn);
-      bindMockPendingMessage(session);
 
-      let capturedCtx: any;
-      const agent = makeMockAgent(async function* (_mem: any, ctx: any) {
-        capturedCtx = ctx;
+      const mockPersist = vi.fn().mockResolvedValue(undefined);
+      const mockMessage = {
+        id: 'msg-1',
+        role: Role.ASSIST,
+        content: '',
+        meta: { events: [] },
+        createdAt: new Date(),
+        conversationId: 'conv-123',
+      };
+      bindMockPendingMessage(session, mockMessage, mockPersist);
+
+      const agent = makeMockAgent(async function* () {
         yield { type: 'start', seq: 1, at: Date.now() };
         await new Promise(resolve => setTimeout(resolve, 50));
         yield { type: 'final', seq: 2, at: Date.now() };
@@ -296,9 +304,12 @@ describe('ChatSession', () => {
       await new Promise(resolve => setTimeout(resolve, 10));
       session.handleDisconnect();
 
-      await runPromise;
+      // Should call persist, not cancel
+      expect(mockPersist).toHaveBeenCalled();
 
-      expect(capturedCtx.signal.aborted).toBe(true);
+      await runPromise;
+      // Agent should complete normally
+      expect(session.phase).toBe('done');
     });
 
     it('should cleanup when phase is waiting', () => {

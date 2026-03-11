@@ -5,13 +5,24 @@ import { globby } from 'globby';
 import type { RedisClientType } from 'redis';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
-import { ChatSession } from '../core/ChatSession';
+import { ChatSession, SessionPhase } from '../core/ChatSession';
 import { Memory } from '../core/memory';
 import { registerMemory } from '../decorator/core';
 import { service } from '../decorator/service';
 import { isProd } from '../utils';
 import Logger from '../utils/logger';
 import { AuthService } from './AuthService';
+
+/**
+ * Session state persisted to Redis for reconnection support.
+ * Allows cross-instance/session restart recovery.
+ */
+export interface ChatSessionState {
+  conversationId: string;
+  phase: SessionPhase;
+  startedAt: number;
+  agentId: string | null;
+}
 
 @service()
 export class ChatService {
@@ -50,22 +61,65 @@ export class ChatService {
     return this.sessions.get(conversationId);
   }
 
+  async getSessionState(
+    conversationId: string,
+  ): Promise<ChatSessionState | null> {
+    const data = await this.redis.get(`chat_session:${conversationId}`);
+    return data ? JSON.parse(data) : null;
+  }
+
+  async updateSessionPhase(
+    conversationId: string,
+    phase: SessionPhase,
+    agentId?: string,
+  ): Promise<void> {
+    const state = await this.getSessionState(conversationId);
+    if (!state) return;
+    await this.redis.set(
+      `chat_session:${conversationId}`,
+      JSON.stringify({ ...state, phase, agentId: agentId ?? state.agentId }),
+      { EX: 3600 },
+    );
+  }
+
   acquireSession(conversationId: string): ChatSession | null {
     const existing = this.sessions.get(conversationId);
-    if (existing?.phase === 'running') return null;
-    if (existing) existing.cleanup();
+    // Allow reconnection for existing session (both waiting and running)
+    if (existing) return existing;
 
     const session = new ChatSession(conversationId, {
       idleTimeoutMs: 30_000,
-      onDispose: (id: string) => {
+      onDispose: async (id: string) => {
         this.sessions.delete(id);
-        this.redis.del(`human_input:${id}`).catch(err => {
-          this.logger.warn(`Failed to clean Redis key for ${id}:`, err);
-        });
+        await this.redis.del(`chat_session:${id}`);
+        await this.redis.del(`human_input:${id}`);
+      },
+      onPhaseChange: async (id: string, phase: SessionPhase) => {
+        await this.updateSessionPhase(id, phase);
       },
     });
 
     this.sessions.set(conversationId, session);
+
+    // Persist session state to Redis for reconnection support
+    this.redis
+      .set(
+        `chat_session:${conversationId}`,
+        JSON.stringify({
+          conversationId,
+          phase: 'waiting',
+          startedAt: Date.now(),
+          agentId: null,
+        }),
+        { EX: 3600 },
+      )
+      .catch(err =>
+        this.logger.error(
+          `Failed to save session state for ${conversationId}:`,
+          err,
+        ),
+      );
+
     return session;
   }
 
