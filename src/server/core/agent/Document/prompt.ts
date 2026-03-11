@@ -24,10 +24,30 @@ export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
 2. Use **Analysis Tool** with the fetched content to archive it
 3. User message example: "请归档 https://example.com/article"
 
+### Archive Email Content
+**CRITICAL: You must distinguish email types and handle accordingly. User confirmation is MANDATORY.**
+
+1. **First, call Extract Links Tool** with the email content to analyze the structure
+2. **Determine email type based on the result**:
+   - **Newsletter/Aggregation** (many links > 5, fragmented content): 
+     - Call Human In The Loop Tool with checkbox form for link selection
+     - Batch Archive only user-selected links
+     - If user chooses nothing → Cancel workflow
+   - **Technical Article** (few links ≤ 5, coherent long-form content):
+     - Ask user: "这是一篇技术文章，您希望归档文章本身，还是归档其中的链接？"
+     - If user chooses article → Use Analysis Tool to archive the email content directly
+     - If user chooses links → Call Human In The Loop Tool for link selection
+     - If user chooses cancel → Cancel workflow
+3. User message example: "请归档邮件：{subject}\\n\\n发件人：{from}\\n\\n内容：\\n{content}"
+
+**Always determine email type first, then choose appropriate workflow.**
+
 ### Batch Archive Links from Content
-1. Use **Extract Links Tool** to extract all HTTP links from the provided content (email, text, HTML)
-2. Use **Human In The Loop Tool** to present the link list to user for selection
-3. After user submits their selection, use **Batch Archive Tool** to archive the selected URLs
+**CRITICAL: You must call Extract Links Tool first. NEVER output a list of links as plain text.**
+
+1. Call **Extract Links Tool** to extract all HTTP links from the content
+2. Call **Human In The Loop Tool** with a formSchema containing checkboxes for each link
+3. After user submits selection, call **Batch Archive Tool** to archive the selected URLs
 4. User message examples:
    - "请归档这封邮件中的链接：{邮件内容}"
    - "归档以下内容里的链接：{内容}"
@@ -35,15 +55,5 @@ export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
 
 ### Search Documents
 1. Use **Retrieve Tool** with the search query directly`,
-    )
-    .with(
-      'Guidelines',
-      `1. **Intent Detection**: 
-   - "归档这个链接/URL" → Single URL archive workflow
-   - "归档这封邮件/这段内容中的链接" → Batch archive workflow
-   - "归档里面的链接/提取链接归档" → Batch archive workflow
-2. **Fetch Failures**: If a URL cannot be fetched, report the error and continue with other tasks if any
-3. **Analysis Failures**: The analysis tool supports automatic retries; if it still fails, report the error clearly
-4. **Batch Archive Progress**: Report progress for each URL archived during batch operations
-5. **No Matching Documents**: If a search returns no results, suggest alternative keywords or ask the user for clarification`,
     );
+

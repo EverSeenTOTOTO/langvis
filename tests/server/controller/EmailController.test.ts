@@ -5,8 +5,27 @@ const mockEmailService = {
   list: vi.fn(),
   getById: vi.fn(),
   delete: vi.fn(),
-  archive: vi.fn(),
+  updateStatus: vi.fn(),
   processInbound: vi.fn(),
+};
+
+const mockConversationService = {
+  createConversation: vi.fn(),
+  batchAddMessages: vi.fn(),
+  getConversationById: vi.fn(),
+  getMessagesByConversationId: vi.fn(),
+  updateMessage: vi.fn(),
+};
+
+const mockChatService = {
+  getSessionState: vi.fn(),
+  acquireSession: vi.fn(),
+  runSession: vi.fn(),
+  updateSessionPhase: vi.fn(),
+};
+
+const mockAuthService = {
+  getUserId: vi.fn(),
 };
 
 vi.mock('@/server/utils/logger', () => ({
@@ -24,8 +43,34 @@ vi.mock('@/server/service/EmailService', () => ({
     list = mockEmailService.list;
     getById = mockEmailService.getById;
     delete = mockEmailService.delete;
-    archive = mockEmailService.archive;
+    updateStatus = mockEmailService.updateStatus;
     processInbound = mockEmailService.processInbound;
+  },
+}));
+
+vi.mock('@/server/service/ConversationService', () => ({
+  ConversationService: class {
+    createConversation = mockConversationService.createConversation;
+    batchAddMessages = mockConversationService.batchAddMessages;
+    getConversationById = mockConversationService.getConversationById;
+    getMessagesByConversationId =
+      mockConversationService.getMessagesByConversationId;
+    updateMessage = mockConversationService.updateMessage;
+  },
+}));
+
+vi.mock('@/server/service/ChatService', () => ({
+  ChatService: class {
+    getSessionState = mockChatService.getSessionState;
+    acquireSession = mockChatService.acquireSession;
+    runSession = mockChatService.runSession;
+    updateSessionPhase = mockChatService.updateSessionPhase;
+  },
+}));
+
+vi.mock('@/server/service/AuthService', () => ({
+  AuthService: class {
+    getUserId = mockAuthService.getUserId;
   },
 }));
 
@@ -73,7 +118,12 @@ describe('EmailController', () => {
       const { default: EmailController } = await import(
         '@/server/controller/EmailController'
       );
-      const emailController = new EmailController(mockEmailService as any);
+      const emailController = new EmailController(
+        mockEmailService as any,
+        mockConversationService as any,
+        mockChatService as any,
+        mockAuthService as any,
+      );
 
       await emailController.list({}, mockRes as Response);
 
@@ -101,7 +151,12 @@ describe('EmailController', () => {
       const { default: EmailController } = await import(
         '@/server/controller/EmailController'
       );
-      const emailController = new EmailController(mockEmailService as any);
+      const emailController = new EmailController(
+        mockEmailService as any,
+        mockConversationService as any,
+        mockChatService as any,
+        mockAuthService as any,
+      );
 
       await emailController.list(
         {
@@ -150,7 +205,12 @@ describe('EmailController', () => {
       const { default: EmailController } = await import(
         '@/server/controller/EmailController'
       );
-      const emailController = new EmailController(mockEmailService as any);
+      const emailController = new EmailController(
+        mockEmailService as any,
+        mockConversationService as any,
+        mockChatService as any,
+        mockAuthService as any,
+      );
 
       await emailController.getById('mail_1', mockRes as Response);
 
@@ -164,7 +224,12 @@ describe('EmailController', () => {
       const { default: EmailController } = await import(
         '@/server/controller/EmailController'
       );
-      const emailController = new EmailController(mockEmailService as any);
+      const emailController = new EmailController(
+        mockEmailService as any,
+        mockConversationService as any,
+        mockChatService as any,
+        mockAuthService as any,
+      );
 
       await emailController.getById('non-existent', mockRes as Response);
 
@@ -180,7 +245,12 @@ describe('EmailController', () => {
       const { default: EmailController } = await import(
         '@/server/controller/EmailController'
       );
-      const emailController = new EmailController(mockEmailService as any);
+      const emailController = new EmailController(
+        mockEmailService as any,
+        mockConversationService as any,
+        mockChatService as any,
+        mockAuthService as any,
+      );
 
       await emailController.delete('mail_1', mockRes as Response);
 
@@ -194,7 +264,12 @@ describe('EmailController', () => {
       const { default: EmailController } = await import(
         '@/server/controller/EmailController'
       );
-      const emailController = new EmailController(mockEmailService as any);
+      const emailController = new EmailController(
+        mockEmailService as any,
+        mockConversationService as any,
+        mockChatService as any,
+        mockAuthService as any,
+      );
 
       await emailController.delete('non-existent', mockRes as Response);
 
@@ -211,7 +286,12 @@ describe('EmailController', () => {
       const { default: EmailController } = await import(
         '@/server/controller/EmailController'
       );
-      const emailController = new EmailController(mockEmailService as any);
+      const emailController = new EmailController(
+        mockEmailService as any,
+        mockConversationService as any,
+        mockChatService as any,
+        mockAuthService as any,
+      );
 
       await emailController.handleInbound(
         { raw: 'test' },
@@ -232,7 +312,12 @@ describe('EmailController', () => {
       const { default: EmailController } = await import(
         '@/server/controller/EmailController'
       );
-      const emailController = new EmailController(mockEmailService as any);
+      const emailController = new EmailController(
+        mockEmailService as any,
+        mockConversationService as any,
+        mockChatService as any,
+        mockAuthService as any,
+      );
 
       await emailController.handleInbound(
         { raw: 'test' },
@@ -253,7 +338,12 @@ describe('EmailController', () => {
       const { default: EmailController } = await import(
         '@/server/controller/EmailController'
       );
-      const emailController = new EmailController(mockEmailService as any);
+      const emailController = new EmailController(
+        mockEmailService as any,
+        mockConversationService as any,
+        mockChatService as any,
+        mockAuthService as any,
+      );
 
       await emailController.handleInbound(
         {} as any,
@@ -281,7 +371,12 @@ describe('EmailController', () => {
       const { default: EmailController } = await import(
         '@/server/controller/EmailController'
       );
-      const emailController = new EmailController(mockEmailService as any);
+      const emailController = new EmailController(
+        mockEmailService as any,
+        mockConversationService as any,
+        mockChatService as any,
+        mockAuthService as any,
+      );
 
       const rawEmail = `From: sender@example.com
 To: recipient@example.com
@@ -319,7 +414,12 @@ This is the email body content.`;
       const { default: EmailController } = await import(
         '@/server/controller/EmailController'
       );
-      const emailController = new EmailController(mockEmailService as any);
+      const emailController = new EmailController(
+        mockEmailService as any,
+        mockConversationService as any,
+        mockChatService as any,
+        mockAuthService as any,
+      );
 
       const rawEmail = `From: sender@example.com
 To: recipient@example.com

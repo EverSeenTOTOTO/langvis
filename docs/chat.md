@@ -1025,84 +1025,39 @@ case 'session_replaced':
 
 ### 10.1 设计目标
 
-- **通用触发函数**：点击按钮 → 新标签页打开会话 → 自动发起 Agent 对话
-- **后端预创建**：后端创建会话和消息，前端只需"重连"
-- **支持配置**：是否自动发送
+- **后端直接启动**：后端创建会话并启动 Agent，前端打开新标签页重连
+- **断线可继续**：Agent 执行不依赖 SSE 连接状态
 
-### 10.2 API 设计
-
-**POST /api/chat/resume/:conversationId**
-
-会话和消息已创建，只需启动 Agent。
-
-请求：无 body
-
-响应：
-
-```typescript
-{
-  success: boolean;
-  messageId: string;
-}
-```
-
-逻辑：
-
-1. 验证会话存在且 Redis 状态为 'waiting'
-2. 从数据库读取最新用户消息
-3. 构建 Memory
-4. 启动 Agent 执行
-5. 更新 Redis 状态为 'running'
-
-### 10.3 前端触发函数
-
-```typescript
-interface OpenConversationOptions {
-  conversationId: string;
-}
-
-function openAgentConversation(options: OpenConversationOptions): void {
-  const url = `/chat?conversationId=${options.conversationId}`;
-  window.open(url, '_blank');
-}
-```
-
-### 10.4 与断线重连的关系
-
-`openAgentConversation` 创建的会话，本质上是"等待重连"的会话：
+### 10.2 后端直接启动流程
 
 ```
-后端 archive API
+后端 API (如 POST /api/emails/archive/:id)
     │
     ├─ 创建 conversation + messages
-    ├─ 写入 Redis: { phase: 'waiting', agentId: 'document' }
+    ├─ 更新业务状态（如邮件状态）
+    ├─ 写入 Redis: { phase: 'running', agentId: 'xxx' }
+    ├─ 异步启动 Agent
     └─ 返回 conversationId
            │
-           └─ 前端 openAgentConversation()
+           └─ 前端打开新标签页
                   │
-                  └─ 打开新标签页
+                  └─ 页面加载，走 activateConversation() 流程
                          │
-                         └─ 页面加载，走 activateConversation() 流程
-                                │
-                                ├─ GET /api/chat/session/:id → { phase: 'waiting' }
-                                │
-                                ├─ 建立 SSE 连接
-                                │
-                                └─ 调用 resume API
-                                       │
-                                       └─ Agent 启动，phase → 'running'
+                         ├─ GET /api/chat/session/:id → { phase: 'running' }
+                         │
+                         └─ 建立 SSE 连接，继续接收事件
 ```
 
-**与普通重连的区别：**
+**优点：**
 
-| 场景       | Redis phase      | 前端行为                   |
-| ---------- | ---------------- | -------------------------- |
-| 普通重连   | `running`        | 建立 SSE，继续接收事件     |
-| Agent 触发 | `waiting`        | 建立 SSE + 调用 resume API |
-| 已结束     | `done` 或 `null` | 无需 SSE，渲染最终状态     |
+- 响应更快，Agent 立即开始执行
+- 利用断线重连机制，用户随时可重连查看进度
+- Agent 执行不依赖 SSE 连接状态
 
-**共享的核心流程：**
+### 10.3 与普通重连的区别
 
-1. `GET /api/chat/session/:id` 查询状态
-2. `activateConversation()` 判断是否需要 SSE
-3. 重连/新建 SSE 连接
+| 场景     | Redis phase      | 前端行为               |
+| -------- | ---------------- | ---------------------- |
+| 后端启动 | `running`        | 建立 SSE，继续接收事件 |
+| 普通重连 | `running`        | 建立 SSE，继续接收事件 |
+| 已结束   | `done` 或 `null` | 无需 SSE，渲染最终状态 |

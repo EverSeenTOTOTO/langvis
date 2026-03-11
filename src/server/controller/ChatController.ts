@@ -11,6 +11,7 @@ import type { Agent } from '../core/agent';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
+import { AuthService } from '../service/AuthService';
 import { ChatService } from '../service/ChatService';
 import { ConversationService } from '../service/ConversationService';
 
@@ -19,9 +20,10 @@ export default class ChatController {
   constructor(
     @inject(ConversationService)
     private conversationService: ConversationService,
-
     @inject(ChatService)
     private chatService: ChatService,
+    @inject(AuthService)
+    private authService: AuthService,
   ) {}
 
   @api('/sse/:conversationId', { method: 'get' })
@@ -118,8 +120,11 @@ export default class ChatController {
         .json({ error: `Agent ${conversation.config!.agent} not found` });
     }
 
+    const userId = await this.authService.getUserId(req);
+
     const memory = await this.chatService.buildMemory(
-      req,
+      conversationId,
+      userId,
       agent,
       conversation.config!,
       {

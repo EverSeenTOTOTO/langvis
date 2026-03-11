@@ -5,12 +5,7 @@ import type { ChatCompletionCreateParams } from 'openai/resources/chat/completio
 import type { RedisClientType } from 'redis';
 import { container } from 'tsyringe';
 import type LlmCallTool from './tool/LlmCall';
-
-export interface CachedReference {
-  $cached: string;
-  $size: number;
-  $preview?: string;
-}
+import type { CachedReference } from '../utils/cache';
 
 export class ExecutionContext {
   public get signal(): AbortSignal {

@@ -6,6 +6,20 @@ export const config: AgentConfig = {
   name: 'ReAct Agent',
   description:
     'An agent that uses the ReAct strategy to interact with tools and provide answers based on reasoning and actions.',
+  configSchema: {
+    type: 'object',
+    properties: {
+      model: {
+        type: 'object',
+        properties: {
+          code: {
+            type: 'string',
+            default: 'qwen3.5-27b',
+          },
+        },
+      },
+    },
+  } as any,
   tools: [
     ToolIds.DATE_TIME,
     ToolIds.WEB_FETCH,

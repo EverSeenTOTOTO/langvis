@@ -12,7 +12,7 @@ export interface ReadCacheInput {
   limit?: number;
 }
 
-export type ReadCacheOutput = string;
+export type ReadCacheOutput = string | Record<string, unknown>;
 
 @tool(ToolIds.READ_CACHE)
 export default class ReadCacheTool extends Tool<
@@ -29,17 +29,19 @@ export default class ReadCacheTool extends Tool<
   ): AsyncGenerator<AgentEvent, ReadCacheOutput, void> {
     const content = await ctx.retrieve(readCacheInput.key);
 
-    if (typeof content !== 'string') {
-      throw new Error(`Cached value is not a string: ${readCacheInput.key}`);
+    if (typeof content === 'string') {
+      const offset = readCacheInput.offset ?? 0;
+      const limit = readCacheInput.limit;
+      const result = limit
+        ? content.slice(offset, offset + limit)
+        : content.slice(offset);
+
+      yield ctx.agentToolProgressEvent(this.id, { size: result.length });
+      return result;
     }
 
-    const offset = readCacheInput.offset ?? 0;
-    const limit = readCacheInput.limit;
-    const result = limit
-      ? content.slice(offset, offset + limit)
-      : content.slice(offset);
-
-    yield ctx.agentToolProgressEvent(this.id, { size: result.length });
-    return result;
+    // Object type cache (from autoCompressOutput)
+    yield ctx.agentToolProgressEvent(this.id, { type: 'object' });
+    return content as Record<string, unknown>;
   }
 }

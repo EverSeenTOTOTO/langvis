@@ -2,7 +2,7 @@
 
 ## 一、设计目标
 
-Agent VM 是一个用于执行 LLM 驱动 Agent 的运行时系统。与传统 Agent（如 ReAct）不同，本系统将 Agent 行为抽象为一组可执行指令，由虚拟机负责执行，LLM 负责生成指令。
+Agent VM 是一个用于执行 LLM 驱动 Agent 的运行时系统。LLM 每次生成**一条指令**，VM 执行后返回结果，形成"思考-行动-观察"循环。
 
 ### 核心目标
 
@@ -16,19 +16,11 @@ Agent VM 是一个用于执行 LLM 驱动 Agent 的运行时系统。与传统 A
 ### 核心理念
 
 ```
-LLM = compiler（编译器）
-Agent VM = runtime（运行时）
+LLM = 决策者（每次一个动作）
+Agent VM = 执行者（确定性运行时）
 ```
 
-LLM 不负责执行任务，只负责生成指令。VM 负责解释和执行指令。
-
-### Agent 是一等公民
-
-Agent 从"调用目标"变成"可操作的数据"。支持：
-
-- 高阶 Agent（Agent 作为参数传递）
-- Agent 闭包（捕获环境变量）
-- Agent 组合（map/filter/compose）
+LLM 不负责执行任务，只负责生成**单条指令**。VM 负责执行指令并返回结果，LLM 根据结果决定下一步。
 
 ---
 
@@ -56,7 +48,6 @@ Agent 从"调用目标"变成"可操作的数据"。支持：
 ```
 Frame {
   locals: Map<string, Value>    // 局部变量
-  operand_stack: Value[]        // 操作栈
   parent: Frame | null          // 父 Frame
 }
 ```
@@ -65,20 +56,8 @@ Frame {
 
 存储当前 Agent 的变量：
 
-- `agent`：当前 Agent 闭包
 - `goal`：当前目标
 - 中间结果
-- 工具引用（预置）
-
-**operand stack**
-
-存储短期数据：
-
-- 工具调用返回值
-- Agent 返回值
-- 临时计算结果
-- 函数参数
-- Agent 闭包
 
 **parent**
 
@@ -88,27 +67,31 @@ Frame {
 
 ## 三、执行模型
 
-### 主循环
+### 主循环（ReAct 风格）
 
 ```
 while (frame_stack not empty) {
   frame = top(frame_stack)
   context = build_context(frame)
-  transaction = LLM(context)    // 生成一个事务
-  execute(transaction)          // 执行事务内所有指令
+  instruction = LLM(context)    // 生成单条指令
+  result = execute(instruction) // 执行并返回结果
+  if (instruction stores result) {
+    frame.locals[instruction.result] = result
+  }
 }
 ```
 
-### 事务（Transaction）
+### 关键差异：每次一条指令
 
-事务是原子执行单位，包含多条指令。
+与传统 ReAct 对比：
 
-特性：
-
-- 一个事务内调用一次 LLM
-- 事务内指令顺序执行
-- 事务执行期间不被打断
-- 事务边界是中断点
+| 特性     | ReAct            | Agent VM           |
+| -------- | ---------------- | ------------------ |
+| LLM 输出 | Thought + Action | 单条指令           |
+| 观察时机 | 每个 Action 后   | 每条指令后         |
+| 状态管理 | 隐式（对话历史） | 显式（Frame 变量） |
+| 可恢复性 | 困难             | 天然支持           |
+| 可中断性 | 有限             | 每条指令后可中断   |
 
 ### LLM 上下文构造
 
@@ -121,8 +104,8 @@ Goal: <当前目标>
 Variables:
   <当前 Frame 的变量列表>
 
-Operand Stack:
-  <栈顶若干元素>
+Last Result:
+  <上一条指令的执行结果（如果有）>
 
 Available Tools:
   <工具列表及描述>
@@ -134,7 +117,7 @@ Allowed Instructions:
   <允许的指令及描述>
 ```
 
-LLM 输出一个事务的指令序列。
+LLM 输出**单条指令**。
 
 ---
 
@@ -163,212 +146,117 @@ Frame B (child of A):
 // Frame A 不受影响
 ```
 
-### 工具作为预置变量
-
-工具在根 Frame 初始化时注入到 `locals`：
-
-```
-root_frame.locals = {
-  web_fetch: Syscall("web_fetch"),
-  doc_analysis: Syscall("doc_analysis"),
-  ...
-}
-```
-
-通过 `LOAD` 指令加载工具引用，与普通变量一致。
-
 ---
 
-## 五、操作栈
+## 五、指令集
 
-操作栈用于传递短期数据，遵循 LIFO 结构。
+### 设计原则
 
-### 特性
-
-- 只属于当前 Frame
-- 子 Frame 不继承父 Frame 的栈
-- 用于传递 CALL/SYSCALL 的参数和返回值
-
-### 参数传递约定
-
-参数按顺序压入栈，栈顶是最后一个参数：
-
-```
-// 调用 send_email(to, subject, body)
-PUSH body
-PUSH subject
-PUSH to
-LOAD send_email
-CALL
-// 参数顺序：to, subject, body
-```
-
----
-
-## 六、指令集
+1. **每条指令是原子操作** — 执行后立即返回结果
+2. **参数内联** — 不需要压栈操作，参数直接写在指令中
+3. **结果可命名** — 可选择存储到变量供后续使用
 
 ### 完整指令集
 
-| 指令         | 参数       | 语义                                    |
-| ------------ | ---------- | --------------------------------------- |
-| `PUSH`       | `value`    | 压入字面量到操作栈                      |
-| `LOAD`       | `var`      | 将变量值压入操作栈                      |
-| `STORE`      | `var`      | 弹出栈顶并存入变量                      |
-| `PUSH_AGENT` | `agent_id` | 创建 Agent 闭包（捕获当前环境）并压入栈 |
-| `CALL`       | 无         | 调用栈顶的 callable                     |
-| `RET`        | 无         | 返回，弹出当前 Frame                    |
-
-### VM 值类型
-
-```
-enum Value {
-  Literal      // JSON 值：string | number | boolean | null | array | object
-  Closure      // Agent 闭包 { agent_id, captured_vars }
-  Syscall      // 工具引用 { tool_id }
-  Continuation // 延续（P1）
-}
-```
-
-**Literal**
-
-所有 JSON 可表示的值统一为 `Literal` 类型：
-
-- `string`、`number`、`boolean`、`null`
-- `array`（`Value[]`）
-- `object`（`Map<string, Value>`）
-
-**Closure**
-
-Agent 闭包，捕获当前环境的变量：
-
-```
-Closure {
-  agent_id: string
-  captured_vars: Map<string, Value>
-}
-```
-
-**Syscall**
-
-工具引用，在根 Frame 初始化时注入：
-
-```
-Syscall {
-  tool_id: string
-}
-```
-
-**Continuation**
-
-延续，用于高级控制流（P1）。
+| 指令    | 参数                    | 语义                 |
+| ------- | ----------------------- | -------------------- |
+| `CALL`  | `tool`, `args`, `into?` | 调用工具             |
+| `STORE` | `from`, `into`          | 复制/重命名变量      |
+| `RET`   | `value?`                | 返回，结束当前 Frame |
 
 ### 指令格式
 
-指令序列使用 JSON 数组格式：
+指令使用 JSON 对象格式：
 
 ```json
-[
-  { "op": "PUSH", "value": "https://example.com" },
-  { "op": "LOAD", "var": "web_fetch" },
-  { "op": "CALL" },
-  { "op": "STORE", "var": "page" }
-]
+{
+  "op": "CALL",
+  "tool": "web_fetch",
+  "args": ["https://example.com"],
+  "into": "page"
+}
 ```
 
 ### 指令详解
 
-#### PUSH
+#### CALL
 
-压入字面量值。
+调用工具，参数直接内联。
 
 ```json
-{"op": "PUSH", "value": "hello"}
-{"op": "PUSH", "value": 42}
-{"op": "PUSH", "value": {"key": "value"}}
+{ "op": "CALL", "tool": "web_fetch", "args": ["https://example.com"] }
+{ "op": "CALL", "tool": "web_fetch", "args": ["https://example.com"], "into": "page" }
+{ "op": "CALL", "tool": "send_email", "args": { "to": "user@example.com", "subject": "Hello", "body": "..." } }
 ```
 
-#### LOAD
+- `tool`：工具名称
+- `args`：参数，数组或对象（取决于工具签名）
+- `into`：可选，将结果存储到变量
 
-从 locals 加载变量，压入栈顶。支持作用域链查找。
+**调用 Agent 也是通过工具实现：**
 
 ```json
-{"op": "LOAD", "var": "url"}
-{"op": "LOAD", "var": "web_fetch"}  // 加载工具
+{
+  "op": "CALL",
+  "tool": "call_agent",
+  "args": { "agent": "document_agent", "goal": "分析这份文档" },
+  "into": "result"
+}
+```
+
+`call_agent` 工具内部创建新 Frame 并入栈，主循环在新 Frame 中继续执行。
+
+执行结果：
+
+```typescript
+type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 ```
 
 #### STORE
 
-弹出栈顶，存入当前 Frame 的 locals。
+复制或重命名变量。
 
 ```json
-{ "op": "STORE", "var": "page" }
-```
-
-#### PUSH_AGENT
-
-创建 Agent 闭包，捕获当前环境的变量，压入栈。
-
-```json
-{ "op": "PUSH_AGENT", "agent_id": "document_agent" }
-```
-
-#### CALL
-
-调用栈顶的 callable：
-
-- 若是 `Syscall`：调用工具，返回值压入栈
-- 若是 `Closure`：创建新 Frame，入栈，开始执行
-
-```json
-{ "op": "CALL" }
+{ "op": "STORE", "from": "result", "into": "final_answer" }
 ```
 
 #### RET
 
-结束当前 Agent 执行：
-
-1. 弹出当前 Frame
-2. 若有返回值，压入父 Frame 的操作栈
-3. 继续执行父 Frame 的下一条指令
+结束当前 Agent 执行，返回父 Frame。
 
 ```json
 { "op": "RET" }
+{ "op": "RET", "value": "分析完成，结果如下..." }
+{ "op": "RET", "value": { "from": "analysis" } }  // 引用变量
 ```
 
----
+- `value`：可选，返回值。可以是字面量或变量引用
 
-## 七、事务与回滚
+执行后：
 
-### 事务边界
-
-- 每次调用 LLM 生成一个事务
-- 事务内指令顺序执行，不可打断
-- 事务执行完成后，VM 检查中断信号
-
-### 取消与补偿（Saga 模式）
-
-不支持传统回滚（时间旅行式撤销）。采用 Saga 补偿模式：
-
-- 用户请求取消 → LLM 生成补偿指令序列
-- 补偿操作追加执行，而非撤销历史
-- 补偿可能不完美（如已发送的邮件），由 LLM 告知用户
-
-### 工具职责边界
-
-工具不持有流程执行状态，也不提供 `undo` 方法。
-
-回滚补偿由 LLM 结合当前可用工具判断如何执行：
-
-- LLM 决定调用哪些工具来补偿
-- 补偿逻辑是运行时决策，而非工具内置能力
+1. 弹出当前 Frame
+2. 若有返回值，存储到父 Frame 的 `last_result` 变量
+3. 继续执行父 Frame
 
 ---
 
-## 八、错误处理
+## 六、VM 值类型
+
+所有变量值为 JSON 可表示的类型：
+
+- `string`、`number`、`boolean`、`null`
+- `array`
+- `object`
+
+工具调用结果也遵循相同格式。
+
+---
+
+## 七、错误处理
 
 ### 错误作为值
 
-工具调用失败不打断事务，错误作为返回值：
+工具调用失败不打断执行，错误作为返回值：
 
 ```typescript
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -377,22 +265,22 @@ type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 示例：
 
 ```json
-[
-  { "op": "PUSH", "value": "https://example.com" },
-  { "op": "LOAD", "var": "web_fetch" },
-  { "op": "CALL" },
-  { "op": "STORE", "var": "result" }
-]
+{
+  "op": "CALL",
+  "tool": "web_fetch",
+  "args": ["https://flaky-api.com"],
+  "into": "result"
+}
 
 
 // result = { ok: true, data: "..." } 或 { ok: false, error: "timeout" }
 ```
 
-LLM 根据结果决定下一步操作。
+LLM 在下一次调用时看到 `result` 的值，决定是否重试或换策略。
 
 ---
 
-## 九、中断与恢复
+## 八、中断与恢复
 
 ### 取消任务
 
@@ -404,10 +292,10 @@ LLM 根据结果决定下一步操作。
 
 用户请求"回退到某个 Frame"，例如当前在 A→B→C 链上，用户要取消 C 回到 B：
 
-1. LLM 在 C 的 Frame 中生成补偿指令
-2. 执行补偿，清理 C 的副作用
-3. C 执行 `RET`，返回 `{ cancelled: true, reason: "..." }`
-4. B 收到返回值，LLM 决定下一步（继续或也取消）
+1. 标记 C 为"已取消"
+2. VM 在下次指令生成时告知 LLM：当前 Frame 已取消
+3. LLM 生成 `RET` 指令，返回 `{ cancelled: true, reason: "..." }`
+4. B 收到返回值，LLM 决定下一步
 
 ### 返回值结构
 
@@ -418,19 +306,22 @@ type RetValue =
   | { cancelled: true; reason: string }; // 被取消/rewind
 ```
 
-RET 统一处理所有返回场景。
-
 ### Human-in-the-loop
 
-`HumanInTheLoopTool` 与其他工具一致：
+`human_input` 工具与其他工具一致：
 
-- 等待用户输入
-- 采集结果
-- 返回给 Agent 分析下一步
+```json
+{
+  "op": "CALL",
+  "tool": "human_input",
+  "args": { "prompt": "请提供文档链接" },
+  "into": "doc_url"
+}
+```
 
 ---
 
-## 十、执行限制
+## 九、执行限制
 
 ### 栈深度限制
 
@@ -442,20 +333,17 @@ max_frame_depth = 100  // 可配置
 
 超过限制时抛出错误。
 
-### 尾调用优化（P1）
+### 指令数限制
 
-Agent 调用后立即返回的场景：
+防止无限循环：
 
 ```
-// Agent A 的最后一步
-PUSH_AGENT B
-CALL
-RET  // 可优化为：直接跳转到 B，复用当前 Frame
+max_instructions_per_frame = 1000  // 可配置
 ```
 
 ---
 
-## 十一、记忆系统
+## 十、记忆系统
 
 长期记忆以 facts 形式存在，作为变量注入：
 
@@ -466,85 +354,174 @@ RET  // 可优化为：直接跳转到 B，复用当前 Frame
 
 ---
 
-## 十二、示例
+## 十一、示例
 
 ### 示例 1：获取并分析文档
 
+**第一轮：获取网页**
+
 ```json
-[
-  { "op": "PUSH", "value": "https://example.com/doc" },
-  { "op": "LOAD", "var": "web_fetch" },
-  { "op": "CALL" },
-  { "op": "STORE", "var": "page" },
-  { "op": "LOAD", "var": "page" },
-  { "op": "LOAD", "var": "doc_analysis" },
-  { "op": "CALL" },
-  { "op": "STORE", "var": "analysis" },
-  { "op": "LOAD", "var": "analysis" },
-  { "op": "RET" }
-]
+{
+  "op": "CALL",
+  "tool": "web_fetch",
+  "args": ["https://example.com/doc"],
+  "into": "page"
+}
 ```
 
-### 示例 2：创建 Agent 闭包并调用
+结果：`page = { ok: true, data: "文档内容..." }`
+
+**第二轮：分析文档**
 
 ```json
-[
-  { "op": "PUSH", "value": "分析下 https://example.com/1" },
-  { "op": "PUSH_AGENT", "agent_id": "document_agent" },
-  { "op": "CALL" },
-  { "op": "STORE", "var": "result1" }
-]
+{
+  "op": "CALL",
+  "tool": "doc_analysis",
+  "args": { "from": "page.data" },
+  "into": "analysis"
+}
 ```
 
-### 示例 3：处理错误
+结果：`analysis = { ok: true, data: { summary: "...", keywords: [...] } }`
 
-第一个事务：尝试请求
+**第三轮：返回结果**
 
 ```json
-[
-  { "op": "PUSH", "value": "https://flaky-api.com" },
-  { "op": "LOAD", "var": "web_fetch" },
-  { "op": "CALL" },
-  { "op": "STORE", "var": "result" }
-]
-
-
-// result = { ok: false, error: "timeout" }
+{ "op": "RET", "value": { "from": "analysis" } }
 ```
 
-第二个事务（LLM 根据错误结果生成）：重试
+### 示例 2：调用子 Agent
+
+**第一轮：调用第一个 Agent**
 
 ```json
-[
-  { "op": "PUSH", "value": "https://flaky-api.com" },
-  { "op": "LOAD", "var": "web_fetch" },
-  { "op": "CALL" },
-  { "op": "STORE", "var": "result" }
-]
+{
+  "op": "CALL",
+  "tool": "call_agent",
+  "args": { "agent": "document_agent", "goal": "分析 https://example.com/1" },
+  "into": "result1"
+}
 ```
 
-第三个事务（成功后）：继续处理
+**第二轮：调用第二个 Agent**
 
 ```json
-[
-  { "op": "LOAD", "var": "result" },
-  { "op": "PUSH", "value": "data" },
-  { "op": "LOAD", "var": "get_field" },
-  { "op": "CALL" },
-  { "op": "STORE", "var": "data" },
-  { "op": "RET" }
-]
+{
+  "op": "CALL",
+  "tool": "call_agent",
+  "args": { "agent": "document_agent", "goal": "分析 https://example.com/2" },
+  "into": "result2"
+}
+```
+
+**第三轮：汇总返回**
+
+```json
+{
+  "op": "RET",
+  "value": { "results": [{ "from": "result1" }, { "from": "result2" }] }
+}
+```
+
+### 示例 3：处理错误并重试
+
+**第一轮：尝试请求**
+
+```json
+{
+  "op": "CALL",
+  "tool": "web_fetch",
+  "args": ["https://flaky-api.com"],
+  "into": "result"
+}
+```
+
+结果：`result = { ok: false, error: "timeout" }`
+
+**第二轮：LLM 看到错误，决定重试**
+
+```json
+{
+  "op": "CALL",
+  "tool": "web_fetch",
+  "args": ["https://flaky-api.com"],
+  "into": "result"
+}
+```
+
+结果：`result = { ok: true, data: "..." }`
+
+**第三轮：继续处理**
+
+```json
+{
+  "op": "CALL",
+  "tool": "parse_json",
+  "args": { "from": "result.data" },
+  "into": "data"
+}
+```
+
+### 示例 4：询问用户
+
+**第一轮：询问用户**
+
+```json
+{
+  "op": "CALL",
+  "tool": "human_input",
+  "args": { "prompt": "请提供要分析的文档链接" },
+  "into": "doc_url"
+}
+```
+
+结果：`doc_url = { ok: true, data: "https://example.com/doc" }`
+
+**第二轮：使用用户输入**
+
+```json
+{
+  "op": "CALL",
+  "tool": "web_fetch",
+  "args": [{ "from": "doc_url.data" }],
+  "into": "page"
+}
+```
+
+---
+
+## 十二、变量引用语法
+
+在指令中使用变量值：
+
+| 语法                | 语义                     |
+| ------------------- | ------------------------ |
+| `"literal"`         | 字面量字符串             |
+| `{ "from": "x" }`   | 引用变量 `x` 的值        |
+| `{ "from": "x.y" }` | 引用变量 `x` 的 `y` 属性 |
+
+示例：
+
+```json
+{
+  "op": "CALL",
+  "tool": "send_email",
+  "args": {
+    "to": { "from": "user_email" },
+    "subject": "分析结果",
+    "body": { "from": "analysis.summary" }
+  }
+}
 ```
 
 ---
 
 ## 十三、设计原则总结
 
-1. **指令集最小化** — 6 条指令，避免 LLM 幻觉
-2. **确定性执行** — VM 行为可预测，便于调试和恢复
-3. **错误作为值** — 不打断执行，LLM 决定处理方式
-4. **Saga 补偿** — 不支持回滚，追加补偿操作
+1. **单指令决策** — 每次 LLM 只生成一条指令，降低规划难度
+2. **参数内联** — 不需要压栈操作，减少 LLM 认知负担
+3. **确定性执行** — VM 行为可预测，便于调试和恢复
+4. **错误作为值** — 不打断执行，LLM 决定处理方式
 5. **作用域隔离** — 子 Frame 变量独立，避免污染
-6. **一等公民 Agent** — 支持闭包、组合、高阶调用
 
 ---
