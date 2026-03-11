@@ -1,15 +1,13 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
-import { InjectTokens, ToolIds } from '@/shared/constants';
+import { InjectTokens, RedisKeys, ToolIds } from '@/shared/constants';
 import { ToolConfig, AgentEvent } from '@/shared/types';
 import { JSONSchemaType } from 'ajv';
 import type { RedisClientType } from 'redis';
 import { inject } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
-
-const REDIS_PREFIX = 'human_input:';
 
 function waitForNotification(
   subscriber: RedisClientType<any>,
@@ -86,7 +84,7 @@ export default class HumanInTheLoopTool<
     ctx.signal.throwIfAborted();
 
     const { conversationId, message, formSchema, timeout = 300_000 } = params;
-    const key = `${REDIS_PREFIX}${conversationId}`;
+    const key = RedisKeys.HUMAN_INPUT(conversationId);
     const POLL_INTERVAL = 30_000; // 30s fallback check when Pub/Sub fails
 
     await this.redis.set(

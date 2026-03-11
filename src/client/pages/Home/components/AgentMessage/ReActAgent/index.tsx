@@ -38,7 +38,6 @@ function deriveReActState(state: MessageRenderState): ReActDerivedState {
 
   const toolBlocks = buildToolBlocks(toolCallTimeline);
 
-  // Fix: Check ALL pending tools for awaiting_input
   const awaitingInput = detectAwaitingInput(toolBlocks);
 
   const allToolsSettled =
@@ -223,36 +222,42 @@ const ReActEventRenderer: React.FC<ReActEventRendererProps> = ({
   );
 };
 
-const ReActAgentRenderer = (
-  msg: Message,
-  state: MessageRenderState,
-): AgentRenderResult => {
-  const { showBubbleLoading } = deriveReActState(state);
+const createReActRenderer = (agentId: string) => {
+  const renderer = (
+    msg: Message,
+    state: MessageRenderState,
+  ): AgentRenderResult => {
+    const { showBubbleLoading } = deriveReActState(state);
 
-  return {
-    content: (
-      <>
-        {state.hasEvents && (
-          <ReActEventRenderer
-            state={state}
-            conversationId={msg.conversationId}
-          />
-        )}
+    return {
+      content: (
+        <>
+          {state.hasEvents && (
+            <ReActEventRenderer
+              state={state}
+              conversationId={msg.conversationId}
+            />
+          )}
 
-        {state.isAwaitingContent && (
-          <Typography.Text type="secondary" italic>
-            <LoadingOutlined style={{ marginInlineEnd: 4 }} />
-            Thinking...
-          </Typography.Text>
-        )}
+          {state.isAwaitingContent && (
+            <Typography.Text type="secondary" italic>
+              <LoadingOutlined style={{ marginInlineEnd: 4 }} />
+              Thinking...
+            </Typography.Text>
+          )}
 
-        <MarkdownRender>{msg.content}</MarkdownRender>
-      </>
-    ),
-    showBubbleLoading,
+          <MarkdownRender>{msg.content}</MarkdownRender>
+        </>
+      ),
+      showBubbleLoading,
+    };
   };
+
+  registerAgentRenderer(agentId, renderer);
+  return renderer;
 };
 
-registerAgentRenderer(AgentIds.REACT, ReActAgentRenderer);
+const ReActAgentRenderer = createReActRenderer(AgentIds.REACT);
 
+export { createReActRenderer };
 export default ReActAgentRenderer;

@@ -4,19 +4,12 @@ import type { Message } from '@/shared/types/entities';
 
 export type MessagePersister = (message: Message) => Promise<unknown>;
 
-/**
- * Manages the state of a message being built during agent execution.
- * Responsible for accumulating content and events from agent events.
- */
 export class PendingMessage {
   constructor(
     private message: Message,
     private persistCallback: MessagePersister,
   ) {}
 
-  /**
-   * Handle an agent event and update message state accordingly.
-   */
   handleEvent(event: AgentEvent): void {
     // 1. Accumulate stream content to message
     if (event.type === 'stream') {
@@ -44,10 +37,6 @@ export class PendingMessage {
     }
   }
 
-  /**
-   * Get current content length (character count).
-   * Useful for token estimation and statistics.
-   */
   get contentLength(): number {
     return this.message.content.length;
   }

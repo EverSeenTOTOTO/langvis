@@ -39,12 +39,12 @@ const Chat: React.FC = () => {
     const messages = conversationStore.currentMessages;
     const lastMessage = messages?.[messages.length - 1];
     if (!lastMessage || lastMessage.role !== Role.ASSIST) {
-      return chatStore.isCurrentLoading; // fallback to phase-based check
+      return chatStore.currentSession?.isLoading ?? false; // fallback to phase-based check
     }
     return !deriveMessageState(lastMessage).isTerminated;
   }, [
     conversationStore.currentMessages,
-    chatStore.isCurrentLoading,
+    chatStore.currentSession?.isLoading,
     isCancelling,
   ]);
 

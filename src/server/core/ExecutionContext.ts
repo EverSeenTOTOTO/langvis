@@ -1,4 +1,4 @@
-import { InjectTokens, ToolIds } from '@/shared/constants';
+import { InjectTokens, RedisKeys, ToolIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
 import { generateId } from '@/shared/utils';
 import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
@@ -196,7 +196,11 @@ export class ExecutionContext {
     const serialized =
       typeof value === 'string' ? value : JSON.stringify(value);
     const redis = container.resolve<RedisClientType>(InjectTokens.REDIS);
-    await redis.setEx(`agent:cache:${this.traceId}:${key}`, 3600, serialized);
+    await redis.setEx(
+      RedisKeys.AGENT_CACHE(this.traceId, key),
+      3600,
+      serialized,
+    );
     this.cachedKeys.push(key);
 
     return {
@@ -211,7 +215,7 @@ export class ExecutionContext {
 
   async retrieve(key: string): Promise<unknown> {
     const redis = container.resolve<RedisClientType>(InjectTokens.REDIS);
-    const data = await redis.get(`agent:cache:${this.traceId}:${key}`);
+    const data = await redis.get(RedisKeys.AGENT_CACHE(this.traceId, key));
     if (!data) {
       throw new Error(`Cache miss: ${key}`);
     }
@@ -225,7 +229,9 @@ export class ExecutionContext {
   async clearCache(): Promise<void> {
     if (this.cachedKeys.length > 0) {
       const redis = container.resolve<RedisClientType>(InjectTokens.REDIS);
-      const keys = this.cachedKeys.map(k => `agent:cache:${this.traceId}:${k}`);
+      const keys = this.cachedKeys.map(k =>
+        RedisKeys.AGENT_CACHE(this.traceId, k),
+      );
       await redis.del(keys);
       this.cachedKeys = [];
     }
