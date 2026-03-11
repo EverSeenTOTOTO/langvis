@@ -99,9 +99,8 @@ export class ChatSession {
       throw new Error('PendingMessage not bound');
     }
 
-    const message = this.pendingMessage.toMessage();
     const controller = new AbortController();
-    const ctx = new ExecutionContext(message.id, controller);
+    const ctx = new ExecutionContext(this.conversationId, controller);
     this.ctx = ctx;
 
     this.transition('running');

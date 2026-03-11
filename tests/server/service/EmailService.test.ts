@@ -246,4 +246,49 @@ describe('EmailService', () => {
       expect(result).toBe(false);
     });
   });
+
+  describe('updateStatus', () => {
+    it('should update email status to archived', async () => {
+      const mockEmail = {
+        id: 'mail_1',
+        status: 'unarchived',
+        archivedAt: null,
+      };
+      mockRepository.findOneBy.mockResolvedValueOnce(mockEmail);
+      mockRepository.save.mockResolvedValueOnce({
+        ...mockEmail,
+        status: 'archived',
+        archivedAt: expect.any(Date),
+      });
+
+      const result = await emailService.updateStatus('mail_1', 'archived');
+
+      expect(result.success).toBe(true);
+      expect(mockRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'archived',
+          archivedAt: expect.any(Date),
+        }),
+      );
+    });
+
+    it('should return false if email not found', async () => {
+      mockRepository.findOneBy.mockResolvedValueOnce(null);
+
+      const result = await emailService.updateStatus('nonexistent', 'archived');
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('list with status filter', () => {
+    it('should filter by status', async () => {
+      mockRepository.findAndCount.mockResolvedValueOnce([[], 0]);
+
+      await emailService.list({ status: 'archived' });
+
+      const callArgs = mockRepository.findAndCount.mock.calls[0][0];
+      expect(callArgs.where.status).toBe('archived');
+    });
+  });
 });

@@ -68,9 +68,11 @@ export default class ReActAgent extends Agent {
         iterMessages.filter(m => m.role !== Role.SYSTEM),
       );
 
+      const model = options?.model?.code ?? process.env.OPENAI_MODEL;
+
       const content = yield* ctx.callLlm({
         messages: iterMessages,
-        model: options?.model?.code,
+        model,
         temperature: options?.model?.temperature,
         stop: ['Observation:', 'Observation：'],
       });

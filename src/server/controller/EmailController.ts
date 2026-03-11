@@ -1,10 +1,20 @@
+import { AgentIds } from '@/shared/constants';
 import { ListEmailsRequestDto } from '@/shared/dto/controller';
+import { Conversation } from '@/shared/entities/Conversation';
+import { EmailEntity } from '@/shared/entities/Email';
+import { Role } from '@/shared/entities/Message';
 import type { Request, Response } from 'express';
-import { inject } from 'tsyringe';
+import { container, inject } from 'tsyringe';
+import type { Agent } from '../core/agent';
+import { PendingMessage } from '../core/PendingMessage';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, query, request, response } from '../decorator/param';
+import { AuthService } from '../service/AuthService';
+import { ChatService } from '../service/ChatService';
+import { ConversationService } from '../service/ConversationService';
 import { EmailService } from '../service/EmailService';
+import { compressIfNeeded, type CachedReference } from '../utils/cache';
 import Logger from '../utils/logger';
 
 const INBOUND_SECRET = import.meta.env.VITE_INBOUND_SECRET || '';
@@ -20,6 +30,12 @@ export default class EmailController {
   constructor(
     @inject(EmailService)
     private readonly emailService: EmailService,
+    @inject(ConversationService)
+    private readonly conversationService: ConversationService,
+    @inject(ChatService)
+    private readonly chatService: ChatService,
+    @inject(AuthService)
+    private readonly authService: AuthService,
   ) {}
 
   @api('/')
@@ -29,6 +45,7 @@ export default class EmailController {
       subject: dto.subject,
       startDate: dto.startDate,
       endDate: dto.endDate,
+      status: dto.status,
       page: dto.page,
       pageSize: dto.pageSize,
     });
@@ -91,5 +108,103 @@ export default class EmailController {
       this.logger.error(`Failed to process inbound email: ${errorMsg}`);
       return res.status(500).json({ error: errorMsg });
     }
+  }
+
+  @api('/archive/:id', { method: 'post' })
+  async archive(
+    @param('id') id: string,
+    @request() req: Request,
+    @response() res: Response,
+  ) {
+    const email = await this.emailService.getById(id);
+
+    if (!email) {
+      return res.status(404).json({ error: 'Email not found' });
+    }
+
+    await this.emailService.updateStatus(id, 'archived');
+
+    const userId = await this.authService.getUserId(req);
+    const conversation = await this.conversationService.createConversation(
+      `归档邮件: ${email.subject}`,
+      userId,
+      { agent: AgentIds.DOCUMENT },
+    );
+
+    const agent = container.resolve<Agent>(AgentIds.DOCUMENT);
+    const contentOrCached = await compressIfNeeded(
+      conversation.id,
+      email.content,
+    );
+    const userContent = this.buildArchivePrompt(email, contentOrCached);
+
+    res.status(200).json({ conversationId: conversation.id });
+
+    await this.startArchiveSession(conversation, email, userContent, agent);
+    return;
+  }
+
+  private buildArchivePrompt(
+    email: EmailEntity,
+    contentOrCached: string | CachedReference,
+  ): string {
+    const fromDisplay = email.fromName
+      ? `${email.fromName} <${email.from}>`
+      : email.from;
+
+    if (typeof contentOrCached === 'string') {
+      return `请归档邮件：${email.subject}\n\n发件人：${fromDisplay}\n发件时间：${email.sentAt.toISOString()}\n\n内容：\n${contentOrCached}`;
+    }
+
+    return `请归档邮件：${email.subject}\n\n发件人：${fromDisplay}\n发件时间：${email.sentAt.toISOString()}\n\n内容已缓存：${JSON.stringify(contentOrCached)}`;
+  }
+
+  private async startArchiveSession(
+    conversation: Conversation,
+    email: EmailEntity,
+    userContent: string,
+    agent: Agent,
+  ): Promise<void> {
+    const conversationId = conversation.id;
+
+    const memory = await this.chatService.buildMemory(
+      conversationId,
+      conversation.userId,
+      agent,
+      conversation.config!,
+      {
+        role: Role.USER,
+        content: userContent,
+        meta: { emailId: email.id },
+      },
+    );
+
+    const session = this.chatService.acquireSession(conversationId);
+    if (!session) {
+      this.logger.error(`Failed to acquire session for ${conversationId}`);
+      return;
+    }
+
+    await this.chatService.updateSessionPhase(
+      conversationId,
+      'running',
+      agent.id,
+    );
+
+    const [assistantMessage] = await this.conversationService.batchAddMessages(
+      conversationId,
+      [{ role: Role.ASSIST, content: '', createdAt: new Date() }],
+    );
+
+    const pendingMessage = new PendingMessage(assistantMessage, message =>
+      this.conversationService.updateMessage(
+        message.id,
+        message.content,
+        message.meta,
+      ),
+    );
+    session.bindPendingMessage(pendingMessage);
+
+    this.chatService.runSession(session, agent, memory, conversation.config);
   }
 }

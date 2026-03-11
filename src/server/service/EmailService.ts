@@ -18,6 +18,7 @@ export interface EmailListParams {
   subject?: string;
   startDate?: string;
   endDate?: string;
+  status?: 'unarchived' | 'archived';
   page?: number;
   pageSize?: number;
 }
@@ -83,6 +84,10 @@ export class EmailService {
       } else if (end) {
         where.sentAt = LessThanOrEqual(end);
       }
+    }
+
+    if (params.status) {
+      where.status = params.status;
     }
 
     const [items, total] = await this.repository.findAndCount({
@@ -156,6 +161,24 @@ export class EmailService {
   async delete(id: string): Promise<boolean> {
     const result = await this.repository.delete(id);
     return (result.affected ?? 0) > 0;
+  }
+
+  async updateStatus(
+    id: string,
+    status: 'unarchived' | 'archived',
+  ): Promise<{ success: boolean }> {
+    const email = await this.repository.findOneBy({ id });
+    if (!email) {
+      return { success: false };
+    }
+
+    email.status = status;
+    if (status === 'archived') {
+      email.archivedAt = new Date();
+    }
+
+    await this.repository.save(email);
+    return { success: true };
   }
 
   private extractAttachmentNames(raw?: Record<string, unknown>): string[] {

@@ -47,4 +47,10 @@ export class EmailEntity {
 
   @Column({ type: 'jsonb', nullable: true })
   metadata!: EmailMetadata | null;
+
+  @Column({ type: 'varchar', length: 20, default: 'unarchived' })
+  status!: 'unarchived' | 'archived';
+
+  @Column({ type: 'timestamp', nullable: true })
+  archivedAt!: Date | null;
 }

@@ -6,6 +6,7 @@ export interface ListEmailsRequest {
   subject?: string;
   startDate?: string;
   endDate?: string;
+  status?: 'unarchived' | 'archived';
   page?: number;
   pageSize?: number;
 }
@@ -17,6 +18,11 @@ export interface ListEmailsRequest {
     subject: { type: 'string', nullable: true },
     startDate: { type: 'string', format: 'date-time', nullable: true },
     endDate: { type: 'string', format: 'date-time', nullable: true },
+    status: {
+      type: 'string',
+      enum: ['unarchived', 'archived'],
+      nullable: true,
+    },
     page: { type: 'integer', minimum: 1, nullable: true },
     pageSize: { type: 'integer', minimum: 1, maximum: 100, nullable: true },
   },
@@ -27,6 +33,7 @@ export class ListEmailsRequestDto extends BaseDto implements ListEmailsRequest {
   subject?: string;
   startDate?: string;
   endDate?: string;
+  status?: 'unarchived' | 'archived';
   page?: number;
   pageSize?: number;
 }
@@ -44,6 +51,8 @@ export interface EmailListItem {
   attachmentCount: number;
   attachmentNames: string[] | null;
   createdAt: Date;
+  status: 'unarchived' | 'archived';
+  archivedAt: Date | null;
 }
 
 // List emails response
@@ -89,4 +98,24 @@ export class DeleteEmailRequestDto
   implements DeleteEmailRequest
 {
   id!: string;
+}
+
+// Archive email response
+export interface ArchiveEmailResponse {
+  conversationId: string;
+}
+
+@dto<ArchiveEmailResponse>({
+  type: 'object',
+  properties: {
+    conversationId: { type: 'string' },
+  },
+  required: ['conversationId'],
+  additionalProperties: false,
+})
+export class ArchiveEmailResponseDto
+  extends BaseDto
+  implements ArchiveEmailResponse
+{
+  conversationId!: string;
 }

@@ -27,8 +27,13 @@ class MockChatService {
   getSessionState = vi.fn();
 }
 
+class MockAuthService {
+  getUserId = vi.fn();
+}
+
 let mockConversationService: MockConversationService;
 let mockChatService: MockChatService;
+let mockAuthService: MockAuthService;
 
 describe('ChatController', () => {
   let chatController: ChatController;
@@ -40,10 +45,12 @@ describe('ChatController', () => {
   beforeEach(() => {
     mockConversationService = new MockConversationService();
     mockChatService = new MockChatService();
+    mockAuthService = new MockAuthService();
 
     chatController = new ChatController(
       mockConversationService as any,
       mockChatService as any,
+      mockAuthService as any,
     );
 
     mockJson = vi.fn(() => mockResponse as Response);
@@ -252,6 +259,8 @@ describe('ChatController', () => {
       const mockAgent = {};
       (container.resolve as any).mockReturnValue(mockAgent);
 
+      mockAuthService.getUserId.mockResolvedValue('user-123');
+
       const mockMemory = {};
       mockChatService.buildMemory.mockResolvedValue(mockMemory);
 
@@ -266,6 +275,14 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
+      expect(mockAuthService.getUserId).toHaveBeenCalledWith(mockRequest);
+      expect(mockChatService.buildMemory).toHaveBeenCalledWith(
+        'conv-123',
+        'user-123',
+        mockAgent,
+        mockConversation.config,
+        { role: Role.USER, content: 'Hello' },
+      );
       expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
         'conv-123',
         [expect.objectContaining({ role: Role.ASSIST, content: '' })],

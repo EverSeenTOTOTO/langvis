@@ -1,6 +1,7 @@
 import { api, ApiRequest } from '@/client/decorator/api';
 import { store } from '@/client/decorator/store';
 import type {
+  ArchiveEmailResponse,
   EmailDetail,
   ListEmailsRequest,
   ListEmailsResponse,
@@ -56,5 +57,26 @@ export class EmailStore {
   ): Promise<boolean> {
     const result = await req!.send();
     return result !== undefined;
+  }
+
+  @api('/api/emails/archive/:id', {
+    method: 'post',
+  })
+  async archiveEmail(
+    _params: { id: string },
+    req?: ApiRequest<{ id: string }>,
+  ): Promise<ArchiveEmailResponse | undefined> {
+    const result = await req!.send();
+    return result as ArchiveEmailResponse | undefined;
+  }
+
+  updateEmailStatus(id: string, status: 'unarchived' | 'archived'): void {
+    const email = this.items.find(item => item.id === id);
+    if (email) {
+      email.status = status;
+      if (status === 'archived') {
+        (email as { archivedAt?: Date | null }).archivedAt = new Date();
+      }
+    }
   }
 }

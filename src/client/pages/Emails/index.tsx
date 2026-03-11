@@ -4,6 +4,7 @@ import type { EmailListItem } from '@/shared/dto/controller/email.dto';
 import {
   DeleteOutlined,
   EyeOutlined,
+  InboxOutlined,
   MailOutlined,
   PaperClipOutlined,
   ReloadOutlined,
@@ -20,6 +21,7 @@ import {
   Modal,
   Popconfirm,
   Row,
+  Select,
   Table,
   Tag,
   Tooltip,
@@ -41,6 +43,7 @@ interface SearchParams {
   subject?: string;
   startDate?: string;
   endDate?: string;
+  status?: 'unarchived' | 'archived';
 }
 
 const Emails: React.FC = () => {
@@ -55,6 +58,7 @@ const Emails: React.FC = () => {
 
   const detailApi = useAsyncFn(emailStore.getEmailById.bind(emailStore));
   const deleteApi = useAsyncFn(emailStore.deleteEmail.bind(emailStore));
+  const archiveApi = useAsyncFn(emailStore.archiveEmail.bind(emailStore));
 
   const { dataSource, pagination, loading, search, reset, refresh } =
     usePagination<SearchParams, EmailListItem>(emailStore, {
@@ -71,6 +75,7 @@ const Emails: React.FC = () => {
       subject: values.subject,
       startDate,
       endDate,
+      status: values.status,
     });
   };
 
@@ -92,6 +97,22 @@ const Emails: React.FC = () => {
     if (success) {
       refresh();
       message.success(settingStore.tr('Email deleted successfully'));
+    }
+  };
+
+  const handleArchive = async (email: EmailListItem) => {
+    // Optimistic update
+    emailStore.updateEmailStatus(email.id, 'archived');
+
+    try {
+      const result = await archiveApi[1]({ id: email.id });
+      if (result) {
+        window.open(`/?conversationId=${result.conversationId}`, '_blank');
+      }
+    } catch {
+      // Rollback on error
+      emailStore.updateEmailStatus(email.id, 'unarchived');
+      message.error(settingStore.tr('Archive failed'));
     }
   };
 
@@ -132,6 +153,18 @@ const Emails: React.FC = () => {
       key: 'subject',
       width: 250,
       ellipsis: true,
+    },
+    {
+      title: settingStore.tr('Status'),
+      dataIndex: 'status',
+      key: 'status',
+      width: 100,
+      render: (status: string) =>
+        status === 'archived' ? (
+          <Tag color="green">{settingStore.tr('Archived')}</Tag>
+        ) : (
+          <Tag>{settingStore.tr('Unarchived')}</Tag>
+        ),
     },
     {
       title: settingStore.tr('Sent At'),
@@ -178,7 +211,7 @@ const Emails: React.FC = () => {
     {
       title: settingStore.tr('Actions'),
       key: 'actions',
-      width: 200,
+      width: 250,
       fixed: 'right',
       render: (_, record) => (
         <>
@@ -190,6 +223,29 @@ const Emails: React.FC = () => {
           >
             {settingStore.tr('View')}
           </Button>
+          {record.status === 'archived' ? (
+            <Popconfirm
+              title={settingStore.tr(
+                'This email has been archived. Archive again?',
+              )}
+              onConfirm={() => handleArchive(record)}
+              okText={settingStore.tr('Yes')}
+              cancelText={settingStore.tr('No')}
+            >
+              <Button type="link" size="small" icon={<InboxOutlined />}>
+                {settingStore.tr('Archive')}
+              </Button>
+            </Popconfirm>
+          ) : (
+            <Button
+              type="link"
+              size="small"
+              icon={<InboxOutlined />}
+              onClick={() => handleArchive(record)}
+            >
+              {settingStore.tr('Archive')}
+            </Button>
+          )}
           <Popconfirm
             title={settingStore.tr('Delete this email?')}
             onConfirm={() => handleDelete(record.id)}
@@ -227,12 +283,28 @@ const Emails: React.FC = () => {
                 />
               </Form.Item>
             </Col>
-            <Col span={6}>
+            <Col span={4}>
               <Form.Item name="timeRange">
                 <RangePicker showTime style={{ width: '100%' }} />
               </Form.Item>
             </Col>
-            <Col span={6} style={{ textAlign: 'right' }}>
+            <Col span={4}>
+              <Form.Item name="status">
+                <Select
+                  placeholder={settingStore.tr('Status')}
+                  allowClear
+                  style={{ width: '100%' }}
+                  options={[
+                    {
+                      label: settingStore.tr('Unarchived'),
+                      value: 'unarchived',
+                    },
+                    { label: settingStore.tr('Archived'), value: 'archived' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={4} style={{ textAlign: 'right' }}>
               <Form.Item>
                 <Button onClick={handleReset} icon={<ReloadOutlined />}>
                   {settingStore.tr('Reset')}
@@ -257,7 +329,7 @@ const Emails: React.FC = () => {
         dataSource={dataSource}
         rowKey="id"
         loading={loading}
-        scroll={{ x: 1300 }}
+        scroll={{ x: 1500 }}
         pagination={pagination}
       />
 

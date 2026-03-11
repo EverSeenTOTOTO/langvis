@@ -18,6 +18,7 @@ export const config: AgentConfig<{
         properties: {
           code: {
             type: 'string',
+            default: 'gemini-3-flash-preview',
           },
           temperature: {
             type: 'number',

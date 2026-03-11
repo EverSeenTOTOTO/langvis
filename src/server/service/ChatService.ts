@@ -1,6 +1,5 @@
-import { InjectTokens, RedisKeys } from '@/shared/constants';
+import { InjectTokens, MemoryIds, RedisKeys } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
-import type { Request } from 'express';
 import { globby } from 'globby';
 import type { RedisClientType } from 'redis';
 import { container, inject } from 'tsyringe';
@@ -11,7 +10,7 @@ import { registerMemory } from '../decorator/core';
 import { service } from '../decorator/service';
 import { isProd } from '../utils';
 import Logger from '../utils/logger';
-import { AuthService } from './AuthService';
+import { ConversationService } from './ConversationService';
 
 /**
  * Session state persisted to Redis for reconnection support.
@@ -30,9 +29,8 @@ export class ChatService {
   private sessions = new Map<string, ChatSession>();
 
   constructor(
-    @inject(AuthService)
-    private authService: AuthService,
-
+    @inject(ConversationService)
+    private conversationService: ConversationService,
     @inject(InjectTokens.REDIS)
     private redis: RedisClientType<any>,
   ) {
@@ -146,22 +144,22 @@ export class ChatService {
   }
 
   async buildMemory(
-    req: Request,
+    conversationId: string,
+    userId: string,
     agent: Agent,
     config: Record<string, any>,
-    userMessage: {
+    userMessage?: {
       role: Role;
       content: string;
       meta?: Record<string, any> | null;
     },
   ): Promise<Memory> {
-    const { conversationId } = req.params;
-    const currentUserId = await this.authService.getUserId(req);
-
-    const memory = container.resolve<Memory>(config?.memory?.type);
+    const memory = container.resolve<Memory>(
+      config?.memory?.type ?? MemoryIds.NONE,
+    );
 
     memory.setConversationId(conversationId);
-    memory.setUserId(currentUserId);
+    memory.setUserId(userId);
 
     const chatMessages: {
       role: Role;
@@ -179,7 +177,7 @@ export class ChatService {
       const systemPrompt = agent.systemPrompt
         .with(
           'Background',
-          `${conversationId ? `Conversation ID: ${conversationId}\n` : ''}${currentUserId ? `User ID: ${currentUserId}` : ''}`.trim(),
+          `Conversation ID: ${conversationId}\nUser ID: ${userId}`,
         )
         .build();
 
@@ -192,11 +190,29 @@ export class ChatService {
       }
     }
 
-    // Add user message
-    chatMessages.push({
-      ...userMessage,
-      createdAt: new Date(baseTime + timeOffset),
-    });
+    // Add user message if provided (for frontend-triggered chats)
+    if (userMessage) {
+      chatMessages.push({
+        ...userMessage,
+        createdAt: new Date(baseTime + timeOffset),
+      });
+    } else {
+      // Otherwise, load existing messages from database (for backend-triggered sessions)
+      const existingMessages =
+        await this.conversationService.getMessagesByConversationId(
+          conversationId,
+        );
+      for (const msg of existingMessages) {
+        if (msg.role === Role.USER) {
+          chatMessages.push({
+            role: msg.role,
+            content: msg.content,
+            meta: msg.meta,
+            createdAt: new Date(baseTime + timeOffset++),
+          });
+        }
+      }
+    }
 
     await memory.store(chatMessages);
 
