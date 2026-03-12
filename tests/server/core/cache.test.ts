@@ -1,207 +1,128 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { container } from 'tsyringe';
-import { ExecutionContext } from '@/server/core/ExecutionContext';
+import { compress, resolve } from '@/server/utils/cache';
 import { InjectTokens, RedisKeys } from '@/shared/constants';
 
-describe('ExecutionContext Cache Management', () => {
-  let ctx: ExecutionContext;
+describe('Cache Utils', () => {
   let mockRedis: {
     setEx: ReturnType<typeof vi.fn>;
     get: ReturnType<typeof vi.fn>;
-    del: ReturnType<typeof vi.fn>;
   };
-  let mockController: any;
 
   beforeEach(() => {
     mockRedis = {
       setEx: vi.fn().mockResolvedValue('OK'),
       get: vi.fn().mockResolvedValue(null),
-      del: vi.fn().mockResolvedValue(1),
     };
 
     container.register(InjectTokens.REDIS, { useValue: mockRedis });
-
-    mockController = {
-      abort: vi.fn(),
-      signal: { aborted: false, reason: null },
-    };
-
-    ctx = new ExecutionContext('test-trace-id', mockController);
   });
 
   describe('compress', () => {
-    it('should compress a string and return CachedReference', async () => {
-      const longString = 'a'.repeat(1500);
+    const traceId = 'test-trace-id';
 
-      const result = await ctx.compress(longString);
+    it('should compress string longer than 5000 chars', async () => {
+      const longString = 'a'.repeat(5001);
 
-      expect(result).toMatchObject({
-        $cached: expect.stringMatching(/^cache_/),
-        $size: 1500,
-        $preview: 'a'.repeat(200),
-      });
+      const result = (await compress(traceId, longString)) as {
+        $cached: string;
+        $size: number;
+        $preview: string;
+      };
+
+      expect(result.$cached).toMatch(/^cache_/);
+      expect(result.$size).toBe(5001);
+      expect(result.$preview).toBe('a'.repeat(200));
       expect(mockRedis.setEx).toHaveBeenCalledWith(
-        expect.stringContaining(RedisKeys.AGENT_CACHE('test-trace-id', '')),
+        expect.stringContaining(RedisKeys.AGENT_CACHE(traceId, result.$cached)),
         3600,
         longString,
       );
     });
 
-    it('should compress an object and return CachedReference', async () => {
-      const largeArray = Array.from({ length: 25 }, (_, i) => ({ id: i }));
+    it('should not compress string shorter than 5000 chars', async () => {
+      const shortString = 'a'.repeat(100);
 
-      const result = await ctx.compress(largeArray);
-
-      expect(result.$cached).toMatch(/^cache_/);
-      expect(result.$size).toBeGreaterThan(0);
-      expect(mockRedis.setEx).toHaveBeenCalledWith(
-        expect.stringContaining(RedisKeys.AGENT_CACHE('test-trace-id', '')),
-        3600,
-        JSON.stringify(largeArray),
-      );
-    });
-
-    it('should support custom preview length', async () => {
-      const longString = 'a'.repeat(2000);
-
-      const result = await ctx.compress(longString, { preview: 100 });
-
-      expect(result.$preview).toBe('a'.repeat(100));
-    });
-  });
-
-  describe('retrieve', () => {
-    it('should retrieve cached string', async () => {
-      mockRedis.get.mockResolvedValueOnce('cached content');
-
-      const result = await ctx.retrieve('cache_abc123');
-
-      expect(result).toBe('cached content');
-      expect(mockRedis.get).toHaveBeenCalledWith(
-        RedisKeys.AGENT_CACHE('test-trace-id', 'cache_abc123'),
-      );
-    });
-
-    it('should throw error when cache miss', async () => {
-      mockRedis.get.mockResolvedValueOnce(null);
-
-      await expect(ctx.retrieve('cache_notexist')).rejects.toThrow(
-        'Cache miss: cache_notexist',
-      );
-    });
-  });
-
-  describe('clearCache', () => {
-    it('should delete all cached keys', async () => {
-      // Compress some values to populate cachedKeys
-      await ctx.compress('a'.repeat(1500));
-      await ctx.compress('b'.repeat(1500));
-
-      await ctx.clearCache();
-
-      expect(mockRedis.del).toHaveBeenCalledTimes(1);
-      expect(mockRedis.del).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.stringContaining(RedisKeys.AGENT_CACHE('test-trace-id', '')),
-          expect.stringContaining(RedisKeys.AGENT_CACHE('test-trace-id', '')),
-        ]),
-      );
-    });
-
-    it('should do nothing when no cached keys', async () => {
-      await ctx.clearCache();
-
-      expect(mockRedis.del).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('shouldCompress', () => {
-    it('should compress string longer than 1000 chars', async () => {
-      const longString = 'a'.repeat(1001);
-      const result = await ctx.autoCompressOutput(longString);
-
-      expect(result).toHaveProperty('$cached');
-    });
-
-    it('should not compress string shorter than 1000 chars', async () => {
-      const shortString = 'a'.repeat(999);
-      const result = await ctx.autoCompressOutput(shortString);
+      const result = await compress(traceId, shortString);
 
       expect(result).toBe(shortString);
     });
 
-    it('should compress array with more than 20 items', async () => {
-      const largeArray = Array.from({ length: 21 }, (_, i) => `item-${i}`);
-      const result = await ctx.autoCompressOutput(largeArray);
+    it('should compress array with more than 50 items', async () => {
+      const largeArray = Array.from({ length: 51 }, (_, i) => ({ id: i }));
 
-      expect(result).toHaveProperty('$cached');
+      const result = (await compress(traceId, largeArray)) as {
+        $cached: string;
+      };
+
+      expect(result.$cached).toMatch(/^cache_/);
+      expect(mockRedis.setEx).toHaveBeenCalled();
     });
 
-    it('should not compress array with 20 or fewer items', async () => {
-      const smallArray = Array.from({ length: 20 }, (_, i) => `item-${i}`);
-      const result = await ctx.autoCompressOutput(smallArray);
+    it('should not compress array with 50 or fewer items', async () => {
+      const smallArray = Array.from({ length: 50 }, (_, i) => `item-${i}`);
+
+      const result = await compress(traceId, smallArray);
 
       expect(result).toEqual(smallArray);
     });
 
-    it('should compress object with more than 20 keys', async () => {
-      const largeObj: Record<string, string> = {};
-      for (let i = 0; i < 21; i++) {
-        largeObj[`key-${i}`] = `value-${i}`;
-      }
-      const result = await ctx.autoCompressOutput(largeObj);
-
-      expect(result).toHaveProperty('$cached');
-    });
-
-    it('should not compress object with 20 or fewer keys', async () => {
-      const smallObj: Record<string, string> = {};
-      for (let i = 0; i < 20; i++) {
-        smallObj[`key-${i}`] = `value-${i}`;
-      }
-      const result = await ctx.autoCompressOutput(smallObj);
-
-      expect(result).toEqual(smallObj);
-    });
-
-    it('should recursively compress nested values', async () => {
+    it('should recursively compress nested values while preserving first-level keys', async () => {
       const nested = {
         short: 'short string',
-        long: 'a'.repeat(1500),
+        long: 'a'.repeat(5001),
         nested: {
-          deep: 'b'.repeat(1500),
+          deep: 'b'.repeat(5001),
         },
       };
 
-      const result = (await ctx.autoCompressOutput(nested)) as Record<
+      const result = (await compress(traceId, nested)) as Record<
         string,
         unknown
       >;
 
       expect(result.short).toBe('short string');
-      expect(result.long).toHaveProperty('$cached');
-      expect((result.nested as Record<string, unknown>).deep).toHaveProperty(
-        '$cached',
-      );
+      expect((result.long as { $cached: string }).$cached).toMatch(/^cache_/);
+      expect(
+        ((result.nested as Record<string, unknown>).deep as { $cached: string })
+          .$cached,
+      ).toMatch(/^cache_/);
+    });
+
+    it('should recursively compress array items', async () => {
+      const nested = {
+        items: ['a'.repeat(5001), 'short', 'b'.repeat(5001)],
+      };
+
+      const result = (await compress(traceId, nested)) as Record<
+        string,
+        unknown
+      >;
+      const items = result.items as unknown[];
+
+      expect((items[0] as { $cached: string }).$cached).toMatch(/^cache_/);
+      expect(items[1]).toBe('short');
+      expect((items[2] as { $cached: string }).$cached).toMatch(/^cache_/);
     });
   });
 
-  describe('autoResolveInput', () => {
+  describe('resolve', () => {
+    const traceId = 'test-trace-id';
+
     it('should resolve CachedReference', async () => {
       mockRedis.get.mockResolvedValueOnce('resolved content');
 
       const input = {
-        key: 'value',
-        cached: { $cached: 'cache_abc123', $size: 100 },
+        $cached: 'cache_abc123',
+        $size: 100,
       };
 
-      const result = (await ctx.autoResolveInput(input)) as Record<
-        string,
-        unknown
-      >;
+      const result = await resolve(traceId, input);
 
-      expect(result.key).toBe('value');
-      expect(result.cached).toBe('resolved content');
+      expect(result).toBe('resolved content');
+      expect(mockRedis.get).toHaveBeenCalledWith(
+        RedisKeys.AGENT_CACHE(traceId, 'cache_abc123'),
+      );
     });
 
     it('should recursively resolve nested CachedReferences', async () => {
@@ -216,10 +137,7 @@ describe('ExecutionContext Cache Management', () => {
         },
       };
 
-      const result = (await ctx.autoResolveInput(input)) as Record<
-        string,
-        unknown
-      >;
+      const result = (await resolve(traceId, input)) as Record<string, unknown>;
       const nested = result.nested as Record<string, unknown>;
 
       expect(nested.ref1).toBe('content1');
@@ -233,10 +151,7 @@ describe('ExecutionContext Cache Management', () => {
         items: [{ $cached: 'cache_arr', $size: 50 }],
       };
 
-      const result = (await ctx.autoResolveInput(input)) as Record<
-        string,
-        unknown
-      >;
+      const result = (await resolve(traceId, input)) as Record<string, unknown>;
 
       expect((result.items as unknown[])[0]).toBe('array content');
     });
@@ -248,9 +163,29 @@ describe('ExecutionContext Cache Management', () => {
         flag: true,
       };
 
-      const result = await ctx.autoResolveInput(input);
+      const result = await resolve(traceId, input);
 
       expect(result).toEqual(input);
+    });
+
+    it('should throw error when cache miss', async () => {
+      mockRedis.get.mockResolvedValueOnce(null);
+
+      const input = { $cached: 'cache_notexist', $size: 100 };
+
+      await expect(resolve(traceId, input)).rejects.toThrow(
+        'Cache miss: cache_notexist',
+      );
+    });
+
+    it('should parse JSON from cache', async () => {
+      mockRedis.get.mockResolvedValueOnce('{"key":"value"}');
+
+      const input = { $cached: 'cache_json', $size: 100 };
+
+      const result = await resolve(traceId, input);
+
+      expect(result).toEqual({ key: 'value' });
     });
   });
 });

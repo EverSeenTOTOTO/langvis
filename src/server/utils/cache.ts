@@ -9,45 +9,113 @@ export interface CachedReference {
   $preview?: string;
 }
 
-const STRING_THRESHOLD = 1000;
+function isCachedReference(value: unknown): value is CachedReference {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    '$cached' in value &&
+    typeof (value as CachedReference).$cached === 'string'
+  );
+}
 
-/**
- * Compress a large string value to Redis cache.
- * Returns the original value if under threshold.
- */
-export async function compressIfNeeded(
+const STRING_THRESHOLD = 5000;
+const ARRAY_THRESHOLD = 50;
+const PREVIEW_LENGTH = 200;
+const CACHE_TTL = 3600;
+
+async function storeCache(
   traceId: string,
-  value: string,
-  options?: { preview?: number; threshold?: number },
-): Promise<string | CachedReference> {
-  const threshold = options?.threshold ?? STRING_THRESHOLD;
-
-  if (value.length < threshold) {
-    return value;
-  }
-
+  value: unknown,
+): Promise<CachedReference> {
   const key = generateId('cache');
-  const redis = container.resolve<RedisClientType<any>>(InjectTokens.REDIS);
-  await redis.setEx(RedisKeys.AGENT_CACHE(traceId, key), 3600, value);
+  const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+  const redis = container.resolve<RedisClientType>(InjectTokens.REDIS);
+  await redis.setEx(RedisKeys.AGENT_CACHE(traceId, key), CACHE_TTL, serialized);
 
   return {
     $cached: key,
-    $size: Buffer.byteLength(value, 'utf8'),
-    $preview: value.slice(0, options?.preview ?? 200),
+    $size: Buffer.byteLength(serialized, 'utf8'),
+    $preview:
+      typeof value === 'string'
+        ? value.slice(0, PREVIEW_LENGTH)
+        : JSON.stringify(value).slice(0, PREVIEW_LENGTH),
   };
 }
 
-/**
- * Retrieve cached value from Redis.
- */
-export async function retrieveCached(
-  traceId: string,
-  key: string,
-): Promise<string> {
-  const redis = container.resolve<RedisClientType<any>>(InjectTokens.REDIS);
+async function retrieveCache(traceId: string, key: string): Promise<unknown> {
+  const redis = container.resolve<RedisClientType>(InjectTokens.REDIS);
   const data = await redis.get(RedisKeys.AGENT_CACHE(traceId, key));
   if (!data) {
     throw new Error(`Cache miss: ${key}`);
   }
-  return data;
+  try {
+    return JSON.parse(data);
+  } catch {
+    return data;
+  }
+}
+
+function shouldCompress(value: unknown): boolean {
+  if (typeof value === 'string') {
+    return value.length > STRING_THRESHOLD;
+  }
+  if (Array.isArray(value)) {
+    return value.length > ARRAY_THRESHOLD;
+  }
+  return false;
+}
+
+export async function compress(
+  traceId: string,
+  value: unknown,
+): Promise<unknown> {
+  if (shouldCompress(value)) {
+    return storeCache(traceId, value);
+  }
+
+  if (Array.isArray(value)) {
+    const result: unknown[] = [];
+    for (const item of value) {
+      result.push(await compress(traceId, item));
+    }
+    return result;
+  }
+
+  if (value && typeof value === 'object' && !isCachedReference(value)) {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value)) {
+      result[key] = await compress(traceId, val);
+    }
+    return result;
+  }
+
+  return value;
+}
+
+export async function resolve(
+  traceId: string,
+  value: unknown,
+): Promise<unknown> {
+  if (isCachedReference(value)) {
+    return retrieveCache(traceId, value.$cached);
+  }
+
+  if (Array.isArray(value)) {
+    const result: unknown[] = [];
+    for (const item of value) {
+      result.push(await resolve(traceId, item));
+    }
+    return result;
+  }
+
+  if (value && typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value)) {
+      result[key] = await resolve(traceId, val);
+    }
+    return result;
+  }
+
+  return value;
 }

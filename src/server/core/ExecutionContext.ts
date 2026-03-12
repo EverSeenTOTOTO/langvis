@@ -1,11 +1,9 @@
-import { InjectTokens, RedisKeys, ToolIds } from '@/shared/constants';
+import { ToolIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
 import { generateId } from '@/shared/utils';
 import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
-import type { RedisClientType } from 'redis';
 import { container } from 'tsyringe';
 import type LlmCallTool from './tool/LlmCall';
-import type { CachedReference } from '../utils/cache';
 
 export class ExecutionContext {
   public get signal(): AbortSignal {
@@ -16,7 +14,6 @@ export class ExecutionContext {
 
   private seqCounter = 0;
   private callIdStack: string[] = [];
-  private cachedKeys: string[] = [];
 
   constructor(
     traceId: string,
@@ -176,116 +173,5 @@ export class ExecutionContext {
     }
 
     return content;
-  }
-
-  // === Cache management ===
-
-  private static readonly STRING_THRESHOLD = 1000;
-  private static readonly COLLECTION_THRESHOLD = 20;
-
-  async compress(
-    value: unknown,
-    options?: { preview?: number },
-  ): Promise<CachedReference> {
-    const key = generateId('cache');
-    const serialized =
-      typeof value === 'string' ? value : JSON.stringify(value);
-    const redis = container.resolve<RedisClientType>(InjectTokens.REDIS);
-    await redis.setEx(
-      RedisKeys.AGENT_CACHE(this.traceId, key),
-      3600,
-      serialized,
-    );
-    this.cachedKeys.push(key);
-
-    return {
-      $cached: key,
-      $size: Buffer.byteLength(serialized, 'utf8'),
-      $preview:
-        typeof value === 'string'
-          ? value.slice(0, options?.preview ?? 200)
-          : undefined,
-    };
-  }
-
-  async retrieve(key: string): Promise<unknown> {
-    const redis = container.resolve<RedisClientType>(InjectTokens.REDIS);
-    const data = await redis.get(RedisKeys.AGENT_CACHE(this.traceId, key));
-    if (!data) {
-      throw new Error(`Cache miss: ${key}`);
-    }
-    try {
-      return JSON.parse(data);
-    } catch {
-      return data;
-    }
-  }
-
-  async clearCache(): Promise<void> {
-    if (this.cachedKeys.length > 0) {
-      const redis = container.resolve<RedisClientType>(InjectTokens.REDIS);
-      const keys = this.cachedKeys.map(k =>
-        RedisKeys.AGENT_CACHE(this.traceId, k),
-      );
-      await redis.del(keys);
-      this.cachedKeys = [];
-    }
-  }
-
-  // === Auto compress/resolve for tool I/O ===
-
-  private shouldCompress(value: unknown): boolean {
-    if (typeof value === 'string') {
-      return value.length > ExecutionContext.STRING_THRESHOLD;
-    }
-    if (Array.isArray(value)) {
-      return value.length > ExecutionContext.COLLECTION_THRESHOLD;
-    }
-    if (value && typeof value === 'object') {
-      return Object.keys(value).length > ExecutionContext.COLLECTION_THRESHOLD;
-    }
-    return false;
-  }
-
-  async autoCompressOutput(output: unknown): Promise<unknown> {
-    if (this.shouldCompress(output)) {
-      return this.compress(output);
-    }
-
-    if (Array.isArray(output)) {
-      return Promise.all(output.map(item => this.autoCompressOutput(item)));
-    }
-
-    if (output && typeof output === 'object') {
-      const result: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(output)) {
-        result[k] = await this.autoCompressOutput(v);
-      }
-      return result;
-    }
-
-    return output;
-  }
-
-  async autoResolveInput(input: unknown): Promise<unknown> {
-    if (input && typeof input === 'object' && !Array.isArray(input)) {
-      if (
-        '$cached' in input &&
-        typeof (input as Record<string, unknown>).$cached === 'string'
-      ) {
-        return this.retrieve((input as CachedReference).$cached);
-      }
-      const result: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(input)) {
-        result[k] = await this.autoResolveInput(v);
-      }
-      return result;
-    }
-
-    if (Array.isArray(input)) {
-      return Promise.all(input.map(item => this.autoResolveInput(item)));
-    }
-
-    return input;
   }
 }
