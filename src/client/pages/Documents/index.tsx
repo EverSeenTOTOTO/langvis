@@ -415,12 +415,9 @@ const Documents: React.FC = () => {
 
             <div className="detail-section">
               <Title level={5}>{settingStore.tr('Raw Content')}</Title>
-              <div
-                className="detail-content html-content"
-                dangerouslySetInnerHTML={{
-                  __html: selectedDocument.rawContent,
-                }}
-              />
+              <Typography.Paragraph>
+                {selectedDocument.rawContent}
+              </Typography.Paragraph>
             </div>
           </div>
         )}
@@ -430,3 +427,4 @@ const Documents: React.FC = () => {
 };
 
 export default observer(Documents);
+

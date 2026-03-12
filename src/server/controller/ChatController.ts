@@ -46,6 +46,8 @@ export default class ChatController {
     const sseConnection = new SSEConnection(conversationId, res);
     session.bindConnection(sseConnection);
 
+    req.log.info('SSE connection established', { sessionId: conversationId });
+
     req.on('close', () => {
       req.log.info('SSE connection closed:', conversationId);
       session.handleDisconnect();

@@ -83,7 +83,15 @@ export class ChatService {
   acquireSession(conversationId: string): ChatSession | null {
     const existing = this.sessions.get(conversationId);
     // Allow reconnection for existing session (both waiting and running)
-    if (existing) return existing;
+    if (existing) {
+      this.logger.info(`Session reconnected`, {
+        sessionId: conversationId,
+        phase: existing.phase,
+      });
+      return existing;
+    }
+
+    this.logger.info(`Session created`, { sessionId: conversationId });
 
     const session = new ChatSession(conversationId, {
       idleTimeoutMs: 30_000,
@@ -215,6 +223,11 @@ export class ChatService {
     }
 
     await memory.store(chatMessages);
+
+    this.logger.debug('Memory built', {
+      sessionId: conversationId,
+      messageCount: chatMessages.length,
+    });
 
     return memory;
   }

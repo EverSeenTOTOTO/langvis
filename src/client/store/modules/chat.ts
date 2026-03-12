@@ -10,7 +10,7 @@ import type {
 } from '@/shared/dto/controller';
 import { AgentEvent, SSEMessage } from '@/shared/types';
 import { Role } from '@/shared/types/entities';
-import { generateId, isClient } from '@/shared/utils';
+import { generateId } from '@/shared/utils';
 import { message } from 'antd';
 import { makeAutoObservable, reaction } from 'mobx';
 import { inject } from 'tsyringe';
@@ -28,13 +28,6 @@ export class ChatStore {
   ) {
     makeAutoObservable(this);
 
-    if (isClient()) {
-      document.addEventListener(
-        'visibilitychange',
-        this.handleVisibilityChange.bind(this),
-      );
-    }
-
     reaction(
       () => this.conversationStore.currentConversationId,
       async (newId, oldId) => {
@@ -49,17 +42,6 @@ export class ChatStore {
       },
     );
   }
-
-  private handleVisibilityChange = (): void => {
-    const conversationId = this.conversationStore.currentConversationId;
-    if (!conversationId) return;
-
-    if (document.visibilityState === 'hidden') {
-      this.getSession(conversationId)?.disconnect();
-    } else {
-      this.activateConversation(conversationId);
-    }
-  };
 
   @api('/api/chat/session/:conversationId')
   async getSessionState(

@@ -60,7 +60,12 @@ export class ChatSession {
   private transition(to: SessionPhase): boolean {
     if (!VALID_TRANSITIONS[this.phase].includes(to)) return false;
 
+    const from = this.phase;
     this.phase = to;
+
+    logger.info(`Session phase changed: ${from} -> ${to}`, {
+      sessionId: this.conversationId,
+    });
 
     if (to === 'running') {
       clearTimeout(this.idleTimeout);
