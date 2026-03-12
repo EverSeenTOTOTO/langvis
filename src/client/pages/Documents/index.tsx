@@ -1,4 +1,5 @@
 import { usePagination } from '@/client/hooks/usePagination';
+import MarkdownRender from '@/client/components/MarkdownRender';
 import { useStore } from '@/client/store';
 import type { DocumentListItem } from '@/shared/dto/controller/document.dto';
 import type { DocumentCategory as DCType } from '@/shared/entities/Document';
@@ -415,9 +416,7 @@ const Documents: React.FC = () => {
 
             <div className="detail-section">
               <Title level={5}>{settingStore.tr('Raw Content')}</Title>
-              <Typography.Paragraph>
-                {selectedDocument.rawContent}
-              </Typography.Paragraph>
+              <MarkdownRender>{selectedDocument.rawContent}</MarkdownRender>
             </div>
           </div>
         )}
@@ -427,4 +426,3 @@ const Documents: React.FC = () => {
 };
 
 export default observer(Documents);
-

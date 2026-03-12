@@ -6,9 +6,16 @@ import { AgentEvent, ToolConfig } from '@/shared/types';
 import { createTimeoutController } from '@/server/utils/abort';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
+import TurndownService from 'turndown';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { sanitizeHtml } from '@/server/utils/sanitizeHtml';
+
+const turndownService = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+  bulletListMarker: '-',
+});
 
 interface WebFetchInput {
   url: string;
@@ -95,9 +102,13 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
 
         this.logger.info(`Successfully extracted content from: ${url}`);
 
+        const markdownContent = article.content
+          ? turndownService.turndown(article.content)
+          : '';
+
         return {
           title: article.title || '',
-          textContent: article.textContent || '',
+          textContent: markdownContent,
           excerpt: article.excerpt || '',
           byline: article.byline || null,
           siteName: article.siteName || null,
