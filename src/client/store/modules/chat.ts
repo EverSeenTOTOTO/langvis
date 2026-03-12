@@ -100,7 +100,9 @@ export class ChatStore {
       return;
     }
 
-    const wasStreaming = session.phase === 'streaming';
+    // Check if backend needs to be notified:
+    // SSE connected means backend session exists
+    const shouldNotifyBackend = session.isConnected();
 
     // Immediately update UI
     session.cancel();
@@ -113,8 +115,8 @@ export class ChatStore {
       at: Date.now(),
     });
 
-    // Only notify backend when phase was streaming (Agent is running)
-    if (wasStreaming) {
+    // Notify backend if SSE was connected (Agent may be running)
+    if (shouldNotifyBackend) {
       try {
         await req!.send();
       } catch (e) {
