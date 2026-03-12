@@ -118,10 +118,6 @@ export class ChatSession {
 
   private handleEvent(msg: SSEMessage & { type: string }): void {
     switch (msg.type) {
-      case 'start':
-        this.transition('streaming');
-        break;
-
       case 'final':
         this.transition('idle');
         this.closeEventSource();
@@ -140,6 +136,12 @@ export class ChatSession {
       case 'session_replaced':
         this.transition('idle');
         this.closeEventSource();
+        break;
+
+      default:
+        // Any other business event means Agent is running.
+        // This handles reconnection where 'start' was already emitted.
+        this.transition('streaming');
         break;
     }
 
