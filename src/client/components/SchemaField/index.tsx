@@ -132,12 +132,20 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
     );
   }
 
-  // Array type with enum: multi-select checkboxes
+  // Array type with enum: multi-select checkboxes (vertical layout)
   if (prop.type === 'array' && prop.enum?.length) {
     const options = normalizeEnumItems(prop.enum);
     return (
       <Form.Item key={fieldKey} {...commonProps}>
-        <Checkbox.Group options={options} />
+        <Checkbox.Group
+          style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+        >
+          {options.map(opt => (
+            <Checkbox key={String(opt.value)} value={opt.value}>
+              {opt.label}
+            </Checkbox>
+          ))}
+        </Checkbox.Group>
       </Form.Item>
     );
   }

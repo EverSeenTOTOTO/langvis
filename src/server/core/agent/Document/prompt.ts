@@ -56,4 +56,3 @@ export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
 ### Search Documents
 1. Use **Retrieve Tool** with the search query directly`,
     );
-

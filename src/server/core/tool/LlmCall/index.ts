@@ -26,9 +26,21 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
     @input() data: LlmCallInput,
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, LlmCallOutput, void> {
+    const messages = data.messages ?? [];
+    const model = data.model || process.env.OPENAI_MODEL!;
+
+    this.logger.debug('LLM call request', {
+      sessionId: ctx.traceId,
+      model,
+      messageCount: messages.length,
+      temperature: data.temperature,
+      stop: data.stop,
+      messages,
+    });
+
     const response = await this.openai.chat.completions.create(
       {
-        model: data.model || process.env.OPENAI_MODEL!,
+        model,
         messages: [],
         ...data,
         stream: true,

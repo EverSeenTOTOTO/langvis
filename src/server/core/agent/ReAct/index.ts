@@ -63,11 +63,6 @@ export default class ReActAgent extends Agent {
     for (let i = 0; i < this.maxIterations; i++) {
       ctx.signal.throwIfAborted();
 
-      this.logger.debug(
-        'ReAct iter messages: ',
-        iterMessages.filter(m => m.role !== Role.SYSTEM),
-      );
-
       const model = options?.model?.code ?? process.env.OPENAI_MODEL;
 
       const content = yield* ctx.callLlm({
@@ -95,7 +90,7 @@ export default class ReActAgent extends Agent {
           throw new Error('Parsed response is empty');
         }
       } catch (error) {
-        const observation = `Error parsing response: ${(error as Error).message}`;
+        const observation = `Error parsing response: ${(error as Error)?.message ?? String(error)}`;
 
         iterMessages.push({
           role: Role.USER,
@@ -227,7 +222,7 @@ export default class ReActAgent extends Agent {
       yield ctx.agentToolResultEvent(toolName, observation);
       return observation;
     } catch (error) {
-      const errMsg = (error as Error).message;
+      const errMsg = (error as Error)?.message ?? String(error);
       yield ctx.agentToolErrorEvent(toolName, errMsg);
       throw error;
     }
