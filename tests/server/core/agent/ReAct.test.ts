@@ -200,7 +200,7 @@ describe('ReActAgent', () => {
         },
       );
 
-      const largeContent = 'a'.repeat(1500);
+      const largeContent = 'a'.repeat(5001);
       mockNestedTool.call.mockImplementation(async function* (): AsyncGenerator<
         AgentEvent,
         string,
@@ -216,7 +216,7 @@ describe('ReActAgent', () => {
       const output = JSON.parse(toolResultEvent.output);
       expect(output).toMatchObject({
         $cached: expect.stringMatching(/^cache_/),
-        $size: 1500,
+        $size: 5001,
       });
       expect(mockRedis.setEx).toHaveBeenCalled();
     });
@@ -296,7 +296,7 @@ describe('ReActAgent', () => {
         },
       );
 
-      const largeArray = Array.from({ length: 25 }, (_, i) => ({ id: i }));
+      const largeArray = Array.from({ length: 51 }, (_, i) => ({ id: i }));
       mockNestedTool.call.mockImplementation(async function* (): AsyncGenerator<
         AgentEvent,
         any[],

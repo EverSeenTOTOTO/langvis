@@ -14,7 +14,7 @@ import { AuthService } from '../service/AuthService';
 import { ChatService } from '../service/ChatService';
 import { ConversationService } from '../service/ConversationService';
 import { EmailService } from '../service/EmailService';
-import { compressIfNeeded, type CachedReference } from '../utils/cache';
+import { compress, type CachedReference } from '../utils/cache';
 import Logger from '../utils/logger';
 
 const INBOUND_SECRET = import.meta.env.VITE_INBOUND_SECRET || '';
@@ -132,11 +132,11 @@ export default class EmailController {
     );
 
     const agent = container.resolve<Agent>(AgentIds.DOCUMENT);
-    const contentOrCached = await compressIfNeeded(
-      conversation.id,
-      email.content,
+    const contentOrCached = await compress(conversation.id, email.content);
+    const userContent = this.buildArchivePrompt(
+      email,
+      contentOrCached as string | CachedReference,
     );
-    const userContent = this.buildArchivePrompt(email, contentOrCached);
 
     res.status(200).json({ conversationId: conversation.id });
 

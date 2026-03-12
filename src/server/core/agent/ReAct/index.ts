@@ -1,5 +1,6 @@
 import { agent } from '@/server/decorator/core';
 import { config } from '@/server/decorator/param';
+import { compress, resolve } from '@/server/utils/cache';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
@@ -196,8 +197,7 @@ export default class ReActAgent extends Agent {
   ): AsyncGenerator<AgentEvent, string, void> {
     const tool = container.resolve<Tool>(toolName);
 
-    // Auto resolve CachedReference in input
-    const resolvedInput = await ctx.autoResolveInput(toolInput);
+    const resolvedInput = await resolve(ctx.traceId, toolInput);
 
     yield ctx.agentToolCallEvent(
       toolName,
@@ -210,10 +210,9 @@ export default class ReActAgent extends Agent {
         ctx,
       );
 
-      // Auto compress large strings in output (skip if tool opts out)
       const compressedOutput = tool.config?.skipCompression
         ? output
-        : await ctx.autoCompressOutput(output);
+        : await compress(ctx.traceId, output);
 
       const observation =
         typeof compressedOutput === 'string'

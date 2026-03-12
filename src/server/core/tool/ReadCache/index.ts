@@ -1,5 +1,6 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
+import { resolve } from '@/server/utils/cache';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig, AgentEvent } from '@/shared/types';
@@ -27,7 +28,7 @@ export default class ReadCacheTool extends Tool<
     @input() readCacheInput: ReadCacheInput,
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, ReadCacheOutput, void> {
-    const content = await ctx.retrieve(readCacheInput.key);
+    const content = await resolve(ctx.traceId, { $cached: readCacheInput.key });
 
     if (typeof content === 'string') {
       const offset = readCacheInput.offset ?? 0;
@@ -40,7 +41,6 @@ export default class ReadCacheTool extends Tool<
       return result;
     }
 
-    // Object type cache (from autoCompressOutput)
     yield ctx.agentToolProgressEvent(this.id, { type: 'object' });
     return content as Record<string, unknown>;
   }
