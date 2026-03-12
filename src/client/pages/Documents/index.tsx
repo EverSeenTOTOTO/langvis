@@ -1,5 +1,5 @@
-import { usePagination } from '@/client/hooks/usePagination';
 import MarkdownRender from '@/client/components/MarkdownRender';
+import { usePagination } from '@/client/hooks/usePagination';
 import { useStore } from '@/client/store';
 import type { DocumentListItem } from '@/shared/dto/controller/document.dto';
 import type { DocumentCategory as DCType } from '@/shared/entities/Document';
@@ -201,22 +201,6 @@ const Documents: React.FC = () => {
           <Tag color={SOURCE_TYPE_COLORS[type] || 'default'}>
             {settingStore.tr(type)}
           </Tag>
-        ) : (
-          '-'
-        ),
-    },
-    {
-      title: settingStore.tr('Source URL'),
-      dataIndex: 'sourceUrl',
-      key: 'sourceUrl',
-      width: 200,
-      render: (url: string | null) =>
-        url ? (
-          <Paragraph copyable style={{ margin: 0 }}>
-            <a href={url} target="_blank" rel="noopener noreferrer">
-              {url}
-            </a>
-          </Paragraph>
         ) : (
           '-'
         ),
@@ -426,3 +410,4 @@ const Documents: React.FC = () => {
 };
 
 export default observer(Documents);
+
