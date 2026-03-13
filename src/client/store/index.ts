@@ -3,15 +3,16 @@ import 'reflect-metadata';
 import { container } from 'tsyringe';
 import composeApi from '../decorator/api';
 import composeHydrate from '../decorator/hydrate';
+import { AgentStore } from './modules/agent';
 import { AuthStore } from './modules/auth';
 import { ChatStore } from './modules/chat';
 import { ConversationGroupStore } from './modules/conversationGroup';
 import { ConversationStore } from './modules/conversation';
 import { DocumentStore } from './modules/document';
 import { EmailStore } from './modules/email';
+import { FileStore } from './modules/file';
 import { SettingStore } from './modules/setting';
 import { UserStore } from './modules/user';
-import { AgentStore } from './modules/agent';
 
 configure({ enforceActions: 'never' });
 
@@ -42,6 +43,8 @@ export class AppStore {
   document = bindStore(DocumentStore);
 
   email = bindStore(EmailStore);
+
+  file = bindStore(FileStore);
 
   hydrate(data: Record<string, any>) {
     Object.keys(data).forEach(key => {

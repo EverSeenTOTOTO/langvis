@@ -1,5 +1,14 @@
 import { JSONSchemaType } from 'ajv';
 
+export interface UploadConfig {
+  /** Maximum file size in bytes */
+  maxSize?: number;
+  /** Allowed MIME types, e.g. ['image/*', 'application/pdf'] */
+  allowedTypes?: string[];
+  /** Maximum number of files per upload */
+  maxCount?: number;
+}
+
 export interface AgentConfig<Config = Record<string, unknown>> {
   extends?: string;
   name: string;
@@ -7,6 +16,7 @@ export interface AgentConfig<Config = Record<string, unknown>> {
   tools?: string[];
   configSchema?: JSONSchemaType<Config>;
   enabled?: boolean;
+  upload?: UploadConfig;
 }
 
 export interface ToolConfig<

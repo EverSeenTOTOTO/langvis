@@ -1,4 +1,5 @@
 import { createReadStream, promises as fs } from 'fs';
+import mime from 'mime-types';
 import path from 'path';
 import { service } from '../decorator/service';
 
@@ -139,5 +140,79 @@ export class FileService {
 
   getFilePath(filename: string): string {
     return this.validatePath(filename);
+  }
+
+  async saveFile(file: Express.Multer.File): Promise<{
+    filename: string;
+    url: string;
+    size: number;
+    mimeType: string;
+  }> {
+    const ext = path.extname(file.originalname) || '';
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).slice(2, 8);
+    const filename = `${timestamp}-${random}${ext}`;
+
+    const filePath = this.getFilePath(filename);
+    await fs.writeFile(filePath, file.buffer);
+
+    const publicUrl = process.env.PUBLIC_URL || '';
+    const url = publicUrl
+      ? `${publicUrl}/api/files/play/${filename}`
+      : `/api/files/play/${filename}`;
+
+    return {
+      filename,
+      url,
+      size: file.size,
+      mimeType: file.mimetype,
+    };
+  }
+
+  async listFiles(options: { page: number; pageSize: number }): Promise<{
+    items: Array<{
+      filename: string;
+      size: number;
+      mimeType: string;
+      createdAt: Date;
+      url: string;
+    }>;
+    total: number;
+  }> {
+    const page = options.page || 1;
+    const pageSize = options.pageSize || 20;
+
+    const files = await fs.readdir(this.uploadDir);
+    const items = await Promise.all(
+      files
+        .filter(f => !f.startsWith('.'))
+        .map(async filename => {
+          const filePath = this.getFilePath(filename);
+          const stats = await fs.stat(filePath);
+          return {
+            filename,
+            size: stats.size,
+            mimeType: mime.lookup(filename) || 'application/octet-stream',
+            createdAt: stats.mtime,
+            url: `/api/files/download/${filename}`,
+          };
+        }),
+    );
+
+    // Sort by createdAt desc
+    items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    const start = (page - 1) * pageSize;
+    const paged = items.slice(start, start + pageSize);
+
+    return {
+      items: paged,
+      total: items.length,
+    };
+  }
+
+  async deleteFile(filename: string): Promise<void> {
+    const filePath = this.getFilePath(filename);
+    await fs.unlink(filePath);
   }
 }

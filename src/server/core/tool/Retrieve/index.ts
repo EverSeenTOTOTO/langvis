@@ -27,7 +27,7 @@ export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
     @input() data: RetrieveInput,
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, RetrieveOutput, void> {
-    const { query, limit = 5, threshold } = data;
+    const { query, limit = 10, threshold } = data;
 
     // 1. Generate embedding for query
     yield ctx.agentToolProgressEvent(this.id, {

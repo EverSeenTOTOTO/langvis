@@ -48,6 +48,31 @@ export const config: AgentConfig<{
           },
         },
       },
+      upload: {
+        type: 'object',
+        properties: {
+          maxSize: {
+            type: 'number',
+            description: 'Maximum file size in bytes (e.g. 10485760 = 10MB)',
+            default: 10485760, // 10MB
+            nullable: true,
+          },
+          allowedTypes: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Allowed MIME types (e.g. image/*, application/pdf)',
+            default: ['image/*', 'application/pdf', 'text/*'],
+            nullable: true,
+          },
+          maxCount: {
+            type: 'number',
+            description: 'Maximum number of files per upload',
+            default: 5,
+            nullable: true,
+          },
+        },
+        nullable: true,
+      },
     },
   },
 };

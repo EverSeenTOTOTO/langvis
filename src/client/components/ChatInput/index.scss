@@ -70,6 +70,19 @@
   padding: 0;
 }
 
+.chat-input-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  align-items: center;
+}
+
+.chat-input-attach-button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
 .root-dark {
   .chat-input-container {
     background-color: rgb(255 255 255 / 6%);

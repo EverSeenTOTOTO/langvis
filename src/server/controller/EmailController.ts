@@ -129,6 +129,8 @@ export default class EmailController {
       `归档邮件: ${email.subject}`,
       userId,
       { agent: AgentIds.DOCUMENT },
+      null,
+      'Email Archive',
     );
 
     const agent = container.resolve<Agent>(AgentIds.DOCUMENT);

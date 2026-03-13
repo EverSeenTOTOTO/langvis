@@ -51,6 +51,32 @@ describe('NoneMemory', () => {
         messages,
       );
     });
+
+    it('should store messages with attachments', async () => {
+      const messages = [
+        {
+          role: Role.USER,
+          content: 'What is in this image?',
+          attachments: [
+            {
+              filename: 'test.png',
+              url: 'https://example.com/test.png',
+              mimeType: 'image/png',
+              size: 1024,
+            },
+          ],
+          meta: null,
+          createdAt: new Date(),
+        },
+      ];
+
+      await memory.store(messages);
+
+      expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
+        'conv-123',
+        messages,
+      );
+    });
   });
 
   describe('retrieve', () => {

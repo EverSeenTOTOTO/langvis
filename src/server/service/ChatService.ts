@@ -1,5 +1,6 @@
 import { InjectTokens, MemoryIds, RedisKeys } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
+import type { MessageAttachment } from '@/shared/types/entities';
 import { globby } from 'globby';
 import type { RedisClientType } from 'redis';
 import { container, inject } from 'tsyringe';
@@ -159,6 +160,7 @@ export class ChatService {
     userMessage?: {
       role: Role;
       content: string;
+      attachments?: MessageAttachment[] | null;
       meta?: Record<string, any> | null;
     },
   ): Promise<Memory> {
@@ -172,6 +174,7 @@ export class ChatService {
     const chatMessages: {
       role: Role;
       content: string;
+      attachments?: MessageAttachment[] | null;
       meta?: Record<string, any> | null;
       createdAt: Date;
     }[] = [];
@@ -215,6 +218,7 @@ export class ChatService {
           chatMessages.push({
             role: msg.role,
             content: msg.content,
+            attachments: msg.attachments,
             meta: msg.meta,
             createdAt: new Date(baseTime + timeOffset++),
           });

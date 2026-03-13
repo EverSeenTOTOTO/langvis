@@ -1,4 +1,5 @@
 import { Role } from '@/shared/entities/Message';
+import type { MessageAttachment } from '@/shared/types/entities';
 import { BaseDto, dto } from '../base';
 
 export interface InitSSERequest {
@@ -47,6 +48,7 @@ export interface StartChatRequest {
   conversationId: string;
   role: Role;
   content: string;
+  attachments?: MessageAttachment[];
 }
 
 @dto<StartChatRequest>({
@@ -54,7 +56,12 @@ export interface StartChatRequest {
   properties: {
     conversationId: { type: 'string' },
     role: { type: 'string', enum: Object.values(Role) as Role[] },
-    content: { type: 'string', minLength: 1 },
+    content: { type: 'string' },
+    attachments: {
+      type: 'array',
+      nullable: true,
+      items: { type: 'object' } as any,
+    },
   },
   required: ['conversationId', 'role', 'content'],
   additionalProperties: false,
@@ -63,6 +70,7 @@ export class StartChatRequestDto extends BaseDto implements StartChatRequest {
   conversationId!: string;
   role!: Role;
   content!: string;
+  attachments?: MessageAttachment[];
 }
 
 export interface StartChatResponse {

@@ -2,6 +2,7 @@ import { memory } from '@/server/decorator/core';
 import { ConversationService } from '@/server/service/ConversationService';
 import { Logger } from '@/server/utils/logger';
 import { MemoryIds } from '@/shared/constants';
+import type { MessageAttachment } from '@/shared/types/entities';
 import { Message, Role } from '@/shared/types/entities';
 import { inject } from 'tsyringe';
 import { Memory } from '..';
@@ -23,6 +24,7 @@ export default class NoneMemory extends Memory {
     messages: {
       role: Role;
       content: string;
+      attachments?: MessageAttachment[] | null;
       meta?: Record<string, any> | null;
       createdAt: Date;
     }[],

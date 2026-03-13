@@ -1,4 +1,4 @@
-import type { Message } from '@/shared/types/entities';
+import type { Message, MessageAttachment } from '@/shared/types/entities';
 import {
   BeforeInsert,
   Column,
@@ -34,6 +34,9 @@ export class MessageEntity implements Message {
 
   @Column({ type: 'text' })
   content!: string;
+
+  @Column({ type: 'json', nullable: true })
+  attachments!: MessageAttachment[] | null;
 
   @Column({ type: 'json', nullable: true })
   meta!: Record<string, any> | null;

@@ -5,6 +5,7 @@ import {
 } from '@/shared/entities/Conversation';
 import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
 import { Message, MessageEntity, Role } from '@/shared/entities/Message';
+import type { MessageAttachment } from '@/shared/types/entities';
 import { In } from 'typeorm';
 import { service } from '../decorator/service';
 import pg from './pg';
@@ -150,6 +151,7 @@ export class ConversationService {
     messagesData: Array<{
       role: Role;
       content: string;
+      attachments?: MessageAttachment[] | null;
       meta?: Record<string, any> | null;
       createdAt?: Date;
     }>,
@@ -166,6 +168,7 @@ export class ConversationService {
         conversationId,
         role: data.role,
         content: data.content,
+        attachments: data.attachments,
         meta: data.meta,
         ...(data.createdAt && { createdAt: data.createdAt }),
       }),
