@@ -175,6 +175,54 @@
       .chat-input-container {
         background-color: var(--ant-color-bg-container);
       }
+
+      .chat-input-header-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        padding-block-end: 8px;
+      }
+
+      .chat-attachments {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        align-items: center;
+
+        .attachment-tag {
+          display: inline-flex;
+          gap: 4px;
+          align-items: center;
+          max-width: 200px;
+
+          .attachment-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          .attachment-loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--ant-color-primary);
+            border-block-end-color: transparent;
+            border-radius: 50%;
+            animation: attachment-spin 1s linear infinite;
+          }
+        }
+      }
+    }
+
+    @keyframes attachment-spin {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
     }
 
     .chat-placeholder {

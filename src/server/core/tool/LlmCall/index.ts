@@ -4,13 +4,83 @@ import { OpenAI } from '@/server/service/openai';
 import type { Logger } from '@/server/utils/logger';
 import { InjectTokens, ToolIds } from '@/shared/constants';
 import { ToolConfig, AgentEvent } from '@/shared/types';
-import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
+import type { MessageAttachment } from '@/shared/types/entities';
+import type {
+  ChatCompletionCreateParams,
+  ChatCompletionMessageParam,
+} from 'openai/resources/chat/completions';
 import { inject } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 
 export type LlmCallInput = Partial<ChatCompletionCreateParams>;
 export type LlmCallOutput = string;
+
+type InternalMessage = {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  attachments?: MessageAttachment[] | null;
+};
+
+/**
+ * Convert message with attachments to OpenAI multimodal format
+ */
+function toMultimodalContent(
+  content: string,
+  attachments?: MessageAttachment[] | null,
+):
+  | string
+  | Array<{
+      type: 'text' | 'image_url';
+      text?: string;
+      image_url?: { url: string };
+    }> {
+  if (!attachments || attachments.length === 0) {
+    return content;
+  }
+
+  const parts: Array<{
+    type: 'text' | 'image_url';
+    text?: string;
+    image_url?: { url: string };
+  }> = [];
+
+  if (content.trim()) {
+    parts.push({ type: 'text', text: content });
+  }
+
+  for (const att of attachments) {
+    if (att.mimeType.startsWith('image/')) {
+      parts.push({
+        type: 'image_url',
+        image_url: { url: att.url },
+      });
+    }
+  }
+
+  return parts.length > 0 ? parts : content;
+}
+
+/**
+ * Convert internal messages to OpenAI format, handling multimodal content
+ */
+function toOpenAIMessages(
+  messages: InternalMessage[],
+): ChatCompletionMessageParam[] {
+  return messages.map(msg => {
+    if (msg.role === 'user' && msg.attachments?.length) {
+      return {
+        role: 'user' as const,
+        content: toMultimodalContent(msg.content, msg.attachments),
+      } as ChatCompletionMessageParam;
+    }
+
+    return {
+      role: msg.role,
+      content: msg.content,
+    } as ChatCompletionMessageParam;
+  });
+}
 
 @tool(ToolIds.LLM_CALL)
 export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
@@ -26,7 +96,8 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
     @input() data: LlmCallInput,
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, LlmCallOutput, void> {
-    const messages = data.messages ?? [];
+    const rawMessages = data.messages ?? [];
+    const messages = toOpenAIMessages(rawMessages as InternalMessage[]);
     const model = data.model || process.env.OPENAI_MODEL!;
 
     this.logger.debug('LLM call request', {
@@ -41,8 +112,8 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
     const response = await this.openai.chat.completions.create(
       {
         model,
-        messages: [],
         ...data,
+        messages,
         stream: true,
       },
       { signal: ctx.signal },

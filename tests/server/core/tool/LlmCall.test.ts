@@ -201,5 +201,230 @@ describe('LlmCallTool', () => {
         expect.stringContaining('max_tokens limit reached'),
       );
     });
+
+    it('should convert messages with image attachments to multimodal format', async () => {
+      const mockChunks = [
+        {
+          choices: [
+            { delta: { content: 'I see an image' }, finish_reason: null },
+          ],
+        },
+        { choices: [{ delta: {}, finish_reason: 'stop' }] },
+      ];
+
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          for (const chunk of mockChunks) {
+            yield chunk;
+          }
+        },
+      } as unknown as Stream<any>;
+
+      mockCreate.mockResolvedValue(mockStream);
+
+      const input = {
+        messages: [
+          {
+            role: 'user' as const,
+            content: 'What is in this image?',
+            attachments: [
+              {
+                filename: 'test.png',
+                url: 'https://example.com/test.png',
+                mimeType: 'image/png',
+                size: 1024,
+              },
+            ],
+          },
+        ],
+        model: 'gpt-4o',
+      };
+
+      const ctx = createMockContext();
+      await collectEvents(llmCallTool.call(input, ctx));
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gpt-4o',
+          stream: true,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'What is in this image?' },
+                {
+                  type: 'image_url',
+                  image_url: { url: 'https://example.com/test.png' },
+                },
+              ],
+            },
+          ],
+        }),
+        { signal: ctx.signal },
+      );
+    });
+
+    it('should handle messages with multiple image attachments', async () => {
+      const mockChunks = [
+        {
+          choices: [{ delta: { content: 'Response' }, finish_reason: null }],
+        },
+        { choices: [{ delta: {}, finish_reason: 'stop' }] },
+      ];
+
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          for (const chunk of mockChunks) {
+            yield chunk;
+          }
+        },
+      } as unknown as Stream<any>;
+
+      mockCreate.mockResolvedValue(mockStream);
+
+      const input = {
+        messages: [
+          {
+            role: 'user' as const,
+            content: 'Compare these images',
+            attachments: [
+              {
+                filename: 'image1.png',
+                url: 'https://example.com/image1.png',
+                mimeType: 'image/png',
+                size: 1024,
+              },
+              {
+                filename: 'image2.jpg',
+                url: 'https://example.com/image2.jpg',
+                mimeType: 'image/jpeg',
+                size: 2048,
+              },
+            ],
+          },
+        ],
+        model: 'gpt-4o',
+      };
+
+      const ctx = createMockContext();
+      await collectEvents(llmCallTool.call(input, ctx));
+
+      const callArgs = mockCreate.mock.calls[0][0];
+      const userMessage = callArgs.messages[0];
+
+      expect(userMessage.content).toHaveLength(3);
+      expect(userMessage.content[0]).toEqual({
+        type: 'text',
+        text: 'Compare these images',
+      });
+      expect(userMessage.content[1]).toEqual({
+        type: 'image_url',
+        image_url: { url: 'https://example.com/image1.png' },
+      });
+      expect(userMessage.content[2]).toEqual({
+        type: 'image_url',
+        image_url: { url: 'https://example.com/image2.jpg' },
+      });
+    });
+
+    it('should not convert non-image attachments to multimodal format', async () => {
+      const mockChunks = [
+        {
+          choices: [{ delta: { content: 'Response' }, finish_reason: null }],
+        },
+        { choices: [{ delta: {}, finish_reason: 'stop' }] },
+      ];
+
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          for (const chunk of mockChunks) {
+            yield chunk;
+          }
+        },
+      } as unknown as Stream<any>;
+
+      mockCreate.mockResolvedValue(mockStream);
+
+      const input = {
+        messages: [
+          {
+            role: 'user' as const,
+            content: 'Read this PDF',
+            attachments: [
+              {
+                filename: 'document.pdf',
+                url: 'https://example.com/document.pdf',
+                mimeType: 'application/pdf',
+                size: 10240,
+              },
+            ],
+          },
+        ],
+        model: 'gpt-4o',
+      };
+
+      const ctx = createMockContext();
+      await collectEvents(llmCallTool.call(input, ctx));
+
+      const callArgs = mockCreate.mock.calls[0][0];
+      const userMessage = callArgs.messages[0];
+
+      // Non-image attachments should not be added to content
+      expect(userMessage.content).toEqual([
+        { type: 'text', text: 'Read this PDF' },
+      ]);
+    });
+
+    it('should not convert assistant messages to multimodal format', async () => {
+      const mockChunks = [
+        {
+          choices: [{ delta: { content: 'Response' }, finish_reason: null }],
+        },
+        { choices: [{ delta: {}, finish_reason: 'stop' }] },
+      ];
+
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          for (const chunk of mockChunks) {
+            yield chunk;
+          }
+        },
+      } as unknown as Stream<any>;
+
+      mockCreate.mockResolvedValue(mockStream);
+
+      const input = {
+        messages: [
+          {
+            role: 'user' as const,
+            content: 'Hello',
+          },
+          {
+            role: 'assistant' as const,
+            content: 'Hi there!',
+            attachments: [
+              {
+                filename: 'image.png',
+                url: 'https://example.com/image.png',
+                mimeType: 'image/png',
+                size: 1024,
+              },
+            ],
+          },
+        ],
+        model: 'gpt-4o',
+      };
+
+      const ctx = createMockContext();
+      await collectEvents(llmCallTool.call(input, ctx));
+
+      const callArgs = mockCreate.mock.calls[0][0];
+
+      // Assistant message should remain as string content
+      expect(callArgs.messages[1]).toEqual({
+        role: 'assistant',
+        content: 'Hi there!',
+      });
+    });
   });
 });

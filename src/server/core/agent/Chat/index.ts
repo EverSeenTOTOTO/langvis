@@ -38,23 +38,16 @@ export default class ChatAgent extends Agent {
     yield ctx.agentStartEvent();
 
     const messages = await memory.summarize();
-    const conversationMessages = messages.map(msg => ({
-      role: msg.role as 'user' | 'assistant' | 'system',
-      content: msg.content,
-    }));
 
     const model = options?.model?.code ?? process.env.OPENAI_MODEL;
 
-    this.logger.debug(
-      `Chat with ${chalk.bgRed(model)}, messages: `,
-      conversationMessages,
-    );
+    this.logger.debug(`Chat with ${chalk.bgRed(model)}, messages: `, messages);
 
     yield* ctx.callLlm(
       {
         model,
         temperature: options?.model?.temperature,
-        messages: conversationMessages,
+        messages,
       },
       false,
     );

@@ -75,6 +75,32 @@ describe('ChatHistoryMemory', () => {
         messages,
       );
     });
+
+    it('should store messages with attachments', async () => {
+      const messages = [
+        {
+          role: Role.USER,
+          content: 'Analyze this image',
+          attachments: [
+            {
+              filename: 'photo.jpg',
+              url: 'https://example.com/photo.jpg',
+              mimeType: 'image/jpeg',
+              size: 2048,
+            },
+          ],
+          meta: null,
+          createdAt: new Date(),
+        },
+      ];
+
+      await memory.store(messages);
+
+      expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
+        'conv-123',
+        messages,
+      );
+    });
   });
 
   describe('retrieve', () => {

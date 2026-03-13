@@ -11,18 +11,20 @@ declare global {
   }
 }
 
-const EXEMPT_PATHS = [
+const EXEMPT_PATH_PREFIXES = [
   '/auth/sign-up/email',
   '/auth/sign-in/email',
   '/auth/get-session',
   '/emails/inbound',
+  '/files/play/',
+  '/files/download/',
 ];
 
 export default async (app: Express) => {
   const authService = container.resolve<AuthService>(AuthService);
 
   app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
-    if (EXEMPT_PATHS.includes(req.path)) {
+    if (EXEMPT_PATH_PREFIXES.some(prefix => req.path.startsWith(prefix))) {
       return next();
     }
 

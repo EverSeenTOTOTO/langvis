@@ -44,18 +44,14 @@ export default class GirlFriendAgent extends Agent {
     yield ctx.agentStartEvent();
 
     const messages = await memory.summarize();
-    const conversationMessages = messages.map(msg => ({
-      role: msg.role as 'user' | 'assistant' | 'system',
-      content: msg.content,
-    }));
 
-    this.logger.debug('GF agent messages: ', conversationMessages);
+    this.logger.debug('GF agent messages: ', messages);
 
     const accumulatedContent = yield* ctx.callLlm(
       {
         model: options?.model?.code,
         temperature: options?.model?.temperature,
-        messages: conversationMessages,
+        messages,
       },
       false,
     );

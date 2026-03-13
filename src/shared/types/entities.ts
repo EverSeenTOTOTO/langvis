@@ -6,10 +6,18 @@ export enum Role {
   ASSIST = 'assistant',
 }
 
+export interface MessageAttachment {
+  filename: string;
+  url: string;
+  mimeType: string;
+  size?: number;
+}
+
 export type Message = {
   id: string;
   role: Role;
   content: string;
+  attachments?: MessageAttachment[] | null;
   meta?: { events?: AgentEvent[] } | null;
   createdAt: Date;
   conversationId: string;

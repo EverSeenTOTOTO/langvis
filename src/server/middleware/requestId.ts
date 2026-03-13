@@ -48,14 +48,16 @@ export default async (app: Express) => {
       headers: req.headers,
     });
 
-    next();
-
-    req.log.info({
-      type: '<-',
-      method: req.method,
-      url: req.originalUrl,
-      statusCode: res.statusCode,
-      statusMessage: res.statusMessage,
+    res.on('finish', () => {
+      req.log.info({
+        type: '<-',
+        method: req.method,
+        url: req.originalUrl,
+        statusCode: res.statusCode,
+        statusMessage: res.statusMessage,
+      });
     });
+
+    next();
   });
 };

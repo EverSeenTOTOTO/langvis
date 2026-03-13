@@ -132,6 +132,7 @@ export default class ChatController {
       {
         role: dto.role,
         content: dto.content,
+        attachments: dto.attachments,
       },
     );
 

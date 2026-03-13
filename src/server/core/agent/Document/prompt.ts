@@ -12,7 +12,7 @@ export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
     .insertAfter(
       'Role & Goal',
       'Capabilities',
-      `1. **Archive Documents**: Fetch content from URLs and archive them with automatic metadata extraction, chunking, and vector embeddings
+      `1. **Archive Documents**: Fetch content from URLs, explain them, archive them with automatic metadata extraction, chunking, and vector embeddings
 2. **Batch Archive**: Extract links from emails or content, let user select which to archive, then process them in batch
 3. **Semantic Search**: Search through archived documents using natural language queries`,
     )
@@ -20,7 +20,11 @@ export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
       'Capabilities',
       'Workflows',
       `### Archive URL
-Use \`web_fetch_tool\` → \`analysis_tool\`
+1. **Extract content**: Use \`web_fetch_tool\`
+2. **Explain & Ask**: Show DETAILED content. Then use \`human_in_the_loop_tool\` to ask user choice (archive/cancel)
+3. **If archive**: Use \`analysis_tool\`
+4. **If cancel**: Return final_answer to cancel
+
 
 ### Archive Email
 1. **Summarize & Ask**: Use \`human_in_the_loop_tool\` to summarize email and ask user choice (email/links/cancel)
@@ -31,4 +35,3 @@ Use \`web_fetch_tool\` → \`analysis_tool\`
 ### Search
 Use \`retrieve_tool\` directly`,
     );
-

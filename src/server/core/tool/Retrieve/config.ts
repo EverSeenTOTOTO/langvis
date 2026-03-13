@@ -36,7 +36,7 @@ export const config: ToolConfig<RetrieveInput, RetrieveOutput> = {
       limit: {
         type: 'number',
         nullable: true,
-        description: 'Maximum number of results to return. Defaults to 5',
+        description: 'Maximum number of results to return. Defaults to 10',
       },
       threshold: {
         type: 'number',

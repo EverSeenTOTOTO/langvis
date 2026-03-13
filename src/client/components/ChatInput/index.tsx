@@ -29,6 +29,8 @@ export interface ChatInputProps {
   cancelling?: boolean;
   placeholder?: string;
   header?: React.ReactNode;
+  /** Content rendered before the send button */
+  suffix?: React.ReactNode;
   minRows?: number;
   maxRows?: number;
   className?: string;
@@ -46,6 +48,7 @@ const InnerEditor: React.FC<{
   loading?: boolean;
   cancelling?: boolean;
   placeholder?: string;
+  suffix?: React.ReactNode;
   minRows?: number;
   maxRows?: number;
 }> = ({
@@ -56,6 +59,7 @@ const InnerEditor: React.FC<{
   loading,
   cancelling,
   placeholder,
+  suffix,
   minRows = 2,
   maxRows = 6,
 }) => {
@@ -161,22 +165,25 @@ const InnerEditor: React.FC<{
           <HistoryPlugin />
           <OnChangePlugin onChange={handleChange} />
         </div>
-        <Button
-          type="primary"
-          className="chat-input-send-button"
-          icon={
-            cancelling ? (
-              <CloseOutlined />
-            ) : loading ? (
-              <LoadingOutlined spin />
-            ) : (
-              <SendOutlined />
-            )
-          }
-          onClick={loading && !cancelling ? handleCancel : handleSend}
-          disabled={cancelling || (!loading && !value?.trim())}
-          loading={false}
-        />
+        <div className="chat-input-actions">
+          {suffix}
+          <Button
+            type="primary"
+            className="chat-input-send-button"
+            icon={
+              cancelling ? (
+                <CloseOutlined />
+              ) : loading ? (
+                <LoadingOutlined spin />
+              ) : (
+                <SendOutlined />
+              )
+            }
+            onClick={loading && !cancelling ? handleCancel : handleSend}
+            disabled={cancelling || (!loading && !value?.trim())}
+            loading={false}
+          />
+        </div>
       </div>
     </div>
   );
@@ -191,6 +198,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   cancelling = false,
   placeholder = 'Type a message...',
   header,
+  suffix,
   minRows = 2,
   maxRows = 6,
   className,
@@ -215,6 +223,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           loading={loading}
           cancelling={cancelling}
           placeholder={placeholder}
+          suffix={suffix}
           minRows={minRows}
           maxRows={maxRows}
         />

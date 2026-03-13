@@ -379,5 +379,98 @@ describe('ChatService', () => {
       ).toHaveBeenCalledWith('conv-789');
       expect(mockMemory.store).toHaveBeenCalled();
     });
+
+    it('should store user message with attachments', async () => {
+      const storedMessages: any[] = [];
+      const mockMemory = {
+        setConversationId: vi.fn(),
+        setUserId: vi.fn(),
+        summarize: vi.fn().mockResolvedValue([]),
+        store: vi.fn().mockImplementation((msgs: any[]) => {
+          storedMessages.push(...msgs);
+        }),
+      };
+
+      const mockAgent = {
+        systemPrompt: {
+          build: () => 'System prompt',
+          with: vi.fn().mockReturnThis(),
+        },
+      };
+
+      container.register('test-memory-attachments', { useValue: mockMemory });
+
+      const attachments = [
+        {
+          filename: 'test.png',
+          url: 'https://example.com/test.png',
+          mimeType: 'image/png',
+          size: 1024,
+        },
+      ];
+
+      await chatService.buildMemory(
+        'conv-123',
+        'user-123',
+        mockAgent as any,
+        { memory: { type: 'test-memory-attachments' } },
+        { role: Role.USER, content: 'What is this?', attachments },
+      );
+
+      const userMsg = storedMessages.find(m => m.role === Role.USER);
+      expect(userMsg).toBeDefined();
+      expect(userMsg.content).toBe('What is this?');
+      expect(userMsg.attachments).toEqual(attachments);
+    });
+
+    it('should load existing messages with attachments', async () => {
+      const storedMessages: any[] = [];
+      const mockMemory = {
+        setConversationId: vi.fn(),
+        setUserId: vi.fn(),
+        summarize: vi.fn().mockResolvedValue([]),
+        store: vi.fn().mockImplementation((msgs: any[]) => {
+          storedMessages.push(...msgs);
+        }),
+      };
+
+      const mockAgent = {
+        systemPrompt: {
+          build: () => 'System prompt',
+          with: vi.fn().mockReturnThis(),
+        },
+      };
+
+      container.register('test-memory-load-attachments', {
+        useValue: mockMemory,
+      });
+
+      const existingAttachments = [
+        {
+          filename: 'existing.jpg',
+          url: 'https://example.com/existing.jpg',
+          mimeType: 'image/jpeg',
+          size: 2048,
+        },
+      ];
+
+      mockConversationService.getMessagesByConversationId.mockResolvedValue([
+        {
+          id: 'msg-1',
+          role: Role.USER,
+          content: 'Existing with attachment',
+          attachments: existingAttachments,
+          meta: null,
+        },
+      ]);
+
+      await chatService.buildMemory('conv-789', 'user-456', mockAgent as any, {
+        memory: { type: 'test-memory-load-attachments' },
+      });
+
+      const userMsg = storedMessages.find(m => m.role === Role.USER);
+      expect(userMsg).toBeDefined();
+      expect(userMsg.attachments).toEqual(existingAttachments);
+    });
   });
 });

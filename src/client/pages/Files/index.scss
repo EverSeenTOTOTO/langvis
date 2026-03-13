@@ -1,0 +1,18 @@
+.files-page {
+  padding: 24px;
+
+  .files-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+
+    h2 {
+      margin: 0;
+    }
+  }
+
+  .file-name {
+    font-family: monospace;
+  }
+}
