@@ -34,11 +34,17 @@ interface FinalAnswerResponse {
   thought?: string; // Optional: Reasoning about the answer or what info is missing.
   final_answer: string; // The actual response content to the user.
 }
-\`\`\`
-
-## Cached References
-
-When a tool returns an object containing a \`$cached\` field, it is a reference to cached content:
+\`\`\``,
+    )
+    .with(
+      'Guidelines',
+      `1. **Thought is Optional**: You can omit the "thought" field if the answer is direct, but keeping it helps accuracy.
+2. **Missing Info**: If you need user input (confirmation, choice, or additional info), use \`HumanInTheLoop Tool\` to ask the user interactively.
+3. **No Tool Applies**: Use Option 2 to explain why and suggest alternatives.`,
+    )
+    .with(
+      'Cached References',
+      `When a tool returns an object containing a \`$cached\` field, it is a reference to cached content:
 
 \`\`\`json
 { "title": "Example", "content": { "$cached": "cache_abc123", "$size": 45000, "$preview": "Lorem ipsum..." } }
@@ -49,12 +55,6 @@ When a tool returns an object containing a \`$cached\` field, it is a reference 
 - To read the full content yourself, use the \`read_cache\` tool with the \`$cached\` value as the key`,
     )
     .with(
-      'Guidelines',
-      `1. **Thought is Optional**: You can omit the "thought" field if the answer is direct, but keeping it helps accuracy.
-2. **Missing Info**: If you need user input (confirmation, choice, or additional info), use \`HumanInTheLoop Tool\` to ask the user interactively.
-3. **No Tool Applies**: Use Option 2 to explain why and suggest alternatives.`,
-    )
-    .with(
       'Examples',
       `<example:straight-to-final>
 User: Hi.
@@ -62,17 +62,11 @@ Assistant: { "final_answer": "你好！有什么我可以帮你的吗？" }
 </example:straight-to-final>
 
 <example:use-tool>
-User: What time is it in Tokyo?
+User: Content is cached, cache key: cache_abc123
 Assistant:
 {
-  "thought": "Need to check current time for Tokyo timezone.",
-  "action": { "tool": "date_time_tool", "input": {"timezone": "Asia/Tokyo"} }
-}
-(Observation received)
-Assistant:
-{
-  "thought": "I have the time info, now answering the user.",
-  "final_answer": "2025-09-01 18:42:10"
+  "thought": "Need to use read_cache tool to retrieve content",
+  "action": { "tool": "read_cache_tool", "input": {"key": "cache_abc123"} }
 }
 </example:use-tool>
 
@@ -103,3 +97,4 @@ Assistant:
 }
 </example:use-human-in-the-loop>`,
     );
+
