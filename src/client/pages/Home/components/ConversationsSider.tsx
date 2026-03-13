@@ -3,28 +3,28 @@ import { useSearchParam } from '@/client/hooks/useSearchParam';
 import { useStore } from '@/client/store';
 import { UNGROUPED_GROUP_NAME } from '@/shared/constants';
 import {
-    DeleteOutlined,
-    EditOutlined,
-    EllipsisOutlined,
-    FolderOutlined,
-    MenuFoldOutlined,
-    MenuUnfoldOutlined,
-    MessageOutlined,
-    PlusOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EllipsisOutlined,
+  FolderOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  MessageOutlined,
+  PlusOutlined,
 } from '@ant-design/icons';
 import {
-    App,
-    Button,
-    Dropdown,
-    Flex,
-    Layout,
-    Skeleton,
-    Tag,
-    Tooltip,
-    Tree,
-    theme,
-    type MenuProps,
-    type TreeProps,
+  App,
+  Button,
+  Dropdown,
+  Flex,
+  Layout,
+  Skeleton,
+  Tag,
+  Tooltip,
+  Tree,
+  theme,
+  type MenuProps,
+  type TreeProps,
 } from 'antd';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef, useState } from 'react';
