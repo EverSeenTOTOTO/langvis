@@ -25,4 +25,3 @@ export default async (_app: Express) => {
   });
   container.register<DataSource>(InjectTokens.PG, { useValue: pg });
 };
-

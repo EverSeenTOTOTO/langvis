@@ -162,7 +162,7 @@
     .scroll-btn-group {
       position: absolute;
       right: 24px;
-      bottom: 96px;
+      bottom: calc(var(--chat-input-height, 60px) + 24px);
       z-index: 10;
     }
 
@@ -226,7 +226,7 @@
     }
 
     .chat-placeholder {
-      height: 60px;
+      height: var(--chat-input-height, 60px);
     }
   }
 
@@ -251,7 +251,7 @@
 
       .scroll-btn-group {
         right: 16px;
-        bottom: 88px;
+        bottom: calc(var(--chat-input-height, 60px) + 20px);
       }
 
       .chat-input {

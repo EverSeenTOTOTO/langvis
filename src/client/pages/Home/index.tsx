@@ -10,10 +10,16 @@ import { MenuOutlined, PaperClipOutlined } from '@ant-design/icons';
 import { Button, Layout, message, Tag, Upload } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 import { observer } from 'mobx-react-lite';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useAsyncFn, useMedia } from 'react-use';
 import ConversationsSider from './components/ConversationsSider';
-import Messages from './components/Messages';
+import Messages, { type MessagesRef } from './components/Messages';
 import './index.scss';
 
 const { Content } = Layout;
@@ -34,7 +40,10 @@ const Chat: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [inputHeight, setInputHeight] = useState(60);
   const isMobile = useMedia('(max-width: 768px)', false);
+  const messagesRef = useRef<MessagesRef>(null);
+  const inputRef = useRef<HTMLDivElement>(null);
 
   const createConversationApi = useAsyncFn(
     conversationStore.createConversation.bind(conversationStore),
@@ -135,6 +144,9 @@ const Chat: React.FC = () => {
   const handleSend = async () => {
     if (!value && attachments.length === 0) return;
 
+    // Scroll to bottom immediately when user sends
+    messagesRef.current?.scrollToBottom(false);
+
     if (!conversationStore.currentConversationId) {
       await createConversationApi[1]({
         name: settingStore.tr('New Conversation'),
@@ -202,6 +214,18 @@ const Chat: React.FC = () => {
 
   // Check if any file is uploading
   const isUploading = fileList.some(f => f.status === 'uploading');
+
+  // Track input height for dynamic scroll button position
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+
+    const resizeObserver = new ResizeObserver(entries => {
+      setInputHeight(entries[0].contentRect.height);
+    });
+    resizeObserver.observe(el);
+    return () => resizeObserver.disconnect();
+  }, []);
 
   // Upload button component
   const uploadButton = (
@@ -302,9 +326,14 @@ const Chat: React.FC = () => {
       ) : (
         <ConversationsSider />
       )}
-      <Content className="chat-content">
-        <Messages />
-        <div className="chat-input">
+      <Content
+        className="chat-content"
+        style={
+          { '--chat-input-height': `${inputHeight}px` } as React.CSSProperties
+        }
+      >
+        <Messages ref={messagesRef} />
+        <div className="chat-input" ref={inputRef}>
           <ChatInput
             value={value}
             onChange={setValue}

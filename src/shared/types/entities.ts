@@ -18,7 +18,7 @@ export type Message = {
   role: Role;
   content: string;
   attachments?: MessageAttachment[] | null;
-  meta?: { events?: AgentEvent[] } | null;
+  meta?: { events?: AgentEvent[]; hidden?: boolean } | null;
   createdAt: Date;
   conversationId: string;
   loading?: boolean;

@@ -11,6 +11,7 @@ import { service } from '../decorator/service';
 import { isProd } from '../utils';
 import Logger from '../utils/logger';
 import { RedisService } from './RedisService';
+import dayjs from 'dayjs';
 
 /**
  * Session state persisted to Redis for reconnection support.
@@ -297,16 +298,21 @@ export class ChatService {
     }
 
     // Add session context as a user message before the actual user message
-    const sessionContext = `<session-context>
+    // Only add for new conversations to avoid duplication
+    if (isNewConversation) {
+      const sessionContext = `<session-context>
 Conversation ID: ${conversationId}
 User ID: ${userId}
+Current Time: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}
 </session-context>`;
 
-    messages.push({
-      role: Role.USER,
-      content: sessionContext,
-      createdAt: new Date(baseTime + messages.length),
-    });
+      messages.push({
+        role: Role.USER,
+        content: sessionContext,
+        meta: { hidden: true },
+        createdAt: new Date(baseTime + messages.length),
+      });
+    }
 
     // Add user message
     messages.push({
@@ -317,3 +323,4 @@ User ID: ${userId}
     return messages;
   }
 }
+
