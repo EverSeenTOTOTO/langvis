@@ -5,7 +5,8 @@ import { Agent } from '@/server/core/agent';
 import { Memory } from '@/server/core/memory';
 import { PendingMessage } from '@/server/core/PendingMessage';
 import { Role } from '@/shared/entities/Message';
-import { InjectTokens, RedisKeys } from '@/shared/constants';
+import { RedisKeys } from '@/shared/constants';
+import { RedisService } from '@/server/service/RedisService';
 
 vi.mock('globby', () => ({
   globby: vi.fn().mockResolvedValue([]),
@@ -13,19 +14,23 @@ vi.mock('globby', () => ({
 
 describe('ChatService', () => {
   let chatService: ChatService;
-  let mockRedis: any;
+  let mockRedisService: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
     container.clearInstances();
 
-    mockRedis = {
-      del: vi.fn().mockResolvedValue(undefined),
-      set: vi.fn().mockResolvedValue('OK'),
+    mockRedisService = {
       get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(undefined),
+      del: vi.fn().mockResolvedValue(undefined),
+      acquireLock: vi.fn().mockResolvedValue(true),
+      releaseLock: vi.fn().mockResolvedValue(undefined),
     };
 
-    container.register(InjectTokens.REDIS, { useValue: mockRedis });
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    container.register(RedisService, { useValue: mockRedisService });
 
     chatService = container.resolve(ChatService);
   });
@@ -102,7 +107,7 @@ describe('ChatService', () => {
       const session = await chatService.acquireSession('conv-123');
       await session!.cleanup();
 
-      expect(mockRedis.del).toHaveBeenCalledWith(
+      expect(mockRedisService.del).toHaveBeenCalledWith(
         RedisKeys.HUMAN_INPUT('conv-123'),
       );
     });

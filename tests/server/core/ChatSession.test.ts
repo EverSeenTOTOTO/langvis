@@ -6,18 +6,25 @@ import type { SSEConnection } from '@/server/core/SSEConnection';
 import type { Agent } from '@/server/core/agent';
 import type { Memory } from '@/server/core/memory';
 import { Role } from '@/shared/entities/Message';
-import { InjectTokens } from '@/shared/constants';
+import { RedisService } from '@/server/service/RedisService';
 
-const mockRedis = {
-  setEx: () => Promise.resolve('OK'),
+const mockRedisService = {
   get: () => Promise.resolve(null),
-  del: () => Promise.resolve(1),
+  set: () => Promise.resolve(),
+  del: () => Promise.resolve(),
+  client: {
+    setEx: () => Promise.resolve('OK'),
+    get: () => Promise.resolve(null),
+    del: () => Promise.resolve(1),
+  },
 } as any;
 
 try {
-  container.resolve(InjectTokens.REDIS);
+  container.resolve(RedisService);
 } catch {
-  container.register(InjectTokens.REDIS, { useValue: mockRedis });
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  container.register(RedisService, { useValue: mockRedisService });
 }
 
 describe('ChatSession', () => {

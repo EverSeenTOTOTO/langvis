@@ -1,18 +1,25 @@
 import { container } from 'tsyringe';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
-import { InjectTokens } from '@/shared/constants';
+import { RedisService } from '@/server/service/RedisService';
 
-const mockRedis = {
-  setEx: () => Promise.resolve('OK'),
+const mockRedisService = {
   get: () => Promise.resolve(null),
-  del: () => Promise.resolve(1),
-} as any;
+  set: () => Promise.resolve(),
+  del: () => Promise.resolve(),
+  client: {
+    setEx: () => Promise.resolve('OK'),
+    get: () => Promise.resolve(null),
+    del: () => Promise.resolve(1),
+  },
+} as unknown as RedisService;
 
-// Register mock redis if not already registered
+// Register mock RedisService if not already registered
 try {
-  container.resolve(InjectTokens.REDIS);
+  container.resolve(RedisService);
 } catch {
-  container.register(InjectTokens.REDIS, { useValue: mockRedis });
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  container.register(RedisService, { useValue: mockRedisService });
 }
 
 export function createMockContext(traceId = 'test-trace-id'): ExecutionContext {

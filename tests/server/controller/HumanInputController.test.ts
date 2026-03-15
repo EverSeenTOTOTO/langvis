@@ -2,9 +2,9 @@ import HumanInputController from '@/server/controller/HumanInputController';
 import { RedisKeys } from '@/shared/constants';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-function createMockRedis() {
+function createMockRedisService() {
   const store = new Map<string, string>();
-  return {
+  const mockClient = {
     get: vi.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
     set: vi.fn((key: string, value: string) => {
       store.set(key, value);
@@ -38,6 +38,29 @@ function createMockRedis() {
         return Promise.resolve([1, JSON.stringify(pending)]);
       },
     ),
+  };
+
+  return {
+    get: vi.fn((key: string) => {
+      const data = store.get(key) ?? null;
+      if (!data) return Promise.resolve(null);
+      try {
+        return Promise.resolve(JSON.parse(data));
+      } catch {
+        return Promise.resolve(data);
+      }
+    }),
+    set: vi.fn((key: string, value: unknown) => {
+      const serialized =
+        typeof value === 'string' ? value : JSON.stringify(value);
+      store.set(key, serialized);
+      return Promise.resolve();
+    }),
+    del: vi.fn((key: string) => {
+      store.delete(key);
+      return Promise.resolve();
+    }),
+    client: mockClient,
     _store: store,
   };
 }
@@ -59,12 +82,12 @@ function createMockResponse() {
 }
 
 describe('HumanInputController', () => {
-  let mockRedis: ReturnType<typeof createMockRedis>;
+  let mockRedisService: ReturnType<typeof createMockRedisService>;
   let controller: HumanInputController;
 
   beforeEach(() => {
-    mockRedis = createMockRedis();
-    controller = new HumanInputController(mockRedis as any);
+    mockRedisService = createMockRedisService();
+    controller = new HumanInputController(mockRedisService as any);
     vi.clearAllMocks();
   });
 
@@ -85,7 +108,7 @@ describe('HumanInputController', () => {
     });
 
     it('should return 400 when request already submitted', async () => {
-      mockRedis._store.set(
+      mockRedisService._store.set(
         RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
@@ -114,7 +137,7 @@ describe('HumanInputController', () => {
     });
 
     it('should successfully submit data', async () => {
-      mockRedis._store.set(
+      mockRedisService._store.set(
         RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
@@ -141,14 +164,16 @@ describe('HumanInputController', () => {
       expect(res.json).toHaveBeenCalledWith({ success: true });
 
       const stored = JSON.parse(
-        mockRedis._store.get(RedisKeys.HUMAN_INPUT('test-conversation'))!,
+        mockRedisService._store.get(
+          RedisKeys.HUMAN_INPUT('test-conversation'),
+        )!,
       );
       expect(stored.submitted).toBe(true);
       expect(stored.result).toEqual({ name: 'John' });
     });
 
     it('should publish notification after submission', async () => {
-      mockRedis._store.set(
+      mockRedisService._store.set(
         RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
@@ -167,8 +192,8 @@ describe('HumanInputController', () => {
       );
 
       // Lua script handles both update and publish atomically
-      expect(mockRedis.eval).toHaveBeenCalled();
-      const evalCall = mockRedis.eval.mock.calls[0];
+      expect(mockRedisService.client.eval).toHaveBeenCalled();
+      const evalCall = mockRedisService.client.eval.mock.calls[0];
       expect(evalCall[1].keys[0]).toBe(
         RedisKeys.HUMAN_INPUT('test-conversation'),
       );
@@ -182,7 +207,7 @@ describe('HumanInputController', () => {
         submitted: false,
         createdAt: 1234567890,
       };
-      mockRedis._store.set(
+      mockRedisService._store.set(
         RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify(originalData),
       );
@@ -198,7 +223,9 @@ describe('HumanInputController', () => {
       );
 
       const stored = JSON.parse(
-        mockRedis._store.get(RedisKeys.HUMAN_INPUT('test-conversation'))!,
+        mockRedisService._store.get(
+          RedisKeys.HUMAN_INPUT('test-conversation'),
+        )!,
       );
       expect(stored.message).toBe('Please confirm this action');
       expect(stored.formSchema).toEqual({ type: 'boolean' });
@@ -215,7 +242,7 @@ describe('HumanInputController', () => {
     });
 
     it('should return request status when exists and not submitted', async () => {
-      mockRedis._store.set(
+      mockRedisService._store.set(
         RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
@@ -238,7 +265,7 @@ describe('HumanInputController', () => {
     });
 
     it('should return request status when already submitted', async () => {
-      mockRedis._store.set(
+      mockRedisService._store.set(
         RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
@@ -261,7 +288,7 @@ describe('HumanInputController', () => {
     });
 
     it('should not expose result data in status response', async () => {
-      mockRedis._store.set(
+      mockRedisService._store.set(
         RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
@@ -291,15 +318,15 @@ describe('HumanInputController', () => {
         res,
       );
       // Lua script receives the key
-      expect(mockRedis.eval).toHaveBeenCalled();
-      const evalCall = mockRedis.eval.mock.calls[0];
+      expect(mockRedisService.client.eval).toHaveBeenCalled();
+      const evalCall = mockRedisService.client.eval.mock.calls[0];
       expect(evalCall[1].keys[0]).toBe(RedisKeys.HUMAN_INPUT('conv-123'));
     });
 
     it('should use correct Redis key prefix for getStatus', async () => {
       const res = createMockResponse();
       await controller.getStatus('conv-456', res);
-      expect(mockRedis.get).toHaveBeenCalledWith(
+      expect(mockRedisService.get).toHaveBeenCalledWith(
         RedisKeys.HUMAN_INPUT('conv-456'),
       );
     });

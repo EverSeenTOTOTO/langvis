@@ -1,16 +1,16 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
-import { InjectTokens, RedisKeys, ToolIds } from '@/shared/constants';
+import { RedisKeys, ToolIds } from '@/shared/constants';
 import { ToolConfig, AgentEvent } from '@/shared/types';
 import { JSONSchemaType } from 'ajv';
 import type { RedisClientType } from 'redis';
-import { inject } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
+import { RedisService } from '../../../service/RedisService';
 
 function waitForNotification(
-  subscriber: RedisClientType<any>,
+  subscriber: RedisClientType,
   channel: string,
   timeout: number,
   signal: AbortSignal,
@@ -68,12 +68,7 @@ export default class HumanInTheLoopTool<
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  constructor(
-    @inject(InjectTokens.REDIS)
-    private redis: RedisClientType<any>,
-    @inject(InjectTokens.REDIS_SUBSCRIBER)
-    private redisSubscriber: RedisClientType<any>,
-  ) {
+  constructor(private redisService: RedisService) {
     super();
   }
 
@@ -87,16 +82,13 @@ export default class HumanInTheLoopTool<
     const key = RedisKeys.HUMAN_INPUT(conversationId);
     const POLL_INTERVAL = 30_000; // 30s fallback check when Pub/Sub fails
 
-    await this.redis.set(
-      key,
-      JSON.stringify({
-        conversationId,
-        formSchema,
-        message,
-        submitted: false,
-        createdAt: Date.now(),
-      }),
-    );
+    await this.redisService.set(key, {
+      conversationId,
+      formSchema,
+      message,
+      submitted: false,
+      createdAt: Date.now(),
+    });
 
     this.logger.info(`HumanInTheLoop request created: ${conversationId}`);
 
@@ -120,39 +112,37 @@ export default class HumanInTheLoopTool<
 
       try {
         await waitForNotification(
-          this.redisSubscriber,
+          this.redisService.subscriber,
           key,
           waitTime,
           ctx.signal,
         );
       } catch (e) {
         if (ctx.signal.aborted) {
-          await this.redis.del(key);
+          await this.redisService.del(key);
           throw e;
         }
       }
 
       // Check Redis (works for both submitted and timeout cases)
-      const data = await this.redis.get(key);
-      if (data) {
-        const pending = JSON.parse(data);
-        if (pending.submitted) {
-          await this.redis.del(key);
-          this.logger.info(
-            `HumanInTheLoop request submitted: ${conversationId}`,
-          );
+      const pending = await this.redisService.get<{
+        submitted: boolean;
+        result?: O;
+      }>(key);
+      if (pending?.submitted) {
+        await this.redisService.del(key);
+        this.logger.info(`HumanInTheLoop request submitted: ${conversationId}`);
 
-          const output: HumanInTheLoopOutput<O> = {
-            submitted: true,
-            data: pending.result,
-          };
+        const output: HumanInTheLoopOutput<O> = {
+          submitted: true,
+          data: pending.result,
+        };
 
-          return output;
-        }
+        return output;
       }
     }
 
-    await this.redis.del(key);
+    await this.redisService.del(key);
     this.logger.info(`HumanInTheLoop request timeout: ${conversationId}`);
 
     const output: HumanInTheLoopOutput<O> = {

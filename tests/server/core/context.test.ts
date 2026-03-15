@@ -1,15 +1,22 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { container } from 'tsyringe';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
-import { InjectTokens } from '@/shared/constants';
+import { RedisService } from '@/server/service/RedisService';
 
-const mockRedis = {
-  setEx: () => Promise.resolve('OK'),
+const mockRedisService = {
   get: () => Promise.resolve(null),
-  del: () => Promise.resolve(1),
+  set: () => Promise.resolve(),
+  del: () => Promise.resolve(),
+  client: {
+    setEx: () => Promise.resolve('OK'),
+    get: () => Promise.resolve(null),
+    del: () => Promise.resolve(1),
+  },
 } as any;
 
-container.register(InjectTokens.REDIS, { useValue: mockRedis });
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+container.register(RedisService, { useValue: mockRedisService });
 
 describe('ExecutionContext', () => {
   let ctx: ExecutionContext;

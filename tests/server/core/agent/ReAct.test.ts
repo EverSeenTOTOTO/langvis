@@ -1,13 +1,15 @@
 import ReActAgent from '@/server/core/agent/ReAct';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
-import { InjectTokens } from '@/shared/constants';
+import { RedisService } from '@/server/service/RedisService';
 import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockRedis = {
-  setEx: vi.fn().mockResolvedValue('OK'),
-  get: vi.fn().mockResolvedValue(null),
-  del: vi.fn().mockResolvedValue(1),
+const mockRedisService = {
+  client: {
+    setEx: vi.fn().mockResolvedValue('OK'),
+    get: vi.fn().mockResolvedValue(null),
+    del: vi.fn().mockResolvedValue(1),
+  },
 };
 
 const mockNestedTool = {
@@ -19,12 +21,12 @@ vi.mock('tsyringe', async () => {
   return {
     ...actual,
     container: {
-      resolve: vi.fn((token: string | symbol) => {
+      resolve: vi.fn((token: unknown) => {
         if (token === 'nested_tool') {
           return mockNestedTool;
         }
-        if (token === InjectTokens.REDIS) {
-          return mockRedis;
+        if (token === RedisService) {
+          return mockRedisService;
         }
         return new (class MockLogger {
           info = vi.fn();
@@ -218,7 +220,7 @@ describe('ReActAgent', () => {
         $cached: expect.stringMatching(/^cache_/),
         $size: 5001,
       });
-      expect(mockRedis.setEx).toHaveBeenCalled();
+      expect(mockRedisService.client.setEx).toHaveBeenCalled();
     });
 
     it('should resolve CachedReference in tool input', async () => {
@@ -230,7 +232,7 @@ describe('ReActAgent', () => {
       const ctx = createMockContext();
 
       const cachedContent = 'cached large content';
-      mockRedis.get.mockResolvedValueOnce(cachedContent);
+      mockRedisService.client.get.mockResolvedValueOnce(cachedContent);
 
       let llmCallCount = 0;
 
@@ -352,13 +354,13 @@ describe('ReActAgent', () => {
       });
 
       vi.clearAllMocks();
-      mockRedis.setEx.mockClear();
+      mockRedisService.client.setEx.mockClear();
 
       const events = await collectEvents(reactAgent.call(memory, ctx, {}));
 
       const toolResultEvent = events.find(e => e.type === 'tool_result') as any;
       expect(toolResultEvent.output).toBe(smallContent);
-      expect(mockRedis.setEx).not.toHaveBeenCalled();
+      expect(mockRedisService.client.setEx).not.toHaveBeenCalled();
     });
   });
 });
