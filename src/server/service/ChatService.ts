@@ -2,7 +2,7 @@ import { MemoryIds, RedisKeys } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { MessageAttachment } from '@/shared/types/entities';
 import { globby } from 'globby';
-import { container } from 'tsyringe';
+import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
 import { ChatSession, SessionPhase } from '../core/ChatSession';
 import { Memory } from '../core/memory';
@@ -29,7 +29,7 @@ export class ChatService {
   private readonly logger = Logger.child({ source: 'ChatService' });
   private sessions = new Map<string, ChatSession>();
 
-  constructor(private redisService: RedisService) {
+  constructor(@inject(RedisService) private redisService: RedisService) {
     const suffix = isProd ? '.js' : '.ts';
     const pattern = `./${isProd ? 'dist' : 'src'}/server/core/memory/*/index${suffix}`;
 
@@ -323,4 +323,3 @@ Current Time: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}
     return messages;
   }
 }
-

@@ -4,6 +4,7 @@ import { api } from '@/server/decorator/api';
 import { controller } from '@/server/decorator/controller';
 import { body, param, response } from '@/server/decorator/param';
 import type { Response } from 'express';
+import { inject } from 'tsyringe';
 import { RedisService } from '../service/RedisService';
 
 // Lua script for atomic check-and-set
@@ -27,7 +28,7 @@ return {1, cjson.encode(pending)}
 
 @controller('/api/human-input')
 export default class HumanInputController {
-  constructor(private redisService: RedisService) {}
+  constructor(@inject(RedisService) private redisService: RedisService) {}
 
   @api('/:conversationId', { method: 'post' })
   async submitInput(

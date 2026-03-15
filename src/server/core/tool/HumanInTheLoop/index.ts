@@ -8,6 +8,7 @@ import type { RedisClientType } from 'redis';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { RedisService } from '../../../service/RedisService';
+import { inject } from 'tsyringe';
 
 function waitForNotification(
   subscriber: RedisClientType,
@@ -68,7 +69,7 @@ export default class HumanInTheLoopTool<
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  constructor(private redisService: RedisService) {
+  constructor(@inject(RedisService) private redisService: RedisService) {
     super();
   }
 
