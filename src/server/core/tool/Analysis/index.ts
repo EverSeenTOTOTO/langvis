@@ -16,7 +16,7 @@ import { config } from './config';
 
 const DEFAULT_TIMEOUT_MS = 120_000; // 2 minutes
 
-@tool(ToolIds.ANALYSIS)
+@tool(ToolIds.DOCUMENT_ARCHIVE)
 export default class AnalysisTool extends Tool<AnalysisInput, AnalysisOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
@@ -50,7 +50,7 @@ export default class AnalysisTool extends Tool<AnalysisInput, AnalysisOutput> {
       timeoutController.signal.throwIfAborted();
 
       const metaExtractTool = container.resolve<MetaExtractTool>(
-        ToolIds.META_EXTRACT,
+        ToolIds.DOCUMENT_METADATA_EXTRACT,
       );
       const metaResult = yield* metaExtractTool.call(
         { content, sourceUrl, sourceType },
@@ -67,7 +67,7 @@ export default class AnalysisTool extends Tool<AnalysisInput, AnalysisOutput> {
 
       timeoutController.signal.throwIfAborted();
 
-      const chunkTool = container.resolve<ChunkTool>(ToolIds.CHUNK);
+      const chunkTool = container.resolve<ChunkTool>(ToolIds.CONTENT_CHUNK);
       const chunkResult = yield* chunkTool.call(
         { content, strategy: 'paragraph', options: { maxChunkSize: 1000 } },
         ctx,
@@ -85,7 +85,9 @@ export default class AnalysisTool extends Tool<AnalysisInput, AnalysisOutput> {
 
       timeoutController.signal.throwIfAborted();
 
-      const embedTool = container.resolve<EmbedTool>(ToolIds.EMBED);
+      const embedTool = container.resolve<EmbedTool>(
+        ToolIds.EMBEDDING_GENERATE,
+      );
       const embedResult = yield* embedTool.call(
         { chunks: chunkResult.chunks, timeout },
         ctx,
@@ -103,7 +105,9 @@ export default class AnalysisTool extends Tool<AnalysisInput, AnalysisOutput> {
 
       timeoutController.signal.throwIfAborted();
 
-      const archiveTool = container.resolve<ArchiveTool>(ToolIds.ARCHIVE);
+      const archiveTool = container.resolve<ArchiveTool>(
+        ToolIds.DOCUMENT_STORE,
+      );
       const archiveResult = yield* archiveTool.call(
         {
           document: {

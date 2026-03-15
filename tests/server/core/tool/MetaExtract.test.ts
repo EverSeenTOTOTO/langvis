@@ -155,7 +155,7 @@ describe('MetaExtractTool', () => {
 
       await expect(
         collectEvents(metaExtractTool.call({ content: 'test' }, ctx)),
-      ).rejects.toThrow('No response from LLM');
+      ).rejects.toThrow('LLM returned empty response');
     });
 
     it('should throw error on invalid JSON response', async () => {

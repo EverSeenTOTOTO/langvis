@@ -32,7 +32,7 @@ describe('ExtractLinksTool', () => {
   beforeEach(() => {
     tool = new ExtractLinksTool();
     // @ts-expect-error readonly
-    tool.id = ToolIds.EXTRACT_LINKS;
+    tool.id = ToolIds.LINKS_EXTRACT;
     // @ts-expect-error readonly
     tool.config = {
       name: 'Extract Links Tool',

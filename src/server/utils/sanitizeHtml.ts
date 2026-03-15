@@ -2,6 +2,18 @@ import DOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
 
 const ALLOWED_TAGS = [
+  'html',
+  'head',
+  'body',
+  'meta',
+  'title',
+  'article',
+  'section',
+  'main',
+  'header',
+  'footer',
+  'nav',
+  'aside',
   'p',
   'div',
   'span',

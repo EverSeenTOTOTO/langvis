@@ -17,7 +17,7 @@ import { config } from './config';
 
 const DEFAULT_TIMEOUT_MS = 120_000; // 2 minutes per URL
 
-@tool(ToolIds.BATCH_ARCHIVE)
+@tool(ToolIds.DOCUMENT_ARCHIVE_BATCH)
 export default class BatchArchiveTool extends Tool<
   BatchArchiveInput,
   BatchArchiveOutput
@@ -38,7 +38,9 @@ export default class BatchArchiveTool extends Tool<
     this.logger.info(`Starting batch archive for ${urls.length} URLs`);
 
     const webFetchTool = container.resolve<WebFetchTool>(ToolIds.WEB_FETCH);
-    const analysisTool = container.resolve<AnalysisTool>(ToolIds.ANALYSIS);
+    const analysisTool = container.resolve<AnalysisTool>(
+      ToolIds.DOCUMENT_ARCHIVE,
+    );
 
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
@@ -63,7 +65,7 @@ export default class BatchArchiveTool extends Tool<
         this.logger.info(`[${current}/${urls.length}] Archiving: ${url}`);
         const archiveResult = yield* analysisTool.call(
           {
-            content: fetchResult.textContent,
+            content: fetchResult.content,
             sourceUrl: url,
             sourceType: 'web',
             timeout,

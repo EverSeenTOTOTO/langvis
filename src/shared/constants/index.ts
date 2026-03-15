@@ -1,19 +1,22 @@
 export enum ToolIds {
-  DATE_TIME = 'date_time_tool',
-  LLM_CALL = 'llm_call_tool',
-  TEXT_TO_SPEECH = 'text_to_speech_tool',
-  WEB_FETCH = 'web_fetch_tool',
-  HUMAN_IN_THE_LOOP = 'human_in_the_loop_tool',
-  META_EXTRACT = 'meta_extract_tool',
-  CHUNK = 'chunk_tool',
-  EMBED = 'embed_tool',
-  ARCHIVE = 'archive_tool',
-  ANALYSIS = 'analysis_tool',
-  RETRIEVE = 'retrieve_tool',
-  READ_CACHE = 'read_cache_tool',
-  POSITION_ADJUST = 'position_adjust_tool',
-  EXTRACT_LINKS = 'extract_links_tool',
-  BATCH_ARCHIVE = 'batch_archive_tool',
+  // High-level tools for agents
+  DATETIME_GET = 'datetime_get',
+  LLM_CALL = 'llm_call',
+  TEXT_TO_SPEECH = 'text_to_speech',
+  WEB_FETCH = 'web_fetch',
+  ASK_USER = 'ask_user',
+  DOCUMENT_ARCHIVE = 'document_archive',
+  DOCUMENT_SEARCH = 'document_search',
+  DOCUMENT_ARCHIVE_BATCH = 'document_archive_batch',
+  LINKS_EXTRACT = 'links_extract',
+  CACHED_READ = 'cached_read',
+  POSITION_ADJUSTMENT_ADVICE = 'position_adjustment_advice',
+
+  // Internal tools (not exposed to agents directly)
+  DOCUMENT_METADATA_EXTRACT = 'document_metadata_extract',
+  CONTENT_CHUNK = 'content_chunk',
+  EMBEDDING_GENERATE = 'embedding_generate',
+  DOCUMENT_STORE = 'document_store',
 }
 
 export enum AgentIds {
@@ -42,6 +45,8 @@ export const UNGROUPED_GROUP_NAME = 'Ungrouped';
 export const RedisKeys = {
   HUMAN_INPUT: (conversationId: string) => `human_input:${conversationId}`,
   CHAT_SESSION: (conversationId: string) => `chat_session:${conversationId}`,
+  CHAT_SESSION_LOCK: (conversationId: string) =>
+    `chat_session_lock:${conversationId}`,
   AGENT_CACHE: (traceId: string, key: string) =>
     `agent:cache:${traceId}:${key}`,
 };

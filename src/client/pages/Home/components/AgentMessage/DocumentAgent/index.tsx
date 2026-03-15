@@ -321,7 +321,7 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
   ) : null;
 
   // Document Agent specific: Analysis pipeline visualization
-  const isAnalysisTool = toolCall.toolName === ToolIds.ANALYSIS;
+  const isAnalysisTool = toolCall.toolName === ToolIds.DOCUMENT_ARCHIVE;
   const hasAnalysisProgress =
     isAnalysisTool &&
     toolCall.progress.some(p => {
@@ -330,7 +330,8 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
     });
 
   // Document Agent specific: Batch archive progress visualization
-  const isBatchArchiveTool = toolCall.toolName === ToolIds.BATCH_ARCHIVE;
+  const isBatchArchiveTool =
+    toolCall.toolName === ToolIds.DOCUMENT_ARCHIVE_BATCH;
   const hasBatchArchiveProgress =
     isBatchArchiveTool &&
     toolCall.progress.some(p => {

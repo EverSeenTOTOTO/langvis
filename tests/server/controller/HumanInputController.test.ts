@@ -15,6 +15,29 @@ function createMockRedis() {
       return Promise.resolve(1);
     }),
     publish: vi.fn(() => Promise.resolve(1)),
+    // Mock eval for Lua script execution
+    eval: vi.fn(
+      (_script: string, options: { keys: string[]; arguments: string[] }) => {
+        const key = options.keys[0];
+        const data = store.get(key);
+
+        if (!data) {
+          return Promise.resolve([-1, '']);
+        }
+
+        const pending = JSON.parse(data);
+        if (pending.submitted) {
+          return Promise.resolve([0, '']);
+        }
+
+        // Update the data
+        pending.submitted = true;
+        pending.result = JSON.parse(options.arguments[0]);
+        store.set(key, JSON.stringify(pending));
+
+        return Promise.resolve([1, JSON.stringify(pending)]);
+      },
+    ),
     _store: store,
   };
 }
@@ -143,9 +166,11 @@ describe('HumanInputController', () => {
         res,
       );
 
-      expect(mockRedis.publish).toHaveBeenCalledWith(
+      // Lua script handles both update and publish atomically
+      expect(mockRedis.eval).toHaveBeenCalled();
+      const evalCall = mockRedis.eval.mock.calls[0];
+      expect(evalCall[1].keys[0]).toBe(
         RedisKeys.HUMAN_INPUT('test-conversation'),
-        'submitted',
       );
     });
 
@@ -265,9 +290,10 @@ describe('HumanInputController', () => {
         { conversationId: 'conv-123', data: {} },
         res,
       );
-      expect(mockRedis.get).toHaveBeenCalledWith(
-        RedisKeys.HUMAN_INPUT('conv-123'),
-      );
+      // Lua script receives the key
+      expect(mockRedis.eval).toHaveBeenCalled();
+      const evalCall = mockRedis.eval.mock.calls[0];
+      expect(evalCall[1].keys[0]).toBe(RedisKeys.HUMAN_INPUT('conv-123'));
     });
 
     it('should use correct Redis key prefix for getStatus', async () => {

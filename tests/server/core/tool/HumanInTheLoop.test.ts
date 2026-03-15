@@ -95,7 +95,7 @@ describe('HumanInTheLoopTool', () => {
     mockRedisSubscriber = createMockRedisSubscriber();
     mockRedis = createMockRedis(mockRedisSubscriber._notify);
     tool = new HumanInTheLoopTool(mockRedis as any, mockRedisSubscriber as any);
-    (tool as any).id = ToolIds.HUMAN_IN_THE_LOOP;
+    (tool as any).id = ToolIds.ASK_USER;
     (tool as any).config = {};
     (tool as any).logger = {
       info: vi.fn(),
@@ -106,7 +106,7 @@ describe('HumanInTheLoopTool', () => {
 
   describe('basic properties', () => {
     it('should have correct tool id', () => {
-      expect(tool.id).toBe(ToolIds.HUMAN_IN_THE_LOOP);
+      expect(tool.id).toBe(ToolIds.ASK_USER);
     });
   });
 
@@ -128,7 +128,7 @@ describe('HumanInTheLoopTool', () => {
       expect(firstEvent.done).toBe(false);
       expect(firstEvent.value).toMatchObject({
         type: 'tool_progress',
-        toolName: ToolIds.HUMAN_IN_THE_LOOP,
+        toolName: ToolIds.ASK_USER,
         data: {
           status: 'awaiting_input',
           conversationId: 'test-conversation',
@@ -161,7 +161,7 @@ describe('HumanInTheLoopTool', () => {
       const { value } = await generator.next();
       expect(value).toMatchObject({
         type: 'tool_progress',
-        toolName: ToolIds.HUMAN_IN_THE_LOOP,
+        toolName: ToolIds.ASK_USER,
         data: {
           status: 'awaiting_input',
         },

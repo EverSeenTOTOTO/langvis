@@ -64,7 +64,7 @@ describe('BatchArchiveTool', () => {
         },
       },
     });
-    container.register(ToolIds.ANALYSIS, {
+    container.register(ToolIds.DOCUMENT_ARCHIVE, {
       useValue: {
         async *call(input: unknown) {
           return yield* mockAnalysisCall(input);
@@ -74,7 +74,7 @@ describe('BatchArchiveTool', () => {
 
     tool = new BatchArchiveTool();
     // @ts-expect-error readonly
-    tool.id = ToolIds.BATCH_ARCHIVE;
+    tool.id = ToolIds.DOCUMENT_ARCHIVE_BATCH;
     // @ts-expect-error readonly
     tool.config = {
       name: 'Batch Archive Tool',

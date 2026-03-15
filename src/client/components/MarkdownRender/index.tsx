@@ -108,6 +108,16 @@ const MarkdownRender = observer(
             a: ({ ...props }) => (
               <a {...props} target="_blank" rel="noopener noreferrer" />
             ),
+            img: ({ ...props }) => (
+              <img
+                {...props}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '300px',
+                  objectFit: 'contain',
+                }}
+              />
+            ),
             code({ inline, className, children, ...props }: any) {
               const match = /language-(\w+)/.exec(className || '');
 

@@ -195,16 +195,16 @@ export default class ReActAgent extends Agent {
     toolInput: Record<string, unknown>,
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, string, void> {
-    const tool = container.resolve<Tool>(toolName);
-
-    const resolvedInput = await resolve(ctx.traceId, toolInput);
-
-    yield ctx.agentToolCallEvent(
-      toolName,
-      resolvedInput as Record<string, unknown>,
-    );
-
     try {
+      const tool = container.resolve<Tool>(toolName);
+
+      const resolvedInput = await resolve(ctx.traceId, toolInput);
+
+      yield ctx.agentToolCallEvent(
+        toolName,
+        resolvedInput as Record<string, unknown>,
+      );
+
       const output = yield* tool.call(
         resolvedInput as Record<string, unknown>,
         ctx,

@@ -22,11 +22,11 @@ export const config: AgentConfig = {
   } as any,
   tools: [
     ToolIds.WEB_FETCH,
-    ToolIds.ANALYSIS,
-    ToolIds.RETRIEVE,
-    ToolIds.READ_CACHE,
-    ToolIds.EXTRACT_LINKS,
-    ToolIds.BATCH_ARCHIVE,
-    ToolIds.HUMAN_IN_THE_LOOP,
+    ToolIds.DOCUMENT_ARCHIVE,
+    ToolIds.DOCUMENT_SEARCH,
+    ToolIds.CACHED_READ,
+    ToolIds.LINKS_EXTRACT,
+    ToolIds.DOCUMENT_ARCHIVE_BATCH,
+    ToolIds.ASK_USER,
   ],
 };

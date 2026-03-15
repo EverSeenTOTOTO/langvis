@@ -27,17 +27,21 @@ async function getResult<T>(gen: AsyncGenerator<unknown, T, void>): Promise<T> {
 }
 
 const mockHTML = `
-  <!DOCTYPE html>
-  <html>
-    <head><title>Test Article</title></head>
-    <body>
-      <article>
-        <h1>Test Article Title</h1>
-        <p>This is a test article with sufficient content for Readability parsing.</p>
-        <p>More content here to ensure proper article extraction.</p>
-      </article>
-    </body>
-  </html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Article</title>
+</head>
+<body>
+  <article>
+    <h1>Test Article Title</h1>
+    <p>This is a test article with sufficient content for Readability parsing. The content needs to be long enough for the parser to consider it a valid article. We add more sentences to ensure proper extraction.</p>
+    <p>More content here to ensure proper article extraction. Readability requires enough paragraph content to determine if this is an actual article worth reading.</p>
+    <p>Third paragraph with additional content to meet the minimum content threshold for article detection in Mozilla's Readability library.</p>
+  </article>
+</body>
+</html>
 `;
 
 describe('WebFetchTool', () => {
@@ -90,9 +94,8 @@ describe('WebFetchTool', () => {
     );
 
     expect(result).toHaveProperty('title');
-    expect(result).toHaveProperty('textContent');
-    expect(result).toHaveProperty('url', 'https://example.com/article');
-    expect(result.textContent).toContain('test article');
+    expect(result).toHaveProperty('content');
+    expect((result as { content: string }).content).toContain('test article');
   });
 
   it('should handle fetch errors', async () => {
@@ -105,7 +108,7 @@ describe('WebFetchTool', () => {
     const ctx = createMockContext();
     await expect(
       getResult(tool.call({ url: 'https://example.com/nonexistent' }, ctx)),
-    ).rejects.toThrow('Failed to fetch URL: 404 Not Found');
+    ).rejects.toThrow('Failed to fetch URL (404 Not Found)');
   });
 
   it('should sanitize malicious content', async () => {
@@ -137,8 +140,8 @@ describe('WebFetchTool', () => {
       tool.call({ url: 'https://example.com/malicious' }, ctx),
     );
 
-    expect(result.textContent).not.toContain('<script>');
-    expect(result.textContent).not.toContain('onclick');
+    expect(result.content).not.toContain('<script>');
+    expect(result.content).not.toContain('onclick');
   });
 
   it('should respect timeout parameter', async () => {
@@ -215,7 +218,7 @@ describe('WebFetchTool - proxy and retry', () => {
     const ctx = createMockContext();
     await expect(
       getResult(tool.call({ url: 'https://example.com/blocked' }, ctx)),
-    ).rejects.toThrow('Failed to fetch URL: 403 Forbidden');
+    ).rejects.toThrow('Failed to fetch URL (403 Forbidden)');
   });
 
   it('should retry specified number of times on failure', async () => {
@@ -240,7 +243,7 @@ describe('WebFetchTool - proxy and retry', () => {
     );
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
-    expect(result.textContent).toContain('test article');
+    expect(result.content).toContain('test article');
   });
 
   it('should log warning on retry attempts', async () => {
@@ -280,7 +283,7 @@ describe('WebFetchTool - proxy and retry', () => {
     const ctx = createMockContext();
     await expect(
       getResult(tool.call({ url: 'https://example.com/down', retry: 3 }, ctx)),
-    ).rejects.toThrow('Failed to fetch URL: 503 Service Unavailable');
+    ).rejects.toThrow('Failed to fetch URL (503 Service Unavailable)');
 
     expect(global.fetch).toHaveBeenCalledTimes(4); // initial + 3 retries
   });

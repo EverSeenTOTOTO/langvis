@@ -1,8 +1,9 @@
 import SchemaField, { SchemaProperty } from '@/client/components/SchemaField';
 import { useStore } from '@/client/store';
-import { Button, Form, Spin, Typography } from 'antd';
+import { Button, Form, Spin } from 'antd';
 import React, { useEffect } from 'react';
 import { useAsyncFn } from 'react-use';
+import MarkdownRender from '../MarkdownRender';
 import './index.scss';
 
 interface HumanInputFormProps {
@@ -61,7 +62,7 @@ const HumanInputForm: React.FC<HumanInputFormProps> = ({
 
   return (
     <div className="human-input-form">
-      <Typography.Paragraph>{message}</Typography.Paragraph>
+      <MarkdownRender>{message}</MarkdownRender>
       <Form form={form} layout="vertical" onFinish={handleSubmit}>
         {schema.type === 'object' && schema.properties ? (
           Object.entries(schema.properties).map(([key, prop]) => (

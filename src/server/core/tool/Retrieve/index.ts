@@ -11,7 +11,7 @@ import type EmbedTool from '../Embed';
 import type { RetrieveInput, RetrieveOutput } from './config';
 import { config } from './config';
 
-@tool(ToolIds.RETRIEVE)
+@tool(ToolIds.DOCUMENT_SEARCH)
 export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
@@ -35,7 +35,7 @@ export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
       data: { queryLength: query.length },
     });
 
-    const embedTool = container.resolve<EmbedTool>(ToolIds.EMBED);
+    const embedTool = container.resolve<EmbedTool>(ToolIds.EMBEDDING_GENERATE);
     const embedResult = yield* embedTool.call(
       { chunks: [{ content: query, index: 0 }] },
       ctx,

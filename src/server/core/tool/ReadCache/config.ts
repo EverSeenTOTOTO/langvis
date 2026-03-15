@@ -37,4 +37,4 @@ export const config: ToolConfig<
   },
 };
 
-export const id = ToolIds.READ_CACHE;
+export const id = ToolIds.CACHED_READ;

@@ -8,7 +8,7 @@ import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import type { ExtractLinksInput, ExtractLinksOutput, LinkInfo } from './config';
 
-@tool(ToolIds.EXTRACT_LINKS)
+@tool(ToolIds.LINKS_EXTRACT)
 export default class ExtractLinksTool extends Tool<
   ExtractLinksInput,
   ExtractLinksOutput

@@ -160,6 +160,20 @@ const Chat: React.FC = () => {
           }))
         : undefined;
 
+    // Build content with markdown attachments
+    let finalContent = value;
+    if (attachments.length > 0) {
+      const attachmentMarkdown = attachments
+        .map(a => {
+          const isImage = a.mimeType.startsWith('image/');
+          return isImage
+            ? `![${a.filename}](${a.url})`
+            : `[${a.filename}](${a.url})`;
+        })
+        .join('\n');
+      finalContent = `${value}\n---\n${attachmentMarkdown}`;
+    }
+
     setValue('');
     setAttachments([]);
     setFileList([]);
@@ -167,7 +181,7 @@ const Chat: React.FC = () => {
     await chatApi[1]({
       conversationId: conversationStore.currentConversationId,
       role: Role.USER,
-      content: value,
+      content: finalContent,
       attachments: messageAttachments,
     });
   };

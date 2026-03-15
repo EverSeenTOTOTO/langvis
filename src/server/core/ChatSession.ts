@@ -45,7 +45,10 @@ export class ChatSession {
         logger.warn(
           `Session ${this.conversationId} idle timeout after ${this.options.idleTimeoutMs}ms`,
         );
-        this.cleanup();
+        // Fire and forget - cleanup runs asynchronously
+        this.cleanup().catch(err =>
+          logger.error(`Failed to cleanup session on idle timeout:`, err),
+        );
       }
     }, this.options.idleTimeoutMs);
   }
@@ -57,7 +60,7 @@ export class ChatSession {
     return this.pendingMessage.toMessage();
   }
 
-  private transition(to: SessionPhase): boolean {
+  private async transition(to: SessionPhase): Promise<boolean> {
     if (!VALID_TRANSITIONS[this.phase].includes(to)) return false;
 
     const from = this.phase;
@@ -76,11 +79,14 @@ export class ChatSession {
       this.sseConnection?.close();
       this.sseConnection = null;
       this.pendingMessage = null;
-      this.options.onDispose(this.conversationId);
     }
 
-    // Notify phase change for Redis persistence
-    this.options.onPhaseChange?.(this.conversationId, to);
+    // Wait for Redis persistence to ensure consistency
+    await this.options.onPhaseChange?.(this.conversationId, to);
+
+    if (to === 'done') {
+      this.options.onDispose(this.conversationId);
+    }
 
     return true;
   }
@@ -108,7 +114,8 @@ export class ChatSession {
     const ctx = new ExecutionContext(this.conversationId, controller);
     this.ctx = ctx;
 
-    this.transition('running');
+    // Wait for phase transition to complete (ensures Redis is synced)
+    await this.transition('running');
 
     const startTime = Date.now();
     let firstTokenTime: number | undefined;
@@ -180,7 +187,7 @@ export class ChatSession {
       `Agent completed: totalTime=${totalTime}ms tokens=${this.pendingMessage!.contentLength} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${this.conversationId}`,
     );
 
-    this.cleanup();
+    await this.cleanup();
   }
 
   cancel(reason: string): void {
@@ -200,7 +207,10 @@ export class ChatSession {
     }
 
     if (this.phase === 'waiting') {
-      this.cleanup();
+      // Fire and forget - cleanup runs asynchronously
+      this.cleanup().catch(err =>
+        logger.error(`Failed to cleanup session on disconnect:`, err),
+      );
     }
   }
 
@@ -209,7 +219,7 @@ export class ChatSession {
     return this.sseConnection.send(event as AgentEvent);
   }
 
-  cleanup(): void {
-    this.transition('done');
+  async cleanup(): Promise<void> {
+    await this.transition('done');
   }
 }

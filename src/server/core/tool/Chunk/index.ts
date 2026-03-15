@@ -113,7 +113,7 @@ class FixedStrategy implements ChunkStrategyHandler {
   }
 }
 
-@tool(ToolIds.CHUNK)
+@tool(ToolIds.CONTENT_CHUNK)
 export default class ChunkTool extends Tool<ChunkInput, ChunkOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
@@ -132,7 +132,12 @@ export default class ChunkTool extends Tool<ChunkInput, ChunkOutput> {
 
     const handler = this.strategies.get(strategy);
     if (!handler) {
-      throw new Error(`Unknown chunk strategy: ${strategy}`);
+      throw new Error(
+        `Unknown chunk strategy "${strategy}". ` +
+          `Valid strategies: "paragraph" (splits at sentence/paragraph boundaries, best for natural text), ` +
+          `"fixed" (splits at fixed character count, best for structured data). ` +
+          `Default is "paragraph".`,
+      );
     }
 
     const chunks = handler.chunk(content, options);

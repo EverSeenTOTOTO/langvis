@@ -7,6 +7,25 @@ import { inject } from 'tsyringe';
 import type { RedisClientType } from 'redis';
 import type { Response } from 'express';
 
+// Lua script for atomic check-and-set
+// Returns: 1 if success, 0 if already submitted, -1 if not found
+const SUBMIT_LUA_SCRIPT = `
+local key = KEYS[1]
+local data = redis.call('GET', key)
+if not data then
+  return {-1, ''}
+end
+local pending = cjson.decode(data)
+if pending.submitted then
+  return {0, ''}
+end
+pending.submitted = true
+pending.result = cjson.decode(ARGV[1])
+redis.call('SET', key, cjson.encode(pending))
+redis.call('PUBLISH', key, 'submitted')
+return {1, cjson.encode(pending)}
+`;
+
 @controller('/api/human-input')
 export default class HumanInputController {
   constructor(
@@ -21,29 +40,28 @@ export default class HumanInputController {
     @response() res: Response,
   ) {
     const key = RedisKeys.HUMAN_INPUT(conversationId);
-    const data = await this.redis.get(key);
 
-    if (!data) {
+    // Use Lua script for atomic check-and-set
+    const result = (await this.redis.eval(SUBMIT_LUA_SCRIPT, {
+      keys: [key],
+      arguments: [JSON.stringify(dto.data)],
+    })) as [number, string];
+
+    const [code] = result;
+
+    if (code === -1) {
       return res.status(404).json({
         success: false,
         error: 'Request not found or expired',
       });
     }
 
-    const pending = JSON.parse(data);
-    if (pending.submitted) {
+    if (code === 0) {
       return res.status(400).json({
         success: false,
         error: 'Request already submitted',
       });
     }
-
-    pending.submitted = true;
-    pending.result = dto.data;
-    await this.redis.set(key, JSON.stringify(pending));
-
-    // Notify waiting tool via Pub/Sub
-    await this.redis.publish(key, 'submitted');
 
     return res.json({ success: true });
   }

@@ -65,18 +65,18 @@ Assistant: { "final_answer": "你好！有什么我可以帮你的吗？" }
 User: Content is cached, cache key: cache_abc123
 Assistant:
 {
-  "thought": "Need to use read_cache tool to retrieve content",
-  "action": { "tool": "read_cache_tool", "input": {"key": "cache_abc123"} }
+  "thought": "Need to use \`cached_read\` tool to retrieve content",
+  "action": { "tool": "cache_read", "input": {"key": "cache_abc123"} }
 }
 </example:use-tool>
 
-<example:use-human-in-the-loop>
+<example:ask-user>
 User: Delete all my old files.
 Assistant:
 {
   "thought": "This is a destructive operation that needs user confirmation.",
   "action": {
-    "tool": "human_in_the_loop_tool",
+    "tool": "ask_user",
     "input": {
       "conversationId": "conv_abc123",
       "message": "This will permanently delete all files older than 30 days. Do you want to proceed?",
@@ -93,7 +93,7 @@ Assistant:
 Assistant:
 {
   "thought": "User confirmed, proceeding with deletion.",
-  "action": { "tool": "delete_file_tool", "input": { "olderThan": 30} }
+  "action": { "tool": "delete_file", "input": { "olderThan": 30} }
 }
-</example:use-human-in-the-loop>`,
+</example:ask-user>`,
     );

@@ -69,7 +69,7 @@ describe('AnalysisTool', () => {
         yield {
           type: 'result',
           callId: 'tc_meta',
-          toolName: ToolIds.META_EXTRACT,
+          toolName: ToolIds.DOCUMENT_METADATA_EXTRACT,
           output: {
             title: 'Extracted Title',
             summary: 'Summary',
@@ -96,7 +96,7 @@ describe('AnalysisTool', () => {
         yield {
           type: 'progress',
           callId: 'tc_chunk',
-          toolName: ToolIds.CHUNK,
+          toolName: ToolIds.CONTENT_CHUNK,
           data: { message: 'Split into 2 chunks' },
           seq: 2,
           at: Date.now(),
@@ -104,7 +104,7 @@ describe('AnalysisTool', () => {
         yield {
           type: 'result',
           callId: 'tc_chunk',
-          toolName: ToolIds.CHUNK,
+          toolName: ToolIds.CONTENT_CHUNK,
           output: {
             chunks: [
               { content: 'Chunk 1', index: 0 },
@@ -129,7 +129,7 @@ describe('AnalysisTool', () => {
         yield {
           type: 'progress',
           callId: 'tc_embed',
-          toolName: ToolIds.EMBED,
+          toolName: ToolIds.EMBEDDING_GENERATE,
           data: { message: 'Calling embedding API' },
           seq: 4,
           at: Date.now(),
@@ -137,7 +137,7 @@ describe('AnalysisTool', () => {
         yield {
           type: 'result',
           callId: 'tc_embed',
-          toolName: ToolIds.EMBED,
+          toolName: ToolIds.EMBEDDING_GENERATE,
           output: {
             chunks: [
               { content: 'Chunk 1', index: 0, embedding: [0.1, 0.2] },
@@ -166,7 +166,7 @@ describe('AnalysisTool', () => {
         yield {
           type: 'progress',
           callId: 'tc_archive',
-          toolName: ToolIds.ARCHIVE,
+          toolName: ToolIds.DOCUMENT_STORE,
           data: { message: 'Saving document' },
           seq: 6,
           at: Date.now(),
@@ -174,7 +174,7 @@ describe('AnalysisTool', () => {
         yield {
           type: 'result',
           callId: 'tc_archive',
-          toolName: ToolIds.ARCHIVE,
+          toolName: ToolIds.DOCUMENT_STORE,
           output: {
             documentId: 'doc_123',
             chunkCount: 2,
@@ -189,10 +189,12 @@ describe('AnalysisTool', () => {
       }),
     } as unknown as ArchiveTool;
 
-    container.register(ToolIds.META_EXTRACT, { useValue: mockMetaExtractTool });
-    container.register(ToolIds.CHUNK, { useValue: mockChunkTool });
-    container.register(ToolIds.EMBED, { useValue: mockEmbedTool });
-    container.register(ToolIds.ARCHIVE, { useValue: mockArchiveTool });
+    container.register(ToolIds.DOCUMENT_METADATA_EXTRACT, {
+      useValue: mockMetaExtractTool,
+    });
+    container.register(ToolIds.CONTENT_CHUNK, { useValue: mockChunkTool });
+    container.register(ToolIds.EMBEDDING_GENERATE, { useValue: mockEmbedTool });
+    container.register(ToolIds.DOCUMENT_STORE, { useValue: mockArchiveTool });
 
     analysisTool = new AnalysisTool();
     (analysisTool as any).logger = logger;

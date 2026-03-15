@@ -38,9 +38,9 @@ export default class ChatController {
       return res.status(200).json({ type: 'session_ended', conversationId });
     }
 
-    const session = this.chatService.acquireSession(conversationId);
+    const session = await this.chatService.acquireSession(conversationId);
     if (!session) {
-      return res.status(409).json({ error: 'Session already running' });
+      return res.status(409).json({ error: 'Session lock contention' });
     }
 
     const sseConnection = new SSEConnection(conversationId, res);
@@ -125,9 +125,9 @@ export default class ChatController {
     const userId = await this.authService.getUserId(req);
 
     const memory = await this.chatService.buildMemory(
+      agent,
       conversationId,
       userId,
-      agent,
       conversation.config!,
       {
         role: dto.role,

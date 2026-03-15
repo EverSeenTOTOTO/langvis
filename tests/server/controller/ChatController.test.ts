@@ -101,7 +101,7 @@ describe('ChatController', () => {
     it('should return 409 if session already running', async () => {
       mockRequest.params = { conversationId: 'conv-123' };
       mockChatService.getSessionState.mockResolvedValue({ phase: 'waiting' });
-      mockChatService.acquireSession.mockReturnValue(null);
+      mockChatService.acquireSession.mockResolvedValue(null);
 
       await chatController.initSSE(
         'conv-123',
@@ -111,7 +111,7 @@ describe('ChatController', () => {
 
       expect(mockStatus).toHaveBeenCalledWith(409);
       expect(mockJson).toHaveBeenCalledWith({
-        error: 'Session already running',
+        error: 'Session lock contention',
       });
     });
 
@@ -277,9 +277,9 @@ describe('ChatController', () => {
 
       expect(mockAuthService.getUserId).toHaveBeenCalledWith(mockRequest);
       expect(mockChatService.buildMemory).toHaveBeenCalledWith(
+        mockAgent,
         'conv-123',
         'user-123',
-        mockAgent,
         mockConversation.config,
         { role: Role.USER, content: 'Hello' },
       );

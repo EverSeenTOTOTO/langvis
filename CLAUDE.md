@@ -8,7 +8,6 @@
 | Dev Framework   | `vite`   | Development server & build            |
 | Build System    | `make`   | Use instead of npm scripts            |
 | Test Framework  | `vitest` | Run specific tests: `bunx vitest run` |
-| HTTP Client     | `curl`   | Use instead of `web_fetch` tool       |
 
 ## Code Style
 
