@@ -1,7 +1,7 @@
-import { InjectTokens, RedisKeys } from '@/shared/constants';
+import { RedisKeys } from '@/shared/constants';
 import { generateId } from '@/shared/utils';
-import type { RedisClientType } from 'redis';
 import { container } from 'tsyringe';
+import { RedisService } from '../service/RedisService';
 
 export interface CachedReference {
   $cached: string;
@@ -30,8 +30,12 @@ async function storeCache(
 ): Promise<CachedReference> {
   const key = generateId('cache');
   const serialized = typeof value === 'string' ? value : JSON.stringify(value);
-  const redis = container.resolve<RedisClientType>(InjectTokens.REDIS);
-  await redis.setEx(RedisKeys.AGENT_CACHE(traceId, key), CACHE_TTL, serialized);
+  const redisService = container.resolve(RedisService);
+  await redisService.client.setEx(
+    RedisKeys.AGENT_CACHE(traceId, key),
+    CACHE_TTL,
+    serialized,
+  );
 
   return {
     $cached: key,
@@ -44,8 +48,10 @@ async function storeCache(
 }
 
 async function retrieveCache(traceId: string, key: string): Promise<unknown> {
-  const redis = container.resolve<RedisClientType>(InjectTokens.REDIS);
-  const data = await redis.get(RedisKeys.AGENT_CACHE(traceId, key));
+  const redisService = container.resolve(RedisService);
+  const data = await redisService.client.get(
+    RedisKeys.AGENT_CACHE(traceId, key),
+  );
   if (!data) {
     throw new Error(`Cache miss: ${key}`);
   }

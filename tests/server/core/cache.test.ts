@@ -1,21 +1,28 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { container } from 'tsyringe';
 import { compress, resolve } from '@/server/utils/cache';
-import { InjectTokens, RedisKeys } from '@/shared/constants';
+import { RedisKeys } from '@/shared/constants';
+import { RedisService } from '@/server/service/RedisService';
 
 describe('Cache Utils', () => {
-  let mockRedis: {
-    setEx: ReturnType<typeof vi.fn>;
-    get: ReturnType<typeof vi.fn>;
+  let mockRedisService: {
+    client: {
+      setEx: ReturnType<typeof vi.fn>;
+      get: ReturnType<typeof vi.fn>;
+    };
   };
 
   beforeEach(() => {
-    mockRedis = {
-      setEx: vi.fn().mockResolvedValue('OK'),
-      get: vi.fn().mockResolvedValue(null),
+    mockRedisService = {
+      client: {
+        setEx: vi.fn().mockResolvedValue('OK'),
+        get: vi.fn().mockResolvedValue(null),
+      },
     };
 
-    container.register(InjectTokens.REDIS, { useValue: mockRedis });
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    container.register(RedisService, { useValue: mockRedisService });
   });
 
   describe('compress', () => {
@@ -33,7 +40,7 @@ describe('Cache Utils', () => {
       expect(result.$cached).toMatch(/^cache_/);
       expect(result.$size).toBe(5001);
       expect(result.$preview).toBe('a'.repeat(200));
-      expect(mockRedis.setEx).toHaveBeenCalledWith(
+      expect(mockRedisService.client.setEx).toHaveBeenCalledWith(
         expect.stringContaining(RedisKeys.AGENT_CACHE(traceId, result.$cached)),
         3600,
         longString,
@@ -56,7 +63,7 @@ describe('Cache Utils', () => {
       };
 
       expect(result.$cached).toMatch(/^cache_/);
-      expect(mockRedis.setEx).toHaveBeenCalled();
+      expect(mockRedisService.client.setEx).toHaveBeenCalled();
     });
 
     it('should not compress array with 50 or fewer items', async () => {
@@ -110,7 +117,7 @@ describe('Cache Utils', () => {
     const traceId = 'test-trace-id';
 
     it('should resolve CachedReference', async () => {
-      mockRedis.get.mockResolvedValueOnce('resolved content');
+      mockRedisService.client.get.mockResolvedValueOnce('resolved content');
 
       const input = {
         $cached: 'cache_abc123',
@@ -120,13 +127,13 @@ describe('Cache Utils', () => {
       const result = await resolve(traceId, input);
 
       expect(result).toBe('resolved content');
-      expect(mockRedis.get).toHaveBeenCalledWith(
+      expect(mockRedisService.client.get).toHaveBeenCalledWith(
         RedisKeys.AGENT_CACHE(traceId, 'cache_abc123'),
       );
     });
 
     it('should recursively resolve nested CachedReferences', async () => {
-      mockRedis.get
+      mockRedisService.client.get
         .mockResolvedValueOnce('content1')
         .mockResolvedValueOnce('content2');
 
@@ -145,7 +152,7 @@ describe('Cache Utils', () => {
     });
 
     it('should resolve CachedReference in array', async () => {
-      mockRedis.get.mockResolvedValueOnce('array content');
+      mockRedisService.client.get.mockResolvedValueOnce('array content');
 
       const input = {
         items: [{ $cached: 'cache_arr', $size: 50 }],
@@ -169,7 +176,7 @@ describe('Cache Utils', () => {
     });
 
     it('should throw error when cache miss', async () => {
-      mockRedis.get.mockResolvedValueOnce(null);
+      mockRedisService.client.get.mockResolvedValueOnce(null);
 
       const input = { $cached: 'cache_notexist', $size: 100 };
 
@@ -179,7 +186,7 @@ describe('Cache Utils', () => {
     });
 
     it('should parse JSON from cache', async () => {
-      mockRedis.get.mockResolvedValueOnce('{"key":"value"}');
+      mockRedisService.client.get.mockResolvedValueOnce('{"key":"value"}');
 
       const input = { $cached: 'cache_json', $size: 100 };
 

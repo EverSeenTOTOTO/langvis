@@ -1,11 +1,10 @@
 import { SubmitHumanInputRequestDto } from '@/shared/dto/controller';
-import { InjectTokens, RedisKeys } from '@/shared/constants';
+import { RedisKeys } from '@/shared/constants';
 import { api } from '@/server/decorator/api';
 import { controller } from '@/server/decorator/controller';
 import { body, param, response } from '@/server/decorator/param';
-import { inject } from 'tsyringe';
-import type { RedisClientType } from 'redis';
 import type { Response } from 'express';
+import { RedisService } from '../service/RedisService';
 
 // Lua script for atomic check-and-set
 // Returns: 1 if success, 0 if already submitted, -1 if not found
@@ -28,10 +27,7 @@ return {1, cjson.encode(pending)}
 
 @controller('/api/human-input')
 export default class HumanInputController {
-  constructor(
-    @inject(InjectTokens.REDIS)
-    private redis: RedisClientType<any>,
-  ) {}
+  constructor(private redisService: RedisService) {}
 
   @api('/:conversationId', { method: 'post' })
   async submitInput(
@@ -42,7 +38,7 @@ export default class HumanInputController {
     const key = RedisKeys.HUMAN_INPUT(conversationId);
 
     // Use Lua script for atomic check-and-set
-    const result = (await this.redis.eval(SUBMIT_LUA_SCRIPT, {
+    const result = (await this.redisService.client.eval(SUBMIT_LUA_SCRIPT, {
       keys: [key],
       arguments: [JSON.stringify(dto.data)],
     })) as [number, string];
@@ -72,13 +68,16 @@ export default class HumanInputController {
     @response() res: Response,
   ) {
     const key = RedisKeys.HUMAN_INPUT(conversationId);
-    const data = await this.redis.get(key);
+    const pending = await this.redisService.get<{
+      submitted: boolean;
+      message: string;
+      formSchema: unknown;
+    }>(key);
 
-    if (!data) {
+    if (!pending) {
       return res.json({ exists: false });
     }
 
-    const pending = JSON.parse(data);
     return res.json({
       exists: true,
       submitted: pending.submitted,

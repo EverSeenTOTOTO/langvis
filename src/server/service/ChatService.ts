@@ -1,9 +1,8 @@
-import { InjectTokens, MemoryIds, RedisKeys } from '@/shared/constants';
+import { MemoryIds, RedisKeys } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { MessageAttachment } from '@/shared/types/entities';
 import { globby } from 'globby';
-import type { RedisClientType } from 'redis';
-import { container, inject } from 'tsyringe';
+import { container } from 'tsyringe';
 import type { Agent } from '../core/agent';
 import { ChatSession, SessionPhase } from '../core/ChatSession';
 import { Memory } from '../core/memory';
@@ -11,6 +10,7 @@ import { registerMemory } from '../decorator/core';
 import { service } from '../decorator/service';
 import { isProd } from '../utils';
 import Logger from '../utils/logger';
+import { RedisService } from './RedisService';
 
 /**
  * Session state persisted to Redis for reconnection support.
@@ -28,10 +28,7 @@ export class ChatService {
   private readonly logger = Logger.child({ source: 'ChatService' });
   private sessions = new Map<string, ChatSession>();
 
-  constructor(
-    @inject(InjectTokens.REDIS)
-    private redis: RedisClientType<any>,
-  ) {
+  constructor(private redisService: RedisService) {
     const suffix = isProd ? '.js' : '.ts';
     const pattern = `./${isProd ? 'dist' : 'src'}/server/core/memory/*/index${suffix}`;
 
@@ -60,8 +57,9 @@ export class ChatService {
   async getSessionState(
     conversationId: string,
   ): Promise<ChatSessionState | null> {
-    const data = await this.redis.get(RedisKeys.CHAT_SESSION(conversationId));
-    return data ? JSON.parse(data) : null;
+    return this.redisService.get<ChatSessionState>(
+      RedisKeys.CHAT_SESSION(conversationId),
+    );
   }
 
   async updateSessionPhase(
@@ -71,10 +69,10 @@ export class ChatService {
   ): Promise<void> {
     const state = await this.getSessionState(conversationId);
     if (!state) return;
-    await this.redis.set(
+    await this.redisService.set(
       RedisKeys.CHAT_SESSION(conversationId),
-      JSON.stringify({ ...state, phase, agentId: agentId ?? state.agentId }),
-      { EX: 3600 },
+      { ...state, phase, agentId: agentId ?? state.agentId },
+      3600,
     );
   }
 
@@ -95,10 +93,7 @@ export class ChatService {
 
     // Try to acquire distributed lock
     const lockKey = RedisKeys.CHAT_SESSION_LOCK(conversationId);
-    const lockAcquired = await this.redis.set(lockKey, '1', {
-      NX: true,
-      EX: 5,
-    });
+    const lockAcquired = await this.redisService.acquireLock(lockKey, 5);
 
     if (!lockAcquired) {
       this.logger.warn(`Failed to acquire lock for ${conversationId}`);
@@ -118,8 +113,8 @@ export class ChatService {
         idleTimeoutMs: 30_000,
         onDispose: async (id: string) => {
           this.sessions.delete(id);
-          await this.redis.del(RedisKeys.CHAT_SESSION(id));
-          await this.redis.del(RedisKeys.HUMAN_INPUT(id));
+          await this.redisService.del(RedisKeys.CHAT_SESSION(id));
+          await this.redisService.del(RedisKeys.HUMAN_INPUT(id));
         },
         onPhaseChange: async (id: string, phase: SessionPhase) => {
           await this.updateSessionPhase(id, phase);
@@ -129,21 +124,21 @@ export class ChatService {
       this.sessions.set(conversationId, session);
 
       // Persist session state to Redis for reconnection support
-      await this.redis.set(
+      await this.redisService.set(
         RedisKeys.CHAT_SESSION(conversationId),
-        JSON.stringify({
+        {
           conversationId,
           phase: 'waiting',
           startedAt: Date.now(),
           agentId: null,
-        }),
-        { EX: 3600 },
+        },
+        3600,
       );
 
       return session;
     } finally {
       // Always release lock
-      await this.redis.del(lockKey);
+      await this.redisService.releaseLock(lockKey);
     }
   }
 
@@ -170,8 +165,8 @@ export class ChatService {
       idleTimeoutMs: 30_000,
       onDispose: async (id: string) => {
         this.sessions.delete(id);
-        await this.redis.del(RedisKeys.CHAT_SESSION(id));
-        await this.redis.del(RedisKeys.HUMAN_INPUT(id));
+        await this.redisService.del(RedisKeys.CHAT_SESSION(id));
+        await this.redisService.del(RedisKeys.HUMAN_INPUT(id));
       },
       onPhaseChange: async (id: string, phase: SessionPhase) => {
         await this.updateSessionPhase(id, phase);
@@ -181,15 +176,15 @@ export class ChatService {
     this.sessions.set(conversationId, session);
 
     // Persist session state to Redis for reconnection support
-    await this.redis.set(
+    await this.redisService.set(
       RedisKeys.CHAT_SESSION(conversationId),
-      JSON.stringify({
+      {
         conversationId,
         phase: 'waiting',
         startedAt: Date.now(),
         agentId: null,
-      }),
-      { EX: 3600 },
+      },
+      3600,
     );
 
     return session;

@@ -5,51 +5,63 @@ import { JSONSchemaType } from 'ajv';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext } from '../../helpers/context';
 
-function createMockRedis(
+function createMockRedisService(
   subscriberNotify?: (channel: string, message: string) => void,
 ) {
   const store = new Map<string, string>();
-  return {
-    get: vi.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
-    set: vi.fn((key: string, value: string) => {
-      store.set(key, value);
-      return Promise.resolve('OK');
-    }),
-    del: vi.fn((key: string) => {
-      store.delete(key);
-      return Promise.resolve(1);
-    }),
-    publish: vi.fn((channel: string, message: string) => {
-      subscriberNotify?.(channel, message);
-      return Promise.resolve(1);
-    }),
-    _store: store,
-  };
-}
-
-function createMockRedisSubscriber() {
   const messageCallbacks = new Set<
     (channel: string, message: string) => void
   >();
 
   return {
-    on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
-      if (event === 'message') {
-        messageCallbacks.add(cb as (channel: string, message: string) => void);
+    get: vi.fn((key: string) => {
+      const data = store.get(key) ?? null;
+      if (!data) return Promise.resolve(null);
+      try {
+        return Promise.resolve(JSON.parse(data));
+      } catch {
+        return Promise.resolve(data);
       }
     }),
-    off: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
-      if (event === 'message') {
-        messageCallbacks.delete(
-          cb as (channel: string, message: string) => void,
-        );
-      }
+    set: vi.fn((key: string, value: unknown) => {
+      const serialized =
+        typeof value === 'string' ? value : JSON.stringify(value);
+      store.set(key, serialized);
+      return Promise.resolve();
     }),
-    subscribe: vi.fn(() => Promise.resolve()),
-    unsubscribe: vi.fn(() => Promise.resolve()),
-    _notify: (channel: string, message: string) => {
-      messageCallbacks.forEach(cb => cb(channel, message));
+    del: vi.fn((key: string) => {
+      store.delete(key);
+      return Promise.resolve();
+    }),
+    client: {
+      get: vi.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
+      set: vi.fn((key: string, value: string) => {
+        store.set(key, value);
+        return Promise.resolve('OK');
+      }),
+      del: vi.fn((key: string) => {
+        store.delete(key);
+        return Promise.resolve(1);
+      }),
+      publish: vi.fn((channel: string, message: string) => {
+        subscriberNotify?.(channel, message);
+        return Promise.resolve(1);
+      }),
     },
+    subscriber: {
+      subscribe: vi.fn(
+        (_channel: string, callback: (message: string) => void) => {
+          const wrapper = (_: string, message: string) => callback(message);
+          messageCallbacks.add(wrapper);
+          return Promise.resolve();
+        },
+      ),
+      unsubscribe: vi.fn(() => Promise.resolve()),
+      _notify: (channel: string, message: string) => {
+        messageCallbacks.forEach(cb => cb(channel, message));
+      },
+    },
+    _store: store,
   };
 }
 
@@ -87,14 +99,14 @@ const objectSchemaWithEmail = {
 } as unknown as JSONSchemaType<unknown>;
 
 describe('HumanInTheLoopTool', () => {
-  let mockRedis: ReturnType<typeof createMockRedis>;
-  let mockRedisSubscriber: ReturnType<typeof createMockRedisSubscriber>;
+  let mockRedisService: ReturnType<typeof createMockRedisService>;
   let tool: HumanInTheLoopTool;
 
   beforeEach(() => {
-    mockRedisSubscriber = createMockRedisSubscriber();
-    mockRedis = createMockRedis(mockRedisSubscriber._notify);
-    tool = new HumanInTheLoopTool(mockRedis as any, mockRedisSubscriber as any);
+    mockRedisService = createMockRedisService((channel, message) =>
+      mockRedisService.subscriber._notify(channel, message),
+    );
+    tool = new HumanInTheLoopTool(mockRedisService as any);
     (tool as any).id = ToolIds.ASK_USER;
     (tool as any).config = {};
     (tool as any).logger = {
@@ -137,9 +149,9 @@ describe('HumanInTheLoopTool', () => {
         },
       });
 
-      expect(mockRedis.set).toHaveBeenCalledWith(
+      expect(mockRedisService.set).toHaveBeenCalledWith(
         RedisKeys.HUMAN_INPUT('test-conversation'),
-        expect.stringContaining('"submitted":false'),
+        expect.objectContaining({ submitted: false }),
       );
 
       await generator.return?.({ submitted: true });
@@ -184,7 +196,7 @@ describe('HumanInTheLoopTool', () => {
       await generator.next();
 
       // Simulate submission: update Redis and publish notification
-      mockRedis._store.set(
+      mockRedisService._store.set(
         RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
@@ -196,7 +208,7 @@ describe('HumanInTheLoopTool', () => {
       );
 
       // Trigger Pub/Sub notification
-      await mockRedis.publish(
+      await mockRedisService.client.publish(
         RedisKeys.HUMAN_INPUT('test-conversation'),
         'submitted',
       );
@@ -207,7 +219,7 @@ describe('HumanInTheLoopTool', () => {
         submitted: true,
         data: { answer: 'yes' },
       });
-      expect(mockRedis.del).toHaveBeenCalledWith(
+      expect(mockRedisService.del).toHaveBeenCalledWith(
         RedisKeys.HUMAN_INPUT('test-conversation'),
       );
     });
@@ -227,7 +239,7 @@ describe('HumanInTheLoopTool', () => {
 
       await generator.next();
 
-      mockRedis._store.set(
+      mockRedisService._store.set(
         RedisKeys.HUMAN_INPUT('test-conversation'),
         JSON.stringify({
           conversationId: 'test-conversation',
@@ -238,7 +250,7 @@ describe('HumanInTheLoopTool', () => {
         }),
       );
 
-      await mockRedis.publish(
+      await mockRedisService.client.publish(
         RedisKeys.HUMAN_INPUT('test-conversation'),
         'submitted',
       );
@@ -269,7 +281,7 @@ describe('HumanInTheLoopTool', () => {
       const { result } = await collectEvents(generator);
 
       expect(result).toEqual({ submitted: false });
-      expect(mockRedis.del).toHaveBeenCalledWith(
+      expect(mockRedisService.del).toHaveBeenCalledWith(
         RedisKeys.HUMAN_INPUT('test-conversation'),
       );
     });
@@ -289,7 +301,7 @@ describe('HumanInTheLoopTool', () => {
 
       await collectEvents(generator);
 
-      expect(mockRedis.del).toHaveBeenCalledWith(
+      expect(mockRedisService.del).toHaveBeenCalledWith(
         RedisKeys.HUMAN_INPUT('test-conversation'),
       );
     });
@@ -356,9 +368,9 @@ describe('HumanInTheLoopTool', () => {
 
       await generator.next();
 
-      expect(mockRedis.set).toHaveBeenCalledWith(
+      expect(mockRedisService.set).toHaveBeenCalledWith(
         RedisKeys.HUMAN_INPUT('my-custom-conversation'),
-        expect.any(String),
+        expect.any(Object),
       );
     });
   });
@@ -380,7 +392,9 @@ describe('HumanInTheLoopTool', () => {
       await generator.next();
 
       const storedData = JSON.parse(
-        mockRedis._store.get(RedisKeys.HUMAN_INPUT('test-conversation'))!,
+        mockRedisService._store.get(
+          RedisKeys.HUMAN_INPUT('test-conversation'),
+        )!,
       );
 
       expect(storedData).toMatchObject({
