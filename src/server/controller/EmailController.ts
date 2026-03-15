@@ -169,10 +169,13 @@ export default class EmailController {
   ): Promise<void> {
     const conversationId = conversation.id;
 
+    // Create session BEFORE building memory to avoid race with frontend SSE
+    const session = await this.chatService.startSession(conversationId);
+
     const memory = await this.chatService.buildMemory(
+      agent,
       conversationId,
       conversation.userId,
-      agent,
       conversation.config!,
       {
         role: Role.USER,
@@ -180,12 +183,6 @@ export default class EmailController {
         meta: { emailId: email.id },
       },
     );
-
-    const session = this.chatService.acquireSession(conversationId);
-    if (!session) {
-      this.logger.error(`Failed to acquire session for ${conversationId}`);
-      return;
-    }
 
     await this.chatService.updateSessionPhase(
       conversationId,

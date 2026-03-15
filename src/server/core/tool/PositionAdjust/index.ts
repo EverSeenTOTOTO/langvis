@@ -10,7 +10,7 @@ import { Prompt } from '../../PromptBuilder';
 import HumanInTheLoopTool from '../HumanInTheLoop';
 import type { PositionAdjustInput, PositionAdjustOutput } from './config';
 
-@tool(ToolIds.POSITION_ADJUST)
+@tool(ToolIds.POSITION_ADJUSTMENT_ADVICE)
 export default class PositionAdjustTool extends Tool<
   PositionAdjustInput,
   PositionAdjustOutput
@@ -26,7 +26,7 @@ export default class PositionAdjustTool extends Tool<
     ctx.signal.throwIfAborted();
 
     const humanInputTool = container.resolve<HumanInTheLoopTool>(
-      ToolIds.HUMAN_IN_THE_LOOP,
+      ToolIds.ASK_USER,
     );
 
     const { formSchema } = await import('./config');

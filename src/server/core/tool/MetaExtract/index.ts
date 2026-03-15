@@ -38,7 +38,7 @@ const systemPrompt = Prompt.empty()
 }`,
   );
 
-@tool(ToolIds.META_EXTRACT)
+@tool(ToolIds.DOCUMENT_METADATA_EXTRACT)
 export default class MetaExtractTool extends Tool<
   MetaExtractInput,
   MetaExtractOutput
@@ -78,7 +78,12 @@ ${truncatedContent}`;
     });
 
     if (!responseContent) {
-      throw new Error('No response from LLM');
+      throw new Error(
+        'LLM returned empty response when extracting metadata. ' +
+          'This may be due to: (1) content too short or empty, (2) content in unsupported language, ' +
+          '(3) LLM service temporarily unavailable. ' +
+          'Try: provide longer content, or check LLM service status.',
+      );
     }
 
     let parsed: MetaExtractOutput;
@@ -86,7 +91,13 @@ ${truncatedContent}`;
       parsed = JSON.parse(responseContent);
     } catch {
       this.logger.error('Failed to parse LLM response:', responseContent);
-      throw new Error('Failed to parse LLM response as JSON');
+      throw new Error(
+        `Failed to parse LLM response as JSON. ` +
+          `The LLM may have returned malformed output. ` +
+          `Try: (1) retry the operation, (2) use a different model with better JSON formatting, ` +
+          `(3) check if content contains special characters that confuse the model. ` +
+          `Response preview: ${responseContent?.slice(0, 100)}...`,
+      );
     }
 
     // Validate and provide defaults

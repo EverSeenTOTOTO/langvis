@@ -138,7 +138,7 @@ describe('ChunkTool', () => {
         collectEvents(
           chunkTool.call({ content, strategy: 'unknown' as any }, ctx),
         ),
-      ).rejects.toThrow('Unknown chunk strategy: unknown');
+      ).rejects.toThrow('Unknown chunk strategy "unknown"');
     });
 
     it('should handle empty content', async () => {

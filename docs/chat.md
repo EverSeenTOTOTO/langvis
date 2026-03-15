@@ -97,16 +97,16 @@ waiting ──────────────► running ──────
 
 **核心职责：**
 
-| 职责     | 方法/属性                       | 说明                                 |
-| -------- | ------------------------------- | ------------------------------------ |
-| 消息管理 | `message`                       | 持有助手消息，累积内容、持久化事件   |
-| 执行编排 | `run(agent, memory, config)`    | 驱动 Agent 循环，处理事件            |
-| 事件处理 | `handleEvent(event)` (internal) | 累积内容 + 持久化事件 + 发送 SSE     |
-| 状态转换 | `transition()` (internal)       | 校验合法转换                         |
-| 取消信号 | `cancel(reason)`                | 代理到 `ctx.abort()`                 |
-| 断线处理 | `handleDisconnect()`            | 按 phase 分路径处理                  |
-| SSE 绑定 | `bindConnection(conn)`          | 绑定 SSE 连接                        |
-| 资源清理 | `cleanup()`                     | 关闭连接、清理定时器、持久化 message |
+| 职责     | 方法/属性                       | 说明                                         |
+| -------- | ------------------------------- | -------------------------------------------- |
+| 消息管理 | `message`                       | 持有助手消息，累积内容、持久化事件           |
+| 执行编排 | `run(agent, memory, config)`    | 驱动 Agent 循环，处理事件                    |
+| 事件处理 | `handleEvent(event)` (internal) | 累积内容 + 持久化事件 + 发送 SSE             |
+| 状态转换 | `transition()` (internal)       | 校验合法转换，等待 Redis 持久化完成          |
+| 取消信号 | `cancel(reason)`                | 代理到 `ctx.abort()`                         |
+| 断线处理 | `handleDisconnect()`            | 按 phase 分路径处理                          |
+| SSE 绑定 | `bindConnection(conn)`          | 绑定 SSE 连接                                |
+| 资源清理 | `cleanup()`                     | 关闭连接、清理定时器、持久化 message（异步） |
 
 **事件处理逻辑：**
 
@@ -133,16 +133,24 @@ private handleEvent(event: AgentEvent): void {
 
 **核心方法：**
 
-| 方法                                      | 说明                       |
-| ----------------------------------------- | -------------------------- |
-| `acquireSession(conversationId, message)` | 原子占位，防止 TOCTOU 竞态 |
-| `getSession(conversationId)`              | 获取现有 session           |
-| `runSession(session, ...)`                | 委托 `session.run()` 执行  |
+| 方法                             | 说明                                     |
+| -------------------------------- | ---------------------------------------- |
+| `acquireSession(conversationId)` | 带分布式锁的 session 获取，支持重连      |
+| `startSession(conversationId)`   | 后端启动场景专用，无锁，直接创建 session |
+| `getSession(conversationId)`     | 获取现有 session                         |
+| `runSession(session, ...)`       | 委托 `session.run()` 执行                |
 
-**生命周期：**
+**acquireSession vs startSession：**
+
+| 方法             | 场景               | 锁  | 返回值                     |
+| ---------------- | ------------------ | --- | -------------------------- |
+| `acquireSession` | 前端 SSE 重连      | 有  | `Promise<Session \| null>` |
+| `startSession`   | 后端直接启动 Agent | 无  | `Promise<Session>`         |
+
+**生命周期（前端触发）：**
 
 ```
-acquireSession(conversationId, message) → session(phase=waiting)
+await acquireSession(conversationId) → session(phase=waiting)
        ↓
 bindConnection(sseConnection)
        ↓
@@ -151,6 +159,18 @@ runSession() → session.run(agent, memory, config) → phase=running
 session.run() 内部: for await → handleEvent → cleanup → phase=done
        ↓
 onDispose() → delete from Map, clean Redis
+```
+
+**生命周期（后端触发）：**
+
+```
+await startSession(conversationId) → session(phase=waiting)
+       ↓
+buildMemory() → 准备上下文
+       ↓
+runSession() → session.run(agent, memory, config) → phase=running
+       ↓
+（前端稍后通过 acquireSession 重连获取 SSE）
 ```
 
 **关键文件：** `src/server/service/ChatService.ts`
@@ -652,7 +672,15 @@ message 是会话级概念，与 SSE 连接、phase 状态同属一层。Executi
 
 ### 9.2 会话状态持久化
 
-**Redis Key:** `chat_session:{conversationId}`
+**Redis Keys:**
+
+| Key Pattern                          | 用途               | TTL |
+| ------------------------------------ | ------------------ | --- |
+| `chat_session:{conversationId}`      | 会话状态           | 1h  |
+| `chat_session_lock:{conversationId}` | 分布式锁（创建时） | 5s  |
+| `human_input:{conversationId}`       | Human-in-the-loop  | -   |
+
+**ChatSessionState 结构：**
 
 ```typescript
 interface ChatSessionState {
@@ -783,11 +811,31 @@ class PendingMessage {
 **ChatService.acquireSession()：**
 
 ```typescript
-// 改造前：已有 running 会话时拒绝
-if (existing?.phase === 'running') return null;
+// 使用 Redis 分布式锁防止并发创建
+async acquireSession(conversationId: string): Promise<ChatSession | null> {
+  // 快速路径：已有 session 直接返回（支持重连）
+  const existing = this.sessions.get(conversationId);
+  if (existing) return existing;
 
-// 改造后：已有会话直接返回（支持重连）
-if (existing) return existing;
+  // 尝试获取分布式锁
+  const lockKey = RedisKeys.CHAT_SESSION_LOCK(conversationId);
+  const lockAcquired = await this.redis.set(lockKey, '1', { NX: true, EX: 5 });
+  if (!lockAcquired) return null;  // 锁竞争失败
+
+  try {
+    // 双重检查
+    const existingAfterLock = this.sessions.get(conversationId);
+    if (existingAfterLock) return existingAfterLock;
+
+    // 创建 session 并持久化到 Redis
+    const session = new ChatSession(conversationId, { ... });
+    this.sessions.set(conversationId, session);
+    await this.redis.set(RedisKeys.CHAT_SESSION(conversationId), ...);
+    return session;
+  } finally {
+    await this.redis.del(lockKey);  // 释放锁
+  }
+}
 ```
 
 ### 9.5 重连场景
@@ -1034,9 +1082,11 @@ case 'session_replaced':
 后端 API (如 POST /api/emails/archive/:id)
     │
     ├─ 创建 conversation + messages
-    ├─ 更新业务状态（如邮件状态）
-    ├─ 写入 Redis: { phase: 'running', agentId: 'xxx' }
-    ├─ 异步启动 Agent
+    ├─ startSession(conversationId) → 创建 session
+    │     └─ 写入 Redis: { phase: 'waiting' }
+    ├─ buildMemory() → 准备上下文
+    ├─ runSession() → 异步启动 Agent
+    │     └─ phase 变为 'running'
     └─ 返回 conversationId
            │
            └─ 前端打开新标签页
@@ -1045,8 +1095,13 @@ case 'session_replaced':
                          │
                          ├─ GET /api/chat/session/:id → { phase: 'running' }
                          │
-                         └─ 建立 SSE 连接，继续接收事件
+                         └─ acquireSession() + SSE 连接，继续接收事件
 ```
+
+**注意：** 后端启动场景使用 `startSession()` 而不是 `acquireSession()`：
+
+- `startSession()` 无锁，直接创建 session
+- 前端后续通过 `acquireSession()` 重连获取 SSE 连接
 
 **优点：**
 

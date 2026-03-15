@@ -10,27 +10,13 @@ import TurndownService from 'turndown';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { sanitizeHtml } from '@/server/utils/sanitizeHtml';
+import type { WebFetchInput, WebFetchOutput } from './config';
 
 const turndownService = new TurndownService({
   headingStyle: 'atx',
   codeBlockStyle: 'fenced',
   bulletListMarker: '-',
 });
-
-interface WebFetchInput {
-  url: string;
-  timeout?: number;
-  retry?: number;
-}
-
-interface WebFetchOutput {
-  title: string;
-  textContent: string;
-  excerpt: string;
-  byline: string | null;
-  siteName: string | null;
-  url: string;
-}
 
 @tool(ToolIds.WEB_FETCH)
 export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
@@ -58,8 +44,19 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
     });
 
     if (!response.ok) {
+      const statusHints: Record<number, string> = {
+        403: 'Access denied - the site may require authentication or block bots',
+        404: 'Page not found - verify the URL is correct',
+        429: 'Rate limited - wait before retrying or use a proxy',
+        500: 'Server error - the target site may be temporarily unavailable',
+        502: 'Bad gateway - the target site may be experiencing issues',
+        503: 'Service unavailable - the target site may be down',
+      };
+      const hint =
+        statusHints[response.status] ||
+        'Check URL validity and network connectivity';
       throw new Error(
-        `Failed to fetch URL: ${response.status} ${response.statusText}`,
+        `Failed to fetch URL (${response.status} ${response.statusText}). ${hint}. URL: ${url}`,
       );
     }
 
@@ -72,7 +69,12 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
   ): AsyncGenerator<AgentEvent, WebFetchOutput, void> {
     ctx.signal.throwIfAborted();
 
-    const { url, timeout = 30000, retry = 0 } = data;
+    const {
+      url,
+      timeout = 30000,
+      retry = 0,
+      response_format = 'concise',
+    } = data;
     const proxy = process.env.WEB_FETCH_PROXY;
 
     let lastError: Error | undefined;
@@ -97,7 +99,13 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
         const article = reader.parse();
 
         if (!article) {
-          throw new Error('Failed to extract article content from URL');
+          throw new Error(
+            `Failed to extract article content from URL. ` +
+              `Possible causes: (1) page requires JavaScript rendering, ` +
+              `(2) content is behind a paywall or login, ` +
+              `(3) page has non-standard HTML structure. ` +
+              `Try: fetch a different URL, or provide content directly. URL: ${url}`,
+          );
         }
 
         this.logger.info(`Successfully extracted content from: ${url}`);
@@ -106,11 +114,18 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
           ? turndownService.turndown(article.content)
           : '';
 
+        if (response_format === 'concise') {
+          return {
+            title: article.title || '',
+            content: markdownContent,
+          };
+        }
+
         return {
           title: article.title || '',
-          textContent: markdownContent,
+          content: markdownContent,
           excerpt: article.excerpt || '',
-          byline: article.byline || null,
+          author: article.byline || null,
           siteName: article.siteName || null,
           url,
         };

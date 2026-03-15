@@ -11,7 +11,6 @@ import { registerMemory } from '../decorator/core';
 import { service } from '../decorator/service';
 import { isProd } from '../utils';
 import Logger from '../utils/logger';
-import { ConversationService } from './ConversationService';
 
 /**
  * Session state persisted to Redis for reconnection support.
@@ -30,8 +29,6 @@ export class ChatService {
   private sessions = new Map<string, ChatSession>();
 
   constructor(
-    @inject(ConversationService)
-    private conversationService: ConversationService,
     @inject(InjectTokens.REDIS)
     private redis: RedisClientType<any>,
   ) {
@@ -81,9 +78,13 @@ export class ChatService {
     );
   }
 
-  acquireSession(conversationId: string): ChatSession | null {
+  /**
+   * Acquire or retrieve an existing session with distributed lock.
+   * Returns null if lock acquisition fails (another request is creating session).
+   */
+  async acquireSession(conversationId: string): Promise<ChatSession | null> {
+    // Check existing session first (fast path, no lock needed)
     const existing = this.sessions.get(conversationId);
-    // Allow reconnection for existing session (both waiting and running)
     if (existing) {
       this.logger.info(`Session reconnected`, {
         sessionId: conversationId,
@@ -92,7 +93,78 @@ export class ChatService {
       return existing;
     }
 
-    this.logger.info(`Session created`, { sessionId: conversationId });
+    // Try to acquire distributed lock
+    const lockKey = RedisKeys.CHAT_SESSION_LOCK(conversationId);
+    const lockAcquired = await this.redis.set(lockKey, '1', {
+      NX: true,
+      EX: 5,
+    });
+
+    if (!lockAcquired) {
+      this.logger.warn(`Failed to acquire lock for ${conversationId}`);
+      return null;
+    }
+
+    try {
+      // Double-check after acquiring lock
+      const existingAfterLock = this.sessions.get(conversationId);
+      if (existingAfterLock) {
+        return existingAfterLock;
+      }
+
+      this.logger.info(`Session created`, { sessionId: conversationId });
+
+      const session = new ChatSession(conversationId, {
+        idleTimeoutMs: 30_000,
+        onDispose: async (id: string) => {
+          this.sessions.delete(id);
+          await this.redis.del(RedisKeys.CHAT_SESSION(id));
+          await this.redis.del(RedisKeys.HUMAN_INPUT(id));
+        },
+        onPhaseChange: async (id: string, phase: SessionPhase) => {
+          await this.updateSessionPhase(id, phase);
+        },
+      });
+
+      this.sessions.set(conversationId, session);
+
+      // Persist session state to Redis for reconnection support
+      await this.redis.set(
+        RedisKeys.CHAT_SESSION(conversationId),
+        JSON.stringify({
+          conversationId,
+          phase: 'waiting',
+          startedAt: Date.now(),
+          agentId: null,
+        }),
+        { EX: 3600 },
+      );
+
+      return session;
+    } finally {
+      // Always release lock
+      await this.redis.del(lockKey);
+    }
+  }
+
+  /**
+   * Start a new session for backend-initiated agents.
+   * This is for scenarios where the backend starts the agent first,
+   * then the frontend connects via SSE later.
+   */
+  async startSession(conversationId: string): Promise<ChatSession> {
+    // Check existing session first
+    const existing = this.sessions.get(conversationId);
+    if (existing) {
+      this.logger.warn(`Session already exists for ${conversationId}`, {
+        phase: existing.phase,
+      });
+      return existing;
+    }
+
+    this.logger.info(`Session started (backend-initiated)`, {
+      sessionId: conversationId,
+    });
 
     const session = new ChatSession(conversationId, {
       idleTimeoutMs: 30_000,
@@ -109,23 +181,16 @@ export class ChatService {
     this.sessions.set(conversationId, session);
 
     // Persist session state to Redis for reconnection support
-    this.redis
-      .set(
-        RedisKeys.CHAT_SESSION(conversationId),
-        JSON.stringify({
-          conversationId,
-          phase: 'waiting',
-          startedAt: Date.now(),
-          agentId: null,
-        }),
-        { EX: 3600 },
-      )
-      .catch(err =>
-        this.logger.error(
-          `Failed to save session state for ${conversationId}:`,
-          err,
-        ),
-      );
+    await this.redis.set(
+      RedisKeys.CHAT_SESSION(conversationId),
+      JSON.stringify({
+        conversationId,
+        phase: 'waiting',
+        startedAt: Date.now(),
+        agentId: null,
+      }),
+      { EX: 3600 },
+    );
 
     return session;
   }
@@ -148,16 +213,16 @@ export class ChatService {
         sessionId: session.conversationId,
       });
       session.send({ type: 'session_error', error: errorMsg });
-      session.cleanup();
+      await session.cleanup();
     }
   }
 
   async buildMemory(
+    agent: Agent,
     conversationId: string,
     userId: string,
-    agent: Agent,
     config: Record<string, any>,
-    userMessage?: {
+    userMessage: {
       role: Role;
       content: string;
       attachments?: MessageAttachment[] | null;
@@ -171,60 +236,14 @@ export class ChatService {
     memory.setConversationId(conversationId);
     memory.setUserId(userId);
 
-    const chatMessages: {
-      role: Role;
-      content: string;
-      attachments?: MessageAttachment[] | null;
-      meta?: Record<string, any> | null;
-      createdAt: Date;
-    }[] = [];
     const messages = await memory.summarize();
-
-    const baseTime = Date.now();
-    let timeOffset = 0;
-
-    // Add system prompt if needed
-    if (messages.length === 0) {
-      const systemPrompt = agent.systemPrompt
-        .with(
-          'Background',
-          `Conversation ID: ${conversationId}\nUser ID: ${userId}`,
-        )
-        .build();
-
-      if (systemPrompt) {
-        chatMessages.push({
-          role: Role.SYSTEM,
-          content: systemPrompt,
-          createdAt: new Date(baseTime + timeOffset++),
-        });
-      }
-    }
-
-    // Add user message if provided (for frontend-triggered chats)
-    if (userMessage) {
-      chatMessages.push({
-        ...userMessage,
-        createdAt: new Date(baseTime + timeOffset),
-      });
-    } else {
-      // Otherwise, load existing messages from database (for backend-triggered sessions)
-      const existingMessages =
-        await this.conversationService.getMessagesByConversationId(
-          conversationId,
-        );
-      for (const msg of existingMessages) {
-        if (msg.role === Role.USER) {
-          chatMessages.push({
-            role: msg.role,
-            content: msg.content,
-            attachments: msg.attachments,
-            meta: msg.meta,
-            createdAt: new Date(baseTime + timeOffset++),
-          });
-        }
-      }
-    }
+    const chatMessages = this.buildChatMessages({
+      agent,
+      conversationId,
+      userId,
+      userMessage,
+      isNewConversation: messages.length === 0,
+    });
 
     await memory.store(chatMessages);
 
@@ -234,5 +253,72 @@ export class ChatService {
     });
 
     return memory;
+  }
+
+  private buildChatMessages({
+    agent,
+    conversationId,
+    userId,
+    userMessage,
+    isNewConversation,
+  }: {
+    agent: Agent;
+    conversationId: string;
+    userId: string;
+    userMessage: {
+      role: Role;
+      content: string;
+      attachments?: MessageAttachment[] | null;
+      meta?: Record<string, any> | null;
+    };
+    isNewConversation: boolean;
+  }): {
+    role: Role;
+    content: string;
+    attachments?: MessageAttachment[] | null;
+    meta?: Record<string, any> | null;
+    createdAt: Date;
+  }[] {
+    const baseTime = Date.now();
+    const messages: {
+      role: Role;
+      content: string;
+      attachments?: MessageAttachment[] | null;
+      meta?: Record<string, any> | null;
+      createdAt: Date;
+    }[] = [];
+
+    // Add system prompt for new conversations
+    if (isNewConversation) {
+      const systemPrompt = agent.systemPrompt.build();
+
+      if (systemPrompt) {
+        messages.push({
+          role: Role.SYSTEM,
+          content: systemPrompt,
+          createdAt: new Date(baseTime + messages.length),
+        });
+      }
+    }
+
+    // Add session context as a user message before the actual user message
+    const sessionContext = `<session-context>
+Conversation ID: ${conversationId}
+User ID: ${userId}
+</session-context>`;
+
+    messages.push({
+      role: Role.USER,
+      content: sessionContext,
+      createdAt: new Date(baseTime + messages.length),
+    });
+
+    // Add user message
+    messages.push({
+      ...userMessage,
+      createdAt: new Date(baseTime + messages.length),
+    });
+
+    return messages;
   }
 }

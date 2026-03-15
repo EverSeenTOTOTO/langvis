@@ -1,21 +1,42 @@
 import { ToolConfig } from '@/shared/types';
 
-export const config: ToolConfig<
-  {
-    url: string;
-    timeout?: number;
-  },
-  {
-    title?: string;
-    textContent?: string;
-    excerpt?: string;
-    byline?: string;
-    siteName?: string;
-    url: string;
-  }
-> = {
-  name: 'Web Fetch Tool',
-  description: 'A tool to fetch and extract content from web pages.',
+export type ResponseFormat = 'concise' | 'detailed';
+
+export interface WebFetchInput {
+  url: string;
+  timeout?: number;
+  retry?: number;
+  response_format?: ResponseFormat;
+}
+
+export interface WebFetchOutputConcise {
+  title: string;
+  content: string;
+}
+
+export interface WebFetchOutputDetailed {
+  title: string;
+  content: string;
+  excerpt: string;
+  author: string | null;
+  siteName: string | null;
+  url: string;
+}
+
+export type WebFetchOutput = WebFetchOutputConcise | WebFetchOutputDetailed;
+
+export const config: ToolConfig<WebFetchInput, WebFetchOutput> = {
+  name: 'web_fetch',
+  description: `Fetch and extract main content from a web page URL.
+
+**Response formats:**
+- \`concise\` (default): Returns only title and content. Use for most cases.
+- \`detailed\`: Also includes excerpt, author, site name. Use when you need metadata.
+
+**Common use cases:**
+- Reading article content: use concise format
+- Archiving documents: use concise format
+- Extracting article metadata: use detailed format`,
   inputSchema: {
     type: 'object',
     properties: {
@@ -38,6 +59,14 @@ export const config: ToolConfig<
           'Number of retry attempts on failure. Default is 0 (no retry).',
         nullable: true,
       },
+      response_format: {
+        type: 'string',
+        enum: ['concise', 'detailed'],
+        default: 'concise',
+        description:
+          'Output format. "concise" returns only title+content. "detailed" includes all metadata.',
+        nullable: true,
+      },
     },
     required: ['url'],
   },
@@ -46,35 +75,34 @@ export const config: ToolConfig<
     properties: {
       title: {
         type: 'string',
-        nullable: true,
         description: 'The title of the article or page.',
       },
-      textContent: {
+      content: {
         type: 'string',
-        nullable: true,
-        description:
-          'The main text content of the article, with HTML tags removed.',
+        description: 'The main text content in markdown format.',
       },
       excerpt: {
         type: 'string',
         nullable: true,
-        description: 'A short excerpt or summary of the article.',
+        description:
+          'A short excerpt or summary of the article (detailed only).',
       },
-      byline: {
+      author: {
         type: 'string',
         nullable: true,
-        description: 'The author or attribution information.',
+        description: 'The author name (detailed only).',
       },
       siteName: {
         type: 'string',
         nullable: true,
-        description: 'The name of the website or publication.',
+        description: 'The name of the website or publication (detailed only).',
       },
       url: {
         type: 'string',
-        description: 'The original URL that was fetched.',
+        nullable: true,
+        description: 'The original URL that was fetched (detailed only).',
       },
     },
-    required: ['url'],
+    required: ['title', 'content'],
   },
 };

@@ -21,7 +21,7 @@ export type DateTimeOutput = {
   result: string;
 };
 
-@tool(ToolIds.DATE_TIME)
+@tool(ToolIds.DATETIME_GET)
 export default class DateTimeTool extends Tool<DateTimeInput, DateTimeOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;

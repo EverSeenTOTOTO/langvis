@@ -21,9 +21,9 @@ export const config: AgentConfig = {
     },
   } as any,
   tools: [
-    ToolIds.DATE_TIME,
+    ToolIds.DATETIME_GET,
     ToolIds.WEB_FETCH,
-    ToolIds.HUMAN_IN_THE_LOOP,
-    ToolIds.READ_CACHE,
+    ToolIds.ASK_USER,
+    ToolIds.CACHED_READ,
   ],
 };

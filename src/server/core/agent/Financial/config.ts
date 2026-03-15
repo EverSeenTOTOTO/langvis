@@ -7,8 +7,8 @@ export const config: AgentConfig = {
   description:
     'A financial advisor agent that provides investment knowledge and position adjustment advice.',
   tools: [
-    ToolIds.HUMAN_IN_THE_LOOP,
-    ToolIds.POSITION_ADJUST,
-    ToolIds.READ_CACHE,
+    ToolIds.ASK_USER,
+    ToolIds.POSITION_ADJUSTMENT_ADVICE,
+    ToolIds.CACHED_READ,
   ],
 };

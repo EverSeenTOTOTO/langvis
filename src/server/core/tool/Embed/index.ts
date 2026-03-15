@@ -11,7 +11,7 @@ import { config } from './config';
 
 const DEFAULT_TIMEOUT_MS = 60_000; // 1 minute
 
-@tool(ToolIds.EMBED)
+@tool(ToolIds.EMBEDDING_GENERATE)
 export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;

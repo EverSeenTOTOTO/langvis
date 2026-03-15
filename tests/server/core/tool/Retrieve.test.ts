@@ -72,7 +72,7 @@ describe('RetrieveTool', () => {
         yield {
           type: 'result',
           callId: 'tc_1',
-          toolName: ToolIds.EMBED,
+          toolName: ToolIds.EMBEDDING_GENERATE,
           output: {
             chunks: [
               { content: 'query', index: 0, embedding: [0.1, 0.2, 0.3] },
@@ -91,7 +91,7 @@ describe('RetrieveTool', () => {
       }),
     } as unknown as EmbedTool;
 
-    container.register(ToolIds.EMBED, { useValue: mockEmbedTool });
+    container.register(ToolIds.EMBEDDING_GENERATE, { useValue: mockEmbedTool });
 
     retrieveTool = new RetrieveTool(mockDataSource);
     (retrieveTool as any).logger = logger;

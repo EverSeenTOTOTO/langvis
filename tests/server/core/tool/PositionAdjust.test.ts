@@ -15,7 +15,7 @@ vi.mock('tsyringe', async () => {
     ...actual,
     container: {
       resolve: vi.fn((token: string | symbol) => {
-        if (token === ToolIds.HUMAN_IN_THE_LOOP) {
+        if (token === ToolIds.ASK_USER) {
           return mockHumanInputTool;
         }
         throw new Error(`Unknown token: ${String(token)}`);
@@ -46,7 +46,7 @@ describe('PositionAdjustTool', () => {
 
   beforeEach(() => {
     tool = new PositionAdjustTool();
-    (tool as any).id = ToolIds.POSITION_ADJUST;
+    (tool as any).id = ToolIds.POSITION_ADJUSTMENT_ADVICE;
     (tool as any).config = {};
     (tool as any).logger = {
       info: vi.fn(),
@@ -59,7 +59,7 @@ describe('PositionAdjustTool', () => {
 
   describe('basic properties', () => {
     it('should have correct tool id', () => {
-      expect(tool.id).toBe(ToolIds.POSITION_ADJUST);
+      expect(tool.id).toBe(ToolIds.POSITION_ADJUSTMENT_ADVICE);
     });
   });
 
@@ -68,7 +68,7 @@ describe('PositionAdjustTool', () => {
       const ctx = createMockContext();
 
       mockHumanInputTool.call.mockImplementation(async function* () {
-        yield ctx.agentToolProgressEvent(ToolIds.HUMAN_IN_THE_LOOP, {
+        yield ctx.agentToolProgressEvent(ToolIds.ASK_USER, {
           status: 'awaiting_input',
         });
         return { submitted: false };
@@ -88,7 +88,7 @@ describe('PositionAdjustTool', () => {
       const ctx = createMockContext();
 
       mockHumanInputTool.call.mockImplementation(async function* () {
-        yield ctx.agentToolProgressEvent(ToolIds.HUMAN_IN_THE_LOOP, {
+        yield ctx.agentToolProgressEvent(ToolIds.ASK_USER, {
           status: 'awaiting_input',
         });
         return { submitted: true, data: null };
@@ -119,7 +119,7 @@ describe('PositionAdjustTool', () => {
       };
 
       mockHumanInputTool.call.mockImplementation(async function* () {
-        yield ctx.agentToolProgressEvent(ToolIds.HUMAN_IN_THE_LOOP, {
+        yield ctx.agentToolProgressEvent(ToolIds.ASK_USER, {
           status: 'awaiting_input',
         });
         return { submitted: true, data: formData };
@@ -179,7 +179,7 @@ describe('PositionAdjustTool', () => {
       };
 
       mockHumanInputTool.call.mockImplementation(async function* () {
-        yield ctx.agentToolProgressEvent(ToolIds.HUMAN_IN_THE_LOOP, {
+        yield ctx.agentToolProgressEvent(ToolIds.ASK_USER, {
           status: 'awaiting_input',
         });
         return { submitted: true, data: formData };

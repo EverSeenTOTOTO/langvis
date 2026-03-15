@@ -15,7 +15,7 @@ export interface ReadCacheInput {
 
 export type ReadCacheOutput = string | Record<string, unknown>;
 
-@tool(ToolIds.READ_CACHE)
+@tool(ToolIds.CACHED_READ)
 export default class ReadCacheTool extends Tool<
   ReadCacheInput,
   ReadCacheOutput

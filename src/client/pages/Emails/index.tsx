@@ -241,6 +241,7 @@ const Emails: React.FC = () => {
               type="link"
               size="small"
               icon={<InboxOutlined />}
+              loading={archiveApi[0].loading}
               onClick={() => handleArchive(record)}
             >
               {settingStore.tr('Archive')}

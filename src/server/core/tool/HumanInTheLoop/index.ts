@@ -59,7 +59,7 @@ export interface HumanInTheLoopOutput<O = Record<string, any>> {
   data?: O;
 }
 
-@tool(ToolIds.HUMAN_IN_THE_LOOP)
+@tool(ToolIds.ASK_USER)
 export default class HumanInTheLoopTool<
   I = Record<string, any>,
   O = Record<string, any>,

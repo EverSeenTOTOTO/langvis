@@ -23,12 +23,15 @@ try {
 describe('ChatSession', () => {
   let session: ChatSession;
   let onDispose: ReturnType<typeof vi.fn>;
+  let onPhaseChange: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     onDispose = vi.fn();
+    onPhaseChange = vi.fn().mockResolvedValue(undefined);
     session = new ChatSession('conv-123', {
       idleTimeoutMs: 30_000,
       onDispose,
+      onPhaseChange,
     });
   });
 
@@ -312,8 +315,11 @@ describe('ChatSession', () => {
       expect(session.phase).toBe('done');
     });
 
-    it('should cleanup when phase is waiting', () => {
+    it('should cleanup when phase is waiting', async () => {
       session.handleDisconnect();
+
+      // Wait for async cleanup to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       expect(session.phase).toBe('done');
       expect(onDispose).toHaveBeenCalledWith('conv-123');
@@ -384,19 +390,19 @@ describe('ChatSession', () => {
   });
 
   describe('cleanup', () => {
-    it('should close the connection', () => {
+    it('should close the connection', async () => {
       const { conn } = makeMockConnection();
       session.bindConnection(conn);
-      session.cleanup();
+      await session.cleanup();
 
       expect((conn as any).close).toHaveBeenCalled();
     });
 
-    it('should be idempotent - done to done is ignored', () => {
-      session.cleanup();
+    it('should be idempotent - done to done is ignored', async () => {
+      await session.cleanup();
       expect(onDispose).toHaveBeenCalledTimes(1);
 
-      session.cleanup();
+      await session.cleanup();
       expect(onDispose).toHaveBeenCalledTimes(1);
     });
   });

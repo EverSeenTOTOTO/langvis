@@ -86,9 +86,9 @@ describe('Config Decorators', () => {
 
   describe('tool decorator', () => {
     it('should add metadata and make class injectable', () => {
-      @tool(ToolIds.DATE_TIME)
+      @tool(ToolIds.DATETIME_GET)
       class TestTool extends Tool {
-        id = ToolIds.DATE_TIME;
+        id = ToolIds.DATETIME_GET;
         config: ToolConfig = {
           name: 'Test Tool',
           description: 'Test description',
@@ -145,9 +145,9 @@ describe('Config Decorators', () => {
     });
 
     it('should register agent with tools', async () => {
-      @tool(ToolIds.DATE_TIME)
+      @tool(ToolIds.DATETIME_GET)
       class TestTool extends Tool {
-        id = ToolIds.DATE_TIME;
+        id = ToolIds.DATETIME_GET;
         config: ToolConfig = {
           name: 'Test Tool',
           description: 'Test description',
@@ -190,7 +190,7 @@ describe('Config Decorators', () => {
       const agentConfig: AgentConfig = {
         name: 'Test Agent',
         description: 'Test description',
-        tools: [ToolIds.DATE_TIME],
+        tools: [ToolIds.DATETIME_GET],
       };
 
       const token = await registerAgent(TestAgent, agentConfig);
@@ -321,9 +321,9 @@ describe('Config Decorators', () => {
 
   describe('registerTool', () => {
     it('should register tool with basic config', async () => {
-      @tool(ToolIds.DATE_TIME)
+      @tool(ToolIds.DATETIME_GET)
       class TestTool extends Tool {
-        id = ToolIds.DATE_TIME;
+        id = ToolIds.DATETIME_GET;
         config: ToolConfig = {
           name: 'Test Tool',
           description: 'Test description',
@@ -347,12 +347,12 @@ describe('Config Decorators', () => {
 
       const token = await registerTool(TestTool, toolConfig);
 
-      expect(token).toBe(ToolIds.DATE_TIME);
+      expect(token).toBe(ToolIds.DATETIME_GET);
 
-      const instance = container.resolve<Tool>(ToolIds.DATE_TIME);
+      const instance = container.resolve<Tool>(ToolIds.DATETIME_GET);
       expect(instance).toBeInstanceOf(TestTool);
       expect(instance.config).toEqual(toolConfig);
-      expect(instance.id).toBe(ToolIds.DATE_TIME);
+      expect(instance.id).toBe(ToolIds.DATETIME_GET);
     });
 
     it('should handle config extension for tools', async () => {
@@ -375,9 +375,9 @@ describe('Config Decorators', () => {
         }
       }
 
-      @tool(ToolIds.DATE_TIME)
+      @tool(ToolIds.DATETIME_GET)
       class ExtendedTool extends Tool {
-        id = ToolIds.DATE_TIME;
+        id = ToolIds.DATETIME_GET;
         config: ToolConfig = {
           name: 'Extended Tool',
           description: 'Extended description',
@@ -408,9 +408,9 @@ describe('Config Decorators', () => {
 
       const token = await registerTool(ExtendedTool, extendedConfig);
 
-      expect(token).toBe(ToolIds.DATE_TIME);
+      expect(token).toBe(ToolIds.DATETIME_GET);
 
-      const instance = container.resolve<Tool>(ToolIds.DATE_TIME);
+      const instance = container.resolve<Tool>(ToolIds.DATETIME_GET);
       expect(instance.config.enabled).toBe(true);
       expect(instance.config.name).toBe('Extended Tool');
     });

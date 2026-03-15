@@ -20,18 +20,18 @@ export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
       'Capabilities',
       'Workflows',
       `### Archive URL
-1. **Extract content**: Use \`web_fetch_tool\`
-2. **Explain & Ask**: Show DETAILED content. Then use \`human_in_the_loop_tool\` to ask user choice (archive/cancel)
-3. **If archive**: Use \`analysis_tool\`
+1. **Extract content**: Use \`web_fetch\`
+2. **Explain & Ask**: Show DETAILED content. Then use \`ask_user\` to get user choice (archive/cancel)
+3. **If archive**: Use \`document_archive\`
 4. **If cancel**: Return final_answer to cancel
 
 
 ### Archive Email
 1. **Summarize & Ask**: Use \`human_in_the_loop_tool\` to summarize email and ask user choice (email/links/cancel)
-2. **If email**: Use \`analysis_tool\` directly
+2. **If email**: Use \`document_archive\` directly
 3. **If links**: \`extract_links_tool\` → \`human_in_the_loop_tool\` (multi-select) → \`batch_archive_tool\`
 4. **If cancel or 0 links selected**: Return final_answer to cancel
 
 ### Search
-Use \`retrieve_tool\` directly`,
+Use \`document_search\` directly`,
     );

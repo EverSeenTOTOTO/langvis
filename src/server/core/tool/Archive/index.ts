@@ -12,7 +12,7 @@ import { ExecutionContext } from '../../ExecutionContext';
 import type { ArchiveInput, ArchiveOutput } from './config';
 import { config } from './config';
 
-@tool(ToolIds.ARCHIVE)
+@tool(ToolIds.DOCUMENT_STORE)
 export default class ArchiveTool extends Tool<ArchiveInput, ArchiveOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;

@@ -133,7 +133,11 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
 
       if (finishReason) {
         if (finishReason === 'content_filter') {
-          const error = 'Content filter triggered - response incomplete';
+          const error =
+            'Content filter triggered - response incomplete. ' +
+            'The input or generated content may violate content policy. ' +
+            'Try: (1) rephrase the input to avoid sensitive topics, ' +
+            '(2) use a different model, (3) simplify or shorten the prompt.';
           this.logger.warn(`LLM stream aborted: ${error}`);
           throw new Error(error);
         }
