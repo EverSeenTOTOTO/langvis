@@ -29,13 +29,15 @@
   position: relative;
   flex: 1;
   min-height: 44px;
-  overflow: hidden;
+  max-height: 156px;
+  overflow-y: auto;
+
+  @include mixins.default-scrollbar;
 }
 
 .chat-input-content-editable {
   min-height: 44px;
   padding: 10px 0;
-  overflow-y: auto;
   font-size: 14px;
   line-height: 22px;
   word-break: break-word;

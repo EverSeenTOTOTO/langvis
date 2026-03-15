@@ -6,7 +6,7 @@ import {
 } from '@ant-design/icons';
 import { Flex, FloatButton } from 'antd';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { useRafState, useScroll } from 'react-use';
 import AssistantMessage from './AssistantMessage';
 import SystemMessage from './SystemMessage';
@@ -14,9 +14,15 @@ import UserMessage from './UserMessage';
 
 const SCROLL_THRESHOLD = 100;
 
-const Messages = () => {
+export interface MessagesRef {
+  scrollToBottom: (smooth?: boolean) => void;
+}
+
+const Messages = forwardRef<MessagesRef>((_props, ref) => {
   const conversationStore = useStore('conversation');
-  const currentMessages = conversationStore.currentMessages;
+  const currentMessages = conversationStore.currentMessages.filter(
+    msg => !msg.meta?.hidden,
+  );
   const messagesStartRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -38,6 +44,10 @@ const Messages = () => {
       behavior: smooth ? 'smooth' : 'auto',
     });
   };
+
+  useImperativeHandle(ref, () => ({
+    scrollToBottom,
+  }));
 
   const isNearTop = scrollState.y < SCROLL_THRESHOLD;
 
@@ -100,6 +110,9 @@ const Messages = () => {
       </FloatButton.Group>
     </>
   );
-};
+});
+
+Messages.displayName = 'Messages';
 
 export default observer(Messages);
+

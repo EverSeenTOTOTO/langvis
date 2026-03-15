@@ -133,4 +133,3 @@ export class RedisService {
     return this.redisSubscriber;
   }
 }
-
