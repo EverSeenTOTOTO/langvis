@@ -11,9 +11,6 @@ import { Memory } from '..';
 export default class ChatHistoryMemory extends Memory {
   protected readonly logger!: Logger;
 
-  conversationId?: string;
-  userId?: string;
-
   constructor(
     @inject(ConversationService)
     private conversationService: ConversationService,

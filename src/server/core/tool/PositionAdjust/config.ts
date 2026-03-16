@@ -1,7 +1,7 @@
 import { ToolConfig } from '@/shared/types';
 
 export interface PositionAdjustInput {
-  conversationId: string;
+  // No input required - conversationId is obtained from TraceContext
 }
 
 export interface PositionAdjustOutput {
@@ -16,13 +16,8 @@ export const config: ToolConfig<PositionAdjustInput, PositionAdjustOutput> = {
   skipCompression: true,
   inputSchema: {
     type: 'object',
-    properties: {
-      conversationId: {
-        type: 'string',
-        description: 'The conversation ID for form submission',
-      },
-    },
-    required: ['conversationId'],
+    properties: {},
+    required: [],
   },
   outputSchema: {
     type: 'object',

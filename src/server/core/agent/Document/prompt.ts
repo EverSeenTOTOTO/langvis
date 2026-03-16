@@ -27,9 +27,9 @@ export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
 
 
 ### Archive Email
-1. **Summarize & Ask**: Use \`human_in_the_loop_tool\` to summarize email and ask user choice (email/links/cancel)
+1. **Summarize & Ask**: Use \`ask_user\` to summarize email and ask user choice (email/links/cancel)
 2. **If email**: Use \`document_archive\` directly
-3. **If links**: \`extract_links_tool\` → \`human_in_the_loop_tool\` (multi-select) → \`batch_archive_tool\`
+3. **If links**: \`links_extract\` → \`ask_user\` (multi-select) → \`document_archive_batch\`
 4. **If cancel or 0 links selected**: Return final_answer to cancel
 
 ### Search

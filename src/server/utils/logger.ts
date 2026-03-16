@@ -4,6 +4,7 @@ import { isEmpty, isObject } from 'lodash-es';
 import winston from 'winston';
 import 'winston-daily-rotate-file';
 import { isProd } from '.';
+import { TraceContext } from '../core/TraceContext';
 
 export type Logger = winston.Logger;
 
@@ -40,6 +41,10 @@ const consoleFormat = printf(({ timestamp: time, level, ...meta }) => {
   if (meta.userId) {
     result += ` ${chalk.gray(`[uId: ${meta.userId}]`)}`;
     delete meta.userId;
+  }
+  if (meta.conversationId) {
+    result += ` ${chalk.gray(`[convId: ${meta.conversationId}]`)}`;
+    delete meta.conversationId;
   }
 
   if (isObject(meta.message)) {
@@ -154,6 +159,23 @@ const createSafeLogger = (winstonLogger: winston.Logger) => {
   const safeLog = (level: string, message: any, ...meta: any[]) => {
     const safeMessage = makeSafe(message);
     const safeMeta = meta.map(makeSafe);
+
+    // Auto-inject trace context from TraceContext
+    const trace = TraceContext.get();
+    if (trace) {
+      const traceMeta: Record<string, any> = {};
+      if (trace.requestId) traceMeta.requestId = trace.requestId;
+      if (trace.userId) traceMeta.userId = trace.userId;
+      if (trace.conversationId) traceMeta.conversationId = trace.conversationId;
+
+      // Merge trace meta with first meta object if it exists
+      if (safeMeta.length > 0 && typeof safeMeta[0] === 'object') {
+        safeMeta[0] = { ...traceMeta, ...safeMeta[0] };
+      } else {
+        safeMeta.unshift(traceMeta);
+      }
+    }
+
     return (winstonLogger as any)[level](safeMessage, ...safeMeta);
   };
 

@@ -1,5 +1,6 @@
 import ReActAgent from '@/server/core/agent/ReAct';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
+import { TraceContext } from '@/server/core/TraceContext';
 import { RedisService } from '@/server/service/RedisService';
 import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -40,7 +41,11 @@ vi.mock('tsyringe', async () => {
 });
 
 function createMockContext(traceId = 'test-trace-id'): ExecutionContext {
-  return new ExecutionContext(traceId, new AbortController());
+  let ctx: ExecutionContext | undefined;
+  TraceContext.run({ requestId: 'test-req', traceId }, () => {
+    ctx = new ExecutionContext(new AbortController());
+  });
+  return ctx!;
 }
 
 async function collectEvents(

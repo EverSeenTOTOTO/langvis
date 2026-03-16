@@ -5,6 +5,7 @@ import { globby } from 'globby';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
 import { ChatSession, SessionPhase } from '../core/ChatSession';
+import { TraceContext } from '../core/TraceContext';
 import { Memory } from '../core/memory';
 import { registerMemory } from '../decorator/core';
 import { service } from '../decorator/service';
@@ -215,8 +216,6 @@ export class ChatService {
 
   async buildMemory(
     agent: Agent,
-    conversationId: string,
-    userId: string,
     config: Record<string, any>,
     userMessage: {
       role: Role;
@@ -229,14 +228,9 @@ export class ChatService {
       config?.memory?.type ?? MemoryIds.NONE,
     );
 
-    memory.setConversationId(conversationId);
-    memory.setUserId(userId);
-
     const messages = await memory.summarize();
     const chatMessages = this.buildChatMessages({
       agent,
-      conversationId,
-      userId,
       userMessage,
       isNewConversation: messages.length === 0,
     });
@@ -244,7 +238,7 @@ export class ChatService {
     await memory.store(chatMessages);
 
     this.logger.debug('Memory built', {
-      sessionId: conversationId,
+      sessionId: memory.conversationId,
       messageCount: chatMessages.length,
     });
 
@@ -253,14 +247,10 @@ export class ChatService {
 
   private buildChatMessages({
     agent,
-    conversationId,
-    userId,
     userMessage,
     isNewConversation,
   }: {
     agent: Agent;
-    conversationId: string;
-    userId: string;
     userMessage: {
       role: Role;
       content: string;
@@ -275,6 +265,10 @@ export class ChatService {
     meta?: Record<string, any> | null;
     createdAt: Date;
   }[] {
+    const trace = TraceContext.get();
+    const conversationId = trace?.conversationId ?? '';
+    const userId = trace?.userId ?? '';
+
     const baseTime = Date.now();
     const messages: {
       role: Role;

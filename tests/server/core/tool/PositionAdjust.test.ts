@@ -1,4 +1,5 @@
 import { ExecutionContext } from '@/server/core/ExecutionContext';
+import { TraceContext } from '@/server/core/TraceContext';
 import PositionAdjustTool from '@/server/core/tool/PositionAdjust';
 import { ToolIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
@@ -233,9 +234,15 @@ describe('PositionAdjustTool', () => {
       const abortController = new AbortController();
       abortController.abort(new Error('User cancelled'));
 
-      const ctx = new ExecutionContext('test-trace-id', abortController);
+      let ctx: ExecutionContext | undefined;
+      TraceContext.run(
+        { requestId: 'test-req', traceId: 'test-trace-id' },
+        () => {
+          ctx = new ExecutionContext(abortController);
+        },
+      );
 
-      const generator = tool.call({ conversationId: 'test-conv' }, ctx);
+      const generator = tool.call({ conversationId: 'test-conv' }, ctx!);
 
       await expect(generator.next()).rejects.toThrow('User cancelled');
     });

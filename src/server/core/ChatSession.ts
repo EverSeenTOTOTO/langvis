@@ -111,7 +111,7 @@ export class ChatSession {
     }
 
     const controller = new AbortController();
-    const ctx = new ExecutionContext(this.conversationId, controller);
+    const ctx = new ExecutionContext(controller);
     this.ctx = ctx;
 
     // Wait for phase transition to complete (ensures Redis is synced)

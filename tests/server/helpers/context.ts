@@ -1,5 +1,6 @@
 import { container } from 'tsyringe';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
+import { TraceContext } from '@/server/core/TraceContext';
 import { RedisService } from '@/server/service/RedisService';
 
 const mockRedisService = {
@@ -22,6 +23,14 @@ try {
   container.register(RedisService, { useValue: mockRedisService });
 }
 
-export function createMockContext(traceId = 'test-trace-id'): ExecutionContext {
-  return new ExecutionContext(traceId, new AbortController());
+export function createMockContext(
+  traceId = 'test-trace-id',
+  conversationId = 'test-conversation',
+): ExecutionContext {
+  // Initialize TraceContext with the traceId and conversationId
+  let ctx: ExecutionContext | undefined;
+  TraceContext.run({ requestId: 'test-req', traceId, conversationId }, () => {
+    ctx = new ExecutionContext(new AbortController());
+  });
+  return ctx!;
 }
