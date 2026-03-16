@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { container } from 'tsyringe';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
+import { TraceContext } from '@/server/core/TraceContext';
 import { RedisService } from '@/server/service/RedisService';
 
 const mockRedisService = {
@@ -28,7 +29,10 @@ describe('ExecutionContext', () => {
       signal: { aborted: false, reason: null },
     };
 
-    ctx = new ExecutionContext('msg-123', mockController);
+    // Create context within TraceContext.run() to provide traceId
+    TraceContext.run({ requestId: 'test-req', traceId: 'msg-123' }, () => {
+      ctx = new ExecutionContext(mockController);
+    });
   });
 
   describe('seq counter', () => {
@@ -269,7 +273,7 @@ describe('ExecutionContext', () => {
       expect(ctx.signal).toBe(mockController.signal);
     });
 
-    it('should expose traceId from constructor', () => {
+    it('should expose traceId from TraceContext', () => {
       expect(ctx.traceId).toBe('msg-123');
     });
   });

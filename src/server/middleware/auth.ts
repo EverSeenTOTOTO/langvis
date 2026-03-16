@@ -1,6 +1,7 @@
 import { Express, Request, Response, NextFunction } from 'express';
 import { container } from 'tsyringe';
 import { AuthService } from '../service/AuthService';
+import { TraceContext } from '../core/TraceContext';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -34,6 +35,12 @@ export default async (app: Express) => {
       if (isAuthenticated) {
         const user = await authService.getUser(req);
         req.user = user;
+
+        // Update TraceContext with userId
+        if (user?.id) {
+          TraceContext.update({ userId: user.id });
+        }
+
         next();
       } else {
         res.status(401).json({

@@ -10,8 +10,6 @@ import { Memory } from '..';
 @memory(MemoryIds.NONE)
 export default class NoneMemory extends Memory {
   protected readonly logger!: Logger;
-  conversationId?: string;
-  userId?: string;
 
   constructor(
     @inject(ConversationService)

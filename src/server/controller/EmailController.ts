@@ -7,6 +7,7 @@ import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
 import { PendingMessage } from '../core/PendingMessage';
+import { TraceContext } from '../core/TraceContext';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, query, request, response } from '../decorator/param';
@@ -169,13 +170,19 @@ export default class EmailController {
   ): Promise<void> {
     const conversationId = conversation.id;
 
+    // Set TraceContext for this conversation
+    TraceContext.update({
+      conversationId,
+      userId: conversation.userId,
+      traceId: conversationId,
+    });
+    TraceContext.freeze();
+
     // Create session BEFORE building memory to avoid race with frontend SSE
     const session = await this.chatService.startSession(conversationId);
 
     const memory = await this.chatService.buildMemory(
       agent,
-      conversationId,
-      conversation.userId,
       conversation.config!,
       {
         role: Role.USER,

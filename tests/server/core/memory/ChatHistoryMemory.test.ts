@@ -1,4 +1,5 @@
 import ChatHistoryMemory from '@/server/core/memory/ChatHistory';
+import { TraceContext } from '@/server/core/TraceContext';
 import { ConversationService } from '@/server/service/ConversationService';
 import { Role } from '@/shared/types/entities';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -30,150 +31,191 @@ describe('ChatHistoryMemory', () => {
     memory = new ChatHistoryMemory(
       mockConversationService as unknown as ConversationService,
     );
-    memory.setConversationId('conv-123');
   });
 
   describe('store', () => {
     it('should store messages via conversationService', async () => {
-      const messages = [
-        {
-          role: Role.USER,
-          content: 'Hello',
-          meta: null,
-          createdAt: new Date(),
-        },
-        {
-          role: Role.ASSIST,
-          content: 'Hi there!',
-          meta: { key: 'value' },
-          createdAt: new Date(),
-        },
-      ];
+      await TraceContext.run(
+        { requestId: 'test', conversationId: 'conv-123' },
+        async () => {
+          const messages = [
+            {
+              role: Role.USER,
+              content: 'Hello',
+              meta: null,
+              createdAt: new Date(),
+            },
+            {
+              role: Role.ASSIST,
+              content: 'Hi there!',
+              meta: { key: 'value' },
+              createdAt: new Date(),
+            },
+          ];
 
-      await memory.store(messages);
+          await memory.store(messages);
 
-      expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
-        'conv-123',
-        messages,
+          expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
+            'conv-123',
+            messages,
+          );
+        },
       );
     });
 
     it('should store single message', async () => {
-      const messages = [
-        {
-          role: Role.SYSTEM,
-          content: 'You are a helpful assistant.',
-          meta: null,
-          createdAt: new Date(),
+      await TraceContext.run(
+        { requestId: 'test', conversationId: 'conv-123' },
+        async () => {
+          const messages = [
+            {
+              role: Role.SYSTEM,
+              content: 'You are a helpful assistant.',
+              meta: null,
+              createdAt: new Date(),
+            },
+          ];
+
+          await memory.store(messages);
+
+          expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
+            'conv-123',
+            messages,
+          );
         },
-      ];
-
-      await memory.store(messages);
-
-      expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
-        'conv-123',
-        messages,
       );
     });
 
     it('should store messages with attachments', async () => {
-      const messages = [
-        {
-          role: Role.USER,
-          content: 'Analyze this image',
-          attachments: [
+      await TraceContext.run(
+        { requestId: 'test', conversationId: 'conv-123' },
+        async () => {
+          const messages = [
             {
-              filename: 'photo.jpg',
-              url: 'https://example.com/photo.jpg',
-              mimeType: 'image/jpeg',
-              size: 2048,
+              role: Role.USER,
+              content: 'Analyze this image',
+              attachments: [
+                {
+                  filename: 'photo.jpg',
+                  url: 'https://example.com/photo.jpg',
+                  mimeType: 'image/jpeg',
+                  size: 2048,
+                },
+              ],
+              meta: null,
+              createdAt: new Date(),
             },
-          ],
-          meta: null,
-          createdAt: new Date(),
+          ];
+
+          await memory.store(messages);
+
+          expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
+            'conv-123',
+            messages,
+          );
         },
-      ];
-
-      await memory.store(messages);
-
-      expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
-        'conv-123',
-        messages,
       );
     });
   });
 
   describe('retrieve', () => {
     it('should retrieve messages from conversationService', async () => {
-      const mockMessages = [
-        {
-          id: 'msg-1',
-          role: Role.USER,
-          content: 'Hello',
-          conversationId: 'conv-123',
-          createdAt: new Date(),
+      await TraceContext.run(
+        { requestId: 'test', conversationId: 'conv-123' },
+        async () => {
+          const mockMessages = [
+            {
+              id: 'msg-1',
+              role: Role.USER,
+              content: 'Hello',
+              conversationId: 'conv-123',
+              createdAt: new Date(),
+            },
+          ];
+          mockConversationService.getMessagesByConversationId.mockResolvedValue(
+            mockMessages,
+          );
+
+          const result = await memory.retrieve();
+
+          expect(
+            mockConversationService.getMessagesByConversationId,
+          ).toHaveBeenCalledWith('conv-123');
+          expect(result).toEqual(mockMessages);
         },
-      ];
-      mockConversationService.getMessagesByConversationId.mockResolvedValue(
-        mockMessages,
       );
-
-      const result = await memory.retrieve();
-
-      expect(
-        mockConversationService.getMessagesByConversationId,
-      ).toHaveBeenCalledWith('conv-123');
-      expect(result).toEqual(mockMessages);
     });
 
     it('should return empty array when no messages', async () => {
-      mockConversationService.getMessagesByConversationId.mockResolvedValue([]);
+      await TraceContext.run(
+        { requestId: 'test', conversationId: 'conv-123' },
+        async () => {
+          mockConversationService.getMessagesByConversationId.mockResolvedValue(
+            [],
+          );
 
-      const result = await memory.retrieve();
+          const result = await memory.retrieve();
 
-      expect(result).toEqual([]);
+          expect(result).toEqual([]);
+        },
+      );
     });
   });
 
   describe('clearByConversationId', () => {
     it('should delete messages via conversationService', async () => {
-      await memory.clearByConversationId();
+      await TraceContext.run(
+        { requestId: 'test', conversationId: 'conv-123' },
+        async () => {
+          await memory.clearByConversationId();
 
-      expect(
-        mockConversationService.batchDeleteMessagesInConversation,
-      ).toHaveBeenCalledWith('conv-123');
+          expect(
+            mockConversationService.batchDeleteMessagesInConversation,
+          ).toHaveBeenCalledWith('conv-123');
+        },
+      );
     });
   });
 
   describe('clearByUserId', () => {
     it('should throw error as not supported', async () => {
-      await expect(memory.clearByUserId('user-123')).rejects.toThrow(
-        'ChatHistoryMemory does not support clearByUserId',
+      await TraceContext.run(
+        { requestId: 'test', conversationId: 'conv-123' },
+        async () => {
+          await expect(memory.clearByUserId('user-123')).rejects.toThrow(
+            'ChatHistoryMemory does not support clearByUserId',
+          );
+        },
       );
     });
   });
 
   describe('summarize', () => {
     it('should call retrieve (same as summarize)', async () => {
-      const mockMessages = [
-        {
-          id: 'msg-1',
-          role: Role.USER,
-          content: 'Hello',
-          conversationId: 'conv-123',
-          createdAt: new Date(),
+      await TraceContext.run(
+        { requestId: 'test', conversationId: 'conv-123' },
+        async () => {
+          const mockMessages = [
+            {
+              id: 'msg-1',
+              role: Role.USER,
+              content: 'Hello',
+              conversationId: 'conv-123',
+              createdAt: new Date(),
+            },
+          ];
+          mockConversationService.getMessagesByConversationId.mockResolvedValue(
+            mockMessages,
+          );
+
+          const result = await memory.summarize();
+
+          expect(
+            mockConversationService.getMessagesByConversationId,
+          ).toHaveBeenCalledWith('conv-123');
+          expect(result).toEqual(mockMessages);
         },
-      ];
-      mockConversationService.getMessagesByConversationId.mockResolvedValue(
-        mockMessages,
       );
-
-      const result = await memory.summarize();
-
-      expect(
-        mockConversationService.getMessagesByConversationId,
-      ).toHaveBeenCalledWith('conv-123');
-      expect(result).toEqual(mockMessages);
     });
   });
 });

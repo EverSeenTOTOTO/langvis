@@ -1,0 +1,5 @@
+{
+  "permissions": {
+    "allow": ["Bash(bunx vitest:*)", "Bash(make lint:*)"]
+  }
+}

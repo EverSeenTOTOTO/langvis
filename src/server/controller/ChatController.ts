@@ -7,6 +7,7 @@ import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
 import { PendingMessage } from '../core/PendingMessage';
 import { SSEConnection } from '../core/SSEConnection';
+import { TraceContext } from '../core/TraceContext';
 import type { Agent } from '../core/agent';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
@@ -122,12 +123,15 @@ export default class ChatController {
         .json({ error: `Agent ${conversation.config!.agent} not found` });
     }
 
-    const userId = await this.authService.getUserId(req);
+    // Verify user is authenticated
+    await this.authService.getUserId(req);
+
+    // Set conversationId and traceId, then freeze TraceContext
+    TraceContext.update({ conversationId, traceId: conversationId });
+    TraceContext.freeze();
 
     const memory = await this.chatService.buildMemory(
       agent,
-      conversationId,
-      userId,
       conversation.config!,
       {
         role: dto.role,

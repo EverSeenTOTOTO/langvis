@@ -3,6 +3,7 @@ import { AgentEvent } from '@/shared/types';
 import { generateId } from '@/shared/utils';
 import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
 import { container } from 'tsyringe';
+import { TraceContext } from './TraceContext';
 import type LlmCallTool from './tool/LlmCall';
 
 export class ExecutionContext {
@@ -15,11 +16,10 @@ export class ExecutionContext {
   private seqCounter = 0;
   private callIdStack: string[] = [];
 
-  constructor(
-    traceId: string,
-    private readonly controller: AbortController,
-  ) {
-    this.traceId = traceId;
+  constructor(private readonly controller: AbortController) {
+    // Cache traceId from TraceContext at construction time
+    const store = TraceContext.get();
+    this.traceId = store?.traceId ?? '';
   }
 
   private nextSeq(): number {

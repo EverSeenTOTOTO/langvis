@@ -16,22 +16,29 @@ export function formatToolsToMarkdown(tools: Tool[]): string {
       sections.push(config.description);
       sections.push('');
 
-      const schema = config.inputSchema as JSONSchemaObject;
+      const inputSchema = config.inputSchema as JSONSchemaObject;
+      const outputSchema = config.outputSchema as JSONSchemaObject;
 
-      if (schema?.properties) {
+      if (inputSchema?.properties) {
         sections.push('**Input:**');
         sections.push('');
         sections.push(
-          formatSchemaAsTable(schema!.properties, schema!.required as string[]),
+          formatSchemaAsTable(
+            inputSchema.properties,
+            inputSchema.required as string[],
+          ),
         );
         sections.push('');
       }
 
-      if (schema?.properties) {
+      if (outputSchema?.properties) {
         sections.push('**Output:**');
         sections.push('');
         sections.push(
-          formatSchemaAsTable(schema.properties, schema.required as string[]),
+          formatSchemaAsTable(
+            outputSchema.properties,
+            outputSchema.required as string[],
+          ),
         );
         sections.push('');
       }

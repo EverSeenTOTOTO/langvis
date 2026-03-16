@@ -1,4 +1,5 @@
 import authMiddleware from '@/server/middleware/auth';
+import { TraceContext } from '@/server/core/TraceContext';
 import { Express, Request, Response } from 'express';
 import { container } from 'tsyringe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -80,27 +81,29 @@ describe('Auth Middleware - Permission Tests', () => {
   });
 
   it('should allow access to API routes for authenticated users', async () => {
-    const req = createMockRequest('/api/users');
-    const res = createMockResponse();
-    const next = vi.fn();
-    const mockUser = { id: '1', email: 'test@example.com' };
+    await TraceContext.run({ requestId: 'test-req' }, async () => {
+      const req = createMockRequest('/api/users');
+      const res = createMockResponse();
+      const next = vi.fn();
+      const mockUser = { id: '1', email: 'test@example.com' };
 
-    mockAuthService.isAuthenticated.mockResolvedValue(true);
-    mockAuthService.getUser.mockResolvedValue(mockUser);
+      mockAuthService.isAuthenticated.mockResolvedValue(true);
+      mockAuthService.getUser.mockResolvedValue(mockUser);
 
-    await authMiddleware(mockApp);
-    // The middleware is registered with '/api' path prefix
-    const [path, middleware] = (mockApp.use as jest.Mock).mock.calls[0];
-    expect(path).toBe('/api');
+      await authMiddleware(mockApp);
+      // The middleware is registered with '/api' path prefix
+      const [path, middleware] = (mockApp.use as jest.Mock).mock.calls[0];
+      expect(path).toBe('/api');
 
-    // Create a new request with the path without '/api' prefix
-    const modifiedReq = { ...req, path: '/users' };
-    await middleware(modifiedReq, res, next);
+      // Create a new request with the path without '/api' prefix
+      const modifiedReq = { ...req, path: '/users' };
+      await middleware(modifiedReq, res, next);
 
-    expect(mockAuthService.isAuthenticated).toHaveBeenCalled();
-    expect(mockAuthService.getUser).toHaveBeenCalled();
-    expect(modifiedReq.user).toEqual(mockUser);
-    expect(next).toHaveBeenCalled();
+      expect(mockAuthService.isAuthenticated).toHaveBeenCalled();
+      expect(mockAuthService.getUser).toHaveBeenCalled();
+      expect(modifiedReq.user).toEqual(mockUser);
+      expect(next).toHaveBeenCalled();
+    });
   });
 
   it('should deny access to API routes for unauthenticated users', async () => {

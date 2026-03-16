@@ -8,6 +8,7 @@ import type { RedisClientType } from 'redis';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { RedisService } from '../../../service/RedisService';
+import { TraceContext } from '../../TraceContext';
 import { inject } from 'tsyringe';
 
 function waitForNotification(
@@ -49,7 +50,6 @@ function waitForNotification(
 }
 
 export interface HumanInTheLoopInput<I = Record<string, any>> {
-  conversationId: string;
   message: string;
   formSchema: JSONSchemaType<I>;
   timeout?: number;
@@ -79,7 +79,10 @@ export default class HumanInTheLoopTool<
   ): AsyncGenerator<AgentEvent, HumanInTheLoopOutput<O>, void> {
     ctx.signal.throwIfAborted();
 
-    const { conversationId, message, formSchema, timeout = 300_000 } = params;
+    const traceStore = TraceContext.getOrFail();
+    const conversationId = traceStore.conversationId!;
+
+    const { message, formSchema, timeout = 300_000 } = params;
     const key = RedisKeys.HUMAN_INPUT(conversationId);
     const POLL_INTERVAL = 30_000; // 30s fallback check when Pub/Sub fails
 

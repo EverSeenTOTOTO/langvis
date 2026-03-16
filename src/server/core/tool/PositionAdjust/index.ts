@@ -20,7 +20,7 @@ export default class PositionAdjustTool extends Tool<
   protected readonly logger!: Logger;
 
   async *call(
-    @input() params: PositionAdjustInput,
+    @input() _params: PositionAdjustInput,
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, PositionAdjustOutput, void> {
     ctx.signal.throwIfAborted();
@@ -33,7 +33,6 @@ export default class PositionAdjustTool extends Tool<
 
     const humanInput = yield* humanInputTool.call(
       {
-        conversationId: params.conversationId,
         message: '请填写以下仓位调整信息：',
         formSchema: formSchema as any,
       },

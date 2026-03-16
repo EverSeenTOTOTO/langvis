@@ -1,5 +1,6 @@
 import HumanInTheLoopTool from '@/server/core/tool/HumanInTheLoop';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
+import { TraceContext } from '@/server/core/TraceContext';
 import { RedisKeys, ToolIds } from '@/shared/constants';
 import { JSONSchemaType } from 'ajv';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -124,185 +125,209 @@ describe('HumanInTheLoopTool', () => {
 
   describe('call - successful submission', () => {
     it('should create Redis entry with correct data', async () => {
-      const ctx = createMockContext();
+      await TraceContext.run(
+        { requestId: 'test-req', conversationId: 'test-conversation' },
+        async () => {
+          const ctx = createMockContext();
 
-      const generator = tool.call(
-        {
-          conversationId: 'test-conversation',
-          message: 'Please enter your name',
-          formSchema: objectSchemaWithName,
-          timeout: 100,
+          const generator = tool.call(
+            {
+              message: 'Please enter your name',
+              formSchema: objectSchemaWithName,
+              timeout: 100,
+            },
+            ctx,
+          );
+
+          const firstEvent = await generator.next();
+          expect(firstEvent.done).toBe(false);
+          expect(firstEvent.value).toMatchObject({
+            type: 'tool_progress',
+            toolName: ToolIds.ASK_USER,
+            data: {
+              status: 'awaiting_input',
+              conversationId: 'test-conversation',
+              message: 'Please enter your name',
+              schema: objectSchemaWithName,
+            },
+          });
+
+          expect(mockRedisService.set).toHaveBeenCalledWith(
+            RedisKeys.HUMAN_INPUT('test-conversation'),
+            expect.objectContaining({ submitted: false }),
+          );
+
+          await generator.return?.({ submitted: true });
         },
-        ctx,
       );
-
-      const firstEvent = await generator.next();
-      expect(firstEvent.done).toBe(false);
-      expect(firstEvent.value).toMatchObject({
-        type: 'tool_progress',
-        toolName: ToolIds.ASK_USER,
-        data: {
-          status: 'awaiting_input',
-          conversationId: 'test-conversation',
-          message: 'Please enter your name',
-          schema: objectSchemaWithName,
-        },
-      });
-
-      expect(mockRedisService.set).toHaveBeenCalledWith(
-        RedisKeys.HUMAN_INPUT('test-conversation'),
-        expect.objectContaining({ submitted: false }),
-      );
-
-      await generator.return?.({ submitted: true });
     });
 
     it('should yield tool_progress event with awaiting_input status', async () => {
-      const ctx = createMockContext();
+      await TraceContext.run(
+        { requestId: 'test-req', conversationId: 'test-conversation' },
+        async () => {
+          const ctx = createMockContext();
 
-      const generator = tool.call(
-        {
-          conversationId: 'test-conversation',
-          message: 'Confirm?',
-          formSchema: booleanSchema,
-          timeout: 50,
+          const generator = tool.call(
+            {
+              message: 'Confirm?',
+              formSchema: booleanSchema,
+              timeout: 50,
+            },
+            ctx,
+          );
+
+          const { value } = await generator.next();
+          expect(value).toMatchObject({
+            type: 'tool_progress',
+            toolName: ToolIds.ASK_USER,
+            data: {
+              status: 'awaiting_input',
+            },
+          });
         },
-        ctx,
       );
-
-      const { value } = await generator.next();
-      expect(value).toMatchObject({
-        type: 'tool_progress',
-        toolName: ToolIds.ASK_USER,
-        data: {
-          status: 'awaiting_input',
-        },
-      });
     });
 
     it('should return submitted result when user submits data via Pub/Sub', async () => {
-      const ctx = createMockContext();
+      await TraceContext.run(
+        { requestId: 'test-req', conversationId: 'test-conversation' },
+        async () => {
+          const ctx = createMockContext();
 
-      const generator = tool.call(
-        {
-          conversationId: 'test-conversation',
-          message: 'Question?',
-          formSchema: objectSchemaWithAnswer,
-          timeout: 200,
+          const generator = tool.call(
+            {
+              message: 'Question?',
+              formSchema: objectSchemaWithAnswer,
+              timeout: 200,
+            },
+            ctx,
+          );
+
+          await generator.next();
+
+          // Simulate submission: update Redis and publish notification
+          mockRedisService._store.set(
+            RedisKeys.HUMAN_INPUT('test-conversation'),
+            JSON.stringify({
+              conversationId: 'test-conversation',
+              formSchema: objectSchemaWithAnswer,
+              message: 'Question?',
+              submitted: true,
+              result: { answer: 'yes' },
+            }),
+          );
+
+          // Trigger Pub/Sub notification
+          await mockRedisService.client.publish(
+            RedisKeys.HUMAN_INPUT('test-conversation'),
+            'submitted',
+          );
+
+          const { result } = await collectEvents(generator);
+
+          expect(result).toEqual({
+            submitted: true,
+            data: { answer: 'yes' },
+          });
+          expect(mockRedisService.del).toHaveBeenCalledWith(
+            RedisKeys.HUMAN_INPUT('test-conversation'),
+          );
         },
-        ctx,
-      );
-
-      await generator.next();
-
-      // Simulate submission: update Redis and publish notification
-      mockRedisService._store.set(
-        RedisKeys.HUMAN_INPUT('test-conversation'),
-        JSON.stringify({
-          conversationId: 'test-conversation',
-          formSchema: objectSchemaWithAnswer,
-          message: 'Question?',
-          submitted: true,
-          result: { answer: 'yes' },
-        }),
-      );
-
-      // Trigger Pub/Sub notification
-      await mockRedisService.client.publish(
-        RedisKeys.HUMAN_INPUT('test-conversation'),
-        'submitted',
-      );
-
-      const { result } = await collectEvents(generator);
-
-      expect(result).toEqual({
-        submitted: true,
-        data: { answer: 'yes' },
-      });
-      expect(mockRedisService.del).toHaveBeenCalledWith(
-        RedisKeys.HUMAN_INPUT('test-conversation'),
       );
     });
 
     it('should return result on successful submission', async () => {
-      const ctx = createMockContext();
+      await TraceContext.run(
+        { requestId: 'test-req', conversationId: 'test-conversation' },
+        async () => {
+          const ctx = createMockContext();
 
-      const generator = tool.call(
-        {
-          conversationId: 'test-conversation',
-          message: 'Confirm?',
-          formSchema: booleanSchema,
-          timeout: 200,
+          const generator = tool.call(
+            {
+              message: 'Confirm?',
+              formSchema: booleanSchema,
+              timeout: 200,
+            },
+            ctx,
+          );
+
+          await generator.next();
+
+          mockRedisService._store.set(
+            RedisKeys.HUMAN_INPUT('test-conversation'),
+            JSON.stringify({
+              conversationId: 'test-conversation',
+              formSchema: booleanSchema,
+              message: 'Confirm?',
+              submitted: true,
+              result: { confirmed: true },
+            }),
+          );
+
+          await mockRedisService.client.publish(
+            RedisKeys.HUMAN_INPUT('test-conversation'),
+            'submitted',
+          );
+
+          const { result } = await collectEvents(generator);
+
+          expect(result).toEqual({
+            submitted: true,
+            data: { confirmed: true },
+          });
         },
-        ctx,
       );
-
-      await generator.next();
-
-      mockRedisService._store.set(
-        RedisKeys.HUMAN_INPUT('test-conversation'),
-        JSON.stringify({
-          conversationId: 'test-conversation',
-          formSchema: booleanSchema,
-          message: 'Confirm?',
-          submitted: true,
-          result: { confirmed: true },
-        }),
-      );
-
-      await mockRedisService.client.publish(
-        RedisKeys.HUMAN_INPUT('test-conversation'),
-        'submitted',
-      );
-
-      const { result } = await collectEvents(generator);
-
-      expect(result).toEqual({
-        submitted: true,
-        data: { confirmed: true },
-      });
     });
   });
 
   describe('call - timeout', () => {
     it('should return not submitted after timeout', async () => {
-      const ctx = createMockContext();
+      await TraceContext.run(
+        { requestId: 'test-req', conversationId: 'test-conversation' },
+        async () => {
+          const ctx = createMockContext();
 
-      const generator = tool.call(
-        {
-          conversationId: 'test-conversation',
-          message: 'Confirm?',
-          formSchema: booleanSchema,
-          timeout: 10,
+          const generator = tool.call(
+            {
+              message: 'Confirm?',
+              formSchema: booleanSchema,
+              timeout: 10,
+            },
+            ctx,
+          );
+
+          const { result } = await collectEvents(generator);
+
+          expect(result).toEqual({ submitted: false });
+          expect(mockRedisService.del).toHaveBeenCalledWith(
+            RedisKeys.HUMAN_INPUT('test-conversation'),
+          );
         },
-        ctx,
-      );
-
-      const { result } = await collectEvents(generator);
-
-      expect(result).toEqual({ submitted: false });
-      expect(mockRedisService.del).toHaveBeenCalledWith(
-        RedisKeys.HUMAN_INPUT('test-conversation'),
       );
     });
 
     it('should clean up Redis key on timeout', async () => {
-      const ctx = createMockContext();
+      await TraceContext.run(
+        { requestId: 'test-req', conversationId: 'test-conversation' },
+        async () => {
+          const ctx = createMockContext();
 
-      const generator = tool.call(
-        {
-          conversationId: 'test-conversation',
-          message: 'Confirm?',
-          formSchema: booleanSchema,
-          timeout: 10,
+          const generator = tool.call(
+            {
+              message: 'Confirm?',
+              formSchema: booleanSchema,
+              timeout: 10,
+            },
+            ctx,
+          );
+
+          await collectEvents(generator);
+
+          expect(mockRedisService.del).toHaveBeenCalledWith(
+            RedisKeys.HUMAN_INPUT('test-conversation'),
+          );
         },
-        ctx,
-      );
-
-      await collectEvents(generator);
-
-      expect(mockRedisService.del).toHaveBeenCalledWith(
-        RedisKeys.HUMAN_INPUT('test-conversation'),
       );
     });
   });
@@ -312,98 +337,127 @@ describe('HumanInTheLoopTool', () => {
       const abortController = new AbortController();
       abortController.abort(new Error('User cancelled'));
 
-      const ctx = new ExecutionContext('test-trace-id', abortController);
-
-      const generator = tool.call(
+      await TraceContext.run(
         {
+          requestId: 'test-req',
+          traceId: 'test-trace-id',
           conversationId: 'test-conversation',
-          message: 'Confirm?',
-          formSchema: booleanSchema,
-          timeout: 10000,
         },
-        ctx,
-      );
+        async () => {
+          const ctx = new ExecutionContext(abortController);
 
-      await expect(generator.next()).rejects.toThrow('User cancelled');
+          const generator = tool.call(
+            {
+              message: 'Confirm?',
+              formSchema: booleanSchema,
+              timeout: 10000,
+            },
+            ctx,
+          );
+
+          await expect(generator.next()).rejects.toThrow('User cancelled');
+        },
+      );
     });
 
     it('should throw when signal is aborted during wait', async () => {
       const abortController = new AbortController();
-      const ctx = new ExecutionContext('test-trace-id', abortController);
 
-      const generator = tool.call(
+      await TraceContext.run(
         {
+          requestId: 'test-req',
+          traceId: 'test-trace-id',
           conversationId: 'test-conversation',
-          message: 'Confirm?',
-          formSchema: booleanSchema,
-          timeout: 10000,
         },
-        ctx,
+        async () => {
+          const ctx = new ExecutionContext(abortController);
+
+          const generator = tool.call(
+            {
+              message: 'Confirm?',
+              formSchema: booleanSchema,
+              timeout: 10000,
+            },
+            ctx,
+          );
+
+          await generator.next();
+
+          setTimeout(
+            () => abortController.abort(new Error('User cancelled')),
+            50,
+          );
+
+          await expect(generator.next()).rejects.toThrow('User cancelled');
+        },
       );
-
-      await generator.next();
-
-      setTimeout(() => abortController.abort(new Error('User cancelled')), 50);
-
-      await expect(generator.next()).rejects.toThrow('User cancelled');
     });
   });
 
   describe('Redis key format', () => {
-    it('should use conversationId as key suffix', async () => {
-      const customCtx = new ExecutionContext(
-        'custom-trace-id',
-        new AbortController(),
-      );
-
-      const generator = tool.call(
+    it('should use conversationId from TraceContext as key suffix', async () => {
+      await TraceContext.run(
         {
+          requestId: 'test-req',
+          traceId: 'custom-trace-id',
           conversationId: 'my-custom-conversation',
-          message: 'Test',
-          formSchema: booleanSchema,
-          timeout: 10,
         },
-        customCtx,
-      );
+        async () => {
+          const customCtx = new ExecutionContext(new AbortController());
 
-      await generator.next();
+          const generator = tool.call(
+            {
+              message: 'Test',
+              formSchema: booleanSchema,
+              timeout: 10,
+            },
+            customCtx,
+          );
 
-      expect(mockRedisService.set).toHaveBeenCalledWith(
-        RedisKeys.HUMAN_INPUT('my-custom-conversation'),
-        expect.any(Object),
+          await generator.next();
+
+          expect(mockRedisService.set).toHaveBeenCalledWith(
+            RedisKeys.HUMAN_INPUT('my-custom-conversation'),
+            expect.any(Object),
+          );
+        },
       );
     });
   });
 
   describe('stored data structure', () => {
     it('should store correct initial data in Redis', async () => {
-      const ctx = createMockContext();
+      await TraceContext.run(
+        { requestId: 'test-req', conversationId: 'test-conversation' },
+        async () => {
+          const ctx = createMockContext();
 
-      const generator = tool.call(
-        {
-          conversationId: 'test-conversation',
-          message: 'Enter email',
-          formSchema: objectSchemaWithEmail,
-          timeout: 10,
+          const generator = tool.call(
+            {
+              message: 'Enter email',
+              formSchema: objectSchemaWithEmail,
+              timeout: 10,
+            },
+            ctx,
+          );
+
+          await generator.next();
+
+          const storedData = JSON.parse(
+            mockRedisService._store.get(
+              RedisKeys.HUMAN_INPUT('test-conversation'),
+            )!,
+          );
+
+          expect(storedData).toMatchObject({
+            conversationId: 'test-conversation',
+            message: 'Enter email',
+            formSchema: objectSchemaWithEmail,
+            submitted: false,
+          });
+          expect(storedData).toHaveProperty('createdAt');
         },
-        ctx,
       );
-
-      await generator.next();
-
-      const storedData = JSON.parse(
-        mockRedisService._store.get(
-          RedisKeys.HUMAN_INPUT('test-conversation'),
-        )!,
-      );
-
-      expect(storedData).toMatchObject({
-        conversationId: 'test-conversation',
-        message: 'Enter email',
-        formSchema: objectSchemaWithEmail,
-        submitted: false,
-      });
-      expect(storedData).toHaveProperty('createdAt');
     });
   });
 });
