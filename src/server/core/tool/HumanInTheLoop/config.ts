@@ -93,4 +93,3 @@ formSchema MUST be an object with fields defined in \`properties\`. Examples:
     required: ['submitted'],
   },
 };
-
