@@ -4,6 +4,7 @@ import { TraceContext } from '@/server/core/TraceContext';
 import { RedisService } from '@/server/service/RedisService';
 import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { withTraceContext } from '../../helpers/context';
 
 const mockRedisService = {
   client: {
@@ -81,10 +82,6 @@ describe('ReActAgent', () => {
   });
 
   it('should correctly handle tool execution with nested sub-tools', async () => {
-    /**
-     * Tools now yield only tool_progress events and return results.
-     * Agent is responsible for emitting tool_call/tool_result/tool_error.
-     */
     const memory = {
       summarize: vi
         .fn()
@@ -92,7 +89,6 @@ describe('ReActAgent', () => {
     } as any;
     const ctx = createMockContext();
 
-    // Mock callLlm to first return an action, then a final answer
     let llmCallCount = 0;
     vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
       llmCallCount++;
@@ -115,7 +111,6 @@ describe('ReActAgent', () => {
       }
     });
 
-    // Mock nested_tool that yields progress and returns result
     mockNestedTool.call.mockImplementation(async function* (): AsyncGenerator<
       AgentEvent,
       { documentId: string },
@@ -126,9 +121,10 @@ describe('ReActAgent', () => {
       return { documentId: 'doc_123' };
     });
 
-    const events = await collectEvents(reactAgent.call(memory, ctx, {}));
+    const events = await withTraceContext(async () => {
+      return collectEvents(reactAgent.call(memory, ctx, {}));
+    });
 
-    // Should have tool_call and tool_result for nested_tool
     const toolCallEvent = events.find(e => e.type === 'tool_call');
     expect(toolCallEvent).toMatchObject({
       type: 'tool_call',
@@ -141,10 +137,8 @@ describe('ReActAgent', () => {
       toolName: 'nested_tool',
     });
 
-    // Should have a final event
     expect(events.find(e => e.type === 'final')).toBeDefined();
 
-    // LLM should be called twice
     expect(llmCallCount).toBe(2);
   });
 
@@ -166,13 +160,14 @@ describe('ReActAgent', () => {
       });
     });
 
-    const events = await collectEvents(reactAgent.call(memory, ctx, {}));
+    const events = await withTraceContext(async () => {
+      return collectEvents(reactAgent.call(memory, ctx, {}));
+    });
 
     expect(events[0]).toMatchObject({ type: 'start' });
     expect(events.find(e => e.type === 'thought')).toMatchObject({
       content: 'Simple greeting',
     });
-    // callLlm yields the full JSON, then Agent yields the final_answer separately
     const streamEvents = events.filter(e => e.type === 'stream');
     expect(streamEvents[streamEvents.length - 1]).toMatchObject({
       content: 'Hello! How can I help you?',
@@ -217,7 +212,9 @@ describe('ReActAgent', () => {
         return largeContent;
       });
 
-      const events = await collectEvents(reactAgent.call(memory, ctx, {}));
+      const events = await withTraceContext(async () => {
+        return collectEvents(reactAgent.call(memory, ctx, {}));
+      });
 
       const toolResultEvent = events.find(e => e.type === 'tool_result') as any;
       const output = JSON.parse(toolResultEvent.output);
@@ -271,9 +268,10 @@ describe('ReActAgent', () => {
         return 'processed';
       });
 
-      await collectEvents(reactAgent.call(memory, ctx, {}));
+      await withTraceContext(() =>
+        collectEvents(reactAgent.call(memory, ctx, {})),
+      );
 
-      // Tool should receive resolved content, not CachedReference
       expect(receivedInput.content).toBe(cachedContent);
     });
 
@@ -313,7 +311,9 @@ describe('ReActAgent', () => {
         return largeArray;
       });
 
-      const events = await collectEvents(reactAgent.call(memory, ctx, {}));
+      const events = await withTraceContext(async () => {
+        return collectEvents(reactAgent.call(memory, ctx, {}));
+      });
 
       const toolResultEvent = events.find(e => e.type === 'tool_result') as any;
       const output = JSON.parse(toolResultEvent.output);
@@ -361,7 +361,9 @@ describe('ReActAgent', () => {
       vi.clearAllMocks();
       mockRedisService.client.setEx.mockClear();
 
-      const events = await collectEvents(reactAgent.call(memory, ctx, {}));
+      const events = await withTraceContext(async () => {
+        return collectEvents(reactAgent.call(memory, ctx, {}));
+      });
 
       const toolResultEvent = events.find(e => e.type === 'tool_result') as any;
       expect(toolResultEvent.output).toBe(smallContent);

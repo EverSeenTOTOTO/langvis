@@ -3,13 +3,13 @@ import { config } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { AgentConfig, AgentEvent } from '@/shared/types';
-import { generateId } from '@/shared/utils';
 import { container } from 'tsyringe';
 import { Agent } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
 import { Prompt } from '../../PromptBuilder';
 import { Tool } from '../../tool';
+import { TraceContext } from '../../TraceContext';
 import type TextToSpeechTool from '../../tool/TextToSpeech';
 import { createPrompt } from './prompt';
 
@@ -59,7 +59,7 @@ export default class GirlFriendAgent extends Agent {
     const tts = container.resolve<TextToSpeechTool>(ToolIds.TEXT_TO_SPEECH);
     const ttsArgs = {
       text: accumulatedContent,
-      reqId: generateId('req'),
+      reqId: TraceContext.getOrFail().requestId,
       voice: options?.tts?.voice || '',
       emotion: options?.tts?.emotion || '',
       speedRatio: options?.tts?.speedRatio,

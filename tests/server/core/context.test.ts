@@ -268,13 +268,9 @@ describe('ExecutionContext', () => {
     });
   });
 
-  describe('signal and traceId', () => {
+  describe('signal', () => {
     it('should expose signal from controller', () => {
       expect(ctx.signal).toBe(mockController.signal);
-    });
-
-    it('should expose traceId from TraceContext', () => {
-      expect(ctx.traceId).toBe('msg-123');
     });
   });
 });

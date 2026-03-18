@@ -101,17 +101,13 @@ const Emails: React.FC = () => {
   };
 
   const handleArchive = async (email: EmailListItem) => {
-    // Optimistic update
-    emailStore.updateEmailStatus(email.id, 'archived');
-
     try {
       const result = await archiveApi[1]({ id: email.id });
       if (result) {
+        refresh();
         window.open(`/?conversationId=${result.conversationId}`, '_blank');
       }
     } catch {
-      // Rollback on error
-      emailStore.updateEmailStatus(email.id, 'unarchived');
       message.error(settingStore.tr('Archive failed'));
     }
   };

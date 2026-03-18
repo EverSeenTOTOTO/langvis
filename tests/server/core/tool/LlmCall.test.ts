@@ -5,7 +5,7 @@ import OpenAI from 'openai';
 import type { Stream } from 'openai/core/streaming.mjs';
 import type { ChatCompletionCreateParamsStreaming } from 'openai/resources/chat/completions';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMockContext } from '../../helpers/context';
+import { createMockContext, withTraceContext } from '../../helpers/context';
 
 vi.mock('@/server/utils/logger', () => {
   const mockLogger = {
@@ -89,9 +89,9 @@ describe('LlmCallTool', () => {
       };
 
       const ctx = createMockContext();
-      const { progress, result } = await collectEvents(
-        llmCallTool.call(input, ctx),
-      );
+      const { progress, result } = await withTraceContext(async () => {
+        return collectEvents(llmCallTool.call(input, ctx));
+      });
 
       expect(mockCreate).toHaveBeenCalledWith(
         {
@@ -123,9 +123,9 @@ describe('LlmCallTool', () => {
       };
 
       const ctx = createMockContext();
-      await expect(collectEvents(llmCallTool.call(input, ctx))).rejects.toThrow(
-        mockError,
-      );
+      await expect(
+        withTraceContext(() => collectEvents(llmCallTool.call(input, ctx))),
+      ).rejects.toThrow(mockError);
     });
 
     it('should return error when content_filter is triggered', async () => {
@@ -151,16 +151,18 @@ describe('LlmCallTool', () => {
       const ctx = createMockContext();
       const events: AgentEvent[] = [];
 
-      try {
-        for await (const event of llmCallTool.call(
-          { messages: [{ role: 'user', content: 'test' }] },
-          ctx,
-        )) {
-          events.push(event);
+      await withTraceContext(async () => {
+        try {
+          for await (const event of llmCallTool.call(
+            { messages: [{ role: 'user', content: 'test' }] },
+            ctx,
+          )) {
+            events.push(event);
+          }
+        } catch (_e) {
+          // Tool throws error for content_filter
         }
-      } catch (_e) {
-        // Tool throws error for content_filter
-      }
+      });
 
       expect(events.some(e => e.type === 'error')).toBe(false);
       expect(logger.warn).toHaveBeenCalledWith(
@@ -189,12 +191,14 @@ describe('LlmCallTool', () => {
       mockCreate.mockResolvedValue(mockStream);
 
       const ctx = createMockContext();
-      const { result } = await collectEvents(
-        llmCallTool.call(
-          { messages: [{ role: 'user', content: 'test' }] },
-          ctx,
-        ),
-      );
+      const { result } = await withTraceContext(async () => {
+        return collectEvents(
+          llmCallTool.call(
+            { messages: [{ role: 'user', content: 'test' }] },
+            ctx,
+          ),
+        );
+      });
 
       expect(result).toBe('Partial response');
       expect(logger.warn).toHaveBeenCalledWith(
@@ -241,7 +245,9 @@ describe('LlmCallTool', () => {
       };
 
       const ctx = createMockContext();
-      await collectEvents(llmCallTool.call(input, ctx));
+      await withTraceContext(() =>
+        collectEvents(llmCallTool.call(input, ctx)),
+      );
 
       expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -307,7 +313,9 @@ describe('LlmCallTool', () => {
       };
 
       const ctx = createMockContext();
-      await collectEvents(llmCallTool.call(input, ctx));
+      await withTraceContext(() =>
+        collectEvents(llmCallTool.call(input, ctx)),
+      );
 
       const callArgs = mockCreate.mock.calls[0][0];
       const userMessage = callArgs.messages[0];
@@ -364,12 +372,13 @@ describe('LlmCallTool', () => {
       };
 
       const ctx = createMockContext();
-      await collectEvents(llmCallTool.call(input, ctx));
+      await withTraceContext(() =>
+        collectEvents(llmCallTool.call(input, ctx)),
+      );
 
       const callArgs = mockCreate.mock.calls[0][0];
       const userMessage = callArgs.messages[0];
 
-      // Non-image attachments should not be added to content
       expect(userMessage.content).toEqual([
         { type: 'text', text: 'Read this PDF' },
       ]);
@@ -416,11 +425,12 @@ describe('LlmCallTool', () => {
       };
 
       const ctx = createMockContext();
-      await collectEvents(llmCallTool.call(input, ctx));
+      await withTraceContext(() =>
+        collectEvents(llmCallTool.call(input, ctx)),
+      );
 
       const callArgs = mockCreate.mock.calls[0][0];
 
-      // Assistant message should remain as string content
       expect(callArgs.messages[1]).toEqual({
         role: 'assistant',
         content: 'Hi there!',

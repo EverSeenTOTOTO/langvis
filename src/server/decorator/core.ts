@@ -67,7 +67,7 @@ const proxyValidation = <T>(
             args[meta.index] = validated;
           } catch (error) {
             logger.error(
-              `Validation failed for ${token} method ${method}: ${(error as Error).message}`,
+              `Validation failed for ${token} method ${method}: ${(error as Error)?.message ?? String(error)}`,
             );
             throw error;
           }

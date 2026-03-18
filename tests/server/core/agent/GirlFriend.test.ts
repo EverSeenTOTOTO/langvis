@@ -2,7 +2,7 @@ import GirlFriendAgent from '@/server/core/agent/GirlFriend';
 import { ToolIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMockContext } from '../../helpers/context';
+import { createMockContext, withTraceContext } from '../../helpers/context';
 
 const mockLlmCallTool = {
   call: vi.fn(),
@@ -96,7 +96,9 @@ describe('GirlFriendAgent', () => {
       return { voice: 'test-voice', filePath: 'tts/test.mp3' };
     });
 
-    const events = await collectEvents(girlFriendAgent.call(memory, ctx, {}));
+    const events = await withTraceContext(async () => {
+      return collectEvents(girlFriendAgent.call(memory, ctx, {}));
+    });
 
     expect(events[0]).toMatchObject({
       type: 'start',
@@ -138,7 +140,9 @@ describe('GirlFriendAgent', () => {
       return {};
     });
 
-    await collectEvents(girlFriendAgent.call(memory, ctx, {}));
+    await withTraceContext(() =>
+      collectEvents(girlFriendAgent.call(memory, ctx, {})),
+    );
 
     expect(mockLlmCallTool.call).toHaveBeenCalledWith(expect.any(Object), ctx);
     expect(mockTtsTool.call).toHaveBeenCalledWith(expect.any(Object), ctx);

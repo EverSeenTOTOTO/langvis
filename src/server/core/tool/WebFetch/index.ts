@@ -134,7 +134,7 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
 
         if (attempt < retry) {
           this.logger.warn(
-            `Fetch attempt ${attempt + 1} failed, retrying: ${(error as Error).message}`,
+            `Fetch attempt ${attempt + 1} failed, retrying: ${(error as Error)?.message ?? String(error)}`,
           );
         }
       } finally {

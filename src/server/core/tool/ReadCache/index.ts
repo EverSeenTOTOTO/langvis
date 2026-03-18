@@ -1,6 +1,7 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import { resolve } from '@/server/utils/cache';
+import { TraceContext } from '../../TraceContext';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig, AgentEvent } from '@/shared/types';
@@ -28,7 +29,7 @@ export default class ReadCacheTool extends Tool<
     @input() readCacheInput: ReadCacheInput,
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, ReadCacheOutput, void> {
-    const content = await resolve(ctx.traceId, { $cached: readCacheInput.key });
+    const content = await resolve(TraceContext.getOrFail().traceId!, { $cached: readCacheInput.key });
 
     if (typeof content === 'string') {
       const offset = readCacheInput.offset ?? 0;
