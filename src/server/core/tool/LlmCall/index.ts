@@ -1,6 +1,7 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import { OpenAI } from '@/server/service/openai';
+import { TraceContext } from '../../TraceContext';
 import type { Logger } from '@/server/utils/logger';
 import { InjectTokens, ToolIds } from '@/shared/constants';
 import { ToolConfig, AgentEvent } from '@/shared/types';
@@ -101,7 +102,7 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
     const model = data.model || process.env.OPENAI_MODEL!;
 
     this.logger.debug('LLM call request', {
-      sessionId: ctx.traceId,
+      sessionId: TraceContext.getOrFail().traceId!,
       model,
       messageCount: messages.length,
       temperature: data.temperature,

@@ -144,53 +144,6 @@ export class ChatService {
     }
   }
 
-  /**
-   * Start a new session for backend-initiated agents.
-   * This is for scenarios where the backend starts the agent first,
-   * then the frontend connects via SSE later.
-   */
-  async startSession(conversationId: string): Promise<ChatSession> {
-    // Check existing session first
-    const existing = this.sessions.get(conversationId);
-    if (existing) {
-      this.logger.warn(`Session already exists for ${conversationId}`, {
-        phase: existing.phase,
-      });
-      return existing;
-    }
-
-    this.logger.info(`Session started (backend-initiated)`, {
-      sessionId: conversationId,
-    });
-
-    const session = new ChatSession(conversationId, {
-      idleTimeoutMs: 30_000,
-      onDispose: async (id: string) => {
-        this.sessions.delete(id);
-        await this.redisService.del(RedisKeys.CHAT_SESSION(id));
-        await this.redisService.del(RedisKeys.HUMAN_INPUT(id));
-      },
-      onPhaseChange: async (id: string, phase: SessionPhase) => {
-        await this.updateSessionPhase(id, phase);
-      },
-    });
-
-    this.sessions.set(conversationId, session);
-
-    // Persist session state to Redis for reconnection support
-    await this.redisService.set(
-      RedisKeys.CHAT_SESSION(conversationId),
-      {
-        conversationId,
-        phase: 'waiting',
-        startedAt: Date.now(),
-        agentId: null,
-      },
-      3600,
-    );
-
-    return session;
-  }
 
   async runSession(
     session: ChatSession,

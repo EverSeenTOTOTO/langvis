@@ -69,14 +69,4 @@ export class EmailStore {
     const result = await req!.send();
     return result as ArchiveEmailResponse | undefined;
   }
-
-  updateEmailStatus(id: string, status: 'unarchived' | 'archived'): void {
-    const email = this.items.find(item => item.id === id);
-    if (email) {
-      email.status = status;
-      if (status === 'archived') {
-        (email as { archivedAt?: Date | null }).archivedAt = new Date();
-      }
-    }
-  }
 }

@@ -90,7 +90,7 @@ export default class BatchArchiveTool extends Tool<
           title: archiveResult.title,
         });
       } catch (error) {
-        const errorMsg = (error as Error).message;
+        const errorMsg = (error as Error)?.message ?? String(error);
         const isTimeout = errorMsg.includes('timed out');
         this.logger.error(
           `[${current}/${urls.length}] ${isTimeout ? 'Timeout' : 'Failed'}: ${url} - ${errorMsg}`,

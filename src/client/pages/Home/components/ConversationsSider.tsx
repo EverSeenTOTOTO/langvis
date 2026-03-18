@@ -81,37 +81,38 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
   const initializedRef = useRef(false);
   useEffect(() => {
     if (initializedRef.current) return;
-    if (groupStore.groups.length > 0) {
-      initializedRef.current = true;
-      if (
-        paramConversationId &&
-        store.findConversationById(paramConversationId)
-      ) {
-        store.currentConversationId = paramConversationId;
-      } else {
-        store.currentConversationId = store.getFirstConversationId();
-      }
+    if (groupStore.groups.length === 0) return;
+    initializedRef.current = true;
+    if (
+      paramConversationId &&
+      store.findConversationById(paramConversationId)
+    ) {
+      store.currentConversationId = paramConversationId;
+    } else {
+      store.currentConversationId = store.getFirstConversationId();
     }
   }, [groupStore.groups, paramConversationId]);
 
   // store 变化同步到 URL 和展开分组
   useEffect(() => {
-    if (store.currentConversationId) {
-      if (store.currentConversationId !== paramConversationId) {
-        setParamConversationId(store.currentConversationId);
-      }
-      const groupId = groupStore.findGroupIdByConversationId(
-        store.currentConversationId,
-      );
-      if (groupId) {
-        const groupKey = `group-${groupId}`;
-        setExpandedKeys(prev => {
-          if (!prev.includes(groupKey)) {
-            return [...prev, groupKey];
-          }
-          return prev;
-        });
-      }
+    if (!store.currentConversationId) {
+      return;
+    }
+
+    if (store.currentConversationId !== paramConversationId) {
+      setParamConversationId(store.currentConversationId);
+    }
+    const groupId = groupStore.findGroupIdByConversationId(
+      store.currentConversationId,
+    );
+    if (groupId) {
+      const groupKey = `group-${groupId}`;
+      setExpandedKeys(prev => {
+        if (!prev.includes(groupKey)) {
+          return [...prev, groupKey];
+        }
+        return prev;
+      });
     }
   }, [store.currentConversationId]);
 

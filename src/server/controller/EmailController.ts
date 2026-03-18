@@ -179,7 +179,10 @@ export default class EmailController {
     TraceContext.freeze();
 
     // Create session BEFORE building memory to avoid race with frontend SSE
-    const session = await this.chatService.startSession(conversationId);
+    const session = await this.chatService.acquireSession(conversationId);
+    if (!session) {
+      throw new Error(`Failed to acquire session for ${conversationId}`);
+    }
 
     const memory = await this.chatService.buildMemory(
       agent,

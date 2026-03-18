@@ -1,7 +1,7 @@
 import { ConversationEntity } from '@/shared/entities/Conversation';
 import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
-import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
 import { DocumentEntity } from '@/shared/entities/Document';
+import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
 import { EmailEntity } from '@/shared/entities/Email';
 import { MessageEntity } from '@/shared/entities/Message';
 import { entities, migrations } from '@hedystia/better-auth-typeorm';
@@ -28,7 +28,5 @@ const pg = new DataSource({
   migrations: [...migrations],
   migrationsRun: true,
 });
-
-pg.initialize().catch(err => console.error('Failed to initialize:', err));
 
 export default pg;

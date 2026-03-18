@@ -1,11 +1,14 @@
 import { ToolConfig } from '@/shared/types';
 
-export const config: ToolConfig<{
-  model?: string;
-  temperature?: number;
-  top_p?: number;
-  stream?: boolean;
-}> = {
+export const config: ToolConfig<
+  {
+    model?: string;
+    temperature?: number;
+    top_p?: number;
+    stream?: boolean;
+  },
+  string
+> = {
   name: 'LlmCall Tool',
   description: 'A tool to perform a single call of Llm.',
   inputSchema: {
@@ -42,7 +45,6 @@ export const config: ToolConfig<{
     },
   },
   outputSchema: {
-    type: 'object',
-    properties: {},
+    type: 'string',
   },
 };

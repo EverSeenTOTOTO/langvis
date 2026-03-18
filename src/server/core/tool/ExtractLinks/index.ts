@@ -68,7 +68,9 @@ export default class ExtractLinksTool extends Tool<
         });
       });
     } catch (error) {
-      this.logger.warn(`Failed to parse HTML: ${(error as Error).message}`);
+      this.logger.warn(
+        `Failed to parse HTML: ${(error as Error)?.message ?? String(error)}`,
+      );
     }
 
     return links;

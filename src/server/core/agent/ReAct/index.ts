@@ -3,7 +3,7 @@ import { config } from '@/server/decorator/param';
 import { compress, resolve } from '@/server/utils/cache';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds } from '@/shared/constants';
-import { Role } from '@/shared/entities/Message';
+import { Message, Role } from '@/shared/entities/Message';
 import { AgentConfig, AgentEvent } from '@/shared/types';
 import { isEmpty } from 'lodash-es';
 import { container } from 'tsyringe';
@@ -12,6 +12,7 @@ import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
 import { Prompt } from '../../PromptBuilder';
 import { Tool } from '../../tool';
+import { TraceContext } from '../../TraceContext';
 import { createPrompt } from './prompt';
 
 type ReActAction = {
@@ -139,7 +140,7 @@ export default class ReActAgent extends Agent {
   }
 
   private buildIterMessages(
-    messages: Awaited<ReturnType<Memory['summarize']>>,
+    messages: Message[],
   ): Array<{ role: 'user' | 'assistant' | 'system'; content: string }> {
     return messages.map(msg => {
       if (msg.role !== 'assistant') {
@@ -198,7 +199,7 @@ export default class ReActAgent extends Agent {
     try {
       const tool = container.resolve<Tool>(toolName);
 
-      const resolvedInput = await resolve(ctx.traceId, toolInput);
+      const resolvedInput = await resolve(TraceContext.getOrFail().traceId!, toolInput);
 
       yield ctx.agentToolCallEvent(
         toolName,
@@ -212,7 +213,7 @@ export default class ReActAgent extends Agent {
 
       const compressedOutput = tool.config?.skipCompression
         ? output
-        : await compress(ctx.traceId, output);
+        : await compress(TraceContext.getOrFail().traceId!, output);
 
       const observation =
         typeof compressedOutput === 'string'
