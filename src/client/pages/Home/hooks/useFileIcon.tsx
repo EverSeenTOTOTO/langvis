@@ -9,6 +9,9 @@ import {
   FileUnknownOutlined,
   FileWordOutlined,
   FileZipOutlined,
+  FolderOutlined,
+  PlayCircleOutlined,
+  CustomerServiceOutlined,
 } from '@ant-design/icons';
 import { theme } from 'antd';
 import { useMemo } from 'react';
@@ -24,7 +27,10 @@ export const useFileIcon = () => {
       excel: token.colorSuccess,
       ppt: token.colorWarning,
       zip: token.colorPrimary,
+      audio: token.colorInfo,
+      video: token.colorError,
       text: token.colorTextSecondary,
+      markdown: token.colorTextSecondary,
       default: token.colorTextQuaternary,
     }),
     [token],
@@ -40,6 +46,10 @@ export const useFileIcon = () => {
     if (type.includes('powerpoint') || type.includes('presentation'))
       return 'ppt';
     if (type.includes('zip') || type.includes('compressed')) return 'zip';
+    if (type.startsWith('audio/')) return 'audio';
+    if (type.startsWith('video/')) return 'video';
+    if (type === 'text/markdown' || type === 'text/x-markdown')
+      return 'markdown';
     if (type.startsWith('text/')) return 'text';
     return 'default' as const;
   };
@@ -82,6 +92,10 @@ export const useFileIcon = () => {
       return <FileZipOutlined />;
     }
 
+    if (type.startsWith('audio/')) return <CustomerServiceOutlined />;
+
+    if (type.startsWith('video/')) return <PlayCircleOutlined />;
+
     if (type === 'text/markdown' || type === 'text/x-markdown') {
       return <FileMarkdownOutlined />;
     }
@@ -95,5 +109,7 @@ export const useFileIcon = () => {
     return colorMap[getCategory(mimeType)];
   };
 
-  return { getFileIcon, getFileColor };
+  const getFolderIcon = () => <FolderOutlined />;
+
+  return { getFileIcon, getFileColor, getFolderIcon };
 };

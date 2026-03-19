@@ -320,13 +320,14 @@ export default class FileController {
 
   @api('/list')
   async listFiles(
-    @queryParam() query: { page?: number; pageSize?: number },
+    @queryParam() query: { page?: number; pageSize?: number; dir?: string },
     @response() res: Response,
   ): Promise<void> {
     try {
       const result = await this.fileService.listFiles({
         page: query.page || 1,
         pageSize: query.pageSize || 20,
+        dir: query.dir,
       });
       res.json({
         ...result,

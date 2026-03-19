@@ -142,12 +142,13 @@ describe('FileService - Extended', () => {
       expect(result.items.length).toBeGreaterThanOrEqual(2);
       expect(result.total).toBeGreaterThanOrEqual(2);
 
-      const item = result.items[0];
-      expect(item.filename).toBeDefined();
-      expect(item.size).toBeGreaterThan(0);
-      expect(item.mimeType).toBeDefined();
-      expect(item.createdAt).toBeInstanceOf(Date);
-      expect(item.url).toContain('/api/files/download/');
+      const fileItem = result.items.find(i => !i.isDir);
+      expect(fileItem).toBeDefined();
+      expect(fileItem!.filename).toBeDefined();
+      expect(fileItem!.size).toBeGreaterThan(0);
+      expect(fileItem!.mimeType).toBeDefined();
+      expect(fileItem!.createdAt).toBeInstanceOf(Date);
+      expect(fileItem!.url).toContain('/api/files/download/');
     });
 
     it('should paginate correctly', async () => {

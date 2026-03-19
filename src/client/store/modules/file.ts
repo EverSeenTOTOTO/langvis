@@ -9,6 +9,7 @@ export interface FileListItem {
   mimeType: string;
   createdAt: Date;
   url: string;
+  isDir?: boolean;
 }
 
 @store()
@@ -33,8 +34,8 @@ export class FileStore {
 
   @api('/api/files/list')
   async list(
-    _params: { page?: number; pageSize?: number },
-    req?: ApiRequest<{ page?: number; pageSize?: number }>,
+    _params: { page?: number; pageSize?: number; dir?: string },
+    req?: ApiRequest<{ page?: number; pageSize?: number; dir?: string }>,
   ): Promise<{
     items: FileListItem[];
     total: number;
