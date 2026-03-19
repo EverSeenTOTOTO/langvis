@@ -1,121 +1,163 @@
-import { usePagination } from '@/client/hooks/usePagination';
 import { useStore } from '@/client/store';
-import type { FileListItem } from '@/client/store/modules/file';
-import {
-  DeleteOutlined,
-  DownloadOutlined,
-  ReloadOutlined,
-} from '@ant-design/icons';
-import { Button, Layout, Popconfirm, Table, Tag, Tooltip, message } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import dayjs from 'dayjs';
+import { useFileIcon } from '@/client/pages/Home/hooks/useFileIcon';
+import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Breadcrumb, Button, Layout, Popconfirm, message, theme } from 'antd';
 import { observer } from 'mobx-react-lite';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAsyncFn } from 'react-use';
+import { FilePreview, isImage } from './FilePreview';
 import './index.scss';
+
+const formatSize = (bytes: number): string => {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
 
 const Files: React.FC = () => {
   const fileStore = useStore('file');
   const settingStore = useStore('setting');
+  const { token } = theme.useToken();
+  const { getFileIcon, getFileColor, getFolderIcon } = useFileIcon();
 
-  const deleteApi = useAsyncFn(fileStore.delete.bind(fileStore));
+  const [currentPath, setCurrentPath] = useState<string[]>([]);
+  const [previewFile, setPreviewFile] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState('');
 
-  const { dataSource, pagination, loading, refresh } = usePagination<
-    { page?: number; pageSize?: number },
-    FileListItem
-  >(fileStore, {
-    defaultPageSize: 20,
-  });
+  const dirPath = currentPath.join('/');
+  const previewFilename = previewFile || '';
 
-  const handleDelete = async (filename: string) => {
-    await deleteApi[1]({ filename });
-    refresh();
-    message.success(settingStore.tr('File deleted successfully'));
+  const [listState, doList] = useAsyncFn(async () => {
+    await fileStore.list({
+      page: 1,
+      pageSize: 9999,
+      dir: dirPath || undefined,
+    });
+  }, [dirPath]);
+
+  const [, doDelete] = useAsyncFn(
+    async (filename: string) => {
+      const fullPath = dirPath ? `${dirPath}/${filename}` : filename;
+      await fileStore.delete({ filename: fullPath });
+      message.success(settingStore.tr('File deleted successfully'));
+      doList();
+    },
+    [dirPath, doList],
+  );
+
+  useEffect(() => {
+    doList();
+  }, [doList]);
+
+  const handleFolderClick = (name: string) => {
+    setCurrentPath(prev => [...prev, name]);
   };
 
-  const formatSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const handleBreadcrumbClick = (index: number) => {
+    setCurrentPath(prev => prev.slice(0, index));
   };
 
-  const columns: ColumnsType<FileListItem> = [
+  const handleFileClick = (item: (typeof fileStore.items)[0]) => {
+    if (isImage(item.filename)) {
+      setPreviewFile(item.filename);
+      setPreviewUrl(item.url);
+    } else {
+      const playUrl = item.url.replace(
+        '/api/files/download/',
+        '/api/files/play/',
+      );
+      window.open(playUrl, '_blank');
+    }
+  };
+
+  const breadcrumbItems = [
     {
-      title: settingStore.tr('Filename'),
-      dataIndex: 'filename',
-      key: 'filename',
-      ellipsis: true,
-      render: (filename: string) => (
-        <Tooltip title={filename}>
-          <span className="file-name">{filename}</span>
-        </Tooltip>
+      title: (
+        <span onClick={() => handleBreadcrumbClick(0)}>
+          {settingStore.tr('Files')}
+        </span>
       ),
     },
-    {
-      title: settingStore.tr('Size'),
-      dataIndex: 'size',
-      key: 'size',
-      width: 100,
-      render: (size: number) => formatSize(size),
-    },
-    {
-      title: settingStore.tr('Type'),
-      dataIndex: 'mimeType',
-      key: 'mimeType',
-      width: 150,
-      render: (mimeType: string) => <Tag color="blue">{mimeType}</Tag>,
-    },
-    {
-      title: settingStore.tr('Created At'),
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      width: 180,
-      render: (date: Date) => dayjs(date).format('YYYY-MM-DD HH:mm:ss'),
-    },
-    {
-      title: settingStore.tr('Actions'),
-      key: 'actions',
-      width: 150,
-      render: (_, record) => (
-        <>
-          <Button
-            type="link"
-            size="small"
-            icon={<DownloadOutlined />}
-            href={record.url}
-            target="_blank"
-          >
-            {settingStore.tr('Download')}
-          </Button>
-          <Popconfirm
-            title={settingStore.tr('Delete this file?')}
-            onConfirm={() => handleDelete(record.filename)}
-            okText={settingStore.tr('Yes')}
-            cancelText={settingStore.tr('No')}
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              {settingStore.tr('Delete')}
-            </Button>
-          </Popconfirm>
-        </>
+    ...currentPath.map((segment, index) => ({
+      title: (
+        <span onClick={() => handleBreadcrumbClick(index + 1)}>{segment}</span>
       ),
-    },
+    })),
   ];
 
   return (
     <Layout className="files-page">
-      <div className="files-header">
-        <h2>{settingStore.tr('Files')}</h2>
-        <Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>
+      <div className="files-toolbar">
+        <div className="breadcrumb-wrapper">
+          <Breadcrumb items={breadcrumbItems} />
+        </div>
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={doList}
+          loading={listState.loading}
+        >
           {settingStore.tr('Refresh')}
         </Button>
       </div>
-      <Table
-        columns={columns}
-        dataSource={dataSource}
-        rowKey="filename"
-        loading={loading}
-        pagination={pagination}
+      <div className="files-grid">
+        {fileStore.items.map(item => (
+          <div
+            className="file-card"
+            key={`${item.isDir ? 'dir' : 'file'}-${item.filename}`}
+            onClick={() => {
+              if (item.isDir) handleFolderClick(item.filename);
+              else handleFileClick(item);
+            }}
+          >
+            <div
+              className="file-card-actions"
+              onClick={e => e.stopPropagation()}
+            >
+              <Popconfirm
+                title={
+                  item.isDir
+                    ? settingStore.tr(
+                        'Delete this folder and all its contents?',
+                      )
+                    : settingStore.tr('Delete this file?')
+                }
+                onConfirm={() => doDelete(item.filename)}
+                okText={settingStore.tr('Yes')}
+                cancelText={settingStore.tr('No')}
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                />
+              </Popconfirm>
+            </div>
+            <div
+              className="file-card-icon"
+              style={{
+                color: item.isDir
+                  ? token.colorWarning
+                  : getFileColor(item.mimeType),
+              }}
+            >
+              {item.isDir ? getFolderIcon() : getFileIcon(item.mimeType)}
+            </div>
+            <div className="file-card-name" title={item.filename}>
+              {item.filename}
+            </div>
+            {!item.isDir && item.size > 0 && (
+              <div className="file-card-size">{formatSize(item.size)}</div>
+            )}
+          </div>
+        ))}
+      </div>
+      <FilePreview
+        filename={previewFilename}
+        url={previewUrl}
+        open={!!previewFile}
+        onClose={() => setPreviewFile(null)}
       />
     </Layout>
   );

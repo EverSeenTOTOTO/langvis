@@ -30,10 +30,41 @@ beforeAll(() => {
     unobserve: vi.fn(),
     disconnect: vi.fn(),
   }));
+
+  // JSDOM returns empty strings from getComputedStyle, causing NaN in TextArea autoSize.
+  // Mock getComputedStyle to return sensible defaults for the properties calculateNodeHeight reads.
+  const originalGetComputedStyle = window.getComputedStyle;
+  const stylingDefaults: Record<string, string> = {
+    'padding-top': '0px',
+    'padding-bottom': '0px',
+    'padding-left': '0px',
+    'padding-right': '0px',
+    'border-top-width': '0px',
+    'border-bottom-width': '0px',
+    'border-left-width': '0px',
+    'border-right-width': '0px',
+    'box-sizing': 'content-box',
+  };
+  vi.spyOn(window, 'getComputedStyle').mockImplementation((el: Element) => {
+    const style = originalGetComputedStyle.call(window, el);
+    const originalGetPropertyValue = style.getPropertyValue.bind(style);
+    return new Proxy(style, {
+      get(target, prop: string) {
+        if (prop === 'getPropertyValue') {
+          return (name: string) =>
+            stylingDefaults[name] ?? originalGetPropertyValue(name);
+        }
+        return Reflect.get(target, prop);
+      },
+    });
+  });
 });
 
 describe('SchemaField', () => {
-  it('should render simple string field with correct name path', () => {
+  // getComputedStyle proxy adds overhead in JSDOM
+  const timeout = 10000;
+
+  it('should render simple string field with correct name path', { timeout }, () => {
     const prop: SchemaProperty = {
       type: 'string',
       title: 'Name',
@@ -206,7 +237,7 @@ describe('SchemaField', () => {
     expect(select).toBeInTheDocument();
   });
 
-  it('should produce correct form values for array with enum', async () => {
+  it('should produce correct form values for array with enum', { timeout }, async () => {
     const user = userEvent.setup();
     const prop: SchemaProperty = {
       type: 'array',

@@ -3,6 +3,7 @@ import { BaseDto, dto } from '../base';
 export interface ListFilesRequest {
   page?: number;
   pageSize?: number;
+  dir?: string;
 }
 
 @dto<ListFilesRequest>({
@@ -10,12 +11,14 @@ export interface ListFilesRequest {
   properties: {
     page: { type: 'integer', minimum: 1, nullable: true },
     pageSize: { type: 'integer', minimum: 1, maximum: 100, nullable: true },
+    dir: { type: 'string', nullable: true },
   },
   additionalProperties: false,
 })
 export class ListFilesRequestDto extends BaseDto implements ListFilesRequest {
   page?: number;
   pageSize?: number;
+  dir?: string;
 }
 
 export interface FileListItem {
@@ -24,6 +27,7 @@ export interface FileListItem {
   mimeType: string;
   createdAt: Date;
   url: string;
+  isDir?: boolean;
 }
 
 export interface ListFilesResponse {

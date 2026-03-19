@@ -169,38 +169,71 @@ export class FileService {
     };
   }
 
-  async listFiles(options: { page: number; pageSize: number }): Promise<{
+  async listFiles(options: {
+    page: number;
+    pageSize: number;
+    dir?: string;
+  }): Promise<{
     items: Array<{
       filename: string;
       size: number;
       mimeType: string;
       createdAt: Date;
       url: string;
+      isDir?: boolean;
     }>;
     total: number;
   }> {
     const page = options.page || 1;
     const pageSize = options.pageSize || 20;
+    const targetDir = options.dir
+      ? path.join(this.uploadDir, options.dir)
+      : this.uploadDir;
 
-    const files = await fs.readdir(this.uploadDir);
-    const items = await Promise.all(
-      files
-        .filter(f => !f.startsWith('.'))
-        .map(async filename => {
-          const filePath = this.getFilePath(filename);
-          const stats = await fs.stat(filePath);
+    const resolvedDir = path.resolve(targetDir);
+    const resolvedUploadDir = path.resolve(this.uploadDir);
+
+    if (!resolvedDir.startsWith(resolvedUploadDir)) {
+      throw new Error(`Invalid directory path: ${targetDir}`);
+    }
+
+    const entries = await fs.readdir(resolvedDir, { withFileTypes: true });
+    const visibleEntries = entries.filter(e => !e.name.startsWith('.'));
+
+    const dirs = visibleEntries
+      .filter(e => e.isDirectory())
+      .map(e => ({
+        filename: e.name,
+        size: 0,
+        mimeType: '',
+        createdAt: new Date(0),
+        url: '',
+        isDir: true,
+      }));
+
+    const files = await Promise.all(
+      visibleEntries
+        .filter(e => e.isFile())
+        .map(async e => {
+          const fullPath = path.join(resolvedDir, e.name);
+          const stats = await fs.stat(fullPath);
+          const relativePath = options.dir
+            ? `${options.dir}/${e.name}`
+            : e.name;
           return {
-            filename,
+            filename: e.name,
             size: stats.size,
-            mimeType: mime.lookup(filename) || 'application/octet-stream',
+            mimeType: mime.lookup(e.name) || 'application/octet-stream',
             createdAt: stats.mtime,
-            url: `/api/files/download/${filename}`,
+            url: `/api/files/download/${relativePath}`,
           };
         }),
     );
 
-    // Sort by createdAt desc
-    items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    files.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    dirs.sort((a, b) => a.filename.localeCompare(b.filename));
+
+    const items = [...dirs, ...files];
 
     const start = (page - 1) * pageSize;
     const paged = items.slice(start, start + pageSize);
@@ -212,7 +245,12 @@ export class FileService {
   }
 
   async deleteFile(filename: string): Promise<void> {
-    const filePath = this.getFilePath(filename);
-    await fs.unlink(filePath);
+    const filePath = this.validatePath(filename);
+    const stats = await fs.stat(filePath);
+    if (stats.isDirectory()) {
+      await fs.rm(filePath, { recursive: true });
+    } else {
+      await fs.unlink(filePath);
+    }
   }
 }

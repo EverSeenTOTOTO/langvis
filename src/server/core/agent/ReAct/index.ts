@@ -199,7 +199,10 @@ export default class ReActAgent extends Agent {
     try {
       const tool = container.resolve<Tool>(toolName);
 
-      const resolvedInput = await resolve(TraceContext.getOrFail().traceId!, toolInput);
+      const resolvedInput = await resolve(
+        TraceContext.getOrFail().traceId!,
+        toolInput,
+      );
 
       yield ctx.agentToolCallEvent(
         toolName,

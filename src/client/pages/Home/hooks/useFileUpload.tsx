@@ -180,4 +180,3 @@ export const useFileUpload = (isLoading: boolean) => {
     clearAttachments,
   };
 };
-

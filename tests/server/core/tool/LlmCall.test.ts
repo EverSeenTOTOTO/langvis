@@ -245,9 +245,7 @@ describe('LlmCallTool', () => {
       };
 
       const ctx = createMockContext();
-      await withTraceContext(() =>
-        collectEvents(llmCallTool.call(input, ctx)),
-      );
+      await withTraceContext(() => collectEvents(llmCallTool.call(input, ctx)));
 
       expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -313,9 +311,7 @@ describe('LlmCallTool', () => {
       };
 
       const ctx = createMockContext();
-      await withTraceContext(() =>
-        collectEvents(llmCallTool.call(input, ctx)),
-      );
+      await withTraceContext(() => collectEvents(llmCallTool.call(input, ctx)));
 
       const callArgs = mockCreate.mock.calls[0][0];
       const userMessage = callArgs.messages[0];
@@ -372,9 +368,7 @@ describe('LlmCallTool', () => {
       };
 
       const ctx = createMockContext();
-      await withTraceContext(() =>
-        collectEvents(llmCallTool.call(input, ctx)),
-      );
+      await withTraceContext(() => collectEvents(llmCallTool.call(input, ctx)));
 
       const callArgs = mockCreate.mock.calls[0][0];
       const userMessage = callArgs.messages[0];
@@ -425,9 +419,7 @@ describe('LlmCallTool', () => {
       };
 
       const ctx = createMockContext();
-      await withTraceContext(() =>
-        collectEvents(llmCallTool.call(input, ctx)),
-      );
+      await withTraceContext(() => collectEvents(llmCallTool.call(input, ctx)));
 
       const callArgs = mockCreate.mock.calls[0][0];
 
