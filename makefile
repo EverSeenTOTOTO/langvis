@@ -45,6 +45,7 @@ build: clean
 	bunx vite build --mode production --config config/vite.prod.ts
 	bunx vite build --mode production --config config/vite.server.ts
 	bunx vite build --mode production --config config/vite.serverEntry.ts
+	cp -r src/server/locales ${DIST}/server/locales
 
 .PHONY: start
 start: build
