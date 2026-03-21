@@ -55,7 +55,7 @@ const Login = () => {
 
   return (
     <div className="login-page">
-      <Card title="Login" style={{ width: 300 }}>
+      <Card title={setting.tr('Login')} style={{ width: 300 }}>
         <Form name="login" onFinish={onFinish} autoComplete="off">
           <Form.Item
             name="email"
@@ -66,7 +66,10 @@ const Login = () => {
               },
             ]}
           >
-            <Input prefix={<UserOutlined />} placeholder="Email" />
+            <Input
+              prefix={<UserOutlined />}
+              placeholder={setting.tr('Email')}
+            />
           </Form.Item>
 
           <Form.Item
@@ -78,7 +81,10 @@ const Login = () => {
               },
             ]}
           >
-            <Input.Password prefix={<LockOutlined />} placeholder="Password" />
+            <Input.Password
+              prefix={<LockOutlined />}
+              placeholder={setting.tr('Password')}
+            />
           </Form.Item>
 
           <Form.Item>

@@ -1,6 +1,6 @@
 import ChatInput from '@/client/components/ChatInput';
 import Drawer from '@/client/components/Drawer';
-import { useStore } from '@/client/store';
+import { getStore, useStore } from '@/client/store';
 import { AgentIds } from '@/shared/constants';
 import type { MessageAttachment } from '@/shared/types/entities';
 import { Role } from '@/shared/types/entities';
@@ -16,6 +16,12 @@ import { useFileUpload } from './hooks/useFileUpload';
 import './index.scss';
 
 const { Content } = Layout;
+
+export const prefetch = async () => {
+  const store = getStore('setting');
+
+  await store.fetchSettings();
+};
 
 const Chat: React.FC = () => {
   const chatStore = useStore('chat');

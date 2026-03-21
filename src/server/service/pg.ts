@@ -4,6 +4,7 @@ import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
 import { DocumentEntity } from '@/shared/entities/Document';
 import { EmailEntity } from '@/shared/entities/Email';
 import { MessageEntity } from '@/shared/entities/Message';
+import { SettingsEntity } from '@/shared/entities/Settings';
 import { entities, migrations } from '@hedystia/better-auth-typeorm';
 import { DataSource } from 'typeorm';
 
@@ -24,6 +25,7 @@ const pg = new DataSource({
     DocumentEntity,
     DocumentChunkEntity,
     EmailEntity,
+    SettingsEntity,
   ],
   migrations: [...migrations],
   migrationsRun: true,

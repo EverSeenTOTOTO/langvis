@@ -1,3 +1,4 @@
+import { useStore } from '@/client/store';
 import {
   Checkbox,
   Collapse,
@@ -71,6 +72,7 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
   namePrefix,
   grid = false,
 }) => {
+  const settingStore = useStore('setting');
   const fieldLabel =
     label ?? prop.title ?? (Array.isArray(name) ? name[name.length - 1] : name);
   const fullName: NamePath = namePrefix ? [...namePrefix, name].flat() : name;
@@ -175,7 +177,11 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
   if (prop.type === 'array') {
     return (
       <Form.Item key={fieldKey} {...commonProps}>
-        <Input placeholder={prop.description ?? 'Comma-separated values'} />
+        <Input
+          placeholder={
+            prop.description ?? settingStore.tr('Comma-separated values')
+          }
+        />
       </Form.Item>
     );
   }

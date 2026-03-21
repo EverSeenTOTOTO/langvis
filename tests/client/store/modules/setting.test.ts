@@ -9,6 +9,7 @@ vi.mock('i18next', () => ({
     init: vi.fn().mockReturnValue(Promise.resolve()),
     changeLanguage: vi.fn().mockReturnValue(Promise.resolve()),
     getFixedT: vi.fn(() => (key: string) => key),
+    addResourceBundle: vi.fn(),
     isInitialized: false,
     t: vi.fn((key: string) => key),
   },
