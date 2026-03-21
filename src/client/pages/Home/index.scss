@@ -1,5 +1,3 @@
-@use '../../styles/mixins';
-
 .chat-sider {
   height: 100%;
   padding: 8px;
@@ -118,12 +116,6 @@
       padding-inline: 16px;
       overflow-y: auto;
 
-      .system-message {
-        .ant-collapse-body {
-          @include mixins.default-scrollbar;
-        }
-      }
-
       .ant-bubble {
         .ant-bubble-content {
           position: relative;
@@ -155,8 +147,6 @@
       .ant-bubble-end {
         margin-left: 25%;
       }
-
-      @include mixins.default-scrollbar;
     }
 
     .scroll-btn-group {
