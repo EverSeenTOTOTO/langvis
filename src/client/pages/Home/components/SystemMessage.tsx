@@ -1,5 +1,7 @@
-import MarkdownRender from '@/client/components/MarkdownRender';
 import { useStore } from '@/client/store';
+import { lazy, Suspense } from 'react';
+
+const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 import { Message } from '@/shared/types/entities';
 import { Collapse, Divider, Typography } from 'antd';
 import dayjs from 'dayjs';
@@ -19,7 +21,15 @@ const SystemMessage: React.FC<{ msg: Message }> = ({ msg }) => {
           {
             key: '1',
             label: settingStore.tr('System Prompt'),
-            children: <MarkdownRender>{msg.content}</MarkdownRender>,
+            children: (
+              <Suspense
+                fallback={
+                  <Typography.Paragraph>{msg.content}</Typography.Paragraph>
+                }
+              >
+                <MarkdownRender>{msg.content}</MarkdownRender>
+              </Suspense>
+            ),
           },
         ]}
         style={{ width: '100%' }}

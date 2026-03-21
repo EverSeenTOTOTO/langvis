@@ -1,11 +1,13 @@
-import ChatInput from '@/client/components/ChatInput';
 import Drawer from '@/client/components/Drawer';
+import { lazy, Suspense } from 'react';
+
+const ChatInput = lazy(() => import('@/client/components/ChatInput'));
 import { getStore, useStore } from '@/client/store';
 import { AgentIds } from '@/shared/constants';
 import type { MessageAttachment } from '@/shared/types/entities';
 import { Role } from '@/shared/types/entities';
 import { MenuOutlined } from '@ant-design/icons';
-import { Button, Layout, message } from 'antd';
+import { Button, Layout, message, Skeleton } from 'antd';
 import { observer } from 'mobx-react-lite';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAsyncFn, useMedia } from 'react-use';
@@ -167,37 +169,43 @@ const Chat: React.FC = () => {
       >
         <Messages ref={messagesRef} />
         <div className="chat-input" ref={inputRef}>
-          <ChatInput
-            value={value}
-            onChange={setValue}
-            onSubmit={handleSend}
-            onCancel={handleCancel}
-            minRows={2}
-            maxRows={6}
-            header={
-              isMobile ? (
-                <div className="chat-input-header-row">
-                  <Button
-                    className="chat-drawer-trigger"
-                    size="small"
-                    icon={<MenuOutlined />}
-                    onClick={() => setDrawerOpen(true)}
-                  />
-                  {attachmentTags}
-                </div>
-              ) : (
-                attachmentTags
-              )
+          <Suspense
+            fallback={
+              <Skeleton.Input active style={{ width: '100%', height: 60 }} />
             }
-            suffix={uploadButton}
-            placeholder={settingStore.tr('Type a message...')}
-            loading={
-              createConversationApi[0].loading ||
-              chatApi[0].loading ||
-              isLoading
-            }
-            cancelling={isCancelling}
-          />
+          >
+            <ChatInput
+              value={value}
+              onChange={setValue}
+              onSubmit={handleSend}
+              onCancel={handleCancel}
+              minRows={2}
+              maxRows={6}
+              header={
+                isMobile ? (
+                  <div className="chat-input-header-row">
+                    <Button
+                      className="chat-drawer-trigger"
+                      size="small"
+                      icon={<MenuOutlined />}
+                      onClick={() => setDrawerOpen(true)}
+                    />
+                    {attachmentTags}
+                  </div>
+                ) : (
+                  attachmentTags
+                )
+              }
+              suffix={uploadButton}
+              placeholder={settingStore.tr('Type a message...')}
+              loading={
+                createConversationApi[0].loading ||
+                chatApi[0].loading ||
+                isLoading
+              }
+              cancelling={isCancelling}
+            />
+          </Suspense>
         </div>
         <div className="chat-placeholder" />
       </Content>

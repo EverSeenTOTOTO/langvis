@@ -1,14 +1,35 @@
 import { getOwnPropertyNames, isClient, isTest } from '@/shared/utils';
 import { message } from 'antd';
-import fetchCookie from 'fetch-cookie';
 import { merge } from 'lodash-es';
 import { compile } from 'path-to-regexp';
 
 const metaDataKey = Symbol('client_api');
 
-export const serverFetch = fetchCookie(fetch);
 export const getPrefetchPath = (path: string) =>
   `http://localhost:${import.meta.env.VITE_PORT}${path}`;
+
+// Server-side fetch with cookie support - only loaded on SSR
+// The import is conditional to avoid bundling tough-cookie/tldts in client
+
+let _serverFetch: any = null;
+let _cookieJar: any = null;
+
+const getServerFetch = async () => {
+  if (!_serverFetch) {
+    const fetchCookie = (await import('fetch-cookie')).default;
+    _serverFetch = fetchCookie(fetch);
+    _cookieJar = _serverFetch.cookieJar;
+  }
+  return _serverFetch;
+};
+
+// Export for SSR cookie management
+export const serverFetch = {
+  get cookieJar() {
+    return _cookieJar;
+  },
+  init: getServerFetch,
+};
 
 type ApiConfig = {
   path: string;
@@ -177,8 +198,13 @@ export class ApiRequest<P extends Record<string, any> = {}> extends Request {
   }
 
   async send() {
-    const fetchApi = isClient() ? fetch : serverFetch;
-    const res = await fetchApi(this);
+    let res: Response;
+    if (isClient()) {
+      res = await fetch(this);
+    } else {
+      // Use shared fetch-cookie instance with cookieJar
+      res = await (await getServerFetch())(this);
+    }
 
     if (res instanceof Error) {
       logError(res);

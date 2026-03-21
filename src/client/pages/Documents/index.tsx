@@ -1,5 +1,7 @@
-import MarkdownRender from '@/client/components/MarkdownRender';
+import { lazy, Suspense } from 'react';
 import { usePagination } from '@/client/hooks/usePagination';
+
+const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 import { useStore } from '@/client/store';
 import type { DocumentListItem } from '@/shared/dto/controller/document.dto';
 import type { DocumentCategory as DCType } from '@/shared/entities/Document';
@@ -400,7 +402,15 @@ const Documents: React.FC = () => {
 
             <div className="detail-section">
               <Title level={5}>{settingStore.tr('Raw Content')}</Title>
-              <MarkdownRender>{selectedDocument.rawContent}</MarkdownRender>
+              <Suspense
+                fallback={
+                  <Typography.Paragraph>
+                    {selectedDocument.rawContent}
+                  </Typography.Paragraph>
+                }
+              >
+                <MarkdownRender>{selectedDocument.rawContent}</MarkdownRender>
+              </Suspense>
             </div>
           </div>
         )}
