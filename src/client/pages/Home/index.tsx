@@ -53,8 +53,13 @@ const Chat: React.FC = () => {
     isCancelling,
   ]);
 
-  const { attachments, uploadButton, attachmentTags, clearAttachments } =
-    useFileUpload(isLoading);
+  const {
+    attachments,
+    uploadButton,
+    attachmentTags,
+    clearAttachments,
+    buildMarkdownContent,
+  } = useFileUpload(isLoading);
 
   const handleSend = async () => {
     if (!value && attachments.length === 0) return;
@@ -87,19 +92,7 @@ const Chat: React.FC = () => {
           }))
         : undefined;
 
-    // Build content with markdown attachments
-    let finalContent = value;
-    if (attachments.length > 0) {
-      const attachmentMarkdown = attachments
-        .map(a => {
-          const isImage = a.mimeType.startsWith('image/');
-          return isImage
-            ? `![${a.filename}](${a.url})`
-            : `[${a.filename}](${a.url})`;
-        })
-        .join('\n');
-      finalContent = `${value}\n---\n${attachmentMarkdown}`;
-    }
+    const finalContent = buildMarkdownContent(value);
 
     setValue('');
     clearAttachments();

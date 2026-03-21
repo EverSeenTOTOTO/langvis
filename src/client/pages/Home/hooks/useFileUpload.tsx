@@ -170,6 +170,24 @@ export const useFileUpload = (isLoading: boolean) => {
     setFileList([]);
   }, []);
 
+  const buildMarkdownContent = useCallback(
+    (content: string): string => {
+      if (attachments.length === 0) return content;
+
+      const attachmentMarkdown = attachments
+        .map(a => {
+          const isImage = a.mimeType.startsWith('image/');
+          return isImage
+            ? `![${a.filename}](${a.url})`
+            : `[${a.filename}](${a.url})`;
+        })
+        .join('\n');
+
+      return `${content}\n---\n${attachmentMarkdown}`;
+    },
+    [attachments],
+  );
+
   return {
     attachments,
     uploadButton,
@@ -178,5 +196,6 @@ export const useFileUpload = (isLoading: boolean) => {
     handleUpload,
     handleRemoveAttachment,
     clearAttachments,
+    buildMarkdownContent,
   };
 };
