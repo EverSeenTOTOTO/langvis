@@ -16,6 +16,7 @@ enableStaticRendering(true);
 const APP_HTML = '<!--app-html-->';
 const APP_STATE = '<!--app-state-->';
 const APP_STYLE = '<!--app-style-->';
+const APP_THEME = '<!--app-theme-->';
 
 const serialize = (state: Record<string, unknown> | undefined) =>
   `<script>;window.__PREFETCHED_STATE__=${serializeJavascript(state)};</script>`;
@@ -44,15 +45,15 @@ export async function render(context: RenderContext) {
         req.log.error(e);
       });
 
-    // sync client cookie to futher server prefetch env
-    const fullUrl = getPrefetchPath(req.originalUrl);
-    const cookieStr = Object.entries(req.cookies)
-      .map(([key, value]) => `${key}=${value}`)
-      .join('; ');
-
-    serverFetch.cookieJar.setCookie(cookieStr, fullUrl, {
-      ignoreError: false,
-    });
+    // Set each cookie individually with Path=/ to ensure they're available for all API paths
+    const rootUrl = getPrefetchPath('/');
+    for (const [key, value] of Object.entries(req.cookies)) {
+      await serverFetch.cookieJar.setCookie(
+        `${key}=${value}; Path=/`,
+        rootUrl,
+        { ignoreError: false },
+      );
+    }
   }
 
   const success = await prefetch(ctx).catch(e => {
@@ -74,7 +75,8 @@ export async function render(context: RenderContext) {
   ctx.html = ctx.template
     .replace(APP_HTML, html)
     .replace(APP_STYLE, styleText)
-    .replace(APP_STATE, serialize(state));
+    .replace(APP_STATE, serialize(state))
+    .replace(APP_THEME, store.setting.mode);
 
   return ctx;
 }

@@ -90,7 +90,8 @@ export type PrefetchContext = Omit<
 > & { req: { originalUrl: string } };
 
 export function prefetch(ctx: PrefetchContext) {
-  const matched = ctx.routes.filter(each => each.path === ctx.req.originalUrl);
+  const path = (ctx.req.originalUrl || '/').replace(/\?.*$/, '');
+  const matched = ctx.routes.filter(each => each.path === path);
 
   const ps: Promise<void>[] = [];
 

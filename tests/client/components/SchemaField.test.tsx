@@ -64,22 +64,26 @@ describe('SchemaField', () => {
   // getComputedStyle proxy adds overhead in JSDOM
   const timeout = 10000;
 
-  it('should render simple string field with correct name path', { timeout }, () => {
-    const prop: SchemaProperty = {
-      type: 'string',
-      title: 'Name',
-    };
+  it(
+    'should render simple string field with correct name path',
+    { timeout },
+    () => {
+      const prop: SchemaProperty = {
+        type: 'string',
+        title: 'Name',
+      };
 
-    render(
-      <Form>
-        <SchemaField name="name" prop={prop} namePrefix={['config']} />
-      </Form>,
-    );
+      render(
+        <Form>
+          <SchemaField name="name" prop={prop} namePrefix={['config']} />
+        </Form>,
+      );
 
-    const input = screen.getByRole('textbox');
-    expect(input).toBeInTheDocument();
-    expect(input).toHaveAttribute('id', 'config_name');
-  });
+      const input = screen.getByRole('textbox');
+      expect(input).toBeInTheDocument();
+      expect(input).toHaveAttribute('id', 'config_name');
+    },
+  );
 
   it('should render nested object field with correct nested name path', () => {
     const prop: SchemaProperty = {
@@ -237,43 +241,47 @@ describe('SchemaField', () => {
     expect(select).toBeInTheDocument();
   });
 
-  it('should produce correct form values for array with enum', { timeout }, async () => {
-    const user = userEvent.setup();
-    const prop: SchemaProperty = {
-      type: 'array',
-      title: 'Links',
-      enum: [
-        { label: 'Link A', value: 'url-a' },
-        { label: 'Link B', value: 'url-b' },
-        { label: 'Link C', value: 'url-c' },
-      ],
-    };
+  it(
+    'should produce correct form values for array with enum',
+    { timeout },
+    async () => {
+      const user = userEvent.setup();
+      const prop: SchemaProperty = {
+        type: 'array',
+        title: 'Links',
+        enum: [
+          { label: 'Link A', value: 'url-a' },
+          { label: 'Link B', value: 'url-b' },
+          { label: 'Link C', value: 'url-c' },
+        ],
+      };
 
-    let formValues: unknown = null;
-    const onFinish = (values: unknown) => {
-      formValues = values;
-    };
+      let formValues: unknown = null;
+      const onFinish = (values: unknown) => {
+        formValues = values;
+      };
 
-    const TestForm = () => (
-      <Form onFinish={onFinish}>
-        <SchemaField name="selectedLinks" prop={prop} />
-        <button type="submit">Submit</button>
-      </Form>
-    );
+      const TestForm = () => (
+        <Form onFinish={onFinish}>
+          <SchemaField name="selectedLinks" prop={prop} />
+          <button type="submit">Submit</button>
+        </Form>
+      );
 
-    render(<TestForm />);
+      render(<TestForm />);
 
-    // Click first and third checkboxes
-    const checkboxes = screen.getAllByRole('checkbox');
-    await user.click(checkboxes[0]);
-    await user.click(checkboxes[2]);
+      // Click first and third checkboxes
+      const checkboxes = screen.getAllByRole('checkbox');
+      await user.click(checkboxes[0]);
+      await user.click(checkboxes[2]);
 
-    // Submit the form
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
+      // Submit the form
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
 
-    // Verify form values contain array of selected values
-    expect(formValues).toEqual({
-      selectedLinks: ['url-a', 'url-c'],
-    });
-  });
+      // Verify form values contain array of selected values
+      expect(formValues).toEqual({
+        selectedLinks: ['url-a', 'url-c'],
+      });
+    },
+  );
 });

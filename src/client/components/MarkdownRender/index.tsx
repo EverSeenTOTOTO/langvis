@@ -17,6 +17,7 @@ interface CodeBlockProps {
 }
 
 const CodeBlock = ({ language, code, isDark }: CodeBlockProps) => {
+  const settingStore = useStore('setting');
   const [copied, setCopied] = useState(false);
   const [, copyToClipboard] = useCopyToClipboard();
 
@@ -31,8 +32,10 @@ const CodeBlock = ({ language, code, isDark }: CodeBlockProps) => {
       <button
         className="copy-button"
         onClick={handleCopy}
-        aria-label="Copy code"
-        title={copied ? 'Copied!' : 'Copy code'}
+        aria-label={settingStore.tr('Copy code')}
+        title={
+          copied ? settingStore.tr('Copied!') : settingStore.tr('Copy code')
+        }
       >
         {copied ? (
           <svg

@@ -1,3 +1,4 @@
+import { api, ApiRequest } from '@/client/decorator/api';
 import { hydrate } from '@/client/decorator/hydrate';
 import { store } from '@/client/decorator/store';
 import { Locale } from 'antd/es/locale';
@@ -6,58 +7,11 @@ import zhCN from 'antd/locale/zh_CN';
 import i18next from 'i18next';
 import { makeAutoObservable, reaction } from 'mobx';
 
-type ThemeMode = 'light' | 'dark';
+export type ThemeMode = 'light' | 'dark';
 
 export const SUPPORTED_LOCALES = {
   zh_CN: '简体中文',
   en_US: 'English',
-};
-
-// Initialize i18next with proper configuration
-const initI18n = (lang: string = 'en_US') => {
-  if (!i18next.isInitialized) {
-    i18next.init({
-      lng: lang,
-      fallbackLng: 'en_US',
-      debug: false,
-      resources: {
-        en_US: {
-          translation: {},
-        },
-        zh_CN: {
-          translation: {
-            Language: '语言',
-            Theme: '颜色主题',
-            Login: '登录',
-            Logout: '退出登录',
-            'Login failed': '登录失败',
-            'Please input your email': '请输入邮箱',
-            'Please input your password': '请输入密码',
-            Conversation: '对话',
-            'New Conversation': '新对话',
-            'Failed to create or get conversation': '创建或获取对话失败',
-            'Delete Conversation': '删除对话',
-            'Are you sure you want to delete? This action cannot be undone.':
-              '您确定要删除吗？此操作无法撤销。',
-            Delete: '删除',
-            Cancel: '取消',
-            'Type a message...': '输入消息...',
-            'Edit Conversation': '编辑对话',
-            Save: '保存',
-            'System Prompt': '系统提示',
-            Copied: '复制成功',
-            'Conversation ID': '对话ID',
-            'Conversation Name': '对话名称',
-            'Please enter a conversation name': '请输入对话名称',
-            'Enter conversation name': '输入对话名称',
-            'Error parsing SSE message': '解析 SSE 消息时出错',
-            'Failed to connect to SSE': '连接到 SSE 失败',
-          },
-        },
-      },
-    });
-  }
-  return i18next.getFixedT(lang);
 };
 
 @store()
@@ -68,40 +22,88 @@ export class SettingStore {
   @hydrate()
   lang: string = 'en_US';
 
+  @hydrate()
+  translations: Record<string, string> = {};
+
   locale: Locale = zhCN;
   tr: typeof i18next.t;
 
   constructor() {
     makeAutoObservable(this);
 
-    initI18n(this.lang);
+    this.initI18n();
     this.tr = i18next.getFixedT(this.lang);
 
     reaction(
       () => this.lang,
       () => {
-        switch (this.lang) {
-          case 'en_US':
-            i18next.changeLanguage('en_US').then(() => {
-              import('dayjs/locale/en');
-              this.locale = enUS;
-              this.tr = i18next.getFixedT('en_US');
-            });
-            break;
-          case 'zh_CN':
-          default:
-            i18next.changeLanguage('zh_CN').then(() => {
-              import('dayjs/locale/zh-cn');
-              this.locale = zhCN;
-              this.tr = i18next.getFixedT('zh_CN');
-            });
-            break;
-        }
+        this.updateLocale(this.lang);
       },
     );
   }
 
+  private initI18n() {
+    if (!i18next.isInitialized) {
+      i18next.init({
+        lng: this.lang,
+        fallbackLng: 'en_US',
+        debug: false,
+        resources: {
+          en_US: { translation: this.translations },
+          zh_CN: { translation: this.translations },
+        },
+      });
+    } else {
+      i18next.addResourceBundle(this.lang, 'translation', this.translations);
+    }
+  }
+
+  private updateLocale(lang: string) {
+    i18next.changeLanguage(lang).then(() => {
+      i18next.addResourceBundle(lang, 'translation', this.translations);
+      this.tr = i18next.getFixedT(lang);
+
+      if (lang === 'en_US') {
+        import('dayjs/locale/en');
+        this.locale = enUS;
+      } else {
+        import('dayjs/locale/zh-cn');
+        this.locale = zhCN;
+      }
+    });
+  }
+
   toggleMode() {
     this.mode = this.mode === 'light' ? 'dark' : 'light';
+    this.updateSettings({ themeMode: this.mode }).catch(() => {});
+  }
+
+  setLang(lang: string) {
+    this.lang = lang;
+    this.updateSettings({ locale: lang }).catch(console.warn);
+  }
+
+  @api('/api/settings', { method: 'get' })
+  async fetchSettings(_params?: unknown, req?: ApiRequest<{}>): Promise<void> {
+    const result = await req!.send();
+    if (result) {
+      this.mode = result.themeMode as ThemeMode;
+      this.lang = result.locale;
+      this.translations = result.translations;
+      this.updateLocale(this.lang);
+    }
+  }
+
+  @api('/api/settings', { method: 'put' })
+  async updateSettings(
+    _params: { themeMode?: ThemeMode; locale?: string },
+    req?: ApiRequest<{ themeMode?: ThemeMode; locale?: string }>,
+  ): Promise<void> {
+    const result = await req!.send();
+    if (result) {
+      this.mode = result.themeMode as ThemeMode;
+      this.lang = result.locale;
+      this.translations = result.translations;
+    }
   }
 }

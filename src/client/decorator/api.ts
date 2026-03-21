@@ -178,7 +178,6 @@ export class ApiRequest<P extends Record<string, any> = {}> extends Request {
 
   async send() {
     const fetchApi = isClient() ? fetch : serverFetch;
-
     const res = await fetchApi(this);
 
     if (res instanceof Error) {

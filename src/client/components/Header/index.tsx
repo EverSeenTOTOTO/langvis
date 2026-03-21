@@ -39,12 +39,12 @@ const Header = () => {
     {
       key: '/documents',
       icon: <FileTextOutlined />,
-      label: 'Documents',
+      label: settingStore.tr('Documents'),
     },
     {
       key: '/emails',
       icon: <MailOutlined />,
-      label: 'Emails',
+      label: settingStore.tr('Emails'),
     },
   ];
 
@@ -84,7 +84,7 @@ const Header = () => {
               onClick={e => e.stopPropagation()}
               value={settingStore.lang}
               onChange={value => {
-                settingStore.lang = value;
+                settingStore.setLang(value);
               }}
               options={Object.keys(SUPPORTED_LOCALES).map(key => ({
                 label: SUPPORTED_LOCALES[key as 'zh_CN'],
