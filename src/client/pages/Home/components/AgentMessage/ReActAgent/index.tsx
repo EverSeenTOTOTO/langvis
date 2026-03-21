@@ -1,5 +1,7 @@
 import HumanInputForm from '@/client/components/HumanInputForm';
-import MarkdownRender from '@/client/components/MarkdownRender';
+import { lazy, Suspense } from 'react';
+
+const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 import { AgentIds } from '@/shared/constants';
 import type { Message } from '@/shared/types/entities';
 import type { MessageRenderState, ThoughtItem } from '../deriveMessageState';
@@ -246,7 +248,13 @@ const createReActRenderer = (agentId: string) => {
             </Typography.Text>
           )}
 
-          <MarkdownRender>{msg.content}</MarkdownRender>
+          <Suspense
+            fallback={
+              <Typography.Paragraph>{msg.content}</Typography.Paragraph>
+            }
+          >
+            <MarkdownRender>{msg.content}</MarkdownRender>
+          </Suspense>
         </>
       ),
       showBubbleLoading,

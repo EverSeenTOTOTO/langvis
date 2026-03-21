@@ -1,5 +1,7 @@
 import AudioPlayer from '@/client/components/AudioPlayer';
-import MarkdownRender from '@/client/components/MarkdownRender';
+import { lazy, Suspense } from 'react';
+
+const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 import { TextToSpeechOutput } from '@/server/core/tool/TextToSpeech';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import type { Message } from '@/shared/types/entities';
@@ -63,7 +65,13 @@ const GirlFriendAgentRenderer = (
           </Typography.Text>
         )}
         <Spin spinning={derived.isTtsPending}>
-          <MarkdownRender>{msg.content}</MarkdownRender>
+          <Suspense
+            fallback={
+              <Typography.Paragraph>{msg.content}</Typography.Paragraph>
+            }
+          >
+            <MarkdownRender>{msg.content}</MarkdownRender>
+          </Suspense>
         </Spin>
         {derived.isProcessing && (
           <Typography.Text type="secondary" italic>

@@ -33,6 +33,9 @@ export async function render(context: RenderContext) {
   ctx.routes = routes;
 
   if (!isEmpty(req.cookies)) {
+    // Initialize fetch-cookie instance before setting cookies
+    await serverFetch.init();
+
     // prefetch user session if client cookie present
     await store.auth
       .getSession({
@@ -47,12 +50,11 @@ export async function render(context: RenderContext) {
 
     // Set each cookie individually with Path=/ to ensure they're available for all API paths
     const rootUrl = getPrefetchPath('/');
+    const cookieJar = serverFetch.cookieJar!;
     for (const [key, value] of Object.entries(req.cookies)) {
-      await serverFetch.cookieJar.setCookie(
-        `${key}=${value}; Path=/`,
-        rootUrl,
-        { ignoreError: false },
-      );
+      await cookieJar.setCookie(`${key}=${value}; Path=/`, rootUrl, {
+        ignoreError: false,
+      });
     }
   }
 

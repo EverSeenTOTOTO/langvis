@@ -1,10 +1,11 @@
 import SchemaField, { SchemaProperty } from '@/client/components/SchemaField';
 import { useStore } from '@/client/store';
-import { Alert, Button, Form, Spin } from 'antd';
-import React, { useEffect, useState } from 'react';
+import { Alert, Button, Form, Spin, Typography } from 'antd';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { useAsyncFn } from 'react-use';
-import MarkdownRender from '../MarkdownRender';
 import './index.scss';
+
+const MarkdownRender = lazy(() => import('../MarkdownRender'));
 
 interface HumanInputFormProps {
   conversationId: string;
@@ -168,7 +169,11 @@ const HumanInputForm: React.FC<HumanInputFormProps> = ({
 
   return (
     <div className="human-input-form">
-      <MarkdownRender>{message}</MarkdownRender>
+      <Suspense
+        fallback={<Typography.Paragraph>{message}</Typography.Paragraph>}
+      >
+        <MarkdownRender>{message}</MarkdownRender>
+      </Suspense>
       <Form form={form} layout="vertical" onFinish={handleSubmit}>
         {schema.type === 'object' && schema.properties ? (
           Object.entries(schema.properties).map(([key, prop]) => (

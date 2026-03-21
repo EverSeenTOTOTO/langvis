@@ -1,12 +1,14 @@
 import { useStore } from '@/client/store';
 import { observer } from 'mobx-react-lite';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
 import ReactMarkdown from 'react-markdown';
 import { useCopyToClipboard } from 'react-use';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/contrib/copy-tex.mjs';
 import 'katex/dist/katex.min.css';
 import './index.scss';
 
@@ -87,26 +89,12 @@ const CodeBlock = ({ language, code, isDark }: CodeBlockProps) => {
 const MarkdownRender = observer(
   ({ children: content }: { children: string }) => {
     const settingStore = useStore('setting');
-    const rehypeKatexRef = useRef<typeof import('rehype-katex').default | null>(
-      null,
-    );
-    const [, forceUpdate] = useState(0);
-
-    useEffect(() => {
-      if (rehypeKatexRef.current) return;
-      import('rehype-katex').then(module => {
-        rehypeKatexRef.current = module.default;
-        forceUpdate(n => n + 1);
-      });
-      // Enable copy-tex extension for copying LaTeX source on click
-      import('katex/dist/contrib/copy-tex.mjs');
-    }, []);
 
     return (
       <div className="markdown-render">
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-          rehypePlugins={rehypeKatexRef.current ? [rehypeKatexRef.current] : []}
+          rehypePlugins={[rehypeKatex]}
           components={{
             a: ({ ...props }) => (
               <a {...props} target="_blank" rel="noopener noreferrer" />

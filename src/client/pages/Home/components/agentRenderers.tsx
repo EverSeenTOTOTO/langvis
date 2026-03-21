@@ -1,4 +1,3 @@
-import MarkdownRender from '@/client/components/MarkdownRender';
 import { AgentIds } from '@/shared/constants';
 import type { Message } from '@/shared/types/entities';
 import type { MessageRenderState } from './AgentMessage/deriveMessageState';
@@ -6,6 +5,9 @@ import { deriveMessageState } from './AgentMessage/deriveMessageState';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Typography } from 'antd';
 import type React from 'react';
+import { lazy, Suspense } from 'react';
+
+const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
 export type AgentRenderResult = {
   content: React.ReactNode;
@@ -67,7 +69,11 @@ const defaultChatRenderer: AgentRenderer = (msg, state) => {
             Thinking...
           </Typography.Text>
         )}
-        <MarkdownRender>{msg.content}</MarkdownRender>
+        <Suspense
+          fallback={<Typography.Paragraph>{msg.content}</Typography.Paragraph>}
+        >
+          <MarkdownRender>{msg.content}</MarkdownRender>
+        </Suspense>
       </>
     ),
     showBubbleLoading,
