@@ -1,8 +1,13 @@
 import { service } from '../decorator/service';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
+import { isProd } from '../utils';
 
-const LOCALES_DIR = join(import.meta.dirname, '../locales');
+const LOCALES_DIR = join(
+  process.cwd(),
+  isProd ? 'dist' : 'src',
+  'server/locales',
+);
 
 @service()
 export class LocaleService {

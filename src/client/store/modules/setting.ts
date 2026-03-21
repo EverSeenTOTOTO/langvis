@@ -26,21 +26,23 @@ export class SettingStore {
   translations: Record<string, string> = {};
 
   locale: Locale = zhCN;
-  tr: typeof i18next.t;
 
   constructor() {
     makeAutoObservable(this);
 
     this.initI18n();
-    this.tr = i18next.getFixedT(this.lang);
 
     reaction(
-      () => this.lang,
+      () => [this.lang, this.translations] as const,
       () => {
         this.updateLocale(this.lang);
       },
     );
   }
+
+  tr = (key: string, options?: Record<string, unknown>): string => {
+    return i18next.t(key, { lng: this.lang, ...options });
+  };
 
   private initI18n() {
     if (!i18next.isInitialized) {
@@ -61,7 +63,6 @@ export class SettingStore {
   private updateLocale(lang: string) {
     i18next.changeLanguage(lang).then(() => {
       i18next.addResourceBundle(lang, 'translation', this.translations);
-      this.tr = i18next.getFixedT(lang);
 
       if (lang === 'en_US') {
         import('dayjs/locale/en');
@@ -102,8 +103,8 @@ export class SettingStore {
     const result = await req!.send();
     if (result) {
       this.mode = result.themeMode as ThemeMode;
-      this.lang = result.locale;
       this.translations = result.translations;
+      this.lang = result.locale;
     }
   }
 }
