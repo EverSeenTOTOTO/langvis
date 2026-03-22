@@ -1,5 +1,40 @@
 import { Tool } from '@/server/core/tool';
 import type { JSONSchemaObject } from 'openai/lib/jsonschema.mjs';
+import { Agent } from '../core/agent';
+
+export function formatAgentsToMarkdown(agents: Agent[]): string {
+  if (!agents || agents.length === 0) {
+    return 'No agents available.';
+  }
+
+  return agents
+    .map(agent => {
+      const config = agent.config;
+      const sections: string[] = [];
+
+      sections.push(`### ${agent.id}`);
+      sections.push('');
+      sections.push(config.description);
+      sections.push('');
+
+      const inputSchema = config.inputSchema as JSONSchemaObject;
+
+      if (inputSchema?.properties) {
+        sections.push('**Input:**');
+        sections.push('');
+        sections.push(
+          formatSchemaAsTable(
+            inputSchema.properties,
+            inputSchema.required as string[],
+          ),
+        );
+        sections.push('');
+      }
+
+      return sections.join('\n');
+    })
+    .join('\n---\n\n');
+}
 
 export function formatToolsToMarkdown(tools: Tool[]): string {
   if (!tools || tools.length === 0) {

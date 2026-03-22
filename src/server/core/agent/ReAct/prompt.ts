@@ -1,14 +1,21 @@
-import { formatToolsToMarkdown } from '@/server/utils/formatTools';
+import {
+  formatAgentsToMarkdown,
+  formatToolsToMarkdown,
+} from '@/server/utils/formatTools';
 import { Prompt } from '../../PromptBuilder';
 import type { Agent } from '../index';
 
-export const createPrompt = (agent: Agent, parentPrompt: Prompt) =>
-  parentPrompt
+export const createPrompt = (agent: Agent, parentPrompt: Prompt) => {
+  return parentPrompt
     .with(
       'Role & Goal',
       'You are an AI assistant that answers questions and solves problems through reasoning and tool usage.',
     )
     .with('Tools', formatToolsToMarkdown(agent.tools ?? []))
+    .with(
+      'Agents',
+      `You can delegate subtasks to specialized agents using the \`agent_call\` tool:\n\n${formatAgentsToMarkdown(agent.agents ?? [])}`,
+    )
     .with(
       'Output language',
       '- Default to Chinese unless the user requests another language.',
@@ -70,6 +77,27 @@ Assistant:
 }
 </example:use-tool>
 
+<example:call-agent>
+User: 帮我分析这份财务报表，给出投资建议。
+Assistant:
+{
+  "thought": "用户上传了财务报表文件，需要调用 financial_agent 进行专业分析。文件路径是 /uploads/2024_financial.xlsx",
+  "action": {
+    "tool": "agent_call",
+    "input": {
+      "agentId": "financial_agent",
+      "context": "文件路径：/uploads/2024_financial.xlsx",
+      "query": "分析这份财务报表，重点关注盈利能力、偿债能力和成长性，并给出投资建议。"
+    }
+  }
+}
+(Observation: {"success": true, "content": "财务分析报告：..."})
+Assistant:
+{
+  "final_answer": "根据专业分析，该公司的财务状况如下：..."
+}
+</example:call-agent>
+
 <example:ask-user>
 User: Delete all my old files.
 Assistant:
@@ -97,3 +125,4 @@ Assistant:
 }
 </example:ask-user>`,
     );
+};

@@ -25,7 +25,7 @@ export const agent = createConfigDecorator('agent');
 export const tool = createConfigDecorator('tool');
 export const memory = createConfigDecorator('memory');
 
-const resolveConfig = (config: AgentConfig | ToolConfig) => {
+const resolveConfig = <T extends AgentConfig | ToolConfig>(config: T): T => {
   if (!config.extends) return config;
 
   const target = container.resolve<Agent | Tool>(config.extends);
@@ -103,7 +103,7 @@ export const registerAgent = async <T>(
 
       // Inject tools
       if (instance && 'tools' in instance) {
-        const toolTokens = config.tools || [];
+        const toolTokens = merged.tools || [];
 
         const tools = toolTokens.map(t => container.resolve<Tool>(t));
 
@@ -112,6 +112,11 @@ export const registerAgent = async <T>(
         logger.info(
           `Injected ${tools.length} tools into agent: ${chalk.cyan(config.name)}`,
         );
+      }
+
+      // Agents are resolved lazily from config to avoid circular dependency
+      if (instance && 'agents' in instance) {
+        Reflect.set(instance, 'agents', []);
       }
 
       proxyValidation(
@@ -145,7 +150,7 @@ export const registerTool = async <I, O>(
   container.afterResolution(
     token,
     async (_token, instance: any) => {
-      const merged = resolveConfig(config);
+      const merged = resolveConfig(config as ToolConfig);
 
       Reflect.set(instance, 'config', merged);
       Reflect.set(instance, 'id', token);

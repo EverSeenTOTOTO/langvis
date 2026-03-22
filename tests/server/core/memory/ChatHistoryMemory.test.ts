@@ -40,16 +40,22 @@ describe('ChatHistoryMemory', () => {
         async () => {
           const messages = [
             {
+              id: 'msg-1',
               role: Role.USER,
               content: 'Hello',
+              attachments: null,
               meta: null,
               createdAt: new Date(),
+              conversationId: 'conv-123',
             },
             {
+              id: 'msg-2',
               role: Role.ASSIST,
               content: 'Hi there!',
-              meta: { key: 'value' },
+              attachments: null,
+              meta: { hidden: true },
               createdAt: new Date(),
+              conversationId: 'conv-123',
             },
           ];
 
@@ -69,10 +75,13 @@ describe('ChatHistoryMemory', () => {
         async () => {
           const messages = [
             {
+              id: 'msg-1',
               role: Role.SYSTEM,
               content: 'You are a helpful assistant.',
+              attachments: null,
               meta: null,
               createdAt: new Date(),
+              conversationId: 'conv-123',
             },
           ];
 
@@ -92,6 +101,7 @@ describe('ChatHistoryMemory', () => {
         async () => {
           const messages = [
             {
+              id: 'msg-1',
               role: Role.USER,
               content: 'Analyze this image',
               attachments: [
@@ -104,6 +114,7 @@ describe('ChatHistoryMemory', () => {
               ],
               meta: null,
               createdAt: new Date(),
+              conversationId: 'conv-123',
             },
           ];
 
@@ -128,6 +139,8 @@ describe('ChatHistoryMemory', () => {
               id: 'msg-1',
               role: Role.USER,
               content: 'Hello',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -164,28 +177,18 @@ describe('ChatHistoryMemory', () => {
 
   describe('clearByConversationId', () => {
     it('should delete messages via conversationService', async () => {
-      await TraceContext.run(
-        { requestId: 'test', conversationId: 'conv-123' },
-        async () => {
-          await memory.clearByConversationId();
+      await memory.clearByConversationId('conv-123');
 
-          expect(
-            mockConversationService.batchDeleteMessagesInConversation,
-          ).toHaveBeenCalledWith('conv-123');
-        },
-      );
+      expect(
+        mockConversationService.batchDeleteMessagesInConversation,
+      ).toHaveBeenCalledWith('conv-123');
     });
   });
 
   describe('clearByUserId', () => {
     it('should throw error as not supported', async () => {
-      await TraceContext.run(
-        { requestId: 'test', conversationId: 'conv-123' },
-        async () => {
-          await expect(memory.clearByUserId('user-123')).rejects.toThrow(
-            'ChatHistoryMemory does not support clearByUserId',
-          );
-        },
+      await expect(memory.clearByUserId('user-123')).rejects.toThrow(
+        'ChatHistoryMemory does not support clearByUserId',
       );
     });
   });
@@ -200,6 +203,8 @@ describe('ChatHistoryMemory', () => {
               id: 'msg-1',
               role: Role.USER,
               content: 'Hello',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },

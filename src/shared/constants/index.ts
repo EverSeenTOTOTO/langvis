@@ -11,6 +11,7 @@ export enum ToolIds {
   LINKS_EXTRACT = 'links_extract',
   CACHED_READ = 'cached_read',
   POSITION_ADJUSTMENT_ADVICE = 'position_adjustment_advice',
+  AGENT_CALL = 'agent_call',
 
   // Internal tools (not exposed to agents directly)
   DOCUMENT_METADATA_EXTRACT = 'document_metadata_extract',
@@ -31,6 +32,7 @@ export enum AgentIds {
 export enum MemoryIds {
   NONE = 'no_memory',
   CHAT_HISTORY = 'chat_history_memory',
+  CHILD = 'child_memory',
 }
 
 export const InjectTokens = {

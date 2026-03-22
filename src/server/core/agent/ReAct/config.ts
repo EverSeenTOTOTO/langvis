@@ -25,5 +25,7 @@ export const config: AgentConfig = {
     ToolIds.WEB_FETCH,
     ToolIds.ASK_USER,
     ToolIds.CACHED_READ,
+    ToolIds.AGENT_CALL,
   ],
+  agents: [AgentIds.DOCUMENT, AgentIds.FINANCIAL],
 };

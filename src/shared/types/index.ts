@@ -9,12 +9,20 @@ export interface UploadConfig {
   maxCount?: number;
 }
 
-export interface AgentConfig<Config = Record<string, unknown>> {
+export interface AgentConfig<
+  Config = Record<string, unknown>,
+  Input = Record<string, unknown>,
+> {
   extends?: string;
   name: string;
   description: string;
   tools?: string[];
+  /** Callable agent IDs - these agents can be invoked via agent_call tool */
+  agents?: string[];
+  /** Runtime configuration schema (e.g., model, temperature) */
   configSchema?: JSONSchemaType<Config>;
+  /** Input schema for child agent invocation (context, query, etc.) */
+  inputSchema?: JSONSchemaType<Input>;
   enabled?: boolean;
   upload?: UploadConfig;
 }

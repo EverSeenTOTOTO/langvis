@@ -31,6 +31,7 @@ export default class GirlFriendAgent extends Agent {
   readonly config!: AgentConfig;
   protected readonly logger!: Logger;
   readonly tools!: Tool[];
+  readonly agents!: Agent[];
 
   get systemPrompt(): Prompt {
     return createPrompt(this, super.systemPrompt);
