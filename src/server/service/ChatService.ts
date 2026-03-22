@@ -5,14 +5,12 @@ import { globby } from 'globby';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
 import { ChatSession, SessionPhase } from '../core/ChatSession';
-import { TraceContext } from '../core/TraceContext';
 import { Memory } from '../core/memory';
 import { registerMemory } from '../decorator/core';
 import { service } from '../decorator/service';
 import { isProd } from '../utils';
 import Logger from '../utils/logger';
 import { RedisService } from './RedisService';
-import dayjs from 'dayjs';
 
 /**
  * Session state persisted to Redis for reconnection support.
@@ -180,92 +178,11 @@ export class ChatService {
       config?.memory?.type ?? MemoryIds.NONE,
     );
 
-    const messages = await memory.summarize();
-    const chatMessages = this.buildChatMessages({
-      agent,
+    await memory.initialize({
+      systemPrompt: agent.systemPrompt.build(),
       userMessage,
-      isNewConversation: messages.length === 0,
-    });
-
-    await memory.store(chatMessages);
-
-    this.logger.debug('Memory built', {
-      sessionId: memory.conversationId,
-      messageCount: chatMessages.length,
     });
 
     return memory;
-  }
-
-  private buildChatMessages({
-    agent,
-    userMessage,
-    isNewConversation,
-  }: {
-    agent: Agent;
-    userMessage: {
-      role: Role;
-      content: string;
-      attachments?: MessageAttachment[] | null;
-      meta?: Record<string, any> | null;
-    };
-    isNewConversation: boolean;
-  }): {
-    role: Role;
-    content: string;
-    attachments?: MessageAttachment[] | null;
-    meta?: Record<string, any> | null;
-    createdAt: Date;
-  }[] {
-    const trace = TraceContext.get();
-    const conversationId = trace?.conversationId ?? '';
-    const userId = trace?.userId ?? '';
-
-    const baseTime = Date.now();
-    const messages: {
-      role: Role;
-      content: string;
-      attachments?: MessageAttachment[] | null;
-      meta?: Record<string, any> | null;
-      createdAt: Date;
-    }[] = [];
-
-    // Add system prompt for new conversations
-    if (isNewConversation) {
-      const systemPrompt = agent.systemPrompt.build();
-
-      if (systemPrompt) {
-        messages.push({
-          role: Role.SYSTEM,
-          content: systemPrompt,
-          createdAt: new Date(baseTime + messages.length),
-        });
-      }
-    }
-
-    // Add session context as a user message before the actual user message
-    // Only add for new conversations to avoid duplication
-    if (isNewConversation) {
-      const sessionContext = `<session-context>
-Conversation ID: ${conversationId}
-User ID: ${userId}
-Current Time: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}
-</session-context>`;
-
-      messages.push({
-        role: Role.USER,
-        content: sessionContext,
-        meta: { hidden: true },
-        createdAt: new Date(baseTime + messages.length),
-      });
-    }
-
-    // Add user message
-    messages.push({
-      ...userMessage,
-      createdAt: new Date(baseTime + messages.length),
-    });
-
-    return messages;
   }
 }

@@ -5,6 +5,7 @@
  */
 
 import type { SchemaProperty } from '@/client/components/SchemaField';
+import type { AgentEvent } from '@/shared/types';
 import type { ToolCallTimeline } from './deriveMessageState';
 
 // === Types ===
@@ -18,6 +19,7 @@ export interface ProgressData {
   status?: string;
   message?: string;
   schema?: SchemaProperty;
+  event?: AgentEvent;
   [key: string]: unknown;
 }
 
@@ -25,6 +27,15 @@ export interface ToolBlock {
   toolCall: ToolCallTimeline;
   latestProgress: ProgressData | null;
   isPending: boolean;
+}
+
+export interface AgentCallBlock {
+  callId: string;
+  agentId?: string;
+  status: 'pending' | 'done' | 'error';
+  events: AgentEvent[];
+  content: string;
+  error?: string;
 }
 
 // === Color utilities ===
@@ -96,4 +107,67 @@ export function buildToolBlocks(
       isPending: toolCall.status === 'pending',
     };
   });
+}
+
+// === Agent call blocks ===
+
+/**
+ * Build AgentCallBlocks from tool_call events where toolName is 'agent_call'.
+ * Each block contains nested events from the child agent.
+ */
+export function buildAgentCallBlocks(
+  toolCallTimeline: ToolCallTimeline[],
+): AgentCallBlock[] {
+  const blocks: AgentCallBlock[] = [];
+
+  for (const toolCall of toolCallTimeline) {
+    // Check if this is an agent_call tool
+    if (toolCall.toolName !== 'agent_call') continue;
+
+    const nestedEvents: AgentEvent[] = [];
+    let content = '';
+
+    for (const progress of toolCall.progress) {
+      const data = progress.data as ProgressData;
+
+      // Extract nested agent events
+      if (data?.status === 'agent_event' && data.event) {
+        nestedEvents.push(data.event);
+        if (data.event.type === 'stream') {
+          content += data.event.content;
+        }
+      }
+    }
+
+    blocks.push({
+      callId: toolCall.callId,
+      status: toolCall.status,
+      events: nestedEvents,
+      content,
+      error: toolCall.error,
+    });
+  }
+
+  return blocks;
+}
+
+/**
+ * Detect awaiting_input status from a flat list of agent events.
+ * Used for nested agent call blocks.
+ */
+export function detectAwaitingInputInEvents(
+  events: AgentEvent[],
+): AwaitingInputData | null {
+  for (const event of events) {
+    if (event.type !== 'tool_progress') continue;
+
+    const data = event.data as ProgressData;
+    if (data?.status === 'awaiting_input' && data.schema) {
+      return {
+        message: data.message ?? 'Please provide input',
+        schema: data.schema,
+      };
+    }
+  }
+  return null;
 }

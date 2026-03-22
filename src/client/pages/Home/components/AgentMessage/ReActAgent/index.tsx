@@ -3,8 +3,13 @@ import { lazy, Suspense } from 'react';
 
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 import { AgentIds } from '@/shared/constants';
+import type { AgentEvent } from '@/shared/types';
 import type { Message } from '@/shared/types/entities';
-import type { MessageRenderState, ThoughtItem } from '../deriveMessageState';
+import type {
+  MessageRenderState,
+  ThoughtItem,
+  ToolCallTimeline,
+} from '../deriveMessageState';
 import {
   CheckCircleOutlined,
   LoadingOutlined,
@@ -19,14 +24,18 @@ import {
 } from '../../agentRenderers';
 import {
   buildToolBlocks,
+  buildAgentCallBlocks,
   detectAwaitingInput,
+  detectAwaitingInputInEvents,
   getToolColor,
   type ToolBlock,
+  type AgentCallBlock,
 } from '../utils';
 import './index.scss';
 
 interface ReActDerivedState {
   toolBlocks: ToolBlock[];
+  agentCallBlocks: AgentCallBlock[];
   standaloneThoughts: ThoughtItem[];
   awaitingInput: ReturnType<typeof detectAwaitingInput>;
   isProcessing: boolean;
@@ -39,6 +48,7 @@ function deriveReActState(state: MessageRenderState): ReActDerivedState {
     state;
 
   const toolBlocks = buildToolBlocks(toolCallTimeline);
+  const agentCallBlocks = buildAgentCallBlocks(toolCallTimeline);
 
   const awaitingInput = detectAwaitingInput(toolBlocks);
 
@@ -54,6 +64,7 @@ function deriveReActState(state: MessageRenderState): ReActDerivedState {
 
   return {
     toolBlocks,
+    agentCallBlocks,
     standaloneThoughts: thoughts,
     awaitingInput,
     isProcessing,
@@ -81,6 +92,130 @@ function StandaloneThoughtBlock({ thought }: { thought: ThoughtItem }) {
       >
         {thought.content}
       </Typography.Paragraph>
+    </div>
+  );
+}
+
+/**
+ * Build tool call timeline from nested agent events
+ */
+function buildNestedToolTimeline(events: AgentEvent[]): ToolCallTimeline[] {
+  const toolCallsMap = new Map<string, ToolCallTimeline>();
+
+  for (const event of events) {
+    switch (event.type) {
+      case 'tool_call':
+        toolCallsMap.set(event.callId, {
+          callId: event.callId,
+          toolName: event.toolName,
+          toolArgs: event.toolArgs,
+          seq: event.seq,
+          at: event.at,
+          status: 'pending',
+          progress: [],
+        });
+        break;
+
+      case 'tool_result': {
+        const existing = toolCallsMap.get(event.callId);
+        if (existing) {
+          existing.status = 'done';
+          existing.output = event.output;
+        }
+        break;
+      }
+
+      case 'tool_error': {
+        const existing = toolCallsMap.get(event.callId);
+        if (existing) {
+          existing.status = 'error';
+          existing.error = event.error;
+        }
+        break;
+      }
+
+      case 'tool_progress': {
+        const existing = toolCallsMap.get(event.callId);
+        if (existing) {
+          existing.progress.push({
+            data: event.data,
+            seq: event.seq,
+            at: event.at,
+          });
+        }
+        break;
+      }
+    }
+  }
+
+  return Array.from(toolCallsMap.values()).sort((a, b) => a.seq - b.seq);
+}
+
+interface AgentCallBlockItemProps {
+  block: AgentCallBlock;
+  conversationId: string;
+}
+
+function AgentCallBlockItem({
+  block,
+  conversationId,
+}: AgentCallBlockItemProps) {
+  const [expanded, setExpanded] = useState(false);
+  const nestedToolTimeline = buildNestedToolTimeline(block.events);
+  const nestedToolBlocks = buildToolBlocks(nestedToolTimeline);
+  const nestedAwaitingInput = detectAwaitingInputInEvents(block.events);
+
+  const Icon =
+    block.status === 'pending' ? (
+      <SyncOutlined spin style={{ color: 'var(--ant-color-primary)' }} />
+    ) : block.status === 'done' ? (
+      <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
+    ) : (
+      <span style={{ color: 'var(--ant-color-error)' }}>✕</span>
+    );
+
+  return (
+    <div className="react-agent-call-block">
+      <Flex
+        align="center"
+        gap={8}
+        className="react-agent-call-header"
+        onClick={() => setExpanded(!expanded)}
+        style={{ cursor: 'pointer' }}
+      >
+        {Icon}
+        <Tag color="purple">Agent</Tag>
+        <Typography.Text type="secondary">
+          {nestedToolTimeline.length} tool(s)
+        </Typography.Text>
+        <Typography.Text type="secondary" style={{ marginLeft: 'auto' }}>
+          {expanded ? '▼' : '▶'}
+        </Typography.Text>
+      </Flex>
+
+      {expanded && nestedToolBlocks.length > 0 && (
+        <div className="react-agent-call-nested">
+          {nestedToolBlocks.map(toolBlock => (
+            <ToolBlockItem key={toolBlock.toolCall.callId} block={toolBlock} />
+          ))}
+        </div>
+      )}
+
+      {expanded && nestedAwaitingInput && (
+        <div className="react-agent-call-input">
+          <HumanInputForm
+            conversationId={conversationId}
+            message={nestedAwaitingInput.message}
+            schema={nestedAwaitingInput.schema}
+          />
+        </div>
+      )}
+
+      {block.status === 'error' && (
+        <Typography.Text type="danger" className="react-tool-error">
+          {block.error}
+        </Typography.Text>
+      )}
     </div>
   );
 }
@@ -190,9 +325,26 @@ const ReActEventRenderer: React.FC<ReActEventRendererProps> = ({
             ),
             children: (
               <div className="react-tool-list">
-                {derived.toolBlocks.map(block => (
-                  <ToolBlockItem key={block.toolCall.callId} block={block} />
-                ))}
+                {derived.toolBlocks.map(block => {
+                  // Use AgentCallBlockItem for agent_call tools
+                  if (block.toolCall.toolName === 'agent_call') {
+                    const agentCallBlock = derived.agentCallBlocks.find(
+                      b => b.callId === block.toolCall.callId,
+                    );
+                    if (agentCallBlock) {
+                      return (
+                        <AgentCallBlockItem
+                          key={agentCallBlock.callId}
+                          block={agentCallBlock}
+                          conversationId={conversationId}
+                        />
+                      );
+                    }
+                  }
+                  return (
+                    <ToolBlockItem key={block.toolCall.callId} block={block} />
+                  );
+                })}
                 {derived.standaloneThoughts.map(thought => (
                   <StandaloneThoughtBlock
                     key={`thought-${thought.seq}`}

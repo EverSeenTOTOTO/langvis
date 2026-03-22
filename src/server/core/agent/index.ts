@@ -12,6 +12,7 @@ export abstract class Agent {
   protected abstract readonly logger: Logger;
 
   abstract readonly tools: Tool[];
+  abstract readonly agents: Agent[];
 
   get systemPrompt(): Prompt {
     return Prompt.empty();

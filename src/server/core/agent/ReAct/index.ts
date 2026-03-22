@@ -45,6 +45,7 @@ export default class ReActAgent extends Agent {
   readonly config!: AgentConfig;
   protected readonly logger!: Logger;
   readonly tools!: Tool[];
+  readonly agents!: Agent[];
 
   readonly maxIterations: number = 5;
 

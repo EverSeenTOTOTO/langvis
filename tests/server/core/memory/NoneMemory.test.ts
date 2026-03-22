@@ -40,10 +40,13 @@ describe('NoneMemory', () => {
         async () => {
           const messages = [
             {
+              id: 'msg-1',
               role: Role.USER,
               content: 'Hello',
+              attachments: null,
               meta: null,
               createdAt: new Date(),
+              conversationId: 'conv-123',
             },
           ];
 
@@ -63,6 +66,7 @@ describe('NoneMemory', () => {
         async () => {
           const messages = [
             {
+              id: 'msg-1',
               role: Role.USER,
               content: 'What is in this image?',
               attachments: [
@@ -75,6 +79,7 @@ describe('NoneMemory', () => {
               ],
               meta: null,
               createdAt: new Date(),
+              conversationId: 'conv-123',
             },
           ];
 
@@ -99,6 +104,8 @@ describe('NoneMemory', () => {
               id: 'msg-1',
               role: Role.USER,
               content: 'Hello',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -120,28 +127,18 @@ describe('NoneMemory', () => {
 
   describe('clearByConversationId', () => {
     it('should delete messages via conversationService', async () => {
-      await TraceContext.run(
-        { requestId: 'test', conversationId: 'conv-123' },
-        async () => {
-          await memory.clearByConversationId();
+      await memory.clearByConversationId('conv-123');
 
-          expect(
-            mockConversationService.batchDeleteMessagesInConversation,
-          ).toHaveBeenCalledWith('conv-123');
-        },
-      );
+      expect(
+        mockConversationService.batchDeleteMessagesInConversation,
+      ).toHaveBeenCalledWith('conv-123');
     });
   });
 
   describe('clearByUserId', () => {
     it('should throw error as not supported', async () => {
-      await TraceContext.run(
-        { requestId: 'test', conversationId: 'conv-123' },
-        async () => {
-          await expect(memory.clearByUserId('user-123')).rejects.toThrow(
-            'NoneMemory does not support clearByUserId',
-          );
-        },
+      await expect(memory.clearByUserId('user-123')).rejects.toThrow(
+        'ChatHistoryMemory does not support clearByUserId',
       );
     });
   });
@@ -156,6 +153,8 @@ describe('NoneMemory', () => {
               id: 'msg-1',
               role: Role.SYSTEM,
               content: 'You are a helpful assistant.',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -163,6 +162,8 @@ describe('NoneMemory', () => {
               id: 'msg-2',
               role: Role.USER,
               content: 'First question',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -170,6 +171,8 @@ describe('NoneMemory', () => {
               id: 'msg-3',
               role: Role.ASSIST,
               content: 'First answer',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -177,6 +180,8 @@ describe('NoneMemory', () => {
               id: 'msg-4',
               role: Role.USER,
               content: 'Second question',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -184,6 +189,8 @@ describe('NoneMemory', () => {
               id: 'msg-5',
               role: Role.ASSIST,
               content: '',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -212,6 +219,8 @@ describe('NoneMemory', () => {
               id: 'msg-1',
               role: Role.USER,
               content: 'First question',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -219,6 +228,8 @@ describe('NoneMemory', () => {
               id: 'msg-2',
               role: Role.ASSIST,
               content: 'Answer',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -226,6 +237,8 @@ describe('NoneMemory', () => {
               id: 'msg-3',
               role: Role.USER,
               content: 'Second question',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -233,6 +246,8 @@ describe('NoneMemory', () => {
               id: 'msg-4',
               role: Role.ASSIST,
               content: '',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -259,6 +274,8 @@ describe('NoneMemory', () => {
               id: 'msg-1',
               role: Role.SYSTEM,
               content: 'You are a helpful assistant.',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -266,6 +283,8 @@ describe('NoneMemory', () => {
               id: 'msg-2',
               role: Role.USER,
               content: 'Question',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -273,6 +292,8 @@ describe('NoneMemory', () => {
               id: 'msg-3',
               role: Role.ASSIST,
               content: 'Answer',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -280,6 +301,8 @@ describe('NoneMemory', () => {
               id: 'msg-4',
               role: Role.ASSIST,
               content: '',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -320,6 +343,8 @@ describe('NoneMemory', () => {
               id: 'msg-1',
               role: Role.USER,
               content: 'Hello',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -327,6 +352,8 @@ describe('NoneMemory', () => {
               id: 'msg-2',
               role: Role.ASSIST,
               content: '',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },
@@ -352,6 +379,8 @@ describe('NoneMemory', () => {
               id: 'msg-1',
               role: Role.SYSTEM,
               content: 'You are a helpful assistant.',
+              attachments: null,
+              meta: null,
               conversationId: 'conv-123',
               createdAt: new Date(),
             },

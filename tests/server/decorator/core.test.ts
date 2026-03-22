@@ -71,6 +71,7 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
         tools: Tool[] = [];
+        agents: Agent[] = [];
 
         async *call(
           _memory: Memory,
@@ -119,6 +120,7 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
         tools: Tool[] = [];
+        agents: Agent[] = [];
 
         async *call(
           _memory: Memory,
@@ -172,6 +174,7 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
         tools: Tool[] = [];
+        agents: Agent[] = [];
 
         async *call(
           _memory: Memory,
@@ -213,6 +216,7 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
         tools: Tool[] = [];
+        agents: Agent[] = [];
 
         async *call(
           _memory: Memory,
@@ -231,6 +235,7 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
         tools: Tool[] = [];
+        agents: Agent[] = [];
 
         async *call(
           _memory: Memory,
@@ -272,6 +277,7 @@ describe('Config Decorators', () => {
         };
         logger = winston.createLogger();
         tools: Tool[] = [];
+        agents: Agent[] = [];
 
         async *call(
           _memory: Memory,

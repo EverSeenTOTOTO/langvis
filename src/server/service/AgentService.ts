@@ -53,9 +53,36 @@ export class AgentService {
       this.agents = await Promise.all(
         agents.map(agent => registerAgent(agent.clazz, agent.config)),
       );
+
+      // Inject agents after all agents are registered
+      this.injectAgents();
     } catch (e) {
       this.isInitialized = false;
       this.logger.error('Failed to initialize AgentService:', e);
+    }
+  }
+
+  private injectAgents() {
+    for (const token of this.agents) {
+      const instance = container.resolve<any>(token);
+      if (!instance?.config?.agents) continue;
+
+      const agentTokens: string[] = instance.config.agents;
+      const agentInstances = agentTokens
+        .map(agentToken => {
+          try {
+            return container.resolve<any>(agentToken);
+          } catch {
+            this.logger.warn(`Agent not found: ${agentToken}`);
+            return null;
+          }
+        })
+        .filter(Boolean);
+
+      Reflect.set(instance, 'agents', agentInstances);
+      this.logger.info(
+        `Injected ${agentInstances.length} agents into: ${instance.config.name}`,
+      );
     }
   }
 

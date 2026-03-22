@@ -103,6 +103,90 @@ describe('AgentService', () => {
     });
   });
 
+  describe('injectAgents', () => {
+    it('should inject agents into agent with agents config', async () => {
+      const parentAgent = {
+        config: {
+          name: 'Parent Agent',
+          agents: ['child-agent-1', 'child-agent-2'],
+        },
+        agents: [],
+      };
+      const childAgent1 = { config: { name: 'Child Agent 1' } };
+      const childAgent2 = { config: { name: 'Child Agent 2' } };
+
+      vi.mocked(globby).mockResolvedValue([]);
+      agentService = container.resolve(AgentService);
+
+      vi.spyOn(agentService as any, 'agents', 'get').mockReturnValue([
+        'parent-agent',
+      ]);
+      container.register('parent-agent', { useValue: parentAgent });
+      container.register('child-agent-1', { useValue: childAgent1 });
+      container.register('child-agent-2', { useValue: childAgent2 });
+
+      await (agentService as any).injectAgents();
+
+      expect(parentAgent.agents).toHaveLength(2);
+      expect(parentAgent.agents).toContain(childAgent1);
+      expect(parentAgent.agents).toContain(childAgent2);
+    });
+
+    it('should skip agent without agents config', async () => {
+      const agentWithoutAgents = {
+        config: { name: 'Simple Agent' },
+      };
+
+      vi.mocked(globby).mockResolvedValue([]);
+      agentService = container.resolve(AgentService);
+
+      vi.spyOn(agentService as any, 'agents', 'get').mockReturnValue([
+        'simple-agent',
+      ]);
+      container.register('simple-agent', { useValue: agentWithoutAgents });
+
+      await (agentService as any).injectAgents();
+
+      expect(agentWithoutAgents).not.toHaveProperty('agents');
+    });
+
+    it('should warn and skip when dependent agent not found', async () => {
+      const parentAgent = {
+        config: {
+          name: 'Parent Agent',
+          agents: ['non-existent-agent'],
+        },
+        agents: [],
+      };
+
+      vi.mocked(globby).mockResolvedValue([]);
+      agentService = container.resolve(AgentService);
+
+      vi.spyOn(agentService as any, 'agents', 'get').mockReturnValue([
+        'parent-agent',
+      ]);
+      container.register('parent-agent', { useValue: parentAgent });
+
+      const loggerSpy = vi.spyOn((agentService as any).logger, 'warn');
+
+      await (agentService as any).injectAgents();
+
+      expect(loggerSpy).toHaveBeenCalledWith(
+        'Agent not found: non-existent-agent',
+      );
+      expect(parentAgent.agents).toHaveLength(0);
+    });
+
+    it('should handle empty agents list', async () => {
+      vi.mocked(globby).mockResolvedValue([]);
+      agentService = container.resolve(AgentService);
+
+      vi.spyOn(agentService as any, 'agents', 'get').mockReturnValue([]);
+
+      expect(() => (agentService as any).injectAgents()).not.toThrow();
+    });
+  });
+
   describe('getAllAgentInfo', () => {
     it('should return agent info with config', async () => {
       const mockAgent = {

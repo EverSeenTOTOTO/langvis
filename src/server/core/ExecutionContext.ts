@@ -13,14 +13,18 @@ export class ExecutionContext {
   private seqCounter = 0;
   private callIdStack: string[] = [];
 
-  constructor(private readonly controller: AbortController) {}
+  constructor(
+    private readonly controller: AbortController,
+    private readonly callIdPrefix: string = '',
+  ) {}
 
   private nextSeq(): number {
     return ++this.seqCounter;
   }
 
   private nextCallId(): string {
-    return generateId('tc');
+    const id = generateId('tc');
+    return this.callIdPrefix ? `${this.callIdPrefix}::${id}` : id;
   }
 
   get currentCallId(): string {
