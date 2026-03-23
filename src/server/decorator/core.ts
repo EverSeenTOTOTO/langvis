@@ -2,7 +2,7 @@ import { AgentIds, MemoryIds, ToolIds } from '@/shared/constants';
 import { AgentConfig, ToolConfig } from '@/shared/types';
 import { JSONSchemaType } from 'ajv';
 import chalk from 'chalk';
-import { isArray, mergeWith } from 'lodash-es';
+import { merge } from 'lodash-es';
 import { container, injectable, Lifecycle } from 'tsyringe';
 import { Agent } from '../core/agent';
 import { Memory } from '../core/memory';
@@ -30,12 +30,11 @@ const resolveConfig = <T extends AgentConfig | ToolConfig>(config: T): T => {
 
   const target = container.resolve<Agent | Tool>(config.extends);
 
-  return mergeWith({}, target.config, config, (objValue, srcValue) => {
-    if (isArray(objValue)) {
-      return objValue.concat(srcValue);
-    }
-    return;
-  });
+  return {
+    ...merge({}, target.config, config),
+    tools: (config as AgentConfig).tools,
+    agents: (config as AgentConfig).agents,
+  };
 };
 
 const proxyValidation = <T>(
@@ -103,7 +102,7 @@ export const registerAgent = async <T>(
 
       // Inject tools
       if (instance && 'tools' in instance) {
-        const toolTokens = merged.tools || [];
+        const toolTokens = config.tools || [];
 
         const tools = toolTokens.map(t => container.resolve<Tool>(t));
 

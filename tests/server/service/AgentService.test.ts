@@ -24,6 +24,7 @@ describe('AgentService', () => {
     container.clearInstances();
 
     mockToolService = {
+      initialize: vi.fn().mockResolvedValue(undefined),
       getAllToolInfo: vi.fn().mockResolvedValue([]),
     };
     container.register(ToolService, { useValue: mockToolService });
@@ -42,7 +43,11 @@ describe('AgentService', () => {
       vi.mocked(globby).mockResolvedValue([mockAgentPath]);
       vi.doMock(mockAgentPath, () => ({ default: mockAgentClass }));
       vi.doMock('/path/to/agent/config.ts', () => ({ config: mockConfig }));
-      vi.mocked(configModule.registerAgent).mockResolvedValue('test-agent');
+      vi.mocked(configModule.registerAgent).mockImplementation(async token => {
+        // @ts-expect-error tsyringe register signature mismatch
+        container.register(token, { useValue: { config: mockConfig } });
+        return token;
+      });
 
       agentService = container.resolve(AgentService);
       await agentService.getAllAgentInfo();
@@ -58,7 +63,11 @@ describe('AgentService', () => {
       vi.mocked(globby).mockResolvedValue([mockAgentPath]);
       vi.doMock(mockAgentPath, () => ({ default: mockAgentClass }));
       vi.doMock('/path/to/agent/config.ts', () => ({ config: mockConfig }));
-      vi.mocked(configModule.registerAgent).mockResolvedValue('test-agent');
+      vi.mocked(configModule.registerAgent).mockImplementation(async token => {
+        // @ts-expect-error tsyringe register signature mismatch
+        container.register(token, { useValue: { config: mockConfig } });
+        return token;
+      });
 
       agentService = container.resolve(AgentService);
       const result = await agentService.getAllAgentInfo();

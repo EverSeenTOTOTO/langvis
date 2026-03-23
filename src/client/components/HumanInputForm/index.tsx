@@ -1,7 +1,7 @@
 import SchemaField, { SchemaProperty } from '@/client/components/SchemaField';
 import { useStore } from '@/client/store';
 import { Alert, Button, Form, Spin, Typography } from 'antd';
-import React, { lazy, Suspense, useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { useAsyncFn } from 'react-use';
 import './index.scss';
 
@@ -13,8 +13,6 @@ interface HumanInputFormProps {
   schema: SchemaProperty;
   onSubmit?: () => void;
 }
-
-const PROCESSING_TIMEOUT_MS = 60_000;
 
 type FormState =
   | { type: 'loading' }
@@ -44,8 +42,6 @@ const HumanInputForm: React.FC<HumanInputFormProps> = ({
     chatStore.getSessionState.bind(chatStore),
   );
 
-  const [processingTimeout, setProcessingTimeout] = useState(false);
-
   // Initial check
   useEffect(() => {
     checkStatus({ conversationId });
@@ -60,19 +56,7 @@ const HumanInputForm: React.FC<HumanInputFormProps> = ({
     ) {
       checkSession({ conversationId });
     }
-  }, [checkState.loading, checkState.value, conversationId, checkSession]);
-
-  // Processing timeout timer
-  useEffect(() => {
-    if (!submitState.value?.success) return;
-
-    setProcessingTimeout(false);
-    const timer = setTimeout(
-      () => setProcessingTimeout(true),
-      PROCESSING_TIMEOUT_MS,
-    );
-    return () => clearTimeout(timer);
-  }, [submitState.value?.success]);
+  }, [checkState.loading, checkState.value, conversationId]);
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     await submit({ conversationId, data: values });
@@ -120,16 +104,6 @@ const HumanInputForm: React.FC<HumanInputFormProps> = ({
         };
       }
 
-      // Processing timeout
-      if (processingTimeout) {
-        return {
-          type: 'expired',
-          message: settingStore.tr(
-            'The request is taking too long. The session may have expired.',
-          ),
-        };
-      }
-
       return { type: 'processing' };
     }
 
@@ -151,7 +125,7 @@ const HumanInputForm: React.FC<HumanInputFormProps> = ({
       <div className="human-input-form">
         <Alert
           type="warning"
-          message={settingStore.tr('Session Expired')}
+          title={settingStore.tr('Session Expired')}
           description={state.message}
           showIcon
         />
