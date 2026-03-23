@@ -133,12 +133,13 @@ private handleEvent(event: AgentEvent): void {
 
 **核心方法：**
 
-| 方法                             | 说明                                     |
-| -------------------------------- | ---------------------------------------- |
-| `acquireSession(conversationId)` | 带分布式锁的 session 获取，支持重连      |
-| `startSession(conversationId)`   | 后端启动场景专用，无锁，直接创建 session |
-| `getSession(conversationId)`     | 获取现有 session                         |
-| `runSession(session, ...)`       | 委托 `session.run()` 执行                |
+| 方法                                  | 说明                                                    |
+| ------------------------------------- | ------------------------------------------------------- |
+| `acquireSession(conversationId)`      | 带分布式锁的 session 获取，支持重连                     |
+| `startSession(conversationId)`        | 后端启动场景专用，无锁，直接创建 session                |
+| `getSession(conversationId)`          | 获取现有 session                                        |
+| `cleanupSessionState(conversationId)` | 清理僵尸会话的 Redis 状态（chat_session + human_input） |
+| `runSession(session, ...)`            | 委托 `session.run()` 执行                               |
 
 **acquireSession vs startSession：**
 
@@ -212,10 +213,14 @@ await taskService.runTask(agent, memory, config, traceId, {
 **initSSE 流程：**
 
 ```
-1. acquireSession() → 可返回 409 拒绝
-2. initSSEConnection() → writeHead(200)
-3. bindConnection() → 绑定到 session
-4. req.on('close') → session.handleDisconnect()
+1. 检查 Redis 状态 + 内存 session
+   ├─ done → 返回 session_ended
+   ├─ running 但无内存 session → 僵尸会话，清理 Redis，返回 session_ended
+   └─ waiting / running（有内存 session）→ 继续
+2. acquireSession() → 可返回 409 拒绝
+3. initSSEConnection() → writeHead(200)
+4. bindConnection() → 绑定到 session
+5. req.on('close') → session.handleDisconnect()
 ```
 
 **start 流程：**
@@ -732,11 +737,12 @@ null;
 
 **响应：**
 
-| Redis 状态            | HTTP 状态 | 响应                             |
-| --------------------- | --------- | -------------------------------- |
-| 不存在                | 404       | `{ error: 'Session not found' }` |
-| `done`                | 200       | `{ type: 'session_ended' }`      |
-| `waiting` / `running` | 200       | 建立 SSE，发送 `connected` 事件  |
+| Redis 状态            | 内存 Session | HTTP 状态 | 响应                                       |
+| --------------------- | ------------ | --------- | ------------------------------------------ |
+| 不存在                | -            | 404       | `{ error: 'Session not found' }`           |
+| `done`                | -            | 200       | `{ type: 'session_ended' }`                |
+| `running`             | 无           | 200       | 僵尸会话，清理 Redis，返回 `session_ended` |
+| `waiting` / `running` | 有           | 200       | 建立 SSE，发送 `connected` 事件            |
 
 ### 9.4 后端改造点
 
@@ -840,6 +846,66 @@ async acquireSession(conversationId: string): Promise<ChatSession | null> {
 
 ### 9.5 重连场景
 
+#### 路径一：正常对话
+
+```
+前端: connectSSE → startChat
+后端: acquireSession (内存无, Redis无 → 创建新session)
+     → agent.run() → persist() → cleanup()
+     → phase: waiting → running → done
+DB:   空 assistant message → persist 写入完整内容 + events
+Redis: set(waiting) → set(running) → del(done)
+```
+
+#### 路径二：未重启，前端重连
+
+内存 session 还在，agent 可能还在运行。
+
+```
+前端: connectSSE (重连)
+后端: acquireSession
+     → fast path: 内存有 → 直接返回 ✅
+
+     情况A: agent 还在 running
+       → 重连 SSE，agent 继续推送事件
+
+     情况B: agent 已 done
+       → phase=done, 返回 session, SSE 连上后无事发生
+```
+
+#### 路径三：服务器重启后重连
+
+内存丢失，Redis 可能过期也可能没过期。
+
+```
+前端: connectSSE
+后端: acquireSession
+     → 内存无，尝试获取锁
+
+     情况A: Redis 未过期，phase=running
+       → 检测到僵尸（Redis running + 内存无），cleanup Redis，返回 null ✅
+       → 前端收到 session_ended，渲染 DB 中已有内容
+
+     情况B: Redis 未过期，phase=waiting
+       → 无僵尸风险（agent 没启动），创建新 session ✅
+
+     情况C: Redis 已过期 (oldState=null)
+       → 当作全新，创建新 session
+       → 但 DB 可能有残留的不完整 assistant message
+       → 检查最后一条 assistant 消息是否有终态事件
+       → 无终态 → 僵尸消息，标记为 error ✅
+```
+
+**情况 C 的子场景：**
+
+| 崩溃时机                          | DB 状态                               | 检测方式                  |
+| --------------------------------- | ------------------------------------- | ------------------------- |
+| agent.run() 之前 (phase=waiting)  | 无 assistant message                  | 安全，无残留              |
+| agent.run() 中，persist() 未执行  | 空 assistant message，无 events       | 无终态事件 → 标记为 error |
+| handleDisconnect 触发了 persist() | 残缺 assistant message，有部分 events | 无终态事件 → 标记为 error |
+
+**终态事件判断：** assistant 消息的 `meta.events` 中包含 `final`、`cancelled` 或 `error` 即为正常结束。合法流程中 persist() 一定会写入终态事件，服务器崩溃则 persist() 不会执行。
+
 #### 场景一：页面刷新
 
 ```
@@ -853,11 +919,19 @@ async acquireSession(conversationId: string): Promise<ChatSession | null> {
             │
             └─ waiting / running
                     │
-                    └─ 建立 SSE 连接
-                            │
-                            ├─ Agent 正在运行 → 继续接收事件
-                            │
-                            └─ Agent 等待输入 → 渲染表单（human_in_the_loop）
+                    ├─ GET /api/chat/sse/:id
+                    │       │
+                    │       ├─ running 但无内存 session → 僵尸会话（路径三情况A）
+                    │       │     └─ 返回 session_ended，前端渲染消息当前状态
+                    │       │
+                    │       ├─ Redis 过期，DB 有无终态的 assistant message → 僵尸消息（路径三情况C）
+                    │       │     └─ 标记为 error，创建新 session，前端渲染 error 状态
+                    │       │
+                    │       └─ 有内存 session → 建立 SSE 连接
+                    │               │
+                    │               ├─ Agent 正在运行 → 继续接收事件
+                    │               │
+                    │               └─ Agent 等待输入 → 渲染表单（human_in_the_loop）
 ```
 
 #### 场景二：切换会话
@@ -995,6 +1069,8 @@ Agent 调用 human_in_the_loop，等待用户输入
            └─ 用户提交 → Agent 继续执行
 ```
 
+**服务器重启场景**：运行时状态（Agent 执行上下文、AbortController 等）未持久化，服务器重启后 Agent 不存在。SSE endpoint 会检测到 Redis `running` 但无内存 session，返回 `session_ended`，前端不会渲染表单。
+
 **关键点**：断开 SSE 时调用 `persist()`，确保 `tool_progress(status: 'awaiting_input')` 事件已持久化。
 
 ### 9.8 时序图
@@ -1111,8 +1187,10 @@ case 'session_replaced':
 
 ### 10.3 与普通重连的区别
 
-| 场景     | Redis phase      | 前端行为               |
-| -------- | ---------------- | ---------------------- |
-| 后端启动 | `running`        | 建立 SSE，继续接收事件 |
-| 普通重连 | `running`        | 建立 SSE，继续接收事件 |
-| 已结束   | `done` 或 `null` | 无需 SSE，渲染最终状态 |
+| 场景                      | Redis phase   | 内存 Session | 后端行为                                   | 前端行为         |
+| ------------------------- | ------------- | ------------ | ------------------------------------------ | ---------------- |
+| 后端启动                  | `running`     | 有           | 建立 SSE                                   | 继续接收事件     |
+| 普通重连                  | `running`     | 有           | 建立 SSE                                   | 继续接收事件     |
+| 服务器重启 (Redis 未过期) | `running`     | 无           | 僵尸检测，清理 Redis，返回 `session_ended` | 渲染消息当前状态 |
+| 服务器重启 (Redis 已过期) | `null`        | 无           | 僵尸消息检测，标记 error，创建新 session   | 渲染 error 状态  |
+| 已结束                    | `done`/`null` | -            | 返回 `session_ended`                       | 渲染最终状态     |
