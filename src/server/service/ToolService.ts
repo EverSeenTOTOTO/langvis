@@ -15,10 +15,6 @@ export class ToolService {
   private tools: string[] = [];
   private isInitialized = false;
 
-  constructor() {
-    this.initialize();
-  }
-
   async getAllToolInfo() {
     await this.initialize();
     return this.tools.map(tool => ({
@@ -27,7 +23,7 @@ export class ToolService {
     }));
   }
 
-  private async initialize(): Promise<void> {
+  async initialize(): Promise<void> {
     if (this.isInitialized) {
       return;
     }

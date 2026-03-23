@@ -1,29 +1,25 @@
-import HumanInputForm from '@/client/components/HumanInputForm';
 import { lazy, Suspense } from 'react';
 
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
-import { AgentIds, ToolIds } from '@/shared/constants';
+import { ToolIds } from '@/shared/constants';
 import type { Message } from '@/shared/types/entities';
-import type { MessageRenderState, ThoughtItem } from '../deriveMessageState';
+import type {
+  MessageRenderState,
+  ToolCallTimeline,
+} from '../deriveMessageState';
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   LoadingOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
-import { Collapse, Flex, Progress, Steps, Tag, Typography } from 'antd';
+import { Flex, Progress, Steps, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
-import { useEffect, useState } from 'react';
 import {
   registerAgentRenderer,
   type AgentRenderResult,
 } from '../../agentRenderers';
-import {
-  buildToolBlocks,
-  detectAwaitingInput,
-  getToolColor,
-  type ToolBlock,
-} from '../utils';
+import { UniversalEventRenderer } from '../UniversalEventRenderer';
 import '../ReActAgent/index.scss';
 
 // === Document Agent specific: Analysis Pipeline ===
@@ -122,7 +118,6 @@ function BatchArchiveProgress({
   isPending: boolean;
   nestedAnalysisProgress?: Array<{ data: unknown; seq: number; at: number }>;
 }) {
-  // Get the latest progress for each URL
   const urlStatusMap = new Map<string, BatchArchiveProgressData>();
 
   for (const p of progress) {
@@ -132,7 +127,6 @@ function BatchArchiveProgress({
     }
   }
 
-  // Calculate overall progress
   const completed = Array.from(urlStatusMap.values()).filter(
     d => d.status === 'success' || d.status === 'failed',
   ).length;
@@ -145,11 +139,9 @@ function BatchArchiveProgress({
   );
   const failed = failedList.length;
 
-  // Get current processing URL and its analysis step
   const processingUrl =
     latestProgress?.status === 'processing' ? latestProgress.url : null;
 
-  // Get current analysis step message from nested progress
   const currentStep = nestedAnalysisProgress
     ? (() => {
         const progressByAction = new Map<AnalysisAction, string>();
@@ -159,10 +151,8 @@ function BatchArchiveProgress({
             progressByAction.set(data.action, data.message);
           }
         }
-        // Find the first incomplete step
         for (const step of ANALYSIS_PIPELINE_STEPS) {
           if (!progressByAction.has(step.action)) {
-            // Return the previous step's message (the one currently running)
             const prevIndex = ANALYSIS_PIPELINE_STEPS.indexOf(step) - 1;
             if (prevIndex >= 0) {
               return progressByAction.get(
@@ -190,7 +180,6 @@ function BatchArchiveProgress({
         </Typography.Text>
       </Flex>
 
-      {/* Show processing URL with current step */}
       {isPending && processingUrl && (
         <div style={{ marginBottom: 4 }}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -213,7 +202,6 @@ function BatchArchiveProgress({
         </Typography.Text>
       )}
 
-      {/* Show failed URLs */}
       {!isPending && failedList.length > 0 && (
         <div style={{ marginTop: 8 }}>
           {failedList.map(item => (
@@ -245,84 +233,9 @@ function BatchArchiveProgress({
   );
 }
 
-// === State derivation ===
+// === Custom tool render for Document Agent ===
 
-interface DocumentDerivedState {
-  toolBlocks: ToolBlock[];
-  standaloneThoughts: ThoughtItem[];
-  awaitingInput: ReturnType<typeof detectAwaitingInput>;
-  isProcessing: boolean;
-  showBubbleLoading: boolean;
-  shouldExpandDetails: boolean;
-}
-
-function deriveDocumentState(state: MessageRenderState): DocumentDerivedState {
-  const { toolCallTimeline, thoughts, isTerminated, hasContent, hasEvents } =
-    state;
-
-  const toolBlocks = buildToolBlocks(toolCallTimeline);
-
-  // Fix: Check ALL pending tools for awaiting_input
-  const awaitingInput = detectAwaitingInput(toolBlocks);
-
-  const allToolsSettled =
-    toolBlocks.length > 0 && toolBlocks.every(b => !b.isPending);
-
-  const isProcessing =
-    hasEvents &&
-    !isTerminated &&
-    !awaitingInput &&
-    !allToolsSettled &&
-    !hasContent;
-
-  return {
-    toolBlocks,
-    standaloneThoughts: thoughts,
-    awaitingInput,
-    isProcessing,
-    showBubbleLoading: !hasContent && !hasEvents && !isTerminated,
-    shouldExpandDetails:
-      !isTerminated && (toolBlocks.length > 0 || thoughts.length > 0),
-  };
-}
-
-// === Sub-components ===
-
-function StandaloneThoughtBlock({ thought }: { thought: ThoughtItem }) {
-  return (
-    <div className="react-thought-block">
-      <Flex align="center" gap={8} className="react-tool-header">
-        <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
-        <Tag color="blue">Thought</Tag>
-        <Typography.Text type="secondary" className="react-tool-time">
-          {dayjs(thought.at).format('HH:mm:ss')}
-        </Typography.Text>
-      </Flex>
-      <Typography.Paragraph
-        type="secondary"
-        italic
-        ellipsis={{ rows: 2, expandable: 'collapsible' }}
-        className="react-thought-content"
-      >
-        {thought.content}
-      </Typography.Paragraph>
-    </div>
-  );
-}
-
-function ToolBlockItem({ block }: { block: ToolBlock }) {
-  const { toolCall, latestProgress, isPending } = block;
-  const color = getToolColor(toolCall.toolName);
-
-  const Icon = isPending ? (
-    <SyncOutlined spin style={{ color: 'var(--ant-color-primary)' }} />
-  ) : toolCall.status === 'done' ? (
-    <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
-  ) : toolCall.status === 'error' ? (
-    <CloseCircleOutlined style={{ color: 'var(--ant-color-error)' }} />
-  ) : null;
-
-  // Document Agent specific: Analysis pipeline visualization
+function renderDocumentTool(toolCall: ToolCallTimeline): React.ReactNode {
   const isAnalysisTool = toolCall.toolName === ToolIds.DOCUMENT_ARCHIVE;
   const hasAnalysisProgress =
     isAnalysisTool &&
@@ -331,7 +244,6 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
       return data?.action;
     });
 
-  // Document Agent specific: Batch archive progress visualization
   const isBatchArchiveTool =
     toolCall.toolName === ToolIds.DOCUMENT_ARCHIVE_BATCH;
   const hasBatchArchiveProgress =
@@ -341,8 +253,6 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
       return data?.url;
     });
 
-  // Extract nested analysis_tool progress from batch_archive_tool progress
-  // (since nested tools share the same callId, filter by 'action' field)
   const nestedAnalysisProgress = isBatchArchiveTool
     ? toolCall.progress.filter(p => {
         const data = p.data as { action?: string };
@@ -350,159 +260,113 @@ function ToolBlockItem({ block }: { block: ToolBlock }) {
       })
     : undefined;
 
-  return (
-    <div className="react-tool-block">
-      {toolCall.thought && (
-        <div className="react-tool-thought">
-          <Typography.Paragraph
-            type="secondary"
-            italic
-            ellipsis={{ rows: 2, expandable: 'collapsible' }}
-          >
-            💭 {toolCall.thought}
-          </Typography.Paragraph>
-        </div>
-      )}
+  const isPending = toolCall.status === 'pending';
+  const color = (() => {
+    const TAG_COLORS = [
+      'magenta',
+      'red',
+      'volcano',
+      'orange',
+      'gold',
+      'lime',
+      'green',
+      'cyan',
+      'blue',
+      'geekblue',
+      'purple',
+    ];
+    let hash = 0;
+    for (let i = 0; i < toolCall.toolName.length; i++) {
+      hash = ((hash << 5) - hash + toolCall.toolName.charCodeAt(i)) | 0;
+    }
+    return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
+  })();
 
-      <Flex align="center" gap={8} className="react-tool-header">
-        {Icon}
-        <Tag color={color}>{toolCall.toolName}</Tag>
-        <Typography.Text type="secondary" className="react-tool-time">
-          {dayjs(toolCall.at).format('HH:mm:ss')}
-        </Typography.Text>
-      </Flex>
+  const Icon = isPending ? (
+    <SyncOutlined spin style={{ color: 'var(--ant-color-primary)' }} />
+  ) : toolCall.status === 'done' ? (
+    <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
+  ) : (
+    <CloseCircleOutlined style={{ color: 'var(--ant-color-error)' }} />
+  );
 
-      {hasAnalysisProgress ? (
+  if (hasAnalysisProgress) {
+    return (
+      <div className="react-tool-block">
+        {toolCall.thought && (
+          <div className="react-tool-thought">
+            <Typography.Paragraph
+              type="secondary"
+              italic
+              ellipsis={{ rows: 2, expandable: 'collapsible' }}
+            >
+              💭 {toolCall.thought}
+            </Typography.Paragraph>
+          </div>
+        )}
+        <Flex align="center" gap={8} className="react-tool-header">
+          {Icon}
+          <Tag color={color}>{toolCall.toolName}</Tag>
+          <Typography.Text type="secondary" className="react-tool-time">
+            {dayjs(toolCall.at).format('HH:mm:ss')}
+          </Typography.Text>
+        </Flex>
         <AnalysisPipeline progress={toolCall.progress} isPending={isPending} />
-      ) : hasBatchArchiveProgress ? (
+      </div>
+    );
+  }
+
+  if (hasBatchArchiveProgress) {
+    return (
+      <div className="react-tool-block">
+        {toolCall.thought && (
+          <div className="react-tool-thought">
+            <Typography.Paragraph
+              type="secondary"
+              italic
+              ellipsis={{ rows: 2, expandable: 'collapsible' }}
+            >
+              💭 {toolCall.thought}
+            </Typography.Paragraph>
+          </div>
+        )}
+        <Flex align="center" gap={8} className="react-tool-header">
+          {Icon}
+          <Tag color={color}>{toolCall.toolName}</Tag>
+          <Typography.Text type="secondary" className="react-tool-time">
+            {dayjs(toolCall.at).format('HH:mm:ss')}
+          </Typography.Text>
+        </Flex>
         <BatchArchiveProgress
           progress={toolCall.progress}
           isPending={isPending}
           nestedAnalysisProgress={nestedAnalysisProgress}
         />
-      ) : (
-        latestProgress?.message &&
-        !latestProgress?.status && (
-          <Typography.Text type="secondary" className="react-tool-progress">
-            {latestProgress.message}
-          </Typography.Text>
-        )
-      )}
-
-      {toolCall.status === 'done' && toolCall.output !== undefined && (
-        <div className="react-tool-output">
-          <Typography.Paragraph
-            type="secondary"
-            copyable
-            ellipsis={{ rows: 2, expandable: 'collapsible' }}
-          >
-            {typeof toolCall.output === 'string'
-              ? toolCall.output
-              : JSON.stringify(toolCall.output, null, 2)}
-          </Typography.Paragraph>
-        </div>
-      )}
-
-      {toolCall.status === 'error' && (
-        <Typography.Text type="danger" className="react-tool-error">
-          {toolCall.error}
-        </Typography.Text>
-      )}
-    </div>
-  );
-}
-
-// === Main renderer ===
-
-interface DocumentEventRendererProps {
-  state: MessageRenderState;
-  conversationId: string;
-}
-
-const DocumentEventRenderer: React.FC<DocumentEventRendererProps> = ({
-  state,
-  conversationId,
-}) => {
-  const derived = deriveDocumentState(state);
-  const [activeKey, setActiveKey] = useState<string[]>([]);
-
-  useEffect(() => {
-    setActiveKey(derived.shouldExpandDetails ? ['1'] : []);
-  }, [derived.shouldExpandDetails]);
-
-  if (
-    derived.toolBlocks.length === 0 &&
-    derived.standaloneThoughts.length === 0
-  ) {
-    return null;
+      </div>
+    );
   }
 
-  const totalItems =
-    derived.toolBlocks.length + derived.standaloneThoughts.length;
+  // Return null to use default rendering
+  return null;
+}
 
-  return (
-    <>
-      <Collapse
-        size="small"
-        activeKey={activeKey}
-        onChange={keys => setActiveKey(keys as string[])}
-        items={[
-          {
-            key: '1',
-            label: (
-              <Typography.Text type="secondary">
-                Process Details ({totalItems} steps)
-              </Typography.Text>
-            ),
-            children: (
-              <div className="react-tool-list">
-                {derived.toolBlocks.map(block => (
-                  <ToolBlockItem key={block.toolCall.callId} block={block} />
-                ))}
-                {derived.standaloneThoughts.map(thought => (
-                  <StandaloneThoughtBlock
-                    key={`thought-${thought.seq}`}
-                    thought={thought}
-                  />
-                ))}
-                {derived.isProcessing && (
-                  <div className="react-tool-processing">
-                    <LoadingOutlined style={{ marginInlineEnd: 8 }} />
-                    <Typography.Text type="secondary" italic>
-                      Processing...
-                    </Typography.Text>
-                  </div>
-                )}
-              </div>
-            ),
-          },
-        ]}
-        style={{ width: '100%', marginBlock: 8 }}
-      />
-      {derived.awaitingInput && (
-        <HumanInputForm
-          conversationId={conversationId}
-          message={derived.awaitingInput.message}
-          schema={derived.awaitingInput.schema}
-        />
-      )}
-    </>
-  );
-};
+// === Document Agent Renderer ===
 
 const DocumentAgentRenderer = (
   msg: Message,
   state: MessageRenderState,
 ): AgentRenderResult => {
-  const { showBubbleLoading } = deriveDocumentState(state);
+  const showBubbleLoading =
+    !state.hasContent && !state.hasPendingTools && !state.isTerminated;
 
   return {
     content: (
       <>
         {state.hasEvents && (
-          <DocumentEventRenderer
+          <UniversalEventRenderer
             state={state}
             conversationId={msg.conversationId}
+            customToolRender={renderDocumentTool}
           />
         )}
 
@@ -524,6 +388,6 @@ const DocumentAgentRenderer = (
   };
 };
 
-registerAgentRenderer(AgentIds.DOCUMENT, DocumentAgentRenderer);
+registerAgentRenderer('document', DocumentAgentRenderer);
 
 export default DocumentAgentRenderer;

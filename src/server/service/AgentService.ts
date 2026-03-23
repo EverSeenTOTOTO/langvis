@@ -20,7 +20,9 @@ export class AgentService {
     @inject(ToolService)
     private toolService: ToolService,
   ) {
-    this.initialize();
+    this.toolService.initialize().then(() => {
+      this.initialize();
+    });
   }
 
   async getAllAgentInfo() {

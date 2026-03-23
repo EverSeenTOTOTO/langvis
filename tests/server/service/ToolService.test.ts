@@ -34,7 +34,11 @@ describe('ToolService', () => {
       vi.mocked(globby).mockResolvedValue([mockToolPath]);
       vi.doMock(mockToolPath, () => ({ default: mockToolClass }));
       vi.doMock('/path/to/tool/config.ts', () => ({ config: mockConfig }));
-      vi.mocked(configModule.registerTool).mockResolvedValue('test-tool');
+      vi.mocked(configModule.registerTool).mockImplementation(async token => {
+        // @ts-expect-error tsyringe register signature mismatch
+        container.register(token, { useValue: mockToolClass });
+        return token;
+      });
 
       toolService = container.resolve(ToolService);
       const result = await toolService.getAllToolInfo();
