@@ -11,7 +11,6 @@ import { Button, Layout, message, Skeleton } from 'antd';
 import { observer } from 'mobx-react-lite';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAsyncFn, useMedia } from 'react-use';
-import { deriveMessageState } from './components/AgentMessage/deriveMessageState';
 import ConversationsSider from './components/ConversationsSider';
 import Messages, { type MessagesRef } from './components/Messages';
 import { useFileUpload } from './hooks/useFileUpload';
@@ -45,19 +44,26 @@ const Chat: React.FC = () => {
   // Cancelling = cancel request in flight
   const isCancelling = cancelApi[0].loading;
 
-  // Loading = last assistant message not terminated
+  // Loading = last assistant message still in progress
   const isLoading = useMemo(() => {
     if (isCancelling) return false;
 
+    const session = chatStore.currentSession;
+    if (!session) return false;
+
+    // Check if any MessageFSM is in progress
     const messages = conversationStore.currentMessages;
     const lastMessage = messages?.[messages.length - 1];
-    if (!lastMessage || lastMessage.role !== Role.ASSIST) {
-      return chatStore.currentSession?.isLoading ?? false;
+
+    if (lastMessage && lastMessage.role === Role.ASSIST) {
+      const messageFSM = session.getMessageFSM(lastMessage.id);
+      return messageFSM?.isInProgress ?? false;
     }
-    return !deriveMessageState(lastMessage).isTerminated;
+
+    return session.hasActiveMessage;
   }, [
     conversationStore.currentMessages,
-    chatStore.currentSession?.isLoading,
+    chatStore.currentSession,
     isCancelling,
   ]);
 

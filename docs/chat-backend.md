@@ -27,13 +27,13 @@ SessionFSM 替换当前 ChatSession，管理 SSE 连接生命周期和 Redis 状
 
 ### 状态定义
 
-| 状态     | 是否终态 | 含义                                                  |
-| -------- | -------- | ----------------------------------------------------- |
-| `waiting` | 否       | SSE 已连接，无活跃消息。idle timeout 后 → done        |
-| `active`  | 否       | 至少有一个 MessageFSM 处于非终态                      |
-| `canceling` | 否     | 收到 cancel 请求，正在 abort agent                    |
-| `error`   | 否       | 不可恢复的错误（可重连恢复）                          |
-| `done`    | 是       | 正常终态，触发 cleanup                                |
+| 状态        | 是否终态 | 含义                                           |
+| ----------- | -------- | ---------------------------------------------- |
+| `waiting`   | 否       | SSE 已连接，无活跃消息。idle timeout 后 → done |
+| `active`    | 否       | 至少有一个 MessageFSM 处于非终态               |
+| `canceling` | 否       | 收到 cancel 请求，正在 abort agent             |
+| `error`     | 否       | 不可恢复的错误（可重连恢复）                   |
+| `done`      | 是       | 正常终态，触发 cleanup                         |
 
 ### 状态转换图
 
@@ -119,16 +119,16 @@ class SessionFSM {
 
 ### 状态定义
 
-| 状态             | 是否终态 | 含义                                |
-| ---------------- | -------- | ----------------------------------- |
-| `initialized`    | 否       | 消息已创建到 DB，等待 agent 开始     |
-| `streaming`      | 否       | 正在接收 agent 事件                 |
-| `awaiting_input` | 否       | Agent 等待用户输入                  |
-| `submitting`     | 否       | submitHumanInput API 飞行中        |
-| `canceling`      | 否       | 收到 cancel 请求                    |
-| `final`          | 是       | 正常完成                            |
-| `canceled`       | 是       | 已取消                              |
-| `error`          | 是       | 错误                                |
+| 状态             | 是否终态 | 含义                             |
+| ---------------- | -------- | -------------------------------- |
+| `initialized`    | 否       | 消息已创建到 DB，等待 agent 开始 |
+| `streaming`      | 否       | 正在接收 agent 事件              |
+| `awaiting_input` | 否       | Agent 等待用户输入               |
+| `submitting`     | 否       | submitHumanInput API 飞行中      |
+| `canceling`      | 否       | 收到 cancel 请求                 |
+| `final`          | 是       | 正常完成                         |
+| `canceled`       | 是       | 已取消                           |
+| `error`          | 是       | 错误                             |
 
 ### 状态转换图
 
@@ -162,7 +162,15 @@ stateDiagram-v2
 ### 核心接口
 
 ```typescript
-type MessagePhase = 'initialized' | 'streaming' | 'awaiting_input' | 'submitting' | 'canceling' | 'final' | 'canceled' | 'error';
+type MessagePhase =
+  | 'initialized'
+  | 'streaming'
+  | 'awaiting_input'
+  | 'submitting'
+  | 'canceling'
+  | 'final'
+  | 'canceled'
+  | 'error';
 
 class MessageFSM {
   phase: MessagePhase;
@@ -201,12 +209,12 @@ SessionFSM
 
 SessionFSM phase 由 MessageFSM 状态聚合驱动：
 
-| MessageFSM 变化                              | SessionFSM 变化                          | Redis 更新              |
-| -------------------------------------------- | ---------------------------------------- | ----------------------- |
-| 任一 MessageFSM 进入非终态                    | `waiting → active`                        | phase + add to messages |
-| 最后一个 MessageFSM 到达终态                  | `active → waiting`                        | phase + clear messages  |
-| `canceling → canceled`（全部 MessageFSM 终态） | `canceling → done`                        | del                     |
-| 任一 → `error`（且无其他活跃 MessageFSM）     | `active → error`                          | phase + update messages  |
+| MessageFSM 变化                                | SessionFSM 变化    | Redis 更新              |
+| ---------------------------------------------- | ------------------ | ----------------------- |
+| 任一 MessageFSM 进入非终态                     | `waiting → active` | phase + add to messages |
+| 最后一个 MessageFSM 到达终态                   | `active → waiting` | phase + clear messages  |
+| `canceling → canceled`（全部 MessageFSM 终态） | `canceling → done` | del                     |
+| 任一 → `error`（且无其他活跃 MessageFSM）      | `active → error`   | phase + update messages |
 
 Redis `messages` 数组在每个 MessageFSM phase 变化时同步更新，终态消息从数组中移除。
 
@@ -214,12 +222,12 @@ Redis `messages` 数组在每个 MessageFSM phase 变化时同步更新，终态
 
 ### 会话级取消 vs 消息级取消
 
-| 维度     | 会话级 `cancelConversation()`     | 消息级 `cancelMessage(id)`            |
-| -------- | --------------------------------- | ------------------------------------- |
-| API      | `POST /cancel/:conversationId`    | `POST /cancel/:conversationId/:msgId` |
-| 范围     | 所有活跃 MessageFSM               | 指定 MessageFSM                       |
-| SSE      | 不关闭（其他消息可能还需要）      | 不关闭                                |
-| Session  | 全部 MessageFSM 终态后 → waiting  | 不影响 Session phase                   |
+| 维度    | 会话级 `cancelConversation()`    | 消息级 `cancelMessage(id)`            |
+| ------- | -------------------------------- | ------------------------------------- |
+| API     | `POST /cancel/:conversationId`   | `POST /cancel/:conversationId/:msgId` |
+| 范围    | 所有活跃 MessageFSM              | 指定 MessageFSM                       |
+| SSE     | 不关闭（其他消息可能还需要）     | 不关闭                                |
+| Session | 全部 MessageFSM 终态后 → waiting | 不影响 Session phase                  |
 
 ### 会话级取消流程
 
@@ -282,7 +290,7 @@ interface MessagePhaseEntry {
 interface ChatSessionState {
   conversationId: string;
   phase: SessionPhase;
-  messages: MessagePhaseEntry[];  // 所有活跃消息的 phase
+  messages: MessagePhaseEntry[]; // 所有活跃消息的 phase
   startedAt: number;
   agentId: string | null;
 }
@@ -300,10 +308,10 @@ Redis key: `chat_session:{conversationId}`，TTL: 1h。
 | `done`              | -                    | -            | 正常，无 session                                  |
 | `waiting`           | `[]`                 | 有           | SSE 断开 → cleanup → done                         |
 | `waiting`           | `[]`                 | 无           | 僵尸，清理 Redis                                  |
-| `active`            | 有非终态 entries      | 有           | 正常重连                                          |
-| `active`            | 有非终态 entries      | 无           | **僵尸**：标记所有无终态助手消息为 error          |
-| `canceling`         | 有 canceling entries  | 无           | **僵尸**：标记所有无终态助手消息为 error          |
-| `error`             | 有 entries            | 无           | 僵尸，清理 Redis + 标记所有无终态助手消息为 error  |
+| `active`            | 有非终态 entries     | 有           | 正常重连                                          |
+| `active`            | 有非终态 entries     | 无           | **僵尸**：标记所有无终态助手消息为 error          |
+| `canceling`         | 有 canceling entries | 无           | **僵尸**：标记所有无终态助手消息为 error          |
+| `error`             | 有 entries           | 无           | 僵尸，清理 Redis + 标记所有无终态助手消息为 error |
 
 ### 僵尸检测逻辑（独立方法）
 
@@ -363,34 +371,34 @@ async detectAndCleanupZombie(conversationId: string): Promise<boolean> {
 
 ### SessionFSM（替换 ChatSession）
 
-| 职责         | 方法                                              |
-| ------------ | ------------------------------------------------- |
-| Phase 状态机 | `transition()`, `phase`                           |
+| 职责         | 方法                                               |
+| ------------ | -------------------------------------------------- |
+| Phase 状态机 | `transition()`, `phase`                            |
 | SSE 连接管理 | `bindConnection()`, `handleDisconnect()`, `send()` |
-| 消息生命周期 | `addMessageFSM()`, `messageFSMs` Map              |
+| 消息生命周期 | `addMessageFSM()`, `messageFSMs` Map               |
 | 取消         | `cancelMessage()`, `cancelAllMessages()`           |
-| Redis 持久化 | `onPhaseChange` 回调                              |
+| Redis 持久化 | `onPhaseChange` 回调                               |
 
 **不再持有**：`ExecutionContext`、`run()` 循环。这些移到 ChatService。
 
 ### MessageFSM（替换 PendingMessage 的事件处理逻辑）
 
-| 职责       | 方法                      |
-| ---------- | ------------------------- |
+| 职责         | 方法                    |
+| ------------ | ----------------------- |
 | Phase 状态机 | `transition()`, `phase` |
-| 事件处理   | `handleEvent()`           |
-| 内容累积   | 委托 PendingMessage       |
-| DB 持久化  | `persist()`               |
+| 事件处理     | `handleEvent()`         |
+| 内容累积     | 委托 PendingMessage     |
+| DB 持久化    | `persist()`             |
 
 ### ChatService（重构）
 
-| 职责             | 方法                                       |
-| ---------------- | ------------------------------------------ |
-| Session 注册表   | `acquireSession()`, `getSession()`, `sessions Map` |
-| 僵尸检测         | `detectAndCleanupZombie()`                 |
-| Agent 执行编排   | `runSession()` — 创建 ctx，驱动 agent loop |
-| 构建 Memory      | `buildMemory()`                            |
-| Redis 状态查询   | `getSessionState()`, `updateSessionPhase()` |
+| 职责           | 方法                                               |
+| -------------- | -------------------------------------------------- |
+| Session 注册表 | `acquireSession()`, `getSession()`, `sessions Map` |
+| 僵尸检测       | `detectAndCleanupZombie()`                         |
+| Agent 执行编排 | `runSession()` — 创建 ctx，驱动 agent loop         |
+| 构建 Memory    | `buildMemory()`                                    |
+| Redis 状态查询 | `getSessionState()`, `updateSessionPhase()`        |
 
 ## 8. 文件结构
 

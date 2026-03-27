@@ -8,19 +8,19 @@ import type {
   StartChatResponse,
   SubmitHumanInputRequest,
 } from '@/shared/dto/controller';
-import { AgentEvent, SSEMessage } from '@/shared/types';
+import { AgentEvent } from '@/shared/types';
 import { Role } from '@/shared/types/entities';
 import { generateId } from '@/shared/utils';
 import { message } from 'antd';
 import { makeAutoObservable, reaction } from 'mobx';
 import { inject } from 'tsyringe';
-import { ChatSession } from './ChatSession';
+import { ConversationFSM } from './ConversationFSM';
 import { ConversationStore } from './conversation';
 import { SettingStore } from './setting';
 
 @store()
 export class ChatStore {
-  private sessions = new Map<string, ChatSession>();
+  private sessions = new Map<string, ConversationFSM>();
 
   constructor(
     @inject(ConversationStore) private conversationStore: ConversationStore,
@@ -31,8 +31,9 @@ export class ChatStore {
     reaction(
       () => this.conversationStore.currentConversationId,
       async (newId, oldId) => {
+        // Deactivate old session (soft cancel, don't call cancel API)
         if (oldId) {
-          this.getSession(oldId)?.disconnect();
+          this.getSession(oldId)?.deactivate();
         }
 
         if (!newId) return;
@@ -56,31 +57,37 @@ export class ChatStore {
   async activateConversation(conversationId: string): Promise<void> {
     const state = await this.getSessionState({ conversationId });
 
-    if (!state || state.phase === 'done') {
-      return;
-    }
+    if (!state || state.phase === 'done') return;
 
     const session = this.acquireSession(conversationId);
-    await session.connect();
+    try {
+      await session.connect();
+    } catch {
+      this.handleError(conversationId, 'SSE connection failed');
+      this.conversationStore.getMessagesByConversationId({
+        id: conversationId,
+      });
+    }
   }
 
-  getSession(conversationId: string): ChatSession | undefined {
+  getSession(conversationId: string): ConversationFSM | undefined {
     return this.sessions.get(conversationId);
   }
 
-  acquireSession(conversationId: string): ChatSession {
+  acquireSession(conversationId: string): ConversationFSM {
     let session = this.sessions.get(conversationId);
     if (!session) {
-      session = new ChatSession(conversationId, {
-        onEvent: msg => this.handleEvent(conversationId, msg),
-        onError: error => this.handleError(conversationId, error),
+      session = new ConversationFSM(conversationId, {
+        onEvent: (convId, event) => this.handleEvent(convId, event),
+        onError: (convId, error) => this.handleError(convId, error),
+        onRefreshMessages: convId => this.refreshMessages(convId),
       });
       this.sessions.set(conversationId, session);
     }
     return session;
   }
 
-  get currentSession(): ChatSession | undefined {
+  get currentSession(): ConversationFSM | undefined {
     const conversationId = this.conversationStore.currentConversationId;
     if (!conversationId) return undefined;
     return this.sessions.get(conversationId);
@@ -94,42 +101,10 @@ export class ChatStore {
     req?: ApiRequest<CancelChatRequest>,
   ) {
     const session = this.getSession(params.conversationId);
+    if (!session) return;
 
-    // Idempotency: only cancel if in loading state
-    if (!session?.isLoading) {
-      return;
-    }
-
-    // Check if backend needs to be notified:
-    // SSE connected means backend session exists
-    const shouldNotifyBackend = session.isConnected();
-
-    // Immediately update UI
-    session.cancel();
-
-    // Add cancelled event to message for immediate UI update
-    this.appendMessageEvent(params.conversationId, {
-      type: 'cancelled',
-      reason: params.reason ?? 'Cancelled by user',
-      seq: Date.now(),
-      at: Date.now(),
-    });
-
-    // Notify backend if SSE was connected (Agent may be running)
-    if (shouldNotifyBackend) {
-      try {
-        await req!.send();
-      } catch (e) {
-        // 404 means session already gone, ignore for idempotency
-        if (!(e instanceof Error && e.message.includes('404'))) {
-          throw e;
-        }
-      }
-    }
-
-    // Refresh messages to get final state from backend
-    this.conversationStore.getMessagesByConversationId({
-      id: params.conversationId,
+    await session.cancelConversation(async () => {
+      await req!.send();
     });
   }
 
@@ -176,6 +151,13 @@ export class ChatStore {
       tempAssistantId,
     );
 
+    // Create MessageFSM for the placeholder assistant message
+    const messages = this.conversationStore.messages[conversationId];
+    const assistantMessage = messages?.[messages.length - 1];
+    if (assistantMessage && assistantMessage.id === tempAssistantId) {
+      session.addMessageFSM(tempAssistantId, assistantMessage);
+    }
+
     try {
       await session.connect();
     } catch (e) {
@@ -196,6 +178,13 @@ export class ChatStore {
           tempAssistantId,
           res.messageId,
         );
+        // Update MessageFSM with new ID
+        session.removeMessageFSM(tempAssistantId);
+        const updatedMessages = this.conversationStore.messages[conversationId];
+        const updatedAssistant = updatedMessages?.[updatedMessages.length - 1];
+        if (updatedAssistant && updatedAssistant.id === res.messageId) {
+          session.addMessageFSM(res.messageId, updatedAssistant);
+        }
       }
     } catch (e) {
       this.handleError(
@@ -205,7 +194,7 @@ export class ChatStore {
     }
   }
 
-  private handleEvent(conversationId: string, msg: SSEMessage): void {
+  private handleEvent(conversationId: string, event: AgentEvent): void {
     if (this.conversationStore.currentConversationId !== conversationId) {
       console.warn(
         `Ignoring SSE message for non-current conversation: ${conversationId}`,
@@ -213,43 +202,44 @@ export class ChatStore {
       return;
     }
 
-    // Only handle business events (AgentEvent)
-    const agentEvent = msg as AgentEvent;
-    if (!agentEvent.type) return;
-
-    switch (agentEvent.type) {
+    switch (event.type) {
       case 'start':
       case 'thought':
       case 'tool_call':
       case 'tool_progress':
       case 'tool_result':
       case 'tool_error':
-        this.appendMessageEvent(conversationId, agentEvent);
+        this.appendMessageEvent(conversationId, event);
         break;
 
       case 'stream':
-        this.appendMessageContent(conversationId, agentEvent.content);
+        this.appendMessageContent(conversationId, event.content);
         break;
 
       case 'final':
       case 'cancelled':
-        // Refresh messages to get final state from backend
-        this.conversationStore.getMessagesByConversationId({
-          id: conversationId,
-        });
-        break;
-
       case 'error':
-        this.handleError(conversationId, agentEvent.error);
+        // Refresh handled by ConversationFSM
         break;
     }
   }
 
   private handleError(conversationId: string, errorMessage: string): void {
     const session = this.getSession(conversationId);
-    session?.fail(errorMessage);
+    if (session?.phase === 'canceled') return;
 
-    // Backend has already persisted messages, refresh to get the final state
+    // Add error event to message
+    this.appendMessageEvent(conversationId, {
+      type: 'error',
+      error: errorMessage,
+      seq: Date.now(),
+      at: Date.now(),
+    });
+
+    this.refreshMessages(conversationId);
+  }
+
+  private refreshMessages(conversationId: string): void {
     this.conversationStore.getMessagesByConversationId({ id: conversationId });
   }
 

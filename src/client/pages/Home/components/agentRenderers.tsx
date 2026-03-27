@@ -11,7 +11,6 @@ const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
 export type AgentRenderResult = {
   content: React.ReactNode;
-  showBubbleLoading: boolean;
 };
 
 export type AgentRenderer = (
@@ -52,33 +51,23 @@ export function renderAgentMessage(
 }
 
 // Default chat renderer
-const defaultChatRenderer: AgentRenderer = (msg, state) => {
-  // Show bubble loading only when:
-  // - No content
-  // - No pending tools (tools have their own loading indicator)
-  // - Not terminal
-  const showBubbleLoading =
-    !state.hasContent && !state.hasPendingTools && !state.isTerminated;
-
-  return {
-    content: (
-      <>
-        {state.isAwaitingContent && (
-          <Typography.Text type="secondary" italic>
-            <LoadingOutlined style={{ marginInlineEnd: 4 }} />
-            Thinking...
-          </Typography.Text>
-        )}
-        <Suspense
-          fallback={<Typography.Paragraph>{msg.content}</Typography.Paragraph>}
-        >
-          <MarkdownRender>{msg.content}</MarkdownRender>
-        </Suspense>
-      </>
-    ),
-    showBubbleLoading,
-  };
-};
+const defaultChatRenderer: AgentRenderer = (msg, state) => ({
+  content: (
+    <>
+      {state.isAwaitingContent && (
+        <Typography.Text type="secondary" italic>
+          <LoadingOutlined style={{ marginInlineEnd: 4 }} />
+          Thinking...
+        </Typography.Text>
+      )}
+      <Suspense
+        fallback={<Typography.Paragraph>{msg.content}</Typography.Paragraph>}
+      >
+        <MarkdownRender>{msg.content}</MarkdownRender>
+      </Suspense>
+    </>
+  ),
+});
 
 // Register default renderer
 registerAgentRenderer(AgentIds.CHAT, defaultChatRenderer);

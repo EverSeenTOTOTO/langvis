@@ -1,4 +1,8 @@
-import { AgentIds, UNGROUPED_GROUP_NAME } from '@/shared/constants';
+import {
+  AgentIds,
+  InjectTokens,
+  UNGROUPED_GROUP_NAME,
+} from '@/shared/constants';
 import {
   Conversation,
   ConversationEntity,
@@ -6,17 +10,25 @@ import {
 import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
 import { Message, MessageEntity, Role } from '@/shared/entities/Message';
 import type { MessageAttachment } from '@/shared/types/entities';
-import { In } from 'typeorm';
+import { inject } from 'tsyringe';
+import { DataSource, In } from 'typeorm';
 import { service } from '../decorator/service';
-import pg from './pg';
+
+const TERMINAL_EVENT_TYPES = new Set(['final', 'cancelled', 'error']);
 
 @service()
 export class ConversationService {
+  constructor(
+    @inject(InjectTokens.PG) private readonly dataSource: DataSource,
+  ) {}
+
   private async getOrCreateGroupByName(
     groupName: string,
     userId: string,
   ): Promise<string> {
-    const groupRepository = pg.getRepository(ConversationGroupEntity);
+    const groupRepository = this.dataSource.getRepository(
+      ConversationGroupEntity,
+    );
 
     const existingGroup = await groupRepository.findOneBy({
       name: groupName,
@@ -56,8 +68,11 @@ export class ConversationService {
       finalConfig.agent = AgentIds.CHAT;
     }
 
-    const conversationRepository = pg.getRepository(ConversationEntity);
-    const groupRepository = pg.getRepository(ConversationGroupEntity);
+    const conversationRepository =
+      this.dataSource.getRepository(ConversationEntity);
+    const groupRepository = this.dataSource.getRepository(
+      ConversationGroupEntity,
+    );
 
     let resolvedGroupId = groupId;
 
@@ -101,7 +116,8 @@ export class ConversationService {
     id: string,
     userId?: string,
   ): Promise<Conversation | null> {
-    const conversationRepository = pg.getRepository(ConversationEntity);
+    const conversationRepository =
+      this.dataSource.getRepository(ConversationEntity);
     const where: Record<string, any> = { id };
     if (userId) {
       where.userId = userId;
@@ -117,7 +133,8 @@ export class ConversationService {
     groupId?: string | null,
     groupName?: string,
   ): Promise<Conversation | null> {
-    const conversationRepository = pg.getRepository(ConversationEntity);
+    const conversationRepository =
+      this.dataSource.getRepository(ConversationEntity);
     const conversation = await conversationRepository.findOneBy({ id, userId });
     if (!conversation) {
       return null;
@@ -139,7 +156,8 @@ export class ConversationService {
   }
 
   async deleteConversation(id: string, userId: string): Promise<boolean> {
-    const conversationRepository = pg.getRepository(ConversationEntity);
+    const conversationRepository =
+      this.dataSource.getRepository(ConversationEntity);
 
     const result = await conversationRepository.delete({ id, userId });
 
@@ -162,7 +180,7 @@ export class ConversationService {
       throw new Error(`Conversation ${conversationId} not found`);
     }
 
-    const messageRepository = pg.getRepository(MessageEntity);
+    const messageRepository = this.dataSource.getRepository(MessageEntity);
     const messages = messagesData.map(data =>
       messageRepository.create({
         conversationId,
@@ -177,10 +195,40 @@ export class ConversationService {
     return await messageRepository.save(messages);
   }
 
+  async findLastAssistantMessage(
+    conversationId: string,
+  ): Promise<Message | null> {
+    const messageRepository = this.dataSource.getRepository(MessageEntity);
+    return await messageRepository.findOne({
+      where: { conversationId, role: Role.ASSIST },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Find all assistant messages without terminal events (final/cancelled/error).
+   * Used for zombie detection after server restart.
+   */
+  async findNonTerminalAssistantMessages(
+    conversationId: string,
+  ): Promise<Message[]> {
+    const messageRepository = this.dataSource.getRepository(MessageEntity);
+    const messages = await messageRepository.find({
+      where: { conversationId, role: Role.ASSIST },
+      order: { createdAt: 'ASC' },
+    });
+
+    return messages.filter(msg => {
+      const events = msg.meta?.events;
+      if (!Array.isArray(events) || events.length === 0) return true;
+      return !events.some(e => TERMINAL_EVENT_TYPES.has(e.type));
+    });
+  }
+
   async getMessagesByConversationId(
     conversationId: string,
   ): Promise<Message[]> {
-    const messageRepository = pg.getRepository(MessageEntity);
+    const messageRepository = this.dataSource.getRepository(MessageEntity);
     return await messageRepository.find({
       where: { conversationId },
       order: { createdAt: 'ASC' },
@@ -191,7 +239,7 @@ export class ConversationService {
     conversationId: string,
     messageIds?: string[],
   ) {
-    const messageRepository = pg.getRepository(MessageEntity);
+    const messageRepository = this.dataSource.getRepository(MessageEntity);
 
     if (!messageIds || messageIds.length === 0) {
       return await messageRepository.delete({ conversationId });
@@ -208,7 +256,7 @@ export class ConversationService {
     content: string,
     meta?: Record<string, any> | null,
   ): Promise<Message | null> {
-    const messageRepository = pg.getRepository(MessageEntity);
+    const messageRepository = this.dataSource.getRepository(MessageEntity);
     const message = await messageRepository.findOneBy({ id: messageId });
 
     if (!message) {
@@ -229,7 +277,7 @@ export class ConversationService {
     conversationId: string,
     afterMessageId: string,
   ): Promise<boolean> {
-    const messageRepository = pg.getRepository(MessageEntity);
+    const messageRepository = this.dataSource.getRepository(MessageEntity);
 
     // Get the target message to get its timestamp
     const targetMessage = await messageRepository.findOneBy({

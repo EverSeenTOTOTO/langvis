@@ -1,17 +1,19 @@
+import { InjectTokens } from '@/shared/constants';
 import { EmailEntity } from '@/shared/entities/Email';
 import { generateId } from '@/shared/utils';
-import { ParsedMail, simpleParser } from 'mailparser';
+import { inject } from 'tsyringe';
 import {
   Between,
   LessThanOrEqual,
   Like,
   MoreThanOrEqual,
   type FindOptionsWhere,
+  DataSource,
 } from 'typeorm';
 import { service } from '../decorator/service';
 import Logger from '../utils/logger';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
-import pg from './pg';
+import type { simpleParser as SimpleParserFn } from 'mailparser';
 
 export interface EmailListParams {
   from?: string;
@@ -54,8 +56,12 @@ export interface InboundEmailResult {
 export class EmailService {
   private readonly logger = Logger.child({ source: 'EmailService' });
 
+  constructor(
+    @inject(InjectTokens.PG) private readonly dataSource: DataSource,
+  ) {}
+
   private get repository() {
-    return pg.getRepository(EmailEntity);
+    return this.dataSource.getRepository(EmailEntity);
   }
 
   async list(params: EmailListParams): Promise<EmailListResponse> {
@@ -194,6 +200,7 @@ export class EmailService {
   }
 
   async processInbound(rawEmail: string): Promise<InboundEmailResult> {
+    const { simpleParser } = await import('mailparser');
     const parsed = await Promise.race([
       simpleParser(rawEmail, {
         maxHtmlLengthToParse: 10 * 1024 * 1024, // 10MB
@@ -250,7 +257,7 @@ export class EmailService {
   }
 
   private extractForwardedInfo(
-    parsed: ParsedMail,
+    parsed: Awaited<ReturnType<typeof SimpleParserFn>>,
   ): { originalFrom?: string; forwardedVia?: string } | undefined {
     const headers = parsed.headers;
     const fromAddress = parsed.from?.value?.[0]?.address;

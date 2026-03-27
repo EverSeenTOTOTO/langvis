@@ -1,10 +1,18 @@
 import { memory } from '@/server/decorator/core';
+import { ConversationService } from '@/server/service/ConversationService';
 import { MemoryIds } from '@/shared/constants';
 import { Message, Role } from '@/shared/types/entities';
 import ChatHistoryMemory from '../ChatHistory';
+import { inject } from 'tsyringe';
 
 @memory(MemoryIds.NONE)
 export default class NoneMemory extends ChatHistoryMemory {
+  constructor(
+    @inject(ConversationService) conversationService: ConversationService,
+  ) {
+    super(conversationService);
+  }
+
   async summarize(): Promise<Message[]> {
     const messages = await this.retrieve();
 

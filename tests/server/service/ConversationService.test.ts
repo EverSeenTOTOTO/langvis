@@ -60,7 +60,7 @@ describe('ConversationService', () => {
   let conversationService: ConversationService;
 
   beforeEach(() => {
-    conversationService = new ConversationService();
+    conversationService = new ConversationService(pg as any);
   });
 
   it('should create a conversation', async () => {

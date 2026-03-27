@@ -1,6 +1,8 @@
-import { container } from 'tsyringe';
+import { InjectTokens } from '@/shared/constants';
 import { AuthService } from '@/server/service/AuthService';
-import { vi } from 'vitest';
+import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
+import { container } from 'tsyringe';
+import type { DataSource } from 'typeorm';
 
 vi.mock('@/server/service/pg');
 vi.mock('@/server/service/redis');
@@ -9,6 +11,16 @@ describe('AuthService', () => {
   let authService: AuthService;
 
   beforeEach(() => {
+    container.clearInstances();
+
+    // Register mock DataSource
+    const mockDataSource = {
+      getRepository: vi.fn(),
+      query: vi.fn(),
+    } as unknown as DataSource;
+
+    container.register(InjectTokens.PG, { useValue: mockDataSource });
+
     authService = container.resolve(AuthService);
   });
 

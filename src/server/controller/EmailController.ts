@@ -194,12 +194,6 @@ export default class EmailController {
       },
     );
 
-    await this.chatService.updateSessionPhase(
-      conversationId,
-      'running',
-      agent.id,
-    );
-
     const [assistantMessage] = await this.conversationService.batchAddMessages(
       conversationId,
       [{ role: Role.ASSIST, content: '', createdAt: new Date() }],
@@ -212,8 +206,14 @@ export default class EmailController {
         message.meta,
       ),
     );
-    session.bindPendingMessage(pendingMessage);
+    session.addMessageFSM(assistantMessage.id, pendingMessage);
 
-    this.chatService.runSession(session, agent, memory, conversation.config);
+    this.chatService.runSession(
+      session,
+      agent,
+      memory,
+      conversation.config,
+      assistantMessage.id,
+    );
   }
 }

@@ -4,21 +4,24 @@ import type { MessageAttachment } from '@/shared/types/entities';
 import { globby } from 'globby';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
-import { ChatSession, SessionPhase } from '../core/ChatSession';
+import { ExecutionContext } from '../core/ExecutionContext';
 import { Memory } from '../core/memory';
+import { MessageFSM } from '../core/MessageFSM';
+import { SessionFSM, SessionPhase } from '../core/SessionFSM';
 import { registerMemory } from '../decorator/core';
 import { service } from '../decorator/service';
 import { isProd } from '../utils';
 import Logger from '../utils/logger';
+import { ConversationService } from './ConversationService';
 import { RedisService } from './RedisService';
 
 /**
  * Session state persisted to Redis for reconnection support.
- * Allows cross-instance/session restart recovery.
  */
 export interface ChatSessionState {
   conversationId: string;
   phase: SessionPhase;
+  messages: Array<{ messageId: string; phase: string }>;
   startedAt: number;
   agentId: string | null;
 }
@@ -26,9 +29,13 @@ export interface ChatSessionState {
 @service()
 export class ChatService {
   private readonly logger = Logger.child({ source: 'ChatService' });
-  private sessions = new Map<string, ChatSession>();
+  private sessions = new Map<string, SessionFSM>();
 
-  constructor(@inject(RedisService) private redisService: RedisService) {
+  constructor(
+    @inject(RedisService) private redisService: RedisService,
+    @inject(ConversationService)
+    private conversationService: ConversationService,
+  ) {
     const suffix = isProd ? '.js' : '.ts';
     const pattern = `./${isProd ? 'dist' : 'src'}/server/core/memory/*/index${suffix}`;
 
@@ -40,7 +47,6 @@ export class ChatService {
         return Promise.all(
           memoryPaths.map(async memoryPath => {
             const { default: clazz } = await import(memoryPath);
-
             registerMemory(clazz);
           }),
         );
@@ -50,7 +56,7 @@ export class ChatService {
       });
   }
 
-  getSession(conversationId: string): ChatSession | undefined {
+  getSession(conversationId: string): SessionFSM | undefined {
     return this.sessions.get(conversationId);
   }
 
@@ -78,10 +84,9 @@ export class ChatService {
 
   /**
    * Acquire or retrieve an existing session with distributed lock.
-   * Returns null if lock acquisition fails (another request is creating session).
    */
-  async acquireSession(conversationId: string): Promise<ChatSession | null> {
-    // Check existing session first (fast path, no lock needed)
+  async acquireSession(conversationId: string): Promise<SessionFSM | null> {
+    // Check existing session first (fast path)
     const existing = this.sessions.get(conversationId);
     if (existing) {
       this.logger.info(`Session reconnected`, {
@@ -103,13 +108,16 @@ export class ChatService {
     try {
       // Double-check after acquiring lock
       const existingAfterLock = this.sessions.get(conversationId);
-      if (existingAfterLock) {
-        return existingAfterLock;
+      if (existingAfterLock) return existingAfterLock;
+
+      // Check for zombie session (server restarted while agent was running)
+      if (await this.detectAndCleanupZombie(conversationId)) {
+        return null;
       }
 
       this.logger.info(`Session created`, { sessionId: conversationId });
 
-      const session = new ChatSession(conversationId, {
+      const session = new SessionFSM(conversationId, {
         idleTimeoutMs: 30_000,
         onDispose: async (id: string) => {
           this.sessions.delete(id);
@@ -123,12 +131,13 @@ export class ChatService {
 
       this.sessions.set(conversationId, session);
 
-      // Persist session state to Redis for reconnection support
+      // Persist session state to Redis
       await this.redisService.set(
         RedisKeys.CHAT_SESSION(conversationId),
         {
           conversationId,
           phase: 'waiting',
+          messages: [],
           startedAt: Date.now(),
           agentId: null,
         },
@@ -137,31 +146,155 @@ export class ChatService {
 
       return session;
     } finally {
-      // Always release lock
       await this.redisService.releaseLock(lockKey);
     }
   }
 
+  /**
+   * Detect and cleanup zombie session/message state after server restart.
+   */
+  async detectAndCleanupZombie(conversationId: string): Promise<boolean> {
+    const state = await this.getSessionState(conversationId);
+
+    // No Redis state = no zombie
+    if (!state) return false;
+
+    // Memory has session = not zombie
+    if (this.sessions.has(conversationId)) return false;
+
+    // done or waiting = safe to cleanup
+    if (state.phase === 'done' || state.phase === 'waiting') {
+      await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
+      await this.redisService.del(RedisKeys.HUMAN_INPUT(conversationId));
+      return false;
+    }
+
+    // active / canceling / error + no memory = zombie
+    this.logger.warn(`Zombie session detected`, {
+      sessionId: conversationId,
+      phase: state.phase,
+    });
+
+    // Find all non-terminal assistant messages
+    const zombieMessages =
+      await this.conversationService.findNonTerminalAssistantMessages(
+        conversationId,
+      );
+
+    if (zombieMessages.length === 0) {
+      // All messages have terminal state, safe cleanup
+      await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
+      await this.redisService.del(RedisKeys.HUMAN_INPUT(conversationId));
+      return false;
+    }
+
+    // Mark all zombie messages as error
+    const errorEvent = {
+      type: 'error' as const,
+      error: 'Generation interrupted (server restarted)',
+      seq: Date.now(),
+      at: Date.now(),
+    };
+
+    await Promise.all(
+      zombieMessages.map(msg => {
+        const events = msg.meta?.events ?? [];
+        events.push(errorEvent);
+        return this.conversationService.updateMessage(
+          msg.id,
+          msg.content || 'Generation interrupted (server restarted)',
+          { ...msg.meta, events },
+        );
+      }),
+    );
+
+    await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
+    await this.redisService.del(RedisKeys.HUMAN_INPUT(conversationId));
+
+    return true;
+  }
+
+  /**
+   * Run agent execution loop, driving MessageFSM via events.
+   */
   async runSession(
-    session: ChatSession,
+    session: SessionFSM,
     agent: Agent,
     memory: Memory,
     config: unknown,
+    messageId: string,
   ): Promise<void> {
+    const messageFSM = session.getMessageFSM(messageId);
+    if (!messageFSM) {
+      this.logger.error(`MessageFSM not found for ${messageId}`);
+      return;
+    }
+
     this.logger.info(`Starting agent=${agent.id}`, {
       sessionId: session.conversationId,
+      messageId,
     });
 
+    const controller = new AbortController();
+    const ctx = new ExecutionContext(controller);
+
+    const startTime = Date.now();
+    let firstTokenTime: number | undefined;
+
     try {
-      await session.run(agent, memory, config);
+      for await (const event of agent.call(memory, ctx, config)) {
+        if (ctx.signal.aborted) break;
+
+        if (event.type === 'stream' && !firstTokenTime) {
+          firstTokenTime = Date.now();
+          this.logger.info(
+            `First token: ttft=${firstTokenTime - startTime}ms session=${session.conversationId}`,
+          );
+        }
+
+        // Update MessageFSM
+        messageFSM.handleEvent(event);
+
+        // Send via SSE
+        if (!session.send(event)) {
+          this.logger.warn(
+            `SSE not connected for ${session.conversationId}, event persisted`,
+          );
+        }
+
+        if (event.type === 'error') break;
+      }
     } catch (err) {
-      const errorMsg = (err as Error)?.message || String(err);
-      this.logger.error(`Infrastructure error: ${errorMsg}`, {
-        sessionId: session.conversationId,
-      });
-      session.send({ type: 'session_error', error: errorMsg });
+      this.handleAgentError(err, ctx, messageFSM, session);
+    } finally {
+      await messageFSM.finalize(ctx);
+
+      const totalTime = Date.now() - startTime;
+      const ttft = firstTokenTime ? firstTokenTime - startTime : null;
+      const contentLength = messageFSM.message.content.length;
+      const avgTokenTime = contentLength > 0 ? totalTime / contentLength : 0;
+      this.logger.info(
+        `Agent completed: totalTime=${totalTime}ms tokens=${contentLength} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${session.conversationId}`,
+      );
+
       await session.cleanup();
     }
+  }
+
+  private handleAgentError(
+    err: unknown,
+    ctx: ExecutionContext,
+    messageFSM: MessageFSM,
+    session: SessionFSM,
+  ): void {
+    this.logger.error(
+      `Agent error: ${(err as Error)?.message || String(err)} session=${session.conversationId}`,
+    );
+    const errorEvent = ctx.agentErrorEvent(
+      (err as Error)?.message || String(err),
+    );
+    messageFSM.handleEvent(errorEvent);
+    session.send(errorEvent);
   }
 
   async buildMemory(
