@@ -36,12 +36,12 @@ export default class ChatController {
     const sessionState = await this.chatService.getSessionState(conversationId);
 
     if (sessionState?.phase === 'done') {
-      return res.status(200).json({ type: 'session_ended', conversationId });
+      return res.sendStatus(204);
     }
 
     const session = await this.chatService.acquireSession(conversationId);
     if (!session) {
-      return res.status(409).json({ error: 'Session lock contention' });
+      return res.sendStatus(204);
     }
 
     const sseConnection = new SSEConnection(conversationId, res);
@@ -74,16 +74,51 @@ export default class ChatController {
   ) {
     const session = this.chatService.getSession(conversationId);
 
-    if (!session || session.phase !== 'running') {
+    if (
+      !session ||
+      (session.phase !== 'active' && session.phase !== 'waiting')
+    ) {
       return res.status(404).json({
         error: `No active session for conversation ${conversationId}`,
       });
     }
 
-    session.cancel(dto.reason ?? 'Cancelled by user');
+    session.cancelAllMessages(dto.reason ?? 'Cancelled by user');
 
     req.log.info(
       `Cancelled streaming for conversation ${conversationId}, message ${dto.messageId}`,
+    );
+
+    return res.status(200).json({ success: true });
+  }
+
+  @api('/cancel/:conversationId/:messageId', { method: 'post' })
+  async cancelMessage(
+    @param('conversationId') conversationId: string,
+    @param('messageId') messageId: string,
+    @body() _dto: { reason?: string },
+    @request() req: Request,
+    @response() res: Response,
+  ) {
+    const session = this.chatService.getSession(conversationId);
+
+    if (!session) {
+      return res.status(404).json({
+        error: `No session for conversation ${conversationId}`,
+      });
+    }
+
+    const messageFSM = session.getMessageFSM(messageId);
+    if (!messageFSM || messageFSM.isTerminal) {
+      return res.status(404).json({
+        error: `No active message ${messageId}`,
+      });
+    }
+
+    session.cancelMessage(messageId);
+
+    req.log.info(
+      `Cancelled message ${messageId} for conversation ${conversationId}`,
     );
 
     return res.status(200).json({ success: true });
@@ -101,7 +136,7 @@ export default class ChatController {
     if (!session || session.phase !== 'waiting') {
       return res.status(400).json({
         error: session
-          ? 'Session already running'
+          ? 'Session already active'
           : 'SSE connection not established',
       });
     }
@@ -147,6 +182,7 @@ export default class ChatController {
 
     res.status(200).json({ success: true, messageId: assistantMessage.id });
 
+    // Create PendingMessage and MessageFSM
     const pendingMessage = new PendingMessage(
       assistantMessage,
       (message: Message) =>
@@ -156,9 +192,16 @@ export default class ChatController {
           message.meta,
         ),
     );
-    session.bindPendingMessage(pendingMessage);
 
-    this.chatService.runSession(session, agent, memory, conversation.config);
+    session.addMessageFSM(assistantMessage.id, pendingMessage);
+
+    this.chatService.runSession(
+      session,
+      agent,
+      memory,
+      conversation.config,
+      assistantMessage.id,
+    );
 
     return;
   }
@@ -169,6 +212,7 @@ export default class ChatController {
     @response() res: Response,
   ) {
     const state = await this.chatService.getSessionState(conversationId);
+
     return res.status(200).json(state ? { phase: state.phase } : null);
   }
 }

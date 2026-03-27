@@ -1,16 +1,27 @@
-import { DocumentCategory, DocumentEntity } from '@/shared/entities/Document';
-import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
+import { InjectTokens } from '@/shared/constants';
 import type {
   DocumentDetail,
   DocumentListItem,
   ListDocumentsResponse,
 } from '@/shared/dto/controller/document.dto';
-import { Between, LessThanOrEqual, Like, MoreThanOrEqual } from 'typeorm';
+import { DocumentCategory, DocumentEntity } from '@/shared/entities/Document';
+import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
+import { inject } from 'tsyringe';
+import {
+  Between,
+  LessThanOrEqual,
+  Like,
+  MoreThanOrEqual,
+  DataSource,
+} from 'typeorm';
 import { service } from '../decorator/service';
-import pg from './pg';
 
 @service()
 export class DocumentService {
+  constructor(
+    @inject(InjectTokens.PG) private readonly dataSource: DataSource,
+  ) {}
+
   async listDocuments(params: {
     keyword?: string;
     category?: DocumentCategory;
@@ -19,7 +30,7 @@ export class DocumentService {
     page?: number;
     pageSize?: number;
   }): Promise<ListDocumentsResponse> {
-    const documentRepository = pg.getRepository(DocumentEntity);
+    const documentRepository = this.dataSource.getRepository(DocumentEntity);
 
     const page = params.page ?? 1;
     const pageSize = params.pageSize ?? 10;
@@ -84,8 +95,8 @@ export class DocumentService {
   }
 
   async getDocumentById(id: string): Promise<DocumentDetail | null> {
-    const documentRepository = pg.getRepository(DocumentEntity);
-    const chunkRepository = pg.getRepository(DocumentChunkEntity);
+    const documentRepository = this.dataSource.getRepository(DocumentEntity);
+    const chunkRepository = this.dataSource.getRepository(DocumentChunkEntity);
 
     const document = await documentRepository.findOneBy({ id });
 
@@ -104,7 +115,7 @@ export class DocumentService {
   }
 
   async deleteDocument(id: string): Promise<boolean> {
-    const documentRepository = pg.getRepository(DocumentEntity);
+    const documentRepository = this.dataSource.getRepository(DocumentEntity);
 
     const result = await documentRepository.delete(id);
 

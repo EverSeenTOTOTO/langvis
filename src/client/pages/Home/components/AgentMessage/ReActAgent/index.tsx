@@ -14,16 +14,6 @@ import './index.scss';
 
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
-/**
- * Derive state for ReAct agent (simplified)
- */
-function deriveReActState(state: MessageRenderState) {
-  const { hasContent, hasEvents, isTerminated } = state;
-  return {
-    showBubbleLoading: !hasContent && !hasEvents && !isTerminated,
-  };
-}
-
 interface ReActEventRendererProps {
   state: MessageRenderState;
   conversationId: string;
@@ -42,38 +32,31 @@ const createReActRenderer = (agentId: string) => {
   const renderer = (
     msg: Message,
     state: MessageRenderState,
-  ): AgentRenderResult => {
-    const { showBubbleLoading } = deriveReActState(state);
+  ): AgentRenderResult => ({
+    content: (
+      <>
+        {state.hasEvents && (
+          <ReActEventRenderer
+            state={state}
+            conversationId={msg.conversationId}
+          />
+        )}
 
-    return {
-      content: (
-        <>
-          {state.hasEvents && (
-            <ReActEventRenderer
-              state={state}
-              conversationId={msg.conversationId}
-            />
-          )}
+        {state.isAwaitingContent && (
+          <Typography.Text type="secondary" italic>
+            <LoadingOutlined style={{ marginInlineEnd: 4 }} />
+            Thinking...
+          </Typography.Text>
+        )}
 
-          {state.isAwaitingContent && (
-            <Typography.Text type="secondary" italic>
-              <LoadingOutlined style={{ marginInlineEnd: 4 }} />
-              Thinking...
-            </Typography.Text>
-          )}
-
-          <Suspense
-            fallback={
-              <Typography.Paragraph>{msg.content}</Typography.Paragraph>
-            }
-          >
-            <MarkdownRender>{msg.content}</MarkdownRender>
-          </Suspense>
-        </>
-      ),
-      showBubbleLoading,
-    };
-  };
+        <Suspense
+          fallback={<Typography.Paragraph>{msg.content}</Typography.Paragraph>}
+        >
+          <MarkdownRender>{msg.content}</MarkdownRender>
+        </Suspense>
+      </>
+    ),
+  });
 
   registerAgentRenderer(agentId, renderer);
   return renderer;

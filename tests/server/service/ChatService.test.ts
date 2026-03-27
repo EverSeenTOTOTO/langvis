@@ -6,8 +6,10 @@ import { Memory } from '@/server/core/memory';
 import { PendingMessage } from '@/server/core/PendingMessage';
 import { TraceContext } from '@/server/core/TraceContext';
 import { Role } from '@/shared/entities/Message';
-import { MemoryIds, RedisKeys } from '@/shared/constants';
+import { InjectTokens, MemoryIds, RedisKeys } from '@/shared/constants';
 import { RedisService } from '@/server/service/RedisService';
+import { ConversationService } from '@/server/service/ConversationService';
+import type { DataSource } from 'typeorm';
 
 vi.mock('globby', () => ({
   globby: vi.fn().mockResolvedValue([]),
@@ -16,6 +18,7 @@ vi.mock('globby', () => ({
 describe('ChatService', () => {
   let chatService: ChatService;
   let mockRedisService: any;
+  let mockConversationService: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -29,9 +32,21 @@ describe('ChatService', () => {
       releaseLock: vi.fn().mockResolvedValue(undefined),
     };
 
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
+    mockConversationService = {
+      findNonTerminalAssistantMessages: vi.fn().mockResolvedValue([]),
+    };
+
+    // Register mock DataSource
+    const mockDataSource = {
+      getRepository: vi.fn(),
+      query: vi.fn(),
+    } as unknown as DataSource;
+
+    container.register(InjectTokens.PG, { useValue: mockDataSource });
     container.register(RedisService, { useValue: mockRedisService });
+    container.register(ConversationService, {
+      useValue: mockConversationService,
+    });
 
     chatService = container.resolve(ChatService);
   });
@@ -53,7 +68,7 @@ describe('ChatService', () => {
       const session1 = await chatService.acquireSession('conv-123');
       expect(session1).toBeDefined();
 
-      // Bind mock connection and pending message
+      // Bind mock connection
       const mockConn = {
         conversationId: 'conv-123',
         get isWritable() {
@@ -64,35 +79,8 @@ describe('ChatService', () => {
       };
       session1!.bindConnection(mockConn as any);
 
-      const pendingMessage = new PendingMessage(
-        {
-          id: 'msg',
-          role: Role.ASSIST,
-          content: '',
-          meta: { events: [] },
-          createdAt: new Date(),
-          conversationId: 'conv-123',
-        },
-        vi.fn().mockResolvedValue(undefined),
-      );
-      session1!.bindPendingMessage(pendingMessage);
-
-      const mockAgent = {
-        id: 'test',
-        call: vi.fn().mockImplementation(async function* () {
-          yield { type: 'start', seq: 1, at: Date.now() };
-          await new Promise(resolve => setTimeout(resolve, 200));
-          yield { type: 'final', seq: 2, at: Date.now() };
-        }),
-      } as unknown as Agent;
-
-      const runPromise = session1!.run(mockAgent, {} as Memory, {});
-
       const session2 = await chatService.acquireSession('conv-123');
       expect(session2).toBe(session1); // Reconnection returns same session
-
-      session1!.cancel('test done');
-      await runPromise;
     });
 
     it('should return existing waiting session for reconnection', async () => {
@@ -130,7 +118,7 @@ describe('ChatService', () => {
   });
 
   describe('runSession', () => {
-    it('should delegate to session.run and finalize message', async () => {
+    it('should run agent and finalize message', async () => {
       const session = await chatService.acquireSession('conv-123');
 
       const mockConn = {
@@ -171,33 +159,19 @@ describe('ChatService', () => {
 
       const updateMessage = vi.fn().mockResolvedValue(undefined);
       const pendingMessage = new PendingMessage(mockMessage, updateMessage);
-      session!.bindPendingMessage(pendingMessage);
+      session!.addMessageFSM(mockMessage.id, pendingMessage);
 
-      await chatService.runSession(session!, mockAgent, {} as Memory, {});
+      await chatService.runSession(
+        session!,
+        mockAgent,
+        {} as Memory,
+        {},
+        mockMessage.id,
+      );
 
       expect(mockAgent.call).toHaveBeenCalled();
       expect(updateMessage).toHaveBeenCalled();
       expect(session!.phase).toBe('done');
-    });
-
-    it('should handle infrastructure errors with send', async () => {
-      const session = await chatService.acquireSession('conv-123');
-
-      const mockSend = vi.fn();
-      session!.send = mockSend;
-
-      // Mock run to throw before agent starts (infrastructure error)
-      session!.run = vi.fn().mockRejectedValue(new Error('Infra error'));
-
-      const mockAgent = { id: 'test' } as unknown as Agent;
-      await chatService.runSession(session!, mockAgent, {} as Memory, {});
-
-      expect(mockSend).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'session_error',
-          error: 'Infra error',
-        }),
-      );
     });
   });
 

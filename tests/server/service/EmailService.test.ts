@@ -28,7 +28,7 @@ describe('EmailService', () => {
       delete: vi.fn(),
     };
     vi.mocked(pg.getRepository).mockReturnValue(mockRepository as any);
-    emailService = new EmailService();
+    emailService = new EmailService(pg as any);
   });
 
   describe('list', () => {

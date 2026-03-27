@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
-import { ToolIds } from '@/shared/constants';
+import { AgentIds, ToolIds } from '@/shared/constants';
 import type { Message } from '@/shared/types/entities';
 import type {
   MessageRenderState,
@@ -355,39 +355,33 @@ function renderDocumentTool(toolCall: ToolCallTimeline): React.ReactNode {
 const DocumentAgentRenderer = (
   msg: Message,
   state: MessageRenderState,
-): AgentRenderResult => {
-  const showBubbleLoading =
-    !state.hasContent && !state.hasPendingTools && !state.isTerminated;
+): AgentRenderResult => ({
+  content: (
+    <>
+      {state.hasEvents && (
+        <UniversalEventRenderer
+          state={state}
+          conversationId={msg.conversationId}
+          customToolRender={renderDocumentTool}
+        />
+      )}
 
-  return {
-    content: (
-      <>
-        {state.hasEvents && (
-          <UniversalEventRenderer
-            state={state}
-            conversationId={msg.conversationId}
-            customToolRender={renderDocumentTool}
-          />
-        )}
+      {state.isAwaitingContent && (
+        <Typography.Text type="secondary" italic>
+          <LoadingOutlined style={{ marginInlineEnd: 4 }} />
+          Thinking...
+        </Typography.Text>
+      )}
 
-        {state.isAwaitingContent && (
-          <Typography.Text type="secondary" italic>
-            <LoadingOutlined style={{ marginInlineEnd: 4 }} />
-            Thinking...
-          </Typography.Text>
-        )}
+      <Suspense
+        fallback={<Typography.Paragraph>{msg.content}</Typography.Paragraph>}
+      >
+        <MarkdownRender>{msg.content}</MarkdownRender>
+      </Suspense>
+    </>
+  ),
+});
 
-        <Suspense
-          fallback={<Typography.Paragraph>{msg.content}</Typography.Paragraph>}
-        >
-          <MarkdownRender>{msg.content}</MarkdownRender>
-        </Suspense>
-      </>
-    ),
-    showBubbleLoading,
-  };
-};
-
-registerAgentRenderer('document', DocumentAgentRenderer);
+registerAgentRenderer(AgentIds.DOCUMENT, DocumentAgentRenderer);
 
 export default DocumentAgentRenderer;

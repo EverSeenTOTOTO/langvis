@@ -100,7 +100,33 @@ export type SSEMessage =
   | AgentEvent;
 
 /**
- * ChatPhase - frontend conversation state machine phases
+ * ConversationPhase - frontend conversation FSM phases
+ */
+export type ConversationPhase =
+  | 'idle'
+  | 'connecting'
+  | 'connected'
+  | 'active'
+  | 'canceling'
+  | 'error'
+  | 'canceled';
+
+/**
+ * MessagePhase - frontend message FSM phases
+ */
+export type MessagePhase =
+  | 'placeholder'
+  | 'loading'
+  | 'streaming'
+  | 'awaiting_input'
+  | 'submitting'
+  | 'canceling'
+  | 'final'
+  | 'canceled'
+  | 'error';
+
+/**
+ * @deprecated Use ConversationPhase instead
  */
 export type ChatPhase =
   | 'idle'

@@ -18,7 +18,6 @@ interface GirlFriendDerivedState {
   isTtsPending: boolean;
   ttsError: string | undefined;
   ttsOutput: TextToSpeechOutput | undefined;
-  showBubbleLoading: boolean;
   isProcessing: boolean;
 }
 
@@ -36,9 +35,6 @@ function deriveGirlFriendState(
       ? (ttsCall.output as TextToSpeechOutput | undefined)
       : undefined;
 
-  const showBubbleLoading =
-    !state.hasContent && !state.hasPendingTools && !state.isTerminated;
-
   const isProcessing =
     state.hasContent &&
     !state.isTerminated &&
@@ -46,7 +42,7 @@ function deriveGirlFriendState(
     !ttsOutput &&
     !ttsError;
 
-  return { isTtsPending, ttsError, ttsOutput, showBubbleLoading, isProcessing };
+  return { isTtsPending, ttsError, ttsOutput, isProcessing };
 }
 
 const GirlFriendAgentRenderer = (
@@ -106,7 +102,6 @@ const GirlFriendAgentRenderer = (
         )}
       </>
     ),
-    showBubbleLoading: derived.showBubbleLoading,
   };
 };
 

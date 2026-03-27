@@ -31,15 +31,15 @@
 
 ### 状态定义
 
-| 状态         | 是否终态 | 含义                                       |
-| ------------ | -------- | ------------------------------------------ |
-| `idle`       | 否       | 无 SSE 连接，可以发起新 chat               |
-| `connecting` | 否       | SSE 连接建立中（新建或重连共用）           |
-| `connected`  | 否       | SSE 已连接，无活跃消息                     |
+| 状态         | 是否终态 | 含义                                         |
+| ------------ | -------- | -------------------------------------------- |
+| `idle`       | 否       | 无 SSE 连接，可以发起新 chat                 |
+| `connecting` | 否       | SSE 连接建立中（新建或重连共用）             |
+| `connected`  | 否       | SSE 已连接，无活跃消息                       |
 | `active`     | 否       | SSE 已连接，至少有一个 MessageFSM 处于非终态 |
-| `canceling`  | 否       | 取消 API 请求在飞行中                      |
-| `error`      | 否       | 不可恢复的连接/启动错误                    |
-| `canceled`   | 否       | 已取消（主动取消或切换会话静默取消）       |
+| `canceling`  | 否       | 取消 API 请求在飞行中                        |
+| `error`      | 否       | 不可恢复的连接/启动错误                      |
+| `canceled`   | 否       | 已取消（主动取消或切换会话静默取消）         |
 
 `canceled` 和 `error` 可通过 `reconnect` 或 `activate` 回到 `connecting`。
 
@@ -98,11 +98,11 @@ private onMessagePhaseChange(msgId: string, phase: MessagePhase): void {
 
 `deactivate()` 是切换会话时的唯一调用点，内部根据当前 phase 决定行为：
 
-| 当前 phase                               | 行为                                                           |
-| ---------------------------------------- | -------------------------------------------------------------- |
-| `idle`                                   | 静默关闭 SSE（如果有的话）                                     |
-| `connecting/connected/active/canceling`  | phase → canceled，关闭 SSE，通知所有活跃 MessageFSM → canceled |
-| `error/canceled`                         | 静默关闭 SSE                                                   |
+| 当前 phase                              | 行为                                                           |
+| --------------------------------------- | -------------------------------------------------------------- |
+| `idle`                                  | 静默关闭 SSE（如果有的话）                                     |
+| `connecting/connected/active/canceling` | phase → canceled，关闭 SSE，通知所有活跃 MessageFSM → canceled |
+| `error/canceled`                        | 静默关闭 SSE                                                   |
 
 ### 重连流程
 
@@ -157,7 +157,7 @@ class ConversationFSM {
 | `loading`        | 否       | startChat API 成功，SSE 已连接，等待 agent 开始 |
 | `streaming`      | 否       | 正在接收流式事件                                |
 | `awaiting_input` | 否       | Agent 等待用户输入                              |
-| `submitting`     | 否       | submitHumanInput API 飞行中                    |
+| `submitting`     | 否       | submitHumanInput API 飞行中                     |
 | `canceling`      | 否       | 取消 API 飞行中                                 |
 | `final`          | 是       | 正常完成                                        |
 | `canceled`       | 是       | 已取消                                          |
@@ -197,11 +197,11 @@ stateDiagram-v2
 
 ### API in-flight 失败处理
 
-| 场景             | 当前状态         | API 失败 | 转入       | 说明                              |
-| ---------------- | ---------------- | -------- | ---------- | --------------------------------- |
-| 取消消息         | `canceling`      | 非 404   | `error`    | 取消失败，消息状态不一致          |
-| 取消消息         | `canceling`      | 404      | `canceled` | 后端 session 已不存在，视为已取消 |
-| 提交 human input | `submitting`      | 任意     | `error`    | 致命——用户输入丢失                |
+| 场景             | 当前状态     | API 失败 | 转入       | 说明                              |
+| ---------------- | ------------ | -------- | ---------- | --------------------------------- |
+| 取消消息         | `canceling`  | 非 404   | `error`    | 取消失败，消息状态不一致          |
+| 取消消息         | `canceling`  | 404      | `canceled` | 后端 session 已不存在，视为已取消 |
+| 提交 human input | `submitting` | 任意     | `error`    | 致命——用户输入丢失                |
 
 ### 刷新是终态的衍生动作
 

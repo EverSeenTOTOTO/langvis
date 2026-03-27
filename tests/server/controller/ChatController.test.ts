@@ -18,6 +18,7 @@ vi.mock('tsyringe', () => ({
 class MockConversationService {
   getConversationById = vi.fn();
   batchAddMessages = vi.fn();
+  updateMessage = vi.fn();
 }
 
 class MockChatService {
@@ -60,6 +61,7 @@ describe('ChatController', () => {
     mockResponse = {
       status: mockStatus,
       json: mockJson,
+      sendStatus: vi.fn(),
       writeHead: vi.fn().mockReturnThis(),
       write: vi.fn().mockReturnValue(true),
       flush: vi.fn(),
@@ -82,7 +84,7 @@ describe('ChatController', () => {
   });
 
   describe('initSSE', () => {
-    it('should return session_ended if phase is done', async () => {
+    it('should return 204 if phase is done', async () => {
       mockRequest.params = { conversationId: 'conv-123' };
       mockChatService.getSessionState.mockResolvedValue({ phase: 'done' });
 
@@ -92,14 +94,10 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockStatus).toHaveBeenCalledWith(200);
-      expect(mockJson).toHaveBeenCalledWith({
-        type: 'session_ended',
-        conversationId: 'conv-123',
-      });
+      expect(mockResponse.sendStatus).toHaveBeenCalledWith(204);
     });
 
-    it('should return 409 if session already running', async () => {
+    it('should return 204 if acquireSession returns null', async () => {
       mockRequest.params = { conversationId: 'conv-123' };
       mockChatService.getSessionState.mockResolvedValue({ phase: 'waiting' });
       mockChatService.acquireSession.mockResolvedValue(null);
@@ -110,10 +108,7 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockStatus).toHaveBeenCalledWith(409);
-      expect(mockJson).toHaveBeenCalledWith({
-        error: 'Session lock contention',
-      });
+      expect(mockResponse.sendStatus).toHaveBeenCalledWith(204);
     });
 
     it('should create session and bind SSE connection', async () => {
@@ -124,7 +119,7 @@ describe('ChatController', () => {
         bindConnection: vi.fn(),
         handleDisconnect: vi.fn(),
       };
-      mockChatService.acquireSession.mockReturnValue(mockSession);
+      mockChatService.acquireSession.mockResolvedValue(mockSession);
 
       await chatController.initSSE(
         'conv-123',
@@ -153,7 +148,7 @@ describe('ChatController', () => {
         bindConnection: vi.fn(),
         handleDisconnect: vi.fn(),
       };
-      mockChatService.acquireSession.mockReturnValue(mockSession);
+      mockChatService.acquireSession.mockResolvedValue(mockSession);
 
       let closeCallback: (() => void) | undefined;
       (mockRequest.on as any).mockImplementation(
@@ -201,7 +196,7 @@ describe('ChatController', () => {
       mockRequest.body = { role: Role.USER, content: 'Hello' };
 
       const mockSession = {
-        phase: 'running',
+        phase: 'active',
       };
       mockChatService.getSession.mockReturnValue(mockSession);
 
@@ -214,7 +209,7 @@ describe('ChatController', () => {
 
       expect(mockStatus).toHaveBeenCalledWith(400);
       expect(mockJson).toHaveBeenCalledWith({
-        error: 'Session already running',
+        error: 'Session already active',
       });
     });
 
@@ -248,7 +243,7 @@ describe('ChatController', () => {
 
           const mockSession = {
             phase: 'waiting',
-            bindPendingMessage: vi.fn(),
+            addMessageFSM: vi.fn(),
           };
           mockChatService.getSession.mockReturnValue(mockSession);
 
@@ -283,7 +278,7 @@ describe('ChatController', () => {
           expect(mockChatService.buildMemory).toHaveBeenCalledWith(
             mockAgent,
             mockConversation.config,
-            { role: Role.USER, content: 'Hello' },
+            { role: Role.USER, content: 'Hello', attachments: undefined },
           );
           expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
             'conv-123',
@@ -296,6 +291,7 @@ describe('ChatController', () => {
             messageId: 'assistant-msg',
           });
 
+          expect(mockSession.addMessageFSM).toHaveBeenCalled();
           expect(mockChatService.runSession).toHaveBeenCalled();
         },
       );
@@ -319,11 +315,11 @@ describe('ChatController', () => {
       expect(mockStatus).toHaveBeenCalledWith(404);
     });
 
-    it('should return 404 if session not running', async () => {
+    it('should return 404 if session not active or waiting', async () => {
       mockRequest.params = { conversationId: 'conv-123' };
       mockRequest.body = { messageId: 'msg-123' };
 
-      const mockSession = { phase: 'waiting' };
+      const mockSession = { phase: 'done' };
       mockChatService.getSession.mockReturnValue(mockSession);
 
       await chatController.cancelChat(
@@ -341,8 +337,8 @@ describe('ChatController', () => {
       mockRequest.body = { messageId: 'msg-123', reason: 'User cancelled' };
 
       const mockSession = {
-        phase: 'running',
-        cancel: vi.fn(),
+        phase: 'active',
+        cancelAllMessages: vi.fn(),
       };
       mockChatService.getSession.mockReturnValue(mockSession);
 
@@ -357,7 +353,7 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockSession.cancel).toHaveBeenCalledWith('User cancelled');
+      expect(mockSession.cancelAllMessages).toHaveBeenCalledWith('User cancelled');
       expect(mockStatus).toHaveBeenCalledWith(200);
       expect(mockJson).toHaveBeenCalledWith({ success: true });
     });
@@ -367,8 +363,8 @@ describe('ChatController', () => {
       mockRequest.body = { messageId: 'msg-123' };
 
       const mockSession = {
-        phase: 'running',
-        cancel: vi.fn(),
+        phase: 'active',
+        cancelAllMessages: vi.fn(),
       };
       mockChatService.getSession.mockReturnValue(mockSession);
 
@@ -379,7 +375,7 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockSession.cancel).toHaveBeenCalledWith('Cancelled by user');
+      expect(mockSession.cancelAllMessages).toHaveBeenCalledWith('Cancelled by user');
     });
   });
 });

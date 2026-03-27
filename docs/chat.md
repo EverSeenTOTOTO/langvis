@@ -1,5 +1,12 @@
 # Chat 架构文档
 
+> ⚠️ **已废弃**
+>
+> 本文档描述的是旧实现，已被新的状态机架构取代。请参考以下新文档：
+>
+> - 前端：[chat-frontend.md](./chat-frontend.md)
+> - 后端：[chat-backend.md](./chat-backend.md)
+
 基于 SSE (Server-Sent Events) 的流式对话系统架构，支持断线重连与 Agent 执行解耦。
 
 ## 1. 整体架构

@@ -18,10 +18,15 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
   const currentConversation = conversationStore.currentConversation;
   const agent = currentConversation?.config?.agent || AgentIds.CHAT;
 
-  const { content, showBubbleLoading } = renderAgentMessage(msg, agent);
+  const { content } = renderAgentMessage(msg, agent);
   const hasError = msg.meta?.events?.some(
     e => e.type === 'error' || e.type === 'cancelled',
   );
+
+  // Get loading state directly from FSM
+  const session = chatStore.currentSession;
+  const messageFSM = session?.getMessageFSM(msg.id);
+  const isLoading = messageFSM?.isInProgress ?? false;
 
   return (
     <Bubble
@@ -29,7 +34,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
       placement="start"
       content={content}
       footer={<MessageFooter content={msg.content} />}
-      loading={showBubbleLoading && chatStore.currentSession?.isLoading}
+      loading={isLoading}
       avatar={<Avatar icon={<RobotOutlined />} />}
       styles={{
         content: {

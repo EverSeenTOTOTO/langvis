@@ -1,37 +1,26 @@
+import { InjectTokens } from '@/shared/constants';
 import { typeormAdapter } from '@hedystia/better-auth-typeorm';
 import { betterAuth } from 'better-auth';
 import type { Request } from 'express';
+import { inject } from 'tsyringe';
+import { DataSource } from 'typeorm';
 import { service } from '../decorator/service';
 import { getSessionHeaders } from '../utils';
-import pg from './pg';
-// import redis from './redis';
 
 @service()
 export class AuthService {
-  readonly auth = betterAuth({
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    database: typeormAdapter(pg),
-    // secondaryStorage: {
-    //   get: async key => {
-    //     const value = await redis.get(key);
-    //     return value ?? null;
-    //   },
-    //   set: async (key, value, ttl) => {
-    //     if (ttl) {
-    //       await redis.set(key, value, { EX: ttl });
-    //     } else {
-    //       await redis.set(key, value);
-    //     }
-    //   },
-    //   delete: async key => {
-    //     await redis.del(key);
-    //   },
-    // },
-    emailAndPassword: {
-      enabled: true,
-    },
-  });
+  private readonly auth;
+
+  constructor(@inject(InjectTokens.PG) dataSource: DataSource) {
+    this.auth = betterAuth({
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      database: typeormAdapter(dataSource),
+      emailAndPassword: {
+        enabled: true,
+      },
+    });
+  }
 
   get api() {
     return this.auth.api;

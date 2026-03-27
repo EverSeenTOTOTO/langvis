@@ -28,7 +28,7 @@ describe('DocumentService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    documentService = new DocumentService();
+    documentService = new DocumentService(pg as any);
   });
 
   describe('listDocuments', () => {
