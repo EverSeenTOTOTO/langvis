@@ -80,25 +80,25 @@ export default class HumanInTheLoopTool<
     ctx.signal.throwIfAborted();
 
     const traceStore = TraceContext.getOrFail();
-    const conversationId = traceStore.conversationId!;
+    const messageId = traceStore.messageId!;
 
     const { message, formSchema, timeout = 300_000 } = params;
-    const key = RedisKeys.HUMAN_INPUT(conversationId);
+    const key = RedisKeys.HUMAN_INPUT(messageId);
     const POLL_INTERVAL = 30_000; // 30s fallback check when Pub/Sub fails
 
     await this.redisService.set(key, {
-      conversationId,
+      messageId,
       formSchema,
       message,
       submitted: false,
       createdAt: Date.now(),
     });
 
-    this.logger.info(`HumanInTheLoop request created: ${conversationId}`);
+    this.logger.info(`HumanInTheLoop request created: ${messageId}`);
 
     yield ctx.agentToolProgressEvent(this.id, {
       status: 'awaiting_input',
-      conversationId,
+      messageId,
       message,
       schema: formSchema,
     });
@@ -135,7 +135,7 @@ export default class HumanInTheLoopTool<
       }>(key);
       if (pending?.submitted) {
         await this.redisService.del(key);
-        this.logger.info(`HumanInTheLoop request submitted: ${conversationId}`);
+        this.logger.info(`HumanInTheLoop request submitted: ${messageId}`);
 
         const output: HumanInTheLoopOutput<O> = {
           submitted: true,
@@ -147,7 +147,7 @@ export default class HumanInTheLoopTool<
     }
 
     await this.redisService.del(key);
-    this.logger.info(`HumanInTheLoop request timeout: ${conversationId}`);
+    this.logger.info(`HumanInTheLoop request timeout: ${messageId}`);
 
     const output: HumanInTheLoopOutput<O> = {
       submitted: false,

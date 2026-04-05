@@ -1,31 +1,18 @@
 /**
  * Utilities for Agent renderers
  *
- * Pure functions for event processing, awaiting input detection, etc.
+ * Pure functions for event processing, tool block building, etc.
  */
 
-import type { SchemaProperty } from '@/client/components/SchemaField';
 import type { AgentEvent } from '@/shared/types';
-import type { ToolCallTimeline } from './deriveMessageState';
+import type { ToolCallTimeline } from '@/client/store/modules/MessageFSM';
 
 // === Types ===
-
-export type HumanInputState =
-  | { type: 'awaiting'; message: string; schema: SchemaProperty }
-  | { type: 'submitted'; submittedData: Record<string, unknown> }
-  | { type: 'completed'; submittedData: Record<string, unknown> }
-  | { type: 'timeout' }
-  | null;
-
-export interface AwaitingInputData {
-  message: string;
-  schema: SchemaProperty;
-}
 
 export interface ProgressData {
   status?: string;
   message?: string;
-  schema?: SchemaProperty;
+  schema?: Record<string, unknown>;
   event?: AgentEvent;
   [key: string]: unknown;
 }
@@ -51,43 +38,6 @@ export function buildToolBlocks(
       isPending: toolCall.status === 'pending',
     };
   });
-}
-
-/**
- * Detect awaiting_input status from a flat list of agent events.
- * Used for nested agent call blocks.
- *
- * Only returns awaiting_input if the tool call hasn't completed yet
- * (no tool_result or tool_error for the same callId).
- */
-export function detectAwaitingInputInEvents(
-  events: AgentEvent[],
-): AwaitingInputData | null {
-  // First, build a set of completed callIds
-  const completedCallIds = new Set<string>();
-  for (const event of events) {
-    if (event.type === 'tool_result' || event.type === 'tool_error') {
-      completedCallIds.add(event.callId);
-    }
-  }
-
-  // Then find awaiting_input progress that hasn't been completed
-  for (const event of events) {
-    if (event.type !== 'tool_progress') continue;
-
-    const data = event.data as ProgressData;
-    if (data?.status === 'awaiting_input' && data.schema) {
-      // Skip if this tool call already has a result
-      if (completedCallIds.has(event.callId)) {
-        continue;
-      }
-      return {
-        message: data.message ?? 'Please provide input',
-        schema: data.schema,
-      };
-    }
-  }
-  return null;
 }
 
 // === Recursive event extraction ===
@@ -163,35 +113,4 @@ export function buildToolTimeline(events: AgentEvent[]): ToolCallTimeline[] {
   }
 
   return Array.from(toolCallsMap.values()).sort((a, b) => a.seq - b.seq);
-}
-
-/**
- * Recursively detect awaiting_input status from agent events.
- * Checks current level and all nested agent_call blocks.
- */
-export function detectAwaitingInputRecursive(
-  events: AgentEvent[],
-): AwaitingInputData | null {
-  // Check current level first
-  const found = detectAwaitingInputInEvents(events);
-  if (found) return found;
-
-  // Recursively check nested agent_call blocks
-  for (const event of events) {
-    if (event.type !== 'tool_call' || event.toolName !== 'agent_call') continue;
-
-    // Find tool_progress events for this agent_call
-    const progress: Array<{ data: unknown }> = [];
-    for (const e of events) {
-      if (e.type === 'tool_progress' && e.callId === event.callId) {
-        progress.push({ data: e.data });
-      }
-    }
-
-    const nestedEvents = extractNestedEvents(progress);
-    const nestedFound = detectAwaitingInputRecursive(nestedEvents);
-    if (nestedFound) return nestedFound;
-  }
-
-  return null;
 }

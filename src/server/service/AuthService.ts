@@ -1,26 +1,19 @@
-import { InjectTokens } from '@/shared/constants';
 import { typeormAdapter } from '@hedystia/better-auth-typeorm';
 import { betterAuth } from 'better-auth';
 import type { Request } from 'express';
-import { inject } from 'tsyringe';
-import { DataSource } from 'typeorm';
 import { service } from '../decorator/service';
 import { getSessionHeaders } from '../utils';
+import pg from './pg';
 
 @service()
 export class AuthService {
-  private readonly auth;
-
-  constructor(@inject(InjectTokens.PG) dataSource: DataSource) {
-    this.auth = betterAuth({
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      database: typeormAdapter(dataSource),
-      emailAndPassword: {
-        enabled: true,
-      },
-    });
-  }
+  private readonly auth = betterAuth({
+    // @ts-expect-error type
+    database: typeormAdapter(pg),
+    emailAndPassword: {
+      enabled: true,
+    },
+  });
 
   get api() {
     return this.auth.api;

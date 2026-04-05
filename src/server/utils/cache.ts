@@ -25,14 +25,14 @@ const PREVIEW_LENGTH = 200;
 const CACHE_TTL = 3600;
 
 async function storeCache(
-  traceId: string,
+  messageId: string,
   value: unknown,
 ): Promise<CachedReference> {
   const key = generateId('cache');
   const serialized = typeof value === 'string' ? value : JSON.stringify(value);
   const redisService = container.resolve(RedisService);
   await redisService.client.setEx(
-    RedisKeys.AGENT_CACHE(traceId, key),
+    RedisKeys.AGENT_CACHE(messageId, key),
     CACHE_TTL,
     serialized,
   );
@@ -47,10 +47,10 @@ async function storeCache(
   };
 }
 
-async function retrieveCache(traceId: string, key: string): Promise<unknown> {
+async function retrieveCache(messageId: string, key: string): Promise<unknown> {
   const redisService = container.resolve(RedisService);
   const data = await redisService.client.get(
-    RedisKeys.AGENT_CACHE(traceId, key),
+    RedisKeys.AGENT_CACHE(messageId, key),
   );
   if (!data) {
     throw new Error(`Cache miss: ${key}`);
@@ -73,17 +73,17 @@ function shouldCompress(value: unknown): boolean {
 }
 
 export async function compress(
-  traceId: string,
+  messageId: string,
   value: unknown,
 ): Promise<unknown> {
   if (shouldCompress(value)) {
-    return storeCache(traceId, value);
+    return storeCache(messageId, value);
   }
 
   if (Array.isArray(value)) {
     const result: unknown[] = [];
     for (const item of value) {
-      result.push(await compress(traceId, item));
+      result.push(await compress(messageId, item));
     }
     return result;
   }
@@ -91,7 +91,7 @@ export async function compress(
   if (value && typeof value === 'object' && !isCachedReference(value)) {
     const result: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(value)) {
-      result[key] = await compress(traceId, val);
+      result[key] = await compress(messageId, val);
     }
     return result;
   }
@@ -100,17 +100,17 @@ export async function compress(
 }
 
 export async function resolve(
-  traceId: string,
+  messageId: string,
   value: unknown,
 ): Promise<unknown> {
   if (isCachedReference(value)) {
-    return retrieveCache(traceId, value.$cached);
+    return retrieveCache(messageId, value.$cached);
   }
 
   if (Array.isArray(value)) {
     const result: unknown[] = [];
     for (const item of value) {
-      result.push(await resolve(traceId, item));
+      result.push(await resolve(messageId, item));
     }
     return result;
   }
@@ -118,7 +118,7 @@ export async function resolve(
   if (value && typeof value === 'object') {
     const result: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(value)) {
-      result[key] = await resolve(traceId, val);
+      result[key] = await resolve(messageId, val);
     }
     return result;
   }

@@ -1,7 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { AgentIds } from '@/shared/constants';
-import type { Message } from '@/shared/types/entities';
-import type { MessageRenderState } from '../deriveMessageState';
+import type { MessageFSM } from '@/client/store/modules/MessageFSM';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Typography } from 'antd';
 import {
@@ -14,35 +13,13 @@ import './index.scss';
 
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
-interface ReActEventRendererProps {
-  state: MessageRenderState;
-  conversationId: string;
-}
-
-const ReActEventRenderer: React.FC<ReActEventRendererProps> = ({
-  state,
-  conversationId,
-}) => {
-  return (
-    <UniversalEventRenderer state={state} conversationId={conversationId} />
-  );
-};
-
 const createReActRenderer = (agentId: string) => {
-  const renderer = (
-    msg: Message,
-    state: MessageRenderState,
-  ): AgentRenderResult => ({
+  const renderer = (fsm: MessageFSM): AgentRenderResult => ({
     content: (
       <>
-        {state.hasEvents && (
-          <ReActEventRenderer
-            state={state}
-            conversationId={msg.conversationId}
-          />
-        )}
+        {fsm.hasEvents && <UniversalEventRenderer messageFSM={fsm} />}
 
-        {state.isAwaitingContent && (
+        {fsm.isAwaitingContent && (
           <Typography.Text type="secondary" italic>
             <LoadingOutlined style={{ marginInlineEnd: 4 }} />
             Thinking...
@@ -50,9 +27,9 @@ const createReActRenderer = (agentId: string) => {
         )}
 
         <Suspense
-          fallback={<Typography.Paragraph>{msg.content}</Typography.Paragraph>}
+          fallback={<Typography.Paragraph>{fsm.content}</Typography.Paragraph>}
         >
-          <MarkdownRender>{msg.content}</MarkdownRender>
+          <MarkdownRender>{fsm.content}</MarkdownRender>
         </Suspense>
       </>
     ),

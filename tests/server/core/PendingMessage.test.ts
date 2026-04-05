@@ -4,9 +4,11 @@ import { Role } from '@/shared/entities/Message';
 import { ToolIds } from '@/shared/constants';
 import type { AgentEvent } from '@/shared/types';
 
+const MSG_ID = 'msg-123';
+
 describe('PendingMessage', () => {
   const createMessage = () => ({
-    id: 'msg-123',
+    id: MSG_ID,
     role: Role.ASSIST,
     content: '',
     meta: { events: [] as AgentEvent[] },
@@ -23,12 +25,14 @@ describe('PendingMessage', () => {
 
       pending.handleEvent({
         type: 'stream',
+        messageId: MSG_ID,
         content: 'Hello',
         seq: 1,
         at: Date.now(),
       });
       pending.handleEvent({
         type: 'stream',
+        messageId: MSG_ID,
         content: ' World',
         seq: 2,
         at: Date.now(),
@@ -44,6 +48,7 @@ describe('PendingMessage', () => {
 
       const toolCallEvent: AgentEvent = {
         type: 'tool_call',
+        messageId: MSG_ID,
         callId: 'tc_123',
         toolName: 'search',
         toolArgs: { query: 'test' },
@@ -63,6 +68,7 @@ describe('PendingMessage', () => {
 
       pending.handleEvent({
         type: 'tool_call',
+        messageId: MSG_ID,
         callId: 'tc_123',
         toolName: ToolIds.LLM_CALL,
         toolArgs: {},
@@ -80,6 +86,7 @@ describe('PendingMessage', () => {
 
       pending.handleEvent({
         type: 'error',
+        messageId: MSG_ID,
         error: 'Something went wrong',
         seq: 1,
         at: Date.now(),
@@ -96,6 +103,7 @@ describe('PendingMessage', () => {
 
       pending.handleEvent({
         type: 'tool_result',
+        messageId: MSG_ID,
         callId: 'tc_123',
         toolName: 'search',
         output: { results: [] },
@@ -112,11 +120,17 @@ describe('PendingMessage', () => {
       const pending = new PendingMessage(msg, createPersister());
 
       // Start event
-      pending.handleEvent({ type: 'start', seq: 1, at: Date.now() });
+      pending.handleEvent({
+        type: 'start',
+        messageId: MSG_ID,
+        seq: 1,
+        at: Date.now(),
+      });
 
       // Stream content
       pending.handleEvent({
         type: 'stream',
+        messageId: MSG_ID,
         content: 'Hello',
         seq: 2,
         at: Date.now(),
@@ -125,6 +139,7 @@ describe('PendingMessage', () => {
       // Tool call (non-LLM)
       pending.handleEvent({
         type: 'tool_call',
+        messageId: MSG_ID,
         callId: 'tc_123',
         toolName: 'search',
         toolArgs: { query: 'test' },
@@ -135,6 +150,7 @@ describe('PendingMessage', () => {
       // Tool result
       pending.handleEvent({
         type: 'tool_result',
+        messageId: MSG_ID,
         callId: 'tc_123',
         toolName: 'search',
         output: { results: ['a', 'b'] },
@@ -145,13 +161,19 @@ describe('PendingMessage', () => {
       // More stream
       pending.handleEvent({
         type: 'stream',
+        messageId: MSG_ID,
         content: '!',
         seq: 5,
         at: Date.now(),
       });
 
       // Final
-      pending.handleEvent({ type: 'final', seq: 6, at: Date.now() });
+      pending.handleEvent({
+        type: 'final',
+        messageId: MSG_ID,
+        seq: 6,
+        at: Date.now(),
+      });
 
       expect(msg.content).toBe('Hello!');
       expect(msg.meta!.events).toHaveLength(4); // start, tool_call, tool_result, final
@@ -173,6 +195,7 @@ describe('PendingMessage', () => {
 
       pending.handleEvent({
         type: 'stream',
+        messageId: MSG_ID,
         content: ' content',
         seq: 1,
         at: Date.now(),
@@ -190,6 +213,7 @@ describe('PendingMessage', () => {
 
       pending.handleEvent({
         type: 'stream',
+        messageId: MSG_ID,
         content: 'Hello',
         seq: 1,
         at: Date.now(),

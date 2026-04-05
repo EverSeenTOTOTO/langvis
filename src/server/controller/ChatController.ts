@@ -33,12 +33,6 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const sessionState = await this.chatService.getSessionState(conversationId);
-
-    if (sessionState?.phase === 'done') {
-      return res.sendStatus(204);
-    }
-
     const session = await this.chatService.acquireSession(conversationId);
     if (!session) {
       return res.sendStatus(204);
@@ -109,7 +103,7 @@ export default class ChatController {
     }
 
     const messageFSM = session.getMessageFSM(messageId);
-    if (!messageFSM || messageFSM.isTerminal) {
+    if (!messageFSM || messageFSM.isTerminated) {
       return res.status(404).json({
         error: `No active message ${messageId}`,
       });
@@ -133,11 +127,9 @@ export default class ChatController {
   ) {
     const session = this.chatService.getSession(conversationId);
 
-    if (!session || session.phase !== 'waiting') {
+    if (!session) {
       return res.status(400).json({
-        error: session
-          ? 'Session already active'
-          : 'SSE connection not established',
+        error: 'SSE connection not established',
       });
     }
 
@@ -161,9 +153,9 @@ export default class ChatController {
     // Verify user is authenticated
     await this.authService.getUserId(req);
 
-    // Set conversationId and traceId, then freeze TraceContext
+    // Set conversationId, messageId and traceId, then freeze TraceContext
+    // Note: messageId is set after we create the assistant message
     TraceContext.update({ conversationId, traceId: conversationId });
-    TraceContext.freeze();
 
     const memory = await this.chatService.buildMemory(
       agent,
@@ -179,6 +171,13 @@ export default class ChatController {
       conversation.id!,
       [{ role: Role.ASSIST, content: '', createdAt: new Date() }],
     );
+
+    // Update TraceContext with messageId
+    TraceContext.update({
+      messageId: assistantMessage.id,
+      traceId: assistantMessage.id,
+    });
+    TraceContext.freeze();
 
     res.status(200).json({ success: true, messageId: assistantMessage.id });
 

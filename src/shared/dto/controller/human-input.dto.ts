@@ -1,27 +1,27 @@
 import { BaseDto, dto } from '../base';
 
 export interface SubmitHumanInputRequest {
-  conversationId: string;
+  messageId: string;
   data: Record<string, unknown>;
 }
 
 @dto<SubmitHumanInputRequest>({
   type: 'object',
   properties: {
-    conversationId: { type: 'string' },
+    messageId: { type: 'string' },
     data: {
       type: 'object',
       additionalProperties: true,
     },
   },
-  required: ['conversationId', 'data'],
+  required: ['messageId', 'data'],
   additionalProperties: false,
 })
 export class SubmitHumanInputRequestDto
   extends BaseDto
   implements SubmitHumanInputRequest
 {
-  conversationId!: string;
+  messageId!: string;
   data!: Record<string, unknown>;
 }
 
@@ -31,22 +31,22 @@ export interface SubmitHumanInputResponse {
 }
 
 export interface GetHumanInputStatusRequest {
-  conversationId: string;
+  messageId: string;
 }
 
 @dto<GetHumanInputStatusRequest>({
   type: 'object',
   properties: {
-    conversationId: { type: 'string' },
+    messageId: { type: 'string' },
   },
-  required: ['conversationId'],
+  required: ['messageId'],
   additionalProperties: false,
 })
 export class GetHumanInputStatusRequestDto
   extends BaseDto
   implements GetHumanInputStatusRequest
 {
-  conversationId!: string;
+  messageId!: string;
 }
 
 export interface GetHumanInputStatusResponse {

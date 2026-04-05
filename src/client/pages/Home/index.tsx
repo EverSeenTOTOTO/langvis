@@ -9,7 +9,7 @@ import { Role } from '@/shared/types/entities';
 import { MenuOutlined } from '@ant-design/icons';
 import { Button, Layout, message, Skeleton } from 'antd';
 import { observer } from 'mobx-react-lite';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAsyncFn, useMedia } from 'react-use';
 import ConversationsSider from './components/ConversationsSider';
 import Messages, { type MessagesRef } from './components/Messages';
@@ -44,28 +44,12 @@ const Chat: React.FC = () => {
   // Cancelling = cancel request in flight
   const isCancelling = cancelApi[0].loading;
 
-  // Loading = last assistant message still in progress
-  const isLoading = useMemo(() => {
-    if (isCancelling) return false;
-
-    const session = chatStore.currentSession;
-    if (!session) return false;
-
-    // Check if any MessageFSM is in progress
-    const messages = conversationStore.currentMessages;
-    const lastMessage = messages?.[messages.length - 1];
-
-    if (lastMessage && lastMessage.role === Role.ASSIST) {
-      const messageFSM = session.getMessageFSM(lastMessage.id);
-      return messageFSM?.isInProgress ?? false;
-    }
-
-    return session.hasActiveMessage;
-  }, [
-    conversationStore.currentMessages,
-    chatStore.currentSession,
-    isCancelling,
-  ]);
+  // Loading = connecting or actively streaming
+  const session = chatStore.currentSession;
+  const isLoading =
+    !isCancelling && session
+      ? session.isConnecting || session.hasActiveMessage
+      : false;
 
   const {
     attachments,

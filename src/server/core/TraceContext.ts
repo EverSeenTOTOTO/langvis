@@ -4,6 +4,7 @@ export interface TraceStore {
   requestId: string;
   userId?: string;
   conversationId?: string;
+  messageId?: string;
   traceId?: string;
   _frozen?: boolean;
 }

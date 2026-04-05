@@ -22,6 +22,10 @@ export class PendingMessage {
       this.message.content = event.error;
     }
 
+    if (event.type === 'cancelled') {
+      this.message.content = event.reason;
+    }
+
     // 3. Persist non-stream and non-llm events to message.meta.events
     if (
       (event as Extract<AgentEvent, { type: 'tool_call' }>).toolName !==

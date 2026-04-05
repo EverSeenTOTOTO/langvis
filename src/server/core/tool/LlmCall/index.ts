@@ -102,7 +102,7 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
     const model = data.model || process.env.OPENAI_MODEL!;
 
     this.logger.debug('LLM call request', {
-      sessionId: TraceContext.getOrFail().traceId!,
+      traceId: TraceContext.getOrFail().traceId!,
       model,
       messageCount: messages.length,
       temperature: data.temperature,

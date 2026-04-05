@@ -2,7 +2,10 @@ import { CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { Flex, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import type React from 'react';
-import type { ToolCallTimeline, ThoughtItem } from './deriveMessageState';
+import type {
+  ToolCallTimeline,
+  ThoughtItem,
+} from '@/client/store/modules/MessageFSM';
 import './ReActAgent/index.scss';
 
 const TAG_COLORS = [

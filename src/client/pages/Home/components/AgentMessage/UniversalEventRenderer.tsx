@@ -1,61 +1,15 @@
 import HumanInputForm from '@/client/components/HumanInputForm';
+import type { MessageFSM } from '@/client/store/modules/MessageFSM';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Collapse, Typography } from 'antd';
 import { useEffect, useState } from 'react';
-import type { MessageRenderState, ThoughtItem } from './deriveMessageState';
 import { NestedAgentCallBlock } from './NestedAgentCallBlock';
 import { StandaloneThoughtBlock, ToolBlockItem } from './ToolBlockItem';
-import {
-  buildToolBlocks,
-  detectAwaitingInputRecursive,
-  type ToolBlock,
-} from './utils';
+import { buildToolBlocks, type ToolBlock } from './utils';
 
 export interface UniversalEventRendererProps {
-  state: MessageRenderState;
-  conversationId: string;
-  /** Custom render function for tool-specific visualization */
+  messageFSM: MessageFSM;
   customToolRender?: (toolCall: ToolBlock['toolCall']) => React.ReactNode;
-}
-
-interface DerivedState {
-  toolBlocks: ToolBlock[];
-  standaloneThoughts: ThoughtItem[];
-  awaitingInput: ReturnType<typeof detectAwaitingInputRecursive>;
-  isProcessing: boolean;
-  showBubbleLoading: boolean;
-  shouldExpandDetails: boolean;
-}
-
-function deriveState(state: MessageRenderState): DerivedState {
-  const { toolCallTimeline, thoughts, isTerminated, hasContent, hasEvents } =
-    state;
-
-  const toolBlocks = buildToolBlocks(toolCallTimeline);
-
-  // Use recursive detection for nested awaiting_input
-  const rawEvents = state.rawEvents;
-  const awaitingInput = detectAwaitingInputRecursive(rawEvents);
-
-  const allToolsSettled =
-    toolBlocks.length > 0 && toolBlocks.every(b => !b.isPending);
-
-  const isProcessing =
-    hasEvents &&
-    !isTerminated &&
-    !awaitingInput &&
-    !allToolsSettled &&
-    !hasContent;
-
-  return {
-    toolBlocks,
-    standaloneThoughts: thoughts,
-    awaitingInput,
-    isProcessing,
-    showBubbleLoading: !hasContent && !hasEvents && !isTerminated,
-    shouldExpandDetails:
-      !isTerminated && (toolBlocks.length > 0 || thoughts.length > 0),
-  };
 }
 
 /**
@@ -63,26 +17,22 @@ function deriveState(state: MessageRenderState): DerivedState {
  * Can be used by any Agent renderer that needs event timeline visualization.
  */
 export function UniversalEventRenderer({
-  state,
-  conversationId,
+  messageFSM,
   customToolRender,
 }: UniversalEventRendererProps): React.ReactElement | null {
-  const derived = deriveState(state);
+  const toolBlocks = buildToolBlocks(messageFSM.toolCallTimeline);
+  const thoughts = messageFSM.thoughts;
   const [activeKey, setActiveKey] = useState<string[]>([]);
 
   useEffect(() => {
-    setActiveKey(derived.shouldExpandDetails ? ['1'] : []);
-  }, [derived.shouldExpandDetails]);
+    setActiveKey(messageFSM.shouldExpandDetails ? ['1'] : []);
+  }, [messageFSM.shouldExpandDetails]);
 
-  if (
-    derived.toolBlocks.length === 0 &&
-    derived.standaloneThoughts.length === 0
-  ) {
+  if (toolBlocks.length === 0 && thoughts.length === 0) {
     return null;
   }
 
-  const totalItems =
-    derived.toolBlocks.length + derived.standaloneThoughts.length;
+  const totalItems = toolBlocks.length + thoughts.length;
 
   return (
     <>
@@ -100,14 +50,14 @@ export function UniversalEventRenderer({
             ),
             children: (
               <div className="react-tool-list">
-                {derived.toolBlocks.map(block => {
+                {toolBlocks.map(block => {
                   // Use NestedAgentCallBlock for agent_call tools
                   if (block.toolCall.toolName === 'agent_call') {
                     return (
                       <NestedAgentCallBlock
                         key={block.toolCall.callId}
                         toolCall={block.toolCall}
-                        conversationId={conversationId}
+                        conversationId={messageFSM.conversationId}
                         depth={0}
                         customToolRender={customToolRender}
                       />
@@ -122,13 +72,13 @@ export function UniversalEventRenderer({
                     />
                   );
                 })}
-                {derived.standaloneThoughts.map(thought => (
+                {thoughts.map(thought => (
                   <StandaloneThoughtBlock
                     key={`thought-${thought.seq}`}
                     thought={thought}
                   />
                 ))}
-                {derived.isProcessing && (
+                {messageFSM.isProcessing && (
                   <div className="react-tool-processing">
                     <LoadingOutlined style={{ marginInlineEnd: 8 }} />
                     <Typography.Text type="secondary" italic>
@@ -142,11 +92,12 @@ export function UniversalEventRenderer({
         ]}
         style={{ width: '100%', marginBlock: 8 }}
       />
-      {derived.awaitingInput && (
+      {messageFSM.awaitingInput && (
         <HumanInputForm
-          conversationId={conversationId}
-          message={derived.awaitingInput.message}
-          schema={derived.awaitingInput.schema}
+          messageId={messageFSM.messageId}
+          conversationId={messageFSM.conversationId}
+          message={messageFSM.awaitingInput.message}
+          schema={messageFSM.awaitingInput.schema}
         />
       )}
     </>

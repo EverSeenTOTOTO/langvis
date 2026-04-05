@@ -1,7 +1,5 @@
 import { AgentIds } from '@/shared/constants';
-import type { Message } from '@/shared/types/entities';
-import type { MessageRenderState } from './AgentMessage/deriveMessageState';
-import { deriveMessageState } from './AgentMessage/deriveMessageState';
+import type { MessageFSM } from '@/client/store/modules/MessageFSM';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Typography } from 'antd';
 import type React from 'react';
@@ -13,10 +11,7 @@ export type AgentRenderResult = {
   content: React.ReactNode;
 };
 
-export type AgentRenderer = (
-  msg: Message,
-  state: MessageRenderState,
-) => AgentRenderResult;
+export type AgentRenderer = (fsm: MessageFSM) => AgentRenderResult;
 
 // Registry of agent renderers
 const agentRenderers = new Map<string, AgentRenderer>();
@@ -38,32 +33,20 @@ export function getAgentRenderer(agentId: string): AgentRenderer {
   return agentRenderers.get(agentId) ?? defaultChatRenderer;
 }
 
-/**
- * Render a message using the appropriate agent renderer
- */
-export function renderAgentMessage(
-  msg: Message,
-  agentId: string,
-): AgentRenderResult {
-  const state = deriveMessageState(msg);
-  const renderer = getAgentRenderer(agentId);
-  return renderer(msg, state);
-}
-
 // Default chat renderer
-const defaultChatRenderer: AgentRenderer = (msg, state) => ({
+const defaultChatRenderer: AgentRenderer = fsm => ({
   content: (
     <>
-      {state.isAwaitingContent && (
+      {fsm.isAwaitingContent && (
         <Typography.Text type="secondary" italic>
           <LoadingOutlined style={{ marginInlineEnd: 4 }} />
           Thinking...
         </Typography.Text>
       )}
       <Suspense
-        fallback={<Typography.Paragraph>{msg.content}</Typography.Paragraph>}
+        fallback={<Typography.Paragraph>{fsm.content}</Typography.Paragraph>}
       >
-        <MarkdownRender>{msg.content}</MarkdownRender>
+        <MarkdownRender>{fsm.content}</MarkdownRender>
       </Suspense>
     </>
   ),

@@ -31,14 +31,16 @@ export class ChatStore {
     reaction(
       () => this.conversationStore.currentConversationId,
       async (newId, oldId) => {
-        // Deactivate old session (soft cancel, don't call cancel API)
+        // Cleanup old sessions to limit memory
         if (oldId) {
-          this.getSession(oldId)?.deactivate();
+          this.cleanupOldSessions(oldId);
         }
 
         if (!newId) return;
 
         await this.conversationStore.getMessagesByConversationId({ id: newId });
+        // Initialize FSM for all assistant messages
+        this.initializeMessageFSMs(newId);
         await this.activateConversation(newId);
       },
     );
@@ -63,7 +65,7 @@ export class ChatStore {
     try {
       await session.connect();
     } catch {
-      this.handleError(conversationId, 'SSE connection failed');
+      this.handleError(conversationId);
       this.conversationStore.getMessagesByConversationId({
         id: conversationId,
       });
@@ -79,9 +81,15 @@ export class ChatStore {
     if (!session) {
       session = new ConversationFSM(conversationId, {
         onEvent: (convId, event) => this.handleEvent(convId, event),
-        onError: (convId, error) => this.handleError(convId, error),
+        onError: convId => this.handleError(convId),
         onRefreshMessages: convId => this.refreshMessages(convId),
       });
+      // Set conversation object if available
+      const conversation =
+        this.conversationStore.findConversationById(conversationId);
+      if (conversation) {
+        session.setConversation(conversation);
+      }
       this.sessions.set(conversationId, session);
     }
     return session;
@@ -108,15 +116,15 @@ export class ChatStore {
     });
   }
 
-  @api('/api/human-input/:conversationId', { method: 'post' })
+  @api('/api/human-input/:messageId', { method: 'post' })
   async submitHumanInput(
     _params: SubmitHumanInputRequest,
     req?: ApiRequest<SubmitHumanInputRequest>,
   ) {
-    return req!.send();
+    return await req!.send();
   }
 
-  @api('/api/human-input/:conversationId')
+  @api('/api/human-input/:messageId')
   async getHumanInputStatus(
     _params: GetHumanInputStatusRequest,
     req?: ApiRequest<GetHumanInputStatusRequest>,
@@ -160,11 +168,8 @@ export class ChatStore {
 
     try {
       await session.connect();
-    } catch (e) {
-      this.handleError(
-        conversationId,
-        (e as Error)?.message ?? 'SSE connection failed',
-      );
+    } catch {
+      this.handleError(conversationId);
       return;
     }
 
@@ -183,84 +188,46 @@ export class ChatStore {
         const updatedMessages = this.conversationStore.messages[conversationId];
         const updatedAssistant = updatedMessages?.[updatedMessages.length - 1];
         if (updatedAssistant && updatedAssistant.id === res.messageId) {
-          session.addMessageFSM(res.messageId, updatedAssistant);
+          const fsm = session.addMessageFSM(res.messageId, updatedAssistant);
+          fsm.start();
         }
       }
-    } catch (e) {
-      this.handleError(
-        conversationId,
-        (e as Error)?.message ?? 'Failed to start chat',
-      );
+    } catch {
+      this.handleError(conversationId);
     }
   }
 
-  private handleEvent(conversationId: string, event: AgentEvent): void {
+  // Initialize FSMs for all assistant messages in a conversation
+  private initializeMessageFSMs(conversationId: string): void {
+    const session = this.acquireSession(conversationId);
+    const messages = this.conversationStore.messages[conversationId];
+
+    if (!messages) return;
+
+    for (const msg of messages) {
+      if (msg.role === Role.ASSIST) {
+        session.getOrCreateMessageFSM(msg);
+      }
+    }
+  }
+
+  private handleEvent(conversationId: string, _event: AgentEvent): void {
     if (this.conversationStore.currentConversationId !== conversationId) {
       console.warn(
         `Ignoring SSE message for non-current conversation: ${conversationId}`,
       );
-      return;
-    }
-
-    switch (event.type) {
-      case 'start':
-      case 'thought':
-      case 'tool_call':
-      case 'tool_progress':
-      case 'tool_result':
-      case 'tool_error':
-        this.appendMessageEvent(conversationId, event);
-        break;
-
-      case 'stream':
-        this.appendMessageContent(conversationId, event.content);
-        break;
-
-      case 'final':
-      case 'cancelled':
-      case 'error':
-        // Refresh handled by ConversationFSM
-        break;
     }
   }
 
-  private handleError(conversationId: string, errorMessage: string): void {
+  private handleError(conversationId: string): void {
     const session = this.getSession(conversationId);
     if (session?.phase === 'canceled') return;
-
-    // Add error event to message
-    this.appendMessageEvent(conversationId, {
-      type: 'error',
-      error: errorMessage,
-      seq: Date.now(),
-      at: Date.now(),
-    });
 
     this.refreshMessages(conversationId);
   }
 
   private refreshMessages(conversationId: string): void {
     this.conversationStore.getMessagesByConversationId({ id: conversationId });
-  }
-
-  private appendMessageContent(conversationId: string, content: string): void {
-    const messages = this.conversationStore.messages[conversationId];
-    if (!messages || messages.length === 0) return;
-
-    const lastMessage = messages[messages.length - 1];
-    lastMessage.content += content;
-  }
-
-  private appendMessageEvent(conversationId: string, event: AgentEvent): void {
-    const messages = this.conversationStore.messages[conversationId];
-    if (!messages || messages.length === 0) return;
-
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage.meta) {
-      lastMessage.meta = { events: [] };
-    }
-    lastMessage.meta.events = lastMessage.meta.events ?? [];
-    lastMessage.meta.events.push(event);
   }
 
   private addPendingMessages(
@@ -304,6 +271,15 @@ export class ChatStore {
     const lastMessage = messages[messages.length - 1];
     if (lastMessage && lastMessage.id === oldId) {
       lastMessage.id = newId;
+    }
+  }
+
+  // Deactivate and remove old session
+  private cleanupOldSessions(oldId: string): void {
+    const session = this.sessions.get(oldId);
+    if (session) {
+      session.deactivate();
+      this.sessions.delete(oldId);
     }
   }
 }

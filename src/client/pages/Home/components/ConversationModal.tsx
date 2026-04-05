@@ -12,6 +12,7 @@ import {
   FormProps,
   Input,
   Select,
+  Skeleton,
   Switch,
   Typography,
 } from 'antd';
@@ -180,20 +181,25 @@ const ConversationModal = ({
             )}
           </div>
           <div className="config-right">
-            <Form.Item noStyle dependencies={[['config', 'agent']]}>
-              {({ getFieldValue }) => {
-                const agent = getFieldValue(['config', 'agent']);
-                if (!agent) {
-                  return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
-                }
+            <Skeleton
+              loading={fetchGroupsApi[0].loading || fetchAgentApi[0].loading}
+              active
+            >
+              <Form.Item noStyle dependencies={[['config', 'agent']]}>
+                {({ getFieldValue }) => {
+                  const agent = getFieldValue(['config', 'agent']);
+                  if (!agent) {
+                    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+                  }
 
-                const agentInfo: AgentConfig = fetchAgentApi[0]?.value?.find(
-                  (a: AgentConfig & { id: string }) => a.id === agent,
-                );
+                  const agentInfo: AgentConfig = fetchAgentApi[0]?.value?.find(
+                    (a: AgentConfig & { id: string }) => a.id === agent,
+                  );
 
-                return renderConfigSchema(agentInfo?.configSchema);
-              }}
-            </Form.Item>
+                  return renderConfigSchema(agentInfo?.configSchema);
+                }}
+              </Form.Item>
+            </Skeleton>
           </div>
         </Flex>
       </Form>

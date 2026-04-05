@@ -126,7 +126,7 @@ describe('HumanInTheLoopTool', () => {
   describe('call - successful submission', () => {
     it('should create Redis entry with correct data', async () => {
       await TraceContext.run(
-        { requestId: 'test-req', conversationId: 'test-conversation' },
+        { requestId: 'test-req', messageId: 'test-message' },
         async () => {
           const ctx = createMockContext();
 
@@ -146,14 +146,14 @@ describe('HumanInTheLoopTool', () => {
             toolName: ToolIds.ASK_USER,
             data: {
               status: 'awaiting_input',
-              conversationId: 'test-conversation',
+              messageId: 'test-message',
               message: 'Please enter your name',
               schema: objectSchemaWithName,
             },
           });
 
           expect(mockRedisService.set).toHaveBeenCalledWith(
-            RedisKeys.HUMAN_INPUT('test-conversation'),
+            RedisKeys.HUMAN_INPUT('test-message'),
             expect.objectContaining({ submitted: false }),
           );
 
@@ -164,7 +164,7 @@ describe('HumanInTheLoopTool', () => {
 
     it('should yield tool_progress event with awaiting_input status', async () => {
       await TraceContext.run(
-        { requestId: 'test-req', conversationId: 'test-conversation' },
+        { requestId: 'test-req', messageId: 'test-message' },
         async () => {
           const ctx = createMockContext();
 
@@ -191,7 +191,7 @@ describe('HumanInTheLoopTool', () => {
 
     it('should return submitted result when user submits data via Pub/Sub', async () => {
       await TraceContext.run(
-        { requestId: 'test-req', conversationId: 'test-conversation' },
+        { requestId: 'test-req', messageId: 'test-message' },
         async () => {
           const ctx = createMockContext();
 
@@ -208,9 +208,9 @@ describe('HumanInTheLoopTool', () => {
 
           // Simulate submission: update Redis and publish notification
           mockRedisService._store.set(
-            RedisKeys.HUMAN_INPUT('test-conversation'),
+            RedisKeys.HUMAN_INPUT('test-message'),
             JSON.stringify({
-              conversationId: 'test-conversation',
+              messageId: 'test-message',
               formSchema: objectSchemaWithAnswer,
               message: 'Question?',
               submitted: true,
@@ -220,7 +220,7 @@ describe('HumanInTheLoopTool', () => {
 
           // Trigger Pub/Sub notification
           await mockRedisService.client.publish(
-            RedisKeys.HUMAN_INPUT('test-conversation'),
+            RedisKeys.HUMAN_INPUT('test-message'),
             'submitted',
           );
 
@@ -231,7 +231,7 @@ describe('HumanInTheLoopTool', () => {
             data: { answer: 'yes' },
           });
           expect(mockRedisService.del).toHaveBeenCalledWith(
-            RedisKeys.HUMAN_INPUT('test-conversation'),
+            RedisKeys.HUMAN_INPUT('test-message'),
           );
         },
       );
@@ -239,7 +239,7 @@ describe('HumanInTheLoopTool', () => {
 
     it('should return result on successful submission', async () => {
       await TraceContext.run(
-        { requestId: 'test-req', conversationId: 'test-conversation' },
+        { requestId: 'test-req', messageId: 'test-message' },
         async () => {
           const ctx = createMockContext();
 
@@ -255,9 +255,9 @@ describe('HumanInTheLoopTool', () => {
           await generator.next();
 
           mockRedisService._store.set(
-            RedisKeys.HUMAN_INPUT('test-conversation'),
+            RedisKeys.HUMAN_INPUT('test-message'),
             JSON.stringify({
-              conversationId: 'test-conversation',
+              messageId: 'test-message',
               formSchema: booleanSchema,
               message: 'Confirm?',
               submitted: true,
@@ -266,7 +266,7 @@ describe('HumanInTheLoopTool', () => {
           );
 
           await mockRedisService.client.publish(
-            RedisKeys.HUMAN_INPUT('test-conversation'),
+            RedisKeys.HUMAN_INPUT('test-message'),
             'submitted',
           );
 
@@ -284,7 +284,7 @@ describe('HumanInTheLoopTool', () => {
   describe('call - timeout', () => {
     it('should return not submitted after timeout', async () => {
       await TraceContext.run(
-        { requestId: 'test-req', conversationId: 'test-conversation' },
+        { requestId: 'test-req', messageId: 'test-message' },
         async () => {
           const ctx = createMockContext();
 
@@ -301,7 +301,7 @@ describe('HumanInTheLoopTool', () => {
 
           expect(result).toEqual({ submitted: false });
           expect(mockRedisService.del).toHaveBeenCalledWith(
-            RedisKeys.HUMAN_INPUT('test-conversation'),
+            RedisKeys.HUMAN_INPUT('test-message'),
           );
         },
       );
@@ -309,7 +309,7 @@ describe('HumanInTheLoopTool', () => {
 
     it('should clean up Redis key on timeout', async () => {
       await TraceContext.run(
-        { requestId: 'test-req', conversationId: 'test-conversation' },
+        { requestId: 'test-req', messageId: 'test-message' },
         async () => {
           const ctx = createMockContext();
 
@@ -325,7 +325,7 @@ describe('HumanInTheLoopTool', () => {
           await collectEvents(generator);
 
           expect(mockRedisService.del).toHaveBeenCalledWith(
-            RedisKeys.HUMAN_INPUT('test-conversation'),
+            RedisKeys.HUMAN_INPUT('test-message'),
           );
         },
       );
@@ -341,7 +341,7 @@ describe('HumanInTheLoopTool', () => {
         {
           requestId: 'test-req',
           traceId: 'test-trace-id',
-          conversationId: 'test-conversation',
+          messageId: 'test-message',
         },
         async () => {
           const ctx = new ExecutionContext(abortController);
@@ -367,7 +367,7 @@ describe('HumanInTheLoopTool', () => {
         {
           requestId: 'test-req',
           traceId: 'test-trace-id',
-          conversationId: 'test-conversation',
+          messageId: 'test-message',
         },
         async () => {
           const ctx = new ExecutionContext(abortController);
@@ -395,12 +395,12 @@ describe('HumanInTheLoopTool', () => {
   });
 
   describe('Redis key format', () => {
-    it('should use conversationId from TraceContext as key suffix', async () => {
+    it('should use messageId from TraceContext as key suffix', async () => {
       await TraceContext.run(
         {
           requestId: 'test-req',
           traceId: 'custom-trace-id',
-          conversationId: 'my-custom-conversation',
+          messageId: 'my-custom-message',
         },
         async () => {
           const customCtx = new ExecutionContext(new AbortController());
@@ -417,7 +417,7 @@ describe('HumanInTheLoopTool', () => {
           await generator.next();
 
           expect(mockRedisService.set).toHaveBeenCalledWith(
-            RedisKeys.HUMAN_INPUT('my-custom-conversation'),
+            RedisKeys.HUMAN_INPUT('my-custom-message'),
             expect.any(Object),
           );
         },
@@ -428,7 +428,7 @@ describe('HumanInTheLoopTool', () => {
   describe('stored data structure', () => {
     it('should store correct initial data in Redis', async () => {
       await TraceContext.run(
-        { requestId: 'test-req', conversationId: 'test-conversation' },
+        { requestId: 'test-req', messageId: 'test-message' },
         async () => {
           const ctx = createMockContext();
 
@@ -444,13 +444,11 @@ describe('HumanInTheLoopTool', () => {
           await generator.next();
 
           const storedData = JSON.parse(
-            mockRedisService._store.get(
-              RedisKeys.HUMAN_INPUT('test-conversation'),
-            )!,
+            mockRedisService._store.get(RedisKeys.HUMAN_INPUT('test-message'))!,
           );
 
           expect(storedData).toMatchObject({
-            conversationId: 'test-conversation',
+            messageId: 'test-message',
             message: 'Enter email',
             formSchema: objectSchemaWithEmail,
             submitted: false,

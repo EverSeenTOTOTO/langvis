@@ -191,28 +191,6 @@ describe('ChatController', () => {
       });
     });
 
-    it('should return 400 if session not in waiting phase', async () => {
-      mockRequest.params = { conversationId: 'conv-123' };
-      mockRequest.body = { role: Role.USER, content: 'Hello' };
-
-      const mockSession = {
-        phase: 'active',
-      };
-      mockChatService.getSession.mockReturnValue(mockSession);
-
-      await chatController.chat(
-        'conv-123',
-        { conversationId: 'conv-123', role: Role.USER, content: 'Hello' },
-        mockRequest as Request,
-        mockResponse as Response,
-      );
-
-      expect(mockStatus).toHaveBeenCalledWith(400);
-      expect(mockJson).toHaveBeenCalledWith({
-        error: 'Session already active',
-      });
-    });
-
     it('should return 400 if conversation not found', async () => {
       mockRequest.params = { conversationId: 'conv-123' };
       mockRequest.body = { role: Role.USER, content: 'Hello' };
@@ -353,7 +331,9 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockSession.cancelAllMessages).toHaveBeenCalledWith('User cancelled');
+      expect(mockSession.cancelAllMessages).toHaveBeenCalledWith(
+        'User cancelled',
+      );
       expect(mockStatus).toHaveBeenCalledWith(200);
       expect(mockJson).toHaveBeenCalledWith({ success: true });
     });
@@ -375,7 +355,9 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      expect(mockSession.cancelAllMessages).toHaveBeenCalledWith('Cancelled by user');
+      expect(mockSession.cancelAllMessages).toHaveBeenCalledWith(
+        'Cancelled by user',
+      );
     });
   });
 });
