@@ -29,7 +29,7 @@ export default class ReadCacheTool extends Tool<
     @input() readCacheInput: ReadCacheInput,
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, ReadCacheOutput, void> {
-    const content = await resolve(TraceContext.getOrFail().traceId!, {
+    const content = await resolve(TraceContext.getOrFail().messageId!, {
       $cached: readCacheInput.key,
     });
 

@@ -8,6 +8,7 @@ import './index.scss';
 const MarkdownRender = lazy(() => import('../MarkdownRender'));
 
 interface HumanInputFormProps {
+  messageId: string;
   conversationId: string;
   message: string;
   schema: SchemaProperty;
@@ -21,6 +22,7 @@ type FormState =
   | { type: 'ready' };
 
 const HumanInputForm: React.FC<HumanInputFormProps> = ({
+  messageId,
   conversationId,
   message,
   schema,
@@ -44,8 +46,8 @@ const HumanInputForm: React.FC<HumanInputFormProps> = ({
 
   // Initial check
   useEffect(() => {
-    checkStatus({ conversationId });
-  }, [conversationId]);
+    checkStatus({ messageId });
+  }, [messageId]);
 
   // When submitted, check if session still exists
   useEffect(() => {
@@ -59,7 +61,10 @@ const HumanInputForm: React.FC<HumanInputFormProps> = ({
   }, [checkState.loading, checkState.value, conversationId]);
 
   const handleSubmit = async (values: Record<string, unknown>) => {
-    await submit({ conversationId, data: values });
+    await submit({
+      messageId,
+      data: values,
+    });
     onSubmit?.();
   };
 

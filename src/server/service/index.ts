@@ -21,6 +21,7 @@ export default async (_app: Express) => {
   logger.info(
     `Initialize openai with api base: ${chalk.bgBlue(process.env.OPENAI_API_BASE)}, default model: ${chalk.bgRed(process.env.OPENAI_MODEL)}`,
   );
+  logger.debug(`Api key: ${process.env.OPENAI_API_KEY}`);
 
   container.register<OpenAI>(InjectTokens.OPENAI, {
     useValue: openai,

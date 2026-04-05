@@ -1,8 +1,9 @@
 import { AgentEvent, MessagePhase } from '@/shared/types';
-import type { Message } from '@/shared/types/entities';
+import { Role, type Message } from '@/shared/types/entities';
+import { StateMachine } from '@/shared/utils/StateMachine';
 import { makeAutoObservable } from 'mobx';
 
-const VALID_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
+const DEFAULT_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
   placeholder: ['loading', 'error'],
   loading: ['streaming', 'canceling', 'error'],
   streaming: [
@@ -13,7 +14,7 @@ const VALID_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
     'error',
     'canceling',
   ],
-  awaiting_input: ['submitting', 'canceling', 'canceled', 'error'],
+  awaiting_input: ['submitting', 'streaming', 'canceling', 'canceled', 'error'],
   submitting: ['streaming', 'error', 'canceled'],
   canceling: ['canceled', 'error'],
   final: [],
@@ -21,154 +22,492 @@ const VALID_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
   error: [],
 };
 
-const TERMINAL_PHASES: MessagePhase[] = ['final', 'canceled', 'error'];
+const TERMINATED_PHASES: MessagePhase[] = ['final', 'canceled', 'error'];
+
+export type ToolCallTimeline = {
+  callId: string;
+  toolName: string;
+  toolArgs: Record<string, unknown>;
+  seq: number;
+  at: number;
+  status: 'pending' | 'done' | 'error';
+  output?: unknown;
+  error?: string;
+  progress: Array<{ data: unknown; seq: number; at: number }>;
+  thought?: string;
+};
+
+export type ThoughtItem = {
+  content: string;
+  seq: number;
+  at: number;
+};
+
+export interface AwaitingInputData {
+  message: string;
+  schema: Record<string, unknown>;
+}
 
 export interface MessageFSMOptions {
-  onPhaseChange?: (msgId: string, phase: MessagePhase) => void;
+  onTransition?: (from: MessagePhase, to: MessagePhase) => void;
 }
 
 export class MessageFSM {
-  readonly messageId: string;
-
-  phase: MessagePhase;
-  private message: Message;
-  private options?: MessageFSMOptions;
-
-  // Awaiting input state
-  awaitingInputSchema: Record<string, unknown> | null = null;
+  private _messageId: string;
+  private _message: Message;
+  private _awaitingInputData: AwaitingInputData | null = null;
+  private _phase: MessagePhase;
+  private sm: StateMachine<MessagePhase>;
 
   constructor(
     messageId: string,
     message: Message,
     options?: MessageFSMOptions,
   ) {
-    this.messageId = messageId;
-    this.message = message;
-    this.phase = 'placeholder';
-    this.options = options;
-    makeAutoObservable<this, 'messageId' | 'options'>(this, {
-      messageId: false,
-      options: false,
+    this._messageId = messageId;
+    this._message = message;
+    this._phase = 'placeholder';
+
+    this.sm = new StateMachine({
+      initialPhase: 'placeholder',
+      transitions: DEFAULT_TRANSITIONS,
+      onTransition: (from, to) => {
+        this._phase = to;
+        console.log(`[MessageFSM] ${this._messageId}: ${from} -> ${to}`);
+        if (from === 'awaiting_input') this._awaitingInputData = null;
+        options?.onTransition?.(from, to);
+      },
     });
+
+    makeAutoObservable<this, 'sm'>(this, { sm: false });
   }
 
-  get isTerminal(): boolean {
-    return TERMINAL_PHASES.includes(this.phase);
+  // === Factory method for historical messages ===
+
+  static fromMessage(msg: Message, options?: MessageFSMOptions): MessageFSM {
+    const fsm = new MessageFSM(msg.id, msg, options);
+    fsm.replayEvents(msg.meta?.events ?? []);
+    return fsm;
   }
 
-  get isInProgress(): boolean {
-    return !this.isTerminal;
+  // === Message properties (read-only access) ===
+
+  get messageId(): string {
+    return this._messageId;
   }
 
-  get canCancel(): boolean {
-    return ['loading', 'streaming', 'awaiting_input'].includes(this.phase);
+  get content(): string {
+    return this._message.content ?? '';
   }
 
-  get canSubmitInput(): boolean {
+  get events(): AgentEvent[] {
+    return this._message.meta?.events ?? [];
+  }
+
+  get createdAt(): Date {
+    return this._message.createdAt;
+  }
+
+  get role(): Role {
+    return this._message.role;
+  }
+
+  get conversationId(): string {
+    return this._message.conversationId;
+  }
+
+  // === Lifecycle state ===
+
+  get phase(): MessagePhase {
+    return this._phase;
+  }
+
+  get isTerminated(): boolean {
+    return TERMINATED_PHASES.includes(this.phase);
+  }
+
+  get isPlaceholder(): boolean {
+    return this.phase === 'placeholder';
+  }
+
+  get isLoading(): boolean {
+    return this.phase === 'loading';
+  }
+
+  get isStreaming(): boolean {
+    return this.phase === 'streaming';
+  }
+
+  get isAwaitingInput(): boolean {
     return this.phase === 'awaiting_input';
+  }
+
+  get awaitingInput(): AwaitingInputData | null {
+    if (this.isTerminated) return null;
+    return this._awaitingInputData;
   }
 
   get isSubmitting(): boolean {
     return this.phase === 'submitting';
   }
 
-  handleEvent(event: AgentEvent): void {
-    if (this.isTerminal) return;
+  get isCanceling(): boolean {
+    return this.phase === 'canceling';
+  }
 
+  get isCancellable(): boolean {
+    return ['loading', 'streaming', 'awaiting_input'].includes(this.phase);
+  }
+
+  // === Content rendering state (derived from events) ===
+
+  get hasContent(): boolean {
+    return this.content.length > 0;
+  }
+
+  get hasEvents(): boolean {
+    return this.events.length > 0;
+  }
+
+  get toolCallTimeline(): ToolCallTimeline[] {
+    return this.deriveToolCallTimeline();
+  }
+
+  get pendingToolCalls(): ToolCallTimeline[] {
+    return this.toolCallTimeline.filter(t => t.status === 'pending');
+  }
+
+  get hasPendingTools(): boolean {
+    return this.pendingToolCalls.length > 0;
+  }
+
+  get thoughts(): ThoughtItem[] {
+    return this.deriveThoughts();
+  }
+
+  get isAwaitingContent(): boolean {
+    return (
+      this.hasEvents &&
+      !this.isTerminated &&
+      !this.hasContent &&
+      !this.hasPendingTools
+    );
+  }
+
+  get isProcessing(): boolean {
+    if (this.isTerminated || this._awaitingInputData) return false;
+    if (!this.hasEvents || this.hasContent) return false;
+    const tools = this.toolCallTimeline;
+    return tools.length === 0 || tools.some(t => t.status === 'pending');
+  }
+
+  get shouldExpandDetails(): boolean {
+    return (
+      !this.isTerminated &&
+      (this.toolCallTimeline.length > 0 || this.thoughts.length > 0)
+    );
+  }
+
+  // === Event handling ===
+
+  handleEvent(event: AgentEvent): void {
+    if (this.isTerminated) return;
+
+    this.applyEvent(event);
+
+    const target = this.resolveTargetPhase(event);
+    if (target) this.sm.transition(target);
+  }
+
+  // === Actions ===
+
+  start(): boolean {
+    return this.sm.transition('loading');
+  }
+
+  cancel(): void {
+    if (!this.sm.transition('canceling')) {
+      this.sm.transition('canceled');
+    }
+  }
+
+  close(): void {
+    this.sm.transition('canceled');
+  }
+
+  submitInput(): boolean {
+    return this.sm.transition('submitting');
+  }
+
+  replaceMessageId(newId: string): void {
+    this._messageId = newId;
+  }
+
+  setMessage(message: Message): void {
+    this._message = message;
+  }
+
+  // === Private methods ===
+
+  private replayEvents(events: AgentEvent[]): void {
+    if (events.length === 0) return;
+
+    this._phase = 'loading';
+    this.sm.silentTransition('loading');
+
+    for (const event of events) {
+      const target = this.resolveTargetPhase(event);
+      if (target) {
+        this._phase = target;
+        this.sm.silentTransition(target);
+      }
+
+      if (event.type === 'tool_progress') {
+        this.handleAwaitingInput(event);
+      }
+    }
+  }
+
+  private appendEvent(event: AgentEvent): void {
+    if (!this._message.meta) {
+      this._message.meta = { events: [event] };
+    } else {
+      // Create new array to trigger MobX reactivity
+      this._message.meta = {
+        ...this._message.meta,
+        events: [...(this._message.meta.events ?? []), event],
+      };
+    }
+  }
+
+  private applyEvent(event: AgentEvent): void {
     switch (event.type) {
       case 'start':
-        if (this.phase === 'placeholder' || this.phase === 'loading') {
-          this.transition('streaming');
-        }
+        this.appendEvent(event);
         break;
 
       case 'stream':
-        if (this.phase === 'placeholder' || this.phase === 'loading') {
-          this.transition('streaming');
-        }
-        this.message.content += event.content;
+        this._message.content += event.content;
         break;
 
       case 'thought':
       case 'tool_call':
       case 'tool_result':
       case 'tool_error':
-        if (this.phase === 'placeholder' || this.phase === 'loading') {
-          this.transition('streaming');
-        }
+      case 'cancelled':
         this.appendEvent(event);
         break;
 
-      case 'tool_progress': {
-        if (this.phase === 'placeholder' || this.phase === 'loading') {
-          this.transition('streaming');
-        }
+      case 'tool_progress':
         this.appendEvent(event);
-        // Check for awaiting_input status
-        const data = event.data as
-          | { status?: string; schema?: Record<string, unknown> }
-          | undefined;
-        if (data?.status === 'awaiting_input' && data.schema) {
-          this.awaitingInputSchema = data.schema;
-          this.transition('awaiting_input');
-        }
+        this.handleAwaitingInput(event);
         break;
-      }
 
       case 'final':
-        this.transition('final');
+        this.appendEvent(event);
         break;
+      case 'error':
+        this.appendEvent(event);
+        this._message.content = event.error;
+        break;
+    }
+  }
+
+  private handleAwaitingInput(event: AgentEvent): void {
+    if (event.type !== 'tool_progress') return;
+
+    const data = event.data as
+      | {
+          status?: string;
+          schema?: Record<string, unknown>;
+          message?: string;
+          event?: AgentEvent;
+        }
+      | undefined;
+
+    if (data?.status === 'agent_event' && data.event) {
+      const nestedAwaiting = this.extractAwaitingInput(data.event);
+      if (nestedAwaiting) {
+        this._awaitingInputData = nestedAwaiting;
+        return;
+      }
+    }
+
+    if (data?.status === 'awaiting_input' && data.schema) {
+      this._awaitingInputData = {
+        message: data.message ?? 'Please provide input',
+        schema: data.schema,
+      };
+    }
+  }
+
+  private resolveTargetPhase(event: AgentEvent): MessagePhase | null {
+    const { phase } = this.sm;
+
+    switch (event.type) {
+      case 'start':
+      case 'stream':
+      case 'thought':
+      case 'tool_call':
+        if (phase === 'placeholder' || phase === 'loading') return 'streaming';
+        return null;
+
+      case 'tool_progress': {
+        const data = event.data as
+          | { status?: string; event?: AgentEvent }
+          | undefined;
+        if (data?.status === 'awaiting_input') return 'awaiting_input';
+        if (data?.status === 'agent_event' && data.event) {
+          const nestedAwaiting = this.extractAwaitingInput(data.event);
+          if (nestedAwaiting) return 'awaiting_input';
+        }
+        if (phase === 'placeholder' || phase === 'loading') return 'streaming';
+        return null;
+      }
+
+      case 'tool_result':
+      case 'tool_error':
+        if (phase === 'awaiting_input') return 'streaming';
+        return null;
+
+      case 'final':
+        return 'final';
 
       case 'cancelled':
-        this.transition('canceled');
-        break;
+        return 'canceled';
 
       case 'error':
-        this.transition('error');
-        this.message.content = event.error;
-        break;
+        return 'error';
+
+      default:
+        return null;
     }
   }
 
-  cancel(): void {
-    if (this.canCancel) {
-      this.transition('canceling');
+  // === Derivation methods ===
+
+  private deriveToolCallTimeline(): ToolCallTimeline[] {
+    const toolCallsMap = new Map<string, ToolCallTimeline>();
+    let pendingThought: string | undefined;
+
+    for (const event of this.events) {
+      switch (event.type) {
+        case 'thought':
+          pendingThought = event.content;
+          break;
+
+        case 'tool_call':
+          toolCallsMap.set(event.callId, {
+            callId: event.callId,
+            toolName: event.toolName,
+            toolArgs: event.toolArgs,
+            seq: event.seq,
+            at: event.at,
+            status: 'pending',
+            progress: [],
+            thought: pendingThought,
+          });
+          pendingThought = undefined;
+          break;
+
+        case 'tool_result': {
+          const existing = toolCallsMap.get(event.callId);
+          if (existing) {
+            existing.status = 'done';
+            existing.output = event.output;
+          }
+          break;
+        }
+
+        case 'tool_error': {
+          const existing = toolCallsMap.get(event.callId);
+          if (existing) {
+            existing.status = 'error';
+            existing.error = event.error;
+          }
+          break;
+        }
+
+        case 'tool_progress': {
+          const existing = toolCallsMap.get(event.callId);
+          if (existing) {
+            existing.progress.push({
+              data: event.data,
+              seq: event.seq,
+              at: event.at,
+            });
+          }
+          break;
+        }
+      }
     }
+
+    return Array.from(toolCallsMap.values()).sort((a, b) => a.seq - b.seq);
   }
 
-  close(): void {
-    if (!this.isTerminal) {
-      this.transition('canceled');
+  private deriveThoughts(): ThoughtItem[] {
+    const thoughts: ThoughtItem[] = [];
+    let pendingThought: string | undefined;
+
+    for (const event of this.events) {
+      switch (event.type) {
+        case 'thought':
+          pendingThought = event.content;
+          break;
+
+        case 'tool_call':
+          pendingThought = undefined;
+          break;
+
+        case 'stream':
+        case 'final':
+          if (pendingThought) {
+            thoughts.push({
+              content: pendingThought,
+              seq: event.seq,
+              at: event.at,
+            });
+            pendingThought = undefined;
+          }
+          break;
+      }
     }
-  }
 
-  replaceMessageId(newId: string): void {
-    (this as { messageId: string }).messageId = newId;
-  }
-
-  setMessage(message: Message): void {
-    this.message = message;
-  }
-
-  private transition(to: MessagePhase): void {
-    if (!VALID_TRANSITIONS[this.phase].includes(to)) return;
-
-    const from = this.phase;
-    this.phase = to;
-
-    // Clear awaiting input schema when leaving awaiting_input
-    if (from === 'awaiting_input' && to !== 'submitting') {
-      this.awaitingInputSchema = null;
+    if (pendingThought) {
+      const lastEvent = this.events.at(-1);
+      thoughts.push({
+        content: pendingThought,
+        seq: lastEvent?.seq ?? 0,
+        at: lastEvent?.at ?? Date.now(),
+      });
     }
 
-    this.options?.onPhaseChange?.(this.messageId, to);
+    return thoughts;
   }
 
-  private appendEvent(event: AgentEvent): void {
-    if (!this.message.meta) {
-      this.message.meta = { events: [] };
+  private extractAwaitingInput(event: AgentEvent): AwaitingInputData | null {
+    if (event.type === 'tool_progress') {
+      const data = event.data as
+        | {
+            status?: string;
+            schema?: Record<string, unknown>;
+            message?: string;
+            event?: AgentEvent;
+          }
+        | undefined;
+
+      if (data?.status === 'awaiting_input' && data.schema) {
+        return {
+          message: data.message ?? 'Please provide input',
+          schema: data.schema,
+        };
+      }
+
+      if (data?.status === 'agent_event' && data.event) {
+        return this.extractAwaitingInput(data.event);
+      }
     }
-    this.message.meta.events = this.message.meta.events ?? [];
-    this.message.meta.events.push(event);
+
+    return null;
   }
 }

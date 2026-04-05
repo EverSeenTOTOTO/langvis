@@ -4,7 +4,6 @@ import type { MessageAttachment } from '@/shared/types/entities';
 import { globby } from 'globby';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
-import { ExecutionContext } from '../core/ExecutionContext';
 import { Memory } from '../core/memory';
 import { MessageFSM } from '../core/MessageFSM';
 import { SessionFSM, SessionPhase } from '../core/SessionFSM';
@@ -122,7 +121,6 @@ export class ChatService {
         onDispose: async (id: string) => {
           this.sessions.delete(id);
           await this.redisService.del(RedisKeys.CHAT_SESSION(id));
-          await this.redisService.del(RedisKeys.HUMAN_INPUT(id));
         },
         onPhaseChange: async (id: string, phase: SessionPhase) => {
           await this.updateSessionPhase(id, phase);
@@ -165,7 +163,6 @@ export class ChatService {
     // done or waiting = safe to cleanup
     if (state.phase === 'done' || state.phase === 'waiting') {
       await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
-      await this.redisService.del(RedisKeys.HUMAN_INPUT(conversationId));
       return false;
     }
 
@@ -184,13 +181,13 @@ export class ChatService {
     if (zombieMessages.length === 0) {
       // All messages have terminal state, safe cleanup
       await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
-      await this.redisService.del(RedisKeys.HUMAN_INPUT(conversationId));
       return false;
     }
 
     // Mark all zombie messages as error
     const errorEvent = {
       type: 'error' as const,
+      messageId: 'zombie',
       error: 'Generation interrupted (server restarted)',
       seq: Date.now(),
       at: Date.now(),
@@ -209,9 +206,9 @@ export class ChatService {
     );
 
     await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
-    await this.redisService.del(RedisKeys.HUMAN_INPUT(conversationId));
 
-    return true;
+    // Return false to allow creating a new session
+    return false;
   }
 
   /**
@@ -235,15 +232,12 @@ export class ChatService {
       messageId,
     });
 
-    const controller = new AbortController();
-    const ctx = new ExecutionContext(controller);
-
     const startTime = Date.now();
     let firstTokenTime: number | undefined;
 
     try {
-      for await (const event of agent.call(memory, ctx, config)) {
-        if (ctx.signal.aborted) break;
+      for await (const event of agent.call(memory, messageFSM.ctx, config)) {
+        if (messageFSM.ctx.signal.aborted) break;
 
         if (event.type === 'stream' && !firstTokenTime) {
           firstTokenTime = Date.now();
@@ -265,9 +259,19 @@ export class ChatService {
         if (event.type === 'error') break;
       }
     } catch (err) {
-      this.handleAgentError(err, ctx, messageFSM, session);
+      // If error is due to abort, don't treat as error - let finally handle cancel
+      if (messageFSM.ctx.signal.aborted) {
+        this.logger.info(
+          `Agent execution aborted session=${session.conversationId}`,
+        );
+      } else {
+        this.handleAgentError(err, messageFSM, session);
+      }
     } finally {
-      await messageFSM.finalize(ctx);
+      if (messageFSM.ctx.signal.aborted) {
+        this.handleAgentCancel(messageFSM, session);
+      }
+      await messageFSM.persist();
 
       const totalTime = Date.now() - startTime;
       const ttft = firstTokenTime ? firstTokenTime - startTime : null;
@@ -276,25 +280,34 @@ export class ChatService {
       this.logger.info(
         `Agent completed: totalTime=${totalTime}ms tokens=${contentLength} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${session.conversationId}`,
       );
-
-      await session.cleanup();
     }
   }
 
   private handleAgentError(
     err: unknown,
-    ctx: ExecutionContext,
     messageFSM: MessageFSM,
     session: SessionFSM,
   ): void {
     this.logger.error(
       `Agent error: ${(err as Error)?.message || String(err)} session=${session.conversationId}`,
     );
-    const errorEvent = ctx.agentErrorEvent(
+    const errorEvent = messageFSM.ctx.agentErrorEvent(
       (err as Error)?.message || String(err),
     );
     messageFSM.handleEvent(errorEvent);
     session.send(errorEvent);
+  }
+
+  private handleAgentCancel(messageFSM: MessageFSM, session: SessionFSM): void {
+    const reason =
+      (messageFSM.ctx.signal.reason as Error)?.message ?? 'Unknown';
+    this.logger.info(
+      `Agent cancelled: ${reason} session=${session.conversationId}`,
+    );
+    const cancelledEvent = messageFSM.ctx.agentCancelledEvent(reason);
+    // Send event BEFORE updating FSM state, otherwise cleanup may close SSE
+    messageFSM.handleEvent(cancelledEvent);
+    session.send(cancelledEvent);
   }
 
   async buildMemory(

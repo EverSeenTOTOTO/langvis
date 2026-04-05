@@ -2,7 +2,7 @@ import { CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { Flex, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useState } from 'react';
-import type { ToolCallTimeline } from './deriveMessageState';
+import type { ToolCallTimeline } from '@/client/store/modules/MessageFSM';
 import { ToolBlockItem } from './ToolBlockItem';
 import { buildToolTimeline, extractNestedEvents } from './utils';
 import './ReActAgent/index.scss';

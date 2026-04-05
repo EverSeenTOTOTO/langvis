@@ -2,11 +2,8 @@ import { lazy, Suspense } from 'react';
 
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 import { AgentIds, ToolIds } from '@/shared/constants';
-import type { Message } from '@/shared/types/entities';
-import type {
-  MessageRenderState,
-  ToolCallTimeline,
-} from '../deriveMessageState';
+import type { ToolCallTimeline } from '@/client/store/modules/MessageFSM';
+import type { MessageFSM } from '@/client/store/modules/MessageFSM';
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -352,21 +349,17 @@ function renderDocumentTool(toolCall: ToolCallTimeline): React.ReactNode {
 
 // === Document Agent Renderer ===
 
-const DocumentAgentRenderer = (
-  msg: Message,
-  state: MessageRenderState,
-): AgentRenderResult => ({
+const DocumentAgentRenderer = (fsm: MessageFSM): AgentRenderResult => ({
   content: (
     <>
-      {state.hasEvents && (
+      {fsm.hasEvents && (
         <UniversalEventRenderer
-          state={state}
-          conversationId={msg.conversationId}
+          messageFSM={fsm}
           customToolRender={renderDocumentTool}
         />
       )}
 
-      {state.isAwaitingContent && (
+      {fsm.isAwaitingContent && (
         <Typography.Text type="secondary" italic>
           <LoadingOutlined style={{ marginInlineEnd: 4 }} />
           Thinking...
@@ -374,9 +367,9 @@ const DocumentAgentRenderer = (
       )}
 
       <Suspense
-        fallback={<Typography.Paragraph>{msg.content}</Typography.Paragraph>}
+        fallback={<Typography.Paragraph>{fsm.content}</Typography.Paragraph>}
       >
-        <MarkdownRender>{msg.content}</MarkdownRender>
+        <MarkdownRender>{fsm.content}</MarkdownRender>
       </Suspense>
     </>
   ),

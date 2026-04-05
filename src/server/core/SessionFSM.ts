@@ -3,6 +3,7 @@ import logger from '../utils/logger';
 import { MessageFSM, MessagePhase } from './MessageFSM';
 import type { PendingMessage } from './PendingMessage';
 import { SSEConnection } from './SSEConnection';
+import { StateMachine } from '@/shared/utils/StateMachine';
 
 export type SessionPhase =
   | 'waiting'
@@ -32,7 +33,7 @@ export class SessionFSM {
   readonly conversationId: string;
   readonly createdAt = Date.now();
 
-  phase: SessionPhase = 'waiting';
+  private sm: StateMachine<SessionPhase>;
   private sseConnection: SSEConnection | null = null;
   private messageFSMs = new Map<string, MessageFSM>();
   private idleTimeout: ReturnType<typeof setTimeout>;
@@ -41,6 +42,19 @@ export class SessionFSM {
   constructor(conversationId: string, options: SessionFSMOptions) {
     this.conversationId = conversationId;
     this.options = options;
+
+    this.sm = new StateMachine({
+      initialPhase: 'waiting',
+      transitions: VALID_TRANSITIONS,
+      onTransition: (_from, to) => {
+        if (to !== 'waiting') clearTimeout(this.idleTimeout);
+        logger.info(`Session phase changed: ${_from} -> ${to}`, {
+          sessionId: this.conversationId,
+        });
+        this.options.onPhaseChange?.(this.conversationId, to);
+      },
+    });
+
     this.idleTimeout = setTimeout(() => {
       if (this.phase === 'waiting') {
         logger.warn(
@@ -53,8 +67,11 @@ export class SessionFSM {
     }, this.options.idleTimeoutMs);
   }
 
+  get phase(): SessionPhase {
+    return this.sm.phase;
+  }
+
   bindConnection(connection: SSEConnection): void {
-    // Kick old connection if exists
     if (this.sseConnection) {
       this.sseConnection.send({ type: 'session_replaced' });
       this.sseConnection.close();
@@ -65,7 +82,7 @@ export class SessionFSM {
 
   addMessageFSM(messageId: string, pendingMessage: PendingMessage): MessageFSM {
     const fsm = new MessageFSM(messageId, pendingMessage, {
-      onPhaseChange: (id, phase) => this.onMessagePhaseChange(id, phase),
+      onTransition: (id, from, to) => this.onMessagePhaseChange(id, from, to),
     });
     this.messageFSMs.set(messageId, fsm);
     return fsm;
@@ -77,7 +94,7 @@ export class SessionFSM {
 
   cancelMessage(messageId: string): void {
     const fsm = this.messageFSMs.get(messageId);
-    if (fsm && !fsm.isTerminal) {
+    if (fsm && !fsm.isTerminated) {
       fsm.cancel();
     }
   }
@@ -86,25 +103,23 @@ export class SessionFSM {
     logger.info(`Canceling all messages for ${this.conversationId}: ${reason}`);
 
     for (const fsm of this.messageFSMs.values()) {
-      if (!fsm.isTerminal) {
+      if (!fsm.isTerminated) {
         fsm.cancel();
       }
     }
 
-    this.transition('canceling');
+    this.sm.transition('canceling');
   }
 
   async handleDisconnect(): Promise<void> {
     logger.info(`SSE disconnected for ${this.conversationId}`);
 
-    // Persist all active messages
     for (const fsm of this.messageFSMs.values()) {
-      if (!fsm.isTerminal) {
+      if (!fsm.isTerminated) {
         await fsm.persist();
       }
     }
 
-    // If in waiting phase, cleanup
     if (this.phase === 'waiting') {
       await this.cleanup();
     }
@@ -117,7 +132,7 @@ export class SessionFSM {
 
   async cleanup(): Promise<void> {
     clearTimeout(this.idleTimeout);
-    await this.transition('done');
+    this.sm.transition('done');
 
     this.sseConnection?.close();
     this.sseConnection = null;
@@ -126,40 +141,23 @@ export class SessionFSM {
     await this.options.onDispose(this.conversationId);
   }
 
-  private async transition(to: SessionPhase): Promise<boolean> {
-    if (!VALID_TRANSITIONS[this.phase].includes(to)) return false;
-
-    const from = this.phase;
-    this.phase = to;
-
-    logger.info(`Session phase changed: ${from} -> ${to}`, {
-      sessionId: this.conversationId,
-    });
-
-    if (to !== 'waiting') {
-      clearTimeout(this.idleTimeout);
-    }
-
-    await this.options.onPhaseChange?.(this.conversationId, to);
-
-    return true;
-  }
-
-  private async onMessagePhaseChange(
+  private onMessagePhaseChange(
     _messageId: string,
-    _phase: MessagePhase,
-  ): Promise<void> {
+    _from: MessagePhase,
+    _to: MessagePhase,
+  ): void {
     const hasActive = Array.from(this.messageFSMs.values()).some(
-      fsm => !fsm.isTerminal,
+      fsm => !fsm.isTerminated,
     );
 
     if (hasActive && this.phase === 'waiting') {
-      await this.transition('active');
+      this.sm.transition('active');
     } else if (!hasActive && this.phase === 'active') {
-      await this.transition('waiting');
+      this.sm.transition('waiting');
     } else if (!hasActive && this.phase === 'canceling') {
-      // All messages reached terminal, we're done
-      await this.cleanup();
+      this.cleanup().catch(err =>
+        logger.error(`Failed to cleanup after cancel:`, err),
+      );
     }
   }
 }

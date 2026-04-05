@@ -97,7 +97,7 @@ describe('ChatService', () => {
       await session!.cleanup();
 
       expect(mockRedisService.del).toHaveBeenCalledWith(
-        RedisKeys.HUMAN_INPUT('conv-123'),
+        RedisKeys.CHAT_SESSION('conv-123'),
       );
     });
   });
@@ -120,6 +120,7 @@ describe('ChatService', () => {
   describe('runSession', () => {
     it('should run agent and finalize message', async () => {
       const session = await chatService.acquireSession('conv-123');
+      const MSG_ID = 'assistant-msg';
 
       const mockConn = {
         conversationId: 'conv-123',
@@ -142,14 +143,20 @@ describe('ChatService', () => {
       const mockAgent = {
         id: 'test-agent',
         call: vi.fn().mockImplementation(async function* () {
-          yield { type: 'start', seq: 1, at: Date.now() };
-          yield { type: 'stream', content: 'Hello', seq: 2, at: Date.now() };
-          yield { type: 'final', seq: 3, at: Date.now() };
+          yield { type: 'start', messageId: MSG_ID, seq: 1, at: Date.now() };
+          yield {
+            type: 'stream',
+            messageId: MSG_ID,
+            content: 'Hello',
+            seq: 2,
+            at: Date.now(),
+          };
+          yield { type: 'final', messageId: MSG_ID, seq: 3, at: Date.now() };
         }),
       } as unknown as Agent;
 
       const mockMessage = {
-        id: 'assistant-msg',
+        id: MSG_ID,
         role: Role.ASSIST,
         content: '',
         meta: { events: [] },
@@ -171,7 +178,9 @@ describe('ChatService', () => {
 
       expect(mockAgent.call).toHaveBeenCalled();
       expect(updateMessage).toHaveBeenCalled();
-      expect(session!.phase).toBe('done');
+      // After message completes, session returns to waiting (not done)
+      // done only happens on idle timeout or explicit cleanup
+      expect(session!.phase).toBe('waiting');
     });
   });
 

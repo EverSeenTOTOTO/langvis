@@ -48,7 +48,13 @@ describe('MetaExtractTool', () => {
 
       // Mock callLlm to return content
       vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
-        yield { type: 'stream', content: 'test', seq: 1, at: Date.now() };
+        yield {
+          type: 'stream',
+          messageId: 'test-msg',
+          content: 'test',
+          seq: 1,
+          at: Date.now(),
+        };
         return JSON.stringify({
           title: 'Test Document Title',
           summary: 'A brief summary',
@@ -81,7 +87,13 @@ describe('MetaExtractTool', () => {
       const callLlmSpy = vi
         .spyOn(ctx, 'callLlm')
         .mockImplementation(async function* () {
-          yield { type: 'stream', content: 'test', seq: 1, at: Date.now() };
+          yield {
+            type: 'stream',
+            messageId: 'test-msg',
+            content: 'test',
+            seq: 1,
+            at: Date.now(),
+          };
           return JSON.stringify({ title: 'Test' });
         });
 
@@ -113,7 +125,13 @@ describe('MetaExtractTool', () => {
       const callLlmSpy = vi
         .spyOn(ctx, 'callLlm')
         .mockImplementation(async function* () {
-          yield { type: 'stream', content: 'test', seq: 1, at: Date.now() };
+          yield {
+            type: 'stream',
+            messageId: 'test-msg',
+            content: 'test',
+            seq: 1,
+            at: Date.now(),
+          };
           return JSON.stringify({ title: 'Test' });
         });
 
@@ -131,7 +149,13 @@ describe('MetaExtractTool', () => {
       const ctx = createMockContext();
 
       vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
-        yield { type: 'stream', content: '{}', seq: 1, at: Date.now() };
+        yield {
+          type: 'stream',
+          messageId: 'test-msg',
+          content: '{}',
+          seq: 1,
+          at: Date.now(),
+        };
         return JSON.stringify({});
       });
 
@@ -189,7 +213,13 @@ describe('MetaExtractTool', () => {
       const ctx = createMockContext();
 
       vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
-        yield { type: 'stream', content: 'test', seq: 1, at: Date.now() };
+        yield {
+          type: 'stream',
+          messageId: 'test-msg',
+          content: 'test',
+          seq: 1,
+          at: Date.now(),
+        };
         return JSON.stringify({
           title: 'Test',
           summary: 'Summary',

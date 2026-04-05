@@ -47,12 +47,21 @@ export interface ToolConfig<
  *
  * Tools yield tool_progress events and return results via generator return.
  * Agents manage tool_call/tool_result/tool_error events.
+ *
+ * All events carry messageId for frontend routing in multi-message scenarios.
  */
 export type AgentEvent =
-  | { type: 'start'; seq: number; at: number }
-  | { type: 'thought'; content: string; seq: number; at: number }
+  | { type: 'start'; messageId: string; seq: number; at: number }
+  | {
+      type: 'thought';
+      messageId: string;
+      content: string;
+      seq: number;
+      at: number;
+    }
   | {
       type: 'tool_call';
+      messageId: string;
       callId: string;
       toolName: string;
       toolArgs: Record<string, unknown>;
@@ -61,6 +70,7 @@ export type AgentEvent =
     }
   | {
       type: 'tool_progress';
+      messageId: string;
       callId: string;
       toolName: string;
       data: unknown;
@@ -69,6 +79,7 @@ export type AgentEvent =
     }
   | {
       type: 'tool_result';
+      messageId: string;
       callId: string;
       toolName: string;
       output: unknown;
@@ -77,16 +88,35 @@ export type AgentEvent =
     }
   | {
       type: 'tool_error';
+      messageId: string;
       callId: string;
       toolName: string;
       error: string;
       seq: number;
       at: number;
     }
-  | { type: 'stream'; content: string; seq: number; at: number }
-  | { type: 'final'; seq: number; at: number }
-  | { type: 'cancelled'; reason: string; seq: number; at: number }
-  | { type: 'error'; error: string; seq: number; at: number };
+  | {
+      type: 'stream';
+      messageId: string;
+      content: string;
+      seq: number;
+      at: number;
+    }
+  | { type: 'final'; messageId: string; seq: number; at: number }
+  | {
+      type: 'cancelled';
+      messageId: string;
+      reason: string;
+      seq: number;
+      at: number;
+    }
+  | {
+      type: 'error';
+      messageId: string;
+      error: string;
+      seq: number;
+      at: number;
+    };
 
 /**
  * SSEMessage - the transmission type over SSE channel
@@ -124,14 +154,3 @@ export type MessagePhase =
   | 'final'
   | 'canceled'
   | 'error';
-
-/**
- * @deprecated Use ConversationPhase instead
- */
-export type ChatPhase =
-  | 'idle'
-  | 'connecting'
-  | 'streaming'
-  | 'finishing'
-  | 'error'
-  | 'cancelled';

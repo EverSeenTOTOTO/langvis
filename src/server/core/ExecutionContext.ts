@@ -15,7 +15,7 @@ export class ExecutionContext {
 
   constructor(
     private readonly controller: AbortController,
-    private readonly callIdPrefix: string = '',
+    private readonly messageId: string = '',
   ) {}
 
   private nextSeq(): number {
@@ -24,7 +24,7 @@ export class ExecutionContext {
 
   private nextCallId(): string {
     const id = generateId('tc');
-    return this.callIdPrefix ? `${this.callIdPrefix}::${id}` : id;
+    return this.messageId ? `${this.messageId}::${id}` : id;
   }
 
   get currentCallId(): string {
@@ -50,6 +50,7 @@ export class ExecutionContext {
   agentStartEvent(): AgentEvent {
     return {
       type: 'start',
+      messageId: this.messageId,
       seq: this.nextSeq(),
       at: Date.now(),
     };
@@ -58,6 +59,7 @@ export class ExecutionContext {
   agentThoughtEvent(content: string): AgentEvent {
     return {
       type: 'thought',
+      messageId: this.messageId,
       content,
       seq: this.nextSeq(),
       at: Date.now(),
@@ -67,6 +69,7 @@ export class ExecutionContext {
   agentStreamEvent(content: string): AgentEvent {
     return {
       type: 'stream',
+      messageId: this.messageId,
       content,
       seq: this.nextSeq(),
       at: Date.now(),
@@ -76,6 +79,7 @@ export class ExecutionContext {
   agentFinalEvent(): AgentEvent {
     return {
       type: 'final',
+      messageId: this.messageId,
       seq: this.nextSeq(),
       at: Date.now(),
     };
@@ -84,6 +88,7 @@ export class ExecutionContext {
   agentCancelledEvent(reason: string): AgentEvent {
     return {
       type: 'cancelled',
+      messageId: this.messageId,
       reason,
       seq: this.nextSeq(),
       at: Date.now(),
@@ -93,6 +98,7 @@ export class ExecutionContext {
   agentErrorEvent(error: string): AgentEvent {
     return {
       type: 'error',
+      messageId: this.messageId,
       error,
       seq: this.nextSeq(),
       at: Date.now(),
@@ -106,6 +112,7 @@ export class ExecutionContext {
     const callId = this.pushCallId();
     return {
       type: 'tool_call',
+      messageId: this.messageId,
       callId,
       toolName,
       toolArgs,
@@ -117,6 +124,7 @@ export class ExecutionContext {
   agentToolProgressEvent(toolName: string, data: unknown): AgentEvent {
     return {
       type: 'tool_progress',
+      messageId: this.messageId,
       callId: this.currentCallId,
       toolName,
       data,
@@ -128,6 +136,7 @@ export class ExecutionContext {
   agentToolResultEvent(toolName: string, output: unknown): AgentEvent {
     const event: AgentEvent = {
       type: 'tool_result',
+      messageId: this.messageId,
       callId: this.currentCallId,
       toolName,
       output,
@@ -141,6 +150,7 @@ export class ExecutionContext {
   agentToolErrorEvent(toolName: string, error: string): AgentEvent {
     const event: AgentEvent = {
       type: 'tool_error',
+      messageId: this.messageId,
       callId: this.currentCallId,
       toolName,
       error,

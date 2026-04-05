@@ -4,8 +4,7 @@ import { lazy, Suspense } from 'react';
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 import { TextToSpeechOutput } from '@/server/core/tool/TextToSpeech';
 import { AgentIds, ToolIds } from '@/shared/constants';
-import type { Message } from '@/shared/types/entities';
-import type { MessageRenderState } from '../deriveMessageState';
+import type { MessageFSM } from '@/client/store/modules/MessageFSM';
 import { InfoCircleOutlined, LoadingOutlined } from '@ant-design/icons';
 import { Alert, Spin, Tooltip, Typography } from 'antd';
 import {
@@ -21,10 +20,8 @@ interface GirlFriendDerivedState {
   isProcessing: boolean;
 }
 
-function deriveGirlFriendState(
-  state: MessageRenderState,
-): GirlFriendDerivedState {
-  const ttsCall = state.toolCallTimeline.find(
+function deriveGirlFriendState(fsm: MessageFSM): GirlFriendDerivedState {
+  const ttsCall = fsm.toolCallTimeline.find(
     t => t.toolName === ToolIds.TEXT_TO_SPEECH,
   );
 
@@ -36,8 +33,8 @@ function deriveGirlFriendState(
       : undefined;
 
   const isProcessing =
-    state.hasContent &&
-    !state.isTerminated &&
+    fsm.hasContent &&
+    !fsm.isTerminated &&
     !isTtsPending &&
     !ttsOutput &&
     !ttsError;
@@ -45,16 +42,13 @@ function deriveGirlFriendState(
   return { isTtsPending, ttsError, ttsOutput, isProcessing };
 }
 
-const GirlFriendAgentRenderer = (
-  msg: Message,
-  state: MessageRenderState,
-): AgentRenderResult => {
-  const derived = deriveGirlFriendState(state);
+const GirlFriendAgentRenderer = (fsm: MessageFSM): AgentRenderResult => {
+  const derived = deriveGirlFriendState(fsm);
 
   return {
     content: (
       <>
-        {state.isAwaitingContent && (
+        {fsm.isAwaitingContent && (
           <Typography.Text type="secondary" italic>
             <LoadingOutlined style={{ marginInlineEnd: 4 }} />
             Thinking...
@@ -63,10 +57,10 @@ const GirlFriendAgentRenderer = (
         <Spin spinning={derived.isTtsPending}>
           <Suspense
             fallback={
-              <Typography.Paragraph>{msg.content}</Typography.Paragraph>
+              <Typography.Paragraph>{fsm.content}</Typography.Paragraph>
             }
           >
-            <MarkdownRender>{msg.content}</MarkdownRender>
+            <MarkdownRender>{fsm.content}</MarkdownRender>
           </Suspense>
         </Spin>
         {derived.isProcessing && (

@@ -1,6 +1,8 @@
 import { AgentEvent } from '@/shared/types';
 import type { Message } from '@/shared/types/entities';
-import type { ExecutionContext } from './ExecutionContext';
+import { StateMachine } from '@/shared/utils/StateMachine';
+import { ExecutionContext } from './ExecutionContext';
+import logger from '../utils/logger';
 import type { PendingMessage } from './PendingMessage';
 
 export type MessagePhase =
@@ -23,25 +25,30 @@ const VALID_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
     'error',
     'canceling',
   ],
-  awaiting_input: ['submitting', 'canceling', 'canceled', 'error'],
-  submitting: ['streaming', 'error', 'canceled'],
+  // submitting: user submits input; streaming: tool_result received
+  awaiting_input: ['submitting', 'streaming', 'canceling', 'canceled', 'error'],
+  submitting: ['streaming', 'error', 'canceled', 'canceling'],
   canceling: ['canceled', 'error'],
   final: [],
   canceled: [],
   error: [],
 };
 
-const TERMINAL_PHASES: MessagePhase[] = ['final', 'canceled', 'error'];
+const TERMINATED_PHASES: MessagePhase[] = ['final', 'canceled', 'error'];
 
 export interface MessageFSMOptions {
-  onPhaseChange?: (messageId: string, phase: MessagePhase) => Promise<void>;
+  onTransition?: (
+    messageId: string,
+    from: MessagePhase,
+    to: MessagePhase,
+  ) => void;
 }
 
 export class MessageFSM {
   readonly messageId: string;
-  phase: MessagePhase;
   private pendingMessage: PendingMessage;
-  private options?: MessageFSMOptions;
+  readonly executionContext: ExecutionContext;
+  private sm: StateMachine<MessagePhase>;
 
   constructor(
     messageId: string,
@@ -50,12 +57,53 @@ export class MessageFSM {
   ) {
     this.messageId = messageId;
     this.pendingMessage = pendingMessage;
-    this.phase = 'initialized';
-    this.options = options;
+    this.executionContext = new ExecutionContext(
+      new AbortController(),
+      messageId,
+    );
+
+    this.sm = new StateMachine({
+      initialPhase: 'initialized',
+      transitions: VALID_TRANSITIONS,
+      onTransition: (from, to) => {
+        logger.info(`Message phase changed: ${from} -> ${to}`, {
+          messageId,
+        });
+        options?.onTransition?.(messageId, from, to);
+      },
+    });
   }
 
-  get isTerminal(): boolean {
-    return TERMINAL_PHASES.includes(this.phase);
+  get ctx(): ExecutionContext {
+    return this.executionContext;
+  }
+
+  get phase(): MessagePhase {
+    return this.sm.phase;
+  }
+
+  get isTerminated(): boolean {
+    return TERMINATED_PHASES.includes(this.phase);
+  }
+
+  get isStreaming(): boolean {
+    return this.phase === 'streaming';
+  }
+
+  get isAwaitingInput(): boolean {
+    return this.phase === 'awaiting_input';
+  }
+
+  get isSubmitting(): boolean {
+    return this.phase === 'submitting';
+  }
+
+  get isCanceling(): boolean {
+    return this.phase === 'canceling';
+  }
+
+  get isCancellable(): boolean {
+    return ['streaming', 'awaiting_input'].includes(this.phase);
   }
 
   get message(): Message {
@@ -63,83 +111,67 @@ export class MessageFSM {
   }
 
   handleEvent(event: AgentEvent): void {
-    if (this.isTerminal) return;
+    if (this.isTerminated) return;
 
-    // Accumulate content
     this.pendingMessage.handleEvent(event);
 
-    // Update phase based on event
     switch (event.type) {
       case 'start':
       case 'stream':
       case 'thought':
       case 'tool_call':
+        if (this.phase === 'initialized' || this.phase === 'submitting') {
+          this.sm.transition('streaming');
+        }
+        break;
+
       case 'tool_result':
       case 'tool_error':
-        if (this.phase === 'initialized' || this.phase === 'submitting') {
-          this.transition('streaming');
+        if (
+          this.phase === 'initialized' ||
+          this.phase === 'submitting' ||
+          this.phase === 'awaiting_input'
+        ) {
+          this.sm.transition('streaming');
         }
         break;
 
       case 'tool_progress': {
         if (this.phase === 'initialized' || this.phase === 'submitting') {
-          this.transition('streaming');
+          this.sm.transition('streaming');
         }
-        // Check for awaiting_input status
         const data = event.data as { status?: string } | undefined;
         if (data?.status === 'awaiting_input') {
-          this.transition('awaiting_input');
+          this.sm.transition('awaiting_input');
         }
         break;
       }
 
       case 'final':
-        this.transition('final');
+        this.sm.transition('final');
         break;
 
       case 'cancelled':
-        this.transition('canceled');
+        this.sm.transition('canceled');
         break;
 
       case 'error':
-        this.transition('error');
+        this.sm.transition('error');
         break;
     }
   }
 
   cancel(): void {
-    if (this.phase === 'canceling' || this.isTerminal) return;
+    if (this.isCanceling || this.isTerminated) return;
 
-    const validTargets = VALID_TRANSITIONS[this.phase];
-    if (validTargets.includes('canceling')) {
-      this.transition('canceling');
-    } else if (validTargets.includes('canceled')) {
-      this.transition('canceled');
+    this.executionContext.abort('Cancelled by user');
+
+    if (!this.sm.transition('canceling')) {
+      this.sm.transition('canceled');
     }
-  }
-
-  async finalize(ctx: ExecutionContext): Promise<void> {
-    // If aborted, add cancelled event
-    if (ctx.signal.aborted) {
-      const cancelledEvent = ctx.agentCancelledEvent(
-        (ctx.signal.reason as Error)?.message ?? 'Unknown',
-      );
-      this.pendingMessage.handleEvent(cancelledEvent);
-      this.transition('canceled');
-    }
-
-    // Persist the message
-    await this.persist();
   }
 
   async persist(): Promise<void> {
     await this.pendingMessage.persist();
-  }
-
-  private async transition(to: MessagePhase): Promise<void> {
-    if (!VALID_TRANSITIONS[this.phase].includes(to)) return;
-
-    this.phase = to;
-    await this.options?.onPhaseChange?.(this.messageId, to);
   }
 }

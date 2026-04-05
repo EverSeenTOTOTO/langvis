@@ -30,13 +30,13 @@ return {1, cjson.encode(pending)}
 export default class HumanInputController {
   constructor(@inject(RedisService) private redisService: RedisService) {}
 
-  @api('/:conversationId', { method: 'post' })
+  @api('/:messageId', { method: 'post' })
   async submitInput(
-    @param('conversationId') conversationId: string,
+    @param('messageId') messageId: string,
     @body() dto: SubmitHumanInputRequestDto,
     @response() res: Response,
   ) {
-    const key = RedisKeys.HUMAN_INPUT(conversationId);
+    const key = RedisKeys.HUMAN_INPUT(messageId);
 
     // Use Lua script for atomic check-and-set
     const result = (await this.redisService.client.eval(SUBMIT_LUA_SCRIPT, {
@@ -63,12 +63,12 @@ export default class HumanInputController {
     return res.json({ success: true });
   }
 
-  @api('/:conversationId', { method: 'get' })
+  @api('/:messageId', { method: 'get' })
   async getStatus(
-    @param('conversationId') conversationId: string,
+    @param('messageId') messageId: string,
     @response() res: Response,
   ) {
-    const key = RedisKeys.HUMAN_INPUT(conversationId);
+    const key = RedisKeys.HUMAN_INPUT(messageId);
     const pending = await this.redisService.get<{
       submitted: boolean;
       message: string;
