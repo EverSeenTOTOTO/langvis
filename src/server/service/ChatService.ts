@@ -6,13 +6,14 @@ import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
 import { Memory } from '../core/memory';
 import { MessageFSM } from '../core/MessageFSM';
-import { SessionFSM, SessionPhase } from '../core/SessionFSM';
+import { SessionFSM } from '../core/SessionFSM';
 import { registerMemory } from '../decorator/core';
 import { service } from '../decorator/service';
 import { isProd } from '../utils';
 import Logger from '../utils/logger';
 import { ConversationService } from './ConversationService';
 import { RedisService } from './RedisService';
+import { SessionPhase } from '@/shared/types';
 
 /**
  * Session state persisted to Redis for reconnection support.

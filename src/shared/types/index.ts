@@ -141,6 +141,13 @@ export type ConversationPhase =
   | 'error'
   | 'canceled';
 
+export type SessionPhase =
+  | 'waiting'
+  | 'active'
+  | 'canceling'
+  | 'error'
+  | 'done';
+
 /**
  * MessagePhase - unified message FSM phases (frontend & backend)
  */

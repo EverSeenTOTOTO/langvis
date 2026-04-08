@@ -48,7 +48,7 @@ const GirlFriendAgentRenderer = (fsm: MessageFSM): AgentRenderResult => {
   return {
     content: (
       <>
-        {fsm.isAwaitingContent && (
+        {fsm.isThinking && (
           <Typography.Text type="secondary" italic>
             <LoadingOutlined style={{ marginInlineEnd: 4 }} />
             Thinking...
@@ -57,10 +57,10 @@ const GirlFriendAgentRenderer = (fsm: MessageFSM): AgentRenderResult => {
         <Spin spinning={derived.isTtsPending}>
           <Suspense
             fallback={
-              <Typography.Paragraph>{fsm.content}</Typography.Paragraph>
+              <Typography.Paragraph>{fsm.msg.content}</Typography.Paragraph>
             }
           >
-            <MarkdownRender>{fsm.content}</MarkdownRender>
+            <MarkdownRender>{fsm.msg.content}</MarkdownRender>
           </Suspense>
         </Spin>
         {derived.isProcessing && (

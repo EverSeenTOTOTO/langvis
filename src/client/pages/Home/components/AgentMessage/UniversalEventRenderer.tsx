@@ -57,7 +57,7 @@ export function UniversalEventRenderer({
                       <NestedAgentCallBlock
                         key={block.toolCall.callId}
                         toolCall={block.toolCall}
-                        conversationId={messageFSM.conversationId}
+                        conversationId={messageFSM.msg.conversationId}
                         depth={0}
                         customToolRender={customToolRender}
                       />
@@ -78,7 +78,7 @@ export function UniversalEventRenderer({
                     thought={thought}
                   />
                 ))}
-                {messageFSM.isProcessing && (
+                {messageFSM.isThinking && (
                   <div className="react-tool-processing">
                     <LoadingOutlined style={{ marginInlineEnd: 8 }} />
                     <Typography.Text type="secondary" italic>
@@ -94,8 +94,8 @@ export function UniversalEventRenderer({
       />
       {messageFSM.awaitingInput && (
         <HumanInputForm
-          messageId={messageFSM.messageId}
-          conversationId={messageFSM.conversationId}
+          messageId={messageFSM.msg.id}
+          conversationId={messageFSM.msg.conversationId}
           message={messageFSM.awaitingInput.message}
           schema={messageFSM.awaitingInput.schema}
         />
