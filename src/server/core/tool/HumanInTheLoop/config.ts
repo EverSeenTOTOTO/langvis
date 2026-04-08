@@ -12,6 +12,7 @@ export const config: ToolConfig<
   }
 > = {
   name: 'HumanInTheLoop Tool',
+  untrustedOutput: true,
   description: `Request human input during agent execution. This tool pauses the agent and displays a form to the user.
 
 **When to use:**

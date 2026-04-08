@@ -3,6 +3,7 @@ import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { AgentEvent, ToolConfig } from '@/shared/types';
+import { wrapUntrusted } from '@/shared/utils';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { Prompt } from '../../PromptBuilder';
@@ -61,7 +62,7 @@ export default class MetaExtractTool extends Tool<
 ${sourceUrl ? `Source URL: ${sourceUrl}\n` : ''}${sourceType ? `Source Type: ${sourceType}\n` : ''}
 
 Document Content:
-${truncatedContent}`;
+${wrapUntrusted(truncatedContent)}`;
 
     yield ctx.agentToolProgressEvent(this.id, {
       message: `Analyzing document content (${Math.round(truncatedContent.length / 1024)}KB) via LLM...`,

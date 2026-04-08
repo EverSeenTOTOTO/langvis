@@ -4,6 +4,7 @@ import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { AgentEvent, ToolConfig } from '@/shared/types';
 import { container } from 'tsyringe';
+import { wrapUntrusted } from '@/shared/utils';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { Prompt } from '../../PromptBuilder';
@@ -102,7 +103,10 @@ export default class PositionAdjustTool extends Tool<
     );
 
     if (formData.totalAssets) {
-      prompt = prompt.with('总资产', formData.totalAssets);
+      prompt = prompt.with(
+        '总资产',
+        wrapUntrusted(String(formData.totalAssets)),
+      );
     }
 
     if (formData.investmentGoal) {
@@ -188,11 +192,17 @@ export default class PositionAdjustTool extends Tool<
     }
 
     if (formData.stopLoss) {
-      prompt = prompt.with('止损设置', formData.stopLoss);
+      prompt = prompt.with(
+        '止损设置',
+        wrapUntrusted(String(formData.stopLoss)),
+      );
     }
 
     if (formData.takeProfit) {
-      prompt = prompt.with('止盈目标', formData.takeProfit);
+      prompt = prompt.with(
+        '止盈目标',
+        wrapUntrusted(String(formData.takeProfit)),
+      );
     }
 
     if (formData.liquidityNeeds) {
@@ -208,7 +218,7 @@ export default class PositionAdjustTool extends Tool<
     }
 
     if (formData.notes) {
-      prompt = prompt.with('备注', formData.notes);
+      prompt = prompt.with('备注', wrapUntrusted(String(formData.notes)));
     }
 
     prompt = prompt.with(
