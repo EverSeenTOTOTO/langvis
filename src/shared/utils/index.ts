@@ -13,3 +13,6 @@ export const isTest = () => import.meta.env.MODE === 'test';
 export const sleep = (ms: number): Promise<void> => {
   return new Promise(resolve => setTimeout(resolve, ms));
 };
+
+export const wrapUntrusted = (content: string): string =>
+  `<untrusted_content>\n${content}\n</untrusted_content>`;

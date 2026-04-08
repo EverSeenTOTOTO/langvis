@@ -24,6 +24,7 @@ export interface RetrieveOutput {
 
 export const config: ToolConfig<RetrieveInput, RetrieveOutput> = {
   name: 'Retrieve Tool',
+  untrustedOutput: true,
   description:
     'Semantic search for document chunks based on query text using vector similarity.',
   inputSchema: {

@@ -219,10 +219,13 @@ export default class ReActAgent extends Agent {
         ? output
         : await compress(TraceContext.getOrFail().traceId!, output);
 
-      const observation =
+      const raw =
         typeof compressedOutput === 'string'
           ? compressedOutput
           : JSON.stringify(compressedOutput);
+      const observation = tool.config?.untrustedOutput
+        ? `<untrusted_content>\n${raw}\n</untrusted_content>`
+        : raw;
       yield ctx.agentToolResultEvent(toolName, observation);
       return observation;
     } catch (error) {

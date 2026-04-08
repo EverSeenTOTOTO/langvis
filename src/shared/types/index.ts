@@ -39,6 +39,8 @@ export interface ToolConfig<
   enabled?: boolean;
   /** Skip automatic output compression */
   skipCompression?: boolean;
+  /** Mark tool output as untrusted/external content — will be wrapped with untrusted_content tags in the agent loop */
+  untrustedOutput?: boolean;
 }
 
 /**
