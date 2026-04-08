@@ -19,7 +19,7 @@ const createReActRenderer = (agentId: string) => {
       <>
         {fsm.hasEvents && <UniversalEventRenderer messageFSM={fsm} />}
 
-        {fsm.isAwaitingContent && (
+        {fsm.isThinking && (
           <Typography.Text type="secondary" italic>
             <LoadingOutlined style={{ marginInlineEnd: 4 }} />
             Thinking...
@@ -27,9 +27,11 @@ const createReActRenderer = (agentId: string) => {
         )}
 
         <Suspense
-          fallback={<Typography.Paragraph>{fsm.content}</Typography.Paragraph>}
+          fallback={
+            <Typography.Paragraph>{fsm.msg.content}</Typography.Paragraph>
+          }
         >
-          <MarkdownRender>{fsm.content}</MarkdownRender>
+          <MarkdownRender>{fsm.msg.content}</MarkdownRender>
         </Suspense>
       </>
     ),

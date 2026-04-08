@@ -1,6 +1,5 @@
 import { AgentEvent, ConversationPhase, SSEMessage } from '@/shared/types';
 import type { Conversation, Message } from '@/shared/types/entities';
-import type { MessagePhase } from '@/shared/types';
 import { isClient } from '@/shared/utils';
 import { StateMachine } from '@/shared/utils/StateMachine';
 import { makeAutoObservable } from 'mobx';
@@ -16,8 +15,6 @@ const VALID_TRANSITIONS: Record<ConversationPhase, ConversationPhase[]> = {
   error: ['canceled'],
   canceled: ['connecting'],
 };
-
-const TERMINAL_MESSAGE_PHASES: MessagePhase[] = ['final', 'canceled', 'error'];
 
 export interface ConversationFSMOptions {
   onEvent: (conversationId: string, event: AgentEvent) => void;
@@ -62,26 +59,10 @@ export class ConversationFSM {
     );
   }
 
-  // === Conversation properties (read-only access) ===
+  // === Entity access ===
 
-  get name(): string {
-    return this._conversation?.name ?? '';
-  }
-
-  get config(): Record<string, unknown> | null {
-    return this._conversation?.config ?? null;
-  }
-
-  get groupId(): string | undefined {
-    return this._conversation?.groupId;
-  }
-
-  get order(): number {
-    return this._conversation?.order ?? 0;
-  }
-
-  get createdAt(): Date | undefined {
-    return this._conversation?.createdAt;
+  get conv(): Conversation | null {
+    return this._conversation;
   }
 
   // === Lifecycle state ===
@@ -110,7 +91,7 @@ export class ConversationFSM {
 
   // === Message FSM management ===
 
-  getOrCreateMessageFSM(message: Message): MessageFSM {
+  restoreMessageFSM(message: Message): MessageFSM {
     let fsm = this.messageFSMs.get(message.id);
     if (!fsm) {
       fsm = MessageFSM.fromMessage(message, {
@@ -121,7 +102,7 @@ export class ConversationFSM {
     return fsm;
   }
 
-  addMessageFSM(msgId: string, message: Message): MessageFSM {
+  createMessageFSM(msgId: string, message: Message): MessageFSM {
     let fsm = this.messageFSMs.get(msgId);
     if (!fsm) {
       fsm = new MessageFSM(msgId, message, {
@@ -135,11 +116,15 @@ export class ConversationFSM {
   }
 
   private createMessageOnTransition() {
-    return (_from: MessagePhase, to: MessagePhase) => {
-      if (TERMINAL_MESSAGE_PHASES.includes(to)) {
-        this.onMessageTerminal();
-      } else if (to === 'streaming' || to === 'awaiting_input') {
+    return (fsm: MessageFSM) => {
+      if (fsm.isTerminated) {
+        this.onMessageTerminated();
+        return;
+      }
+
+      if (fsm.isActive) {
         this.onMessageActive();
+        return;
       }
     };
   }
@@ -150,15 +135,20 @@ export class ConversationFSM {
     }
   }
 
-  private onMessageTerminal(): void {
+  private onMessageTerminated(): void {
     const hasActive = Array.from(this.messageFSMs.values()).some(
-      fsm => !fsm.isTerminated,
+      fsm => fsm.isActive,
     );
 
-    if (!hasActive && this.phase === 'active') {
+    if (hasActive) return;
+
+    if (this.phase === 'active') {
       this.sm.transition('connected');
-    } else if (!hasActive && this.phase === 'canceling') {
+      return;
+    }
+    if (this.phase === 'canceling') {
       this.sm.transition('canceled');
+      return;
     }
   }
 
@@ -217,10 +207,8 @@ export class ConversationFSM {
 
           if (msg.type === 'connected') {
             this.sm.transition('connected');
-            // Check if any MessageFSM is still active (e.g., awaiting_input)
-            // Exclude initialized messages that haven't started yet
             const hasActive = Array.from(this.messageFSMs.values()).some(
-              fsm => !fsm.isTerminated && !fsm.isInitialized,
+              fsm => fsm.isActive,
             );
             if (hasActive) {
               this.sm.transition('active');

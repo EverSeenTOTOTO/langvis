@@ -16,7 +16,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
 
   // Get FSM for this message
   const session = chatStore.currentSession;
-  const messageFSM = session?.getOrCreateMessageFSM(msg);
+  const messageFSM = session?.restoreMessageFSM(msg);
 
   // Fallback if no FSM available (shouldn't happen in normal flow)
   if (!messageFSM) {
@@ -32,7 +32,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
   }
 
   // Get agent from conversation config
-  const agent = (session?.config?.agent as string) || AgentIds.CHAT;
+  const agent = (session?.conv?.config?.agent as string) || AgentIds.CHAT;
 
   // Render content using agent renderer
   const { content } = getAgentRenderer(agent)(messageFSM);
@@ -55,7 +55,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
           content
         )
       }
-      footer={<MessageFooter content={messageFSM.content} />}
+      footer={<MessageFooter content={messageFSM.msg.content} />}
       loading={messageFSM.isInitialized}
       avatar={<Avatar icon={<RobotOutlined />} />}
       styles={{

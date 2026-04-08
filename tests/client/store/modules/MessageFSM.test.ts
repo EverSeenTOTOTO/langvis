@@ -41,7 +41,7 @@ describe('MessageFSM', () => {
       expect(fsm.phase).toBe('final');
       expect(fsm.isTerminated).toBe(true);
       // Content is rebuilt from events (stream events append to content)
-      expect(fsm.content).toBe('HelloHello'); // 'Hello' from msg.content + 'Hello' from stream event
+      expect(fsm.msg.content).toBe('HelloHello'); // 'Hello' from msg.content + 'Hello' from stream event
     });
 
     it('should handle empty events gracefully', () => {
@@ -79,7 +79,7 @@ describe('MessageFSM', () => {
       const fsm = new MessageFSM('msg-1', message);
 
       expect(fsm.phase).toBe('initialized');
-      expect(fsm.messageId).toBe('msg-1');
+      expect(fsm.msg.id).toBe('msg-1');
     });
 
     it('should not be terminated initially', () => {
@@ -134,7 +134,11 @@ describe('MessageFSM', () => {
       });
 
       expect(fsm.phase).toBe('streaming');
-      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
+      expect(onTransition).toHaveBeenCalledWith(
+        fsm,
+        'initialized',
+        'streaming',
+      );
     });
 
     it('should transition from streaming to streaming on start event', () => {
@@ -150,7 +154,11 @@ describe('MessageFSM', () => {
       });
 
       expect(fsm.phase).toBe('streaming');
-      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
+      expect(onTransition).toHaveBeenCalledWith(
+        fsm,
+        'initialized',
+        'streaming',
+      );
     });
 
     it('should transition from initialized to streaming on stream event', () => {
@@ -165,7 +173,7 @@ describe('MessageFSM', () => {
       });
 
       expect(fsm.phase).toBe('streaming');
-      expect(fsm.content).toBe('Hello');
+      expect(fsm.msg.content).toBe('Hello');
     });
 
     it('should transition from streaming to streaming on stream event', () => {
@@ -666,7 +674,7 @@ describe('MessageFSM', () => {
 
       fsm.replaceMessageId('msg-2');
 
-      expect(fsm.messageId).toBe('msg-2');
+      expect(fsm.msg.id).toBe('msg-2');
     });
   });
 
@@ -920,7 +928,7 @@ describe('MessageFSM', () => {
       const msg = createMessage('msg-1', events);
       const fsm = MessageFSM.fromMessage(msg);
 
-      expect(fsm.isAwaitingContent).toBe(true);
+      expect(fsm.isThinking).toBe(true);
     });
 
     it('should be false when has content', () => {
@@ -938,7 +946,7 @@ describe('MessageFSM', () => {
       msg.content = 'Hi';
       const fsm = MessageFSM.fromMessage(msg);
 
-      expect(fsm.isAwaitingContent).toBe(false);
+      expect(fsm.isThinking).toBe(false);
     });
 
     it('should be false when has pending tools', () => {
@@ -957,7 +965,7 @@ describe('MessageFSM', () => {
       const msg = createMessage('msg-1', events);
       const fsm = MessageFSM.fromMessage(msg);
 
-      expect(fsm.isAwaitingContent).toBe(false);
+      expect(fsm.isThinking).toBe(false);
     });
 
     it('should be false when terminated', () => {
@@ -968,7 +976,7 @@ describe('MessageFSM', () => {
       const msg = createMessage('msg-1', events);
       const fsm = MessageFSM.fromMessage(msg);
 
-      expect(fsm.isAwaitingContent).toBe(false);
+      expect(fsm.isThinking).toBe(false);
     });
   });
 
@@ -978,7 +986,7 @@ describe('MessageFSM', () => {
       msg.content = 'Hello world';
       const fsm = MessageFSM.fromMessage(msg);
 
-      expect(fsm.content).toBe('Hello world');
+      expect(fsm.msg.content).toBe('Hello world');
     });
 
     it('should expose message events', () => {
@@ -988,14 +996,14 @@ describe('MessageFSM', () => {
       const msg = createMessage('msg-1', events);
       const fsm = MessageFSM.fromMessage(msg);
 
-      expect(fsm.events).toStrictEqual(events);
+      expect(fsm.msg.meta?.events).toStrictEqual(events);
     });
 
     it('should expose conversationId', () => {
       const msg = createMessage('msg-1', []);
       const fsm = MessageFSM.fromMessage(msg);
 
-      expect(fsm.conversationId).toBe('conv-1');
+      expect(fsm.msg.conversationId).toBe('conv-1');
     });
   });
 
@@ -1153,13 +1161,17 @@ describe('MessageFSM', () => {
   });
 
   describe('onTransition callback', () => {
-    it('should call onTransition with (from, to) on state change', () => {
+    it('should call onTransition with (fsm, from, to) on state change', () => {
       const onTransition = vi.fn();
       const fsm = new MessageFSM('msg-1', message, { onTransition });
 
       fsm.start();
 
-      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
+      expect(onTransition).toHaveBeenCalledWith(
+        fsm,
+        'initialized',
+        'streaming',
+      );
     });
 
     it('should call onTransition during replay from events', () => {
@@ -1182,8 +1194,16 @@ describe('MessageFSM', () => {
       MessageFSM.fromMessage(msg, { onTransition });
 
       // New design: replay calls onTransition so ConversationFSM can sync state
-      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
-      expect(onTransition).toHaveBeenCalledWith('streaming', 'awaiting_input');
+      expect(onTransition).toHaveBeenCalledWith(
+        expect.any(MessageFSM),
+        'initialized',
+        'streaming',
+      );
+      expect(onTransition).toHaveBeenCalledWith(
+        expect.any(MessageFSM),
+        'streaming',
+        'awaiting_input',
+      );
     });
 
     it('should call onTransition for each event-driven transition', () => {
@@ -1197,7 +1217,11 @@ describe('MessageFSM', () => {
         seq: 1,
         at: Date.now(),
       });
-      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
+      expect(onTransition).toHaveBeenCalledWith(
+        fsm,
+        'initialized',
+        'streaming',
+      );
 
       fsm.handleEvent({
         type: 'final',
@@ -1205,7 +1229,7 @@ describe('MessageFSM', () => {
         seq: 2,
         at: Date.now(),
       });
-      expect(onTransition).toHaveBeenCalledWith('streaming', 'final');
+      expect(onTransition).toHaveBeenCalledWith(fsm, 'streaming', 'final');
     });
 
     it('should clear awaitingInputData when leaving awaiting_input', () => {
@@ -1228,7 +1252,11 @@ describe('MessageFSM', () => {
 
       // Leave via cancel → awaitingInputData cleared by onTransition
       fsm.cancel();
-      expect(onTransition).toHaveBeenCalledWith('awaiting_input', 'canceling');
+      expect(onTransition).toHaveBeenCalledWith(
+        fsm,
+        'awaiting_input',
+        'canceling',
+      );
       expect(fsm.awaitingInput).toBeNull();
     });
   });
@@ -1436,7 +1464,7 @@ describe('MessageFSM', () => {
       fsm.setMessage(newMessage);
 
       // Verify content is updated (content is a getter that reads from _message)
-      expect(fsm.content).toBe('Updated content');
+      expect(fsm.msg.content).toBe('Updated content');
     });
 
     it('should allow updating events through new message', () => {
@@ -1450,7 +1478,7 @@ describe('MessageFSM', () => {
 
       fsm.setMessage(newMessage);
 
-      expect(fsm.events).toHaveLength(1);
+      expect(fsm.msg.meta?.events).toHaveLength(1);
     });
   });
 });

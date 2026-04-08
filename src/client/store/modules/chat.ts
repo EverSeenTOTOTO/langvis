@@ -8,7 +8,6 @@ import type {
   StartChatResponse,
   SubmitHumanInputRequest,
 } from '@/shared/dto/controller';
-import { AgentEvent } from '@/shared/types';
 import { Role } from '@/shared/types/entities';
 import { generateId } from '@/shared/utils';
 import { message } from 'antd';
@@ -65,10 +64,7 @@ export class ChatStore {
     try {
       await session.connect();
     } catch {
-      this.handleError(conversationId);
-      this.conversationStore.getMessagesByConversationId({
-        id: conversationId,
-      });
+      this.refreshMessages(conversationId);
     }
   }
 
@@ -80,8 +76,14 @@ export class ChatStore {
     let session = this.sessions.get(conversationId);
     if (!session) {
       session = new ConversationFSM(conversationId, {
-        onEvent: (convId, event) => this.handleEvent(convId, event),
-        onError: convId => this.handleError(convId),
+        onEvent: convId => {
+          if (this.conversationStore.currentConversationId !== convId) {
+            console.warn(
+              `Ignoring SSE message for non-current conversation: ${conversationId}`,
+            );
+          }
+        },
+        onError: convId => this.refreshMessages(convId),
         onRefreshMessages: convId => this.refreshMessages(convId),
       });
       // Set conversation object if available
@@ -163,13 +165,13 @@ export class ChatStore {
     const messages = this.conversationStore.messages[conversationId];
     const assistantMessage = messages?.[messages.length - 1];
     if (assistantMessage && assistantMessage.id === tempAssistantId) {
-      session.addMessageFSM(tempAssistantId, assistantMessage);
+      session.createMessageFSM(tempAssistantId, assistantMessage);
     }
 
     try {
       await session.connect();
     } catch {
-      this.handleError(conversationId);
+      this.refreshMessages(conversationId);
       return;
     }
 
@@ -188,12 +190,12 @@ export class ChatStore {
         const updatedMessages = this.conversationStore.messages[conversationId];
         const updatedAssistant = updatedMessages?.[updatedMessages.length - 1];
         if (updatedAssistant && updatedAssistant.id === res.messageId) {
-          const fsm = session.addMessageFSM(res.messageId, updatedAssistant);
+          const fsm = session.createMessageFSM(res.messageId, updatedAssistant);
           fsm.start();
         }
       }
     } catch {
-      this.handleError(conversationId);
+      this.refreshMessages(conversationId);
     }
   }
 
@@ -206,24 +208,9 @@ export class ChatStore {
 
     for (const msg of messages) {
       if (msg.role === Role.ASSIST) {
-        session.getOrCreateMessageFSM(msg);
+        session.restoreMessageFSM(msg);
       }
     }
-  }
-
-  private handleEvent(conversationId: string, _event: AgentEvent): void {
-    if (this.conversationStore.currentConversationId !== conversationId) {
-      console.warn(
-        `Ignoring SSE message for non-current conversation: ${conversationId}`,
-      );
-    }
-  }
-
-  private handleError(conversationId: string): void {
-    const session = this.getSession(conversationId);
-    if (session?.phase === 'canceled') return;
-
-    this.refreshMessages(conversationId);
   }
 
   private refreshMessages(conversationId: string): void {

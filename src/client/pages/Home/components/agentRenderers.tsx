@@ -37,16 +37,18 @@ export function getAgentRenderer(agentId: string): AgentRenderer {
 const defaultChatRenderer: AgentRenderer = fsm => ({
   content: (
     <>
-      {fsm.isAwaitingContent && (
+      {fsm.isThinking && (
         <Typography.Text type="secondary" italic>
           <LoadingOutlined style={{ marginInlineEnd: 4 }} />
           Thinking...
         </Typography.Text>
       )}
       <Suspense
-        fallback={<Typography.Paragraph>{fsm.content}</Typography.Paragraph>}
+        fallback={
+          <Typography.Paragraph>{fsm.msg.content}</Typography.Paragraph>
+        }
       >
-        <MarkdownRender>{fsm.content}</MarkdownRender>
+        <MarkdownRender>{fsm.msg.content}</MarkdownRender>
       </Suspense>
     </>
   ),

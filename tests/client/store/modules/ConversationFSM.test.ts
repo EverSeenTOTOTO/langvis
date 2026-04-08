@@ -141,7 +141,7 @@ describe('ConversationFSM', () => {
     });
   });
 
-  describe('addMessageFSM', () => {
+  describe('createMessageFSM', () => {
     beforeEach(() => {
       fsm['sm'].transition('connecting');
       fsm['sm'].transition('connected');
@@ -149,10 +149,10 @@ describe('ConversationFSM', () => {
 
     it('should create and store a MessageFSM', () => {
       const message = createMessage('msg-1');
-      const msgFsm = fsm.addMessageFSM('msg-1', message);
+      const msgFsm = fsm.createMessageFSM('msg-1', message);
 
       expect(msgFsm).toBeDefined();
-      expect(msgFsm.messageId).toBe('msg-1');
+      expect(msgFsm.msg.id).toBe('msg-1');
       expect(fsm.getMessageFSM('msg-1')).toBe(msgFsm);
     });
 
@@ -160,8 +160,8 @@ describe('ConversationFSM', () => {
       const message1 = createMessage('msg-1');
       const message2 = createMessage('msg-1');
 
-      const msgFsm1 = fsm.addMessageFSM('msg-1', message1);
-      const msgFsm2 = fsm.addMessageFSM('msg-1', message2);
+      const msgFsm1 = fsm.createMessageFSM('msg-1', message1);
+      const msgFsm2 = fsm.createMessageFSM('msg-1', message2);
 
       expect(msgFsm2).toBe(msgFsm1);
     });
@@ -175,7 +175,7 @@ describe('ConversationFSM', () => {
 
     it('should remove MessageFSM from map', () => {
       const message = createMessage('msg-1');
-      fsm.addMessageFSM('msg-1', message);
+      fsm.createMessageFSM('msg-1', message);
 
       fsm.removeMessageFSM('msg-1');
 
@@ -215,7 +215,7 @@ describe('ConversationFSM', () => {
       fsm['sm'].transition('connected');
 
       const message = createMessage('msg-1');
-      const msgFsm = fsm.addMessageFSM('msg-1', message);
+      const msgFsm = fsm.createMessageFSM('msg-1', message);
       const closeSpy = vi.spyOn(msgFsm, 'close');
 
       fsm['sm'].transition('active');
@@ -243,7 +243,7 @@ describe('ConversationFSM', () => {
 
     it('should call cancel on all cancelable MessageFSMs when active', async () => {
       const message = createMessage('msg-1');
-      const msgFsm = fsm.addMessageFSM('msg-1', message);
+      const msgFsm = fsm.createMessageFSM('msg-1', message);
       msgFsm.handleEvent({
         type: 'start',
         messageId: 'msg-1',
@@ -260,7 +260,7 @@ describe('ConversationFSM', () => {
 
     it('should transition to canceled on 404 error', async () => {
       const message = createMessage('msg-1');
-      const msgFsm = fsm.addMessageFSM('msg-1', message);
+      const msgFsm = fsm.createMessageFSM('msg-1', message);
       msgFsm.handleEvent({
         type: 'start',
         messageId: 'msg-1',
@@ -278,7 +278,7 @@ describe('ConversationFSM', () => {
 
     it('should transition to error on non-404 error', async () => {
       const message = createMessage('msg-1');
-      const msgFsm = fsm.addMessageFSM('msg-1', message);
+      const msgFsm = fsm.createMessageFSM('msg-1', message);
       msgFsm.handleEvent({
         type: 'start',
         messageId: 'msg-1',
@@ -304,7 +304,7 @@ describe('ConversationFSM', () => {
 
     it('should transition to active when MessageFSM enters non-terminal state', () => {
       const message = createMessage('msg-1');
-      fsm.addMessageFSM('msg-1', message);
+      fsm.createMessageFSM('msg-1', message);
 
       const msgFsm = fsm.getMessageFSM('msg-1')!;
       msgFsm.handleEvent({
@@ -319,7 +319,7 @@ describe('ConversationFSM', () => {
 
     it('should transition back to connected when all MessageFSMs reach terminal', () => {
       const message = createMessage('msg-1');
-      fsm.addMessageFSM('msg-1', message);
+      fsm.createMessageFSM('msg-1', message);
 
       const msgFsm = fsm.getMessageFSM('msg-1')!;
       msgFsm.handleEvent({
@@ -375,7 +375,7 @@ describe('ConversationFSM', () => {
       };
 
       // Create MessageFSM from historical message (simulating initializeMessageFSMs)
-      fsm.getOrCreateMessageFSM(message);
+      fsm.restoreMessageFSM(message);
 
       // Verify MessageFSM is in awaiting_input state
       const msgFsm = fsm.getMessageFSM('msg-1');
@@ -413,7 +413,7 @@ describe('ConversationFSM', () => {
         conversationId: 'conv-1',
       };
 
-      fsm.getOrCreateMessageFSM(message);
+      fsm.restoreMessageFSM(message);
 
       const msgFsm = fsm.getMessageFSM('msg-1');
       expect(msgFsm?.phase).toBe('final');
@@ -509,8 +509,8 @@ describe('ConversationFSM', () => {
     it('should route event to correct MessageFSM by messageId', () => {
       const message1 = createMessage('msg-1');
       const message2 = createMessage('msg-2');
-      fsm.addMessageFSM('msg-1', message1);
-      fsm.addMessageFSM('msg-2', message2);
+      fsm.createMessageFSM('msg-1', message1);
+      fsm.createMessageFSM('msg-2', message2);
 
       const msgFsm1 = fsm.getMessageFSM('msg-1')!;
       const msgFsm2 = fsm.getMessageFSM('msg-2')!;
@@ -540,7 +540,7 @@ describe('ConversationFSM', () => {
 
     it('should route to first active FSM when no messageId in event', () => {
       const message1 = createMessage('msg-1');
-      fsm.addMessageFSM('msg-1', message1);
+      fsm.createMessageFSM('msg-1', message1);
 
       const msgFsm1 = fsm.getMessageFSM('msg-1')!;
       msgFsm1['sm'].transition('initialized');

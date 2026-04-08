@@ -1,5 +1,5 @@
 import { AgentEvent, MessagePhase } from '@/shared/types';
-import { Role, type Message } from '@/shared/types/entities';
+import type { Message } from '@/shared/types/entities';
 import { StateMachine } from '@/shared/utils/StateMachine';
 import { makeAutoObservable } from 'mobx';
 
@@ -20,8 +20,6 @@ const DEFAULT_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
   canceled: [],
   error: [],
 };
-
-const TERMINATED_PHASES: MessagePhase[] = ['final', 'canceled', 'error'];
 
 export type ToolCallTimeline = {
   callId: string;
@@ -48,7 +46,11 @@ export interface AwaitingInputData {
 }
 
 export interface MessageFSMOptions {
-  onTransition?: (from: MessagePhase, to: MessagePhase) => void;
+  onTransition?: (
+    fsm: MessageFSM,
+    from: MessagePhase,
+    to: MessagePhase,
+  ) => void;
 }
 
 export class MessageFSM {
@@ -74,7 +76,7 @@ export class MessageFSM {
         this._phase = to;
         console.log(`[MessageFSM] ${this._messageId}: ${from} -> ${to}`);
         if (from === 'awaiting_input') this._awaitingInputData = null;
-        options?.onTransition?.(from, to);
+        options?.onTransition?.(this, from, to);
       },
     });
 
@@ -102,30 +104,10 @@ export class MessageFSM {
     return fsm;
   }
 
-  // === Message properties (read-only access) ===
+  // === Entity access ===
 
-  get messageId(): string {
-    return this._messageId;
-  }
-
-  get content(): string {
-    return this._message.content ?? '';
-  }
-
-  get events(): AgentEvent[] {
-    return this._message.meta?.events ?? [];
-  }
-
-  get createdAt(): Date {
-    return this._message.createdAt;
-  }
-
-  get role(): Role {
-    return this._message.role;
-  }
-
-  get conversationId(): string {
-    return this._message.conversationId;
+  get msg(): Message {
+    return this._message;
   }
 
   // === Lifecycle state ===
@@ -135,7 +117,7 @@ export class MessageFSM {
   }
 
   get isTerminated(): boolean {
-    return TERMINATED_PHASES.includes(this.phase);
+    return ['final', 'canceled', 'error'].includes(this.phase);
   }
 
   get isInitialized(): boolean {
@@ -148,6 +130,12 @@ export class MessageFSM {
 
   get isAwaitingInput(): boolean {
     return this.phase === 'awaiting_input';
+  }
+
+  get isActive(): boolean {
+    return ['streaming', 'awaiting_input', 'submitting', 'canceling'].includes(
+      this.phase,
+    );
   }
 
   get awaitingInput(): AwaitingInputData | null {
@@ -170,11 +158,11 @@ export class MessageFSM {
   // === Content rendering state (derived from events) ===
 
   get hasContent(): boolean {
-    return this.content.length > 0;
+    return this._message.content.length > 0;
   }
 
   get hasEvents(): boolean {
-    return this.events.length > 0;
+    return (this._message.meta?.events?.length ?? 0) > 0;
   }
 
   get toolCallTimeline(): ToolCallTimeline[] {
@@ -193,20 +181,13 @@ export class MessageFSM {
     return this.deriveThoughts();
   }
 
-  get isAwaitingContent(): boolean {
+  get isThinking(): boolean {
     return (
       this.hasEvents &&
       !this.isTerminated &&
       !this.hasContent &&
       !this.hasPendingTools
     );
-  }
-
-  get isProcessing(): boolean {
-    if (this.isTerminated || this._awaitingInputData) return false;
-    if (!this.hasEvents || this.hasContent) return false;
-    const tools = this.toolCallTimeline;
-    return tools.length === 0 || tools.some(t => t.status === 'pending');
   }
 
   get shouldExpandDetails(): boolean {
@@ -224,7 +205,8 @@ export class MessageFSM {
     this.applyEvent(event);
 
     const target = this.resolveTargetPhase(event);
-    if (target) this.sm.transition(target);
+
+    this.sm.transition(target);
   }
 
   // === Actions ===
@@ -249,6 +231,7 @@ export class MessageFSM {
 
   replaceMessageId(newId: string): void {
     this._messageId = newId;
+    this._message.id = newId;
   }
 
   setMessage(message: Message): void {
@@ -275,6 +258,7 @@ export class MessageFSM {
         this.appendEvent(event);
         break;
 
+      // stream msg will never append to reduce memory
       case 'stream':
         this._message.content += event.content;
         break;
@@ -330,7 +314,7 @@ export class MessageFSM {
     }
   }
 
-  private resolveTargetPhase(event: AgentEvent): MessagePhase | null {
+  private resolveTargetPhase(event: AgentEvent) {
     const { phase } = this.sm;
 
     switch (event.type) {
@@ -339,7 +323,7 @@ export class MessageFSM {
       case 'thought':
       case 'tool_call':
         if (phase === 'initialized') return 'streaming';
-        return null;
+        break;
 
       case 'tool_progress': {
         const data = event.data as
@@ -351,13 +335,13 @@ export class MessageFSM {
           if (nestedAwaiting) return 'awaiting_input';
         }
         if (phase === 'initialized') return 'streaming';
-        return null;
+        break;
       }
 
       case 'tool_result':
       case 'tool_error':
         if (phase === 'awaiting_input') return 'streaming';
-        return null;
+        break;
 
       case 'final':
         return 'final';
@@ -369,8 +353,10 @@ export class MessageFSM {
         return 'error';
 
       default:
-        return null;
+        return phase;
     }
+
+    return phase;
   }
 
   // === Derivation methods ===
@@ -379,7 +365,7 @@ export class MessageFSM {
     const toolCallsMap = new Map<string, ToolCallTimeline>();
     let pendingThought: string | undefined;
 
-    for (const event of this.events) {
+    for (const event of this._message.meta?.events ?? []) {
       switch (event.type) {
         case 'thought':
           pendingThought = event.content;
@@ -438,7 +424,7 @@ export class MessageFSM {
     const thoughts: ThoughtItem[] = [];
     let pendingThought: string | undefined;
 
-    for (const event of this.events) {
+    for (const event of this._message.meta?.events ?? []) {
       switch (event.type) {
         case 'thought':
           pendingThought = event.content;
@@ -463,7 +449,7 @@ export class MessageFSM {
     }
 
     if (pendingThought) {
-      const lastEvent = this.events.at(-1);
+      const lastEvent = (this._message.meta?.events ?? []).at(-1);
       thoughts.push({
         content: pendingThought,
         seq: lastEvent?.seq ?? 0,

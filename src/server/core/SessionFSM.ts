@@ -1,16 +1,9 @@
-import { AgentEvent } from '@/shared/types';
+import { AgentEvent, MessagePhase, SessionPhase } from '@/shared/types';
 import logger from '../utils/logger';
-import { MessageFSM, MessagePhase } from './MessageFSM';
+import { MessageFSM } from './MessageFSM';
 import type { PendingMessage } from './PendingMessage';
 import { SSEConnection } from './SSEConnection';
 import { StateMachine } from '@/shared/utils/StateMachine';
-
-export type SessionPhase =
-  | 'waiting'
-  | 'active'
-  | 'canceling'
-  | 'error'
-  | 'done';
 
 const VALID_TRANSITIONS: Record<SessionPhase, SessionPhase[]> = {
   waiting: ['active', 'done'],
@@ -170,7 +163,7 @@ export class SessionFSM {
     _to: MessagePhase,
   ): void {
     const hasActive = Array.from(this.messageFSMs.values()).some(
-      fsm => !fsm.isTerminated,
+      fsm => fsm.isActive,
     );
 
     if (hasActive && this.phase === 'waiting') {

@@ -1,19 +1,9 @@
-import { AgentEvent } from '@/shared/types';
+import { AgentEvent, MessagePhase } from '@/shared/types';
 import type { Message } from '@/shared/types/entities';
 import { StateMachine } from '@/shared/utils/StateMachine';
 import { ExecutionContext } from './ExecutionContext';
 import logger from '../utils/logger';
 import type { PendingMessage } from './PendingMessage';
-
-export type MessagePhase =
-  | 'initialized'
-  | 'streaming'
-  | 'awaiting_input'
-  | 'submitting'
-  | 'canceling'
-  | 'final'
-  | 'canceled'
-  | 'error';
 
 const VALID_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
   initialized: ['streaming', 'canceling', 'error'],
@@ -33,8 +23,6 @@ const VALID_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
   canceled: [],
   error: [],
 };
-
-const TERMINATED_PHASES: MessagePhase[] = ['final', 'canceled', 'error'];
 
 export interface MessageFSMOptions {
   onTransition?: (
@@ -83,7 +71,13 @@ export class MessageFSM {
   }
 
   get isTerminated(): boolean {
-    return TERMINATED_PHASES.includes(this.phase);
+    return ['final', 'canceled', 'error'].includes(this.phase);
+  }
+
+  get isActive(): boolean {
+    return ['streaming', 'awaiting_input', 'submitting', 'canceling'].includes(
+      this.phase,
+    );
   }
 
   get isStreaming(): boolean {

@@ -359,7 +359,7 @@ const DocumentAgentRenderer = (fsm: MessageFSM): AgentRenderResult => ({
         />
       )}
 
-      {fsm.isAwaitingContent && (
+      {fsm.isThinking && (
         <Typography.Text type="secondary" italic>
           <LoadingOutlined style={{ marginInlineEnd: 4 }} />
           Thinking...
@@ -367,9 +367,11 @@ const DocumentAgentRenderer = (fsm: MessageFSM): AgentRenderResult => ({
       )}
 
       <Suspense
-        fallback={<Typography.Paragraph>{fsm.content}</Typography.Paragraph>}
+        fallback={
+          <Typography.Paragraph>{fsm.msg.content}</Typography.Paragraph>
+        }
       >
-        <MarkdownRender>{fsm.content}</MarkdownRender>
+        <MarkdownRender>{fsm.msg.content}</MarkdownRender>
       </Suspense>
     </>
   ),
