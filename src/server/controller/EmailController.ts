@@ -135,15 +135,9 @@ export default class EmailController {
     );
 
     const agent = container.resolve<Agent>(AgentIds.DOCUMENT);
-    const contentOrCached = await compress(conversation.id, email.content);
-    const userContent = this.buildArchivePrompt(
-      email,
-      contentOrCached as string | CachedReference,
-    );
-
     res.status(200).json({ conversationId: conversation.id });
 
-    await this.startArchiveSession(conversation, email, userContent, agent);
+    await this.startArchiveSession(conversation, email, agent);
     return;
   }
 
@@ -165,7 +159,6 @@ export default class EmailController {
   private async startArchiveSession(
     conversation: Conversation,
     email: EmailEntity,
-    userContent: string,
     agent: Agent,
   ): Promise<void> {
     const conversationId = conversation.id;
@@ -174,9 +167,7 @@ export default class EmailController {
     TraceContext.update({
       conversationId,
       userId: conversation.userId,
-      traceId: conversationId,
     });
-    TraceContext.freeze();
 
     // Create session BEFORE building memory to avoid race with frontend SSE
     const session = await this.chatService.acquireSession(conversationId);
@@ -184,20 +175,58 @@ export default class EmailController {
       throw new Error(`Failed to acquire session for ${conversationId}`);
     }
 
+    // Build memory first to create sys/user messages with correct timestamps
     const memory = await this.chatService.buildMemory(
       agent,
       conversation.config!,
       {
         role: Role.USER,
-        content: userContent,
+        content: '', // Placeholder, will be updated after cache
         meta: { emailId: email.id },
       },
     );
 
+    // Create assistant message after memory is built, ensuring correct ordering
+    // Use a timestamp that is guaranteed to be after all previous messages
     const [assistantMessage] = await this.conversationService.batchAddMessages(
       conversationId,
-      [{ role: Role.ASSIST, content: '', createdAt: new Date() }],
+      [
+        {
+          role: Role.ASSIST,
+          content: '',
+          createdAt: new Date(Date.now() + 100),
+        },
+      ],
     );
+
+    // Update TraceContext with messageId for cache lookup
+    TraceContext.update({
+      messageId: assistantMessage.id,
+      traceId: assistantMessage.id,
+    });
+    TraceContext.freeze();
+
+    // Use messageId for cache key - ReadCacheTool uses messageId to look up cache
+    const contentOrCached = await compress(assistantMessage.id, email.content);
+    const userContent = this.buildArchivePrompt(
+      email,
+      contentOrCached as string | CachedReference,
+    );
+
+    // Update the placeholder user message with actual content
+    // Find the last user message we just created
+    const messages =
+      await this.conversationService.getMessagesByConversationId(
+        conversationId,
+      );
+    const lastUserMessage = messages.filter(m => m.role === Role.USER).pop();
+    if (lastUserMessage) {
+      await this.conversationService.updateMessage(
+        lastUserMessage.id,
+        userContent,
+        { emailId: email.id },
+      );
+    }
 
     const pendingMessage = new PendingMessage(assistantMessage, message =>
       this.conversationService.updateMessage(

@@ -5,7 +5,7 @@ import { TraceContext } from '../../TraceContext';
 import type { Logger } from '@/server/utils/logger';
 import { InjectTokens, ToolIds } from '@/shared/constants';
 import { ToolConfig, AgentEvent } from '@/shared/types';
-import type { MessageAttachment } from '@/shared/types/entities';
+import { Role, type MessageAttachment } from '@/shared/types/entities';
 import type {
   ChatCompletionCreateParams,
   ChatCompletionMessageParam,
@@ -107,7 +107,7 @@ export default class LlmCallTool extends Tool<LlmCallInput, LlmCallOutput> {
       messageCount: messages.length,
       temperature: data.temperature,
       stop: data.stop,
-      messages,
+      messages: messages.filter(msg => msg.role !== Role.SYSTEM),
     });
 
     const response = await this.openai.chat.completions.create(

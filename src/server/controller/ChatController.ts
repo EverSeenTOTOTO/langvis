@@ -167,9 +167,17 @@ export default class ChatController {
       },
     );
 
+    // Use a timestamp that is guaranteed to be after all previous messages
+    // Add 100ms buffer to ensure correct ordering
     const [assistantMessage] = await this.conversationService.batchAddMessages(
       conversation.id!,
-      [{ role: Role.ASSIST, content: '', createdAt: new Date() }],
+      [
+        {
+          role: Role.ASSIST,
+          content: '',
+          createdAt: new Date(Date.now() + 100),
+        },
+      ],
     );
 
     // Update TraceContext with messageId

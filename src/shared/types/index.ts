@@ -142,11 +142,10 @@ export type ConversationPhase =
   | 'canceled';
 
 /**
- * MessagePhase - frontend message FSM phases
+ * MessagePhase - unified message FSM phases (frontend & backend)
  */
 export type MessagePhase =
-  | 'placeholder'
-  | 'loading'
+  | 'initialized'
   | 'streaming'
   | 'awaiting_input'
   | 'submitting'

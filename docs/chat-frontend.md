@@ -1,30 +1,14 @@
-# Chat 前端状态机重构设计
+# Chat 前端状态机设计
 
-> 日期：2026-03-28
+> 日期：2026-04-06
 > 状态：已批准
-> 更新：重构为同步状态机 + 单一 onTransition 回调
 
 ## 设计原则
 
-1. **状态转换是同步事实**：`transition(to): boolean` 永远同步，永远不抛异常。无效转换静默返回 `false`。
-2. **副作用归属触发源**：方法驱动的副作用（`connect`、`cancel`、`deactivate`）留在方法体内；事件数据驱动的副作用（内容追加、事件累积、`awaitingInputData` 提取）留在 `handleEvent` 中。
-3. **单一 `onTransition(from, to)` 回调**：替代所有 per-state onEnter/onExit 钩子。ConversationFSM 通过此回调同步 phase（`connected ↔ active`）。
-4. **MessageFSM 是事件数据变更的唯一入口**：ChatStore 不再直接修改消息 content 或 events，所有变更由 MessageFSM 的 `applyEvent` 完成。
-5. **无异步转换，无异常**：状态转换只记录状态事实，不包含任何 I/O 或可能失败的操作。
-
-## 背景
-
-早期 chat 前端的会话状态由 `ChatSession` 类管理，消息更新散落在 `ChatStore` 的多个方法中。这种粗粒度、分散的状态管理导致取消/切换会话时出现竞态问题。
-
-此外，当前 `handleEvent` 直接操作最后一条消息，无法区分事件归属，不支持多消息并行。
-
-## 设计目标
-
-1. 两层级状态机：会话层（连接生命周期）+ 消息层（消息生命周期）
-2. 消息状态不下沉到事件列表被动派生，由状态机主动管理
-3. 清晰区分会话级取消 vs 消息级取消
-4. 支持多消息并行执行，事件精确路由到对应消息
-5. 与现有 MobX 架构无缝集成
+1. **与后端状态命名统一**：使用 `initialized` 替代 `placeholder`/`loading`，与后端 MessagePhase 保持一致。
+2. **事件重放兼容**：SSE 重连时，后端会先重放所有累积事件，最后发送 `connected`。前端必须正确处理重放期间的事件流。
+3. **无静默转换**：所有状态转换触发 `onTransition` 回调，确保 ConversationFSM 能同步聚合状态。
+4. **事件路由精确**：通过 `messageId` 精确路由事件到对应 MessageFSM，不再使用「最后一条消息」兜底。
 
 ## 分层概念
 
@@ -40,45 +24,113 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                      MessageFSM                              │
 │  消息层：管理单条消息的生命周期                               │
-│  phase: placeholder | loading | streaming | ...              │
-│  持有：Message 对象引用                                       │
+│  phase: initialized | streaming | awaiting_input | ...       │
+│  持有：Message 对象引用（直接修改 content/events）           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-前端不持有 ExecutionContext，它仅存在于后端。前端通过 SSE 事件和 API 调用与后端交互。
+## 1. SSE 连接与事件重放
 
-## 0. 共享 StateMachine
+### 连接时序
 
-`StateMachine<TPhase>` 是通用的同步状态机，位于 `src/shared/utils/StateMachine.ts`，供 MessageFSM 和 ConversationFSM 共用。
+```
+前端调用 connect()
+    │
+    ▼
+建立 SSE 连接 ──► 后端 bindConnection()
+                    │
+                    ├── 重放所有非终态 MessageFSM 的累积事件
+                    │   （按 seq 顺序发送 start, stream, tool_call...）
+                    │
+                    └── 发送 { type: 'connected' }
+    │
+    ◄────────────── 收到重放事件
+    │               （MessageFSM 逐个处理，状态从 initialized → streaming）
+    ◄────────────── 收到 connected
+    │
+    ▼
+ConversationFSM 检查是否有活跃 MessageFSM
+    ├── 有 ──► transition('active')
+    └── 无 ──► 保持 connected
+```
 
-### 接口定义
+**关键保证**：收到 `connected` 时，所有历史事件已处理完毕，状态已同步。
+
+### ConversationFSM.connect()
 
 ```typescript
-interface StateMachineOptions<TPhase extends string> {
-  initialPhase: TPhase;
-  transitions: Record<TPhase, TPhase[]>;
-  onTransition?: (from: TPhase, to: TPhase) => void;
-}
+connect(): Promise<void> {
+  this.reset();
+  this.sm.transition('connecting');
 
-class StateMachine<TPhase extends string> {
-  phase: TPhase;
-  canTransitionTo(to: TPhase): boolean;
-  transition(to: TPhase): boolean; // 同步，触发 onTransition 回调
-  silentTransition(to: TPhase): boolean; // 同步，不触发回调（用于历史回放）
+  return new Promise((resolve, reject) => {
+    const eventSource = new EventSource(url);
+
+    // 超时处理
+    const timeout = setTimeout(() => {
+      eventSource.close();
+      this.sm.transition('error');
+      reject(new Error('SSE connection timeout'));
+    }, 30_000);
+
+    eventSource.addEventListener('message', event => {
+      const msg: SSEMessage = JSON.parse(event.data);
+
+      // 心跳保活
+      if (msg.type === 'heartbeat') return;
+
+      // 业务事件：路由到对应 MessageFSM
+      if (isAgentEvent(msg)) {
+        this.handleEvent(msg);
+        return;
+      }
+
+      // 控制事件
+      switch (msg.type) {
+        case 'connected': {
+          clearTimeout(timeout);
+          this.sm.transition('connected');
+
+          // 检查是否有非终态 MessageFSM（如 awaiting_input）
+          const hasActive = Array.from(this.messageFSMs.values())
+            .some(fsm => !fsm.isTerminated);
+
+          if (hasActive) {
+            this.sm.transition('active');
+          }
+          resolve();
+          break;
+        }
+
+        case 'session_replaced':
+          this.sm.transition('idle');
+          this.closeEventSource();
+          break;
+
+        case 'session_error':
+          this.sm.transition('error');
+          this.options.onError(this.conversationId, msg.error);
+          reject(new Error(msg.error));
+          break;
+      }
+    });
+
+    eventSource.addEventListener('error', () => {
+      clearTimeout(timeout);
+      // 区分连接期错误 vs 运行期断开
+      if (this.phase === 'connecting') {
+        this.sm.transition('error');
+        reject(new Error('SSE connection failed'));
+      } else if (this.phase === 'connected' || this.phase === 'active') {
+        // 运行期断开，可能是正常结束或网络问题
+        this.options.onError(this.conversationId, 'SSE connection lost');
+      }
+    });
+  });
 }
 ```
 
-### 关键行为
-
-- `transition(to)`：检查转换合法性，合法则更新 `phase` 并调用 `onTransition`，返回 `true`；非法直接返回 `false`。
-- `silentTransition(to)`：同上但不触发 `onTransition`，用于 `replayEvents` 重放历史消息。
-- 不抛异常，不异步。
-
-## 1. 会话层状态机 ConversationFSM
-
-会话层 FSM 管理 SSE 连接生命周期，并通过观察 MessageFSM 状态判断是否有活跃消息。
-
-内部使用 `StateMachine<ConversationPhase>` 驱动状态。
+## 2. 会话层状态机 ConversationFSM
 
 ### 状态定义
 
@@ -88,85 +140,69 @@ class StateMachine<TPhase extends string> {
 | `connecting` | 否       | SSE 连接建立中（新建或重连共用）             |
 | `connected`  | 否       | SSE 已连接，无活跃消息                       |
 | `active`     | 否       | SSE 已连接，至少有一个 MessageFSM 处于非终态 |
-| `canceling`  | 否       | 取消 API 请求在飞行中（会话级）              |
+| `canceling`  | 否       | 取消 API 请求飞行中（会话级）                |
 | `error`      | 否       | 不可恢复的连接/启动错误                      |
 | `canceled`   | 否       | 已取消（主动取消或切换会话静默取消）         |
 
-`connected` 与 `active` 的区别：`connected` 表示 SSE 在线但没有活跃消息，`active` 表示至少有一个 MessageFSM 处于非终态。
+### 状态转换
 
-### 状态转换图
+```
+idle ──► connecting      （调用 connect()）
 
-```mermaid
-stateDiagram-v2
-    [*] --> idle
+connecting ──► connected  （收到 connected 事件，且无活跃消息）
+connecting ──► active     （收到 connected 事件，且有活跃消息）
+connecting ──► error      （超时 / SSE error）
+connecting ──► canceled   （调用 deactivate()）
 
-    idle --> connecting: connect()
-    connecting --> connected: 'connected' event
-    connecting --> error: timeout / SSE error
-    connecting --> canceled: deactivate()
+connected ──► active      （任一 MessageFSM 进入 streaming/awaiting_input）
+connected ──► idle        （收到 session_ended / 正常关闭）
+connected ──► error       （SSE error）
+connected ──► canceled    （调用 deactivate()）
 
-    connected --> active: startChat() success
-    connected --> idle: session_ended / session_replaced
-    connected --> error: SSE error
-    connected --> canceled: deactivate()
+active ──► active         （收到消息事件，持续 streaming）
+active ──► connected      （所有 MessageFSM 到达终态）
+active ──► canceling      （调用 cancelConversation()）
+active ──► error          （SSE error）
+active ──► canceled       （调用 deactivate()）
 
-    active --> active: message events
-    active --> canceling: cancelConversation()
-    active --> connected: all message FSMs reach terminal
-    active --> error: SSE error
-    active --> canceled: deactivate()
+canceling ──► canceled    （cancel API 成功）
+canceling ──► error       （cancel API 失败）
 
-    canceling --> canceled: cancel API done
-    canceling --> error: cancel API failed
+error ──► canceled        （调用 deactivate()）
 
-    error --> canceled: deactivate()
-
-    canceled --> connecting: reconnect (activate)
+canceled ──► connecting   （重新激活）
 ```
 
-### 核心接口
+### Phase 同步机制
 
-```typescript
-class ConversationFSM {
-  phase: ConversationPhase;
-  eventSource: EventSource | null;
-  private messageFSMs: Map<string, MessageFSM>;
-
-  connect(): Promise<void>;
-  deactivate(): void;
-  cancelConversation(sendCancelApi: () => Promise<void>): Promise<void>;
-  addMessageFSM(msgId: string, message: Message): MessageFSM;
-  getOrCreateMessageFSM(message: Message): MessageFSM;
-  getMessageFSM(messageId: string): MessageFSM | undefined;
-  removeMessageFSM(msgId: string): void;
-}
-```
-
-### Phase 同步规则（通过 onTransition 回调）
-
-ConversationFSM 不使用 per-state onEnter/onExit 钩子，而是通过给每个 MessageFSM 传入统一的 `onTransition` 回调来同步会话级 phase：
+ConversationFSM 通过给每个 MessageFSM 传入 `onTransition` 回调来感知消息状态变化：
 
 ```typescript
 private createMessageOnTransition() {
-  return (_from: MessagePhase, to: MessagePhase) => {
-    if (TERMINAL_MESSAGE_PHASES.includes(to)) {
+  return (from: MessagePhase, to: MessagePhase) => {
+    // 消息进入活跃状态
+    if (to === 'streaming' || to === 'awaiting_input') {
+      if (this.phase === 'connected') {
+        this.sm.transition('active');
+      }
+    }
+
+    // 消息到达终态
+    if (['final', 'canceled', 'error'].includes(to)) {
       this.onMessageTerminal();
-    } else if (to === 'loading' || to === 'streaming') {
-      this.onMessageActive();
+    }
+
+    // 清理 awaitingInputData
+    if (from === 'awaiting_input') {
+      // _awaitingInputData 在 MessageFSM 内部清理
     }
   };
 }
 
-private onMessageActive(): void {
-  if (this.phase === 'connected') {
-    this.sm.transition('active');
-  }
-}
-
 private onMessageTerminal(): void {
-  const hasActive = Array.from(this.messageFSMs.values()).some(
-    fsm => !fsm.isTerminated,
-  );
+  const hasActive = Array.from(this.messageFSMs.values())
+    .some(fsm => !fsm.isTerminated);
+
   if (!hasActive && this.phase === 'active') {
     this.sm.transition('connected');
   } else if (!hasActive && this.phase === 'canceling') {
@@ -175,314 +211,286 @@ private onMessageTerminal(): void {
 }
 ```
 
-- 任一 MessageFSM 进入非终态（`loading` / `streaming`）→ `connected → active`
-- 所有 MessageFSM 到达终态 → `active → connected`
+## 3. 消息层状态机 MessageFSM
 
-### 事件路由
+### 状态定义（与后端统一）
 
-SSE 事件携带 `messageId`，ConversationFSM 根据该字段路由到对应的 MessageFSM：
+| 状态             | 是否终态 | 含义                                              |
+| ---------------- | -------- | ------------------------------------------------- |
+| `initialized`    | 否       | 消息已创建（前端临时或后端确认），等待 agent 开始 |
+| `streaming`      | 否       | 正在接收流式事件                                  |
+| `awaiting_input` | 否       | Agent 等待用户输入                                |
+| `submitting`     | 否       | submitHumanInput API 飞行中                       |
+| `canceling`      | 否       | 取消 API 飞行中（消息级）                         |
+| `final`          | 是       | 正常完成                                          |
+| `canceled`       | 是       | 已取消                                            |
+| `error`          | 是       | 错误                                              |
+
+### 状态转换
+
+```
+initialized ──► streaming      （收到 start/stream/thought/tool_call）
+initialized ──► canceling      （调用 cancel()）
+initialized ──► error          （收到 error 事件）
+
+streaming   ──► streaming      （持续接收 stream/thought/tool 事件）
+streaming   ──► awaiting_input （收到 tool_progress status=awaiting_input）
+streaming   ──► final          （收到 final 事件）
+streaming   ──► canceled       （收到 cancelled 事件）
+streaming   ──► error          （收到 error 事件）
+streaming   ──► canceling      （调用 cancel()）
+
+awaiting_input ──► submitting  （调用 submitInput()）
+awaiting_input ──► streaming   （收到 tool_result）
+awaiting_input ──► canceling   （调用 cancel()）
+awaiting_input ──► canceled    （收到 cancelled 事件）
+
+submitting  ──► streaming      （收到 tool_result / 业务事件）
+submitting  ──► error          （API 失败）
+submitting  ──► canceled       （收到 cancelled 事件）
+
+canceling   ──► canceled       （收到 cancelled 事件）
+canceling   ──► error          （收到 error 事件）
+```
+
+### 工厂方法
+
+#### 新消息（startChat 创建）
 
 ```typescript
-private handleEvent(event: AgentEvent): void {
-  const messageId = (event as any).messageId as string | undefined;
-  if (messageId) {
-    const messageFSM = this.messageFSMs.get(messageId);
-    if (messageFSM) {
-      messageFSM.handleEvent(event);
-    } else {
-      console.warn(`MessageFSM not found for ${messageId}`);
-    }
-  } else {
-    const activeFsm = this.getFirstActiveFSM();
-    if (activeFsm) activeFsm.handleEvent(event);
-  }
-}
+// 创建临时消息（前端乐观更新）
+const fsm = new MessageFSM(tempId, tempMessage);
+fsm.sm.transition('initialized'); // 显式转换，触发回调
 ```
 
-## 2. 消息层状态机 MessageFSM
-
-管理单条流式助手消息的完整生命周期。
-
-内部使用 `StateMachine<MessagePhase>` 驱动状态。
-
-### 状态定义
-
-| 状态             | 是否终态 | 含义                                            |
-| ---------------- | -------- | ----------------------------------------------- |
-| `placeholder`    | 否       | 临时消息，无真实 ID，等待 startChat             |
-| `loading`        | 否       | startChat API 成功，SSE 已连接，等待 agent 开始 |
-| `streaming`      | 否       | 正在接收流式事件                                |
-| `awaiting_input` | 否       | Agent 等待用户输入                              |
-| `submitting`     | 否       | submitHumanInput API 飞行中                     |
-| `canceling`      | 否       | 取消 API 飞行中（消息级）                       |
-| `final`          | 是       | 正常完成                                        |
-| `canceled`       | 是       | 已取消                                          |
-| `error`          | 是       | 错误                                            |
-
-### 状态转换图
-
-```mermaid
-stateDiagram-v2
-    [*] --> placeholder: addPendingMessages()
-
-    placeholder --> loading: start() success
-    placeholder --> error: startChat() failed
-
-    loading --> streaming: first agent event
-    loading --> canceling: cancel()
-    loading --> error: SSE lost
-
-    streaming --> streaming: stream/thought/tool events
-    streaming --> awaiting_input: tool_progress status=awaiting_input
-    streaming --> final: 'final' event
-    streaming --> canceled: 'cancelled' event
-    streaming --> error: 'error' event / SSE lost
-
-    awaiting_input --> submitting: submitInput()
-    awaiting_input --> streaming: tool_result (input received)
-    submitting --> streaming: API success
-    submitting --> error: API failed
-    submitting --> canceled: 'cancelled' event
-
-    canceling --> canceled: cancel API success
-    canceling --> error: cancel API failed
-
-    final --> [*]: refreshMessages()
-    canceled --> [*]: refreshMessages()
-    error --> [*]: refreshMessages()
-```
-
-### 核心接口
-
-```typescript
-interface MessageFSMOptions {
-  onTransition?: (from: MessagePhase, to: MessagePhase) => void;
-}
-
-class MessageFSM {
-  phase: MessagePhase;
-  readonly messageId: string;
-
-  // 事件数据变更（唯一入口）
-  handleEvent(event: AgentEvent): void;
-
-  // 同步状态操作
-  start(): boolean;
-  submitInput(): boolean;
-  cancel(): void;
-  close(): void;
-
-  // 工具方法
-  replaceMessageId(newId: string): void;
-  setMessage(message: Message): void;
-}
-```
-
-### 事件处理流程
-
-`handleEvent` 是事件数据变更的唯一入口，分两步：
-
-1. **`applyEvent(event)`**：根据事件类型执行数据变更
-   - `stream` → 追加 `message.content`
-   - `thought` / `tool_call` / `tool_result` / `tool_error` / `cancelled` / `error` → 追加到 `message.meta.events`
-   - `tool_progress` → 追加 event + 提取 `awaitingInputData`
-2. **`resolveTargetPhase(event)` → `transition(target)`**：根据事件类型和当前 phase 确定目标状态并同步转换
-
-```typescript
-handleEvent(event: AgentEvent): void {
-  if (this.isTerminated) return;
-  this.applyEvent(event);
-  const target = this.resolveTargetPhase(event);
-  if (target) this.sm.transition(target);
-}
-```
-
-### awaitingInputData 管理
-
-`awaitingInputData` 是 MessageFSM 的直接字段，由 `applyEvent` 在处理 `tool_progress` 事件时设置。当 `onTransition` 回调检测到 `from === 'awaiting_input'` 时自动清除：
-
-```typescript
-this.sm = new StateMachine({
-  initialPhase: 'placeholder',
-  transitions: DEFAULT_TRANSITIONS,
-  onTransition: (from, to) => {
-    if (from === 'awaiting_input') this._awaitingInputData = null;
-    options?.onTransition?.(from, to);
-  },
-});
-```
-
-### 历史消息回放
-
-历史消息通过 `fromMessage` 工厂方法初始化，使用 `silentTransition` 只计算状态，不触发副作用：
+#### 历史消息（从 DB 加载）
 
 ```typescript
 static fromMessage(msg: Message, options?: MessageFSMOptions): MessageFSM {
   const fsm = new MessageFSM(msg.id, msg, options);
-  fsm.replayEvents(msg.meta?.events ?? []);
+  const events = msg.meta?.events ?? [];
+
+  // 重放历史事件，正常触发 transition（非静默）
+  // 这样 ConversationFSM 能感知到 awaiting_input 等状态
+  for (const event of events) {
+    fsm.handleEvent(event);
+  }
+
   return fsm;
 }
+```
 
-private replayEvents(events: AgentEvent[]): void {
-  if (events.length === 0) return;
-  this.sm.silentTransition('loading');
-  for (const event of events) {
-    const target = this.resolveTargetPhase(event);
-    if (target) this.sm.silentTransition(target);
-    if (event.type === 'tool_progress') {
+**注意**：与旧设计不同，不再使用 `silentTransition`。重放历史事件时正常触发 `onTransition`，确保 ConversationFSM 正确聚合状态。
+
+### 核心接口
+
+```typescript
+class MessageFSM {
+  readonly messageId: string;
+  readonly phase: MessagePhase;
+  readonly content: string;
+  readonly events: AgentEvent[];
+
+  // 状态查询
+  get isTerminated(): boolean;
+  get isStreaming(): boolean;
+  get isAwaitingInput(): boolean;
+  get isCancellable(): boolean;
+
+  // 等待用户输入数据（由 tool_progress 事件提取）
+  get awaitingInput(): AwaitingInputData | null;
+
+  // 派生数据（从 events 计算）
+  get toolCallTimeline(): ToolCallTimeline[];
+  get thoughts(): ThoughtItem[];
+
+  // 事件处理（来自 SSE）
+  handleEvent(event: AgentEvent): void;
+
+  // 动作
+  start(): boolean; // initialized → streaming（实际是收到首事件时转换）
+  submitInput(): boolean; // awaiting_input → submitting
+  cancel(): void; // → canceling / canceled
+  close(): void; // 强制关闭 → canceled
+}
+```
+
+### handleEvent 实现
+
+```typescript
+handleEvent(event: AgentEvent): void {
+  if (this.isTerminated) return;
+
+  // 1. 应用事件到数据
+  this.applyEvent(event);
+
+  // 2. 根据事件类型转换状态
+  const target = this.resolveTargetPhase(event);
+  if (target) {
+    this.sm.transition(target);
+  }
+}
+
+private applyEvent(event: AgentEvent): void {
+  switch (event.type) {
+    case 'stream':
+      this._message.content += event.content;
+      break;
+
+    case 'thought':
+    case 'tool_call':
+    case 'tool_result':
+    case 'tool_error':
+    case 'cancelled':
+    case 'error':
+      this.appendEvent(event);
+      break;
+
+    case 'tool_progress':
+      this.appendEvent(event);
       this.handleAwaitingInput(event);
+      break;
+
+    case 'final':
+      this.appendEvent(event);
+      break;
+  }
+}
+
+private resolveTargetPhase(event: AgentEvent): MessagePhase | null {
+  switch (event.type) {
+    case 'start':
+    case 'stream':
+    case 'thought':
+    case 'tool_call':
+      if (this.phase === 'initialized') return 'streaming';
+      return null;
+
+    case 'tool_progress': {
+      const data = event.data as { status?: string } | undefined;
+      if (data?.status === 'awaiting_input') return 'awaiting_input';
+      if (this.phase === 'initialized') return 'streaming';
+      return null;
     }
+
+    case 'tool_result':
+    case 'tool_error':
+      if (this.phase === 'awaiting_input') return 'streaming';
+      if (this.phase === 'submitting') return 'streaming';
+      return null;
+
+    case 'final':
+      return 'final';
+
+    case 'cancelled':
+      return 'canceled';
+
+    case 'error':
+      return 'error';
+
+    default:
+      return null;
   }
 }
 ```
 
-## 3. 取消语义
-
-### 会话级取消 vs 消息级取消
-
-| 维度     | 会话级 `cancelConversation()`  | 消息级 `cancelMessage(id)`            |
-| -------- | ------------------------------ | ------------------------------------- |
-| 触发     | 切换会话 / 用户点击取消        | 多消息下单独取消某条                  |
-| SSE      | 关闭                           | 不关闭                                |
-| 后端 API | `POST /cancel/:conversationId` | `POST /cancel/:conversationId/:msgId` |
-| 其他消息 | 全部 cancel                    | 不影响                                |
-
-### 消息级取消流程
-
-```
-用户点击单条消息的取消按钮
-  → ConversationFSM.cancelMessage(msgId)
-  → POST /api/chat/cancel/:conversationId/:msgId
-  → 后端: MessageFSM.cancel() → ctx.abort()
-  → SSE 收到 cancelled 事件（带 messageId）
-  → 前端: 对应 MessageFSM → canceled
-  → ConversationFSM: 若还有其他活跃消息则保持 active
-```
-
-## 4. 整体架构
-
-### 数据流
-
-```
-Components
-    │
-    ▼
-ChatStore (薄层入口)
-    │ creates & holds
-    ▼
-ConversationFSM (连接生命周期)
-    │ holds Map<msgId, MessageFSM>
-    │ SSE event dispatch by messageId
-    ▼
-MessageFSM (消息生命周期 + 唯一数据变更入口)
-    │ 直接修改
-    ▼
-Message object (in conversationStore.messages)
-```
-
-### ChatStore 职责
-
-- 持有 `Map<conversationId, ConversationFSM>`
-- 监听 conversationId 变化，驱动 `deactivate` / `activate`
-- 暴露公共方法：`startChat()`, `cancelChat()`, `submitHumanInput()`, `activateConversation()`
-- 创建占位消息 → 创建 MessageFSM
-- `handleEvent` 仅作为安全守卫（检查 conversationId 是否匹配当前会话），不再直接修改消息内容
-
-### 消息内容修改
-
-MessageFSM 持有对 `conversationStore.messages[conversationId]` 中对应消息对象的引用，`handleEvent` → `applyEvent` 是修改 `content` 和 `meta.events` 的唯一路径。ChatStore 不再拥有 `appendMessageContent` 或 `appendMessageEvent` 方法。MobX 的 `makeAutoObservable` 递归观测嵌套对象，组件能自动响应变化。
-
-## 5. 组件变化
-
-| 组件                     | 变化                                                                        |
-| ------------------------ | --------------------------------------------------------------------------- |
-| `AssistantMessage.tsx`   | 统一从 `MessageFSM` 读取 `content`、`events`、`phase` 等                    |
-| `Chat/index.tsx`         | 从 `ConversationFSM` 读取会话状态，`MessageFSM.isTerminated` 判断 isLoading |
-| `UniversalEventRenderer` | 使用 `MessageFSM.toolCallTimeline`、`MessageFSM.thoughts`                   |
-| `HumanInputForm`         | 使用 `MessageFSM.awaitingInput`                                             |
-
-## 6. AgentEvent 增加 messageId
-
-所有 AgentEvent 变体增加 `messageId` 字段，用于前端事件路由：
+## 4. ChatStore 职责
 
 ```typescript
-export type AgentEvent =
-  | { type: 'start'; messageId: string; seq: number; at: number }
-  | {
-      type: 'thought';
-      messageId: string;
-      content: string;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'stream';
-      messageId: string;
-      content: string;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'tool_call';
-      messageId: string;
-      callId: string;
-      toolName: string;
-      toolArgs: Record<string, unknown>;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'tool_progress';
-      messageId: string;
-      callId: string;
-      toolName: string;
-      data: unknown;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'tool_result';
-      messageId: string;
-      callId: string;
-      toolName: string;
-      output: unknown;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'tool_error';
-      messageId: string;
-      callId: string;
-      toolName: string;
-      error: string;
-      seq: number;
-      at: number;
-    }
-  | { type: 'final'; messageId: string; seq: number; at: number }
-  | {
-      type: 'cancelled';
-      messageId: string;
-      reason: string;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'error';
-      messageId: string;
-      error: string;
-      seq: number;
-      at: number;
-    };
+class ChatStore {
+  // 会话管理
+  private sessions = new Map<string, ConversationFSM>();
+
+  acquireSession(conversationId: string): ConversationFSM;
+  getSession(conversationId: string): ConversationFSM | undefined;
+
+  // 核心流程
+  async startChat(params: StartChatRequest): Promise<void>;
+  async cancelChat(params: CancelChatRequest): Promise<void>;
+  async submitHumanInput(params: SubmitHumanInputRequest): Promise<void>;
+
+  // 重连恢复
+  async activateConversation(conversationId: string): Promise<void>;
+
+  // 监听会话切换，自动 activate/deactivate
+  private cleanupOldSessions(oldId: string): void;
+  private initializeMessageFSMs(conversationId: string): void;
+}
 ```
 
-## 7. 文件结构
+### startChat 流程
+
+```typescript
+async startChat(params) {
+  const conversationId = this.conversationStore.currentConversationId;
+  const session = this.acquireSession(conversationId);
+
+  // 1. 创建乐观消息
+  const tempAssistantId = generateId('msg');
+  this.addPendingMessages(conversationId, params.content, tempAssistantId);
+
+  // 2. 创建 MessageFSM
+  const messages = this.conversationStore.messages[conversationId];
+  const assistantMessage = messages[messages.length - 1];
+  session.addMessageFSM(tempAssistantId, assistantMessage);
+
+  // 3. 建立 SSE
+  await session.connect();
+
+  // 4. 调用 API 启动后端 agent
+  const res = await this.apiStartChat(params);
+
+  // 5. 替换临时 ID
+  if (res.messageId) {
+    this.replaceMessageId(conversationId, tempAssistantId, res.messageId);
+    session.removeMessageFSM(tempAssistantId);
+    const updatedMessage = /* 获取更新后的消息 */;
+    session.addMessageFSM(res.messageId, updatedMessage);
+  }
+}
+```
+
+### activateConversation 流程（重连）
+
+```typescript
+async activateConversation(conversationId: string): Promise<void> {
+  // 1. 查询后端状态
+  const state = await this.getSessionState({ conversationId });
+  if (!state || state.phase === 'done') return;
+
+  // 2. 获取会话，初始化所有消息的 FSM
+  const session = this.acquireSession(conversationId);
+  this.initializeMessageFSMs(conversationId);  // 从 DB 加载，fromMessage 重放历史事件
+
+  // 3. 建立 SSE，后端会重放运行时事件
+  try {
+    await session.connect();
+  } catch {
+    // 连接失败，刷新消息列表
+    await this.conversationStore.getMessagesByConversationId({ id: conversationId });
+  }
+}
+```
+
+## 5. 组件使用
+
+| 组件                     | 数据来源                                  |
+| ------------------------ | ----------------------------------------- |
+| `AssistantMessage.tsx`   | `MessageFSM.content`, `MessageFSM.phase`  |
+| `Chat/index.tsx`         | `ConversationFSM.phase`                   |
+| `UniversalEventRenderer` | `MessageFSM.toolCallTimeline`, `thoughts` |
+| `HumanInputForm`         | `MessageFSM.awaitingInput`                |
+| `CancelButton`           | `MessageFSM.isCancellable`                |
+
+## 6. 文件结构
 
 ```
-src/shared/utils/
-└── StateMachine.ts             # 通用同步状态机
-
 src/client/store/modules/
-├── chat.ts                    # ChatStore (薄层入口)
-├── ConversationFSM.ts         # 会话层状态机
-└── MessageFSM.ts              # 消息层状态机
+├── chat.ts                 # ChatStore（会话管理、流程编排）
+├── ConversationFSM.ts      # 会话层状态机
+├── MessageFSM.ts           # 消息层状态机
+└── conversation.ts         # ConversationStore（消息数据持久化）
+
+src/shared/utils/
+└── StateMachine.ts         # 泛型同步状态机（前后端共用）
 ```

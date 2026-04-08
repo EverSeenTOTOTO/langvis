@@ -60,6 +60,8 @@ const Emails: React.FC = () => {
   const deleteApi = useAsyncFn(emailStore.deleteEmail.bind(emailStore));
   const archiveApi = useAsyncFn(emailStore.archiveEmail.bind(emailStore));
 
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
   const { dataSource, pagination, loading, search, reset, refresh } =
     usePagination<SearchParams, EmailListItem>(emailStore, {
       defaultPageSize: 10,
@@ -93,14 +95,20 @@ const Emails: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    const success = await deleteApi[1]({ id });
-    if (success) {
-      refresh();
-      message.success(settingStore.tr('Email deleted successfully'));
+    setActionLoadingId(`delete:${id}`);
+    try {
+      const success = await deleteApi[1]({ id });
+      if (success) {
+        refresh();
+        message.success(settingStore.tr('Email deleted successfully'));
+      }
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
   const handleArchive = async (email: EmailListItem) => {
+    setActionLoadingId(`archive:${email.id}`);
     try {
       const result = await archiveApi[1]({ id: email.id });
       if (result) {
@@ -109,6 +117,8 @@ const Emails: React.FC = () => {
       }
     } catch {
       message.error(settingStore.tr('Archive failed'));
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -228,7 +238,12 @@ const Emails: React.FC = () => {
               okText={settingStore.tr('Yes')}
               cancelText={settingStore.tr('No')}
             >
-              <Button type="link" size="small" icon={<InboxOutlined />}>
+              <Button
+                type="link"
+                size="small"
+                icon={<InboxOutlined />}
+                loading={actionLoadingId === `archive:${record.id}`}
+              >
                 {settingStore.tr('Archive')}
               </Button>
             </Popconfirm>
@@ -237,7 +252,7 @@ const Emails: React.FC = () => {
               type="link"
               size="small"
               icon={<InboxOutlined />}
-              loading={archiveApi[0].loading}
+              loading={actionLoadingId === `archive:${record.id}`}
               onClick={() => handleArchive(record)}
             >
               {settingStore.tr('Archive')}
@@ -249,7 +264,13 @@ const Emails: React.FC = () => {
             okText={settingStore.tr('Yes')}
             cancelText={settingStore.tr('No')}
           >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              loading={actionLoadingId === `delete:${record.id}`}
+            >
               {settingStore.tr('Delete')}
             </Button>
           </Popconfirm>

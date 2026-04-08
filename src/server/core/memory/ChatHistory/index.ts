@@ -36,6 +36,7 @@ export default class ChatHistoryMemory extends Memory {
   async initialize(input: InitializeInput): Promise<void> {
     const history = await this.summarize();
     const isNewConversation = history.length === 0;
+    // Use current time as base, with 1ms increment per message to ensure correct ordering
     const baseTime = Date.now();
     const messages: Message[] = [];
 

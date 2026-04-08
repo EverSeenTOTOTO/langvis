@@ -72,12 +72,35 @@ export class SessionFSM {
   }
 
   bindConnection(connection: SSEConnection): void {
+    // 1. Close old connection if exists
     if (this.sseConnection) {
       this.sseConnection.send({ type: 'session_replaced' });
       this.sseConnection.close();
       logger.info(`Kicked old SSE connection for ${this.conversationId}`);
     }
+
+    // 2. Replay accumulated events from all non-terminal MessageFSMs
+    for (const [messageId, messageFSM] of this.messageFSMs) {
+      if (!messageFSM.isTerminated) {
+        const events = messageFSM.pendingMessage.events;
+        for (const event of events) {
+          connection.send(event);
+        }
+        logger.info(
+          `Replayed ${events.length} events for message ${messageId}`,
+          { sessionId: this.conversationId, messageId },
+        );
+      }
+    }
+
+    // 3. Bind new connection
     this.sseConnection = connection;
+
+    // 4. Send handshake to signal replay completion
+    connection.handshake();
+    logger.info(`SSE connection established with event replay`, {
+      sessionId: this.conversationId,
+    });
   }
 
   addMessageFSM(messageId: string, pendingMessage: PendingMessage): MessageFSM {

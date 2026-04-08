@@ -4,8 +4,7 @@ import { StateMachine } from '@/shared/utils/StateMachine';
 import { makeAutoObservable } from 'mobx';
 
 const DEFAULT_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
-  placeholder: ['loading', 'error'],
-  loading: ['streaming', 'canceling', 'error'],
+  initialized: ['streaming', 'canceling', 'error'],
   streaming: [
     'streaming',
     'awaiting_input',
@@ -15,7 +14,7 @@ const DEFAULT_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
     'canceling',
   ],
   awaiting_input: ['submitting', 'streaming', 'canceling', 'canceled', 'error'],
-  submitting: ['streaming', 'error', 'canceled'],
+  submitting: ['streaming', 'error', 'canceled', 'canceling'],
   canceling: ['canceled', 'error'],
   final: [],
   canceled: [],
@@ -66,10 +65,10 @@ export class MessageFSM {
   ) {
     this._messageId = messageId;
     this._message = message;
-    this._phase = 'placeholder';
+    this._phase = 'initialized';
 
     this.sm = new StateMachine({
-      initialPhase: 'placeholder',
+      initialPhase: 'initialized',
       transitions: DEFAULT_TRANSITIONS,
       onTransition: (from, to) => {
         this._phase = to;
@@ -85,8 +84,21 @@ export class MessageFSM {
   // === Factory method for historical messages ===
 
   static fromMessage(msg: Message, options?: MessageFSMOptions): MessageFSM {
+    // Save events before creating FSM (MobX may wrap the message object)
+    const events = msg.meta?.events ? [...msg.meta.events] : [];
+
     const fsm = new MessageFSM(msg.id, msg, options);
-    fsm.replayEvents(msg.meta?.events ?? []);
+
+    // Clear events on FSM's internal message (may be a MobX proxy)
+    if (fsm._message.meta?.events) {
+      fsm._message.meta.events = [];
+    }
+
+    // Replay events to restore state, triggering onTransition callbacks
+    // so ConversationFSM can sync aggregate state (e.g., detect awaiting_input)
+    for (const event of events) {
+      fsm.handleEvent(event);
+    }
     return fsm;
   }
 
@@ -126,12 +138,8 @@ export class MessageFSM {
     return TERMINATED_PHASES.includes(this.phase);
   }
 
-  get isPlaceholder(): boolean {
-    return this.phase === 'placeholder';
-  }
-
-  get isLoading(): boolean {
-    return this.phase === 'loading';
+  get isInitialized(): boolean {
+    return this.phase === 'initialized';
   }
 
   get isStreaming(): boolean {
@@ -156,7 +164,7 @@ export class MessageFSM {
   }
 
   get isCancellable(): boolean {
-    return ['loading', 'streaming', 'awaiting_input'].includes(this.phase);
+    return ['streaming', 'awaiting_input'].includes(this.phase);
   }
 
   // === Content rendering state (derived from events) ===
@@ -222,7 +230,7 @@ export class MessageFSM {
   // === Actions ===
 
   start(): boolean {
-    return this.sm.transition('loading');
+    return this.sm.transition('streaming');
   }
 
   cancel(): void {
@@ -248,25 +256,6 @@ export class MessageFSM {
   }
 
   // === Private methods ===
-
-  private replayEvents(events: AgentEvent[]): void {
-    if (events.length === 0) return;
-
-    this._phase = 'loading';
-    this.sm.silentTransition('loading');
-
-    for (const event of events) {
-      const target = this.resolveTargetPhase(event);
-      if (target) {
-        this._phase = target;
-        this.sm.silentTransition(target);
-      }
-
-      if (event.type === 'tool_progress') {
-        this.handleAwaitingInput(event);
-      }
-    }
-  }
 
   private appendEvent(event: AgentEvent): void {
     if (!this._message.meta) {
@@ -349,7 +338,7 @@ export class MessageFSM {
       case 'stream':
       case 'thought':
       case 'tool_call':
-        if (phase === 'placeholder' || phase === 'loading') return 'streaming';
+        if (phase === 'initialized') return 'streaming';
         return null;
 
       case 'tool_progress': {
@@ -361,7 +350,7 @@ export class MessageFSM {
           const nestedAwaiting = this.extractAwaitingInput(data.event);
           if (nestedAwaiting) return 'awaiting_input';
         }
-        if (phase === 'placeholder' || phase === 'loading') return 'streaming';
+        if (phase === 'initialized') return 'streaming';
         return null;
       }
 

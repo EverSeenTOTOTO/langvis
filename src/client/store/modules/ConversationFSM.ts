@@ -138,7 +138,7 @@ export class ConversationFSM {
     return (_from: MessagePhase, to: MessagePhase) => {
       if (TERMINAL_MESSAGE_PHASES.includes(to)) {
         this.onMessageTerminal();
-      } else if (to === 'loading' || to === 'streaming') {
+      } else if (to === 'streaming' || to === 'awaiting_input') {
         this.onMessageActive();
       }
     };
@@ -218,9 +218,9 @@ export class ConversationFSM {
           if (msg.type === 'connected') {
             this.sm.transition('connected');
             // Check if any MessageFSM is still active (e.g., awaiting_input)
-            // Exclude placeholder messages that never started
+            // Exclude initialized messages that haven't started yet
             const hasActive = Array.from(this.messageFSMs.values()).some(
-              fsm => !fsm.isTerminated && !fsm.isPlaceholder,
+              fsm => !fsm.isTerminated && !fsm.isInitialized,
             );
             if (hasActive) {
               this.sm.transition('active');
