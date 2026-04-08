@@ -46,7 +46,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
       key={msg.id}
       placement="start"
       content={
-        messageFSM.isLoading ? (
+        messageFSM.isInitialized ? (
           <Typography.Text type="secondary" italic>
             <LoadingOutlined style={{ marginInlineEnd: 4 }} />
             Thinking...
@@ -56,7 +56,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
         )
       }
       footer={<MessageFooter content={messageFSM.content} />}
-      loading={messageFSM.isPlaceholder}
+      loading={messageFSM.isInitialized}
       avatar={<Avatar icon={<RobotOutlined />} />}
       styles={{
         content: {

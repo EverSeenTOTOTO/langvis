@@ -31,6 +31,7 @@ describe('SessionFSM', () => {
     send: vi.fn().mockReturnValue(true),
     close: vi.fn(),
     isWritable: true,
+    handshake: vi.fn(),
   });
 
   beforeEach(() => {

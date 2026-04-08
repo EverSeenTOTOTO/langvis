@@ -159,7 +159,7 @@ export class ChatStore {
       tempAssistantId,
     );
 
-    // Create MessageFSM for the placeholder assistant message
+    // Create MessageFSM for the initialized assistant message
     const messages = this.conversationStore.messages[conversationId];
     const assistantMessage = messages?.[messages.length - 1];
     if (assistantMessage && assistantMessage.id === tempAssistantId) {

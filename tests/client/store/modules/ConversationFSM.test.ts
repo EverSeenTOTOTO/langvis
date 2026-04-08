@@ -244,9 +244,12 @@ describe('ConversationFSM', () => {
     it('should call cancel on all cancelable MessageFSMs when active', async () => {
       const message = createMessage('msg-1');
       const msgFsm = fsm.addMessageFSM('msg-1', message);
-      msgFsm['sm'].transition('loading');
-
-      fsm['sm'].transition('active');
+      msgFsm.handleEvent({
+        type: 'start',
+        messageId: 'msg-1',
+        seq: 1,
+        at: Date.now(),
+      });
 
       const sendCancelApi = vi.fn().mockResolvedValue(undefined);
       await fsm.cancelConversation(sendCancelApi);
@@ -258,9 +261,12 @@ describe('ConversationFSM', () => {
     it('should transition to canceled on 404 error', async () => {
       const message = createMessage('msg-1');
       const msgFsm = fsm.addMessageFSM('msg-1', message);
-      msgFsm['sm'].transition('loading');
-
-      fsm['sm'].transition('active');
+      msgFsm.handleEvent({
+        type: 'start',
+        messageId: 'msg-1',
+        seq: 1,
+        at: Date.now(),
+      });
 
       const sendCancelApi = vi
         .fn()
@@ -273,9 +279,12 @@ describe('ConversationFSM', () => {
     it('should transition to error on non-404 error', async () => {
       const message = createMessage('msg-1');
       const msgFsm = fsm.addMessageFSM('msg-1', message);
-      msgFsm['sm'].transition('loading');
-
-      fsm['sm'].transition('active');
+      msgFsm.handleEvent({
+        type: 'start',
+        messageId: 'msg-1',
+        seq: 1,
+        at: Date.now(),
+      });
 
       const sendCancelApi = vi
         .fn()
@@ -298,7 +307,12 @@ describe('ConversationFSM', () => {
       fsm.addMessageFSM('msg-1', message);
 
       const msgFsm = fsm.getMessageFSM('msg-1')!;
-      msgFsm['sm'].transition('loading');
+      msgFsm.handleEvent({
+        type: 'start',
+        messageId: 'msg-1',
+        seq: 1,
+        at: Date.now(),
+      });
 
       expect(fsm.phase).toBe('active');
     });
@@ -308,11 +322,20 @@ describe('ConversationFSM', () => {
       fsm.addMessageFSM('msg-1', message);
 
       const msgFsm = fsm.getMessageFSM('msg-1')!;
-      msgFsm['sm'].transition('loading');
+      msgFsm.handleEvent({
+        type: 'start',
+        messageId: 'msg-1',
+        seq: 1,
+        at: Date.now(),
+      });
       expect(fsm.phase).toBe('active');
 
-      msgFsm['sm'].transition('streaming');
-      msgFsm['sm'].transition('final');
+      msgFsm.handleEvent({
+        type: 'final',
+        messageId: 'msg-1',
+        seq: 2,
+        at: Date.now(),
+      });
       expect(fsm.phase).toBe('connected');
     });
   });
@@ -492,8 +515,8 @@ describe('ConversationFSM', () => {
       const msgFsm1 = fsm.getMessageFSM('msg-1')!;
       const msgFsm2 = fsm.getMessageFSM('msg-2')!;
 
-      msgFsm1['sm'].transition('loading');
-      msgFsm2['sm'].transition('loading');
+      msgFsm1['sm'].transition('initialized');
+      msgFsm2['sm'].transition('initialized');
 
       const handleEventSpy1 = vi.spyOn(msgFsm1, 'handleEvent');
       const handleEventSpy2 = vi.spyOn(msgFsm2, 'handleEvent');
@@ -520,7 +543,7 @@ describe('ConversationFSM', () => {
       fsm.addMessageFSM('msg-1', message1);
 
       const msgFsm1 = fsm.getMessageFSM('msg-1')!;
-      msgFsm1['sm'].transition('loading');
+      msgFsm1['sm'].transition('initialized');
 
       // Event without messageId
       const event: AgentEvent = {

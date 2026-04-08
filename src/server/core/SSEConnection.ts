@@ -27,8 +27,15 @@ export class SSEConnection {
       }
     }, HEARTBEAT_INTERVAL_MS);
 
-    // Handshake: send connected event to confirm SSE is ready
-    this.send({ type: 'connected', conversationId });
+    // Note: connected event is sent by SessionFSM.bindConnection after event replay
+  }
+
+  /**
+   * Send handshake event after all replayed events.
+   * This signals to the client that event replay is complete.
+   */
+  handshake(): void {
+    this.send({ type: 'connected', conversationId: this.conversationId });
   }
 
   send(message: SSEMessage): boolean {

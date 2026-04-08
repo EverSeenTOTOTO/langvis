@@ -52,4 +52,8 @@ export class PendingMessage {
   toMessage(): Message {
     return this.message;
   }
+
+  get events(): AgentEvent[] {
+    return this.message.meta?.events ?? [];
+  }
 }

@@ -46,7 +46,7 @@ export interface MessageFSMOptions {
 
 export class MessageFSM {
   readonly messageId: string;
-  private pendingMessage: PendingMessage;
+  readonly pendingMessage: PendingMessage;
   readonly executionContext: ExecutionContext;
   private sm: StateMachine<MessagePhase>;
 

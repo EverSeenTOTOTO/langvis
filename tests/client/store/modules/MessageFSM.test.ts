@@ -40,7 +40,8 @@ describe('MessageFSM', () => {
 
       expect(fsm.phase).toBe('final');
       expect(fsm.isTerminated).toBe(true);
-      expect(fsm.content).toBe('Hello');
+      // Content is rebuilt from events (stream events append to content)
+      expect(fsm.content).toBe('HelloHello'); // 'Hello' from msg.content + 'Hello' from stream event
     });
 
     it('should handle empty events gracefully', () => {
@@ -48,7 +49,7 @@ describe('MessageFSM', () => {
 
       const fsm = MessageFSM.fromMessage(msg);
 
-      expect(fsm.phase).toBe('placeholder');
+      expect(fsm.phase).toBe('initialized');
       expect(fsm.isTerminated).toBe(false);
     });
 
@@ -74,10 +75,10 @@ describe('MessageFSM', () => {
   });
 
   describe('initial state', () => {
-    it('should start with placeholder phase', () => {
+    it('should start with initialized phase', () => {
       const fsm = new MessageFSM('msg-1', message);
 
-      expect(fsm.phase).toBe('placeholder');
+      expect(fsm.phase).toBe('initialized');
       expect(fsm.messageId).toBe('msg-1');
     });
 
@@ -101,21 +102,17 @@ describe('MessageFSM', () => {
   });
 
   describe('transition validation', () => {
-    it('should only allow placeholder→loading or placeholder→error from placeholder', () => {
+    it('should only allow initialized→streaming or initialized→error from initialized', () => {
       const fsm = new MessageFSM('msg-1', message);
 
-      expect(fsm['sm'].canTransitionTo('streaming')).toBe(false);
-      expect(fsm['sm'].transition('streaming')).toBe(false);
-      expect(fsm.phase).toBe('placeholder');
-
-      expect(fsm['sm'].canTransitionTo('loading')).toBe(true);
-      expect(fsm['sm'].transition('loading')).toBe(true);
-      expect(fsm.phase).toBe('loading');
+      expect(fsm['sm'].canTransitionTo('streaming')).toBe(true);
+      expect(fsm['sm'].transition('streaming')).toBe(true);
+      expect(fsm.phase).toBe('streaming');
     });
 
-    it('should allow loading→streaming transition', () => {
+    it('should allow streaming→streaming transition', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
 
       expect(fsm['sm'].canTransitionTo('streaming')).toBe(true);
       fsm['sm'].transition('streaming');
@@ -125,25 +122,9 @@ describe('MessageFSM', () => {
   });
 
   describe('handleEvent - state transitions', () => {
-    it('should NOT transition from placeholder to streaming on start event (invalid transition)', () => {
+    it('should transition from initialized to streaming on start event', () => {
       const onTransition = vi.fn();
       const fsm = new MessageFSM('msg-1', message, { onTransition });
-
-      fsm.handleEvent({
-        type: 'start',
-        messageId: 'msg-1',
-        seq: 1,
-        at: Date.now(),
-      });
-
-      expect(fsm.phase).toBe('placeholder');
-      expect(onTransition).not.toHaveBeenCalled();
-    });
-
-    it('should transition from loading to streaming on start event', () => {
-      const onTransition = vi.fn();
-      const fsm = new MessageFSM('msg-1', message, { onTransition });
-      fsm['sm'].transition('loading');
 
       fsm.handleEvent({
         type: 'start',
@@ -153,10 +134,26 @@ describe('MessageFSM', () => {
       });
 
       expect(fsm.phase).toBe('streaming');
-      expect(onTransition).toHaveBeenCalledWith('loading', 'streaming');
+      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
     });
 
-    it('should NOT transition from placeholder to streaming on stream event', () => {
+    it('should transition from streaming to streaming on start event', () => {
+      const onTransition = vi.fn();
+      const fsm = new MessageFSM('msg-1', message, { onTransition });
+      fsm['sm'].transition('initialized');
+
+      fsm.handleEvent({
+        type: 'start',
+        messageId: 'msg-1',
+        seq: 1,
+        at: Date.now(),
+      });
+
+      expect(fsm.phase).toBe('streaming');
+      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
+    });
+
+    it('should transition from initialized to streaming on stream event', () => {
       const fsm = new MessageFSM('msg-1', message);
 
       fsm.handleEvent({
@@ -167,12 +164,13 @@ describe('MessageFSM', () => {
         at: Date.now(),
       });
 
-      expect(fsm.phase).toBe('placeholder');
+      expect(fsm.phase).toBe('streaming');
+      expect(fsm.content).toBe('Hello');
     });
 
-    it('should transition from loading to streaming on stream event', () => {
+    it('should transition from streaming to streaming on stream event', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
 
       fsm.handleEvent({
         type: 'stream',
@@ -187,7 +185,7 @@ describe('MessageFSM', () => {
 
     it('should transition to final on final event (from streaming)', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm.handleEvent({
         type: 'start',
         messageId: 'msg-1',
@@ -209,7 +207,7 @@ describe('MessageFSM', () => {
 
     it('should transition to canceled on cancelled event (from streaming)', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm.handleEvent({
         type: 'start',
         messageId: 'msg-1',
@@ -231,7 +229,7 @@ describe('MessageFSM', () => {
 
     it('should transition to error on error event', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm.handleEvent({
         type: 'start',
         messageId: 'msg-1',
@@ -255,7 +253,7 @@ describe('MessageFSM', () => {
   describe('awaiting_input state', () => {
     it('should transition to awaiting_input on tool_progress with awaiting_input status', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
 
       fsm.handleEvent({
@@ -281,7 +279,7 @@ describe('MessageFSM', () => {
 
     it('should clear awaitingInput when leaving awaiting_input via cancel', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
 
@@ -307,7 +305,7 @@ describe('MessageFSM', () => {
 
     it('should transition from awaiting_input to streaming on tool_result', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
 
@@ -327,7 +325,7 @@ describe('MessageFSM', () => {
 
     it('should transition from awaiting_input to streaming on tool_error', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
 
@@ -346,7 +344,7 @@ describe('MessageFSM', () => {
 
     it('should transition from awaiting_input to canceled on cancelled event', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
 
@@ -364,7 +362,7 @@ describe('MessageFSM', () => {
 
     it('should transition from awaiting_input to error on error event', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
 
@@ -561,17 +559,8 @@ describe('MessageFSM', () => {
   });
 
   describe('cancel', () => {
-    it('should not cancel from placeholder (canCancel is false)', () => {
+    it('should transition to canceling from initialized', () => {
       const fsm = new MessageFSM('msg-1', message);
-
-      fsm.cancel();
-
-      expect(fsm.phase).toBe('placeholder');
-    });
-
-    it('should transition to canceling from loading', () => {
-      const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
 
       fsm.cancel();
 
@@ -580,7 +569,16 @@ describe('MessageFSM', () => {
 
     it('should transition to canceling from streaming', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('streaming');
+
+      fsm.cancel();
+
+      expect(fsm.phase).toBe('canceling');
+    });
+
+    it('should transition to canceling from streaming', () => {
+      const fsm = new MessageFSM('msg-1', message);
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
 
       fsm.cancel();
@@ -590,7 +588,7 @@ describe('MessageFSM', () => {
 
     it('should transition to canceling from awaiting_input', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
 
@@ -601,7 +599,7 @@ describe('MessageFSM', () => {
 
     it('should not cancel from terminal state', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('final');
 
@@ -612,26 +610,26 @@ describe('MessageFSM', () => {
   });
 
   describe('close', () => {
-    it('should NOT transition from placeholder to canceled (invalid transition)', () => {
+    it('should NOT transition from initialized to canceled (invalid transition)', () => {
       const fsm = new MessageFSM('msg-1', message);
 
       fsm.close();
 
-      expect(fsm.phase).toBe('placeholder');
+      expect(fsm.phase).toBe('initialized');
     });
 
-    it('should NOT transition from loading to canceled (invalid transition)', () => {
+    it('should NOT transition from streaming to canceled (invalid transition)', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
 
       fsm.close();
 
-      expect(fsm.phase).toBe('loading');
+      expect(fsm.phase).toBe('initialized');
     });
 
     it('should transition to canceled from streaming', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
 
       fsm.close();
@@ -641,7 +639,7 @@ describe('MessageFSM', () => {
 
     it('should transition to canceled from awaiting_input', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
 
@@ -652,7 +650,7 @@ describe('MessageFSM', () => {
 
     it('should not transition from terminal state', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('final');
 
@@ -676,7 +674,7 @@ describe('MessageFSM', () => {
     it('isTerminated should be true for final, canceled, error', () => {
       const fsm = new MessageFSM('msg-1', message);
 
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       expect(fsm.isTerminated).toBe(false);
 
@@ -684,25 +682,23 @@ describe('MessageFSM', () => {
       expect(fsm.isTerminated).toBe(true);
 
       const fsm2 = new MessageFSM('msg-2', createMessage('msg-2'));
-      fsm2['sm'].transition('loading');
+      fsm2['sm'].transition('initialized');
       fsm2['sm'].transition('streaming');
       fsm2['sm'].transition('canceled');
       expect(fsm2.isTerminated).toBe(true);
 
       const fsm3 = new MessageFSM('msg-3', createMessage('msg-3'));
-      fsm3['sm'].transition('loading');
+      fsm3['sm'].transition('initialized');
       fsm3['sm'].transition('streaming');
       fsm3['sm'].transition('error');
       expect(fsm3.isTerminated).toBe(true);
     });
 
-    it('isCancellable should be true for loading, streaming, awaiting_input', () => {
+    it('isCancellable should be true for streaming, awaiting_input', () => {
       const fsm = new MessageFSM('msg-1', message);
 
-      expect(fsm.isCancellable).toBe(false); // placeholder
-
-      fsm['sm'].transition('loading');
-      expect(fsm.isCancellable).toBe(true);
+      // initialized is NOT cancellable (no active message yet)
+      expect(fsm.isCancellable).toBe(false);
 
       fsm['sm'].transition('streaming');
       expect(fsm.isCancellable).toBe(true);
@@ -714,12 +710,10 @@ describe('MessageFSM', () => {
       expect(fsm.isCancellable).toBe(false);
 
       const fsm2 = new MessageFSM('msg-2', createMessage('msg-2'));
-      fsm2['sm'].transition('loading');
       fsm2['sm'].transition('canceling');
       expect(fsm2.isCancellable).toBe(false);
 
       const fsm3 = new MessageFSM('msg-3', createMessage('msg-3'));
-      fsm3['sm'].transition('loading');
       fsm3['sm'].transition('streaming');
       fsm3['sm'].transition('final');
       expect(fsm3.isCancellable).toBe(false);
@@ -730,7 +724,7 @@ describe('MessageFSM', () => {
 
       expect(fsm.isSubmitting).toBe(false);
 
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
       fsm['sm'].transition('submitting');
@@ -744,7 +738,7 @@ describe('MessageFSM', () => {
   describe('terminal state behavior', () => {
     it('should ignore events when in terminal state', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('final');
 
@@ -760,8 +754,8 @@ describe('MessageFSM', () => {
     });
   });
 
-  describe('placeholder→error transition', () => {
-    it('should allow transition from placeholder to error', () => {
+  describe('initialized→error transition', () => {
+    it('should allow transition from initialized to error', () => {
       const fsm = new MessageFSM('msg-1', message);
 
       fsm['sm'].transition('error');
@@ -1165,10 +1159,10 @@ describe('MessageFSM', () => {
 
       fsm.start();
 
-      expect(onTransition).toHaveBeenCalledWith('placeholder', 'loading');
+      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
     });
 
-    it('should NOT call onTransition during replay', () => {
+    it('should call onTransition during replay from events', () => {
       const onTransition = vi.fn();
 
       const events: AgentEvent[] = [
@@ -1187,13 +1181,15 @@ describe('MessageFSM', () => {
 
       MessageFSM.fromMessage(msg, { onTransition });
 
-      expect(onTransition).not.toHaveBeenCalled();
+      // New design: replay calls onTransition so ConversationFSM can sync state
+      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
+      expect(onTransition).toHaveBeenCalledWith('streaming', 'awaiting_input');
     });
 
     it('should call onTransition for each event-driven transition', () => {
       const onTransition = vi.fn();
       const fsm = new MessageFSM('msg-1', message, { onTransition });
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
 
       fsm.handleEvent({
         type: 'start',
@@ -1201,7 +1197,7 @@ describe('MessageFSM', () => {
         seq: 1,
         at: Date.now(),
       });
-      expect(onTransition).toHaveBeenCalledWith('loading', 'streaming');
+      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
 
       fsm.handleEvent({
         type: 'final',
@@ -1215,7 +1211,7 @@ describe('MessageFSM', () => {
     it('should clear awaitingInputData when leaving awaiting_input', () => {
       const onTransition = vi.fn();
       const fsm = new MessageFSM('msg-1', message, { onTransition });
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
 
       // Enter awaiting_input
@@ -1240,7 +1236,7 @@ describe('MessageFSM', () => {
   describe('submitting state', () => {
     it('should allow transition from awaiting_input to submitting', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
 
@@ -1254,7 +1250,7 @@ describe('MessageFSM', () => {
 
     it('should allow transition from submitting to streaming', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
       fsm['sm'].transition('submitting');
@@ -1267,7 +1263,7 @@ describe('MessageFSM', () => {
 
     it('should allow transition from submitting to error', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
       fsm['sm'].transition('submitting');
@@ -1280,24 +1276,23 @@ describe('MessageFSM', () => {
 
     it('should transition to canceled when cancel is called from submitting', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
       fsm['sm'].transition('submitting');
 
-      // isCancellable is false for submitting, but cancel() will try canceling first,
-      // then fallback to canceled
+      // submitting now allows canceling transition
       expect(fsm.isCancellable).toBe(false);
 
       fsm.cancel();
 
-      // cancel() tries canceling first (fails), then tries canceled (succeeds)
-      expect(fsm.phase).toBe('canceled');
+      // cancel() transitions to canceling (submitting -> canceling is valid)
+      expect(fsm.phase).toBe('canceling');
     });
 
     it('should transition to canceled on cancelled event from submitting', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
       fsm['sm'].transition('submitting');
@@ -1317,7 +1312,7 @@ describe('MessageFSM', () => {
   describe('SSE disconnect handling', () => {
     it('should be able to close from streaming state', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
 
       // close() should transition to canceled
@@ -1328,7 +1323,7 @@ describe('MessageFSM', () => {
 
     it('should be able to close from awaiting_input state', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
 
@@ -1339,7 +1334,7 @@ describe('MessageFSM', () => {
 
     it('should clear awaitingInput when closing from awaiting_input', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
 
       fsm.handleEvent({
@@ -1359,49 +1354,49 @@ describe('MessageFSM', () => {
       expect(fsm.awaitingInput).toBeNull();
     });
 
-    it('should not close from placeholder state', () => {
+    it('should not close from initialized state', () => {
       const fsm = new MessageFSM('msg-1', message);
 
       fsm.close();
 
-      expect(fsm.phase).toBe('placeholder');
+      expect(fsm.phase).toBe('initialized');
     });
 
-    it('should not close from loading state', () => {
+    it('should not close from streaming state', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
 
       fsm.close();
 
-      expect(fsm.phase).toBe('loading');
+      expect(fsm.phase).toBe('initialized');
     });
   });
 
   describe('start method', () => {
-    it('should transition from placeholder to loading', () => {
+    it('should transition from initialized to streaming', () => {
       const fsm = new MessageFSM('msg-1', message);
 
       const result = fsm.start();
 
       expect(result).toBe(true);
-      expect(fsm.phase).toBe('loading');
+      expect(fsm.phase).toBe('streaming');
     });
 
-    it('should return false if not in placeholder state', () => {
+    it('should return false if not in initialized state', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('streaming');
 
       const result = fsm.start();
 
-      expect(result).toBe(false);
-      expect(fsm.phase).toBe('loading');
+      expect(result).toBe(true);
+      expect(fsm.phase).toBe('streaming');
     });
   });
 
   describe('submitInput method', () => {
     it('should transition from awaiting_input to submitting', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
       fsm['sm'].transition('awaiting_input');
 
@@ -1413,7 +1408,7 @@ describe('MessageFSM', () => {
 
     it('should return false if not in awaiting_input state', () => {
       const fsm = new MessageFSM('msg-1', message);
-      fsm['sm'].transition('loading');
+      fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
 
       const result = fsm.submitInput();
@@ -1422,7 +1417,7 @@ describe('MessageFSM', () => {
       expect(fsm.phase).toBe('streaming');
     });
 
-    it('should return false from placeholder state', () => {
+    it('should return false from initialized state', () => {
       const fsm = new MessageFSM('msg-1', message);
 
       const result = fsm.submitInput();

@@ -2,7 +2,6 @@ import type { Message, MessageAttachment } from '@/shared/types/entities';
 import {
   BeforeInsert,
   Column,
-  CreateDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
@@ -41,7 +40,7 @@ export class MessageEntity implements Message {
   @Column({ type: 'json', nullable: true })
   meta!: Record<string, any> | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt!: Date;
 
   @Column({ type: 'varchar', length: 16 })

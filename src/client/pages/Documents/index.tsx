@@ -96,6 +96,8 @@ const Documents: React.FC = () => {
     documentStore.deleteDocument.bind(documentStore),
   );
 
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const { dataSource, pagination, loading, search, reset, refresh } =
     usePagination<SearchParams, DocumentListItem>(documentStore, {
       defaultPageSize: 10,
@@ -128,10 +130,15 @@ const Documents: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    const success = await deleteApi[1]({ id });
-    if (success) {
-      refresh();
-      message.success(settingStore.tr('Document deleted successfully'));
+    setDeletingId(id);
+    try {
+      const success = await deleteApi[1]({ id });
+      if (success) {
+        refresh();
+        message.success(settingStore.tr('Document deleted successfully'));
+      }
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -244,7 +251,13 @@ const Documents: React.FC = () => {
             okText={settingStore.tr('Yes')}
             cancelText={settingStore.tr('No')}
           >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              loading={deletingId === record.id}
+            >
               {settingStore.tr('Delete')}
             </Button>
           </Popconfirm>

@@ -76,6 +76,7 @@ describe('ChatService', () => {
         },
         send: vi.fn().mockReturnValue(true),
         close: vi.fn(),
+        handshake: vi.fn(),
       };
       session1!.bindConnection(mockConn as any);
 
@@ -137,6 +138,7 @@ describe('ChatService', () => {
           return true;
         },
         send: vi.fn().mockReturnValue(true),
+        handshake: vi.fn(),
       };
       session!.bindConnection(mockConn as any);
 
