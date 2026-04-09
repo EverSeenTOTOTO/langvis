@@ -153,9 +153,7 @@ export default class ChatController {
     // Verify user is authenticated
     await this.authService.getUserId(req);
 
-    // Set conversationId, messageId and traceId, then freeze TraceContext
-    // Note: messageId is set after we create the assistant message
-    TraceContext.update({ conversationId, traceId: conversationId });
+    TraceContext.update({ conversationId, userId: conversation.userId });
 
     const memory = await this.chatService.buildMemory(
       agent,

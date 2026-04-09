@@ -35,6 +35,37 @@
       border-radius: 4px;
     }
 
+    &-streaming-output {
+      max-height: 200px;
+      padding: 8px;
+      margin-block-start: 8px;
+      overflow: auto;
+      font-family: monospace;
+      font-size: 12px;
+      word-break: break-all;
+      white-space: pre-wrap;
+      background: var(--ant-color-bg-layout);
+      border-radius: 4px;
+
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+
+        &.stream-stderr {
+          color: var(--ant-color-error);
+        }
+      }
+
+      .stream-cursor {
+        display: inline-block;
+        width: 8px;
+        height: 14px;
+        vertical-align: text-bottom;
+        background: var(--ant-color-primary);
+        animation: blink 1s step-end infinite;
+      }
+    }
+
     &-error {
       display: block;
       margin-block-start: 4px;
@@ -130,5 +161,11 @@
     max-width: none;
     padding-block-start: 2px;
     font-size: 11px;
+  }
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
   }
 }
