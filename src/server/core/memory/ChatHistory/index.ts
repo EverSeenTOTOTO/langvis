@@ -1,6 +1,7 @@
 import { memory } from '@/server/decorator/core';
 import { TraceContext } from '@/server/core/TraceContext';
 import { ConversationService } from '@/server/service/ConversationService';
+import { WorkspaceService } from '@/server/service/WorkspaceService';
 import { Logger } from '@/server/utils/logger';
 import { MemoryIds } from '@/shared/constants';
 import { Message, Role } from '@/shared/types/entities';
@@ -29,6 +30,8 @@ export default class ChatHistoryMemory extends Memory {
   constructor(
     @inject(ConversationService)
     private conversationService: ConversationService,
+    @inject(WorkspaceService)
+    private workspaceService: WorkspaceService,
   ) {
     super();
   }
@@ -55,10 +58,14 @@ export default class ChatHistoryMemory extends Memory {
       }
 
       // Add session context
+      const workDir = await this.workspaceService.getWorkDir(
+        this.conversationId,
+      );
       const sessionContext = `<session-context>
 Conversation ID: ${this.conversationId}
 User ID: ${this.userId}
 Current Time: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}
+Workspace Directory: ${workDir}
 </session-context>`;
 
       messages.push({

@@ -1,6 +1,7 @@
 import NoneMemory from '@/server/core/memory/None';
 import { TraceContext } from '@/server/core/TraceContext';
 import { ConversationService } from '@/server/service/ConversationService';
+import { WorkspaceService } from '@/server/service/WorkspaceService';
 import { Role } from '@/shared/types/entities';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +13,10 @@ const mockConversationService = {
   batchAddMessages: vi.fn(),
   getMessagesByConversationId: vi.fn(),
   batchDeleteMessagesInConversation: vi.fn(),
+};
+
+const mockWorkspaceService = {
+  getWorkDir: vi.fn().mockResolvedValue('/tmp/workspace'),
 };
 
 vi.mock('tsyringe', async importOriginal => {
@@ -30,6 +35,7 @@ describe('NoneMemory', () => {
     vi.clearAllMocks();
     memory = new NoneMemory(
       mockConversationService as unknown as ConversationService,
+      mockWorkspaceService as unknown as WorkspaceService,
     );
   });
 

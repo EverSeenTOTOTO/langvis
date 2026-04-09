@@ -21,15 +21,10 @@ export const config: AgentConfig = {
     },
   } as any,
   tools: [
-    ToolIds.DATETIME_GET,
-    ToolIds.WEB_FETCH,
     ToolIds.ASK_USER,
     ToolIds.CACHED_READ,
-    ToolIds.FILE_READ,
-    ToolIds.FILE_WRITE,
-    ToolIds.FILE_EDIT,
-    ToolIds.BASH,
     ToolIds.AGENT_CALL,
+    ToolIds.LIST_TOOLS,
   ],
   agents: [AgentIds.DOCUMENT, AgentIds.FINANCIAL],
 };
