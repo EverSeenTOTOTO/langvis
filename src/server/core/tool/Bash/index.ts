@@ -14,11 +14,11 @@ import { container } from 'tsyringe';
 import type { BashInput, BashOutput } from './config';
 import HumanInTheLoopTool from '../HumanInTheLoop';
 
-const MAX_OUTPUT = 1024 * 1024; // 1MB per stream
 const FLUSH_INTERVAL = 100; // 100ms
 const DEFAULT_TIMEOUT = 60;
 const MAX_TIMEOUT = 600;
 const SIGTERM_GRACE = 5000;
+const PROGRESS_LIMIT = 8 * 1024; // 8KB preview via toolProgress
 
 const activeProcesses = new Set<ChildProcess>();
 
@@ -156,22 +156,19 @@ export default class BashTool extends Tool<BashInput, BashOutput> {
 
     let stdout = '';
     let stderr = '';
-    let stdoutBuffer = '';
-    let stderrBuffer = '';
+    let lastFlushedStdout = 0;
+    let lastFlushedStderr = 0;
+    let progressSent = 0;
     let timedOut = false;
     let resolveExit: (code: number) => void;
     const exitPromise = new Promise<number>(resolve => (resolveExit = resolve));
 
     child.stdout.on('data', (chunk: Buffer) => {
-      const text = chunk.toString();
-      if (stdout.length < MAX_OUTPUT) stdout += text;
-      stdoutBuffer += text;
+      stdout += chunk.toString();
     });
 
     child.stderr.on('data', (chunk: Buffer) => {
-      const text = chunk.toString();
-      if (stderr.length < MAX_OUTPUT) stderr += text;
-      stderrBuffer += text;
+      stderr += chunk.toString();
     });
 
     child.on('close', code => resolveExit(code ?? -1));
@@ -193,8 +190,33 @@ export default class BashTool extends Tool<BashInput, BashOutput> {
       killProcessTree(child);
     });
 
+    const flushOutput = (source: 'stdout' | 'stderr'): AgentEvent | null => {
+      if (progressSent >= PROGRESS_LIMIT) return null;
+
+      const output = source === 'stdout' ? stdout : stderr;
+      const flushed =
+        source === 'stdout' ? lastFlushedStdout : lastFlushedStderr;
+
+      if (output.length <= flushed) return null;
+
+      const remaining = PROGRESS_LIMIT - progressSent;
+      let text = output.slice(flushed, flushed + remaining);
+
+      if (!text) return null;
+
+      progressSent += text.length;
+
+      if (PROGRESS_LIMIT <= progressSent) {
+        text += ' <truncated...>';
+      }
+
+      if (source === 'stdout') lastFlushedStdout = flushed + text.length;
+      else lastFlushedStderr = flushed + text.length;
+
+      return ctx.agentToolProgressEvent(this.id, { type: source, text });
+    };
+
     try {
-      // Flush loop: yield buffered output at intervals until process exits
       while (child.exitCode === null) {
         const result = await Promise.race([
           exitPromise.then((code: number) => ({ exit: true, code })),
@@ -205,20 +227,8 @@ export default class BashTool extends Tool<BashInput, BashOutput> {
 
         if ('exit' in result) break;
 
-        if (stdoutBuffer) {
-          yield ctx.agentToolProgressEvent(this.id, {
-            type: 'stdout',
-            text: stdoutBuffer,
-          });
-          stdoutBuffer = '';
-        }
-        if (stderrBuffer) {
-          yield ctx.agentToolProgressEvent(this.id, {
-            type: 'stderr',
-            text: stderrBuffer,
-          });
-          stderrBuffer = '';
-        }
+        const event = flushOutput('stdout') ?? flushOutput('stderr');
+        if (event) yield event;
       }
     } finally {
       ctx.signal.removeEventListener('abort', onAbort);
@@ -230,18 +240,8 @@ export default class BashTool extends Tool<BashInput, BashOutput> {
     const exitCode = await exitPromise;
 
     // Flush remaining
-    if (stdoutBuffer) {
-      yield ctx.agentToolProgressEvent(this.id, {
-        type: 'stdout',
-        text: stdoutBuffer,
-      });
-    }
-    if (stderrBuffer) {
-      yield ctx.agentToolProgressEvent(this.id, {
-        type: 'stderr',
-        text: stderrBuffer,
-      });
-    }
+    const event = flushOutput('stdout') ?? flushOutput('stderr');
+    if (event) yield event;
 
     if (timedOut) {
       stderr += `\nProcess timed out after ${userTimeout}s and was killed.`;
@@ -250,3 +250,4 @@ export default class BashTool extends Tool<BashInput, BashOutput> {
     return { exitCode, stdout, stderr, timedOut };
   }
 }
+

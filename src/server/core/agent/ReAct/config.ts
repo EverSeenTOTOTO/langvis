@@ -26,5 +26,6 @@ export const config: AgentConfig = {
     ToolIds.AGENT_CALL,
     ToolIds.LIST_TOOLS,
   ],
-  agents: [AgentIds.DOCUMENT, AgentIds.FINANCIAL],
+  agents: [],
 };
+

@@ -70,5 +70,5 @@ export const config: ToolConfig<AgentCallInput, AgentCallOutput> = {
     },
     required: ['success'],
   },
-  skipCompression: true,
+  compression: 'skip',
 };

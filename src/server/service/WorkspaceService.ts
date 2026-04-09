@@ -3,8 +3,6 @@ import path from 'path';
 import { service } from '../decorator/service';
 import { resolveSafePath } from '../utils/pathSafety';
 
-const MAX_FILE_SIZE = 1024 * 1024; // 1MB
-
 @service()
 export class WorkspaceService {
   private readonly rootDir: string;
@@ -28,12 +26,6 @@ export class WorkspaceService {
     const stat = await fs.stat(filePath).catch(() => null);
     if (!stat) return null;
     if (!stat.isFile()) throw new Error(`Not a file: ${filename}`);
-    if (stat.size > MAX_FILE_SIZE) {
-      throw new Error(
-        `File too large (${(stat.size / 1024).toFixed(0)}KB, max ${MAX_FILE_SIZE / 1024}KB). ` +
-          `Use bash tool with commands like head, tail, sed, or rg to read specific parts.`,
-      );
-    }
     const content = await fs.readFile(filePath, 'utf-8');
     return { content, size: stat.size };
   }

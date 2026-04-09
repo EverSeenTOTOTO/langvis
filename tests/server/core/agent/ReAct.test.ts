@@ -4,6 +4,7 @@ import { TraceContext } from '@/server/core/TraceContext';
 import { RedisService } from '@/server/service/RedisService';
 import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { STRING_THRESHOLD } from '@/server/utils/cache';
 import { withTraceContext } from '../../helpers/context';
 
 const mockRedisService = {
@@ -203,7 +204,7 @@ describe('ReActAgent', () => {
         },
       );
 
-      const largeContent = 'a'.repeat(5001);
+      const largeContent = 'a'.repeat(STRING_THRESHOLD + 1);
       mockNestedTool.call.mockImplementation(async function* (): AsyncGenerator<
         AgentEvent,
         string,
@@ -221,7 +222,7 @@ describe('ReActAgent', () => {
       const output = JSON.parse(toolResultEvent.output);
       expect(output).toMatchObject({
         $cached: expect.stringMatching(/^cache_/),
-        $size: 5001,
+        $size: STRING_THRESHOLD + 1,
       });
       expect(mockRedisService.client.setEx).toHaveBeenCalled();
     });

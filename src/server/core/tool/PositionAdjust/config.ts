@@ -13,7 +13,7 @@ export const config: ToolConfig<PositionAdjustInput, PositionAdjustOutput> = {
   name: 'Position Adjust Tool',
   description:
     'Collect user position data via form and generate position adjustment advice.',
-  skipCompression: true,
+  compression: 'skip',
   inputSchema: {
     type: 'object',
     properties: {},

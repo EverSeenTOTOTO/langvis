@@ -47,7 +47,7 @@ export default class ReActAgent extends Agent {
   readonly tools!: Tool[];
   readonly agents!: Agent[];
 
-  readonly maxIterations: number = 5;
+  readonly maxIterations: number = 99;
 
   get systemPrompt(): Prompt {
     return createPrompt(this, super.systemPrompt);
@@ -215,9 +215,13 @@ export default class ReActAgent extends Agent {
         ctx,
       );
 
-      const compressedOutput = tool.config?.skipCompression
-        ? output
-        : await compress(TraceContext.getOrFail().traceId!, output);
+      const trace = TraceContext.getOrFail();
+      const compressedOutput = await compress(
+        trace.traceId!,
+        output,
+        tool.config?.compression,
+        trace.conversationId,
+      );
 
       const raw =
         typeof compressedOutput === 'string'
@@ -231,7 +235,8 @@ export default class ReActAgent extends Agent {
     } catch (error) {
       const errMsg = (error as Error)?.message ?? String(error);
       yield ctx.agentToolErrorEvent(toolName, errMsg);
-      throw error;
+      return `Error executing tool "${toolName}": ${errMsg}`;
     }
   }
 }
+

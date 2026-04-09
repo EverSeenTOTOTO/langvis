@@ -6,8 +6,13 @@ import { AgentEvent, ToolConfig } from '@/shared/types';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { ToolService } from '../../../service/ToolService';
+import { AgentService } from '../../../service/AgentService';
 import { inject, container } from 'tsyringe';
-import { formatToolsToMarkdown } from '@/server/utils/formatTools';
+import {
+  formatToolsToMarkdown,
+  formatAgentsToMarkdown,
+} from '@/server/utils/formatTools';
+import type { Agent } from '../../agent';
 import type { ListToolsInput, ListToolsOutput } from './config';
 
 const CORE_TOOLS = new Set([
@@ -26,7 +31,10 @@ export default class ListToolsTool extends Tool<
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  constructor(@inject(ToolService) private toolService: ToolService) {
+  constructor(
+    @inject(ToolService) private toolService: ToolService,
+    @inject(AgentService) private agentService: AgentService,
+  ) {
     super();
   }
 
@@ -36,18 +44,22 @@ export default class ListToolsTool extends Tool<
   ): AsyncGenerator<AgentEvent, ListToolsOutput, void> {
     ctx.signal.throwIfAborted();
 
-    const allTools = await this.toolService.getAllToolInfo();
-    const filtered = allTools.filter(t => {
-      if (CORE_TOOLS.has(t.id)) return false;
+    const keywords = query?.toLowerCase().split(/\s+/);
 
-      if (!query) return true;
-
-      const keywords = query.toLowerCase().split(/\s+/);
-      const hay = `${t.id} ${t.name} ${t.description ?? ''}`.toLowerCase();
+    const matchFilter = (text: string) => {
+      if (!keywords) return true;
+      const hay = text.toLowerCase();
       return keywords.some(k => hay.includes(k));
+    };
+
+    // Tools
+    const allTools = await this.toolService.getAllToolInfo();
+    const filteredTools = allTools.filter(t => {
+      if (CORE_TOOLS.has(t.id)) return false;
+      return matchFilter(`${t.id} ${t.name} ${t.description ?? ''}`);
     });
 
-    const toolInstances = filtered
+    const toolInstances = filteredTools
       .map(t => {
         try {
           return container.resolve<Tool>(t.id);
@@ -57,8 +69,29 @@ export default class ListToolsTool extends Tool<
       })
       .filter((t): t is Tool => t !== null);
 
-    const markdown = formatToolsToMarkdown(toolInstances);
+    // Agents
+    const allAgents = await this.agentService.getAllAgentInfo();
+    const filteredAgents = allAgents.filter(a => {
+      if (CORE_TOOLS.has(a.id)) return false;
+      return matchFilter(`${a.id} ${a.name} ${a.description ?? ''}`);
+    });
 
-    return { tools: markdown };
+    const agentInstances = filteredAgents
+      .map(a => {
+        try {
+          return container.resolve<Agent>(a.id);
+        } catch {
+          return null;
+        }
+      })
+      .filter((a): a is Agent => a !== null);
+
+    return {
+      tools: formatToolsToMarkdown(toolInstances),
+      agents:
+        agentInstances.length > 0
+          ? formatAgentsToMarkdown(agentInstances)
+          : undefined,
+    };
   }
 }

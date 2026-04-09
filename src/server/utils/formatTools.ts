@@ -4,7 +4,7 @@ import { Agent } from '../core/agent';
 
 export function formatAgentsToMarkdown(agents: Agent[]): string {
   if (!agents || agents.length === 0) {
-    return 'No agents available.';
+    return 'No builtin agents available.';
   }
 
   return agents
@@ -38,7 +38,7 @@ export function formatAgentsToMarkdown(agents: Agent[]): string {
 
 export function formatToolsToMarkdown(tools: Tool[]): string {
   if (!tools || tools.length === 0) {
-    return 'No tools available.';
+    return 'No builtin tools available.';
   }
 
   return tools
