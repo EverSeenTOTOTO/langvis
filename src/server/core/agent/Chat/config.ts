@@ -18,7 +18,7 @@ export const config: AgentConfig<{
         properties: {
           code: {
             type: 'string',
-            default: 'gemini-3-flash-preview',
+            default: 'qwen3.5-27b',
           },
           temperature: {
             type: 'number',

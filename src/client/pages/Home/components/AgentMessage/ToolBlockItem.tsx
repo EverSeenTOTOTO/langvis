@@ -1,6 +1,7 @@
 import { CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { Flex, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
+import { isEmpty } from 'lodash-es';
 import { useMemo } from 'react';
 import type React from 'react';
 import type {
@@ -108,6 +109,14 @@ export function ToolBlockItem({
           {dayjs(toolCall.at).format('HH:mm:ss')}
         </Typography.Text>
       </Flex>
+
+      {!isEmpty(toolCall.toolArgs) && (
+        <Typography.Text type="secondary" className="react-tool-args">
+          <pre>
+            {JSON.stringify(toolCall.toolArgs, null, 2)}
+          </pre>
+        </Typography.Text>
+      )}
 
       {latestProgress?.message && !latestProgress?.status && (
         <Typography.Text type="secondary" className="react-tool-progress">

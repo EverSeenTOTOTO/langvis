@@ -1,8 +1,23 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { promises as fs } from 'fs';
+import path from 'path';
+import os from 'os';
+import { describe, it, expect, beforeEach, vi, afterAll } from 'vitest';
 import { container } from 'tsyringe';
-import { compress, resolve } from '@/server/utils/cache';
+import { compress, resolve, STRING_THRESHOLD } from '@/server/utils/cache';
 import { RedisKeys } from '@/shared/constants';
 import { RedisService } from '@/server/service/RedisService';
+import { WorkspaceService } from '@/server/service/WorkspaceService';
+
+let testDir: string;
+
+const mockWorkspaceService = {
+  getWorkDir: vi.fn().mockImplementation(async () => {
+    if (!testDir) {
+      testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cache-test-'));
+    }
+    return testDir;
+  }),
+};
 
 describe('Cache Utils', () => {
   let mockRedisService: {
@@ -12,7 +27,14 @@ describe('Cache Utils', () => {
     };
   };
 
+  afterAll(async () => {
+    if (testDir) {
+      await fs.rm(testDir, { recursive: true, force: true });
+    }
+  });
+
   beforeEach(() => {
+    vi.clearAllMocks();
     mockRedisService = {
       client: {
         setEx: vi.fn().mockResolvedValue('OK'),
@@ -23,13 +45,16 @@ describe('Cache Utils', () => {
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     container.register(RedisService, { useValue: mockRedisService });
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    container.register(WorkspaceService, { useValue: mockWorkspaceService });
   });
 
   describe('compress', () => {
     const traceId = 'test-trace-id';
 
-    it('should compress string longer than 5000 chars', async () => {
-      const longString = 'a'.repeat(5001);
+    it(`should compress string longer than ${STRING_THRESHOLD} chars`, async () => {
+      const longString = 'a'.repeat(STRING_THRESHOLD + 1);
 
       const result = (await compress(traceId, longString)) as {
         $cached: string;
@@ -38,7 +63,7 @@ describe('Cache Utils', () => {
       };
 
       expect(result.$cached).toMatch(/^cache_/);
-      expect(result.$size).toBe(5001);
+      expect(result.$size).toBe(STRING_THRESHOLD + 1);
       expect(result.$preview).toBe('a'.repeat(200));
       expect(mockRedisService.client.setEx).toHaveBeenCalledWith(
         expect.stringContaining(RedisKeys.AGENT_CACHE(traceId, result.$cached)),
@@ -47,7 +72,7 @@ describe('Cache Utils', () => {
       );
     });
 
-    it('should not compress string shorter than 5000 chars', async () => {
+    it(`should not compress string shorter than ${STRING_THRESHOLD} chars`, async () => {
       const shortString = 'a'.repeat(100);
 
       const result = await compress(traceId, shortString);
@@ -77,9 +102,9 @@ describe('Cache Utils', () => {
     it('should recursively compress nested values while preserving first-level keys', async () => {
       const nested = {
         short: 'short string',
-        long: 'a'.repeat(5001),
+        long: 'a'.repeat(STRING_THRESHOLD + 1),
         nested: {
-          deep: 'b'.repeat(5001),
+          deep: 'b'.repeat(STRING_THRESHOLD + 1),
         },
       };
 
@@ -98,7 +123,7 @@ describe('Cache Utils', () => {
 
     it('should recursively compress array items', async () => {
       const nested = {
-        items: ['a'.repeat(5001), 'short', 'b'.repeat(5001)],
+        items: ['a'.repeat(STRING_THRESHOLD + 1), 'short', 'b'.repeat(STRING_THRESHOLD + 1)],
       };
 
       const result = (await compress(traceId, nested)) as Record<
@@ -110,6 +135,64 @@ describe('Cache Utils', () => {
       expect((items[0] as { $cached: string }).$cached).toMatch(/^cache_/);
       expect(items[1]).toBe('short');
       expect((items[2] as { $cached: string }).$cached).toMatch(/^cache_/);
+    });
+
+    it('should skip compression when strategy is "skip"', async () => {
+      const longString = 'a'.repeat(STRING_THRESHOLD + 1);
+      const result = await compress(traceId, longString, 'skip');
+      expect(result).toBe(longString);
+      expect(mockRedisService.client.setEx).not.toHaveBeenCalled();
+    });
+
+    it('should skip compression recursively when strategy is "skip"', async () => {
+      const nested = {
+        long: 'a'.repeat(STRING_THRESHOLD + 1),
+        items: ['b'.repeat(5001)],
+      };
+      const result = await compress(traceId, nested, 'skip');
+      expect(result).toEqual(nested);
+      expect(mockRedisService.client.setEx).not.toHaveBeenCalled();
+    });
+
+    it('should compress to file when strategy is "file"', async () => {
+      const longString = 'a'.repeat(STRING_THRESHOLD + 1);
+      const result = (await compress(
+        traceId,
+        longString,
+        'file',
+        'conv-123',
+      )) as {
+        $file: string;
+        $size: number;
+        $preview: string;
+      };
+
+      expect(result.$file).toMatch(/^fc_/);
+      expect(result.$size).toBe(STRING_THRESHOLD + 1);
+      expect(result.$preview).toBe('a'.repeat(200));
+      expect(mockWorkspaceService.getWorkDir).toHaveBeenCalledWith('conv-123');
+      expect(mockRedisService.client.setEx).not.toHaveBeenCalled();
+    });
+
+    it('should throw when file strategy is used without conversationId', async () => {
+      await expect(compress(traceId, 'a'.repeat(STRING_THRESHOLD + 1), 'file')).rejects.toThrow(
+        'conversationId is required',
+      );
+    });
+
+    it('should not compress small values even with file strategy', async () => {
+      const shortString = 'hello';
+      const result = await compress(traceId, shortString, 'file', 'conv-123');
+      expect(result).toBe(shortString);
+    });
+
+    it('should use redis strategy by default', async () => {
+      const longString = 'a'.repeat(STRING_THRESHOLD + 1);
+      const result = (await compress(traceId, longString)) as {
+        $cached: string;
+      };
+      expect(result.$cached).toMatch(/^cache_/);
+      expect(mockRedisService.client.setEx).toHaveBeenCalled();
     });
   });
 

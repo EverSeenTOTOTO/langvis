@@ -16,7 +16,8 @@ export interface BashOutput {
 export const config: ToolConfig<BashInput, BashOutput> = {
   name: 'bash',
   description:
-    'Execute a shell command in the workspace directory. Requires user confirmation before execution.',
+    'Execute a shell command in the workspace directory. Requires user confirmation before execution. Prefer modern CLI tools: use `rg` instead of `grep`, `fd` instead of `find`, `lsd` instead of `ls`, `bat` instead of `cat`.',
+  compression: 'file',
   untrustedOutput: true,
   inputSchema: {
     type: 'object',

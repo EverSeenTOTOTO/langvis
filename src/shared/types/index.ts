@@ -37,8 +37,8 @@ export interface ToolConfig<
   inputSchema?: JSONSchemaType<Input>;
   outputSchema?: JSONSchemaType<Output>;
   enabled?: boolean;
-  /** Skip automatic output compression */
-  skipCompression?: boolean;
+  /** Output compression strategy: 'redis' stores large content in Redis, 'file' writes to workspace temp file, 'skip' returns as-is */
+  compression?: 'skip' | 'redis' | 'file';
   /** Mark tool output as untrusted/external content — will be wrapped with untrusted_content tags in the agent loop */
   untrustedOutput?: boolean;
 }

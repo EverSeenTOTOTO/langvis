@@ -11,8 +11,6 @@ export enum ToolIds {
   LINKS_EXTRACT = 'links_extract',
   CACHED_READ = 'cached_read',
   POSITION_ADJUSTMENT_ADVICE = 'position_adjustment_advice',
-  FILE_READ = 'file_read',
-  FILE_WRITE = 'file_write',
   FILE_EDIT = 'file_edit',
   BASH = 'bash',
   AGENT_CALL = 'agent_call',

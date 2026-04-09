@@ -57,22 +57,13 @@ describe('WorkspaceService', () => {
       expect(result).toBeNull();
     });
 
-    it('should throw for file exceeding 1MB', async () => {
+    it('should read large file', async () => {
       const workDir = await service.getWorkDir('conv-read');
-      const bigContent = 'x'.repeat(1024 * 1024 + 1);
-      await fs.writeFile(path.join(workDir, 'big.txt'), bigContent);
-      await expect(service.readFile('big.txt', workDir)).rejects.toThrow(
-        'File too large',
-      );
-    });
-
-    it('should read up to 1MB file', async () => {
-      const workDir = await service.getWorkDir('conv-read');
-      const content = 'x'.repeat(1024 * 1024);
-      await fs.writeFile(path.join(workDir, 'max.txt'), content);
-      const result = await service.readFile('max.txt', workDir);
+      const content = 'x'.repeat(1024 * 1024 + 1);
+      await fs.writeFile(path.join(workDir, 'big.txt'), content);
+      const result = await service.readFile('big.txt', workDir);
       expect(result).not.toBeNull();
-      expect(result!.content.length).toBe(1024 * 1024);
+      expect(result!.content.length).toBe(1024 * 1024 + 1);
     });
   });
 

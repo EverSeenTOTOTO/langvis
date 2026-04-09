@@ -52,15 +52,22 @@ interface FinalAnswerResponse {
     )
     .with(
       'Cached References',
-      `When a tool returns an object containing a \`$cached\` field, it is a reference to cached content:
+      `When a tool returns large content, it is replaced by a reference object. There are TWO distinct types — they use DIFFERENT field names:
 
+**Type 1: Redis Cache** — has \`$cached\` field:
 \`\`\`json
-{ "title": "Example", "content": { "$cached": "cache_abc123", "$size": 45000, "$preview": "Lorem ipsum..." } }
+{ "$cached": "cache_abc123", "$size": 45000, "$preview": "Lorem ipsum..." }
 \`\`\`
+- To read the full content, use \`read_cache\` with the \`$cached\` value
+- To pass to another tool, copy the entire \`{ "$cached": ... }\` object as-is
 
-**Important:**
-- To pass this content to another tool, copy the entire \`$cached\` object exactly as-is into the input parameter
-- To read the full content yourself, use the \`read_cache\` tool with the \`$cached\` value as the key`,
+**Type 2: File Cache** — has \`$file\` field:
+\`\`\`json
+{ "$file": "fc_xyz789", "$size": 45000, "$preview": "Lorem ipsum..." }
+\`\`\`
+- This is a FILE in the workspace, NOT a redis cache
+- Do NOT use \`read_cache\` — use \`bash\` with \`bat\`, \`head\`, \`tail\`, \`rg\`, \`sed\` to read/search
+- \`$file\` contains the filename (e.g. "fc_xyz789"), NOT a cache key`,
     )
     .with(
       'Examples',
@@ -97,33 +104,7 @@ Assistant:
 {
   "final_answer": "根据专业分析，该公司的财务状况如下：..."
 }
-</example:call-agent>
-
-<example:ask-user>
-User: Delete all my old files.
-Assistant:
-{
-  "thought": "This is a destructive operation that needs user confirmation.",
-  "action": {
-    "tool": "ask_user",
-    "input": {
-      "conversationId": "conv_abc123",
-      "message": "This will permanently delete all files older than 30 days. Do you want to proceed?",
-      "formSchema": {
-        "type": "object",
-        "properties": {
-          "confirmed": {"type": "boolean", "title": "Confirm deletion?"}
-        }
-      }
-    }
-  }
-}
-(Observation: {"submitted": true, "data": {"confirmed": true}})
-Assistant:
-{
-  "thought": "User confirmed, proceeding with deletion.",
-  "action": { "tool": "delete_file", "input": { "olderThan": 30} }
-}
-</example:ask-user>`,
+</example:call-agent>`,
     );
 };
+

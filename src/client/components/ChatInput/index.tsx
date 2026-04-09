@@ -116,7 +116,7 @@ const InnerEditor: React.FC<{
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        if (!loading) {
+        if (!loading && value?.trim()) {
           onSubmit?.();
         }
       }

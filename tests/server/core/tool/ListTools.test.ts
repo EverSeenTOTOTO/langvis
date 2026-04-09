@@ -9,6 +9,10 @@ const mockToolService = {
   getAllToolInfo: vi.fn(),
 };
 
+const mockAgentService = {
+  getAllAgentInfo: vi.fn().mockResolvedValue([]),
+};
+
 const originalResolve = container.resolve.bind(container);
 
 function wrapTrace<T>(fn: () => Promise<T>): Promise<T> {
@@ -72,9 +76,9 @@ describe('ListToolsTool', () => {
       description: 'List available tools',
     },
     {
-      id: 'file_read',
-      name: 'file_read',
-      description: 'Read a file from the workspace',
+      id: 'file_edit',
+      name: 'file_edit',
+      description: 'Edit a file in the workspace',
     },
     { id: 'bash', name: 'bash', description: 'Execute a bash command' },
   ];
@@ -97,7 +101,10 @@ describe('ListToolsTool', () => {
 
     mockToolService.getAllToolInfo.mockResolvedValue(sampleTools);
 
-    toolInstance = new ListToolsTool(mockToolService as any);
+    toolInstance = new ListToolsTool(
+      mockToolService as any,
+      mockAgentService as any,
+    );
     (toolInstance as any).id = 'list_tools';
     (toolInstance as any).config = {};
     (toolInstance as any).logger = {
@@ -117,7 +124,7 @@ describe('ListToolsTool', () => {
       const ctx = new ExecutionContext(new AbortController(), 'test-msg');
       const { result } = await collectEvents(toolInstance.call({}, ctx));
 
-      expect(result.tools).toContain('### file_read');
+      expect(result.tools).toContain('### file_edit');
       expect(result.tools).toContain('### bash');
       expect(result.tools).not.toContain('### ask_user');
       expect(result.tools).not.toContain('### cached_read');
@@ -132,7 +139,7 @@ describe('ListToolsTool', () => {
         toolInstance.call({ query: 'file' }, ctx),
       );
 
-      expect(result.tools).toContain('### file_read');
+      expect(result.tools).toContain('### file_edit');
       expect(result.tools).not.toContain('### bash');
     }));
 
@@ -143,7 +150,7 @@ describe('ListToolsTool', () => {
         toolInstance.call({ query: 'file workspace' }, ctx),
       );
 
-      expect(result.tools).toContain('### file_read');
+      expect(result.tools).toContain('### file_edit');
       expect(result.tools).not.toContain('### bash');
     }));
 
@@ -155,6 +162,6 @@ describe('ListToolsTool', () => {
       const ctx = new ExecutionContext(new AbortController(), 'test-msg');
       const { result } = await collectEvents(toolInstance.call({}, ctx));
 
-      expect(result.tools).toBe('No tools available.');
+      expect(result.tools).toBe('No builtin tools available.');
     }));
 });

@@ -24,6 +24,22 @@
       font-size: 13px;
     }
 
+    &-args {
+      display: block;
+      max-height: 120px;
+      padding: 8px;
+      margin-block-start: 8px;
+      overflow: auto;
+      font-family: monospace;
+      font-size: 12px;
+      border-radius: 4px;
+
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+      }
+    }
+
     &-output {
       max-height: 200px;
       padding: 8px;
