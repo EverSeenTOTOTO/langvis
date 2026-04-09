@@ -37,7 +37,7 @@ export default class AgentCallTool extends Tool<
     }
 
     // Create child context with timeout and callId prefix
-    const [controller, cleanup] = createTimeoutController(timeout);
+    const [controller, cleanup] = createTimeoutController(timeout, ctx.signal);
     // Use current callId as prefix for child's callIds
     const childCtx = new ExecutionContext(controller, ctx.currentCallId);
 
