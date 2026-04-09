@@ -1,7 +1,7 @@
 import { useStore } from '@/client/store';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useState } from 'react';
-import { Highlight, themes } from 'prism-react-renderer';
+import { Highlight, themes, Prism } from 'prism-react-renderer';
 import ReactMarkdown from 'react-markdown';
 import { useCopyToClipboard } from 'react-use';
 import remarkBreaks from 'remark-breaks';
@@ -9,6 +9,33 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/contrib/copy-tex.mjs';
+
+// prism-react-renderer doesn't bundle diff language, register it manually
+const diffPrefixes = {
+  'deleted-sign': '-',
+  'deleted-arrow': '<',
+  'inserted-sign': '+',
+  'inserted-arrow': '>',
+  unchanged: ' ',
+  diff: '!',
+} as const;
+
+Prism.languages.diff = {
+  coord: [/^(?:\*{3}|-{3}|\+{3}).*$/m, /^@@.*@@$/m, /^\d.*$/m],
+};
+
+for (const [name, prefix] of Object.entries(diffPrefixes)) {
+  const alias = /^\w+$/.test(name) ? [] : [/\w+/.exec(name)![0]];
+  if (name === 'diff') alias.push('bold');
+  (Prism.languages.diff as any)[name] = {
+    pattern: RegExp(`^(?:[${prefix}].*(?:\\r\\n?|\\n|(?![\\s\\S])))+`, 'm'),
+    alias,
+    inside: {
+      line: { pattern: /(.)(?=[\s\S]).*(?:\r\n?|\n)?/, lookbehind: true },
+      prefix: { pattern: /[\s\S]/, alias: /\w+/.exec(name)![0] },
+    },
+  };
+}
 import 'katex/dist/katex.min.css';
 import './index.scss';
 

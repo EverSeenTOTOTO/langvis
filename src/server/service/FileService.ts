@@ -2,6 +2,7 @@ import { createReadStream, promises as fs } from 'fs';
 import mime from 'mime-types';
 import path from 'path';
 import { service } from '../decorator/service';
+import { resolveSafePath } from '../utils/pathSafety';
 
 @service()
 export class FileService {
@@ -11,61 +12,8 @@ export class FileService {
     this.uploadDir = path.join(process.cwd(), 'upload');
   }
 
-  private validateFilename(filename: string): boolean {
-    // Check for null, undefined, or empty filename
-    if (!filename || typeof filename !== 'string') {
-      return false;
-    }
-
-    // Check for null bytes and other control characters including tab
-    if (
-      filename.includes('\x00') ||
-      filename.includes('\n') ||
-      filename.includes('\r') ||
-      filename.includes('\t')
-    ) {
-      return false;
-    }
-
-    // URL decode the filename to catch encoded path traversal attempts
-    let decodedFilename: string;
-    try {
-      decodedFilename = decodeURIComponent(filename);
-    } catch {
-      // Invalid URL encoding, reject
-      return false;
-    }
-
-    // Check for path traversal attempts in both original and decoded filename
-    const normalizedFilename = path.normalize(filename);
-    const normalizedDecoded = path.normalize(decodedFilename);
-
-    const hasTraversal = (name: string) =>
-      name.includes('..') || name.startsWith('/') || name.includes('\\');
-
-    if (hasTraversal(normalizedFilename) || hasTraversal(normalizedDecoded)) {
-      return false;
-    }
-
-    return true;
-  }
-
   private validatePath(filename: string): string {
-    if (!this.validateFilename(filename)) {
-      throw new Error(`Invalid filename: ${filename}`);
-    }
-
-    const filePath = path.join(this.uploadDir, filename);
-
-    // Security check: prevent directory traversal
-    const resolvedPath = path.resolve(filePath);
-    const resolvedUploadDir = path.resolve(this.uploadDir);
-
-    if (!resolvedPath.startsWith(resolvedUploadDir)) {
-      throw new Error(`Invalid file path: ${filePath}`);
-    }
-
-    return filePath;
+    return resolveSafePath(filename, this.uploadDir);
   }
 
   async downloadFile(filename: string): Promise<Buffer | null> {

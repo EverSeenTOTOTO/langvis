@@ -1,6 +1,7 @@
 import { CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { Flex, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
+import { useMemo } from 'react';
 import type React from 'react';
 import type {
   ToolCallTimeline,
@@ -54,6 +55,18 @@ export function ToolBlockItem({
   const color = getToolColor(toolCall.toolName);
   const isPending = toolCall.status === 'pending';
 
+  const streamingChunks = useMemo(() => {
+    const chunks: { type: 'stdout' | 'stderr'; text: string }[] = [];
+    for (const p of toolCall.progress) {
+      const d = p.data as { type?: string; text?: string } | undefined;
+      if (d?.type === 'stdout' && d.text)
+        chunks.push({ type: 'stdout', text: d.text });
+      else if (d?.type === 'stderr' && d.text)
+        chunks.push({ type: 'stderr', text: d.text });
+    }
+    return chunks;
+  }, [toolCall.progress]);
+
   const latestProgress = toolCall.progress.at(-1)?.data as
     | { status?: string; message?: string }
     | undefined;
@@ -100,6 +113,20 @@ export function ToolBlockItem({
         <Typography.Text type="secondary" className="react-tool-progress">
           {latestProgress.message}
         </Typography.Text>
+      )}
+
+      {streamingChunks.length > 0 && (
+        <div className="react-tool-streaming-output">
+          {streamingChunks.map((chunk, i) => (
+            <pre
+              key={i}
+              className={chunk.type === 'stderr' ? 'stream-stderr' : ''}
+            >
+              {chunk.text}
+            </pre>
+          ))}
+          {isPending && <span className="stream-cursor" />}
+        </div>
       )}
 
       {toolCall.status === 'done' && toolCall.output !== undefined && (
