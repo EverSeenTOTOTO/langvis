@@ -15,6 +15,7 @@ export enum ToolIds {
   BASH = 'bash',
   AGENT_CALL = 'agent_call',
   LIST_TOOLS = 'list_tools',
+  SKILL_CALL = 'skill_call',
 
   // Internal tools (not exposed to agents directly)
   DOCUMENT_METADATA_EXTRACT = 'document_metadata_extract',

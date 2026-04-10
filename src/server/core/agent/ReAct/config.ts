@@ -11,6 +11,7 @@ export const config: AgentConfig = {
     ToolIds.CACHED_READ,
     ToolIds.AGENT_CALL,
     ToolIds.LIST_TOOLS,
+    ToolIds.SKILL_CALL,
   ],
   agents: [],
 };

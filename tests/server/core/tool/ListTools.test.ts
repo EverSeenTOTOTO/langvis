@@ -13,6 +13,10 @@ const mockAgentService = {
   getAllAgentInfo: vi.fn().mockResolvedValue([]),
 };
 
+const mockSkillService = {
+  getAllSkillInfo: vi.fn().mockResolvedValue([]),
+};
+
 const originalResolve = container.resolve.bind(container);
 
 function wrapTrace<T>(fn: () => Promise<T>): Promise<T> {
@@ -104,6 +108,7 @@ describe('ListToolsTool', () => {
     toolInstance = new ListToolsTool(
       mockToolService as any,
       mockAgentService as any,
+      mockSkillService as any,
     );
     (toolInstance as any).id = 'list_tools';
     (toolInstance as any).config = {};

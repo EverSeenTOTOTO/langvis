@@ -4,6 +4,7 @@ import { LoadingOutlined } from '@ant-design/icons';
 import { Collapse, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { NestedAgentCallBlock } from './NestedAgentCallBlock';
+import { SkillCallBlock } from './SkillCallBlock';
 import { StandaloneThoughtBlock, ToolBlockItem } from './ToolBlockItem';
 import { buildToolBlocks, type ToolBlock } from './utils';
 
@@ -60,6 +61,16 @@ export function UniversalEventRenderer({
                         conversationId={messageFSM.msg.conversationId}
                         depth={0}
                         customToolRender={customToolRender}
+                      />
+                    );
+                  }
+                  // Use SkillCallBlock for skill_call tools
+                  if (block.toolCall.toolName === 'skill_call') {
+                    return (
+                      <SkillCallBlock
+                        key={block.toolCall.callId}
+                        toolCall={block.toolCall}
+                        depth={0}
                       />
                     );
                   }

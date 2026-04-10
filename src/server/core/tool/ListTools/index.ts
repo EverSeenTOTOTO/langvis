@@ -7,10 +7,12 @@ import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { ToolService } from '../../../service/ToolService';
 import { AgentService } from '../../../service/AgentService';
+import { SkillService } from '../../../service/SkillService';
 import { inject, container } from 'tsyringe';
 import {
   formatToolsToMarkdown,
   formatAgentsToMarkdown,
+  formatSkillsToMarkdown,
 } from '@/server/utils/formatTools';
 import type { Agent } from '../../agent';
 import type { ListToolsInput, ListToolsOutput } from './config';
@@ -20,6 +22,7 @@ const CORE_TOOLS = new Set([
   ToolIds.CACHED_READ,
   ToolIds.AGENT_CALL,
   ToolIds.LIST_TOOLS,
+  ToolIds.SKILL_CALL,
 ]);
 
 @tool(ToolIds.LIST_TOOLS)
@@ -34,6 +37,7 @@ export default class ListToolsTool extends Tool<
   constructor(
     @inject(ToolService) private toolService: ToolService,
     @inject(AgentService) private agentService: AgentService,
+    @inject(SkillService) private skillService: SkillService,
   ) {
     super();
   }
@@ -86,11 +90,21 @@ export default class ListToolsTool extends Tool<
       })
       .filter((a): a is Agent => a !== null);
 
+    // Skills
+    const allSkills = await this.skillService.getAllSkillInfo();
+    const filteredSkills = allSkills.filter(s => {
+      return matchFilter(`${s.id} ${s.name} ${s.description ?? ''}`);
+    });
+
     return {
       tools: formatToolsToMarkdown(toolInstances),
       agents:
         agentInstances.length > 0
           ? formatAgentsToMarkdown(agentInstances)
+          : undefined,
+      skills:
+        filteredSkills.length > 0
+          ? formatSkillsToMarkdown(filteredSkills)
           : undefined,
     };
   }
