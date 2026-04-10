@@ -119,8 +119,13 @@ export class ConversationStore {
     params: { id: string },
     req?: ApiRequest<{ id: string }>,
   ): Promise<Message[] | undefined> {
-    const messages = await req!.send();
+    const response = await req!.send();
+    const { messages, contextUsage } = response as {
+      messages: Message[];
+      contextUsage: { used: number; total: number } | null;
+    };
     this.messages[params.id] = messages;
+    this.contextUsage = contextUsage;
     return messages;
   }
 

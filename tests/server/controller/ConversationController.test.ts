@@ -17,10 +17,14 @@ describe('ConversationController', () => {
     getMessagesByConversationId: vi.fn(),
     batchDeleteMessagesInConversation: vi.fn(),
   };
+  const mockProviderService = {
+    getModel: vi.fn(),
+  };
 
   beforeEach(() => {
     conversationController = new ConversationController(
       mockConversationService as any,
+      mockProviderService as any,
     );
     mockReq = {
       user: { id: 'test-user-id' },
@@ -385,12 +389,20 @@ describe('ConversationController', () => {
     mockConversationService.getMessagesByConversationId.mockResolvedValue(
       mockMessages,
     );
+    mockConversationService.getConversationById.mockResolvedValue({
+      id: '1',
+      config: { model: { modelId: 'openai:gpt-4' } },
+    });
+    mockProviderService.getModel.mockReturnValue({ contextSize: 8192 });
 
     await conversationController.getMessagesByConversationId(
       '1',
       mockRes as Response,
     );
 
-    expect(mockRes.json).toHaveBeenCalledWith(mockMessages);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      messages: mockMessages,
+      contextUsage: { used: expect.any(Number), total: 8192 },
+    });
   });
 });

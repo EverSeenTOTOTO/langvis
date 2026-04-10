@@ -10,12 +10,16 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
 import { ConversationService } from '../service/ConversationService';
+import { ProviderService } from '../service/ProviderService';
+import { estimateTokens } from '../utils/estimateTokens';
 
 @controller('/api/conversation')
 export default class ConversationController {
   constructor(
     @inject(ConversationService)
     private conversationService: ConversationService,
+    @inject(ProviderService)
+    private providerService: ProviderService,
   ) {}
 
   @api('/', { method: 'post' })
@@ -142,7 +146,18 @@ export default class ConversationController {
     const messages =
       await this.conversationService.getMessagesByConversationId(id);
 
-    return res.json(messages);
+    // Calculate context usage
+    let contextUsage: { used: number; total: number } | null = null;
+    const conversation = await this.conversationService.getConversationById(id);
+    const modelId = conversation?.config?.model?.modelId;
+    const model = modelId ? this.providerService.getModel(modelId) : undefined;
+
+    if (model?.contextSize && messages.length > 0) {
+      const used = estimateTokens(messages, modelId);
+      contextUsage = { used, total: model.contextSize };
+    }
+
+    return res.json({ messages, contextUsage });
   }
 
   @api('/:id/messages', { method: 'delete' })
