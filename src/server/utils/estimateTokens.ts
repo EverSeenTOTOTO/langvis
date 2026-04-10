@@ -37,29 +37,6 @@ function messageToString(message: Message): string {
     }
   }
 
-  // Include events from meta if present (tool_call, tool_result, etc.)
-  if (message.meta?.events && message.meta.events.length > 0) {
-    for (const event of message.meta.events) {
-      switch (event.type) {
-        case 'tool_call':
-          parts.push(`[Tool Call: ${event.toolName}]`);
-          parts.push(JSON.stringify(event.toolArgs));
-          break;
-        case 'tool_result':
-          parts.push(`[Tool Result: ${event.toolName}]`);
-          parts.push(JSON.stringify(event.output));
-          break;
-        case 'tool_error':
-          parts.push(`[Tool Error: ${event.toolName}]`);
-          parts.push(event.error);
-          break;
-        case 'thought':
-          parts.push(`[Thought] ${event.content}`);
-          break;
-      }
-    }
-  }
-
   return parts.join('\n');
 }
 

@@ -1,10 +1,13 @@
 import { CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { Button, Flex, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
-import { lazy, useState } from 'react';
+import { lazy, Suspense } from 'react';
 import type { ToolCallTimeline } from '@/client/store/modules/MessageFSM';
 import Modal from '@/client/components/Modal';
 import './ReActAgent/index.scss';
+import { useStore } from '@/client/store';
+import type { SkillCallOutput } from '@/server/core/tool/SkillCall/config';
+import { safeJsonParse } from '@/shared/utils';
 
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
@@ -17,7 +20,7 @@ export function SkillCallBlock({
   toolCall,
   depth = 0,
 }: SkillCallBlockProps): React.ReactElement {
-  const [modalOpen, setModalOpen] = useState(false);
+  const settingStore = useStore('setting');
 
   const skillId = (toolCall.toolArgs?.skillId as string) ?? 'unknown';
   const isPending = toolCall.status === 'pending';
@@ -31,11 +34,9 @@ export function SkillCallBlock({
   );
 
   const skillContent =
-    toolCall.status === 'done' && toolCall.output
-      ? typeof toolCall.output === 'string'
-        ? toolCall.output
-        : ((toolCall.output as { content?: string })?.content ?? '')
-      : '';
+    (toolCall.status === 'done' &&
+      safeJsonParse<SkillCallOutput>(toolCall.output)?.content) ||
+    (toolCall.output as string);
 
   return (
     <div
@@ -48,10 +49,25 @@ export function SkillCallBlock({
         <Typography.Text type="secondary" className="react-tool-time">
           {dayjs(toolCall.at).format('HH:mm:ss')}
         </Typography.Text>
-        {!isPending && skillContent && (
-          <Button size="small" type="link" onClick={() => setModalOpen(true)}>
-            查看技能详情
-          </Button>
+        {!isPending && (
+          <Modal
+            title={`技能: ${skillId}`}
+            width="75%"
+            footer={false}
+            trigger={
+              <Button size="small" type="link">
+                {settingStore.tr('View')}
+              </Button>
+            }
+          >
+            <Suspense
+              fallback={
+                <Typography.Paragraph>{skillContent}</Typography.Paragraph>
+              }
+            >
+              <MarkdownRender>{skillContent}</MarkdownRender>
+            </Suspense>
+          </Modal>
         )}
       </Flex>
 
@@ -60,17 +76,6 @@ export function SkillCallBlock({
           {toolCall.error}
         </Typography.Text>
       )}
-
-      <Modal
-        title={`技能: ${skillId}`}
-        open={modalOpen}
-        onOk={() => setModalOpen(false)}
-        onCancel={() => setModalOpen(false)}
-        width={640}
-        footer={null}
-      >
-        {skillContent && <MarkdownRender>{skillContent}</MarkdownRender>}
-      </Modal>
     </div>
   );
 }

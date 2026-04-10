@@ -13,8 +13,21 @@ export default class NoneMemory extends Memory {
     if (messages[0]?.role === Role.SYSTEM) {
       result.push(messages[0]);
     }
-    if (messages[messages.length - 2]?.role === Role.USER) {
-      result.push(messages[messages.length - 2]);
+
+    // Include hidden user messages (session context)
+    // These are current-turn context, not conversation history
+    for (const msg of messages) {
+      if (msg.role === Role.USER && msg.meta?.hidden) {
+        result.push(msg);
+      }
+    }
+
+    // Include last non-hidden user message
+    const lastUserMsg = [...messages]
+      .reverse()
+      .find(m => m.role === Role.USER && !m.meta?.hidden);
+    if (lastUserMsg) {
+      result.push(lastUserMsg);
     }
 
     return result;

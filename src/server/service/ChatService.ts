@@ -243,9 +243,16 @@ export class ChatService {
       attachments?: MessageAttachment[] | null;
       meta?: Record<string, any> | null;
     };
+    assistantId?: string;
   }): Promise<PrepareTurnResult> {
-    const { conversationId, userId, systemPrompt, context, userMessage } =
-      params;
+    const {
+      conversationId,
+      userId,
+      systemPrompt,
+      context,
+      userMessage,
+      assistantId: preGeneratedAssistantId,
+    } = params;
 
     // Load existing history
     const existingMessages =
@@ -312,7 +319,7 @@ Workspace Directory: ${workDir}
     });
 
     // 5. Assistant placeholder
-    const assistantId = generateId('msg');
+    const assistantId = preGeneratedAssistantId ?? generateId('msg');
     const assistantMessage: import('@/shared/entities/Message').Message = {
       id: assistantId,
       role: Role.ASSIST,

@@ -16,3 +16,11 @@ export const sleep = (ms: number): Promise<void> => {
 
 export const wrapUntrusted = (content: string): string =>
   `<untrusted_content>\n${content}\n</untrusted_content>`;
+
+export const safeJsonParse = <T>(o: unknown, fallback?: T): T | null => {
+  try {
+    return JSON.parse(String(o)) as T;
+  } catch {
+    return fallback ?? null;
+  }
+};
