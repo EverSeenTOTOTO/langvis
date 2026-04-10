@@ -11,9 +11,12 @@ import { registerMemory } from '../decorator/core';
 import { service } from '../decorator/service';
 import { isProd } from '../utils';
 import Logger from '../utils/logger';
+import { estimateTokens } from '../utils/estimateTokens';
 import { ConversationService } from './ConversationService';
 import { RedisService } from './RedisService';
 import { SessionPhase } from '@/shared/types';
+import { ContextUsageService } from './ContextUsageService';
+import { ProviderService } from './ProviderService';
 
 /**
  * Session state persisted to Redis for reconnection support.
@@ -35,6 +38,9 @@ export class ChatService {
     @inject(RedisService) private redisService: RedisService,
     @inject(ConversationService)
     private conversationService: ConversationService,
+    @inject(ContextUsageService)
+    private contextUsageService: ContextUsageService,
+    @inject(ProviderService) private providerService: ProviderService,
   ) {
     const suffix = isProd ? '.js' : '.ts';
     const pattern = `./${isProd ? 'dist' : 'src'}/server/core/memory/*/index${suffix}`;
@@ -236,6 +242,19 @@ export class ChatService {
     const startTime = Date.now();
     let firstTokenTime: number | undefined;
 
+    // Get modelId from config for context usage calculation
+    const modelId = (config as Record<string, any>)?.model?.modelId;
+    const conversationId = session.conversationId;
+
+    // Calculate and push context usage before agent starts
+    await this.pushContextUsage(
+      memory,
+      modelId,
+      conversationId,
+      messageFSM,
+      session,
+    );
+
     try {
       for await (const event of agent.call(memory, messageFSM.ctx, config)) {
         if (messageFSM.ctx.signal.aborted) break;
@@ -274,12 +293,66 @@ export class ChatService {
       }
       await messageFSM.persist();
 
+      // Calculate context usage after persist (includes assistant reply)
+      await this.pushContextUsage(
+        memory,
+        modelId,
+        conversationId,
+        messageFSM,
+        session,
+      );
+
       const totalTime = Date.now() - startTime;
       const ttft = firstTokenTime ? firstTokenTime - startTime : null;
       const contentLength = messageFSM.message.content.length;
       const avgTokenTime = contentLength > 0 ? totalTime / contentLength : 0;
       this.logger.info(
         `Agent completed: totalTime=${totalTime}ms tokens=${contentLength} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${session.conversationId}`,
+      );
+    }
+  }
+
+  /**
+   * Calculate context usage and push to client via SSE
+   */
+  private async pushContextUsage(
+    memory: Memory,
+    modelId: string | undefined,
+    conversationId: string,
+    messageFSM: MessageFSM,
+    session: SessionFSM,
+  ): Promise<void> {
+    if (!modelId) return;
+
+    const model = this.providerService.getModel(modelId);
+    if (!model?.contextSize) return;
+
+    try {
+      // Use memory messages + current assistant message for estimation
+      const messages = await memory.retrieve();
+      const assistantMessage = messageFSM.message;
+      const allMessages = [...messages, assistantMessage];
+
+      const used = estimateTokens(allMessages, modelId);
+      const total = model.contextSize;
+
+      // Store in memory
+      this.contextUsageService.set(conversationId, { used, total });
+
+      // Create and send context_usage event
+      const contextUsageEvent = {
+        type: 'context_usage' as const,
+        messageId: messageFSM.messageId,
+        used,
+        total,
+        seq: Date.now(),
+        at: Date.now(),
+      };
+
+      session.send(contextUsageEvent);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to calculate context usage: ${(err as Error)?.message}`,
       );
     }
   }

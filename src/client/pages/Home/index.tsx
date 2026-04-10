@@ -1,4 +1,5 @@
 import Drawer from '@/client/components/Drawer';
+import ContextUsageBar from '@/client/components/ContextUsageBar';
 import { lazy, Suspense } from 'react';
 
 const ChatInput = lazy(() => import('@/client/components/ChatInput'));
@@ -159,6 +160,7 @@ const Chat: React.FC = () => {
       >
         <Messages ref={messagesRef} />
         <div className="chat-input" ref={inputRef}>
+          <ContextUsageBar />
           <Suspense
             fallback={
               <Skeleton.Input active style={{ width: '100%', height: 60 }} />

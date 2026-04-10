@@ -118,6 +118,14 @@ export type AgentEvent =
       error: string;
       seq: number;
       at: number;
+    }
+  | {
+      type: 'context_usage';
+      messageId: string;
+      used: number;
+      total: number;
+      seq: number;
+      at: number;
     };
 
 /**

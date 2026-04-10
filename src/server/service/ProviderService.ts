@@ -119,6 +119,7 @@ export class ProviderService {
         id: model.id,
         name: model.name,
         multimodal: model.multimodal,
+        contextSize: model.contextSize,
       });
     }
 

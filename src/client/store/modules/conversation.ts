@@ -19,6 +19,8 @@ export class ConversationStore {
   @hydrate()
   messages: Record<string, Message[]> = {};
 
+  contextUsage: { used: number; total: number } | null = null;
+
   constructor(
     @inject(ConversationGroupStore)
     private conversationGroupStore: ConversationGroupStore,

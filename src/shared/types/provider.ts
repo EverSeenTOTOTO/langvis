@@ -29,5 +29,10 @@ export interface ProviderDefinition {
 export interface GroupedModels {
   providerId: string;
   providerName: string;
-  models: { id: string; name: string; multimodal?: boolean }[];
+  models: {
+    id: string;
+    name: string;
+    multimodal?: boolean;
+    contextSize?: number;
+  }[];
 }
