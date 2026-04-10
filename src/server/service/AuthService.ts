@@ -1,28 +1,33 @@
 import { typeormAdapter } from '@hedystia/better-auth-typeorm';
 import { betterAuth } from 'better-auth';
 import type { Request } from 'express';
+import { inject } from 'tsyringe';
 import { service } from '../decorator/service';
 import { getSessionHeaders } from '../utils';
-import pg from './pg';
+import { DatabaseService } from './DatabaseService';
 
 @service()
 export class AuthService {
-  private readonly auth = betterAuth({
-    // @ts-expect-error type
-    database: typeormAdapter(pg),
-    emailAndPassword: {
-      enabled: true,
-    },
-  });
+  private auth: ReturnType<typeof betterAuth> | null = null;
+
+  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {
+    this.auth = betterAuth({
+      // @ts-expect-error type
+      database: typeormAdapter(this.db.dataSource),
+      emailAndPassword: {
+        enabled: true,
+      },
+    });
+  }
 
   get api() {
-    return this.auth.api;
+    return this.auth!.api;
   }
 
   protected getSessionData(req: Request) {
     const headers = getSessionHeaders(req);
 
-    return this.auth.api.getSession({
+    return this.auth!.api.getSession({
       headers,
     });
   }

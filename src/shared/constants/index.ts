@@ -38,10 +38,6 @@ export enum MemoryIds {
   CHILD = 'child_memory',
 }
 
-export const InjectTokens = {
-  PG: Symbol('postgres'),
-};
-
 export const UNGROUPED_GROUP_NAME = 'Ungrouped';
 
 export const RedisKeys = {

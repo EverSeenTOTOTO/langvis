@@ -1,19 +1,18 @@
-import { InjectTokens } from '@/shared/constants';
 import { Settings, SettingsEntity } from '@/shared/entities/Settings';
 import { inject } from 'tsyringe';
-import { DataSource } from 'typeorm';
 import { service } from '../decorator/service';
+import { DatabaseService } from './DatabaseService';
 import { LocaleService } from './LocaleService';
 
 @service()
 export class SettingsService {
   constructor(
     @inject(LocaleService) private localeService: LocaleService,
-    @inject(InjectTokens.PG) private readonly dataSource: DataSource,
+    @inject(DatabaseService) private readonly db: DatabaseService,
   ) {}
 
   async getOrCreateSettings(userId: string): Promise<Settings> {
-    const repo = this.dataSource.getRepository(SettingsEntity);
+    const repo = this.db.getRepository(SettingsEntity);
     let settings = await repo.findOne({ where: { userId } });
 
     if (!settings) {
@@ -32,7 +31,7 @@ export class SettingsService {
     userId: string,
     data: Partial<Pick<Settings, 'themeMode' | 'locale'>>,
   ): Promise<Settings> {
-    const repo = this.dataSource.getRepository(SettingsEntity);
+    const repo = this.db.getRepository(SettingsEntity);
     await repo.update({ userId }, data);
     return this.getOrCreateSettings(userId);
   }

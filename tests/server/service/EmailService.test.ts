@@ -1,11 +1,11 @@
 import { EmailService } from '@/server/service/EmailService';
-import pg from '@/server/service/pg';
+import { DatabaseService } from '@/server/service/DatabaseService';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/server/service/pg', () => ({
-  default: {
+vi.mock('@/server/service/DatabaseService', () => ({
+  DatabaseService: vi.fn().mockImplementation(() => ({
     getRepository: vi.fn(),
-  },
+  })),
 }));
 
 vi.mock('@/shared/utils', () => ({
@@ -15,10 +15,12 @@ vi.mock('@/shared/utils', () => ({
 
 describe('EmailService', () => {
   let emailService: EmailService;
+  let mockDb: DatabaseService;
   let mockRepository: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDb = new DatabaseService();
     mockRepository = {
       findAndCount: vi.fn(),
       findOneBy: vi.fn(),
@@ -27,8 +29,8 @@ describe('EmailService', () => {
       save: vi.fn(),
       delete: vi.fn(),
     };
-    vi.mocked(pg.getRepository).mockReturnValue(mockRepository as any);
-    emailService = new EmailService(pg as any);
+    (mockDb.getRepository as any).mockReturnValue(mockRepository as any);
+    emailService = new EmailService(mockDb);
   });
 
   describe('list', () => {

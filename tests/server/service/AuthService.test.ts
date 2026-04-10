@@ -1,25 +1,27 @@
-import { InjectTokens } from '@/shared/constants';
 import { AuthService } from '@/server/service/AuthService';
+import { DatabaseService } from '@/server/service/DatabaseService';
 import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { container } from 'tsyringe';
-import type { DataSource } from 'typeorm';
 
-vi.mock('@/server/service/pg');
+vi.mock('@/server/service/DatabaseService');
 vi.mock('@/server/service/redis');
 
 describe('AuthService', () => {
   let authService: AuthService;
+  let mockDb: DatabaseService;
 
   beforeEach(() => {
     container.clearInstances();
 
-    // Register mock DataSource
-    const mockDataSource = {
-      getRepository: vi.fn(),
-      query: vi.fn(),
-    } as unknown as DataSource;
+    // Create mock DatabaseService
+    mockDb = {
+      dataSource: {
+        getRepository: vi.fn(),
+        query: vi.fn(),
+      },
+    } as unknown as DatabaseService;
 
-    container.register(InjectTokens.PG, { useValue: mockDataSource });
+    container.register(DatabaseService, { useValue: mockDb });
 
     authService = container.resolve(AuthService);
   });

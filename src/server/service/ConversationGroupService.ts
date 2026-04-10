@@ -1,23 +1,18 @@
-import { InjectTokens } from '@/shared/constants';
 import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
 import { ConversationEntity } from '@/shared/entities/Conversation';
 import { inject } from 'tsyringe';
-import { DataSource } from 'typeorm';
 import { service } from '../decorator/service';
+import { DatabaseService } from './DatabaseService';
 
 @service()
 export class ConversationGroupService {
-  constructor(
-    @inject(InjectTokens.PG) private readonly dataSource: DataSource,
-  ) {}
+  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {}
 
   async createGroup(
     name: string,
     userId: string,
   ): Promise<ConversationGroupEntity> {
-    const groupRepository = this.dataSource.getRepository(
-      ConversationGroupEntity,
-    );
+    const groupRepository = this.db.getRepository(ConversationGroupEntity);
 
     // Get max order for the user's groups
     const maxOrder = await groupRepository
@@ -38,9 +33,7 @@ export class ConversationGroupService {
   }
 
   async getGroupsByUserId(userId: string) {
-    const groupRepository = this.dataSource.getRepository(
-      ConversationGroupEntity,
-    );
+    const groupRepository = this.db.getRepository(ConversationGroupEntity);
 
     // Get all groups for user with their conversations
     const groups = await groupRepository.find({
@@ -64,9 +57,7 @@ export class ConversationGroupService {
     name: string,
     userId: string,
   ): Promise<ConversationGroupEntity | null> {
-    const groupRepository = this.dataSource.getRepository(
-      ConversationGroupEntity,
-    );
+    const groupRepository = this.db.getRepository(ConversationGroupEntity);
     const group = await groupRepository.findOneBy({ id, userId });
 
     if (!group) {
@@ -81,9 +72,7 @@ export class ConversationGroupService {
     id: string,
     userId: string,
   ): Promise<{ success: boolean; deletedConversationIds: string[] }> {
-    const groupRepository = this.dataSource.getRepository(
-      ConversationGroupEntity,
-    );
+    const groupRepository = this.db.getRepository(ConversationGroupEntity);
 
     const group = await groupRepository.findOne({
       where: { id, userId },
@@ -105,9 +94,7 @@ export class ConversationGroupService {
     items: Array<{ id: string; type: 'group'; order: number }>,
     userId: string,
   ): Promise<void> {
-    const groupRepository = this.dataSource.getRepository(
-      ConversationGroupEntity,
-    );
+    const groupRepository = this.db.getRepository(ConversationGroupEntity);
 
     for (const item of items) {
       await groupRepository.update(
@@ -122,13 +109,10 @@ export class ConversationGroupService {
     items: Array<{ id: string; order: number }>,
     userId: string,
   ): Promise<void> {
-    const conversationRepository =
-      this.dataSource.getRepository(ConversationEntity);
+    const conversationRepository = this.db.getRepository(ConversationEntity);
 
     // Verify the group belongs to the user
-    const groupRepository = this.dataSource.getRepository(
-      ConversationGroupEntity,
-    );
+    const groupRepository = this.db.getRepository(ConversationGroupEntity);
     const group = await groupRepository.findOneBy({ id: groupId, userId });
 
     if (!group) {

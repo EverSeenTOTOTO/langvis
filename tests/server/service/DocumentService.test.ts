@@ -1,10 +1,10 @@
 import { DocumentService } from '@/server/service/DocumentService';
-import pg from '@/server/service/pg';
+import { DatabaseService } from '@/server/service/DatabaseService';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the pg module
-vi.mock('@/server/service/pg', () => ({
-  default: {
+// Mock the DatabaseService module
+vi.mock('@/server/service/DatabaseService', () => ({
+  DatabaseService: vi.fn().mockImplementation(() => ({
     getRepository: vi.fn().mockImplementation((entity: any) => {
       if (entity.name === 'DocumentEntity') {
         return {
@@ -20,15 +20,17 @@ vi.mock('@/server/service/pg', () => ({
       }
       return {};
     }),
-  },
+  })),
 }));
 
 describe('DocumentService', () => {
   let documentService: DocumentService;
+  let mockDb: DatabaseService;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    documentService = new DocumentService(pg as any);
+    mockDb = new DatabaseService();
+    documentService = new DocumentService(mockDb);
   });
 
   describe('listDocuments', () => {
@@ -47,7 +49,7 @@ describe('DocumentService', () => {
         },
       ];
 
-      vi.mocked(pg.getRepository).mockReturnValueOnce({
+      (mockDb.getRepository as any).mockReturnValueOnce({
         findAndCount: vi.fn(async () => [mockDocuments, 1]),
         findOneBy: vi.fn(),
         delete: vi.fn(),
@@ -63,7 +65,7 @@ describe('DocumentService', () => {
 
     it('should list documents with keyword filter using OR for title and keywords', async () => {
       const mockFindAndCount = vi.fn(async () => [[], 0]);
-      vi.mocked(pg.getRepository).mockReturnValueOnce({
+      (mockDb.getRepository as any).mockReturnValueOnce({
         findAndCount: mockFindAndCount,
         findOneBy: vi.fn(),
         delete: vi.fn(),
@@ -85,7 +87,7 @@ describe('DocumentService', () => {
 
     it('should use fuzzy search for title field', async () => {
       const mockFindAndCount = vi.fn(async () => [[], 0]);
-      vi.mocked(pg.getRepository).mockReturnValueOnce({
+      (mockDb.getRepository as any).mockReturnValueOnce({
         findAndCount: mockFindAndCount,
         findOneBy: vi.fn(),
         delete: vi.fn(),
@@ -102,7 +104,7 @@ describe('DocumentService', () => {
 
     it('should use fuzzy search for keywords field', async () => {
       const mockFindAndCount = vi.fn(async () => [[], 0]);
-      vi.mocked(pg.getRepository).mockReturnValueOnce({
+      (mockDb.getRepository as any).mockReturnValueOnce({
         findAndCount: mockFindAndCount,
         findOneBy: vi.fn(),
         delete: vi.fn(),
@@ -119,7 +121,7 @@ describe('DocumentService', () => {
 
     it('should combine keyword with category filter', async () => {
       const mockFindAndCount = vi.fn(async () => [[], 0]);
-      vi.mocked(pg.getRepository).mockReturnValueOnce({
+      (mockDb.getRepository as any).mockReturnValueOnce({
         findAndCount: mockFindAndCount,
         findOneBy: vi.fn(),
         delete: vi.fn(),
@@ -140,7 +142,7 @@ describe('DocumentService', () => {
 
     it('should list documents with category filter', async () => {
       const mockFindAndCount = vi.fn(async () => [[], 0]);
-      vi.mocked(pg.getRepository).mockReturnValueOnce({
+      (mockDb.getRepository as any).mockReturnValueOnce({
         findAndCount: mockFindAndCount,
         findOneBy: vi.fn(),
         delete: vi.fn(),
@@ -157,7 +159,7 @@ describe('DocumentService', () => {
 
     it('should use custom page and pageSize', async () => {
       const mockFindAndCount = vi.fn(async () => [[], 0]);
-      vi.mocked(pg.getRepository).mockReturnValueOnce({
+      (mockDb.getRepository as any).mockReturnValueOnce({
         findAndCount: mockFindAndCount,
         findOneBy: vi.fn(),
         delete: vi.fn(),
@@ -190,13 +192,13 @@ describe('DocumentService', () => {
         updatedAt: new Date(),
       };
 
-      vi.mocked(pg.getRepository).mockReturnValueOnce({
+      (mockDb.getRepository as any).mockReturnValueOnce({
         findAndCount: vi.fn(),
         findOneBy: vi.fn(async () => mockDocument),
         delete: vi.fn(),
       } as any);
 
-      vi.mocked(pg.getRepository).mockReturnValueOnce({
+      (mockDb.getRepository as any).mockReturnValueOnce({
         count: vi.fn(async () => 5),
         delete: vi.fn(),
       } as any);
@@ -208,7 +210,7 @@ describe('DocumentService', () => {
     });
 
     it('should return null if document not found', async () => {
-      vi.mocked(pg.getRepository).mockReturnValueOnce({
+      (mockDb.getRepository as any).mockReturnValueOnce({
         findAndCount: vi.fn(),
         findOneBy: vi.fn(async () => null),
         delete: vi.fn(),
@@ -222,7 +224,7 @@ describe('DocumentService', () => {
 
   describe('deleteDocument', () => {
     it('should delete document and its chunks', async () => {
-      vi.mocked(pg.getRepository).mockReturnValueOnce({
+      (mockDb.getRepository as any).mockReturnValueOnce({
         findAndCount: vi.fn(),
         findOneBy: vi.fn(),
         delete: vi.fn(async () => ({ affected: 1 })),
@@ -234,7 +236,7 @@ describe('DocumentService', () => {
     });
 
     it('should return false if document not found', async () => {
-      vi.mocked(pg.getRepository).mockReturnValueOnce({
+      (mockDb.getRepository as any).mockReturnValueOnce({
         findAndCount: vi.fn(),
         findOneBy: vi.fn(),
         delete: vi.fn(async () => ({ affected: 0 })),

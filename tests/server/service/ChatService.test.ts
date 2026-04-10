@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { container } from 'tsyringe';
 import { ChatService } from '@/server/service/ChatService';
+import { DatabaseService } from '@/server/service/DatabaseService';
 import { Agent } from '@/server/core/agent';
 import { Memory } from '@/server/core/memory';
 import { PendingMessage } from '@/server/core/PendingMessage';
 import { TraceContext } from '@/server/core/TraceContext';
 import { Role } from '@/shared/entities/Message';
-import { InjectTokens, MemoryIds, RedisKeys } from '@/shared/constants';
+import { MemoryIds, RedisKeys } from '@/shared/constants';
 import { RedisService } from '@/server/service/RedisService';
 import { ConversationService } from '@/server/service/ConversationService';
-import type { DataSource } from 'typeorm';
 
 vi.mock('globby', () => ({
   globby: vi.fn().mockResolvedValue([]),
@@ -19,6 +19,7 @@ describe('ChatService', () => {
   let chatService: ChatService;
   let mockRedisService: any;
   let mockConversationService: any;
+  let mockDb: DatabaseService;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -36,13 +37,15 @@ describe('ChatService', () => {
       findNonTerminalAssistantMessages: vi.fn().mockResolvedValue([]),
     };
 
-    // Register mock DataSource
-    const mockDataSource = {
-      getRepository: vi.fn(),
-      query: vi.fn(),
-    } as unknown as DataSource;
+    // Create mock DatabaseService
+    mockDb = {
+      dataSource: {
+        getRepository: vi.fn(),
+        query: vi.fn(),
+      },
+    } as unknown as DatabaseService;
 
-    container.register(InjectTokens.PG, { useValue: mockDataSource });
+    container.register(DatabaseService, { useValue: mockDb });
     container.register(RedisService, { useValue: mockRedisService });
     container.register(ConversationService, {
       useValue: mockConversationService,

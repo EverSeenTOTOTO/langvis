@@ -1,49 +1,28 @@
 import { ConversationService } from '@/server/service/ConversationService';
-import pg from '@/server/service/pg';
+import { DatabaseService } from '@/server/service/DatabaseService';
 import { AgentIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the pg module
-vi.mock('@/server/service/pg', () => ({
-  default: {
-    getRepository: vi.fn().mockImplementation((entity: any) => {
-      if (entity.name === 'ConversationEntity') {
-        return {
-          create: vi.fn(e => e),
-          save: vi.fn(async e => e),
-          findOneBy: vi.fn(async () => null),
-          findOne: vi.fn(async () => null),
-          find: vi.fn(async () => []),
-          delete: vi.fn(async () => ({ affected: 0 })),
-          createQueryBuilder: vi.fn(() => ({
-            where: vi.fn().mockReturnThis(),
-            andWhere: vi.fn().mockReturnThis(),
-            select: vi.fn().mockReturnThis(),
-            getRawOne: vi.fn(async () => ({ max: 0 })),
-          })),
-        };
-      } else if (entity.name === 'MessageEntity') {
-        return {
-          create: vi.fn(e => e),
-          save: vi.fn(async e => e),
-          findOneBy: vi.fn(async () => null),
-          find: vi.fn(async () => []),
-          delete: vi.fn(async () => ({ affected: 0 })),
-        };
-      } else if (entity.name === 'ConversationGroupEntity') {
-        return {
-          create: vi.fn(e => e),
-          save: vi.fn(async e => e),
-          findOneBy: vi.fn(async () => null),
-          find: vi.fn(async () => []),
-          createQueryBuilder: vi.fn(() => ({
-            where: vi.fn().mockReturnThis(),
-            select: vi.fn().mockReturnThis(),
-            getRawOne: vi.fn(async () => ({ max: 0 })),
-          })),
-        };
-      }
+// Mock the DatabaseService module
+vi.mock('@/server/service/DatabaseService', () => {
+  const mockGetRepository = vi.fn().mockImplementation((entity: any) => {
+    if (entity.name === 'ConversationEntity') {
+      return {
+        create: vi.fn(e => e),
+        save: vi.fn(async e => e),
+        findOneBy: vi.fn(async () => null),
+        findOne: vi.fn(async () => null),
+        find: vi.fn(async () => []),
+        delete: vi.fn(async () => ({ affected: 0 })),
+        createQueryBuilder: vi.fn(() => ({
+          where: vi.fn().mockReturnThis(),
+          andWhere: vi.fn().mockReturnThis(),
+          select: vi.fn().mockReturnThis(),
+          getRawOne: vi.fn(async () => ({ max: 0 })),
+        })),
+      };
+    } else if (entity.name === 'MessageEntity') {
       return {
         create: vi.fn(e => e),
         save: vi.fn(async e => e),
@@ -51,16 +30,46 @@ vi.mock('@/server/service/pg', () => ({
         find: vi.fn(async () => []),
         delete: vi.fn(async () => ({ affected: 0 })),
       };
-    }),
-    isInitialized: true,
-  },
-}));
+    } else if (entity.name === 'ConversationGroupEntity') {
+      return {
+        create: vi.fn(e => e),
+        save: vi.fn(async e => e),
+        findOneBy: vi.fn(async () => null),
+        find: vi.fn(async () => []),
+        createQueryBuilder: vi.fn(() => ({
+          where: vi.fn().mockReturnThis(),
+          select: vi.fn().mockReturnThis(),
+          getRawOne: vi.fn(async () => ({ max: 0 })),
+        })),
+      };
+    }
+    return {
+      create: vi.fn(e => e),
+      save: vi.fn(async e => e),
+      findOneBy: vi.fn(async () => null),
+      find: vi.fn(async () => []),
+      delete: vi.fn(async () => ({ affected: 0 })),
+    };
+  });
+
+  return {
+    DatabaseService: vi.fn().mockImplementation(() => ({
+      getRepository: mockGetRepository,
+      dataSource: {
+        transaction: vi.fn(async (cb: any) => cb({})),
+      },
+    })),
+  };
+});
 
 describe('ConversationService', () => {
   let conversationService: ConversationService;
+  let mockDb: DatabaseService;
 
   beforeEach(() => {
-    conversationService = new ConversationService(pg as any);
+    vi.clearAllMocks();
+    mockDb = new DatabaseService();
+    conversationService = new ConversationService(mockDb);
   });
 
   it('should create a conversation', async () => {
@@ -82,7 +91,7 @@ describe('ConversationService', () => {
       order: 0,
     };
 
-    (pg.getRepository as any).mockImplementation((entity: any) => {
+    (mockDb.getRepository as any).mockImplementation((entity: any) => {
       if (entity.name === 'ConversationEntity') {
         return {
           create: vi.fn().mockImplementation(data => {
@@ -131,7 +140,7 @@ describe('ConversationService', () => {
       order: 0,
     };
 
-    (pg.getRepository as any).mockImplementation((entity: any) => {
+    (mockDb.getRepository as any).mockImplementation((entity: any) => {
       if (entity.name === 'ConversationEntity') {
         return {
           create: vi.fn().mockImplementation(data => {
@@ -174,7 +183,7 @@ describe('ConversationService', () => {
       messages: [],
     };
 
-    (pg.getRepository as any).mockReturnValue({
+    (mockDb.getRepository as any).mockReturnValue({
       findOneBy: vi.fn().mockResolvedValue(mockConversation),
     });
 
@@ -191,7 +200,7 @@ describe('ConversationService', () => {
       messages: [],
     };
 
-    (pg.getRepository as any).mockReturnValue({
+    (mockDb.getRepository as any).mockReturnValue({
       findOneBy: vi.fn().mockResolvedValue(mockConversation),
       save: vi.fn().mockResolvedValue(mockConversation),
     });
@@ -213,7 +222,7 @@ describe('ConversationService', () => {
       messages: [],
     };
 
-    (pg.getRepository as any).mockReturnValue({
+    (mockDb.getRepository as any).mockReturnValue({
       findOneBy: vi.fn().mockResolvedValue(mockConversation),
       save: vi.fn().mockResolvedValue(mockConversation),
     });
@@ -236,7 +245,7 @@ describe('ConversationService', () => {
       messages: [],
     };
 
-    (pg.getRepository as any).mockReturnValue({
+    (mockDb.getRepository as any).mockReturnValue({
       findOneBy: vi.fn().mockResolvedValue(mockConversation),
       save: vi.fn().mockImplementation(entity => {
         expect(entity.name).toBe('Updated Conversation');
@@ -257,7 +266,7 @@ describe('ConversationService', () => {
   it('should delete a conversation', async () => {
     const deleteMock = vi.fn().mockResolvedValue({ affected: 1 });
 
-    (pg.getRepository as any).mockImplementation((entity: any) => {
+    (mockDb.getRepository as any).mockImplementation((entity: any) => {
       if (entity.name === 'ConversationEntity') {
         return {
           delete: deleteMock,
@@ -284,7 +293,7 @@ describe('ConversationService', () => {
     // This test verifies the delete operation is called correctly
     const deleteMock = vi.fn().mockResolvedValue({ affected: 1 });
 
-    (pg.getRepository as any).mockImplementation((entity: any) => {
+    (mockDb.getRepository as any).mockImplementation((entity: any) => {
       if (entity.name === 'ConversationEntity') {
         return {
           delete: deleteMock,
@@ -324,7 +333,7 @@ describe('ConversationService', () => {
       },
     ];
 
-    (pg.getRepository as any).mockReturnValue({
+    (mockDb.getRepository as any).mockReturnValue({
       find: vi.fn().mockResolvedValue(mockMessages),
     });
 
@@ -342,7 +351,7 @@ describe('ConversationService', () => {
     };
 
     // Mock message repository
-    (pg.getRepository as any).mockReturnValueOnce({
+    (mockDb.getRepository as any).mockReturnValueOnce({
       findOneBy: vi.fn().mockResolvedValue(mockMessage),
       save: vi.fn().mockResolvedValue(mockMessage),
     });
@@ -356,7 +365,7 @@ describe('ConversationService', () => {
 
   it('should return null when updating a non-existent message', async () => {
     // Mock message repository
-    (pg.getRepository as any).mockReturnValueOnce({
+    (mockDb.getRepository as any).mockReturnValueOnce({
       findOneBy: vi.fn().mockResolvedValue(null),
     });
 
@@ -385,12 +394,12 @@ describe('ConversationService', () => {
     ];
 
     // Mock conversation repository
-    (pg.getRepository as any).mockReturnValueOnce({
+    (mockDb.getRepository as any).mockReturnValueOnce({
       findOneBy: vi.fn().mockResolvedValue(mockConversation),
     });
 
     // Mock message repository
-    (pg.getRepository as any).mockReturnValueOnce({
+    (mockDb.getRepository as any).mockReturnValueOnce({
       create: vi.fn().mockImplementation(data => data),
       save: vi.fn().mockResolvedValue(expectedMessages),
     });
@@ -407,7 +416,7 @@ describe('ConversationService', () => {
     const messagesData = [{ role: Role.USER, content: 'Hello' }];
 
     // Mock conversation repository to return null
-    (pg.getRepository as any).mockReturnValueOnce({
+    (mockDb.getRepository as any).mockReturnValueOnce({
       findOneBy: vi.fn().mockResolvedValue(null),
     });
 
@@ -435,7 +444,7 @@ describe('ConversationService', () => {
       order: 0,
     };
 
-    (pg.getRepository as any).mockImplementation((entity: any) => {
+    (mockDb.getRepository as any).mockImplementation((entity: any) => {
       if (entity.name === 'ConversationEntity') {
         return {
           create: vi.fn().mockReturnValue(mockConversation),
@@ -483,7 +492,7 @@ describe('ConversationService', () => {
       order: 100,
     };
 
-    (pg.getRepository as any).mockImplementation((entity: any) => {
+    (mockDb.getRepository as any).mockImplementation((entity: any) => {
       if (entity.name === 'ConversationEntity') {
         return {
           create: vi.fn().mockReturnValue(mockConversation),
@@ -536,7 +545,7 @@ describe('ConversationService', () => {
       order: 100,
     };
 
-    (pg.getRepository as any).mockImplementation((entity: any) => {
+    (mockDb.getRepository as any).mockImplementation((entity: any) => {
       if (entity.name === 'ConversationEntity') {
         return {
           create: vi.fn().mockReturnValue(mockConversation),
@@ -597,7 +606,7 @@ describe('ConversationService', () => {
       order: 0,
     };
 
-    (pg.getRepository as any).mockImplementation((entity: any) => {
+    (mockDb.getRepository as any).mockImplementation((entity: any) => {
       if (entity.name === 'ConversationEntity') {
         return {
           create: vi.fn().mockReturnValue(mockConversation),
@@ -641,7 +650,7 @@ describe('ConversationService', () => {
       order: 0,
     };
 
-    (pg.getRepository as any).mockImplementation((entity: any) => {
+    (mockDb.getRepository as any).mockImplementation((entity: any) => {
       if (entity.name === 'ConversationEntity') {
         return {
           findOneBy: vi.fn().mockResolvedValue(mockConversation),

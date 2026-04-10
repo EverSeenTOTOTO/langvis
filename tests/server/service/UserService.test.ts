@@ -1,5 +1,6 @@
 import { describe, it, beforeEach, afterEach, vi, expect } from 'vitest';
 import { UserService } from '@/server/service/UserService';
+import { DatabaseService } from '@/server/service/DatabaseService';
 
 // Create a mock repository with the needed methods
 const mockRepository = {
@@ -7,26 +8,26 @@ const mockRepository = {
   findOneBy: vi.fn(),
 };
 
-// Mock the pg module
-vi.mock('@/server/service/pg', () => {
+// Mock the DatabaseService module
+vi.mock('@/server/service/DatabaseService', () => {
   return {
-    default: {
+    DatabaseService: vi.fn().mockImplementation(() => ({
       getRepository: vi.fn(() => mockRepository),
-      isInitialized: true,
-    },
-    __esModule: true,
+    })),
   };
 });
 
 describe('UserService', () => {
   let userService: UserService;
+  let mockDb: DatabaseService;
 
   beforeEach(() => {
     // Clear all mocks before each test
     vi.clearAllMocks();
 
-    // Create a new instance of UserService for each test
-    userService = new UserService();
+    // Create a new instance
+    mockDb = new DatabaseService();
+    userService = new UserService(mockDb);
   });
 
   afterEach(() => {
