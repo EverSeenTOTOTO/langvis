@@ -1,4 +1,3 @@
-import { InjectTokens } from '@/shared/constants';
 import { EmailEntity } from '@/shared/entities/Email';
 import { generateId } from '@/shared/utils';
 import { inject } from 'tsyringe';
@@ -8,12 +7,12 @@ import {
   Like,
   MoreThanOrEqual,
   type FindOptionsWhere,
-  DataSource,
 } from 'typeorm';
 import { service } from '../decorator/service';
 import Logger from '../utils/logger';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 import type { simpleParser as SimpleParserFn } from 'mailparser';
+import { DatabaseService } from './DatabaseService';
 
 export interface EmailListParams {
   from?: string;
@@ -56,12 +55,10 @@ export interface InboundEmailResult {
 export class EmailService {
   private readonly logger = Logger.child({ source: 'EmailService' });
 
-  constructor(
-    @inject(InjectTokens.PG) private readonly dataSource: DataSource,
-  ) {}
+  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {}
 
   private get repository() {
-    return this.dataSource.getRepository(EmailEntity);
+    return this.db.getRepository(EmailEntity);
   }
 
   async list(params: EmailListParams): Promise<EmailListResponse> {

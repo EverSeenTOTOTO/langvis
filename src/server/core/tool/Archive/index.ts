@@ -1,14 +1,14 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
-import { InjectTokens, ToolIds } from '@/shared/constants';
+import { ToolIds } from '@/shared/constants';
 import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
 import { DocumentEntity } from '@/shared/entities/Document';
 import type { Logger } from '@/server/utils/logger';
 import type { ToolConfig, AgentEvent } from '@/shared/types';
-import { DataSource } from 'typeorm';
 import { inject } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
+import { DatabaseService } from '@/server/service/DatabaseService';
 import type { ArchiveInput, ArchiveOutput } from './config';
 import { config } from './config';
 
@@ -18,9 +18,7 @@ export default class ArchiveTool extends Tool<ArchiveInput, ArchiveOutput> {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  constructor(
-    @inject(InjectTokens.PG) private readonly dataSource: DataSource,
-  ) {
+  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {
     super();
   }
 
@@ -35,7 +33,7 @@ export default class ArchiveTool extends Tool<ArchiveInput, ArchiveOutput> {
       data: { title: document.title, chunkCount: chunks.length },
     });
 
-    const result = await this.dataSource.transaction(async manager => {
+    const result = await this.db.dataSource.transaction(async manager => {
       // Create document
       const doc = manager.create(DocumentEntity, {
         title: document.title,

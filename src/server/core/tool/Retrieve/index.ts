@@ -1,12 +1,12 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
-import { InjectTokens, ToolIds } from '@/shared/constants';
+import { ToolIds } from '@/shared/constants';
 import type { Logger } from '@/server/utils/logger';
 import type { AgentEvent, ToolConfig } from '@/shared/types';
-import { DataSource } from 'typeorm';
 import { container, inject } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
+import { DatabaseService } from '@/server/service/DatabaseService';
 import type EmbedTool from '../Embed';
 import type { RetrieveInput, RetrieveOutput } from './config';
 import { config } from './config';
@@ -17,9 +17,7 @@ export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  constructor(
-    @inject(InjectTokens.PG) private readonly dataSource: DataSource,
-  ) {
+  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {
     super();
   }
 
@@ -66,7 +64,7 @@ export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
       LIMIT $2
     `;
 
-    const rows = await this.dataSource.query(rawQuery, [vectorStr, limit]);
+    const rows = await this.db.dataSource.query(rawQuery, [vectorStr, limit]);
 
     // 3. Calculate similarity and filter by threshold
     const results = rows

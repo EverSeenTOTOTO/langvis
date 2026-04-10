@@ -2,7 +2,7 @@ import ArchiveTool from '@/server/core/tool/Archive';
 import type { ArchiveOutput } from '@/server/core/tool/Archive/config';
 import logger from '@/server/utils/logger';
 import { AgentEvent } from '@/shared/types';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '@/server/service/DatabaseService';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext } from '../../helpers/context';
 
@@ -44,7 +44,7 @@ async function collectEvents(
 
 describe('ArchiveTool', () => {
   let archiveTool: ArchiveTool;
-  let mockDataSource: DataSource;
+  let mockDb: DatabaseService;
   let mockManager: any;
 
   beforeEach(() => {
@@ -57,13 +57,15 @@ describe('ArchiveTool', () => {
       save: vi.fn().mockResolvedValue(undefined),
     };
 
-    mockDataSource = {
-      transaction: vi.fn().mockImplementation(async fn => {
-        return fn(mockManager);
-      }),
-    } as unknown as DataSource;
+    mockDb = {
+      dataSource: {
+        transaction: vi.fn().mockImplementation(async (fn: any) => {
+          return fn(mockManager);
+        }),
+      },
+    } as unknown as DatabaseService;
 
-    archiveTool = new ArchiveTool(mockDataSource);
+    archiveTool = new ArchiveTool(mockDb);
     (archiveTool as any).logger = logger;
   });
 

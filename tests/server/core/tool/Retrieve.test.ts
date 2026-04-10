@@ -4,9 +4,9 @@ import type { RetrieveOutput } from '@/server/core/tool/Retrieve/config';
 import logger from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '@/server/service/DatabaseService';
 import { container } from 'tsyringe';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext } from '../../helpers/context';
 
 vi.mock('@/server/utils/logger', () => {
@@ -47,25 +47,27 @@ async function collectEvents(
 
 describe('RetrieveTool', () => {
   let retrieveTool: RetrieveTool;
-  let mockDataSource: DataSource;
+  let mockDb: DatabaseService;
   let mockEmbedTool: EmbedTool;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockDataSource = {
-      query: vi.fn().mockResolvedValue([
-        {
-          chunkId: 'chunk_1',
-          content: 'Relevant content',
-          distance: '0.2',
-          documentId: 'doc_1',
-          title: 'Test Document',
-          category: 'tech_blog',
-          sourceUrl: 'https://example.com',
-        },
-      ]),
-    } as unknown as DataSource;
+    mockDb = {
+      dataSource: {
+        query: vi.fn().mockResolvedValue([
+          {
+            chunkId: 'chunk_1',
+            content: 'Relevant content',
+            distance: '0.2',
+            documentId: 'doc_1',
+            title: 'Test Document',
+            category: 'tech_blog',
+            sourceUrl: 'https://example.com',
+          },
+        ]),
+      },
+    } as unknown as DatabaseService;
 
     mockEmbedTool = {
       call: vi.fn().mockImplementation(async function* () {
@@ -93,7 +95,7 @@ describe('RetrieveTool', () => {
 
     container.register(ToolIds.EMBEDDING_GENERATE, { useValue: mockEmbedTool });
 
-    retrieveTool = new RetrieveTool(mockDataSource);
+    retrieveTool = new RetrieveTool(mockDb);
     (retrieveTool as any).logger = logger;
   });
 
@@ -123,37 +125,39 @@ describe('RetrieveTool', () => {
       const ctx = createMockContext();
       await collectEvents(retrieveTool.call({ query: 'test', limit: 5 }, ctx));
 
-      expect(mockDataSource.query).toHaveBeenCalledWith(expect.any(String), [
+      expect(mockDb.dataSource.query).toHaveBeenCalledWith(expect.any(String), [
         expect.any(String),
         5,
       ]);
     });
 
     it('should filter results by threshold', async () => {
-      mockDataSource = {
-        query: vi.fn().mockResolvedValue([
-          {
-            chunkId: 'chunk_1',
-            content: 'High similarity',
-            distance: '0.1',
-            documentId: 'doc_1',
-            title: 'Doc 1',
-            category: 'tech_blog',
-            sourceUrl: null,
-          },
-          {
-            chunkId: 'chunk_2',
-            content: 'Low similarity',
-            distance: '0.9',
-            documentId: 'doc_2',
-            title: 'Doc 2',
-            category: 'other',
-            sourceUrl: null,
-          },
-        ]),
-      } as unknown as DataSource;
+      mockDb = {
+        dataSource: {
+          query: vi.fn().mockResolvedValue([
+            {
+              chunkId: 'chunk_1',
+              content: 'High similarity',
+              distance: '0.1',
+              documentId: 'doc_1',
+              title: 'Doc 1',
+              category: 'tech_blog',
+              sourceUrl: null,
+            },
+            {
+              chunkId: 'chunk_2',
+              content: 'Low similarity',
+              distance: '0.9',
+              documentId: 'doc_2',
+              title: 'Doc 2',
+              category: 'other',
+              sourceUrl: null,
+            },
+          ]),
+        },
+      } as unknown as DatabaseService;
 
-      retrieveTool = new RetrieveTool(mockDataSource);
+      retrieveTool = new RetrieveTool(mockDb);
       (retrieveTool as any).logger = logger;
 
       const ctx = createMockContext();
@@ -187,11 +191,13 @@ describe('RetrieveTool', () => {
     });
 
     it('should handle empty results', async () => {
-      mockDataSource = {
-        query: vi.fn().mockResolvedValue([]),
-      } as unknown as DataSource;
+      mockDb = {
+        dataSource: {
+          query: vi.fn().mockResolvedValue([]),
+        },
+      } as unknown as DatabaseService;
 
-      retrieveTool = new RetrieveTool(mockDataSource);
+      retrieveTool = new RetrieveTool(mockDb);
       (retrieveTool as any).logger = logger;
 
       const ctx = createMockContext();
