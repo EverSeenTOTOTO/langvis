@@ -17,6 +17,10 @@ export const createPrompt = (agent: Agent, parentPrompt: Prompt) => {
       `You can delegate subtasks to specialized agents using the \`agent_call\` tool:\n\n${formatAgentsToMarkdown(agent.agents ?? [])}`,
     )
     .with(
+      'Skills',
+      `You can load workflow guidance using the \`skill_call\` tool. Skills provide step-by-step instructions for specific tasks. Call \`skill_call\` with a \`skillId\` to load the guidance, then follow it in subsequent iterations.\n\nUse \`list_tools\` to discover available skills.`,
+    )
+    .with(
       'Output language',
       '- Default to Chinese unless the user requests another language.',
     )
@@ -104,6 +108,21 @@ Assistant:
 {
   "final_answer": "根据专业分析，该公司的财务状况如下：..."
 }
-</example:call-agent>`,
+</example:call-agent>
+
+<example:call-skill>
+User: 帮我处理这个PDF文件
+Assistant:
+{
+  "thought": "用户需要处理PDF文件，先加载PDF处理技能获取工作流指导",
+  "action": { "tool": "skill_call", "input": { "skillId": "pdf" } }
+}
+(Observation: {"content": "## PDF处理技能\\n\\n### 步骤\\n1. 先用 bash 检查文件..."})
+Assistant:
+{
+  "thought": "已获取PDF处理工作流指导，按照步骤先检查文件是否存在",
+  "action": { "tool": "bash", "input": { "command": "ls -la /uploads/file.pdf" } }
+}
+</example:call-skill>`,
     );
 };

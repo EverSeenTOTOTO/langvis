@@ -1,6 +1,7 @@
 import { Tool } from '@/server/core/tool';
 import type { JSONSchemaObject } from 'openai/lib/jsonschema.mjs';
 import { Agent } from '../core/agent';
+import type { SkillInfo } from '../service/SkillService';
 
 export function formatAgentsToMarkdown(agents: Agent[]): string {
   if (!agents || agents.length === 0) {
@@ -31,6 +32,25 @@ export function formatAgentsToMarkdown(agents: Agent[]): string {
         sections.push('');
       }
 
+      return sections.join('\n');
+    })
+    .join('\n---\n\n');
+}
+
+export function formatSkillsToMarkdown(skills: SkillInfo[]): string {
+  if (!skills || skills.length === 0) {
+    return 'No builtin skills available.';
+  }
+
+  return skills
+    .map(skill => {
+      const sections: string[] = [];
+      sections.push(`### ${skill.id}`);
+      sections.push('');
+      sections.push(skill.description);
+      sections.push('');
+      sections.push('**Input:** `skillId` (string) — 技能ID');
+      sections.push('');
       return sections.join('\n');
     })
     .join('\n---\n\n');
