@@ -5,9 +5,7 @@ export enum ToolIds {
   TEXT_TO_SPEECH = 'text_to_speech',
   WEB_FETCH = 'web_fetch',
   ASK_USER = 'ask_user',
-  DOCUMENT_ARCHIVE = 'document_archive',
   DOCUMENT_SEARCH = 'document_search',
-  DOCUMENT_ARCHIVE_BATCH = 'document_archive_batch',
   LINKS_EXTRACT = 'links_extract',
   CACHED_READ = 'cached_read',
   POSITION_ADJUSTMENT_ADVICE = 'position_adjustment_advice',
@@ -29,8 +27,6 @@ export enum AgentIds {
   CHAT = 'chat_agent',
   REACT = 'react_agent',
   GIRLFRIEND = 'girlfriend_agent',
-  DOCUMENT = 'document_agent',
-  FINANCIAL = 'financial_agent',
 }
 
 export enum MemoryIds {

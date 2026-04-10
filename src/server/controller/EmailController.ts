@@ -15,6 +15,7 @@ import { controller } from '../decorator/controller';
 import { body, param, query, request, response } from '../decorator/param';
 import { AuthService } from '../service/AuthService';
 import { ChatService } from '../service/ChatService';
+import { SkillService } from '../service/SkillService';
 import { ConversationService } from '../service/ConversationService';
 import { EmailService } from '../service/EmailService';
 import { compress, type CachedReference } from '../utils/cache';
@@ -37,6 +38,8 @@ export default class EmailController {
     private readonly conversationService: ConversationService,
     @inject(ChatService)
     private readonly chatService: ChatService,
+    @inject(SkillService)
+    private readonly skillService: SkillService,
     @inject(AuthService)
     private readonly authService: AuthService,
   ) {}
@@ -131,7 +134,7 @@ export default class EmailController {
     const conversation = await this.conversationService.createConversation(
       `归档邮件: ${email.subject}`,
       userId,
-      { agent: AgentIds.DOCUMENT },
+      { agent: AgentIds.REACT },
       null,
       'Email Archive',
     );
@@ -142,7 +145,7 @@ export default class EmailController {
       });
     }
 
-    const agent = container.resolve<Agent>(AgentIds.DOCUMENT);
+    const agent = container.resolve<Agent>(AgentIds.REACT);
     res.status(200).json({ conversationId: conversation.id });
 
     await this.startArchiveSession(conversation, email, agent);
@@ -189,6 +192,10 @@ export default class EmailController {
     );
     session.setMemory(memory);
 
+    // Load skill content as context
+    const skillContent =
+      await this.skillService.getSkillContent('document-archive');
+
     // Prepare turn messages
     const { messages, assistantId, assistantMessage } =
       await this.chatService.prepareTurn({
@@ -200,6 +207,7 @@ export default class EmailController {
           content: '', // Placeholder, will be updated after cache
           meta: { emailId: email.id },
         },
+        context: skillContent,
       });
 
     // Update TraceContext with messageId for cache lookup

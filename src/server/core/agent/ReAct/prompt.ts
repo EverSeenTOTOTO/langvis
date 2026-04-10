@@ -90,23 +90,22 @@ Assistant:
 </example:use-tool>
 
 <example:call-agent>
-User: 帮我分析这份财务报表，给出投资建议。
+User: 帮我总结这段长文本的结论。
 Assistant:
 {
-  "thought": "用户上传了财务报表文件，需要调用 financial_agent 进行专业分析。文件路径是 /uploads/2024_financial.xlsx",
+  "thought": "需要调用子agent来总结这段文本",
   "action": {
     "tool": "agent_call",
     "input": {
-      "agentId": "financial_agent",
-      "context": "文件路径：/uploads/2024_financial.xlsx",
-      "query": "分析这份财务报表，重点关注盈利能力、偿债能力和成长性，并给出投资建议。"
+      "agentId": "document_conclude_agent",
+      "query": "请总结以下文本的结论：{内容或缓存引用}"
     }
   }
 }
-(Observation: {"success": true, "content": "财务分析报告：..."})
+(Observation: {"success": true, "content": "结论：..."})
 Assistant:
 {
-  "final_answer": "根据专业分析，该公司的财务状况如下：..."
+  "final_answer": "总结如下：..."
 }
 </example:call-agent>
 
