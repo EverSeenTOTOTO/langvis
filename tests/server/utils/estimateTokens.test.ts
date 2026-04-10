@@ -79,9 +79,9 @@ describe('estimateTokens', () => {
   });
 
   describe('message with metadata', () => {
-    it('should include tool_call events in estimation', () => {
-      const simpleMessage = createMessage(Role.USER, 'Hello');
-      const messageWithToolCall = createMessage(Role.ASSIST, '', {
+    it('should not count meta.events in estimation', () => {
+      const simpleMessage = createMessage(Role.ASSIST, 'Final answer');
+      const messageWithEvents = createMessage(Role.ASSIST, 'Final answer', {
         events: [
           {
             type: 'tool_call',
@@ -96,48 +96,23 @@ describe('estimateTokens', () => {
       });
 
       const simpleTokens = estimateTokens([simpleMessage], 'openai:gpt-4');
-      const toolCallTokens = estimateTokens(
-        [messageWithToolCall],
-        'openai:gpt-4',
-      );
+      const eventsTokens = estimateTokens([messageWithEvents], 'openai:gpt-4');
 
-      expect(toolCallTokens).toBeGreaterThan(simpleTokens);
+      // meta.events are UI-only data and should not affect token estimation
+      expect(eventsTokens).toBe(simpleTokens);
     });
 
-    it('should include tool_result events in estimation', () => {
-      const messageWithResult = createMessage(Role.ASSIST, '', {
-        events: [
-          {
-            type: 'tool_result',
-            messageId: 'msg_test',
-            callId: 'tc_1',
-            toolName: 'test_tool',
-            output: { data: 'This is a large result from the tool' },
-            seq: 2,
-            at: Date.now(),
-          },
-        ],
-      });
+    it('should count attachments in estimation', () => {
+      const messageWithoutAttachment = createMessage(Role.USER, 'Check this');
+      const messageWithAttachment = createMessage(Role.USER, 'Check this');
+      messageWithAttachment.attachments = [
+        { filename: 'photo.png', mimeType: 'image/png', url: 'https://example.com/photo.png' },
+      ];
 
-      const tokens = estimateTokens([messageWithResult], 'openai:gpt-4');
-      expect(tokens).toBeGreaterThan(0);
-    });
+      const withoutTokens = estimateTokens([messageWithoutAttachment], 'openai:gpt-4');
+      const withTokens = estimateTokens([messageWithAttachment], 'openai:gpt-4');
 
-    it('should include thought events in estimation', () => {
-      const messageWithThought = createMessage(Role.ASSIST, 'Final answer', {
-        events: [
-          {
-            type: 'thought',
-            messageId: 'msg_test',
-            content: 'Let me think about this problem step by step...',
-            seq: 1,
-            at: Date.now(),
-          },
-        ],
-      });
-
-      const tokens = estimateTokens([messageWithThought], 'openai:gpt-4');
-      expect(tokens).toBeGreaterThan(0);
+      expect(withTokens).toBeGreaterThan(withoutTokens);
     });
   });
 

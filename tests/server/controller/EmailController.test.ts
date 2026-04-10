@@ -28,6 +28,10 @@ const mockAuthService = {
   getUserId: vi.fn(),
 };
 
+const mockProviderService = {
+  getDefaultModel: vi.fn().mockReturnValue({ id: 'test-provider:test-model' }),
+};
+
 vi.mock('@/server/utils/logger', () => ({
   default: {
     child: () => ({
@@ -122,11 +126,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
-        {
-          getAllSkillInfo: vi.fn().mockResolvedValue([]),
-          getSkillContent: vi.fn().mockResolvedValue(undefined),
-        } as any,
         mockAuthService as any,
+        mockProviderService as any,
       );
 
       await emailController.list({}, mockRes as Response);
@@ -159,11 +160,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
-        {
-          getAllSkillInfo: vi.fn().mockResolvedValue([]),
-          getSkillContent: vi.fn().mockResolvedValue(undefined),
-        } as any,
         mockAuthService as any,
+        mockProviderService as any,
       );
 
       await emailController.list(
@@ -217,11 +215,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
-        {
-          getAllSkillInfo: vi.fn().mockResolvedValue([]),
-          getSkillContent: vi.fn().mockResolvedValue(undefined),
-        } as any,
         mockAuthService as any,
+        mockProviderService as any,
       );
 
       await emailController.getById('mail_1', mockRes as Response);
@@ -240,11 +235,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
-        {
-          getAllSkillInfo: vi.fn().mockResolvedValue([]),
-          getSkillContent: vi.fn().mockResolvedValue(undefined),
-        } as any,
         mockAuthService as any,
+        mockProviderService as any,
       );
 
       await emailController.getById('non-existent', mockRes as Response);
@@ -265,11 +257,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
-        {
-          getAllSkillInfo: vi.fn().mockResolvedValue([]),
-          getSkillContent: vi.fn().mockResolvedValue(undefined),
-        } as any,
         mockAuthService as any,
+        mockProviderService as any,
       );
 
       await emailController.delete('mail_1', mockRes as Response);
@@ -288,11 +277,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
-        {
-          getAllSkillInfo: vi.fn().mockResolvedValue([]),
-          getSkillContent: vi.fn().mockResolvedValue(undefined),
-        } as any,
         mockAuthService as any,
+        mockProviderService as any,
       );
 
       await emailController.delete('non-existent', mockRes as Response);
@@ -314,11 +300,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
-        {
-          getAllSkillInfo: vi.fn().mockResolvedValue([]),
-          getSkillContent: vi.fn().mockResolvedValue(undefined),
-        } as any,
         mockAuthService as any,
+        mockProviderService as any,
       );
 
       await emailController.handleInbound(
@@ -344,11 +327,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
-        {
-          getAllSkillInfo: vi.fn().mockResolvedValue([]),
-          getSkillContent: vi.fn().mockResolvedValue(undefined),
-        } as any,
         mockAuthService as any,
+        mockProviderService as any,
       );
 
       await emailController.handleInbound(
@@ -374,11 +354,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
-        {
-          getAllSkillInfo: vi.fn().mockResolvedValue([]),
-          getSkillContent: vi.fn().mockResolvedValue(undefined),
-        } as any,
         mockAuthService as any,
+        mockProviderService as any,
       );
 
       await emailController.handleInbound(
@@ -411,11 +388,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
-        {
-          getAllSkillInfo: vi.fn().mockResolvedValue([]),
-          getSkillContent: vi.fn().mockResolvedValue(undefined),
-        } as any,
         mockAuthService as any,
+        mockProviderService as any,
       );
 
       const rawEmail = `From: sender@example.com
@@ -458,11 +432,8 @@ This is the email body content.`;
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
-        {
-          getAllSkillInfo: vi.fn().mockResolvedValue([]),
-          getSkillContent: vi.fn().mockResolvedValue(undefined),
-        } as any,
         mockAuthService as any,
+        mockProviderService as any,
       );
 
       const rawEmail = `From: sender@example.com

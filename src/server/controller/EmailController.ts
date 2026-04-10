@@ -1,5 +1,6 @@
 import { AgentIds } from '@/shared/constants';
 import { ListEmailsRequestDto } from '@/shared/dto/controller';
+import { generateId } from '@/shared/utils';
 import { Conversation } from '@/shared/entities/Conversation';
 import { EmailEntity } from '@/shared/entities/Email';
 import { Role } from '@/shared/entities/Message';
@@ -15,9 +16,9 @@ import { controller } from '../decorator/controller';
 import { body, param, query, request, response } from '../decorator/param';
 import { AuthService } from '../service/AuthService';
 import { ChatService } from '../service/ChatService';
-import { SkillService } from '../service/SkillService';
 import { ConversationService } from '../service/ConversationService';
 import { EmailService } from '../service/EmailService';
+import { ProviderService } from '../service/ProviderService';
 import { compress, type CachedReference } from '../utils/cache';
 import Logger from '../utils/logger';
 
@@ -38,10 +39,10 @@ export default class EmailController {
     private readonly conversationService: ConversationService,
     @inject(ChatService)
     private readonly chatService: ChatService,
-    @inject(SkillService)
-    private readonly skillService: SkillService,
     @inject(AuthService)
     private readonly authService: AuthService,
+    @inject(ProviderService)
+    private readonly providerService: ProviderService,
   ) {}
 
   @api('/')
@@ -131,10 +132,11 @@ export default class EmailController {
     await this.emailService.updateStatus(id, 'archived');
 
     const userId = await this.authService.getUserId(req);
+    const defaultModel = this.providerService.getDefaultModel('chat');
     const conversation = await this.conversationService.createConversation(
       `归档邮件: ${email.subject}`,
       userId,
-      { agent: AgentIds.REACT },
+      { agent: AgentIds.REACT, model: { modelId: defaultModel?.id } },
       null,
       'Email Archive',
     );
@@ -161,10 +163,10 @@ export default class EmailController {
       : email.from;
 
     if (typeof contentOrCached === 'string') {
-      return `请归档邮件：${email.subject}\n\n发件人：${fromDisplay}\n发件时间：${email.sentAt.toISOString()}\n\n内容：\n${contentOrCached}`;
+      return `使用文档归档技能归档邮件：${email.subject}\n\n发件人：${fromDisplay}\n发件时间：${email.sentAt.toISOString()}\n\n内容：\n${contentOrCached}`;
     }
 
-    return `请归档邮件：${email.subject}\n\n发件人：${fromDisplay}\n发件时间：${email.sentAt.toISOString()}\n\n内容已缓存：${JSON.stringify(contentOrCached)}`;
+    return `使用文档归档技能归档邮件：${email.subject}\n\n发件人：${fromDisplay}\n发件时间：${email.sentAt.toISOString()}\n\n内容已缓存：${JSON.stringify(contentOrCached)}`;
   }
 
   private async startArchiveSession(
@@ -192,23 +194,8 @@ export default class EmailController {
     );
     session.setMemory(memory);
 
-    // Load skill content as context
-    const skillContent =
-      await this.skillService.getSkillContent('document-archive');
-
-    // Prepare turn messages
-    const { messages, assistantId, assistantMessage } =
-      await this.chatService.prepareTurn({
-        conversationId,
-        userId: conversation.userId,
-        systemPrompt: agent.systemPrompt.build(),
-        userMessage: {
-          role: Role.USER,
-          content: '', // Placeholder, will be updated after cache
-          meta: { emailId: email.id },
-        },
-        context: skillContent,
-      });
+    // Pre-generate assistantId so we can compress before prepareTurn
+    const assistantId = generateId('msg');
 
     // Update TraceContext with messageId for cache lookup
     TraceContext.update({
@@ -217,24 +204,27 @@ export default class EmailController {
     });
     TraceContext.freeze();
 
-    // Use messageId for cache key - ReadCacheTool uses messageId to look up cache
+    // Compress email content using assistantId as cache key
     const contentOrCached = await compress(assistantId, email.content);
     const userContent = this.buildArchivePrompt(
       email,
       contentOrCached as string | CachedReference,
     );
 
-    // Update the placeholder user message with actual content
-    const lastUserMessage = [...messages]
-      .reverse()
-      .find(m => m.role === Role.USER);
-    if (lastUserMessage) {
-      lastUserMessage.content = userContent;
-      lastUserMessage.meta = { emailId: email.id };
-      await this.conversationService.saveMessage(lastUserMessage);
-    }
+    // Prepare turn messages with actual content (no placeholder needed)
+    const { messages, assistantMessage } = await this.chatService.prepareTurn({
+      conversationId,
+      userId: conversation.userId,
+      systemPrompt: agent.systemPrompt.build(),
+      userMessage: {
+        role: Role.USER,
+        content: userContent,
+        meta: { emailId: email.id },
+      },
+      assistantId,
+    });
 
-    // Inject context into memory (full history with updated user message)
+    // Inject context into memory
     memory.setContext(messages);
 
     const pendingMessage = new PendingMessage(assistantMessage);

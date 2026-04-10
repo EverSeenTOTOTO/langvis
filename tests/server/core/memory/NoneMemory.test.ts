@@ -120,7 +120,7 @@ describe('NoneMemory', () => {
       expect(result[0].content).toBe('Second question');
     });
 
-    it('should return only system message when second to last message is not user', async () => {
+    it('should return system and last non-hidden user message even when last message is assistant', async () => {
       memory.setContext([
         {
           id: 'msg-1',
@@ -162,8 +162,10 @@ describe('NoneMemory', () => {
 
       const result = await memory.summarize();
 
-      expect(result).toHaveLength(1);
+      expect(result).toHaveLength(2);
       expect(result[0].role).toBe(Role.SYSTEM);
+      expect(result[1].role).toBe(Role.USER);
+      expect(result[1].content).toBe('Question');
     });
 
     it('should return empty array when no context', async () => {
@@ -219,6 +221,64 @@ describe('NoneMemory', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].role).toBe(Role.SYSTEM);
+    });
+
+    it('should include hidden user messages (session context, skill content)', async () => {
+      memory.setContext([
+        {
+          id: 'msg-1',
+          role: Role.SYSTEM,
+          content: 'You are a helpful assistant.',
+          attachments: null,
+          meta: null,
+          createdAt: new Date(),
+          conversationId: 'conv-123',
+        },
+        {
+          id: 'msg-2',
+          role: Role.USER,
+          content: '<session-context>...</session-context>',
+          attachments: null,
+          meta: { hidden: true },
+          createdAt: new Date(),
+          conversationId: 'conv-123',
+        },
+        {
+          id: 'msg-3',
+          role: Role.USER,
+          content: 'Archive workflow instructions',
+          attachments: null,
+          meta: { hidden: true },
+          createdAt: new Date(),
+          conversationId: 'conv-123',
+        },
+        {
+          id: 'msg-4',
+          role: Role.USER,
+          content: 'Please archive this email',
+          attachments: null,
+          meta: { emailId: 'mail_123' },
+          createdAt: new Date(),
+          conversationId: 'conv-123',
+        },
+        {
+          id: 'msg-5',
+          role: Role.ASSIST,
+          content: '',
+          attachments: null,
+          meta: null,
+          createdAt: new Date(),
+          conversationId: 'conv-123',
+        },
+      ]);
+
+      const result = await memory.summarize();
+
+      expect(result).toHaveLength(4);
+      expect(result[0].role).toBe(Role.SYSTEM);
+      expect(result[1].content).toBe('<session-context>...</session-context>');
+      expect(result[2].content).toBe('Archive workflow instructions');
+      expect(result[3].content).toBe('Please archive this email');
     });
   });
 });
