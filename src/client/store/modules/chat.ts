@@ -85,6 +85,9 @@ export class ChatStore {
         },
         onError: convId => this.refreshMessages(convId),
         onRefreshMessages: convId => this.refreshMessages(convId),
+        onContextUsage: (_convId, used, total) => {
+          this.conversationStore.contextUsage = { used, total };
+        },
       });
       // Set conversation object if available
       const conversation =

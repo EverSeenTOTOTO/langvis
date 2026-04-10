@@ -20,6 +20,11 @@ export interface ConversationFSMOptions {
   onEvent: (conversationId: string, event: AgentEvent) => void;
   onError: (conversationId: string, error: string) => void;
   onRefreshMessages: (conversationId: string) => void;
+  onContextUsage?: (
+    conversationId: string,
+    used: number,
+    total: number,
+  ) => void;
 }
 
 export class ConversationFSM {
@@ -306,6 +311,16 @@ export class ConversationFSM {
   // === Private methods ===
 
   private handleEvent(event: AgentEvent): void {
+    // Handle context_usage event separately - not message-specific
+    if (event.type === 'context_usage') {
+      this.options.onContextUsage?.(
+        this.conversationId,
+        event.used,
+        event.total,
+      );
+      return;
+    }
+
     // Route event to the corresponding MessageFSM by messageId
     const messageId = (event as any).messageId as string | undefined;
     if (messageId) {
