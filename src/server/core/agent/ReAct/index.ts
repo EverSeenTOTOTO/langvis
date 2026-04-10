@@ -34,7 +34,7 @@ type ReActStep =
 
 interface ReActAgentConfig {
   model?: {
-    code?: string;
+    modelId?: string;
     temperature?: number;
   };
 }
@@ -66,11 +66,11 @@ export default class ReActAgent extends Agent {
     for (let i = 0; i < this.maxIterations; i++) {
       ctx.signal.throwIfAborted();
 
-      const model = options?.model?.code ?? process.env.OPENAI_MODEL;
+      const modelId = options?.model?.modelId;
 
       const content = yield* ctx.callLlm({
+        modelId,
         messages: iterMessages,
-        model,
         temperature: options?.model?.temperature,
         stop: ['Observation:', 'Observation：'],
       });
@@ -239,4 +239,3 @@ export default class ReActAgent extends Agent {
     }
   }
 }
-

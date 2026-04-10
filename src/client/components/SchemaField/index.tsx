@@ -12,6 +12,7 @@ import {
 } from 'antd';
 import type { NamePath } from 'antd/es/form/interface';
 import React from 'react';
+import ModelSelect from './ModelSelect';
 
 /** Enum item can be a primitive value or an object with label/value */
 export type EnumItem =
@@ -34,6 +35,10 @@ export type SchemaProperty = {
   properties?: Record<string, SchemaProperty>;
   required?: readonly string[];
   items?: SchemaProperty;
+  /** Custom format hint: 'model-select' renders a TreeSelect with provider-grouped models */
+  format?: string;
+  /** For format='model-select': filter models by type (chat/embedding/tts) */
+  modelType?: string;
 };
 
 /** Normalize enum items to { label, value } format */
@@ -182,6 +187,15 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
             prop.description ?? settingStore.tr('Comma-separated values')
           }
         />
+      </Form.Item>
+    );
+  }
+
+  // Custom format: model-select renders TreeSelect
+  if (prop.format === 'model-select') {
+    return (
+      <Form.Item key={fieldKey} {...commonProps}>
+        <ModelSelect modelType={prop.modelType} />
       </Form.Item>
     );
   }

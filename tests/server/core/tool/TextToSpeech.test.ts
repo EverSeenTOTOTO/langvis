@@ -1,7 +1,7 @@
 import TextToSpeechTool from '@/server/core/tool/TextToSpeech';
+import type { LlmService } from '@/server/service/LlmService';
 import logger from '@/server/utils/logger';
-import { promises as fs } from 'fs';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext } from '../../helpers/context';
 
 vi.mock('@/server/utils/logger', () => {
@@ -18,17 +18,6 @@ vi.mock('@/server/utils/logger', () => {
   };
 });
 
-vi.mock('fs', () => ({
-  promises: {
-    access: vi.fn(),
-    mkdir: vi.fn(),
-    writeFile: vi.fn(),
-    stat: vi.fn(),
-  },
-}));
-
-global.fetch = vi.fn();
-
 async function getResult<T>(gen: AsyncGenerator<unknown, T, void>): Promise<T> {
   let result = await gen.next();
   while (!result.done) {
@@ -39,72 +28,31 @@ async function getResult<T>(gen: AsyncGenerator<unknown, T, void>): Promise<T> {
 
 describe('TextToSpeechTool', () => {
   let tool: TextToSpeechTool;
-  const originalEnv = process.env;
+  let mockLlmService: LlmService;
 
   beforeEach(() => {
-    tool = new TextToSpeechTool();
-    // @ts-expect-error readonly
-    tool.config = {
-      name: { en: 'TextToSpeech Tool' },
-      description: { en: 'Converts text to speech' },
-    };
-    (tool as any).logger = logger;
+    mockLlmService = {
+      tts: vi.fn(),
+    } as unknown as LlmService;
 
-    process.env = {
-      ...originalEnv,
-      OPENAI_API_BASE: 'https://api.example.com',
-      OPENAI_API_KEY: 'test-key',
-    };
+    tool = new TextToSpeechTool(mockLlmService);
+    (tool as any).logger = logger;
 
     vi.clearAllMocks();
   });
 
-  afterEach(() => {
-    process.env = originalEnv;
-  });
-
   describe('call', () => {
-    it('should throw error when environment variables are missing', async () => {
-      delete process.env.OPENAI_API_BASE;
-      delete process.env.OPENAI_API_KEY;
-
-      const ctx = createMockContext();
-      await expect(
-        getResult(
-          tool.call(
-            {
-              voice: 'test-voice',
-              text: 'test text',
-              reqId: 'test-id',
-            },
-            ctx,
-          ),
-        ),
-      ).rejects.toThrow(
-        'OPENAI_API_BASE and OPENAI_API_KEY must be configured',
-      );
-    });
-
     it('should successfully generate TTS', async () => {
-      const mockAudioData = Buffer.from('mock audio data').toString('base64');
-
-      (fs.access as any).mockRejectedValue(new Error('Directory not found'));
-      (fs.mkdir as any).mockResolvedValue(undefined);
-      (fs.writeFile as any).mockResolvedValue(undefined);
-      (fs.stat as any).mockResolvedValue({ size: 15 });
-
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          code: 3000,
-          data: mockAudioData,
-        }),
+      vi.mocked(mockLlmService.tts).mockResolvedValue({
+        voice: 'test-voice',
+        filePath: 'tts/test-123.mp3',
       });
 
       const ctx = createMockContext();
       const result = await getResult(
         tool.call(
           {
+            modelId: 'doubao:tts_hd',
             text: 'Hello world',
             reqId: 'test-123',
             voice: 'test-voice',
@@ -114,40 +62,32 @@ describe('TextToSpeechTool', () => {
       );
 
       expect(result).toEqual({
-        voice: expect.any(String),
+        voice: 'test-voice',
         filePath: 'tts/test-123.mp3',
       });
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.example.com/doubao/tts_hd',
+      expect(mockLlmService.tts).toHaveBeenCalledWith(
+        'doubao:tts_hd',
         expect.objectContaining({
-          method: 'POST',
-          headers: {
-            Authorization: 'Bearer test-key',
-            'Content-Type': 'application/json',
-          },
+          text: 'Hello world',
+          reqId: 'test-123',
+          voice: 'test-voice',
         }),
+        ctx.signal,
       );
     });
 
-    it('should handle API errors', async () => {
-      (fs.access as any).mockRejectedValue(new Error('Directory not found'));
-      (fs.mkdir as any).mockResolvedValue(undefined);
-
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          error: {
-            message: 'API Error',
-          },
-        }),
-      });
+    it('should handle API errors from LlmService', async () => {
+      vi.mocked(mockLlmService.tts).mockRejectedValue(
+        new Error('TTS API error: API Error'),
+      );
 
       const ctx = createMockContext();
       await expect(
         getResult(
           tool.call(
             {
+              modelId: 'doubao:tts_hd',
               voice: 'test-voice',
               text: 'test text',
               reqId: 'test-id',
@@ -158,21 +98,17 @@ describe('TextToSpeechTool', () => {
       ).rejects.toThrow('TTS API error: API Error');
     });
 
-    it('should handle HTTP errors', async () => {
-      (fs.access as any).mockRejectedValue(new Error('Directory not found'));
-      (fs.mkdir as any).mockResolvedValue(undefined);
-
-      (global.fetch as any).mockResolvedValue({
-        ok: false,
-        status: 500,
-        text: async () => 'Internal Server Error',
-      });
+    it('should handle HTTP errors from LlmService', async () => {
+      vi.mocked(mockLlmService.tts).mockRejectedValue(
+        new Error('TTS API failed: 500 - Internal Server Error'),
+      );
 
       const ctx = createMockContext();
       await expect(
         getResult(
           tool.call(
             {
+              modelId: 'doubao:tts_hd',
               voice: 'test-voice',
               text: 'test text',
               reqId: 'test-id',
@@ -180,7 +116,33 @@ describe('TextToSpeechTool', () => {
             ctx,
           ),
         ),
-      ).rejects.toThrow('TTS API request failed with status 500');
+      ).rejects.toThrow('TTS API failed: 500');
+    });
+
+    it('should pass signal to LlmService', async () => {
+      vi.mocked(mockLlmService.tts).mockResolvedValue({
+        voice: 'test-voice',
+        filePath: 'tts/test-id.mp3',
+      });
+
+      const ctx = createMockContext();
+      await getResult(
+        tool.call(
+          {
+            modelId: 'doubao:tts_hd',
+            voice: 'test-voice',
+            text: 'test text',
+            reqId: 'test-id',
+          },
+          ctx,
+        ),
+      );
+
+      expect(mockLlmService.tts).toHaveBeenCalledWith(
+        'doubao:tts_hd',
+        expect.any(Object),
+        ctx.signal,
+      );
     });
   });
 });

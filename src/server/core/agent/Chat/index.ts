@@ -13,7 +13,7 @@ import { createPrompt } from './prompt';
 
 interface ChatAgentConfig {
   model?: {
-    code?: string;
+    modelId?: string;
     temperature?: number;
     topP?: number;
   };
@@ -39,15 +39,18 @@ export default class ChatAgent extends Agent {
     yield ctx.agentStartEvent();
 
     const messages = await memory.summarize();
+    const modelId = options?.model?.modelId;
 
-    const model = options?.model?.code ?? process.env.OPENAI_MODEL;
-
-    this.logger.debug(`Chat with ${chalk.bgRed(model)}, messages: `, messages);
+    this.logger.debug(
+      `Chat with ${chalk.bgRed(modelId)}, messages: `,
+      messages,
+    );
 
     yield* ctx.callLlm(
       {
-        model,
+        modelId,
         temperature: options?.model?.temperature,
+        topP: options?.model?.topP,
         messages,
       },
       false,

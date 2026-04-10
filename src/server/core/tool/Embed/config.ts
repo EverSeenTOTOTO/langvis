@@ -18,7 +18,7 @@ export interface EmbedOutput {
     embedding: number[];
     metadata?: Record<string, unknown>;
   }>;
-  model: string;
+  model?: string;
   dimension: number;
 }
 

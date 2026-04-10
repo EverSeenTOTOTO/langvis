@@ -250,4 +250,3 @@ export default class BashTool extends Tool<BashInput, BashOutput> {
     return { exitCode, stdout, stderr, timedOut };
   }
 }
-
