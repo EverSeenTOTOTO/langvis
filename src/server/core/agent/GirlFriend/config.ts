@@ -3,6 +3,7 @@ import { AgentConfig } from '@/shared/types';
 
 export const config: AgentConfig<{
   tts?: {
+    modelId: string;
     voice?: string;
     emotion?: 'happy' | 'hate' | 'sad';
     speedRatio?: number;
@@ -18,6 +19,11 @@ export const config: AgentConfig<{
       tts: {
         type: 'object',
         properties: {
+          modelId: {
+            type: 'string',
+            format: 'model-select',
+            modelType: 'tts',
+          },
           voice: {
             type: 'string',
             enum: [
@@ -63,6 +69,7 @@ export const config: AgentConfig<{
             nullable: true,
           },
         },
+        required: ['modelId'],
         nullable: true,
       },
     },

@@ -2,7 +2,7 @@ import { AgentConfig } from '@/shared/types';
 
 export const config: AgentConfig<{
   model?: {
-    code: string;
+    modelId: string;
     temperature?: number;
     topP?: number;
   };
@@ -16,9 +16,10 @@ export const config: AgentConfig<{
       model: {
         type: 'object',
         properties: {
-          code: {
+          modelId: {
             type: 'string',
-            default: 'qwen3.5-27b',
+            format: 'model-select',
+            modelType: 'chat',
           },
           temperature: {
             type: 'number',
@@ -35,7 +36,7 @@ export const config: AgentConfig<{
             nullable: true,
           },
         },
-        required: ['code'],
+        required: ['modelId'],
         nullable: true,
       },
       memory: {
@@ -54,7 +55,7 @@ export const config: AgentConfig<{
           maxSize: {
             type: 'number',
             description: 'Maximum file size in bytes (e.g. 10485760 = 10MB)',
-            default: 10485760, // 10MB
+            default: 10485760,
             nullable: true,
           },
           allowedTypes: {

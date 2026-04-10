@@ -15,10 +15,11 @@ import { createPrompt } from './prompt';
 
 interface GirlFriendConfig {
   model?: {
-    code?: string;
+    modelId?: string;
     temperature?: number;
   };
   tts?: {
+    modelId?: string;
     voice?: string;
     emotion?: string;
     speedRatio?: number;
@@ -46,11 +47,11 @@ export default class GirlFriendAgent extends Agent {
 
     const messages = await memory.summarize();
 
-    this.logger.debug('GF agent messages: ', messages);
+    const modelId = options?.model?.modelId;
 
     const accumulatedContent = yield* ctx.callLlm(
       {
-        model: options?.model?.code,
+        modelId,
         temperature: options?.model?.temperature,
         messages,
       },
@@ -59,6 +60,7 @@ export default class GirlFriendAgent extends Agent {
 
     const tts = container.resolve<TextToSpeechTool>(ToolIds.TEXT_TO_SPEECH);
     const ttsArgs = {
+      modelId: options?.tts?.modelId,
       text: accumulatedContent,
       reqId: TraceContext.getOrFail().requestId,
       voice: options?.tts?.voice || '',

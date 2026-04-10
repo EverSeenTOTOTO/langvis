@@ -1,15 +1,16 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
+import { LlmService } from '@/server/service/LlmService';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { AgentEvent, ToolConfig } from '@/shared/types';
-import { createTimeoutController } from '@/server/utils/abort';
+import { inject } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import type { EmbedInput, EmbedOutput } from './config';
 import { config } from './config';
 
-const DEFAULT_TIMEOUT_MS = 60_000; // 1 minute
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 @tool(ToolIds.EMBEDDING_GENERATE)
 export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
@@ -17,24 +18,16 @@ export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
+  constructor(@inject(LlmService) private readonly llmService: LlmService) {
+    super();
+  }
+
   async *call(
     @input() data: EmbedInput,
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, EmbedOutput, void> {
-    const {
-      chunks,
-      model = process.env.OPENAI_EMBEDDING_MODEL!,
-      timeout = DEFAULT_TIMEOUT_MS,
-    } = data;
+    const { chunks, model, timeout = DEFAULT_TIMEOUT_MS } = data;
 
-    const apiBase = process.env.OPENAI_API_BASE;
-    const apiKey = process.env.OPENAI_API_KEY;
-
-    if (!apiBase || !apiKey) {
-      throw new Error('OPENAI_API_BASE and OPENAI_API_KEY must be configured');
-    }
-
-    const url = `${apiBase}/embeddings`;
     const texts = chunks.map(c => c.content);
 
     this.logger.info(
@@ -46,44 +39,20 @@ export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
       data: { model, textCount: chunks.length },
     });
 
-    const [controller, cleanup] = createTimeoutController(timeout, ctx.signal);
+    const signal = AbortSignal.timeout(timeout);
 
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ model, input: texts }),
-        signal: controller.signal,
-      });
+    const sortedData = await this.llmService.embed(model, texts, signal);
 
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`Embedding API failed: ${response.status} - ${text}`);
-      }
+    const output: EmbedOutput = {
+      chunks: chunks.map((chunk, i) => ({
+        ...chunk,
+        embedding: sortedData[i].embedding,
+      })),
+      model,
+      dimension: sortedData[0].embedding.length,
+    };
 
-      const result = (await response.json()) as {
-        data: Array<{ embedding: number[]; index: number }>;
-      };
-
-      // Sort by index to ensure correct order
-      const sortedData = result.data.sort((a, b) => a.index - b.index);
-
-      const output: EmbedOutput = {
-        chunks: chunks.map((chunk, i) => ({
-          ...chunk,
-          embedding: sortedData[i].embedding,
-        })),
-        model,
-        dimension: sortedData[0].embedding.length,
-      };
-
-      return output;
-    } finally {
-      cleanup();
-    }
+    return output;
   }
 }
 

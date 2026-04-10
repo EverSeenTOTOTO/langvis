@@ -40,7 +40,6 @@ export enum MemoryIds {
 
 export const InjectTokens = {
   PG: Symbol('postgres'),
-  OPENAI: Symbol('openai'),
 };
 
 export const UNGROUPED_GROUP_NAME = 'Ungrouped';

@@ -1,4 +1,5 @@
 import EmbedTool from '@/server/core/tool/Embed';
+import type { LlmService } from '@/server/service/LlmService';
 import type { EmbedOutput } from '@/server/core/tool/Embed/config';
 import logger from '@/server/utils/logger';
 import { AgentEvent } from '@/shared/types';
@@ -18,8 +19,6 @@ vi.mock('@/server/utils/logger', () => {
     default: mockLogger,
   };
 });
-
-const originalEnv = process.env;
 
 async function collectEvents(
   generator: AsyncGenerator<AgentEvent, EmbedOutput, void>,
@@ -43,33 +42,29 @@ async function collectEvents(
   return { progress, result };
 }
 
+function createMockLlmService(): LlmService {
+  return {
+    embed: vi.fn(),
+  } as unknown as LlmService;
+}
+
 describe('EmbedTool', () => {
   let embedTool: EmbedTool;
+  let mockLlmService: LlmService;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.resetModules();
-    process.env = { ...originalEnv };
-    embedTool = new EmbedTool();
+    mockLlmService = createMockLlmService();
+    embedTool = new EmbedTool(mockLlmService);
     (embedTool as any).logger = logger;
-  });
-
-  afterEach(() => {
-    process.env = originalEnv;
   });
 
   describe('call', () => {
     it('should generate embeddings for chunks', async () => {
       const mockEmbedding = [0.1, 0.2, 0.3];
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          data: [{ embedding: mockEmbedding, index: 0 }],
-        }),
-      });
-
-      process.env.OPENAI_API_BASE = 'https://api.test.com';
-      process.env.OPENAI_API_KEY = 'test-key';
+      vi.mocked(mockLlmService.embed).mockResolvedValue([
+        { embedding: mockEmbedding },
+      ]);
 
       const chunks = [{ content: 'Test content', index: 0 }];
       const ctx = createMockContext();
@@ -89,15 +84,9 @@ describe('EmbedTool', () => {
 
     it('should use custom model when specified', async () => {
       const mockEmbedding = [0.1, 0.2];
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          data: [{ embedding: mockEmbedding, index: 0 }],
-        }),
-      });
-
-      process.env.OPENAI_API_BASE = 'https://api.test.com';
-      process.env.OPENAI_API_KEY = 'test-key';
+      vi.mocked(mockLlmService.embed).mockResolvedValue([
+        { embedding: mockEmbedding },
+      ]);
 
       const chunks = [{ content: 'Test', index: 0 }];
       const ctx = createMockContext();
@@ -106,27 +95,20 @@ describe('EmbedTool', () => {
       );
 
       expect(result!.model).toBe('custom-model');
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.test.com/embeddings',
-        expect.objectContaining({
-          body: expect.stringContaining('custom-model'),
-        }),
+      expect(mockLlmService.embed).toHaveBeenCalledWith(
+        'custom-model',
+        ['Test'],
+        expect.any(AbortSignal),
       );
     });
 
     it('should handle multiple chunks and maintain order', async () => {
       const embeddings = [
-        { embedding: [0.1, 0.2], index: 0 },
-        { embedding: [0.3, 0.4], index: 1 },
-        { embedding: [0.5, 0.6], index: 2 },
+        { embedding: [0.1, 0.2] },
+        { embedding: [0.3, 0.4] },
+        { embedding: [0.5, 0.6] },
       ];
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ data: embeddings }),
-      });
-
-      process.env.OPENAI_API_BASE = 'https://api.test.com';
-      process.env.OPENAI_API_KEY = 'test-key';
+      vi.mocked(mockLlmService.embed).mockResolvedValue(embeddings);
 
       const chunks = [
         { content: 'First', index: 0 },
@@ -145,29 +127,10 @@ describe('EmbedTool', () => {
       expect(result!.chunks[2].embedding).toEqual([0.5, 0.6]);
     });
 
-    it('should throw error when API env vars not configured', async () => {
-      delete process.env.OPENAI_API_BASE;
-      delete process.env.OPENAI_API_KEY;
-
-      const chunks = [{ content: 'Test', index: 0 }];
-      const ctx = createMockContext();
-
-      await expect(
-        collectEvents(embedTool.call({ chunks }, ctx)),
-      ).rejects.toThrow(
-        'OPENAI_API_BASE and OPENAI_API_KEY must be configured',
+    it('should handle API failure from LlmService', async () => {
+      vi.mocked(mockLlmService.embed).mockRejectedValue(
+        new Error('Embedding API failed: 500 - Internal Server Error'),
       );
-    });
-
-    it('should throw error on API failure', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 500,
-        text: async () => 'Internal Server Error',
-      });
-
-      process.env.OPENAI_API_BASE = 'https://api.test.com';
-      process.env.OPENAI_API_KEY = 'test-key';
 
       const chunks = [{ content: 'Test', index: 0 }];
       const ctx = createMockContext();
@@ -177,53 +140,18 @@ describe('EmbedTool', () => {
       ).rejects.toThrow('Embedding API failed: 500');
     });
 
-    it('should pass abort signal to fetch', async () => {
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          data: [{ embedding: [0.1], index: 0 }],
-        }),
-      });
-      global.fetch = mockFetch;
-
-      process.env.OPENAI_API_BASE = 'https://api.test.com';
-      process.env.OPENAI_API_KEY = 'test-key';
+    it('should pass abort signal to LlmService', async () => {
+      vi.mocked(mockLlmService.embed).mockResolvedValue([{ embedding: [0.1] }]);
 
       const chunks = [{ content: 'Test', index: 0 }];
       const ctx = createMockContext();
-      await collectEvents(embedTool.call({ chunks }, ctx));
+      await collectEvents(embedTool.call({ chunks, model: 'test-model' }, ctx));
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          signal: expect.any(AbortSignal),
-        }),
+      expect(mockLlmService.embed).toHaveBeenCalledWith(
+        'test-model',
+        ['Test'],
+        expect.anything(),
       );
-    });
-
-    it('should timeout when fetch takes too long', async () => {
-      const mockFetch = vi.fn().mockImplementation(
-        (_url: string, options: { signal?: AbortSignal }) =>
-          new Promise((_resolve, reject) => {
-            const signal = options.signal;
-            // When aborted, reject with abort error
-            signal?.addEventListener('abort', () => {
-              reject(new Error('Embedding API timed out after 0.05s'));
-            });
-            // Otherwise hang forever
-          }),
-      );
-      global.fetch = mockFetch;
-
-      process.env.OPENAI_API_BASE = 'https://api.test.com';
-      process.env.OPENAI_API_KEY = 'test-key';
-
-      const chunks = [{ content: 'Test', index: 0 }];
-      const ctx = createMockContext();
-
-      await expect(
-        collectEvents(embedTool.call({ chunks, timeout: 50 }, ctx)),
-      ).rejects.toThrow('timed out');
     });
   });
 });

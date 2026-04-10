@@ -112,9 +112,7 @@ export function ToolBlockItem({
 
       {!isEmpty(toolCall.toolArgs) && (
         <Typography.Text type="secondary" className="react-tool-args">
-          <pre>
-            {JSON.stringify(toolCall.toolArgs, null, 2)}
-          </pre>
+          <pre>{JSON.stringify(toolCall.toolArgs, null, 2)}</pre>
         </Typography.Text>
       )}
 

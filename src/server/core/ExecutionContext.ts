@@ -1,9 +1,21 @@
 import { ToolIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
 import { generateId } from '@/shared/utils';
-import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
 import { container } from 'tsyringe';
 import type LlmCallTool from './tool/LlmCall';
+
+export type CallLlmOptions = {
+  modelId?: string;
+  messages?: Array<{
+    role: string;
+    content: string;
+    attachments?: any[] | null;
+  }>;
+  temperature?: number;
+  topP?: number;
+  stop?: string[];
+  response_format?: { type: string };
+};
 
 export class ExecutionContext {
   public get signal(): AbortSignal {
@@ -164,7 +176,7 @@ export class ExecutionContext {
   // === LlmCall util ===
 
   async *callLlm(
-    options: Partial<ChatCompletionCreateParams>,
+    options: CallLlmOptions,
     ignore: boolean = true,
   ): AsyncGenerator<AgentEvent, string, void> {
     const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);

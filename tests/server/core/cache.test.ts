@@ -123,7 +123,11 @@ describe('Cache Utils', () => {
 
     it('should recursively compress array items', async () => {
       const nested = {
-        items: ['a'.repeat(STRING_THRESHOLD + 1), 'short', 'b'.repeat(STRING_THRESHOLD + 1)],
+        items: [
+          'a'.repeat(STRING_THRESHOLD + 1),
+          'short',
+          'b'.repeat(STRING_THRESHOLD + 1),
+        ],
       };
 
       const result = (await compress(traceId, nested)) as Record<
@@ -175,9 +179,9 @@ describe('Cache Utils', () => {
     });
 
     it('should throw when file strategy is used without conversationId', async () => {
-      await expect(compress(traceId, 'a'.repeat(STRING_THRESHOLD + 1), 'file')).rejects.toThrow(
-        'conversationId is required',
-      );
+      await expect(
+        compress(traceId, 'a'.repeat(STRING_THRESHOLD + 1), 'file'),
+      ).rejects.toThrow('conversationId is required');
     });
 
     it('should not compress small values even with file strategy', async () => {

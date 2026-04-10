@@ -107,4 +107,3 @@ Assistant:
 </example:call-agent>`,
     );
 };
-

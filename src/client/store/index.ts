@@ -11,6 +11,7 @@ import { ConversationStore } from './modules/conversation';
 import { DocumentStore } from './modules/document';
 import { EmailStore } from './modules/email';
 import { FileStore } from './modules/file';
+import { ModelStore } from './modules/model';
 import { SettingStore } from './modules/setting';
 import { UserStore } from './modules/user';
 
@@ -45,6 +46,8 @@ export class AppStore {
   email = bindStore(EmailStore);
 
   file = bindStore(FileStore);
+
+  model = bindStore(ModelStore);
 
   hydrate(data: Record<string, any>) {
     Object.keys(data).forEach(key => {
