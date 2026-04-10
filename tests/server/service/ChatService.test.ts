@@ -5,11 +5,11 @@ import { DatabaseService } from '@/server/service/DatabaseService';
 import { Agent } from '@/server/core/agent';
 import { Memory } from '@/server/core/memory';
 import { PendingMessage } from '@/server/core/PendingMessage';
-import { TraceContext } from '@/server/core/TraceContext';
 import { Role } from '@/shared/entities/Message';
-import { MemoryIds, RedisKeys } from '@/shared/constants';
+import { RedisKeys } from '@/shared/constants';
 import { RedisService } from '@/server/service/RedisService';
 import { ConversationService } from '@/server/service/ConversationService';
+import { WorkspaceService } from '@/server/service/WorkspaceService';
 
 vi.mock('globby', () => ({
   globby: vi.fn().mockResolvedValue([]),
@@ -35,6 +35,9 @@ describe('ChatService', () => {
 
     mockConversationService = {
       findNonTerminalAssistantMessages: vi.fn().mockResolvedValue([]),
+      getMessagesByConversationId: vi.fn().mockResolvedValue([]),
+      batchAddMessages: vi.fn().mockResolvedValue([]),
+      getMessages: vi.fn().mockResolvedValue([]),
     };
 
     // Create mock DatabaseService
@@ -45,10 +48,17 @@ describe('ChatService', () => {
       },
     } as unknown as DatabaseService;
 
+    const mockWorkspaceService = {
+      getWorkDir: vi.fn().mockResolvedValue('/tmp/workspace'),
+    };
+
     container.register(DatabaseService, { useValue: mockDb });
     container.register(RedisService, { useValue: mockRedisService });
     container.register(ConversationService, {
       useValue: mockConversationService,
+    });
+    container.register(WorkspaceService as any, {
+      useValue: mockWorkspaceService,
     });
 
     chatService = container.resolve(ChatService);
@@ -160,6 +170,14 @@ describe('ChatService', () => {
         }),
       } as unknown as Agent;
 
+      const mockMemory = {
+        summarize: vi.fn().mockResolvedValue([]),
+        onTurnComplete: vi.fn(),
+        onContextUsageChange: vi.fn(),
+      } as unknown as Memory;
+
+      session!.setMemory(mockMemory);
+
       const mockMessage = {
         id: MSG_ID,
         role: Role.ASSIST,
@@ -170,171 +188,97 @@ describe('ChatService', () => {
       };
 
       const updateMessage = vi.fn().mockResolvedValue(undefined);
-      const pendingMessage = new PendingMessage(mockMessage, updateMessage);
-      session!.addMessageFSM(mockMessage.id, pendingMessage);
+      const pendingMessage = new PendingMessage(mockMessage);
+      session!.addMessageFSM(mockMessage.id, pendingMessage, updateMessage);
 
-      await chatService.runSession(
-        session!,
-        mockAgent,
-        {} as Memory,
-        {},
-        mockMessage.id,
-      );
+      await chatService.runSession(session!, mockAgent, {}, mockMessage.id);
 
       expect(mockAgent.call).toHaveBeenCalled();
       expect(updateMessage).toHaveBeenCalled();
-      // After message completes, session returns to waiting (not done)
-      // done only happens on idle timeout or explicit cleanup
+      expect(mockMemory.onTurnComplete).toHaveBeenCalled();
       expect(session!.phase).toBe('waiting');
     });
   });
 
-  describe('buildMemory', () => {
-    it('should build memory and return it', async () => {
-      await TraceContext.run(
-        { requestId: 'test', conversationId: 'conv-123', userId: 'user-123' },
-        async () => {
-          const mockMemory = {
-            initialize: vi.fn().mockResolvedValue(undefined),
-          };
+  describe('prepareTurn', () => {
+    it('should construct all messages for first turn', async () => {
+      mockConversationService.getMessagesByConversationId.mockResolvedValue([]);
 
-          const mockAgent = {
-            systemPrompt: {
-              build: vi.fn().mockReturnValue('System prompt'),
-            },
-          };
-
-          container.register('test-memory', { useValue: mockMemory });
-
-          const config = {
-            memory: { type: 'test-memory' },
-          };
-
-          const userMessage = {
-            role: Role.USER,
-            content: 'Hello',
-          };
-
-          const result = await chatService.buildMemory(
-            mockAgent as any,
-            config,
-            userMessage,
-          );
-
-          expect(result).toBe(mockMemory);
-          expect(mockMemory.initialize).toHaveBeenCalledWith({
-            systemPrompt: 'System prompt',
-            userMessage,
-          });
+      const result = await chatService.prepareTurn({
+        conversationId: 'conv-123',
+        userId: 'user-1',
+        systemPrompt: 'You are a helpful assistant.',
+        userMessage: {
+          role: Role.USER,
+          content: 'Hello',
         },
-      );
+      });
+
+      expect(result.messages.length).toBe(4); // system + session context + user + assistant
+      expect(result.messages[0].role).toBe(Role.SYSTEM);
+      expect(result.messages[0].content).toBe('You are a helpful assistant.');
+      expect(result.messages[1].role).toBe(Role.USER);
+      expect(result.messages[1].meta).toEqual({ hidden: true });
+      expect(result.messages[2].role).toBe(Role.USER);
+      expect(result.messages[2].content).toBe('Hello');
+      expect(result.messages[3].role).toBe(Role.ASSIST);
+      expect(result.assistantId).toBe(result.messages[3].id);
     });
 
-    it('should pass system prompt and user message to initialize', async () => {
-      await TraceContext.run(
-        { requestId: 'test', conversationId: 'conv-123', userId: 'user-123' },
-        async () => {
-          const mockMemory = {
-            initialize: vi.fn().mockResolvedValue(undefined),
-          };
-
-          const mockAgent = {
-            systemPrompt: {
-              build: () => 'Custom system prompt',
-            },
-          };
-
-          container.register('test-memory-2', { useValue: mockMemory });
-
-          const userMessage = {
-            role: Role.USER,
-            content: 'Hello',
-            attachments: [
-              {
-                filename: 'test.png',
-                url: 'http://example.com/test.png',
-                mimeType: 'image/png',
-                size: 1024,
-              },
-            ],
-          };
-
-          await chatService.buildMemory(
-            mockAgent as any,
-            { memory: { type: 'test-memory-2' } },
-            userMessage,
-          );
-
-          expect(mockMemory.initialize).toHaveBeenCalledWith({
-            systemPrompt: 'Custom system prompt',
-            userMessage,
-          });
+    it('should include existing history for subsequent turns', async () => {
+      mockConversationService.getMessagesByConversationId.mockResolvedValue([
+        {
+          id: 'msg-1',
+          role: Role.SYSTEM,
+          content: 'System',
+          createdAt: new Date(),
+          conversationId: 'conv-123',
         },
-      );
+      ]);
+
+      const result = await chatService.prepareTurn({
+        conversationId: 'conv-123',
+        userId: 'user-1',
+        systemPrompt: 'You are a helpful assistant.',
+        userMessage: {
+          role: Role.USER,
+          content: 'Follow up',
+        },
+      });
+
+      // existing (1) + new user + new assistant = 3
+      expect(result.messages.length).toBe(3);
+      expect(result.messages[0].role).toBe(Role.SYSTEM);
+      expect(result.messages[1].role).toBe(Role.USER);
+      expect(result.messages[1].content).toBe('Follow up');
+      expect(result.messages[2].role).toBe(Role.ASSIST);
+      expect(result.assistantMessage).toBeDefined();
+      expect(result.assistantMessage.id).toBe(result.assistantId);
     });
 
-    it('should use default memory type when not specified', async () => {
-      await TraceContext.run(
-        { requestId: 'test', conversationId: 'conv-456', userId: 'user-123' },
-        async () => {
-          const mockMemory = {
-            initialize: vi.fn().mockResolvedValue(undefined),
-          };
+    it('should async persist messages', async () => {
+      mockConversationService.getMessagesByConversationId.mockResolvedValue([]);
+      mockConversationService.batchAddMessages.mockResolvedValue([]);
 
-          const mockAgent = {
-            systemPrompt: {
-              build: vi.fn().mockReturnValue('System prompt'),
-            },
-          };
-
-          // Register with the default memory type (NONE)
-          container.register(MemoryIds.NONE, { useValue: mockMemory });
-
-          const result = await chatService.buildMemory(
-            mockAgent as any,
-            {}, // no config
-            { role: Role.USER, content: 'Hi' },
-          );
-
-          expect(result).toBe(mockMemory);
-          expect(mockMemory.initialize).toHaveBeenCalled();
+      await chatService.prepareTurn({
+        conversationId: 'conv-123',
+        userId: 'user-1',
+        systemPrompt: 'System',
+        userMessage: {
+          role: Role.USER,
+          content: 'Hello',
         },
-      );
-    });
+      });
 
-    it('should handle undefined system prompt', async () => {
-      await TraceContext.run(
-        { requestId: 'test', conversationId: 'conv-123', userId: 'user-123' },
-        async () => {
-          const mockMemory = {
-            initialize: vi.fn().mockResolvedValue(undefined),
-          };
+      // Wait for async persist
+      await vi.waitFor(() => {
+        expect(mockConversationService.batchAddMessages).toHaveBeenCalled();
+      });
 
-          const mockAgent = {
-            systemPrompt: {
-              build: () => undefined,
-            },
-          };
-
-          container.register('test-memory-undefined', { useValue: mockMemory });
-
-          const userMessage = {
-            role: Role.USER,
-            content: 'Hello',
-          };
-
-          await chatService.buildMemory(
-            mockAgent as any,
-            { memory: { type: 'test-memory-undefined' } },
-            userMessage,
-          );
-
-          expect(mockMemory.initialize).toHaveBeenCalledWith({
-            systemPrompt: undefined,
-            userMessage,
-          });
-        },
-      );
+      const [conversationId, messages] =
+        mockConversationService.batchAddMessages.mock.calls[0];
+      expect(conversationId).toBe('conv-123');
+      expect(messages.length).toBe(4);
     });
   });
 });

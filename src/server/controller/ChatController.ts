@@ -2,10 +2,11 @@ import {
   CancelChatRequestDto,
   StartChatRequestDto,
 } from '@/shared/dto/controller';
-import { Message, Role } from '@/shared/entities/Message';
 import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
 import { PendingMessage } from '../core/PendingMessage';
+import type { Message } from '@/shared/types/entities';
+import { Memory } from '../core/memory';
 import { SSEConnection } from '../core/SSEConnection';
 import { TraceContext } from '../core/TraceContext';
 import type { Agent } from '../core/agent';
@@ -15,6 +16,7 @@ import { body, param, request, response } from '../decorator/param';
 import { AuthService } from '../service/AuthService';
 import { ChatService } from '../service/ChatService';
 import { ConversationService } from '../service/ConversationService';
+import { MemoryIds } from '@/shared/constants';
 
 @controller('/api/chat')
 export default class ChatController {
@@ -151,61 +153,61 @@ export default class ChatController {
     }
 
     // Verify user is authenticated
-    await this.authService.getUserId(req);
+    const userId = await this.authService.getUserId(req);
 
-    TraceContext.update({ conversationId, userId: conversation.userId });
+    if (userId !== conversation.userId) {
+      return res.status(401).json({
+        error: `Mismatched conversation user: ${userId}`,
+      });
+    }
 
-    const memory = await this.chatService.buildMemory(
-      agent,
-      conversation.config!,
-      {
-        role: dto.role,
-        content: dto.content,
-        attachments: dto.attachments,
-      },
+    TraceContext.update({
+      conversationId,
+      userId,
+    });
+
+    // Create memory for this session
+    const memory = container.resolve<Memory>(
+      conversation.config?.memory?.type ?? MemoryIds.NONE,
     );
+    session.setMemory(memory);
 
-    // Use a timestamp that is guaranteed to be after all previous messages
-    // Add 100ms buffer to ensure correct ordering
-    const [assistantMessage] = await this.conversationService.batchAddMessages(
-      conversation.id!,
-      [
-        {
-          role: Role.ASSIST,
-          content: '',
-          createdAt: new Date(Date.now() + 100),
+    // Prepare turn messages
+    const { messages, assistantId, assistantMessage } =
+      await this.chatService.prepareTurn({
+        conversationId,
+        userId: conversation.userId,
+        systemPrompt: agent.systemPrompt.build(),
+        userMessage: {
+          role: dto.role,
+          content: dto.content,
+          attachments: dto.attachments,
         },
-      ],
-    );
+      });
+
+    // Inject context into memory (full history including new turn)
+    memory.setContext(messages);
 
     // Update TraceContext with messageId
     TraceContext.update({
-      messageId: assistantMessage.id,
-      traceId: assistantMessage.id,
+      messageId: assistantId,
+      traceId: assistantId,
     });
     TraceContext.freeze();
 
-    res.status(200).json({ success: true, messageId: assistantMessage.id });
+    res.status(200).json({ success: true, messageId: assistantId });
 
-    // Create PendingMessage and MessageFSM
-    const pendingMessage = new PendingMessage(
-      assistantMessage,
-      (message: Message) =>
-        this.conversationService.updateMessage(
-          message.id,
-          message.content,
-          message.meta,
-        ),
+    // Create PendingMessage and register with persist callback
+    const pendingMessage = new PendingMessage(assistantMessage);
+    session.addMessageFSM(assistantId, pendingMessage, (message: Message) =>
+      this.conversationService.saveMessage(message),
     );
-
-    session.addMessageFSM(assistantMessage.id, pendingMessage);
 
     this.chatService.runSession(
       session,
       agent,
-      memory,
       conversation.config,
-      assistantMessage.id,
+      assistantId,
     );
 
     return;

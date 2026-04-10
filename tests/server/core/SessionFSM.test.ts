@@ -132,9 +132,13 @@ describe('SessionFSM', () => {
   describe('addMessageFSM', () => {
     it('should create and store a MessageFSM', () => {
       const message = createMessage();
-      const pendingMessage = new PendingMessage(message, createPersister());
+      const pendingMessage = new PendingMessage(message);
 
-      const msgFsm = session.addMessageFSM('msg-1', pendingMessage);
+      const msgFsm = session.addMessageFSM(
+        'msg-1',
+        pendingMessage,
+        createPersister(),
+      );
 
       expect(msgFsm).toBeDefined();
       expect(msgFsm.messageId).toBe('msg-1');
@@ -145,8 +149,8 @@ describe('SessionFSM', () => {
   describe('cancelMessage', () => {
     it('should cancel the specified message', () => {
       const message = createMessage();
-      const pendingMessage = new PendingMessage(message, createPersister());
-      session.addMessageFSM(MSG_ID, pendingMessage);
+      const pendingMessage = new PendingMessage(message);
+      session.addMessageFSM(MSG_ID, pendingMessage, createPersister());
 
       // First, put the message in streaming state (non-terminal)
       const msgFsm = session.getMessageFSM(MSG_ID)!;
@@ -168,8 +172,8 @@ describe('SessionFSM', () => {
 
     it('should do nothing if message already terminal', () => {
       const message = createMessage();
-      const pendingMessage = new PendingMessage(message, createPersister());
-      session.addMessageFSM(MSG_ID, pendingMessage);
+      const pendingMessage = new PendingMessage(message);
+      session.addMessageFSM(MSG_ID, pendingMessage, createPersister());
 
       const msgFsm = session.getMessageFSM(MSG_ID)!;
       // Put through streaming then final
@@ -197,11 +201,11 @@ describe('SessionFSM', () => {
     it('should cancel all non-terminal messages', async () => {
       const message1 = createMessage('msg-1');
       const message2 = createMessage('msg-2');
-      const pending1 = new PendingMessage(message1, createPersister());
-      const pending2 = new PendingMessage(message2, createPersister());
+      const pending1 = new PendingMessage(message1);
+      const pending2 = new PendingMessage(message2);
 
-      session.addMessageFSM('msg-1', pending1);
-      session.addMessageFSM('msg-2', pending2);
+      session.addMessageFSM('msg-1', pending1, createPersister());
+      session.addMessageFSM('msg-2', pending2, createPersister());
 
       const msgFsm1 = session.getMessageFSM('msg-1')!;
       const msgFsm2 = session.getMessageFSM('msg-2')!;
@@ -239,8 +243,8 @@ describe('SessionFSM', () => {
     it('should persist all non-terminal messages', async () => {
       const message = createMessage();
       const persister = createPersister();
-      const pendingMessage = new PendingMessage(message, persister);
-      session.addMessageFSM(MSG_ID, pendingMessage);
+      const pendingMessage = new PendingMessage(message);
+      session.addMessageFSM(MSG_ID, pendingMessage, persister);
 
       const msgFsm = session.getMessageFSM(MSG_ID)!;
       msgFsm.handleEvent({
@@ -335,8 +339,8 @@ describe('SessionFSM', () => {
 
     it('should clear all MessageFSMs', async () => {
       const message = createMessage();
-      const pendingMessage = new PendingMessage(message, createPersister());
-      session.addMessageFSM('msg-1', pendingMessage);
+      const pendingMessage = new PendingMessage(message);
+      session.addMessageFSM('msg-1', pendingMessage, createPersister());
 
       await session.cleanup();
 
@@ -364,8 +368,8 @@ describe('SessionFSM', () => {
   describe('waiting↔active driving', () => {
     it('should transition to active when MessageFSM enters non-terminal state', async () => {
       const message = createMessage();
-      const pendingMessage = new PendingMessage(message, createPersister());
-      session.addMessageFSM(MSG_ID, pendingMessage);
+      const pendingMessage = new PendingMessage(message);
+      session.addMessageFSM(MSG_ID, pendingMessage, createPersister());
 
       const msgFsm = session.getMessageFSM(MSG_ID)!;
       msgFsm.handleEvent({
@@ -380,8 +384,8 @@ describe('SessionFSM', () => {
 
     it('should transition back to waiting when all MessageFSMs reach terminal', async () => {
       const message = createMessage();
-      const pendingMessage = new PendingMessage(message, createPersister());
-      session.addMessageFSM(MSG_ID, pendingMessage);
+      const pendingMessage = new PendingMessage(message);
+      session.addMessageFSM(MSG_ID, pendingMessage, createPersister());
 
       const msgFsm = session.getMessageFSM(MSG_ID)!;
       msgFsm.handleEvent({
@@ -403,8 +407,8 @@ describe('SessionFSM', () => {
 
     it('should cleanup when all messages reach terminal in canceling phase', async () => {
       const message = createMessage();
-      const pendingMessage = new PendingMessage(message, createPersister());
-      session.addMessageFSM(MSG_ID, pendingMessage);
+      const pendingMessage = new PendingMessage(message);
+      session.addMessageFSM(MSG_ID, pendingMessage, createPersister());
 
       const msgFsm = session.getMessageFSM(MSG_ID)!;
       msgFsm.handleEvent({
@@ -433,11 +437,11 @@ describe('SessionFSM', () => {
     it('should keep session active when one message is canceled but others are still running', async () => {
       const message1 = createMessage('msg-1');
       const message2 = createMessage('msg-2');
-      const pending1 = new PendingMessage(message1, createPersister());
-      const pending2 = new PendingMessage(message2, createPersister());
+      const pending1 = new PendingMessage(message1);
+      const pending2 = new PendingMessage(message2);
 
-      session.addMessageFSM('msg-1', pending1);
-      session.addMessageFSM('msg-2', pending2);
+      session.addMessageFSM('msg-1', pending1, createPersister());
+      session.addMessageFSM('msg-2', pending2, createPersister());
 
       const msgFsm1 = session.getMessageFSM('msg-1')!;
       const msgFsm2 = session.getMessageFSM('msg-2')!;
@@ -470,11 +474,11 @@ describe('SessionFSM', () => {
     it('should transition to waiting when all messages reach terminal after individual cancels', async () => {
       const message1 = createMessage('msg-1');
       const message2 = createMessage('msg-2');
-      const pending1 = new PendingMessage(message1, createPersister());
-      const pending2 = new PendingMessage(message2, createPersister());
+      const pending1 = new PendingMessage(message1);
+      const pending2 = new PendingMessage(message2);
 
-      session.addMessageFSM('msg-1', pending1);
-      session.addMessageFSM('msg-2', pending2);
+      session.addMessageFSM('msg-1', pending1, createPersister());
+      session.addMessageFSM('msg-2', pending2, createPersister());
 
       const msgFsm1 = session.getMessageFSM('msg-1')!;
       const msgFsm2 = session.getMessageFSM('msg-2')!;

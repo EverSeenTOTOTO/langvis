@@ -39,12 +39,8 @@ function createMockAgent(
 }
 
 const mockChildMemory = {
-  initialize: vi.fn(),
-  retrieve: vi.fn(),
-  store: vi.fn(),
-  summarize: vi.fn(),
-  clearByConversationId: vi.fn(),
-  clearByUserId: vi.fn(),
+  setContext: vi.fn(),
+  summarize: vi.fn().mockResolvedValue([]),
 };
 
 function wrapTrace<T>(fn: () => Promise<T>): Promise<T> {
@@ -352,14 +348,18 @@ describe('AgentCallTool', () => {
         ),
       );
 
-      expect(mockChildMemory.initialize).toHaveBeenCalledWith(
-        expect.objectContaining({
-          context: 'file: report.pdf',
-          userMessage: {
+      expect(mockChildMemory.setContext).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: 'user',
+            content: 'file: report.pdf',
+            meta: { hidden: true },
+          }),
+          expect.objectContaining({
             role: 'user',
             content: 'analyze this',
-          },
-        }),
+          }),
+        ]),
       );
     }));
 

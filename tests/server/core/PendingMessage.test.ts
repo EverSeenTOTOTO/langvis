@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { PendingMessage } from '@/server/core/PendingMessage';
 import { Role } from '@/shared/entities/Message';
 import { ToolIds } from '@/shared/constants';
@@ -16,12 +16,10 @@ describe('PendingMessage', () => {
     conversationId: 'conv-123',
   });
 
-  const createPersister = () => vi.fn().mockResolvedValue(undefined);
-
   describe('handleEvent', () => {
     it('should accumulate stream content', () => {
       const msg = createMessage();
-      const pending = new PendingMessage(msg, createPersister());
+      const pending = new PendingMessage(msg);
 
       pending.handleEvent({
         type: 'stream',
@@ -44,7 +42,7 @@ describe('PendingMessage', () => {
 
     it('should persist non-stream events to meta.events', () => {
       const msg = createMessage();
-      const pending = new PendingMessage(msg, createPersister());
+      const pending = new PendingMessage(msg);
 
       const toolCallEvent: AgentEvent = {
         type: 'tool_call',
@@ -64,7 +62,7 @@ describe('PendingMessage', () => {
 
     it('should not persist LLM_CALL tool events', () => {
       const msg = createMessage();
-      const pending = new PendingMessage(msg, createPersister());
+      const pending = new PendingMessage(msg);
 
       pending.handleEvent({
         type: 'tool_call',
@@ -82,7 +80,7 @@ describe('PendingMessage', () => {
     it('should set content on error event', () => {
       const msg = createMessage();
       msg.content = 'some previous content';
-      const pending = new PendingMessage(msg, createPersister());
+      const pending = new PendingMessage(msg);
 
       pending.handleEvent({
         type: 'error',
@@ -99,7 +97,7 @@ describe('PendingMessage', () => {
     it('should initialize meta if not present', () => {
       const msg = createMessage();
       (msg as any).meta = undefined;
-      const pending = new PendingMessage(msg, createPersister());
+      const pending = new PendingMessage(msg);
 
       pending.handleEvent({
         type: 'tool_result',
@@ -117,7 +115,7 @@ describe('PendingMessage', () => {
 
     it('should handle multiple event types in sequence', () => {
       const msg = createMessage();
-      const pending = new PendingMessage(msg, createPersister());
+      const pending = new PendingMessage(msg);
 
       // Start event
       pending.handleEvent({
@@ -183,7 +181,7 @@ describe('PendingMessage', () => {
   describe('contentLength', () => {
     it('should return 0 for empty content', () => {
       const msg = createMessage();
-      const pending = new PendingMessage(msg, createPersister());
+      const pending = new PendingMessage(msg);
 
       expect(pending.contentLength).toBe(0);
     });
@@ -191,7 +189,7 @@ describe('PendingMessage', () => {
     it('should return correct length after accumulation', () => {
       const msg = createMessage();
       msg.content = 'Initial';
-      const pending = new PendingMessage(msg, createPersister());
+      const pending = new PendingMessage(msg);
 
       pending.handleEvent({
         type: 'stream',
@@ -205,31 +203,10 @@ describe('PendingMessage', () => {
     });
   });
 
-  describe('finalize', () => {
-    it('should call persister with the message', async () => {
-      const msg = createMessage();
-      const persister = vi.fn().mockResolvedValue(undefined);
-      const pending = new PendingMessage(msg, persister);
-
-      pending.handleEvent({
-        type: 'stream',
-        messageId: MSG_ID,
-        content: 'Hello',
-        seq: 1,
-        at: Date.now(),
-      });
-
-      await pending.persist();
-
-      expect(persister).toHaveBeenCalledWith(msg);
-      expect(persister).toHaveBeenCalledTimes(1);
-    });
-  });
-
   describe('toMessage', () => {
     it('should return the underlying message', () => {
       const msg = createMessage();
-      const pending = new PendingMessage(msg, createPersister());
+      const pending = new PendingMessage(msg);
 
       expect(pending.toMessage()).toBe(msg);
     });

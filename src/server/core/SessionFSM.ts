@@ -1,7 +1,8 @@
 import { AgentEvent, MessagePhase, SessionPhase } from '@/shared/types';
 import logger from '../utils/logger';
-import { MessageFSM } from './MessageFSM';
-import type { PendingMessage } from './PendingMessage';
+import { Memory } from './memory';
+import { MessageFSM, type MessageFSMOptions } from './MessageFSM';
+import { PendingMessage } from './PendingMessage';
 import { SSEConnection } from './SSEConnection';
 import { StateMachine } from '@/shared/utils/StateMachine';
 
@@ -26,6 +27,7 @@ export class SessionFSM {
   readonly conversationId: string;
   readonly createdAt = Date.now();
 
+  private _memory?: Memory;
   private sm: StateMachine<SessionPhase>;
   private sseConnection: SSEConnection | null = null;
   private messageFSMs = new Map<string, MessageFSM>();
@@ -64,6 +66,14 @@ export class SessionFSM {
     return this.sm.phase;
   }
 
+  get memory(): Memory | undefined {
+    return this._memory;
+  }
+
+  setMemory(memory: Memory): void {
+    this._memory = memory;
+  }
+
   bindConnection(connection: SSEConnection): void {
     // 1. Close old connection if exists
     if (this.sseConnection) {
@@ -75,7 +85,7 @@ export class SessionFSM {
     // 2. Replay accumulated events from all non-terminal MessageFSMs
     for (const [messageId, messageFSM] of this.messageFSMs) {
       if (!messageFSM.isTerminated) {
-        const events = messageFSM.pendingMessage.events;
+        const events = messageFSM.getReplayEvents();
         for (const event of events) {
           connection.send(event);
         }
@@ -96,9 +106,14 @@ export class SessionFSM {
     });
   }
 
-  addMessageFSM(messageId: string, pendingMessage: PendingMessage): MessageFSM {
+  addMessageFSM(
+    messageId: string,
+    pendingMessage: PendingMessage,
+    onPersist?: MessageFSMOptions['onPersist'],
+  ): MessageFSM {
     const fsm = new MessageFSM(messageId, pendingMessage, {
       onTransition: (id, from, to) => this.onMessagePhaseChange(id, from, to),
+      onPersist,
     });
     this.messageFSMs.set(messageId, fsm);
     return fsm;
@@ -129,6 +144,9 @@ export class SessionFSM {
 
   async handleDisconnect(): Promise<void> {
     logger.info(`SSE disconnected for ${this.conversationId}`);
+
+    // Always clear SSE reference on disconnect — the response is gone
+    this.sseConnection = null;
 
     for (const fsm of this.messageFSMs.values()) {
       if (!fsm.isTerminated) {

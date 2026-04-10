@@ -3,9 +3,11 @@ import { ListEmailsRequestDto } from '@/shared/dto/controller';
 import { Conversation } from '@/shared/entities/Conversation';
 import { EmailEntity } from '@/shared/entities/Email';
 import { Role } from '@/shared/entities/Message';
+import type { Message } from '@/shared/types/entities';
 import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
+import { Memory } from '../core/memory';
 import { PendingMessage } from '../core/PendingMessage';
 import { TraceContext } from '../core/TraceContext';
 import { api } from '../decorator/api';
@@ -120,7 +122,7 @@ export default class EmailController {
     const email = await this.emailService.getById(id);
 
     if (!email) {
-      return res.status(404).json({ error: 'Email not found' });
+      return res.status(404).json({ error: `Email not found: ${id}` });
     }
 
     await this.emailService.updateStatus(id, 'archived');
@@ -133,6 +135,12 @@ export default class EmailController {
       null,
       'Email Archive',
     );
+
+    if (userId !== conversation.userId) {
+      return res.status(401).json({
+        error: `Mismatched conversation user: ${userId}`,
+      });
+    }
 
     const agent = container.resolve<Agent>(AgentIds.DOCUMENT);
     res.status(200).json({ conversationId: conversation.id });
@@ -169,80 +177,68 @@ export default class EmailController {
       userId: conversation.userId,
     });
 
-    // Create session BEFORE building memory to avoid race with frontend SSE
+    // Create session BEFORE preparing turn to avoid race with frontend SSE
     const session = await this.chatService.acquireSession(conversationId);
     if (!session) {
       throw new Error(`Failed to acquire session for ${conversationId}`);
     }
 
-    // Build memory first to create sys/user messages with correct timestamps
-    const memory = await this.chatService.buildMemory(
-      agent,
-      conversation.config!,
-      {
-        role: Role.USER,
-        content: '', // Placeholder, will be updated after cache
-        meta: { emailId: email.id },
-      },
+    // Create memory for this session
+    const memory = container.resolve<Memory>(
+      conversation.config?.memory?.type ?? 'no_memory',
     );
+    session.setMemory(memory);
 
-    // Create assistant message after memory is built, ensuring correct ordering
-    // Use a timestamp that is guaranteed to be after all previous messages
-    const [assistantMessage] = await this.conversationService.batchAddMessages(
-      conversationId,
-      [
-        {
-          role: Role.ASSIST,
-          content: '',
-          createdAt: new Date(Date.now() + 100),
+    // Prepare turn messages
+    const { messages, assistantId, assistantMessage } =
+      await this.chatService.prepareTurn({
+        conversationId,
+        userId: conversation.userId,
+        systemPrompt: agent.systemPrompt.build(),
+        userMessage: {
+          role: Role.USER,
+          content: '', // Placeholder, will be updated after cache
+          meta: { emailId: email.id },
         },
-      ],
-    );
+      });
 
     // Update TraceContext with messageId for cache lookup
     TraceContext.update({
-      messageId: assistantMessage.id,
-      traceId: assistantMessage.id,
+      messageId: assistantId,
+      traceId: assistantId,
     });
     TraceContext.freeze();
 
     // Use messageId for cache key - ReadCacheTool uses messageId to look up cache
-    const contentOrCached = await compress(assistantMessage.id, email.content);
+    const contentOrCached = await compress(assistantId, email.content);
     const userContent = this.buildArchivePrompt(
       email,
       contentOrCached as string | CachedReference,
     );
 
     // Update the placeholder user message with actual content
-    // Find the last user message we just created
-    const messages =
-      await this.conversationService.getMessagesByConversationId(
-        conversationId,
-      );
-    const lastUserMessage = messages.filter(m => m.role === Role.USER).pop();
+    const lastUserMessage = [...messages]
+      .reverse()
+      .find(m => m.role === Role.USER);
     if (lastUserMessage) {
-      await this.conversationService.updateMessage(
-        lastUserMessage.id,
-        userContent,
-        { emailId: email.id },
-      );
+      lastUserMessage.content = userContent;
+      lastUserMessage.meta = { emailId: email.id };
+      await this.conversationService.saveMessage(lastUserMessage);
     }
 
-    const pendingMessage = new PendingMessage(assistantMessage, message =>
-      this.conversationService.updateMessage(
-        message.id,
-        message.content,
-        message.meta,
-      ),
+    // Inject context into memory (full history with updated user message)
+    memory.setContext(messages);
+
+    const pendingMessage = new PendingMessage(assistantMessage);
+    session.addMessageFSM(assistantId, pendingMessage, (message: Message) =>
+      this.conversationService.saveMessage(message),
     );
-    session.addMessageFSM(assistantMessage.id, pendingMessage);
 
     this.chatService.runSession(
       session,
       agent,
-      memory,
       conversation.config,
-      assistantMessage.id,
+      assistantId,
     );
   }
 }

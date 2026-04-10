@@ -2,13 +2,8 @@ import { ToolIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
 import type { Message } from '@/shared/types/entities';
 
-export type MessagePersister = (message: Message) => Promise<unknown>;
-
 export class PendingMessage {
-  constructor(
-    private message: Message,
-    private persistCallback: MessagePersister,
-  ) {}
+  constructor(private message: Message) {}
 
   handleEvent(event: AgentEvent): void {
     // 1. Accumulate stream content to message
@@ -43,10 +38,6 @@ export class PendingMessage {
 
   get contentLength(): number {
     return this.message.content.length;
-  }
-
-  async persist(): Promise<void> {
-    await this.persistCallback(this.message);
   }
 
   toMessage(): Message {
