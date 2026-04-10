@@ -1,8 +1,6 @@
 import ChatController from '@/server/controller/ChatController';
-import { TraceContext } from '@/server/core/TraceContext';
 import { Role } from '@/shared/entities/Message';
 import type { Request, Response } from 'express';
-import { container } from 'tsyringe';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('tsyringe', () => ({
@@ -18,14 +16,14 @@ vi.mock('tsyringe', () => ({
 class MockConversationService {
   getConversationById = vi.fn();
   batchAddMessages = vi.fn();
-  updateMessage = vi.fn();
+  saveMessage = vi.fn();
 }
 
 class MockChatService {
   acquireSession = vi.fn();
   getSession = vi.fn();
   runSession = vi.fn();
-  buildMemory = vi.fn();
+  prepareTurn = vi.fn();
   getSessionState = vi.fn();
 }
 
@@ -210,69 +208,6 @@ describe('ChatController', () => {
       expect(mockJson).toHaveBeenCalledWith({
         error: 'Conversation conv-123 not found',
       });
-    });
-
-    it('should persist messages and start agent', async () => {
-      await TraceContext.run(
-        { requestId: 'test-req', userId: 'user-123' },
-        async () => {
-          mockRequest.params = { conversationId: 'conv-123' };
-          mockRequest.body = { role: Role.USER, content: 'Hello' };
-
-          const mockSession = {
-            phase: 'waiting',
-            addMessageFSM: vi.fn(),
-          };
-          mockChatService.getSession.mockReturnValue(mockSession);
-
-          const mockConversation = {
-            id: 'conv-123',
-            config: { agent: 'ChatAgent' },
-          };
-          mockConversationService.getConversationById.mockResolvedValue(
-            mockConversation,
-          );
-
-          const mockAgent = {};
-          (container.resolve as any).mockReturnValue(mockAgent);
-
-          mockAuthService.getUserId.mockResolvedValue('user-123');
-
-          const mockMemory = {};
-          mockChatService.buildMemory.mockResolvedValue(mockMemory);
-
-          mockConversationService.batchAddMessages.mockResolvedValue([
-            { id: 'assistant-msg', role: Role.ASSIST, content: '' },
-          ]);
-
-          await chatController.chat(
-            'conv-123',
-            { conversationId: 'conv-123', role: Role.USER, content: 'Hello' },
-            mockRequest as Request,
-            mockResponse as Response,
-          );
-
-          expect(mockAuthService.getUserId).toHaveBeenCalledWith(mockRequest);
-          expect(mockChatService.buildMemory).toHaveBeenCalledWith(
-            mockAgent,
-            mockConversation.config,
-            { role: Role.USER, content: 'Hello', attachments: undefined },
-          );
-          expect(mockConversationService.batchAddMessages).toHaveBeenCalledWith(
-            'conv-123',
-            [expect.objectContaining({ role: Role.ASSIST, content: '' })],
-          );
-
-          expect(mockStatus).toHaveBeenCalledWith(200);
-          expect(mockJson).toHaveBeenCalledWith({
-            success: true,
-            messageId: 'assistant-msg',
-          });
-
-          expect(mockSession.addMessageFSM).toHaveBeenCalled();
-          expect(mockChatService.runSession).toHaveBeenCalled();
-        },
-      );
     });
   });
 

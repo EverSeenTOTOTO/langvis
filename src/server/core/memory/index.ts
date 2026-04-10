@@ -1,20 +1,41 @@
 import { Logger } from '@/server/utils/logger';
 import { Message } from '@/shared/entities/Message';
 
-export interface InitializeInput {
-  systemPrompt?: string;
-  context?: string;
-  userMessage: Omit<Message, 'id' | 'conversationId' | 'createdAt'>;
+export interface ContextUsage {
+  used: number;
+  total: number;
 }
 
 export abstract class Memory {
-  protected abstract readonly logger: Logger;
+  protected readonly logger!: Logger;
 
-  abstract initialize(input: InitializeInput): Promise<void>;
+  private context: Message[] = [];
 
-  abstract store(messages: Message[]): Promise<void>;
+  /**
+   * Set the context messages for this turn.
+   * Called by ChatService before agent execution.
+   * This replaces the old initialize/retrieve flow —
+   * the caller constructs messages, Memory just holds and summarizes them.
+   */
+  setContext(messages: Message[]): void {
+    this.context = messages;
+  }
 
-  abstract retrieve(): Promise<Message[]>;
+  /** Get current context messages */
+  protected getContext(): Message[] {
+    return this.context;
+  }
 
-  abstract summarize(): Promise<Message[]>;
+  /**
+   * Assemble runtime context for the LLM.
+   * Default implementation returns context as-is (full history).
+   * Subclasses can override to compress/filter.
+   */
+  async summarize(): Promise<Message[]> {
+    return this.context;
+  }
+
+  async onTurnComplete(): Promise<void> {}
+
+  async onContextUsageChange(_usage: ContextUsage): Promise<void> {}
 }

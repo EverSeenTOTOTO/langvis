@@ -1,22 +1,12 @@
 import { memory } from '@/server/decorator/core';
-import { ConversationService } from '@/server/service/ConversationService';
-import { WorkspaceService } from '@/server/service/WorkspaceService';
 import { MemoryIds } from '@/shared/constants';
 import { Message, Role } from '@/shared/types/entities';
-import ChatHistoryMemory from '../ChatHistory';
-import { inject } from 'tsyringe';
+import { Memory } from '..';
 
 @memory(MemoryIds.NONE)
-export default class NoneMemory extends ChatHistoryMemory {
-  constructor(
-    @inject(ConversationService) conversationService: ConversationService,
-    @inject(WorkspaceService) workspaceService: WorkspaceService,
-  ) {
-    super(conversationService, workspaceService);
-  }
-
+export default class NoneMemory extends Memory {
   async summarize(): Promise<Message[]> {
-    const messages = await this.retrieve();
+    const messages = this.getContext();
 
     const result: Message[] = [];
 
@@ -24,7 +14,6 @@ export default class NoneMemory extends ChatHistoryMemory {
       result.push(messages[0]);
     }
     if (messages[messages.length - 2]?.role === Role.USER) {
-      // messages[len-1] is the streaming assist message
       result.push(messages[messages.length - 2]);
     }
 

@@ -1,10 +1,11 @@
-import { MemoryIds, RedisKeys } from '@/shared/constants';
+import { RedisKeys } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { MessageAttachment } from '@/shared/types/entities';
+import { SessionPhase } from '@/shared/types';
+import { generateId } from '@/shared/utils';
 import { globby } from 'globby';
-import { container, inject } from 'tsyringe';
+import { inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
-import { Memory } from '../core/memory';
 import { MessageFSM } from '../core/MessageFSM';
 import { SessionFSM } from '../core/SessionFSM';
 import { registerMemory } from '../decorator/core';
@@ -14,9 +15,10 @@ import Logger from '../utils/logger';
 import { estimateTokens } from '../utils/estimateTokens';
 import { ConversationService } from './ConversationService';
 import { RedisService } from './RedisService';
-import { SessionPhase } from '@/shared/types';
 import { ContextUsageService } from './ContextUsageService';
 import { ProviderService } from './ProviderService';
+import { WorkspaceService } from './WorkspaceService';
+import dayjs from 'dayjs';
 
 /**
  * Session state persisted to Redis for reconnection support.
@@ -27,6 +29,14 @@ export interface ChatSessionState {
   messages: Array<{ messageId: string; phase: string }>;
   startedAt: number;
   agentId: string | null;
+}
+
+export interface PrepareTurnResult {
+  /** Full conversation history including new turn messages */
+  messages: import('@/shared/entities/Message').Message[];
+  assistantId: string;
+  /** The assistant placeholder message for this turn */
+  assistantMessage: import('@/shared/entities/Message').Message;
 }
 
 @service()
@@ -41,6 +51,7 @@ export class ChatService {
     @inject(ContextUsageService)
     private contextUsageService: ContextUsageService,
     @inject(ProviderService) private providerService: ProviderService,
+    @inject(WorkspaceService) private workspaceService: WorkspaceService,
   ) {
     const suffix = isProd ? '.js' : '.ts';
     const pattern = `./${isProd ? 'dist' : 'src'}/server/core/memory/*/index${suffix}`;
@@ -219,18 +230,132 @@ export class ChatService {
   }
 
   /**
+   * Prepare messages for a new turn: construct, pre-generate IDs, async persist.
+   */
+  async prepareTurn(params: {
+    conversationId: string;
+    userId: string;
+    systemPrompt: string;
+    context?: string;
+    userMessage: {
+      role: Role;
+      content: string;
+      attachments?: MessageAttachment[] | null;
+      meta?: Record<string, any> | null;
+    };
+  }): Promise<PrepareTurnResult> {
+    const { conversationId, userId, systemPrompt, context, userMessage } =
+      params;
+
+    // Load existing history
+    const existingMessages =
+      await this.conversationService.getMessagesByConversationId(
+        conversationId,
+      );
+    const isFirstTurn = existingMessages.length === 0;
+
+    const baseTime = Date.now();
+    let index = 0;
+    const newMessages: import('@/shared/entities/Message').Message[] = [];
+
+    if (isFirstTurn) {
+      // 1. System message
+      newMessages.push({
+        id: generateId('msg'),
+        role: Role.SYSTEM,
+        content: systemPrompt,
+        attachments: null,
+        meta: null,
+        createdAt: new Date(baseTime + index++),
+        conversationId,
+      });
+
+      // 2. Session context (hidden user message)
+      const workDir = await this.workspaceService.getWorkDir(conversationId);
+      const sessionContext = `<session-context>
+Conversation ID: ${conversationId}
+User ID: ${userId}
+Current Time: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}
+Workspace Directory: ${workDir}
+</session-context>`;
+
+      newMessages.push({
+        id: generateId('msg'),
+        role: Role.USER,
+        content: sessionContext,
+        attachments: null,
+        meta: { hidden: true },
+        createdAt: new Date(baseTime + index++),
+        conversationId,
+      });
+
+      // 3. Context (optional hidden user message)
+      if (context) {
+        newMessages.push({
+          id: generateId('msg'),
+          role: Role.USER,
+          content: context,
+          attachments: null,
+          meta: { hidden: true },
+          createdAt: new Date(baseTime + index++),
+          conversationId,
+        });
+      }
+    }
+
+    // 4. User message
+    newMessages.push({
+      id: generateId('msg'),
+      ...userMessage,
+      createdAt: new Date(baseTime + index++),
+      conversationId,
+    });
+
+    // 5. Assistant placeholder
+    const assistantId = generateId('msg');
+    const assistantMessage: import('@/shared/entities/Message').Message = {
+      id: assistantId,
+      role: Role.ASSIST,
+      content: '',
+      attachments: null,
+      meta: null,
+      createdAt: new Date(baseTime + index++),
+      conversationId,
+    };
+    newMessages.push(assistantMessage);
+
+    // 6. Async persist (fire and forget)
+    this.conversationService
+      .batchAddMessages(conversationId, newMessages)
+      .catch(err => {
+        this.logger.error('Failed to persist turn messages', err);
+      });
+
+    return {
+      messages: [...existingMessages, ...newMessages],
+      assistantId,
+      assistantMessage,
+    };
+  }
+
+  /**
    * Run agent execution loop, driving MessageFSM via events.
    */
   async runSession(
     session: SessionFSM,
     agent: Agent,
-    memory: Memory,
     config: unknown,
     messageId: string,
   ): Promise<void> {
     const messageFSM = session.getMessageFSM(messageId);
     if (!messageFSM) {
       this.logger.error(`MessageFSM not found for ${messageId}`);
+      return;
+    }
+
+    const memory = session.memory;
+    if (!memory) {
+      this.logger.error(`Memory not set for session ${session.conversationId}`);
       return;
     }
 
@@ -244,16 +369,6 @@ export class ChatService {
 
     // Get modelId from config for context usage calculation
     const modelId = (config as Record<string, any>)?.model?.modelId;
-    const conversationId = session.conversationId;
-
-    // Calculate and push context usage before agent starts
-    await this.pushContextUsage(
-      memory,
-      modelId,
-      conversationId,
-      messageFSM,
-      session,
-    );
 
     try {
       for await (const event of agent.call(memory, messageFSM.ctx, config)) {
@@ -294,13 +409,10 @@ export class ChatService {
       await messageFSM.persist();
 
       // Calculate context usage after persist (includes assistant reply)
-      await this.pushContextUsage(
-        memory,
-        modelId,
-        conversationId,
-        messageFSM,
-        session,
-      );
+      await this.pushContextUsage(session, modelId, messageId);
+
+      // Trigger memory turn-complete hook
+      await memory.onTurnComplete();
 
       const totalTime = Date.now() - startTime;
       const ttft = firstTokenTime ? firstTokenTime - startTime : null;
@@ -316,28 +428,30 @@ export class ChatService {
    * Calculate context usage and push to client via SSE
    */
   private async pushContextUsage(
-    memory: Memory,
-    modelId: string | undefined,
-    conversationId: string,
-    messageFSM: MessageFSM,
     session: SessionFSM,
+    modelId: string | undefined,
+    messageId: string,
   ): Promise<void> {
     if (!modelId) return;
+
+    const memory = session.memory;
+    const messageFSM = session.getMessageFSM(messageId);
+    if (!memory || !messageFSM) return;
 
     const model = this.providerService.getModel(modelId);
     if (!model?.contextSize) return;
 
     try {
-      // Use memory messages + current assistant message for estimation
-      const messages = await memory.retrieve();
+      // Use summarized messages + current assistant message for estimation
+      const messages = await memory.summarize();
       const assistantMessage = messageFSM.message;
       const allMessages = [...messages, assistantMessage];
 
       const used = estimateTokens(allMessages, modelId);
       const total = model.contextSize;
 
-      // Store in memory
-      this.contextUsageService.set(conversationId, { used, total });
+      // Store in context usage service
+      this.contextUsageService.set(session.conversationId, { used, total });
 
       // Create and send context_usage event
       const contextUsageEvent = {
@@ -350,6 +464,9 @@ export class ChatService {
       };
 
       session.send(contextUsageEvent);
+
+      // Notify memory of context usage change
+      await memory.onContextUsageChange({ used, total });
     } catch (err) {
       this.logger.warn(
         `Failed to calculate context usage: ${(err as Error)?.message}`,
@@ -382,27 +499,5 @@ export class ChatService {
     // Send event BEFORE updating FSM state, otherwise cleanup may close SSE
     messageFSM.handleEvent(cancelledEvent);
     session.send(cancelledEvent);
-  }
-
-  async buildMemory(
-    agent: Agent,
-    config: Record<string, any>,
-    userMessage: {
-      role: Role;
-      content: string;
-      attachments?: MessageAttachment[] | null;
-      meta?: Record<string, any> | null;
-    },
-  ): Promise<Memory> {
-    const memory = container.resolve<Memory>(
-      config?.memory?.type ?? MemoryIds.NONE,
-    );
-
-    await memory.initialize({
-      systemPrompt: agent.systemPrompt.build(),
-      userMessage,
-    });
-
-    return memory;
   }
 }

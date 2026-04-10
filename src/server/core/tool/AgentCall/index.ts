@@ -4,6 +4,7 @@ import type { Logger } from '@/server/utils/logger';
 import { MemoryIds, ToolIds } from '@/shared/constants';
 import { AgentEvent, ToolConfig } from '@/shared/types';
 import { Role } from '@/shared/types/entities';
+import { generateId } from '@/shared/utils';
 import { container } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
@@ -43,14 +44,44 @@ export default class AgentCallTool extends Tool<
 
     // Initialize child memory with fabricated history
     const memory = container.resolve<ChildMemory>(MemoryIds.CHILD);
-    await memory.initialize({
-      systemPrompt: agent.systemPrompt.build(),
-      context,
-      userMessage: {
+    const baseTime = Date.now();
+    const childMessages: import('@/shared/entities/Message').Message[] = [];
+
+    if (agent.systemPrompt.build()) {
+      childMessages.push({
+        id: generateId('msg'),
+        role: Role.SYSTEM,
+        content: agent.systemPrompt.build(),
+        attachments: null,
+        meta: null,
+        createdAt: new Date(baseTime),
+        conversationId: '',
+      });
+    }
+
+    if (context) {
+      childMessages.push({
+        id: generateId('msg'),
         role: Role.USER,
-        content: query,
-      },
+        content: context,
+        attachments: null,
+        meta: { hidden: true },
+        createdAt: new Date(baseTime + 1),
+        conversationId: '',
+      });
+    }
+
+    childMessages.push({
+      id: generateId('msg'),
+      role: Role.USER,
+      content: query,
+      attachments: null,
+      meta: null,
+      createdAt: new Date(baseTime + childMessages.length),
+      conversationId: '',
     });
+
+    memory.setContext(childMessages);
 
     // Execute child agent and wrap events
     let content = '';

@@ -30,11 +30,13 @@ export interface MessageFSMOptions {
     from: MessagePhase,
     to: MessagePhase,
   ) => void;
+  onPersist?: (message: Message) => Promise<unknown>;
 }
 
 export class MessageFSM {
   readonly messageId: string;
-  readonly pendingMessage: PendingMessage;
+  private readonly pendingMessage: PendingMessage;
+  private readonly onPersist?: MessageFSMOptions['onPersist'];
   readonly executionContext: ExecutionContext;
   private sm: StateMachine<MessagePhase>;
 
@@ -45,6 +47,7 @@ export class MessageFSM {
   ) {
     this.messageId = messageId;
     this.pendingMessage = pendingMessage;
+    this.onPersist = options?.onPersist;
     this.executionContext = new ExecutionContext(
       new AbortController(),
       messageId,
@@ -102,6 +105,10 @@ export class MessageFSM {
 
   get message(): Message {
     return this.pendingMessage.toMessage();
+  }
+
+  getReplayEvents(): AgentEvent[] {
+    return this.pendingMessage.events;
   }
 
   handleEvent(event: AgentEvent): void {
@@ -166,6 +173,8 @@ export class MessageFSM {
   }
 
   async persist(): Promise<void> {
-    await this.pendingMessage.persist();
+    if (this.onPersist) {
+      await this.onPersist(this.pendingMessage.toMessage());
+    }
   }
 }

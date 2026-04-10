@@ -37,7 +37,7 @@ const ContextUsageBar: React.FC = () => {
       transition: 'all 0.3s ease',
     },
     rail: {
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      backgroundColor: 'rgba(255, 255, 255)',
       borderRadius: 6,
     },
   };

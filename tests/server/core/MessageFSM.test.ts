@@ -25,7 +25,7 @@ describe('MessageFSM (server)', () => {
   beforeEach(() => {
     message = createMessage();
     persister = vi.fn().mockResolvedValue(undefined);
-    pendingMessage = new PendingMessage(message, persister);
+    pendingMessage = new PendingMessage(message);
     onTransition = vi.fn();
   });
 
@@ -483,7 +483,9 @@ describe('MessageFSM (server)', () => {
 
   describe('persist', () => {
     it('should persist the message after events', async () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage);
+      const fsm = new MessageFSM(MSG_ID, pendingMessage, {
+        onPersist: persister,
+      });
       fsm.handleEvent({
         type: 'start',
         messageId: MSG_ID,
@@ -502,8 +504,10 @@ describe('MessageFSM (server)', () => {
       expect(persister).toHaveBeenCalled();
     });
 
-    it('should call pendingMessage.persist()', async () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage);
+    it('should call onPersist with message', async () => {
+      const fsm = new MessageFSM(MSG_ID, pendingMessage, {
+        onPersist: persister,
+      });
 
       await fsm.persist();
 

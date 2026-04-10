@@ -154,6 +154,7 @@ export class ConversationService {
   async batchAddMessages(
     conversationId: string,
     messagesData: Array<{
+      id?: string;
       role: Role;
       content: string;
       attachments?: MessageAttachment[] | null;
@@ -170,6 +171,7 @@ export class ConversationService {
     const messageRepository = this.db.getRepository(MessageEntity);
     const messages = messagesData.map(data =>
       messageRepository.create({
+        ...(data.id && { id: data.id }),
         conversationId,
         role: data.role,
         content: data.content,
@@ -220,6 +222,14 @@ export class ConversationService {
       where: { conversationId },
       order: { createdAt: 'ASC' },
     });
+  }
+
+  /**
+   * Save (upsert) a message. If the message ID exists, updates it; otherwise inserts.
+   */
+  async saveMessage(message: Message): Promise<Message> {
+    const messageRepository = this.db.getRepository(MessageEntity);
+    return await messageRepository.save(message as MessageEntity);
   }
 
   async batchDeleteMessagesInConversation(
