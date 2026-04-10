@@ -122,6 +122,10 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
+        {
+          getAllSkillInfo: vi.fn().mockResolvedValue([]),
+          getSkillContent: vi.fn().mockResolvedValue(undefined),
+        } as any,
         mockAuthService as any,
       );
 
@@ -155,6 +159,10 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
+        {
+          getAllSkillInfo: vi.fn().mockResolvedValue([]),
+          getSkillContent: vi.fn().mockResolvedValue(undefined),
+        } as any,
         mockAuthService as any,
       );
 
@@ -209,6 +217,10 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
+        {
+          getAllSkillInfo: vi.fn().mockResolvedValue([]),
+          getSkillContent: vi.fn().mockResolvedValue(undefined),
+        } as any,
         mockAuthService as any,
       );
 
@@ -228,6 +240,10 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
+        {
+          getAllSkillInfo: vi.fn().mockResolvedValue([]),
+          getSkillContent: vi.fn().mockResolvedValue(undefined),
+        } as any,
         mockAuthService as any,
       );
 
@@ -249,6 +265,10 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
+        {
+          getAllSkillInfo: vi.fn().mockResolvedValue([]),
+          getSkillContent: vi.fn().mockResolvedValue(undefined),
+        } as any,
         mockAuthService as any,
       );
 
@@ -268,6 +288,10 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
+        {
+          getAllSkillInfo: vi.fn().mockResolvedValue([]),
+          getSkillContent: vi.fn().mockResolvedValue(undefined),
+        } as any,
         mockAuthService as any,
       );
 
@@ -290,6 +314,10 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
+        {
+          getAllSkillInfo: vi.fn().mockResolvedValue([]),
+          getSkillContent: vi.fn().mockResolvedValue(undefined),
+        } as any,
         mockAuthService as any,
       );
 
@@ -316,6 +344,10 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
+        {
+          getAllSkillInfo: vi.fn().mockResolvedValue([]),
+          getSkillContent: vi.fn().mockResolvedValue(undefined),
+        } as any,
         mockAuthService as any,
       );
 
@@ -342,6 +374,10 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
+        {
+          getAllSkillInfo: vi.fn().mockResolvedValue([]),
+          getSkillContent: vi.fn().mockResolvedValue(undefined),
+        } as any,
         mockAuthService as any,
       );
 
@@ -375,6 +411,10 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
+        {
+          getAllSkillInfo: vi.fn().mockResolvedValue([]),
+          getSkillContent: vi.fn().mockResolvedValue(undefined),
+        } as any,
         mockAuthService as any,
       );
 
@@ -418,6 +458,10 @@ This is the email body content.`;
         mockEmailService as any,
         mockConversationService as any,
         mockChatService as any,
+        {
+          getAllSkillInfo: vi.fn().mockResolvedValue([]),
+          getSkillContent: vi.fn().mockResolvedValue(undefined),
+        } as any,
         mockAuthService as any,
       );
 
