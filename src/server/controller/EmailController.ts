@@ -190,8 +190,11 @@ export default class EmailController {
 
     // Create memory for this session
     const memory = container.resolve<Memory>(
-      conversation.config?.memory?.type ?? MemoryIds.CHAT_HISTORY,
+      conversation.config?.memory?.type ?? MemoryIds.SLIDE_WINDOW,
     );
+    if (conversation.config?.memory?.windowSize) {
+      memory.setWindowSize(conversation.config.memory.windowSize);
+    }
     session.setMemory(memory);
 
     // Pre-generate assistantId so we can compress before prepareTurn
