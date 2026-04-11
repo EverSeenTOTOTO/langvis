@@ -374,9 +374,6 @@ Workspace Directory: ${workDir}
     const startTime = Date.now();
     let firstTokenTime: number | undefined;
 
-    // Get modelId from config for context usage calculation
-    const modelId = (config as Record<string, any>)?.model?.modelId;
-
     try {
       for await (const event of agent.call(memory, messageFSM.ctx, config)) {
         if (messageFSM.ctx.signal.aborted) break;
@@ -416,7 +413,10 @@ Workspace Directory: ${workDir}
       await messageFSM.persist();
 
       // Calculate context usage after persist (includes assistant reply)
-      await this.pushContextUsage(session, modelId, messageId);
+      await messageFSM.ctx.pushContextUsage([
+        ...(await memory.summarize()),
+        messageFSM.message,
+      ]);
 
       // Trigger memory turn-complete hook
       await memory.onTurnComplete();
@@ -432,53 +432,48 @@ Workspace Directory: ${workDir}
   }
 
   /**
-   * Calculate context usage and push to client via SSE
+   * Setup context usage callback for ExecutionContext.
+   * Agent/tool can call ctx.pushContextUsage(messages) to report context usage.
    */
-  private async pushContextUsage(
+  setupContextUsageCallback(
     session: SessionFSM,
+    messageFSM: MessageFSM,
     modelId: string | undefined,
-    messageId: string,
-  ): Promise<void> {
+  ): void {
     if (!modelId) return;
-
-    const memory = session.memory;
-    const messageFSM = session.getMessageFSM(messageId);
-    if (!memory || !messageFSM) return;
 
     const model = this.providerService.getModel(modelId);
     if (!model?.contextSize) return;
 
-    try {
-      // Use summarized messages + current assistant message for estimation
-      const messages = await memory.summarize();
-      const assistantMessage = messageFSM.message;
-      const allMessages = [...messages, assistantMessage];
+    messageFSM.ctx.setOnPushContextUsage(async messages => {
+      const memory = session.memory;
+      if (!memory) return;
 
-      const used = estimateTokens(allMessages, modelId);
-      const total = model.contextSize;
+      try {
+        const used = estimateTokens(messages, modelId);
+        const total = model.contextSize!;
 
-      // Store in context usage service
-      this.contextUsageService.set(session.conversationId, { used, total });
+        // Store in context usage service
+        this.contextUsageService.set(session.conversationId, { used, total });
 
-      // Create and send context_usage event
-      const contextUsageEvent = {
-        type: 'context_usage' as const,
-        messageId: messageFSM.messageId,
-        used,
-        total,
-        seq: Date.now(),
-        at: Date.now(),
-      };
+        // Send context_usage event to client
+        session.send({
+          type: 'context_usage',
+          messageId: messageFSM.messageId,
+          used,
+          total,
+          seq: Date.now(),
+          at: Date.now(),
+        });
 
-      session.send(contextUsageEvent);
-
-      // Notify memory of context usage change
-      await memory.onContextUsageChange({ used, total });
-    } catch (err) {
-      this.logger.warn(
-        `Failed to calculate context usage: ${(err as Error)?.message}`,
-      );
-    }
+        // Notify memory of context usage change
+        await memory.onContextUsageChange({ used, total });
+      } catch (err) {
+        this.logger.warn(
+          `Failed to calculate context usage: ${(err as Error)?.message}`,
+        );
+      }
+    });
   }
 
   private handleAgentError(

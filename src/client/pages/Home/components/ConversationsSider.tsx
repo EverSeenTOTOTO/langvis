@@ -188,7 +188,7 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
                 conv.name ||
                 `${settingStore.tr('Conversation')} ${conv.id.substring(0, 8)}`;
               const agentId = conv.config?.agent;
-              const modelCode = conv.config?.model?.code;
+              const modelId = conv.config?.model?.modelId;
               const memoryType = conv.config?.memory?.type;
 
               const convMenuItems: MenuProps['items'] = [
@@ -207,7 +207,7 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
                 },
               ];
 
-              const hasMeta = agentId || modelCode || memoryType;
+              const hasMeta = agentId || modelId || memoryType;
               const title = (
                 <Tooltip
                   title={
@@ -216,7 +216,7 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
                       {hasMeta && (
                         <Flex gap={4} wrap>
                           {agentId && <Tag color="blue">{agentId}</Tag>}
-                          {modelCode && <Tag color="purple">{modelCode}</Tag>}
+                          {modelId && <Tag color="purple">{modelId}</Tag>}
                           {memoryType && <Tag color="green">{memoryType}</Tag>}
                         </Flex>
                       )}

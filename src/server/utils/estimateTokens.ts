@@ -1,4 +1,4 @@
-import type { Message } from '@/shared/types/entities';
+import type { LlmMessage } from '@/shared/types/entities';
 import { getEncoding, TiktokenEncoding } from 'js-tiktoken';
 
 // Encoding mapping based on modelId patterns
@@ -22,7 +22,7 @@ function getEncodingForModel(modelId: string): TiktokenEncoding {
   return 'cl100k_base';
 }
 
-function messageToString(message: Message): string {
+function messageToString(message: LlmMessage): string {
   const parts: string[] = [];
 
   // Role prefix
@@ -44,7 +44,10 @@ function messageToString(message: Message): string {
  * Estimate token count for messages using js-tiktoken.
  * Falls back to cl100k_base if model encoding is not recognized.
  */
-export function estimateTokens(messages: Message[], modelId: string): number {
+export function estimateTokens(
+  messages: LlmMessage[],
+  modelId: string,
+): number {
   const encodingName = getEncodingForModel(modelId);
   const encoding = getEncoding(encodingName);
 

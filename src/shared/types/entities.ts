@@ -29,6 +29,12 @@ export type Message = {
   loading?: boolean;
 };
 
+export type LlmMessage = {
+  role: Role | 'system' | 'user' | 'assistant';
+  content: string;
+  attachments?: MessageAttachment[] | null;
+};
+
 export type Conversation = {
   id: string;
   name: string;

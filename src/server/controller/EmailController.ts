@@ -231,9 +231,16 @@ export default class EmailController {
     memory.setContext(messages);
 
     const pendingMessage = new PendingMessage(assistantMessage);
-    session.addMessageFSM(assistantId, pendingMessage, (message: Message) =>
-      this.conversationService.saveMessage(message),
+    const messageFSM = session.addMessageFSM(
+      assistantId,
+      pendingMessage,
+      (message: Message) => this.conversationService.saveMessage(message),
     );
+
+    // Setup context usage callback for agent/tool to report usage
+    const modelId = (conversation.config as Record<string, any>)?.model
+      ?.modelId;
+    this.chatService.setupContextUsageCallback(session, messageFSM, modelId);
 
     this.chatService.runSession(
       session,
