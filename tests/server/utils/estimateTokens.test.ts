@@ -106,11 +106,21 @@ describe('estimateTokens', () => {
       const messageWithoutAttachment = createMessage(Role.USER, 'Check this');
       const messageWithAttachment = createMessage(Role.USER, 'Check this');
       messageWithAttachment.attachments = [
-        { filename: 'photo.png', mimeType: 'image/png', url: 'https://example.com/photo.png' },
+        {
+          filename: 'photo.png',
+          mimeType: 'image/png',
+          url: 'https://example.com/photo.png',
+        },
       ];
 
-      const withoutTokens = estimateTokens([messageWithoutAttachment], 'openai:gpt-4');
-      const withTokens = estimateTokens([messageWithAttachment], 'openai:gpt-4');
+      const withoutTokens = estimateTokens(
+        [messageWithoutAttachment],
+        'openai:gpt-4',
+      );
+      const withTokens = estimateTokens(
+        [messageWithAttachment],
+        'openai:gpt-4',
+      );
 
       expect(withTokens).toBeGreaterThan(withoutTokens);
     });

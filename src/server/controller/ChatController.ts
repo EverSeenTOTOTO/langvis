@@ -168,7 +168,7 @@ export default class ChatController {
 
     // Create memory for this session
     const memory = container.resolve<Memory>(
-      conversation.config?.memory?.type ?? MemoryIds.NONE,
+      conversation.config?.memory?.type ?? MemoryIds.CHAT_HISTORY,
     );
     session.setMemory(memory);
 

@@ -1,7 +1,6 @@
 import { ToolConfig } from '@/shared/types';
 
 export interface AgentCallInput {
-  agentId: string;
   /** Background context for the child agent */
   context?: string;
   /** The task/query for the child agent to execute */
@@ -19,14 +18,11 @@ export interface AgentCallOutput {
 
 export const config: ToolConfig<AgentCallInput, AgentCallOutput> = {
   name: 'agent_call',
-  description: '调用其他 Agent 执行子任务。',
+  description:
+    'Fork a sub-agent to handle a task concurrently (e.g. summarization, translation, analysis). The sub-agent runs independently and returns its result.',
   inputSchema: {
     type: 'object',
     properties: {
-      agentId: {
-        type: 'string',
-        description: '目标 Agent ID',
-      },
       context: {
         type: 'string',
         description: '背景信息，传递给子 agent 作为上下文',
@@ -48,7 +44,7 @@ export const config: ToolConfig<AgentCallInput, AgentCallOutput> = {
         nullable: true,
       },
     },
-    required: ['agentId', 'query'],
+    required: ['query'],
   },
   outputSchema: {
     type: 'object',

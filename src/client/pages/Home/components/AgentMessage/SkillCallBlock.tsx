@@ -8,6 +8,7 @@ import './ReActAgent/index.scss';
 import { useStore } from '@/client/store';
 import type { SkillCallOutput } from '@/server/core/tool/SkillCall/config';
 import { safeJsonParse } from '@/shared/utils';
+import { getToolColor } from './ToolBlockItem';
 
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
@@ -40,12 +41,12 @@ export function SkillCallBlock({
 
   return (
     <div
-      className={`react-tool-block ${depth > 0 ? `nested-depth-${depth}` : ''}`}
+      className={`react-skill-block ${depth > 0 ? `nested-depth-${depth}` : ''}`}
     >
       <Flex align="center" gap={8} className="react-tool-header">
         {Icon}
-        <Tag color="geekblue">skill</Tag>
-        <Typography.Text>{skillId}</Typography.Text>
+        <Tag color="cyan">Skill</Tag>
+        <Tag color={getToolColor(skillId)}>{skillId}</Tag>
         <Typography.Text type="secondary" className="react-tool-time">
           {dayjs(toolCall.at).format('HH:mm:ss')}
         </Typography.Text>

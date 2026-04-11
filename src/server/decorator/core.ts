@@ -33,7 +33,6 @@ const resolveConfig = <T extends AgentConfig | ToolConfig>(config: T): T => {
   return {
     ...merge({}, target.config, config),
     tools: (config as AgentConfig).tools,
-    agents: (config as AgentConfig).agents,
   };
 };
 
@@ -111,11 +110,6 @@ export const registerAgent = async <T>(
         logger.info(
           `Injected ${tools.length} tools into agent: ${chalk.cyan(config.name)}`,
         );
-      }
-
-      // Agents are resolved lazily from config to avoid circular dependency
-      if (instance && 'agents' in instance) {
-        Reflect.set(instance, 'agents', []);
       }
 
       proxyValidation(

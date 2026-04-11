@@ -13,5 +13,4 @@ export const config: AgentConfig = {
     ToolIds.LIST_TOOLS,
     ToolIds.SKILL_CALL,
   ],
-  agents: [],
 };

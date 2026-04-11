@@ -104,6 +104,7 @@ export function ToolBlockItem({
 
       <Flex align="center" gap={8} className="react-tool-header">
         {Icon}
+        <Tag color="geekblue">Tool</Tag>
         <Tag color={color}>{toolCall.toolName}</Tag>
         <Typography.Text type="secondary" className="react-tool-time">
           {dayjs(toolCall.at).format('HH:mm:ss')}

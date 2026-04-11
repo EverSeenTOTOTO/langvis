@@ -17,8 +17,6 @@ export interface AgentConfig<
   name: string;
   description: string;
   tools?: string[];
-  /** Callable agent IDs - these agents can be invoked via agent_call tool */
-  agents?: string[];
   /** Runtime configuration schema (e.g., model, temperature) */
   configSchema?: JSONSchemaType<Config>;
   /** Input schema for child agent invocation (context, query, etc.) */

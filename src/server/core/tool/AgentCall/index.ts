@@ -1,7 +1,7 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
-import { MemoryIds, ToolIds } from '@/shared/constants';
+import { AgentIds, MemoryIds, ToolIds } from '@/shared/constants';
 import { AgentEvent, ToolConfig } from '@/shared/types';
 import { Role } from '@/shared/types/entities';
 import { generateId } from '@/shared/utils';
@@ -26,15 +26,15 @@ export default class AgentCallTool extends Tool<
     @input() params: AgentCallInput,
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, AgentCallOutput, void> {
-    const { agentId, context, query, config: callConfig = {} } = params;
+    const { context, query, config: callConfig = {} } = params;
     const { timeout = 60000 } = callConfig;
 
-    // Resolve target agent
+    // Resolve target agent (always ReAct)
     let agent: Agent;
     try {
-      agent = container.resolve<Agent>(agentId);
+      agent = container.resolve<Agent>(AgentIds.REACT);
     } catch {
-      return { success: false, error: `Agent not found: ${agentId}` };
+      return { success: false, error: 'Agent not available' };
     }
 
     // Create child context with timeout and callId prefix

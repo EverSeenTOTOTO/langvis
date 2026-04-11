@@ -1,4 +1,4 @@
-import { AgentIds } from '@/shared/constants';
+import { AgentIds, MemoryIds } from '@/shared/constants';
 import { ListEmailsRequestDto } from '@/shared/dto/controller';
 import { generateId } from '@/shared/utils';
 import { Conversation } from '@/shared/entities/Conversation';
@@ -190,7 +190,7 @@ export default class EmailController {
 
     // Create memory for this session
     const memory = container.resolve<Memory>(
-      conversation.config?.memory?.type ?? 'no_memory',
+      conversation.config?.memory?.type ?? MemoryIds.CHAT_HISTORY,
     );
     session.setMemory(memory);
 

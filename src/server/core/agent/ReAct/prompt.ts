@@ -1,7 +1,4 @@
-import {
-  formatAgentsToMarkdown,
-  formatToolsToMarkdown,
-} from '@/server/utils/formatTools';
+import { formatToolsToMarkdown } from '@/server/utils/formatTools';
 import { Prompt } from '../../PromptBuilder';
 import type { Agent } from '../index';
 
@@ -13,12 +10,12 @@ export const createPrompt = (agent: Agent, parentPrompt: Prompt) => {
     )
     .with('Tools', formatToolsToMarkdown(agent.tools ?? []))
     .with(
-      'Agents',
-      `You can delegate subtasks to specialized agents using the \`agent_call\` tool:\n\n${formatAgentsToMarkdown(agent.agents ?? [])}`,
-    )
-    .with(
       'Skills',
       `You can load workflow guidance using the \`skill_call\` tool. Skills provide step-by-step instructions for specific tasks. Call \`skill_call\` with a \`skillId\` to load the guidance, then follow it in subsequent iterations.\n\nUse \`list_tools\` to discover available skills.`,
+    )
+    .with(
+      'Fork',
+      `You can use the \`agent_call\` tool to fork a sub-agent for concurrent tasks like summarization, translation, or analysis. The sub-agent runs independently and returns its result.`,
     )
     .with(
       'Output language',
@@ -93,11 +90,10 @@ Assistant:
 User: 帮我总结这段长文本的结论。
 Assistant:
 {
-  "thought": "需要调用子agent来总结这段文本",
+  "thought": "需要fork一个子agent来总结这段文本",
   "action": {
     "tool": "agent_call",
     "input": {
-      "agentId": "document_conclude_agent",
       "query": "请总结以下文本的结论：{内容或缓存引用}"
     }
   }
