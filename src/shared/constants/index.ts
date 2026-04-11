@@ -30,8 +30,7 @@ export enum AgentIds {
 }
 
 export enum MemoryIds {
-  NONE = 'no_memory',
-  CHAT_HISTORY = 'chat_history_memory',
+  SLIDE_WINDOW = 'slide_window_memory',
   CHILD = 'child_memory',
 }
 

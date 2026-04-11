@@ -8,8 +8,13 @@ export interface ContextUsage {
 
 export abstract class Memory {
   protected readonly logger!: Logger;
+  protected windowSize: number = Number.MAX_SAFE_INTEGER;
 
   private context: Message[] = [];
+
+  setWindowSize(size: number): void {
+    this.windowSize = size;
+  }
 
   /**
    * Set the context messages for this turn.

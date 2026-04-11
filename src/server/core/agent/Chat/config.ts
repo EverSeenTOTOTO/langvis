@@ -44,8 +44,14 @@ export const config: AgentConfig<{
         properties: {
           type: {
             type: 'string',
-            enum: ['no_memory', 'chat_history_memory', 'enhanced_memory'],
-            default: 'chat_history_memory',
+            enum: ['slide_window_memory'],
+            default: 'slide_window_memory',
+          },
+          windowSize: {
+            type: 'integer',
+            minimum: 1,
+            default: 10,
+            description: 'Number of conversation turns to keep in memory',
           },
         },
       },
