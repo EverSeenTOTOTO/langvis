@@ -7,7 +7,6 @@ export interface ListToolsInput {
 
 export interface ListToolsOutput {
   tools: string;
-  agents?: string;
   skills?: string;
 }
 
@@ -30,11 +29,6 @@ export const config: ToolConfig<ListToolsInput, ListToolsOutput> = {
       tools: {
         type: 'string',
         description: '可用工具的描述列表',
-      },
-      agents: {
-        type: 'string',
-        nullable: true,
-        description: '可用代理的描述列表',
       },
       skills: {
         type: 'string',

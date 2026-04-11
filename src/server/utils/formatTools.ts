@@ -1,45 +1,10 @@
 import { Tool } from '@/server/core/tool';
 import type { JSONSchemaObject } from 'openai/lib/jsonschema.mjs';
-import { Agent } from '../core/agent';
 import type { SkillInfo } from '../service/SkillService';
-
-export function formatAgentsToMarkdown(agents: Agent[]): string {
-  if (!agents || agents.length === 0) {
-    return 'No builtin agents available.';
-  }
-
-  return agents
-    .map(agent => {
-      const config = agent.config;
-      const sections: string[] = [];
-
-      sections.push(`### ${agent.id}`);
-      sections.push('');
-      sections.push(config.description);
-      sections.push('');
-
-      const inputSchema = config.inputSchema as JSONSchemaObject;
-
-      if (inputSchema?.properties) {
-        sections.push('**Input:**');
-        sections.push('');
-        sections.push(
-          formatSchemaAsTable(
-            inputSchema.properties,
-            inputSchema.required as string[],
-          ),
-        );
-        sections.push('');
-      }
-
-      return sections.join('\n');
-    })
-    .join('\n---\n\n');
-}
 
 export function formatSkillsToMarkdown(skills: SkillInfo[]): string {
   if (!skills || skills.length === 0) {
-    return 'No builtin skills available.';
+    return 'No skills available.';
   }
 
   return skills
@@ -58,7 +23,7 @@ export function formatSkillsToMarkdown(skills: SkillInfo[]): string {
 
 export function formatToolsToMarkdown(tools: Tool[]): string {
   if (!tools || tools.length === 0) {
-    return 'No builtin tools available.';
+    return 'No tools available.';
   }
 
   return tools

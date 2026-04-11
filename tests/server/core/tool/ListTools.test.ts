@@ -9,10 +9,6 @@ const mockToolService = {
   getAllToolInfo: vi.fn(),
 };
 
-const mockAgentService = {
-  getAllAgentInfo: vi.fn().mockResolvedValue([]),
-};
-
 const mockSkillService = {
   getAllSkillInfo: vi.fn().mockResolvedValue([]),
 };
@@ -107,7 +103,6 @@ describe('ListToolsTool', () => {
 
     toolInstance = new ListToolsTool(
       mockToolService as any,
-      mockAgentService as any,
       mockSkillService as any,
     );
     (toolInstance as any).id = 'list_tools';
@@ -167,6 +162,6 @@ describe('ListToolsTool', () => {
       const ctx = new ExecutionContext(new AbortController(), 'test-msg');
       const { result } = await collectEvents(toolInstance.call({}, ctx));
 
-      expect(result.tools).toBe('No builtin tools available.');
+      expect(result.tools).toBe('No tools available.');
     }));
 });

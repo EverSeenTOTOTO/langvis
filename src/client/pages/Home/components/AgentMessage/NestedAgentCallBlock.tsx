@@ -1,9 +1,14 @@
-import { CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
+import {
+  CaretDownOutlined,
+  CaretLeftOutlined,
+  CheckCircleOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { Flex, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useState } from 'react';
 import type { ToolCallTimeline } from '@/client/store/modules/MessageFSM';
-import { ToolBlockItem } from './ToolBlockItem';
+import { ToolBlockItem, getToolColor } from './ToolBlockItem';
 import { buildToolTimeline, extractNestedEvents } from './utils';
 import './ReActAgent/index.scss';
 
@@ -57,7 +62,8 @@ export function NestedAgentCallBlock({
         style={{ cursor: 'pointer' }}
       >
         {Icon}
-        <Tag color="purple">{agentId ?? 'Agent'}</Tag>
+        <Tag color="pink">Agent</Tag>
+        <Tag color={getToolColor(agentId ?? 'unknown')}>{agentId}</Tag>
         <Typography.Text type="secondary">
           {nestedTimeline.length} tool(s)
         </Typography.Text>
@@ -65,7 +71,7 @@ export function NestedAgentCallBlock({
           {dayjs(toolCall.at).format('HH:mm:ss')}
         </Typography.Text>
         <Typography.Text type="secondary" style={{ marginLeft: 'auto' }}>
-          {expanded ? '▼' : '▶'}
+          {expanded ? <CaretDownOutlined /> : <CaretLeftOutlined />}
         </Typography.Text>
       </Flex>
 

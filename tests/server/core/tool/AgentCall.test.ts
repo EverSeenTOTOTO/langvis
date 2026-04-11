@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { container } from 'tsyringe';
-import { MemoryIds } from '@/shared/constants';
+import { AgentIds, MemoryIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
 import { TraceContext } from '@/server/core/TraceContext';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
@@ -21,11 +21,9 @@ function createMockAgent(
       name: id,
       description: `Mock ${id}`,
       tools: [],
-      agents: [],
     },
     logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
     tools: [],
-    agents: [],
     get systemPrompt() {
       return Prompt.empty();
     },
@@ -99,20 +97,21 @@ describe('AgentCallTool', () => {
     resolveSpy.mockRestore();
   });
 
-  it('should return error when agent not found', () =>
+  it('should return error when agent not available', () =>
     wrapTrace(async () => {
+      // Don't mock AgentIds.REACT, so container.resolve throws
       const ctx = new ExecutionContext(new AbortController(), 'test-msg');
       const { result } = await collectEvents(
-        tool.call({ agentId: 'nonexistent_agent', query: 'hello' }, ctx),
+        tool.call({ query: 'hello' }, ctx),
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Agent not found');
+      expect(result.error).toContain('Agent not available');
     }));
 
   it('should execute agent and return accumulated stream content', () =>
     wrapTrace(async () => {
-      const { instance } = createMockAgent('test_agent', [
+      const { instance } = createMockAgent(AgentIds.REACT, [
         { type: 'start', messageId: 'child-msg', seq: 1, at: Date.now() },
         {
           type: 'stream',
@@ -133,14 +132,14 @@ describe('AgentCallTool', () => {
 
       resolveSpy.mockImplementation((token: any) => {
         if (token === MemoryIds.CHILD) return mockChildMemory;
-        return instance;
+        if (token === AgentIds.REACT) return instance;
+        return originalResolve(token);
       });
 
       const ctx = new ExecutionContext(new AbortController(), 'test-msg');
       const { result, events } = await collectEvents(
         tool.call(
           {
-            agentId: 'test_agent',
             query: 'say hello',
             context: 'some context',
           },
@@ -161,7 +160,7 @@ describe('AgentCallTool', () => {
 
   it('should return error when child agent emits error event', () =>
     wrapTrace(async () => {
-      const { instance } = createMockAgent('test_agent', [
+      const { instance } = createMockAgent(AgentIds.REACT, [
         { type: 'start', messageId: 'child-msg', seq: 1, at: Date.now() },
         {
           type: 'error',
@@ -174,13 +173,12 @@ describe('AgentCallTool', () => {
 
       resolveSpy.mockImplementation((token: any) => {
         if (token === MemoryIds.CHILD) return mockChildMemory;
-        return instance;
+        if (token === AgentIds.REACT) return instance;
+        return originalResolve(token);
       });
 
       const ctx = new ExecutionContext(new AbortController(), 'test-msg');
-      const { result } = await collectEvents(
-        tool.call({ agentId: 'test_agent', query: 'fail' }, ctx),
-      );
+      const { result } = await collectEvents(tool.call({ query: 'fail' }, ctx));
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('something went wrong');
@@ -188,7 +186,7 @@ describe('AgentCallTool', () => {
 
   it('should return error when child agent emits cancelled event', () =>
     wrapTrace(async () => {
-      const { instance } = createMockAgent('test_agent', [
+      const { instance } = createMockAgent(AgentIds.REACT, [
         {
           type: 'cancelled',
           messageId: 'child-msg',
@@ -200,12 +198,13 @@ describe('AgentCallTool', () => {
 
       resolveSpy.mockImplementation((token: any) => {
         if (token === MemoryIds.CHILD) return mockChildMemory;
-        return instance;
+        if (token === AgentIds.REACT) return instance;
+        return originalResolve(token);
       });
 
       const ctx = new ExecutionContext(new AbortController(), 'test-msg');
       const { result } = await collectEvents(
-        tool.call({ agentId: 'test_agent', query: 'cancel me' }, ctx),
+        tool.call({ query: 'cancel me' }, ctx),
       );
 
       expect(result.success).toBe(false);
@@ -215,12 +214,11 @@ describe('AgentCallTool', () => {
   it('should return error when child agent throws', () =>
     wrapTrace(async () => {
       const instance: any = {
-        id: 'test_agent',
+        id: AgentIds.REACT,
         config: {
-          name: 'test_agent',
+          name: 'react_agent',
           description: 'test',
           tools: [],
-          agents: [],
         },
         logger: {
           info: vi.fn(),
@@ -229,7 +227,6 @@ describe('AgentCallTool', () => {
           debug: vi.fn(),
         },
         tools: [],
-        agents: [],
         get systemPrompt() {
           return Prompt.empty();
         },
@@ -240,12 +237,13 @@ describe('AgentCallTool', () => {
 
       resolveSpy.mockImplementation((token: any) => {
         if (token === MemoryIds.CHILD) return mockChildMemory;
-        return instance;
+        if (token === AgentIds.REACT) return instance;
+        return originalResolve(token);
       });
 
       const ctx = new ExecutionContext(new AbortController(), 'test-msg');
       const { result } = await collectEvents(
-        tool.call({ agentId: 'test_agent', query: 'crash' }, ctx),
+        tool.call({ query: 'crash' }, ctx),
       );
 
       expect(result.success).toBe(false);
@@ -259,12 +257,11 @@ describe('AgentCallTool', () => {
         let childAbortSignal: AbortSignal | undefined;
 
         const instance: any = {
-          id: 'slow_agent',
+          id: AgentIds.REACT,
           config: {
-            name: 'slow_agent',
+            name: 'react_agent',
             description: 'test',
             tools: [],
-            agents: [],
           },
           logger: {
             info: vi.fn(),
@@ -273,7 +270,6 @@ describe('AgentCallTool', () => {
             debug: vi.fn(),
           },
           tools: [],
-          agents: [],
           get systemPrompt() {
             return Prompt.empty();
           },
@@ -291,14 +287,15 @@ describe('AgentCallTool', () => {
 
         resolveSpy.mockImplementation((token: any) => {
           if (token === MemoryIds.CHILD) return mockChildMemory;
-          return instance;
+          if (token === AgentIds.REACT) return instance;
+          return originalResolve(token);
         });
 
         const parentController = new AbortController();
         const ctx = new ExecutionContext(parentController, 'test-msg');
 
         const collectPromise = collectEvents(
-          tool.call({ agentId: 'slow_agent', query: 'slow task' }, ctx),
+          tool.call({ query: 'slow task' }, ctx),
         );
 
         // Wait for child to start and capture signal
@@ -318,7 +315,7 @@ describe('AgentCallTool', () => {
 
   it('should pass context and query to child memory', () =>
     wrapTrace(async () => {
-      const { instance } = createMockAgent('test_agent', [
+      const { instance } = createMockAgent(AgentIds.REACT, [
         { type: 'start', messageId: 'child-msg', seq: 1, at: Date.now() },
         {
           type: 'stream',
@@ -332,7 +329,8 @@ describe('AgentCallTool', () => {
 
       resolveSpy.mockImplementation((token: any) => {
         if (token === MemoryIds.CHILD) return mockChildMemory;
-        return instance;
+        if (token === AgentIds.REACT) return instance;
+        return originalResolve(token);
       });
 
       const parentController = new AbortController();
@@ -340,7 +338,6 @@ describe('AgentCallTool', () => {
       await collectEvents(
         tool.call(
           {
-            agentId: 'test_agent',
             query: 'analyze this',
             context: 'file: report.pdf',
           },
@@ -365,7 +362,7 @@ describe('AgentCallTool', () => {
 
   it('should use default timeout when not specified', () =>
     wrapTrace(async () => {
-      const { instance } = createMockAgent('test_agent', [
+      const { instance } = createMockAgent(AgentIds.REACT, [
         {
           type: 'stream',
           messageId: 'child-msg',
@@ -377,13 +374,12 @@ describe('AgentCallTool', () => {
 
       resolveSpy.mockImplementation((token: any) => {
         if (token === MemoryIds.CHILD) return mockChildMemory;
-        return instance;
+        if (token === AgentIds.REACT) return instance;
+        return originalResolve(token);
       });
 
       const ctx = new ExecutionContext(new AbortController(), 'test-msg');
-      const { result } = await collectEvents(
-        tool.call({ agentId: 'test_agent', query: 'go' }, ctx),
-      );
+      const { result } = await collectEvents(tool.call({ query: 'go' }, ctx));
 
       expect(result.success).toBe(true);
     }));

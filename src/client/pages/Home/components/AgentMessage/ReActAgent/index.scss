@@ -6,6 +6,7 @@
       margin-block: 4px;
       background: var(--ant-color-bg-container);
       border: 1px solid var(--ant-color-border);
+      border-left: 3px solid #2f54eb; // geekblue
       border-radius: 6px;
     }
 
@@ -104,6 +105,21 @@
     }
   }
 
+  &-skill-block {
+    padding: 8px 12px;
+    margin-block: 4px;
+    background: var(--ant-color-bg-container);
+    border: 1px solid var(--ant-color-border);
+    border-left: 3px solid #13c2c2; // cyan
+    border-radius: 6px;
+
+    .react-tool-header,
+    .react-tool-time,
+    .react-tool-error {
+      // Reuse tool styles
+    }
+  }
+
   &-thought {
     &-block {
       padding: 8px 12px;
@@ -125,7 +141,7 @@
       margin-block: 4px;
       background: var(--ant-color-bg-container);
       border: 1px solid var(--ant-color-border);
-      border-left: 3px solid var(--ant-color-primary);
+      border-left: 3px solid #eb2f96; // pink
       border-radius: 6px;
     }
 
@@ -136,8 +152,7 @@
     &-nested {
       padding-inline-start: 12px;
       margin-block-start: 8px;
-      margin-inline-start: 12px;
-      border-left: 2px solid var(--ant-color-border);
+      margin-inline-start: 8px;
 
       .react-tool-block {
         font-size: 0.95em;
