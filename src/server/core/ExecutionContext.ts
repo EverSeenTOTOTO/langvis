@@ -1,4 +1,5 @@
 import { ToolIds } from '@/shared/constants';
+import type { LlmMessage } from '@/shared/types/entities';
 import { AgentEvent } from '@/shared/types';
 import { generateId } from '@/shared/utils';
 import { container } from 'tsyringe';
@@ -6,11 +7,7 @@ import type LlmCallTool from './tool/LlmCall';
 
 export type CallLlmOptions = {
   modelId?: string;
-  messages?: Array<{
-    role: string;
-    content: string;
-    attachments?: any[] | null;
-  }>;
+  messages?: LlmMessage[];
   temperature?: number;
   topP?: number;
   stop?: string[];
@@ -24,11 +21,22 @@ export class ExecutionContext {
 
   private seqCounter = 0;
   private callIdStack: string[] = [];
+  private onPushContextUsage?: (messages: LlmMessage[]) => Promise<void>;
 
   constructor(
     private readonly controller: AbortController,
     private readonly messageId: string = '',
   ) {}
+
+  setOnPushContextUsage(
+    callback: (messages: LlmMessage[]) => Promise<void>,
+  ): void {
+    this.onPushContextUsage = callback;
+  }
+
+  async pushContextUsage(messages: LlmMessage[]): Promise<void> {
+    await this.onPushContextUsage?.(messages);
+  }
 
   private nextSeq(): number {
     return ++this.seqCounter;

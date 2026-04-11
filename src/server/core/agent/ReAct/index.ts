@@ -74,6 +74,9 @@ export default class ReActAgent extends Agent {
         stop: ['Observation:', 'Observation：'],
       });
 
+      // Report context usage after each LLM call
+      await ctx.pushContextUsage(iterMessages);
+
       if (!content) {
         yield ctx.agentErrorEvent('No response from model');
         return;

@@ -9,21 +9,15 @@ import { ProviderService } from './ProviderService';
 import { ToolIds } from '@/shared/constants';
 import { TraceContext } from '../core/TraceContext';
 import type { AgentEvent } from '@/shared/types';
-import { Role, type MessageAttachment } from '@/shared/types/entities';
+import { Role, type LlmMessage, type Message } from '@/shared/types/entities';
 import type {
   TextToSpeechInput,
   TextToSpeechOutput,
 } from '../core/tool/TextToSpeech';
 
-type InternalMessage = {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  attachments?: MessageAttachment[] | null;
-};
-
 function toMultimodalContent(
   content: string,
-  attachments?: MessageAttachment[] | null,
+  attachments?: Message['attachments'],
 ):
   | string
   | Array<{
@@ -58,7 +52,7 @@ function toMultimodalContent(
 }
 
 function toOpenAIMessages(
-  messages: InternalMessage[],
+  messages: LlmMessage[],
 ): ChatCompletionMessageParam[] {
   return messages.map(msg => {
     if (msg.role === 'user' && msg.attachments?.length) {
@@ -133,7 +127,7 @@ export class LlmService {
     const client = this.getOrCreateClient(providerId);
 
     const rawMessages = data.messages ?? [];
-    const messages = toOpenAIMessages(rawMessages as InternalMessage[]);
+    const messages = toOpenAIMessages(rawMessages as LlmMessage[]);
 
     logger.debug('LLM call request', {
       traceId: TraceContext.getOrFail().traceId!,

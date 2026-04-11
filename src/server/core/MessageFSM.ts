@@ -173,8 +173,6 @@ export class MessageFSM {
   }
 
   async persist(): Promise<void> {
-    if (this.onPersist) {
-      await this.onPersist(this.pendingMessage.toMessage());
-    }
+    await this.onPersist?.(this.pendingMessage.toMessage());
   }
 }
