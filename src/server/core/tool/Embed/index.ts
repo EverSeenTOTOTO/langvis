@@ -54,6 +54,18 @@ export default class EmbedTool extends Tool<EmbedInput, EmbedOutput> {
 
     return output;
   }
+
+  override summarizeArgs(args: Record<string, unknown>): string {
+    const chunks = args.chunks as EmbedInput['chunks'] | undefined;
+    if (!chunks) return '';
+    return `(${chunks.length} 条文本)`;
+  }
+
+  override summarizeOutput(output: unknown): string {
+    const result = output as EmbedOutput | undefined;
+    if (!result) return '完成';
+    return `生成 ${result.chunks.length} 个向量 (dim=${result.dimension})`;
+  }
 }
 
 export { config };

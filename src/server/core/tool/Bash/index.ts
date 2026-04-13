@@ -249,4 +249,18 @@ export default class BashTool extends Tool<BashInput, BashOutput> {
 
     return { exitCode, stdout, stderr, timedOut };
   }
+
+  override summarizeArgs(args: Record<string, unknown>): string {
+    const command = typeof args.command === 'string' ? args.command : '';
+    const preview =
+      command.length > 40 ? `${command.slice(0, 40)}...` : command;
+    return `(${preview})`;
+  }
+
+  override summarizeOutput(output: unknown): string {
+    const result = output as BashOutput | undefined;
+    if (!result) return '完成';
+    if (result.timedOut) return `超时 (exitCode=${result.exitCode})`;
+    return `exitCode=${result.exitCode}`;
+  }
 }

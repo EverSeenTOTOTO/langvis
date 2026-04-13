@@ -410,6 +410,10 @@ Workspace Directory: ${workDir}
       if (messageFSM.ctx.signal.aborted) {
         this.handleAgentCancel(messageFSM, session);
       }
+      // Trigger memory turn-complete hook before persist
+      // so that summaries can be persisted together with the message
+      await memory.onTurnComplete(messageFSM.message);
+
       await messageFSM.persist();
 
       // Calculate context usage after persist (includes assistant reply)
@@ -417,9 +421,6 @@ Workspace Directory: ${workDir}
         ...(await memory.summarize()),
         messageFSM.message,
       ]);
-
-      // Trigger memory turn-complete hook
-      await memory.onTurnComplete();
 
       const totalTime = Date.now() - startTime;
       const ttft = firstTokenTime ? firstTokenTime - startTime : null;

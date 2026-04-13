@@ -144,4 +144,16 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
 
     throw lastError;
   }
+
+  override summarizeArgs(args: Record<string, unknown>): string {
+    const url = typeof args.url === 'string' ? args.url : '';
+    return `(${url})`;
+  }
+
+  override summarizeOutput(output: unknown): string {
+    const result = output as WebFetchOutput | undefined;
+    if (!result) return '完成';
+    const length = result.content?.length ?? 0;
+    return `获取 ${length} 字符`;
+  }
 }

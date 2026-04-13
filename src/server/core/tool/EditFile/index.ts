@@ -72,4 +72,15 @@ export default class EditFileTool extends Tool<EditFileInput, EditFileOutput> {
     );
     return { path, changes: result.changes };
   }
+
+  override summarizeArgs(args: Record<string, unknown>): string {
+    const path = typeof args.path === 'string' ? args.path : '';
+    return `(${path})`;
+  }
+
+  override summarizeOutput(output: unknown): string {
+    const result = output as EditFileOutput | undefined;
+    if (!result) return '完成';
+    return `${result.changes} 处修改`;
+  }
 }

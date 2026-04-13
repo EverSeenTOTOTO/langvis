@@ -95,6 +95,18 @@ export default class RetrieveTool extends Tool<RetrieveInput, RetrieveOutput> {
 
     return { results };
   }
+
+  override summarizeArgs(args: Record<string, unknown>): string {
+    const query = typeof args.query === 'string' ? args.query : '';
+    const preview = query.length > 30 ? `${query.slice(0, 30)}...` : query;
+    return `(${preview})`;
+  }
+
+  override summarizeOutput(output: unknown): string {
+    const result = output as RetrieveOutput | undefined;
+    if (!result) return '完成';
+    return `检索到 ${result.results.length} 条`;
+  }
 }
 
 export { config };

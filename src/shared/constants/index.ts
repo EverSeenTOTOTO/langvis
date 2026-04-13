@@ -32,6 +32,7 @@ export enum AgentIds {
 export enum MemoryIds {
   SLIDE_WINDOW = 'slide_window_memory',
   CHILD = 'child_memory',
+  REACT = 'react_memory',
 }
 
 export const UNGROUPED_GROUP_NAME = 'Ungrouped';

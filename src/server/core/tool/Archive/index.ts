@@ -77,6 +77,18 @@ export default class ArchiveTool extends Tool<ArchiveInput, ArchiveOutput> {
 
     return output;
   }
+
+  override summarizeArgs(args: Record<string, unknown>): string {
+    const doc = args.document as ArchiveInput['document'] | undefined;
+    if (!doc) return '';
+    return `("${doc.title}")`;
+  }
+
+  override summarizeOutput(output: unknown): string {
+    const result = output as ArchiveOutput | undefined;
+    if (!result) return '完成';
+    return `存储 ${result.chunkCount} 个分片`;
+  }
 }
 
 export { config };

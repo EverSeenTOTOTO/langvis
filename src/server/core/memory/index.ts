@@ -40,7 +40,7 @@ export abstract class Memory {
     return this.context;
   }
 
-  async onTurnComplete(): Promise<void> {}
+  async onTurnComplete(_currentMessage?: Message): Promise<void> {}
 
   async onContextUsageChange(_usage: ContextUsage): Promise<void> {}
 }

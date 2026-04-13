@@ -1,4 +1,9 @@
-import { AgentEvent, MessagePhase } from '@/shared/types';
+import {
+  AgentEvent,
+  MessagePhase,
+  type ToolCallTimeline,
+  buildToolTimeline,
+} from '@/shared/types';
 import type { Message } from '@/shared/types/entities';
 import { StateMachine } from '@/shared/utils/StateMachine';
 import { makeAutoObservable } from 'mobx';
@@ -21,18 +26,7 @@ const DEFAULT_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
   error: [],
 };
 
-export type ToolCallTimeline = {
-  callId: string;
-  toolName: string;
-  toolArgs: Record<string, unknown>;
-  seq: number;
-  at: number;
-  status: 'pending' | 'done' | 'error';
-  output?: unknown;
-  error?: string;
-  progress: Array<{ data: unknown; seq: number; at: number }>;
-  thought?: string;
-};
+export type { ToolCallTimeline };
 
 export type ThoughtItem = {
   content: string;
@@ -166,7 +160,7 @@ export class MessageFSM {
   }
 
   get toolCallTimeline(): ToolCallTimeline[] {
-    return this.deriveToolCallTimeline();
+    return buildToolTimeline(this._message.meta?.events ?? []);
   }
 
   get pendingToolCalls(): ToolCallTimeline[] {
@@ -360,65 +354,6 @@ export class MessageFSM {
   }
 
   // === Derivation methods ===
-
-  private deriveToolCallTimeline(): ToolCallTimeline[] {
-    const toolCallsMap = new Map<string, ToolCallTimeline>();
-    let pendingThought: string | undefined;
-
-    for (const event of this._message.meta?.events ?? []) {
-      switch (event.type) {
-        case 'thought':
-          pendingThought = event.content;
-          break;
-
-        case 'tool_call':
-          toolCallsMap.set(event.callId, {
-            callId: event.callId,
-            toolName: event.toolName,
-            toolArgs: event.toolArgs,
-            seq: event.seq,
-            at: event.at,
-            status: 'pending',
-            progress: [],
-            thought: pendingThought,
-          });
-          pendingThought = undefined;
-          break;
-
-        case 'tool_result': {
-          const existing = toolCallsMap.get(event.callId);
-          if (existing) {
-            existing.status = 'done';
-            existing.output = event.output;
-          }
-          break;
-        }
-
-        case 'tool_error': {
-          const existing = toolCallsMap.get(event.callId);
-          if (existing) {
-            existing.status = 'error';
-            existing.error = event.error;
-          }
-          break;
-        }
-
-        case 'tool_progress': {
-          const existing = toolCallsMap.get(event.callId);
-          if (existing) {
-            existing.progress.push({
-              data: event.data,
-              seq: event.seq,
-              at: event.at,
-            });
-          }
-          break;
-        }
-      }
-    }
-
-    return Array.from(toolCallsMap.values()).sort((a, b) => a.seq - b.seq);
-  }
 
   private deriveThoughts(): ThoughtItem[] {
     const thoughts: ThoughtItem[] = [];
