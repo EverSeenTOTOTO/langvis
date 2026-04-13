@@ -38,4 +38,9 @@ export default class SkillCallTool extends Tool<
 
     return { content };
   }
+
+  override summarizeArgs(args: Record<string, unknown>): string {
+    const skillId = typeof args.skillId === 'string' ? args.skillId : '';
+    return `(${skillId})`;
+  }
 }

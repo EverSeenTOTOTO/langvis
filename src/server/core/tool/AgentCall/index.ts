@@ -117,4 +117,17 @@ export default class AgentCallTool extends Tool<
       cleanup();
     }
   }
+
+  override summarizeArgs(args: Record<string, unknown>): string {
+    const query = typeof args.query === 'string' ? args.query : '';
+    const preview = query.length > 30 ? `${query.slice(0, 30)}...` : query;
+    return `(${preview})`;
+  }
+
+  override summarizeOutput(output: unknown): string {
+    const result = output as AgentCallOutput | undefined;
+    if (!result) return '完成';
+    if (!result.success) return `失败 - ${result.error}`;
+    return result.success ? '成功' : '失败';
+  }
 }

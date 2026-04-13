@@ -44,7 +44,7 @@ export const config: AgentConfig<{
         properties: {
           type: {
             type: 'string',
-            enum: ['slide_window_memory'],
+            enum: ['slide_window_memory', 'react_memory'],
             default: 'slide_window_memory',
           },
           windowSize: {

@@ -53,4 +53,9 @@ export default class ReadCacheTool extends Tool<
 
     return result;
   }
+
+  override summarizeArgs(args: Record<string, unknown>): string {
+    const key = typeof args.key === 'string' ? args.key : '';
+    return `(${key})`;
+  }
 }

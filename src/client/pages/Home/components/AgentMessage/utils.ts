@@ -4,8 +4,8 @@
  * Pure functions for event processing, tool block building, etc.
  */
 
-import type { AgentEvent } from '@/shared/types';
-import type { ToolCallTimeline } from '@/client/store/modules/MessageFSM';
+import type { AgentEvent, ToolCallTimeline } from '@/shared/types';
+import { buildToolTimeline as sharedBuildToolTimeline } from '@/shared/types/tool';
 
 // === Types ===
 
@@ -61,56 +61,6 @@ export function extractNestedEvents(
 
 /**
  * Build a tool call timeline from a list of agent events.
- * Similar to deriveMessageState but returns just the timeline.
+ * Delegates to shared implementation.
  */
-export function buildToolTimeline(events: AgentEvent[]): ToolCallTimeline[] {
-  const toolCallsMap = new Map<string, ToolCallTimeline>();
-
-  for (const event of events) {
-    switch (event.type) {
-      case 'tool_call':
-        toolCallsMap.set(event.callId, {
-          callId: event.callId,
-          toolName: event.toolName,
-          toolArgs: event.toolArgs,
-          seq: event.seq,
-          at: event.at,
-          status: 'pending',
-          progress: [],
-        });
-        break;
-
-      case 'tool_result': {
-        const existing = toolCallsMap.get(event.callId);
-        if (existing) {
-          existing.status = 'done';
-          existing.output = event.output;
-        }
-        break;
-      }
-
-      case 'tool_error': {
-        const existing = toolCallsMap.get(event.callId);
-        if (existing) {
-          existing.status = 'error';
-          existing.error = event.error;
-        }
-        break;
-      }
-
-      case 'tool_progress': {
-        const existing = toolCallsMap.get(event.callId);
-        if (existing) {
-          existing.progress.push({
-            data: event.data,
-            seq: event.seq,
-            at: event.at,
-          });
-        }
-        break;
-      }
-    }
-  }
-
-  return Array.from(toolCallsMap.values()).sort((a, b) => a.seq - b.seq);
-}
+export const buildToolTimeline = sharedBuildToolTimeline;
