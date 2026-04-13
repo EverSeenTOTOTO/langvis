@@ -35,8 +35,8 @@ export interface ToolConfig<
   inputSchema?: JSONSchemaType<Input>;
   outputSchema?: JSONSchemaType<Output>;
   enabled?: boolean;
-  /** Output compression strategy: 'redis' stores large content in Redis, 'file' writes to workspace temp file, 'skip' returns as-is */
-  compression?: 'skip' | 'redis' | 'file';
+  /** Output compression strategy: 'file' writes large content to workspace temp file, 'skip' returns as-is */
+  compression?: 'skip' | 'file';
   /** Mark tool output as untrusted/external content — will be wrapped with untrusted_content tags in the agent loop */
   untrustedOutput?: boolean;
 }

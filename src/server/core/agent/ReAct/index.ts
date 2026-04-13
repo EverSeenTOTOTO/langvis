@@ -1,12 +1,12 @@
 import { agent } from '@/server/decorator/core';
 import { config } from '@/server/decorator/param';
-import { compress, resolve } from '@/server/utils/cache';
+import { CacheService } from '@/server/service/CacheService';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds } from '@/shared/constants';
 import { Message, Role } from '@/shared/entities/Message';
 import { AgentConfig, AgentEvent } from '@/shared/types';
 import { isEmpty } from 'lodash-es';
-import { container } from 'tsyringe';
+import { container, inject } from 'tsyringe';
 import { Agent } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
@@ -47,6 +47,12 @@ export default class ReActAgent extends Agent {
   readonly tools!: Tool[];
 
   readonly maxIterations: number = Number.MAX_SAFE_INTEGER;
+
+  constructor(
+    @inject(CacheService) private readonly cacheService: CacheService,
+  ) {
+    super();
+  }
 
   get systemPrompt(): Prompt {
     return createPrompt(this, super.systemPrompt);
@@ -201,9 +207,10 @@ export default class ReActAgent extends Agent {
   ): AsyncGenerator<AgentEvent, string, void> {
     try {
       const tool = container.resolve<Tool>(toolName);
+      const conversationId = TraceContext.getOrFail().conversationId!;
 
-      const resolvedInput = await resolve(
-        TraceContext.getOrFail().traceId!,
+      const resolvedInput = await this.cacheService.resolve(
+        conversationId,
         toolInput,
       );
 
@@ -217,12 +224,10 @@ export default class ReActAgent extends Agent {
         ctx,
       );
 
-      const trace = TraceContext.getOrFail();
-      const compressedOutput = await compress(
-        trace.traceId!,
+      const compressedOutput = await this.cacheService.compress(
+        conversationId,
         output,
         tool.config?.compression,
-        trace.conversationId,
       );
 
       const raw =

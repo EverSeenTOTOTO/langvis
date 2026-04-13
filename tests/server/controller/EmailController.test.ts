@@ -28,6 +28,12 @@ const mockAuthService = {
   getUserId: vi.fn(),
 };
 
+const mockCacheService = {
+  compress: vi.fn(),
+  resolve: vi.fn(),
+  readFile: vi.fn(),
+};
+
 const mockProviderService = {
   getDefaultModel: vi.fn().mockReturnValue({ id: 'test-provider:test-model' }),
 };
@@ -128,6 +134,7 @@ describe('EmailController', () => {
         mockChatService as any,
         mockAuthService as any,
         mockProviderService as any,
+        mockCacheService as any,
       );
 
       await emailController.list({}, mockRes as Response);
@@ -162,6 +169,7 @@ describe('EmailController', () => {
         mockChatService as any,
         mockAuthService as any,
         mockProviderService as any,
+        mockCacheService as any,
       );
 
       await emailController.list(
@@ -217,6 +225,7 @@ describe('EmailController', () => {
         mockChatService as any,
         mockAuthService as any,
         mockProviderService as any,
+        mockCacheService as any,
       );
 
       await emailController.getById('mail_1', mockRes as Response);
@@ -237,6 +246,7 @@ describe('EmailController', () => {
         mockChatService as any,
         mockAuthService as any,
         mockProviderService as any,
+        mockCacheService as any,
       );
 
       await emailController.getById('non-existent', mockRes as Response);
@@ -259,6 +269,7 @@ describe('EmailController', () => {
         mockChatService as any,
         mockAuthService as any,
         mockProviderService as any,
+        mockCacheService as any,
       );
 
       await emailController.delete('mail_1', mockRes as Response);
@@ -279,6 +290,7 @@ describe('EmailController', () => {
         mockChatService as any,
         mockAuthService as any,
         mockProviderService as any,
+        mockCacheService as any,
       );
 
       await emailController.delete('non-existent', mockRes as Response);
@@ -302,6 +314,7 @@ describe('EmailController', () => {
         mockChatService as any,
         mockAuthService as any,
         mockProviderService as any,
+        mockCacheService as any,
       );
 
       await emailController.handleInbound(
@@ -329,6 +342,7 @@ describe('EmailController', () => {
         mockChatService as any,
         mockAuthService as any,
         mockProviderService as any,
+        mockCacheService as any,
       );
 
       await emailController.handleInbound(
@@ -356,6 +370,7 @@ describe('EmailController', () => {
         mockChatService as any,
         mockAuthService as any,
         mockProviderService as any,
+        mockCacheService as any,
       );
 
       await emailController.handleInbound(
@@ -390,6 +405,7 @@ describe('EmailController', () => {
         mockChatService as any,
         mockAuthService as any,
         mockProviderService as any,
+        mockCacheService as any,
       );
 
       const rawEmail = `From: sender@example.com
@@ -434,6 +450,7 @@ This is the email body content.`;
         mockChatService as any,
         mockAuthService as any,
         mockProviderService as any,
+        mockCacheService as any,
       );
 
       const rawEmail = `From: sender@example.com

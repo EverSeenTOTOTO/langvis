@@ -1,18 +1,34 @@
 import ReActAgent from '@/server/core/agent/ReAct';
 import { ExecutionContext } from '@/server/core/ExecutionContext';
 import { TraceContext } from '@/server/core/TraceContext';
-import { RedisService } from '@/server/service/RedisService';
+import { CacheService } from '@/server/service/CacheService';
+import { WorkspaceService } from '@/server/service/WorkspaceService';
 import { AgentEvent } from '@/shared/types';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { STRING_THRESHOLD } from '@/server/utils/cache';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { STRING_THRESHOLD } from '@/server/service/CacheService';
 import { withTraceContext } from '../../helpers/context';
+import { promises as fs } from 'fs';
+import path from 'path';
+import os from 'os';
 
-const mockRedisService = {
-  client: {
-    setEx: vi.fn().mockResolvedValue('OK'),
-    get: vi.fn().mockResolvedValue(null),
-    del: vi.fn().mockResolvedValue(1),
-  },
+let testDir: string;
+
+const mockWorkspaceService = {
+  getWorkDir: vi.fn().mockImplementation(async () => {
+    if (!testDir) {
+      testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'react-test-'));
+    }
+    return testDir;
+  }),
+  readFile: vi
+    .fn()
+    .mockImplementation(async (filename: string, workDir: string) => {
+      const filePath = path.join(workDir, filename);
+      const stat = await fs.stat(filePath).catch(() => null);
+      if (!stat) return null;
+      const content = await fs.readFile(filePath, 'utf-8');
+      return { content, size: stat.size };
+    }),
 };
 
 const mockNestedTool = {
@@ -29,8 +45,8 @@ vi.mock('tsyringe', async () => {
         if (token === 'nested_tool') {
           return mockNestedTool;
         }
-        if (token === RedisService) {
-          return mockRedisService;
+        if (token === WorkspaceService) {
+          return mockWorkspaceService;
         }
         return new (class MockLogger {
           info = vi.fn();
@@ -45,9 +61,12 @@ vi.mock('tsyringe', async () => {
 
 function createMockContext(traceId = 'test-trace-id'): ExecutionContext {
   let ctx: ExecutionContext | undefined;
-  TraceContext.run({ requestId: 'test-req', traceId }, () => {
-    ctx = new ExecutionContext(new AbortController());
-  });
+  TraceContext.run(
+    { requestId: 'test-req', traceId, conversationId: 'conv-test' },
+    () => {
+      ctx = new ExecutionContext(new AbortController());
+    },
+  );
   return ctx!;
 }
 
@@ -64,8 +83,16 @@ async function collectEvents(
 describe('ReActAgent', () => {
   let reactAgent: ReActAgent;
 
+  afterEach(async () => {
+    if (testDir) {
+      await fs.rm(testDir, { recursive: true, force: true });
+      testDir = '';
+    }
+  });
+
   beforeEach(() => {
-    reactAgent = new ReActAgent();
+    const cacheService = new CacheService(mockWorkspaceService as any);
+    reactAgent = new ReActAgent(cacheService);
     Object.defineProperty(reactAgent, 'logger', {
       value: {
         debug: vi.fn(),
@@ -178,7 +205,7 @@ describe('ReActAgent', () => {
   });
 
   describe('cache compression and resolution', () => {
-    it('should compress large string output from tool', async () => {
+    it('should compress large string output from tool to file', async () => {
       const memory = {
         summarize: vi
           .fn()
@@ -221,10 +248,9 @@ describe('ReActAgent', () => {
       const toolResultEvent = events.find(e => e.type === 'tool_result') as any;
       const output = JSON.parse(toolResultEvent.output);
       expect(output).toMatchObject({
-        $cached: expect.stringMatching(/^cache_/),
+        $cached: expect.stringMatching(/^fc_/),
         $size: STRING_THRESHOLD + 1,
       });
-      expect(mockRedisService.client.setEx).toHaveBeenCalled();
     });
 
     it('should resolve CachedReference in tool input', async () => {
@@ -236,7 +262,10 @@ describe('ReActAgent', () => {
       const ctx = createMockContext();
 
       const cachedContent = 'cached large content';
-      mockRedisService.client.get.mockResolvedValueOnce(cachedContent);
+      mockWorkspaceService.readFile.mockResolvedValueOnce({
+        content: cachedContent,
+        size: cachedContent.length,
+      });
 
       let llmCallCount = 0;
 
@@ -245,13 +274,13 @@ describe('ReActAgent', () => {
           llmCallCount++;
           if (llmCallCount === 1) {
             yield ctx.agentStreamEvent(
-              '{ "action": { "tool": "nested_tool", "input": { "content": { "$cached": "cache_abc", "$size": 100 } } } }',
+              '{ "action": { "tool": "nested_tool", "input": { "content": { "$cached": "fc_abc", "$size": 100 } } } }',
             );
             return JSON.stringify({
               action: {
                 tool: 'nested_tool',
                 input: {
-                  content: { $cached: 'cache_abc', $size: 100 },
+                  content: { $cached: 'fc_abc', $size: 100 },
                 },
               },
             });
@@ -320,7 +349,7 @@ describe('ReActAgent', () => {
       const toolResultEvent = events.find(e => e.type === 'tool_result') as any;
       const output = JSON.parse(toolResultEvent.output);
       expect(output).toMatchObject({
-        $cached: expect.stringMatching(/^cache_/),
+        $cached: expect.stringMatching(/^fc_/),
       });
     });
 
@@ -361,7 +390,6 @@ describe('ReActAgent', () => {
       });
 
       vi.clearAllMocks();
-      mockRedisService.client.setEx.mockClear();
 
       const events = await withTraceContext(async () => {
         return collectEvents(reactAgent.call(memory, ctx, {}));
@@ -369,7 +397,6 @@ describe('ReActAgent', () => {
 
       const toolResultEvent = events.find(e => e.type === 'tool_result') as any;
       expect(toolResultEvent.output).toBe(smallContent);
-      expect(mockRedisService.client.setEx).not.toHaveBeenCalled();
     });
   });
 

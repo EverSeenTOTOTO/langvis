@@ -19,7 +19,7 @@ import { ChatService } from '../service/ChatService';
 import { ConversationService } from '../service/ConversationService';
 import { EmailService } from '../service/EmailService';
 import { ProviderService } from '../service/ProviderService';
-import { compress, type CachedReference } from '../utils/cache';
+import { CacheService, type CachedReference } from '../service/CacheService';
 import Logger from '../utils/logger';
 
 const INBOUND_SECRET = import.meta.env.VITE_INBOUND_SECRET || '';
@@ -43,6 +43,8 @@ export default class EmailController {
     private readonly authService: AuthService,
     @inject(ProviderService)
     private readonly providerService: ProviderService,
+    @inject(CacheService)
+    private readonly cacheService: CacheService,
   ) {}
 
   @api('/')
@@ -207,8 +209,11 @@ export default class EmailController {
     });
     TraceContext.freeze();
 
-    // Compress email content using assistantId as cache key
-    const contentOrCached = await compress(assistantId, email.content);
+    // Compress email content
+    const contentOrCached = await this.cacheService.compress(
+      conversationId,
+      email.content,
+    );
     const userContent = this.buildArchivePrompt(
       email,
       contentOrCached as string | CachedReference,
