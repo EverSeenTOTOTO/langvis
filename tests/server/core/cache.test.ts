@@ -1,11 +1,9 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
-import { describe, it, expect, beforeEach, vi, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { container } from 'tsyringe';
-import { compress, resolve, STRING_THRESHOLD } from '@/server/utils/cache';
-import { RedisKeys } from '@/shared/constants';
-import { RedisService } from '@/server/service/RedisService';
+import { CacheService, STRING_THRESHOLD } from '@/server/service/CacheService';
 import { WorkspaceService } from '@/server/service/WorkspaceService';
 
 let testDir: string;
@@ -17,15 +15,19 @@ const mockWorkspaceService = {
     }
     return testDir;
   }),
+  readFile: vi
+    .fn()
+    .mockImplementation(async (filename: string, workDir: string) => {
+      const filePath = path.join(workDir, filename);
+      const stat = await fs.stat(filePath).catch(() => null);
+      if (!stat) return null;
+      const content = await fs.readFile(filePath, 'utf-8');
+      return { content, size: stat.size };
+    }),
 };
 
-describe('Cache Utils', () => {
-  let mockRedisService: {
-    client: {
-      setEx: ReturnType<typeof vi.fn>;
-      get: ReturnType<typeof vi.fn>;
-    };
-  };
+describe('CacheService', () => {
+  let cacheService: CacheService;
 
   afterAll(async () => {
     if (testDir) {
@@ -35,47 +37,47 @@ describe('Cache Utils', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRedisService = {
-      client: {
-        setEx: vi.fn().mockResolvedValue('OK'),
-        get: vi.fn().mockResolvedValue(null),
-      },
-    };
-
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    container.register(RedisService, { useValue: mockRedisService });
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     container.register(WorkspaceService, { useValue: mockWorkspaceService });
+    cacheService = container.resolve(CacheService);
   });
 
   describe('compress', () => {
-    const traceId = 'test-trace-id';
+    const conversationId = 'conv-test-123';
 
-    it(`should compress string longer than ${STRING_THRESHOLD} chars`, async () => {
+    it(`should compress string longer than ${STRING_THRESHOLD} chars to file`, async () => {
       const longString = 'a'.repeat(STRING_THRESHOLD + 1);
 
-      const result = (await compress(traceId, longString)) as {
+      const result = (await cacheService.compress(
+        conversationId,
+        longString,
+      )) as {
         $cached: string;
         $size: number;
         $preview: string;
       };
 
-      expect(result.$cached).toMatch(/^cache_/);
+      expect(result.$cached).toMatch(/^fc_/);
       expect(result.$size).toBe(STRING_THRESHOLD + 1);
       expect(result.$preview).toBe('a'.repeat(200));
-      expect(mockRedisService.client.setEx).toHaveBeenCalledWith(
-        expect.stringContaining(RedisKeys.AGENT_CACHE(traceId, result.$cached)),
-        3600,
-        longString,
+      expect(mockWorkspaceService.getWorkDir).toHaveBeenCalledWith(
+        conversationId,
       );
+
+      // Verify file was actually written
+      const workDir = await mockWorkspaceService.getWorkDir();
+      const fileResult = await mockWorkspaceService.readFile(
+        result.$cached,
+        workDir,
+      );
+      expect(fileResult?.content).toBe(longString);
     });
 
     it(`should not compress string shorter than ${STRING_THRESHOLD} chars`, async () => {
       const shortString = 'a'.repeat(100);
 
-      const result = await compress(traceId, shortString);
+      const result = await cacheService.compress(conversationId, shortString);
 
       expect(result).toBe(shortString);
     });
@@ -83,18 +85,20 @@ describe('Cache Utils', () => {
     it('should compress array with more than 50 items', async () => {
       const largeArray = Array.from({ length: 51 }, (_, i) => ({ id: i }));
 
-      const result = (await compress(traceId, largeArray)) as {
+      const result = (await cacheService.compress(
+        conversationId,
+        largeArray,
+      )) as {
         $cached: string;
       };
 
-      expect(result.$cached).toMatch(/^cache_/);
-      expect(mockRedisService.client.setEx).toHaveBeenCalled();
+      expect(result.$cached).toMatch(/^fc_/);
     });
 
     it('should not compress array with 50 or fewer items', async () => {
       const smallArray = Array.from({ length: 50 }, (_, i) => `item-${i}`);
 
-      const result = await compress(traceId, smallArray);
+      const result = await cacheService.compress(conversationId, smallArray);
 
       expect(result).toEqual(smallArray);
     });
@@ -108,17 +112,17 @@ describe('Cache Utils', () => {
         },
       };
 
-      const result = (await compress(traceId, nested)) as Record<
-        string,
-        unknown
-      >;
+      const result = (await cacheService.compress(
+        conversationId,
+        nested,
+      )) as Record<string, unknown>;
 
       expect(result.short).toBe('short string');
-      expect((result.long as { $cached: string }).$cached).toMatch(/^cache_/);
+      expect((result.long as { $cached: string }).$cached).toMatch(/^fc_/);
       expect(
         ((result.nested as Record<string, unknown>).deep as { $cached: string })
           .$cached,
-      ).toMatch(/^cache_/);
+      ).toMatch(/^fc_/);
     });
 
     it('should recursively compress array items', async () => {
@@ -130,22 +134,25 @@ describe('Cache Utils', () => {
         ],
       };
 
-      const result = (await compress(traceId, nested)) as Record<
-        string,
-        unknown
-      >;
+      const result = (await cacheService.compress(
+        conversationId,
+        nested,
+      )) as Record<string, unknown>;
       const items = result.items as unknown[];
 
-      expect((items[0] as { $cached: string }).$cached).toMatch(/^cache_/);
+      expect((items[0] as { $cached: string }).$cached).toMatch(/^fc_/);
       expect(items[1]).toBe('short');
-      expect((items[2] as { $cached: string }).$cached).toMatch(/^cache_/);
+      expect((items[2] as { $cached: string }).$cached).toMatch(/^fc_/);
     });
 
     it('should skip compression when strategy is "skip"', async () => {
       const longString = 'a'.repeat(STRING_THRESHOLD + 1);
-      const result = await compress(traceId, longString, 'skip');
+      const result = await cacheService.compress(
+        conversationId,
+        longString,
+        'skip',
+      );
       expect(result).toBe(longString);
-      expect(mockRedisService.client.setEx).not.toHaveBeenCalled();
     });
 
     it('should skip compression recursively when strategy is "skip"', async () => {
@@ -153,133 +160,144 @@ describe('Cache Utils', () => {
         long: 'a'.repeat(STRING_THRESHOLD + 1),
         items: ['b'.repeat(5001)],
       };
-      const result = await compress(traceId, nested, 'skip');
+      const result = await cacheService.compress(
+        conversationId,
+        nested,
+        'skip',
+      );
       expect(result).toEqual(nested);
-      expect(mockRedisService.client.setEx).not.toHaveBeenCalled();
-    });
-
-    it('should compress to file when strategy is "file"', async () => {
-      const longString = 'a'.repeat(STRING_THRESHOLD + 1);
-      const result = (await compress(
-        traceId,
-        longString,
-        'file',
-        'conv-123',
-      )) as {
-        $file: string;
-        $size: number;
-        $preview: string;
-      };
-
-      expect(result.$file).toMatch(/^fc_/);
-      expect(result.$size).toBe(STRING_THRESHOLD + 1);
-      expect(result.$preview).toBe('a'.repeat(200));
-      expect(mockWorkspaceService.getWorkDir).toHaveBeenCalledWith('conv-123');
-      expect(mockRedisService.client.setEx).not.toHaveBeenCalled();
-    });
-
-    it('should throw when file strategy is used without conversationId', async () => {
-      await expect(
-        compress(traceId, 'a'.repeat(STRING_THRESHOLD + 1), 'file'),
-      ).rejects.toThrow('conversationId is required');
-    });
-
-    it('should not compress small values even with file strategy', async () => {
-      const shortString = 'hello';
-      const result = await compress(traceId, shortString, 'file', 'conv-123');
-      expect(result).toBe(shortString);
-    });
-
-    it('should use redis strategy by default', async () => {
-      const longString = 'a'.repeat(STRING_THRESHOLD + 1);
-      const result = (await compress(traceId, longString)) as {
-        $cached: string;
-      };
-      expect(result.$cached).toMatch(/^cache_/);
-      expect(mockRedisService.client.setEx).toHaveBeenCalled();
     });
   });
 
   describe('resolve', () => {
-    const traceId = 'test-trace-id';
+    const conversationId = 'conv-test-456';
 
-    it('should resolve CachedReference', async () => {
-      mockRedisService.client.get.mockResolvedValueOnce('resolved content');
+    it('should resolve CachedReference by reading file', async () => {
+      const longString = 'a'.repeat(STRING_THRESHOLD + 1);
 
-      const input = {
-        $cached: 'cache_abc123',
-        $size: 100,
+      // First compress to create the file
+      const compressed = (await cacheService.compress(
+        conversationId,
+        longString,
+      )) as {
+        $cached: string;
       };
 
-      const result = await resolve(traceId, input);
+      // Then resolve it
+      const result = await cacheService.resolve(conversationId, compressed);
 
-      expect(result).toBe('resolved content');
-      expect(mockRedisService.client.get).toHaveBeenCalledWith(
-        RedisKeys.AGENT_CACHE(traceId, 'cache_abc123'),
+      expect(result).toBe(longString);
+    });
+
+    it('should resolve CachedReference containing JSON object', async () => {
+      const jsonObject = { key: 'value', count: 42 };
+
+      // Manually create a cache file with JSON content
+      const workDir = await mockWorkspaceService.getWorkDir();
+      const filename = 'fc_testjson';
+      await fs.writeFile(
+        path.join(workDir, filename),
+        JSON.stringify(jsonObject),
+        'utf-8',
       );
+
+      const result = await cacheService.resolve(conversationId, {
+        $cached: filename,
+      });
+
+      expect(result).toEqual(jsonObject);
     });
 
     it('should recursively resolve nested CachedReferences', async () => {
-      mockRedisService.client.get
-        .mockResolvedValueOnce('content1')
-        .mockResolvedValueOnce('content2');
+      const content1 = 'a'.repeat(STRING_THRESHOLD + 1);
+      const content2 = 'b'.repeat(STRING_THRESHOLD + 1);
 
-      const input = {
-        nested: {
-          ref1: { $cached: 'cache_1', $size: 100 },
-          ref2: { $cached: 'cache_2', $size: 200 },
-        },
+      const ref1 = (await cacheService.compress(conversationId, content1)) as {
+        $cached: string;
+      };
+      const ref2 = (await cacheService.compress(conversationId, content2)) as {
+        $cached: string;
       };
 
-      const result = (await resolve(traceId, input)) as Record<string, unknown>;
+      const input = { nested: { ref1, ref2 } };
+      const result = (await cacheService.resolve(
+        conversationId,
+        input,
+      )) as Record<string, unknown>;
       const nested = result.nested as Record<string, unknown>;
 
-      expect(nested.ref1).toBe('content1');
-      expect(nested.ref2).toBe('content2');
+      expect(nested.ref1).toBe(content1);
+      expect(nested.ref2).toBe(content2);
     });
 
     it('should resolve CachedReference in array', async () => {
-      mockRedisService.client.get.mockResolvedValueOnce('array content');
-
-      const input = {
-        items: [{ $cached: 'cache_arr', $size: 50 }],
+      const content = 'a'.repeat(STRING_THRESHOLD + 1);
+      const ref = (await cacheService.compress(conversationId, content)) as {
+        $cached: string;
       };
 
-      const result = (await resolve(traceId, input)) as Record<string, unknown>;
+      const input = { items: [ref] };
+      const result = (await cacheService.resolve(
+        conversationId,
+        input,
+      )) as Record<string, unknown>;
 
-      expect((result.items as unknown[])[0]).toBe('array content');
+      expect((result.items as unknown[])[0]).toBe(content);
     });
 
     it('should not modify non-CachedReference objects', async () => {
-      const input = {
-        name: 'test',
-        count: 42,
-        flag: true,
-      };
+      const input = { name: 'test', count: 42, flag: true };
 
-      const result = await resolve(traceId, input);
+      const result = await cacheService.resolve(conversationId, input);
 
       expect(result).toEqual(input);
     });
 
     it('should throw error when cache miss', async () => {
-      mockRedisService.client.get.mockResolvedValueOnce(null);
+      await expect(
+        cacheService.resolve(conversationId, {
+          $cached: 'fc_nonexistent',
+          $size: 100,
+        }),
+      ).rejects.toThrow('Cache miss: fc_nonexistent');
+    });
+  });
 
-      const input = { $cached: 'cache_notexist', $size: 100 };
+  describe('readFile', () => {
+    const conversationId = 'conv-test-789';
 
-      await expect(resolve(traceId, input)).rejects.toThrow(
-        'Cache miss: cache_notexist',
+    it('should read file with offset and limit', async () => {
+      const content = '0123456789abcdef';
+      const workDir = await mockWorkspaceService.getWorkDir();
+      await fs.writeFile(path.join(workDir, 'fc_test'), content, 'utf-8');
+
+      const result = await cacheService.readFile(
+        conversationId,
+        'fc_test',
+        4,
+        8,
       );
+      expect(result).toBe('456789ab');
     });
 
-    it('should parse JSON from cache', async () => {
-      mockRedisService.client.get.mockResolvedValueOnce('{"key":"value"}');
+    it('should read file from beginning when offset is omitted', async () => {
+      const content = 'hello world';
+      const workDir = await mockWorkspaceService.getWorkDir();
+      await fs.writeFile(path.join(workDir, 'fc_test2'), content, 'utf-8');
 
-      const input = { $cached: 'cache_json', $size: 100 };
+      const result = await cacheService.readFile(
+        conversationId,
+        'fc_test2',
+        undefined,
+        5,
+      );
+      expect(result).toBe('hello');
+    });
 
-      const result = await resolve(traceId, input);
-
-      expect(result).toEqual({ key: 'value' });
+    it('should throw error when file not found', async () => {
+      await expect(
+        cacheService.readFile(conversationId, 'fc_missing'),
+      ).rejects.toThrow('Cache miss: fc_missing');
     });
   });
 });

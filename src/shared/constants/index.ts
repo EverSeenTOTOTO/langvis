@@ -39,9 +39,6 @@ export const UNGROUPED_GROUP_NAME = 'Ungrouped';
 export const RedisKeys = {
   // Message level
   HUMAN_INPUT: (messageId: string) => `human_input:${messageId}`,
-  AGENT_CACHE: (messageId: string, key: string) =>
-    `agent:cache:${messageId}:${key}`,
-
   // Session level
   CHAT_SESSION: (conversationId: string) => `chat_session:${conversationId}`,
   CHAT_SESSION_LOCK: (conversationId: string) =>

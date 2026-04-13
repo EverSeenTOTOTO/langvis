@@ -53,22 +53,13 @@ interface FinalAnswerResponse {
     )
     .with(
       'Cached References',
-      `When a tool returns large content, it is replaced by a reference object. There are TWO distinct types — they use DIFFERENT field names:
-
-**Type 1: Redis Cache** — has \`$cached\` field:
+      `When a tool returns large content, it is replaced by a cached reference object:
 \`\`\`json
-{ "$cached": "cache_abc123", "$size": 45000, "$preview": "Lorem ipsum..." }
+{ "$cached": "fc_abc123", "$size": 45000, "$preview": "Lorem ipsum..." }
 \`\`\`
-- To read the full content, use \`read_cache\` with the \`$cached\` value
-- To pass to another tool, copy the entire \`{ "$cached": ... }\` object as-is
-
-**Type 2: File Cache** — has \`$file\` field:
-\`\`\`json
-{ "$file": "fc_xyz789", "$size": 45000, "$preview": "Lorem ipsum..." }
-\`\`\`
-- This is a FILE in the workspace, NOT a redis cache
-- Do NOT use \`read_cache\` — use \`bash\` with \`bat\`, \`head\`, \`tail\`, \`rg\`, \`sed\` to read/search
-- \`$file\` contains the filename (e.g. "fc_xyz789"), NOT a cache key`,
+- \`$cached\` is the filename of the cached content
+- To read the full content, use \`read_cache\` with the \`$cached\` value (supports \`offset\` and \`limit\` for pagination)
+- To pass cached content to another tool, copy the entire \`{ "$cached": ... }\` object as-is — it will be automatically resolved`,
     )
     .with(
       'Examples',
