@@ -1,7 +1,7 @@
 import { getOwnPropertyNames } from '@/shared/utils';
 import { action } from 'mobx';
 
-const metaDataKey = Symbol('hydrate');
+const metaDataKey = Symbol.for('hydrate');
 
 // 目标属性水化时如何从预取数据state中提取并还原到客户端实例
 export type HydrateMethod = string | ((state: any) => any);

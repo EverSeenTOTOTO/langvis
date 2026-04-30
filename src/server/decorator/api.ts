@@ -9,7 +9,7 @@ import {
   PARAM_METADATA_KEY,
 } from './param';
 
-const metaDataKey = Symbol('server_api');
+const metaDataKey = Symbol.for('server_api');
 
 export interface ApiOptions {
   method?: 'get' | 'post' | 'put' | 'delete' | 'patch';
