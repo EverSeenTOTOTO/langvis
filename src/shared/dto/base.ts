@@ -18,7 +18,7 @@ export class ValidationException extends Error {
   }
 }
 
-export const DTO_SCHEMA_KEY = Symbol('dto:schema');
+export const DTO_SCHEMA_KEY = Symbol.for('dto:schema');
 
 export interface DtoConstructor<T = any> {
   new (): T;

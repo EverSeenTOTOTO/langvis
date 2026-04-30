@@ -3,7 +3,7 @@ import { isDtoClass } from '@/shared/dto/base';
 import type { Request, Response } from 'express';
 import multer from 'multer';
 
-export const PARAM_METADATA_KEY = Symbol('param_metadata');
+export const PARAM_METADATA_KEY = Symbol.for('param_metadata');
 
 export enum ParamType {
   BODY = 'body',

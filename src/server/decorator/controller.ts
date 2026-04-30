@@ -4,7 +4,7 @@ import { container, singleton } from 'tsyringe';
 import logger from '../utils/logger';
 import bindApi from './api';
 
-const metaDataKey = Symbol('controller');
+const metaDataKey = Symbol.for('controller');
 
 export function controller(namespace = ''): ClassDecorator {
   return function controllerDecorator(target: any) {

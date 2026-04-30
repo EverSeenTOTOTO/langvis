@@ -11,7 +11,7 @@ import logger from '../utils/logger';
 import { parse } from '../utils/schemaValidator';
 import { PARAM_METADATA_KEY, ParamMetadata, ParamType } from './param';
 
-const metaDataKey = Symbol('config');
+const metaDataKey = Symbol.for('config');
 
 function createConfigDecorator(type: 'agent' | 'tool' | 'memory') {
   return (token?: ToolIds | AgentIds | MemoryIds) =>

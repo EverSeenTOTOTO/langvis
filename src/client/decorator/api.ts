@@ -3,7 +3,7 @@ import { message } from 'antd';
 import { merge } from 'lodash-es';
 import { compile } from 'path-to-regexp';
 
-const metaDataKey = Symbol('client_api');
+const metaDataKey = Symbol.for('client_api');
 
 console.info(`Prefetch origin: http://localhost:${import.meta.env.VITE_PORT}`);
 
