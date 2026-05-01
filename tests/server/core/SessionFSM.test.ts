@@ -26,12 +26,15 @@ describe('SessionFSM', () => {
 
   const createPersister = () => vi.fn().mockResolvedValue(undefined);
 
-  const createMockConnection = () => ({
-    conversationId: 'conv-1',
+  const createMockTransport = () => ({
     send: vi.fn().mockReturnValue(true),
     close: vi.fn(),
-    isWritable: true,
-    handshake: vi.fn(),
+    disconnect: vi.fn(),
+    isConnected: true,
+    connect: vi.fn().mockResolvedValue(undefined),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
   });
 
   beforeEach(() => {
@@ -108,24 +111,23 @@ describe('SessionFSM', () => {
     });
   });
 
-  describe('bindConnection', () => {
-    it('should bind new connection', () => {
-      const conn = createMockConnection();
+  describe('attachTransport', () => {
+    it('should attach new transport', () => {
+      const transport = createMockTransport();
 
-      session.bindConnection(conn as any);
+      session.attachTransport(transport as any);
 
-      expect(conn.send).not.toHaveBeenCalled();
+      expect(transport.send).not.toHaveBeenCalled();
     });
 
-    it('should kick old connection when binding new one', () => {
-      const oldConn = createMockConnection();
-      const newConn = createMockConnection();
+    it('should kick old transport when attaching new one', () => {
+      const oldTransport = createMockTransport();
+      const newTransport = createMockTransport();
 
-      session.bindConnection(oldConn as any);
-      session.bindConnection(newConn as any);
+      session.attachTransport(oldTransport as any);
+      session.attachTransport(newTransport as any);
 
-      expect(oldConn.send).toHaveBeenCalledWith({ type: 'session_replaced' });
-      expect(oldConn.close).toHaveBeenCalled();
+      expect(oldTransport.disconnect).toHaveBeenCalled();
     });
   });
 
@@ -277,9 +279,9 @@ describe('SessionFSM', () => {
   });
 
   describe('send', () => {
-    it('should send event through connection', () => {
-      const conn = createMockConnection();
-      session.bindConnection(conn as any);
+    it('should send event through transport', () => {
+      const transport = createMockTransport();
+      session.attachTransport(transport as any);
 
       const event: AgentEvent = {
         type: 'stream',
@@ -291,7 +293,7 @@ describe('SessionFSM', () => {
       const result = session.send(event);
 
       expect(result).toBe(true);
-      expect(conn.send).toHaveBeenCalledWith(event);
+      expect(transport.send).toHaveBeenCalledWith(event);
     });
 
     it('should return false if no connection', () => {
@@ -307,10 +309,10 @@ describe('SessionFSM', () => {
       expect(result).toBe(false);
     });
 
-    it('should return false if connection not writable', () => {
-      const conn = createMockConnection();
-      conn.isWritable = false;
-      session.bindConnection(conn as any);
+    it('should return false if transport not connected', () => {
+      const transport = createMockTransport();
+      transport.isConnected = false;
+      session.attachTransport(transport as any);
 
       const event: AgentEvent = {
         type: 'stream',
@@ -326,14 +328,14 @@ describe('SessionFSM', () => {
   });
 
   describe('cleanup', () => {
-    it('should transition to done and close connection', async () => {
-      const conn = createMockConnection();
-      session.bindConnection(conn as any);
+    it('should transition to done and close transport', async () => {
+      const transport = createMockTransport();
+      session.attachTransport(transport as any);
 
       await session.cleanup();
 
       expect(session.phase).toBe('done');
-      expect(conn.close).toHaveBeenCalled();
+      expect(transport.close).toHaveBeenCalled();
       expect(options.onDispose).toHaveBeenCalledWith('conv-1');
     });
 

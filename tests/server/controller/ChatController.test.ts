@@ -109,12 +109,12 @@ describe('ChatController', () => {
       expect(mockResponse.sendStatus).toHaveBeenCalledWith(204);
     });
 
-    it('should create session and bind SSE connection', async () => {
+    it('should create session and attach transport', async () => {
       mockRequest.params = { conversationId: 'conv-123' };
       mockChatService.getSessionState.mockResolvedValue({ phase: 'waiting' });
 
       const mockSession = {
-        bindConnection: vi.fn(),
+        attachTransport: vi.fn(),
         handleDisconnect: vi.fn(),
       };
       mockChatService.acquireSession.mockResolvedValue(mockSession);
@@ -125,13 +125,13 @@ describe('ChatController', () => {
         mockResponse as Response,
       );
 
-      // SSEConnection constructor calls writeHead
+      // SSEServerTransport constructor calls writeHead and send connected
       expect(mockResponse.writeHead).toHaveBeenCalledWith(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
       });
-      expect(mockSession.bindConnection).toHaveBeenCalled();
+      expect(mockSession.attachTransport).toHaveBeenCalled();
       expect(mockRequest.on).toHaveBeenCalledWith(
         'close',
         expect.any(Function),
@@ -143,7 +143,7 @@ describe('ChatController', () => {
       mockChatService.getSessionState.mockResolvedValue({ phase: 'waiting' });
 
       const mockSession = {
-        bindConnection: vi.fn(),
+        attachTransport: vi.fn(),
         handleDisconnect: vi.fn(),
       };
       mockChatService.acquireSession.mockResolvedValue(mockSession);

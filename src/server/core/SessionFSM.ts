@@ -1,9 +1,14 @@
-import { AgentEvent, MessagePhase, SessionPhase } from '@/shared/types';
+import {
+  AgentEvent,
+  MessagePhase,
+  SSEMessage,
+  SessionPhase,
+} from '@/shared/types';
+import { Transport } from '@/shared/transport';
 import logger from '../utils/logger';
 import { Memory } from './memory';
 import { MessageFSM, type MessageFSMOptions } from './MessageFSM';
 import { PendingMessage } from './PendingMessage';
-import { SSEConnection } from './SSEConnection';
 import { StateMachine } from '@/shared/utils/StateMachine';
 
 const VALID_TRANSITIONS: Record<SessionPhase, SessionPhase[]> = {
@@ -29,7 +34,7 @@ export class SessionFSM {
 
   private _memory?: Memory;
   private sm: StateMachine<SessionPhase>;
-  private sseConnection: SSEConnection | null = null;
+  private transport: Transport<SSEMessage> | null = null;
   private messageFSMs = new Map<string, MessageFSM>();
   private idleTimeout: ReturnType<typeof setTimeout>;
   private options: SessionFSMOptions;
@@ -74,20 +79,22 @@ export class SessionFSM {
     this._memory = memory;
   }
 
-  bindConnection(connection: SSEConnection): void {
-    // 1. Close old connection if exists
-    if (this.sseConnection) {
-      this.sseConnection.send({ type: 'session_replaced' });
-      this.sseConnection.close();
-      logger.info(`Kicked old SSE connection for ${this.conversationId}`);
+  attachTransport(newTransport: Transport<SSEMessage>): void {
+    // 1. Close old transport if exists
+    if (this.transport) {
+      this.transport.disconnect();
+      logger.info(`Kicked old transport for ${this.conversationId}`);
     }
 
-    // 2. Replay accumulated events from all non-terminal MessageFSMs
+    // 2. Bind new transport (connected already sent by transport on construction)
+    this.transport = newTransport;
+
+    // 3. Replay accumulated events from all non-terminal MessageFSMs
     for (const [messageId, messageFSM] of this.messageFSMs) {
       if (!messageFSM.isTerminated) {
         const events = messageFSM.getReplayEvents();
         for (const event of events) {
-          connection.send(event);
+          newTransport.send(event);
         }
         logger.info(
           `Replayed ${events.length} events for message ${messageId}`,
@@ -96,12 +103,7 @@ export class SessionFSM {
       }
     }
 
-    // 3. Bind new connection
-    this.sseConnection = connection;
-
-    // 4. Send handshake to signal replay completion
-    connection.handshake();
-    logger.info(`SSE connection established with event replay`, {
+    logger.info(`Transport attached with event replay`, {
       sessionId: this.conversationId,
     });
   }
@@ -145,8 +147,8 @@ export class SessionFSM {
   async handleDisconnect(): Promise<void> {
     logger.info(`SSE disconnected for ${this.conversationId}`);
 
-    // Always clear SSE reference on disconnect — the response is gone
-    this.sseConnection = null;
+    // Always clear transport reference on disconnect — the connection is gone
+    this.transport = null;
 
     for (const fsm of this.messageFSMs.values()) {
       if (!fsm.isTerminated) {
@@ -160,16 +162,16 @@ export class SessionFSM {
   }
 
   send(event: AgentEvent | { type: string; [key: string]: unknown }): boolean {
-    if (!this.sseConnection?.isWritable) return false;
-    return this.sseConnection.send(event as AgentEvent);
+    if (!this.transport?.isConnected) return false;
+    return this.transport.send(event as SSEMessage);
   }
 
   async cleanup(): Promise<void> {
     clearTimeout(this.idleTimeout);
     this.sm.transition('done');
 
-    this.sseConnection?.close();
-    this.sseConnection = null;
+    this.transport?.close();
+    this.transport = null;
     this.messageFSMs.clear();
 
     await this.options.onDispose(this.conversationId);

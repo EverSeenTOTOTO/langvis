@@ -81,17 +81,20 @@ describe('ChatService', () => {
       const session1 = await chatService.acquireSession('conv-123');
       expect(session1).toBeDefined();
 
-      // Bind mock connection
-      const mockConn = {
-        conversationId: 'conv-123',
-        get isWritable() {
+      // Bind mock transport
+      const mockTransport = {
+        get isConnected() {
           return true;
         },
         send: vi.fn().mockReturnValue(true),
         close: vi.fn(),
-        handshake: vi.fn(),
+        disconnect: vi.fn(),
+        connect: vi.fn().mockResolvedValue(undefined),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
       };
-      session1!.bindConnection(mockConn as any);
+      session1!.attachTransport(mockTransport as any);
 
       const session2 = await chatService.acquireSession('conv-123');
       expect(session2).toBe(session1); // Reconnection returns same session
@@ -136,24 +139,19 @@ describe('ChatService', () => {
       const session = await chatService.acquireSession('conv-123');
       const MSG_ID = 'assistant-msg';
 
-      const mockConn = {
-        conversationId: 'conv-123',
-        response: {
-          writable: true,
-          write: vi.fn().mockReturnValue(true),
-          flush: vi.fn(),
-          writableEnded: false,
-          end: vi.fn(),
-        },
-        heartbeat: null,
-        close: vi.fn(),
-        get isWritable() {
+      const mockTransport = {
+        get isConnected() {
           return true;
         },
         send: vi.fn().mockReturnValue(true),
-        handshake: vi.fn(),
+        close: vi.fn(),
+        disconnect: vi.fn(),
+        connect: vi.fn().mockResolvedValue(undefined),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
       };
-      session!.bindConnection(mockConn as any);
+      session!.attachTransport(mockTransport as any);
 
       const mockAgent = {
         id: 'test-agent',

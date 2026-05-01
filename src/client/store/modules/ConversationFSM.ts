@@ -1,10 +1,9 @@
 import { AgentEvent, ConversationPhase, SSEMessage } from '@/shared/types';
 import type { Conversation, Message } from '@/shared/types/entities';
-import { isClient } from '@/shared/utils';
 import { StateMachine } from '@/shared/utils/StateMachine';
 import { makeAutoObservable } from 'mobx';
-import { getPrefetchPath } from '../../decorator/api';
 import { MessageFSM } from './MessageFSM';
+import { SSEClientTransport } from './transport';
 
 const VALID_TRANSITIONS: Record<ConversationPhase, ConversationPhase[]> = {
   idle: ['connecting'],
@@ -31,7 +30,7 @@ export class ConversationFSM {
   readonly conversationId: string;
 
   private _conversation: Conversation | null = null;
-  private eventSource: EventSource | null = null;
+  private transport: SSEClientTransport | null = null;
   private options: ConversationFSMOptions;
   private messageFSMs = new Map<string, MessageFSM>();
   private _phase: ConversationPhase;
@@ -53,10 +52,10 @@ export class ConversationFSM {
       },
     });
 
-    makeAutoObservable<this, 'eventSource' | 'options' | 'messageFSMs' | 'sm'>(
+    makeAutoObservable<this, 'transport' | 'options' | 'messageFSMs' | 'sm'>(
       this,
       {
-        eventSource: false,
+        transport: false,
         options: false,
         messageFSMs: false,
         sm: false,
@@ -171,92 +170,45 @@ export class ConversationFSM {
     this.reset();
     this.sm.transition('connecting');
 
-    return new Promise((resolve, reject) => {
-      const path = `/api/chat/sse/${this.conversationId}`;
-      const url =
-        path.startsWith('/') && !isClient() ? getPrefetchPath(path) : path;
+    const transport = new SSEClientTransport(
+      `/api/chat/sse/${this.conversationId}`,
+    );
 
-      const eventSource = new EventSource(url, {
-        withCredentials: true,
-      });
+    this.transport = transport;
 
-      this.eventSource = eventSource;
+    transport.addEventListener('message', (e: CustomEvent<SSEMessage>) => {
+      this.handleEvent(e.detail as AgentEvent);
+    });
 
-      const timeout = setTimeout(() => {
-        eventSource.close();
-        this.eventSource = null;
+    transport.addEventListener('disconnect', () => {
+      if (this.phase === 'connecting') {
         this.sm.transition('error');
-        reject(new Error('SSE connection timeout'));
-      }, 30_000);
+      } else if (this.phase === 'connected' || this.phase === 'active') {
+        this.sm.transition('error');
+        this.options.onError(this.conversationId, 'SSE connection lost');
+      }
+    });
 
-      eventSource.addEventListener('error', () => {
-        clearTimeout(timeout);
-        eventSource.close();
-        this.eventSource = null;
-        if (this.phase === 'connecting') {
-          this.sm.transition('error');
-          reject(new Error('SSE connection failed'));
-        } else if (this.phase === 'connected') {
-          // SSE connection closed normally after stream ended - this is expected
-        } else {
-          this.sm.transition('error');
-          this.options.onError(this.conversationId, 'SSE connection lost');
-        }
-      });
+    transport.addEventListener('error', (e: CustomEvent<string>) => {
+      this.sm.transition('error');
+      this.options.onError(this.conversationId, e.detail);
+    });
 
-      eventSource.addEventListener('message', event => {
-        clearTimeout(timeout);
-
-        try {
-          const msg: SSEMessage = JSON.parse(event.data);
-
-          if (msg.type === 'connected') {
-            this.sm.transition('connected');
-            const hasActive = Array.from(this.messageFSMs.values()).some(
-              fsm => fsm.isActive,
-            );
-            if (hasActive) {
-              this.sm.transition('active');
-            }
-            resolve();
-            return;
-          }
-
-          if (msg.type === 'heartbeat') {
-            return;
-          }
-
-          if (msg.type === 'session_error') {
-            this.sm.transition('error');
-            eventSource.close();
-            this.eventSource = null;
-            this.options.onError(this.conversationId, msg.error);
-            reject(new Error(msg.error));
-            return;
-          }
-
-          if (msg.type === 'session_replaced') {
-            this.sm.transition('idle');
-            this.closeEventSource();
-            return;
-          }
-
-          // Business event
-          this.handleEvent(msg as AgentEvent);
-        } catch (e) {
-          this.options.onError(
-            this.conversationId,
-            `Failed parsing SSE message: ${(e as Error).message}`,
-          );
-        }
-      });
+    return transport.connect().then(() => {
+      this.sm.transition('connected');
+      const hasActive = Array.from(this.messageFSMs.values()).some(
+        fsm => fsm.isActive,
+      );
+      if (hasActive) {
+        this.sm.transition('active');
+      }
     });
   }
 
   deactivate(): void {
     switch (this.phase) {
       case 'idle':
-        this.closeEventSource();
+        this.closeTransport();
         break;
 
       case 'connecting':
@@ -264,7 +216,7 @@ export class ConversationFSM {
       case 'active':
       case 'canceling':
         this.sm.transition('canceled');
-        this.closeEventSource();
+        this.closeTransport();
         for (const fsm of this.messageFSMs.values()) {
           fsm.close();
         }
@@ -272,7 +224,7 @@ export class ConversationFSM {
 
       case 'error':
       case 'canceled':
-        this.closeEventSource();
+        this.closeTransport();
         break;
     }
   }
@@ -305,7 +257,7 @@ export class ConversationFSM {
   }
 
   isConnected(): boolean {
-    return this.eventSource?.readyState === EventSource.OPEN;
+    return this.transport?.isConnected ?? false;
   }
 
   // === Private methods ===
@@ -358,13 +310,13 @@ export class ConversationFSM {
     return this.messageFSMs.values().next().value;
   }
 
-  private closeEventSource(): void {
-    this.eventSource?.close();
-    this.eventSource = null;
+  private closeTransport(): void {
+    this.transport?.close();
+    this.transport = null;
   }
 
   private reset(): void {
-    this.closeEventSource();
+    this.closeTransport();
     // Reset state machine to idle
     this._phase = 'idle';
     this.sm = new StateMachine({
