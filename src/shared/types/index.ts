@@ -128,11 +128,11 @@ export type AgentEvent =
 
 /**
  * SSEMessage - the transmission type over SSE channel
- * Includes control messages (connected, heartbeat, session_error) and business events (AgentEvent)
+ * Includes control messages (connected, session_replaced, session_error) and business events (AgentEvent)
+ * heartbeat is handled internally by Transport implementations
  */
 export type SSEMessage =
-  | { type: 'connected'; conversationId: string }
-  | { type: 'heartbeat' }
+  | { type: 'connected' }
   | { type: 'session_replaced' }
   | { type: 'session_error'; error: string }
   | AgentEvent;

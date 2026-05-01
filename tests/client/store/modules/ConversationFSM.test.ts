@@ -4,40 +4,39 @@ import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
 import type { AgentEvent } from '@/shared/types';
 
-// Mock EventSource
+// Mock EventSource for SSEClientTransport
 class MockEventSource {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSED = 2;
+
   url: string;
-  readyState: number = EventSource.CONNECTING;
-  listeners: Map<string, EventListener[]> = new Map();
-  closed = false;
+  readyState: number = MockEventSource.CONNECTING;
+  private listeners: Map<string, EventListener[]> = new Map();
 
   constructor(url: string) {
     this.url = url;
-    setTimeout(() => {
-      this.readyState = EventSource.OPEN;
-    }, 0);
   }
 
   addEventListener(type: string, listener: EventListener) {
-    const listeners = this.listeners.get(type) || [];
-    listeners.push(listener);
-    this.listeners.set(type, listeners);
+    const list = this.listeners.get(type) || [];
+    list.push(listener);
+    this.listeners.set(type, list);
   }
 
   close() {
-    this.closed = true;
-    this.readyState = EventSource.CLOSED;
+    this.readyState = MockEventSource.CLOSED;
   }
 
   emit(type: string, data: unknown) {
-    const listeners = this.listeners.get(type) || [];
+    const list = this.listeners.get(type) || [];
     const event = { data: JSON.stringify(data) } as MessageEvent;
-    listeners.forEach(l => l(event));
+    list.forEach(l => l(event));
   }
 
   emitError() {
-    const listeners = this.listeners.get('error') || [];
-    listeners.forEach(l => l({} as Event));
+    const list = this.listeners.get('error') || [];
+    list.forEach(l => l({} as Event));
   }
 }
 
@@ -184,8 +183,8 @@ describe('ConversationFSM', () => {
   });
 
   describe('deactivate', () => {
-    it('should close event source when idle', () => {
-      const closeSpy = vi.spyOn(fsm as any, 'closeEventSource');
+    it('should close transport when idle', () => {
+      const closeSpy = vi.spyOn(fsm as any, 'closeTransport');
 
       fsm.deactivate();
 
@@ -342,7 +341,6 @@ describe('ConversationFSM', () => {
 
   describe('reconnect with active MessageFSM', () => {
     it('should transition to active when connect() succeeds with awaiting_input MessageFSM', async () => {
-      // Simulate reconnect scenario: MessageFSM already exists with awaiting_input state
       const awaitingInputEvents: AgentEvent[] = [
         { type: 'start', messageId: 'msg-1', seq: 1, at: Date.now() },
         {
@@ -374,31 +372,25 @@ describe('ConversationFSM', () => {
         conversationId: 'conv-1',
       };
 
-      // Create MessageFSM from historical message (simulating initializeMessageFSMs)
       fsm.restoreMessageFSM(message);
 
-      // Verify MessageFSM is in awaiting_input state
       const msgFsm = fsm.getMessageFSM('msg-1');
       expect(msgFsm?.phase).toBe('awaiting_input');
 
-      // Now connect() - should transition to active after connected
       const connectPromise = fsm.connect();
 
-      // Wait a tick for MockEventSource to be created
       await new Promise(r => setTimeout(r, 0));
 
-      // Get the mock EventSource and emit connected event
-      const es = (fsm as any).eventSource as MockEventSource;
+      const transport = (fsm as any).transport;
+      const es = (transport as any).eventSource as MockEventSource;
       es.emit('message', { type: 'connected' });
 
       await connectPromise;
 
-      // Should be active, not connected, because MessageFSM is awaiting_input
       expect(fsm.phase).toBe('active');
     });
 
     it('should stay connected when all MessageFSMs are terminated', async () => {
-      // MessageFSM in final state
       const finalEvents: AgentEvent[] = [
         { type: 'start', messageId: 'msg-1', seq: 1, at: Date.now() },
         { type: 'final', messageId: 'msg-1', seq: 2, at: Date.now() },
@@ -420,12 +412,12 @@ describe('ConversationFSM', () => {
 
       const connectPromise = fsm.connect();
       await new Promise(r => setTimeout(r, 0));
-      const es = (fsm as any).eventSource as MockEventSource;
+      const transport = (fsm as any).transport;
+      const es = (transport as any).eventSource as MockEventSource;
       es.emit('message', { type: 'connected' });
 
       await connectPromise;
 
-      // Should stay connected because all MessageFSMs are terminated
       expect(fsm.phase).toBe('connected');
     });
   });
@@ -521,7 +513,6 @@ describe('ConversationFSM', () => {
       const handleEventSpy1 = vi.spyOn(msgFsm1, 'handleEvent');
       const handleEventSpy2 = vi.spyOn(msgFsm2, 'handleEvent');
 
-      // Simulate SSE event routing
       const event: AgentEvent = {
         type: 'stream',
         messageId: 'msg-1',
@@ -530,8 +521,6 @@ describe('ConversationFSM', () => {
         at: Date.now(),
       };
 
-      // Call handleEvent on ConversationFSM (if it exists)
-      // or manually route to MessageFSM
       msgFsm1.handleEvent(event);
 
       expect(handleEventSpy1).toHaveBeenCalledWith(event);
@@ -545,17 +534,14 @@ describe('ConversationFSM', () => {
       const msgFsm1 = fsm.getMessageFSM('msg-1')!;
       msgFsm1['sm'].transition('initialized');
 
-      // Event without messageId
       const event: AgentEvent = {
         type: 'stream',
-        messageId: '', // empty or undefined
+        messageId: '',
         content: 'Hello',
         seq: 1,
         at: Date.now(),
       };
-      void event; // event is used to document the scenario
-
-      // Manually test the routing logic
+      void event;
 
       const activeFsm = (fsm as any).getFirstActiveFSM();
       expect(activeFsm).toBeDefined();
@@ -571,9 +557,8 @@ describe('ConversationFSM', () => {
         seq: 1,
         at: Date.now(),
       };
-      void event; // event is used to document the scenario
+      void event;
 
-      // Trigger event routing with non-existent messageId
       const msgFsm = fsm.getMessageFSM('non-existent');
       expect(msgFsm).toBeUndefined();
 
@@ -586,7 +571,6 @@ describe('ConversationFSM', () => {
       fsm['sm'].transition('connecting');
       fsm['sm'].transition('connected');
 
-      // session_replaced triggers transition to idle
       expect(fsm['sm'].canTransitionTo('idle')).toBe(true);
 
       fsm['sm'].transition('idle');
@@ -599,7 +583,6 @@ describe('ConversationFSM', () => {
       fsm['sm'].transition('connected');
       fsm['sm'].transition('idle');
 
-      // Should be able to connect again
       expect(fsm['sm'].canTransitionTo('connecting')).toBe(true);
     });
   });

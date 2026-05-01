@@ -7,7 +7,7 @@ import { container, inject } from 'tsyringe';
 import { PendingMessage } from '../core/PendingMessage';
 import type { Message } from '@/shared/types/entities';
 import { Memory } from '../core/memory';
-import { SSEConnection } from '../core/SSEConnection';
+import { SSEServerTransport } from '../core/transport';
 import { TraceContext } from '../core/TraceContext';
 import type { Agent } from '../core/agent';
 import { api } from '../decorator/api';
@@ -40,23 +40,20 @@ export default class ChatController {
       return res.sendStatus(204);
     }
 
-    const sseConnection = new SSEConnection(conversationId, res);
-    session.bindConnection(sseConnection);
+    const transport = new SSEServerTransport(req, res);
 
-    req.log.info('SSE connection established', { sessionId: conversationId });
-
-    req.on('close', () => {
+    transport.addEventListener('disconnect', () => {
       req.log.info('SSE connection closed:', conversationId);
       session.handleDisconnect();
     });
 
-    req.on('error', err => {
-      const isNormalClose =
-        err.message === 'aborted' || (err as any).code === 'ECONNRESET';
-      if (!isNormalClose) {
-        req.log.error('SSE connection error:', err);
-      }
+    transport.addEventListener('error', (e: CustomEvent<string>) => {
+      req.log.error('SSE connection error:', e.detail);
     });
+
+    session.attachTransport(transport);
+
+    req.log.info('SSE connection established', { sessionId: conversationId });
 
     return;
   }
