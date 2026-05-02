@@ -124,7 +124,11 @@ describe('MessageFSM', () => {
   describe('handleEvent - state transitions', () => {
     it('should transition from initialized to streaming on start event', () => {
       const onTransition = vi.fn();
-      const fsm = new MessageFSM('msg-1', message, { onTransition });
+      const fsm = new MessageFSM('msg-1', message);
+      fsm.addEventListener('transition', e => {
+        const { from, to } = (e as CustomEvent).detail;
+        onTransition(from, to);
+      });
 
       fsm.handleEvent({
         type: 'start',
@@ -134,16 +138,16 @@ describe('MessageFSM', () => {
       });
 
       expect(fsm.phase).toBe('streaming');
-      expect(onTransition).toHaveBeenCalledWith(
-        fsm,
-        'initialized',
-        'streaming',
-      );
+      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
     });
 
     it('should transition from streaming to streaming on start event', () => {
       const onTransition = vi.fn();
-      const fsm = new MessageFSM('msg-1', message, { onTransition });
+      const fsm = new MessageFSM('msg-1', message);
+      fsm.addEventListener('transition', e => {
+        const { from, to } = (e as CustomEvent).detail;
+        onTransition(from, to);
+      });
       fsm['sm'].transition('initialized');
 
       fsm.handleEvent({
@@ -154,11 +158,7 @@ describe('MessageFSM', () => {
       });
 
       expect(fsm.phase).toBe('streaming');
-      expect(onTransition).toHaveBeenCalledWith(
-        fsm,
-        'initialized',
-        'streaming',
-      );
+      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
     });
 
     it('should transition from initialized to streaming on stream event', () => {
@@ -1160,21 +1160,21 @@ describe('MessageFSM', () => {
     });
   });
 
-  describe('onTransition callback', () => {
-    it('should call onTransition with (fsm, from, to) on state change', () => {
+  describe('transition event', () => {
+    it('should dispatch transition event with { from, to } on state change', () => {
       const onTransition = vi.fn();
-      const fsm = new MessageFSM('msg-1', message, { onTransition });
+      const fsm = new MessageFSM('msg-1', message);
+      fsm.addEventListener('transition', e => {
+        const { from, to } = (e as CustomEvent).detail;
+        onTransition(from, to);
+      });
 
       fsm.start();
 
-      expect(onTransition).toHaveBeenCalledWith(
-        fsm,
-        'initialized',
-        'streaming',
-      );
+      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
     });
 
-    it('should call onTransition during replay from events', () => {
+    it('should dispatch transition event during replay from events', () => {
       const onTransition = vi.fn();
 
       const events: AgentEvent[] = [
@@ -1191,24 +1191,31 @@ describe('MessageFSM', () => {
       ];
       const msg = createMessage('msg-1', events);
 
-      MessageFSM.fromMessage(msg, { onTransition });
+      // Use constructor + manual replay so listener is attached before events fire
+      const fsm = new MessageFSM('msg-1', msg);
+      fsm.addEventListener('transition', e => {
+        const { from, to } = (e as CustomEvent).detail;
+        onTransition(from, to);
+      });
 
-      // New design: replay calls onTransition so ConversationFSM can sync state
-      expect(onTransition).toHaveBeenCalledWith(
-        expect.any(MessageFSM),
-        'initialized',
-        'streaming',
-      );
-      expect(onTransition).toHaveBeenCalledWith(
-        expect.any(MessageFSM),
-        'streaming',
-        'awaiting_input',
-      );
+      if (fsm.msg.meta?.events) {
+        (fsm as any)._message.meta.events = [];
+      }
+      for (const event of events) {
+        fsm.handleEvent(event);
+      }
+
+      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
+      expect(onTransition).toHaveBeenCalledWith('streaming', 'awaiting_input');
     });
 
-    it('should call onTransition for each event-driven transition', () => {
+    it('should dispatch transition event for each event-driven transition', () => {
       const onTransition = vi.fn();
-      const fsm = new MessageFSM('msg-1', message, { onTransition });
+      const fsm = new MessageFSM('msg-1', message);
+      fsm.addEventListener('transition', e => {
+        const { from, to } = (e as CustomEvent).detail;
+        onTransition(from, to);
+      });
       fsm['sm'].transition('initialized');
 
       fsm.handleEvent({
@@ -1217,11 +1224,7 @@ describe('MessageFSM', () => {
         seq: 1,
         at: Date.now(),
       });
-      expect(onTransition).toHaveBeenCalledWith(
-        fsm,
-        'initialized',
-        'streaming',
-      );
+      expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
 
       fsm.handleEvent({
         type: 'final',
@@ -1229,12 +1232,16 @@ describe('MessageFSM', () => {
         seq: 2,
         at: Date.now(),
       });
-      expect(onTransition).toHaveBeenCalledWith(fsm, 'streaming', 'final');
+      expect(onTransition).toHaveBeenCalledWith('streaming', 'final');
     });
 
     it('should clear awaitingInputData when leaving awaiting_input', () => {
       const onTransition = vi.fn();
-      const fsm = new MessageFSM('msg-1', message, { onTransition });
+      const fsm = new MessageFSM('msg-1', message);
+      fsm.addEventListener('transition', e => {
+        const { from, to } = (e as CustomEvent).detail;
+        onTransition(from, to);
+      });
       fsm['sm'].transition('initialized');
       fsm['sm'].transition('streaming');
 
@@ -1250,13 +1257,9 @@ describe('MessageFSM', () => {
       });
       expect(fsm.awaitingInput).not.toBeNull();
 
-      // Leave via cancel → awaitingInputData cleared by onTransition
+      // Leave via cancel → awaitingInputData cleared
       fsm.cancel();
-      expect(onTransition).toHaveBeenCalledWith(
-        fsm,
-        'awaiting_input',
-        'canceling',
-      );
+      expect(onTransition).toHaveBeenCalledWith('awaiting_input', 'canceling');
       expect(fsm.awaitingInput).toBeNull();
     });
   });

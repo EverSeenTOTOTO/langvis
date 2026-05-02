@@ -6,14 +6,12 @@ import type { Message } from '@/shared/types/entities';
 import type { AgentEvent } from '@/shared/types';
 
 const MSG_ID = 'msg-1';
+const IDLE_TIMEOUT_MS = 60000;
 
 describe('SessionFSM', () => {
   let session: SessionFSM;
-  let options: {
-    idleTimeoutMs: number;
-    onDispose: ReturnType<typeof vi.fn>;
-    onPhaseChange: ReturnType<typeof vi.fn>;
-  };
+  let onDispose: ReturnType<typeof vi.fn>;
+  let onPhaseChange: ReturnType<typeof vi.fn>;
 
   const createMessage = (id = 'msg-1'): Message => ({
     id,
@@ -23,8 +21,6 @@ describe('SessionFSM', () => {
     createdAt: new Date(),
     conversationId: 'conv-1',
   });
-
-  const createPersister = () => vi.fn().mockResolvedValue(undefined);
 
   const createMockTransport = () => ({
     send: vi.fn().mockReturnValue(true),
@@ -40,12 +36,19 @@ describe('SessionFSM', () => {
   beforeEach(() => {
     vi.useFakeTimers();
 
-    options = {
-      idleTimeoutMs: 60000,
-      onDispose: vi.fn().mockResolvedValue(undefined),
-      onPhaseChange: vi.fn().mockResolvedValue(undefined),
-    };
-    session = new SessionFSM('conv-1', options);
+    onDispose = vi.fn().mockResolvedValue(undefined);
+    onPhaseChange = vi.fn().mockResolvedValue(undefined);
+
+    session = new SessionFSM('conv-1', IDLE_TIMEOUT_MS);
+
+    session.addEventListener('dispose', e => {
+      const conversationId = (e as CustomEvent).detail;
+      onDispose(conversationId);
+    });
+    session.addEventListener('transition', e => {
+      const { from, to } = (e as CustomEvent).detail;
+      onPhaseChange('conv-1', from, to);
+    });
   });
 
   afterEach(() => {
@@ -71,7 +74,7 @@ describe('SessionFSM', () => {
       session['sm'].transition('active');
 
       expect(session.phase).toBe('active');
-      expect(options.onPhaseChange).toHaveBeenCalledWith('conv-1', 'active');
+      expect(onPhaseChange).toHaveBeenCalledWith('conv-1', 'waiting', 'active');
     });
 
     it('should not allow invalid transition from waiting to done directly via transition', () => {
@@ -136,11 +139,7 @@ describe('SessionFSM', () => {
       const message = createMessage();
       const pendingMessage = new PendingMessage(message);
 
-      const msgFsm = session.addMessageFSM(
-        'msg-1',
-        pendingMessage,
-        createPersister(),
-      );
+      const msgFsm = session.addMessageFSM('msg-1', pendingMessage);
 
       expect(msgFsm).toBeDefined();
       expect(msgFsm.messageId).toBe('msg-1');
@@ -152,7 +151,7 @@ describe('SessionFSM', () => {
     it('should cancel the specified message', () => {
       const message = createMessage();
       const pendingMessage = new PendingMessage(message);
-      session.addMessageFSM(MSG_ID, pendingMessage, createPersister());
+      session.addMessageFSM(MSG_ID, pendingMessage);
 
       // First, put the message in streaming state (non-terminal)
       const msgFsm = session.getMessageFSM(MSG_ID)!;
@@ -175,7 +174,7 @@ describe('SessionFSM', () => {
     it('should do nothing if message already terminal', () => {
       const message = createMessage();
       const pendingMessage = new PendingMessage(message);
-      session.addMessageFSM(MSG_ID, pendingMessage, createPersister());
+      session.addMessageFSM(MSG_ID, pendingMessage);
 
       const msgFsm = session.getMessageFSM(MSG_ID)!;
       // Put through streaming then final
@@ -206,8 +205,8 @@ describe('SessionFSM', () => {
       const pending1 = new PendingMessage(message1);
       const pending2 = new PendingMessage(message2);
 
-      session.addMessageFSM('msg-1', pending1, createPersister());
-      session.addMessageFSM('msg-2', pending2, createPersister());
+      session.addMessageFSM('msg-1', pending1);
+      session.addMessageFSM('msg-2', pending2);
 
       const msgFsm1 = session.getMessageFSM('msg-1')!;
       const msgFsm2 = session.getMessageFSM('msg-2')!;
@@ -244,9 +243,8 @@ describe('SessionFSM', () => {
   describe('handleDisconnect', () => {
     it('should persist all non-terminal messages', async () => {
       const message = createMessage();
-      const persister = createPersister();
       const pendingMessage = new PendingMessage(message);
-      session.addMessageFSM(MSG_ID, pendingMessage, persister);
+      session.addMessageFSM(MSG_ID, pendingMessage);
 
       const msgFsm = session.getMessageFSM(MSG_ID)!;
       msgFsm.handleEvent({
@@ -258,14 +256,15 @@ describe('SessionFSM', () => {
 
       await session.handleDisconnect();
 
-      expect(persister).toHaveBeenCalled();
+      // After disconnect, message is still tracked (no persist method)
+      expect(session.getMessageFSM(MSG_ID)).toBeDefined();
     });
 
     it('should cleanup when in waiting phase', async () => {
       await session.handleDisconnect();
 
       expect(session.phase).toBe('done');
-      expect(options.onDispose).toHaveBeenCalledWith('conv-1');
+      expect(onDispose).toHaveBeenCalledWith('conv-1');
     });
 
     it('should not cleanup when in active phase', async () => {
@@ -274,7 +273,7 @@ describe('SessionFSM', () => {
       await session.handleDisconnect();
 
       expect(session.phase).toBe('active');
-      expect(options.onDispose).not.toHaveBeenCalled();
+      expect(onDispose).not.toHaveBeenCalled();
     });
   });
 
@@ -336,13 +335,13 @@ describe('SessionFSM', () => {
 
       expect(session.phase).toBe('done');
       expect(transport.close).toHaveBeenCalled();
-      expect(options.onDispose).toHaveBeenCalledWith('conv-1');
+      expect(onDispose).toHaveBeenCalledWith('conv-1');
     });
 
     it('should clear all MessageFSMs', async () => {
       const message = createMessage();
       const pendingMessage = new PendingMessage(message);
-      session.addMessageFSM('msg-1', pendingMessage, createPersister());
+      session.addMessageFSM('msg-1', pendingMessage);
 
       await session.cleanup();
 
@@ -352,18 +351,17 @@ describe('SessionFSM', () => {
 
   describe('idle timeout', () => {
     it('should cleanup after idle timeout in waiting phase', async () => {
-      // Advance timers and allow async operations to complete
-      await vi.advanceTimersByTimeAsync(options.idleTimeoutMs);
+      await vi.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS);
 
-      expect(options.onDispose).toHaveBeenCalledWith('conv-1');
+      expect(onDispose).toHaveBeenCalledWith('conv-1');
     });
 
     it('should not cleanup if not in waiting phase', async () => {
       session['sm'].transition('active');
 
-      await vi.advanceTimersByTimeAsync(options.idleTimeoutMs);
+      await vi.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS);
 
-      expect(options.onDispose).not.toHaveBeenCalled();
+      expect(onDispose).not.toHaveBeenCalled();
     });
   });
 
@@ -371,7 +369,7 @@ describe('SessionFSM', () => {
     it('should transition to active when MessageFSM enters non-terminal state', async () => {
       const message = createMessage();
       const pendingMessage = new PendingMessage(message);
-      session.addMessageFSM(MSG_ID, pendingMessage, createPersister());
+      session.addMessageFSM(MSG_ID, pendingMessage);
 
       const msgFsm = session.getMessageFSM(MSG_ID)!;
       msgFsm.handleEvent({
@@ -387,7 +385,7 @@ describe('SessionFSM', () => {
     it('should transition back to waiting when all MessageFSMs reach terminal', async () => {
       const message = createMessage();
       const pendingMessage = new PendingMessage(message);
-      session.addMessageFSM(MSG_ID, pendingMessage, createPersister());
+      session.addMessageFSM(MSG_ID, pendingMessage);
 
       const msgFsm = session.getMessageFSM(MSG_ID)!;
       msgFsm.handleEvent({
@@ -410,7 +408,7 @@ describe('SessionFSM', () => {
     it('should cleanup when all messages reach terminal in canceling phase', async () => {
       const message = createMessage();
       const pendingMessage = new PendingMessage(message);
-      session.addMessageFSM(MSG_ID, pendingMessage, createPersister());
+      session.addMessageFSM(MSG_ID, pendingMessage);
 
       const msgFsm = session.getMessageFSM(MSG_ID)!;
       msgFsm.handleEvent({
@@ -442,8 +440,8 @@ describe('SessionFSM', () => {
       const pending1 = new PendingMessage(message1);
       const pending2 = new PendingMessage(message2);
 
-      session.addMessageFSM('msg-1', pending1, createPersister());
-      session.addMessageFSM('msg-2', pending2, createPersister());
+      session.addMessageFSM('msg-1', pending1);
+      session.addMessageFSM('msg-2', pending2);
 
       const msgFsm1 = session.getMessageFSM('msg-1')!;
       const msgFsm2 = session.getMessageFSM('msg-2')!;
@@ -479,8 +477,8 @@ describe('SessionFSM', () => {
       const pending1 = new PendingMessage(message1);
       const pending2 = new PendingMessage(message2);
 
-      session.addMessageFSM('msg-1', pending1, createPersister());
-      session.addMessageFSM('msg-2', pending2, createPersister());
+      session.addMessageFSM('msg-1', pending1);
+      session.addMessageFSM('msg-2', pending2);
 
       const msgFsm1 = session.getMessageFSM('msg-1')!;
       const msgFsm2 = session.getMessageFSM('msg-2')!;

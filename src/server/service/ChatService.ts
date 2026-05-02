@@ -1,6 +1,6 @@
 import { RedisKeys } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
-import type { MessageAttachment } from '@/shared/types/entities';
+import type { Message, MessageAttachment } from '@/shared/types/entities';
 import { SessionPhase } from '@/shared/types';
 import { generateId } from '@/shared/utils';
 import { globby } from 'globby';
@@ -18,11 +18,7 @@ import { RedisService } from './RedisService';
 import { ContextUsageService } from './ContextUsageService';
 import { ProviderService } from './ProviderService';
 import { WorkspaceService } from './WorkspaceService';
-import dayjs from 'dayjs';
 
-/**
- * Session state persisted to Redis for reconnection support.
- */
 export interface ChatSessionState {
   conversationId: string;
   phase: SessionPhase;
@@ -32,10 +28,8 @@ export interface ChatSessionState {
 }
 
 export interface PrepareTurnResult {
-  /** Full conversation history including new turn messages */
   messages: import('@/shared/entities/Message').Message[];
   assistantId: string;
-  /** The assistant placeholder message for this turn */
   assistantMessage: import('@/shared/entities/Message').Message;
 }
 
@@ -99,11 +93,7 @@ export class ChatService {
     );
   }
 
-  /**
-   * Acquire or retrieve an existing session with distributed lock.
-   */
   async acquireSession(conversationId: string): Promise<SessionFSM | null> {
-    // Check existing session first (fast path)
     const existing = this.sessions.get(conversationId);
     if (existing) {
       this.logger.info(`Session reconnected`, {
@@ -113,7 +103,6 @@ export class ChatService {
       return existing;
     }
 
-    // Try to acquire distributed lock
     const lockKey = RedisKeys.CHAT_SESSION_LOCK(conversationId);
     const lockAcquired = await this.redisService.acquireLock(lockKey, 5);
 
@@ -123,31 +112,32 @@ export class ChatService {
     }
 
     try {
-      // Double-check after acquiring lock
       const existingAfterLock = this.sessions.get(conversationId);
       if (existingAfterLock) return existingAfterLock;
 
-      // Check for zombie session (server restarted while agent was running)
       if (await this.detectAndCleanupZombie(conversationId)) {
         return null;
       }
 
       this.logger.info(`Session created`, { sessionId: conversationId });
 
-      const session = new SessionFSM(conversationId, {
-        idleTimeoutMs: 30_000,
-        onDispose: async (id: string) => {
-          this.sessions.delete(id);
-          await this.redisService.del(RedisKeys.CHAT_SESSION(id));
-        },
-        onPhaseChange: async (id: string, phase: SessionPhase) => {
-          await this.updateSessionPhase(id, phase);
-        },
+      const session = new SessionFSM(conversationId, 30_000);
+
+      session.addEventListener('dispose', (e: Event) => {
+        const id = (e as CustomEvent<string>).detail;
+        this.sessions.delete(id);
+        this.redisService.del(RedisKeys.CHAT_SESSION(id));
+      });
+
+      session.addEventListener('transition', (e: Event) => {
+        const { to } = (
+          e as CustomEvent<{ from: SessionPhase; to: SessionPhase }>
+        ).detail;
+        this.updateSessionPhase(conversationId, to);
       });
 
       this.sessions.set(conversationId, session);
 
-      // Persist session state to Redis
       await this.redisService.set(
         RedisKeys.CHAT_SESSION(conversationId),
         {
@@ -166,43 +156,33 @@ export class ChatService {
     }
   }
 
-  /**
-   * Detect and cleanup zombie session/message state after server restart.
-   */
   async detectAndCleanupZombie(conversationId: string): Promise<boolean> {
     const state = await this.getSessionState(conversationId);
 
-    // No Redis state = no zombie
     if (!state) return false;
 
-    // Memory has session = not zombie
     if (this.sessions.has(conversationId)) return false;
 
-    // done or waiting = safe to cleanup
     if (state.phase === 'done' || state.phase === 'waiting') {
       await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
       return false;
     }
 
-    // active / canceling / error + no memory = zombie
     this.logger.warn(`Zombie session detected`, {
       sessionId: conversationId,
       phase: state.phase,
     });
 
-    // Find all non-terminal assistant messages
     const zombieMessages =
       await this.conversationService.findNonTerminalAssistantMessages(
         conversationId,
       );
 
     if (zombieMessages.length === 0) {
-      // All messages have terminal state, safe cleanup
       await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
       return false;
     }
 
-    // Mark all zombie messages as error
     const errorEvent = {
       type: 'error' as const,
       messageId: 'zombie',
@@ -225,13 +205,9 @@ export class ChatService {
 
     await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
 
-    // Return false to allow creating a new session
     return false;
   }
 
-  /**
-   * Prepare messages for a new turn: construct, pre-generate IDs, async persist.
-   */
   async prepareTurn(params: {
     conversationId: string;
     userId: string;
@@ -254,7 +230,6 @@ export class ChatService {
       assistantId: preGeneratedAssistantId,
     } = params;
 
-    // Load existing history
     const existingMessages =
       await this.conversationService.getMessagesByConversationId(
         conversationId,
@@ -263,10 +238,9 @@ export class ChatService {
 
     const baseTime = Date.now();
     let index = 0;
-    const newMessages: import('@/shared/entities/Message').Message[] = [];
+    const newMessages: Message[] = [];
 
     if (isFirstTurn) {
-      // 1. System message
       newMessages.push({
         id: generateId('msg'),
         role: Role.SYSTEM,
@@ -277,12 +251,10 @@ export class ChatService {
         conversationId,
       });
 
-      // 2. Session context (hidden user message)
       const workDir = await this.workspaceService.getWorkDir(conversationId);
       const sessionContext = `<session-context>
 Conversation ID: ${conversationId}
 User ID: ${userId}
-Current Time: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}
 Workspace Directory: ${workDir}
 </session-context>`;
 
@@ -296,7 +268,6 @@ Workspace Directory: ${workDir}
         conversationId,
       });
 
-      // 3. Context (optional hidden user message)
       if (context) {
         newMessages.push({
           id: generateId('msg'),
@@ -310,7 +281,6 @@ Workspace Directory: ${workDir}
       }
     }
 
-    // 4. User message
     newMessages.push({
       id: generateId('msg'),
       ...userMessage,
@@ -318,7 +288,6 @@ Workspace Directory: ${workDir}
       conversationId,
     });
 
-    // 5. Assistant placeholder
     const assistantId = preGeneratedAssistantId ?? generateId('msg');
     const assistantMessage: import('@/shared/entities/Message').Message = {
       id: assistantId,
@@ -331,7 +300,6 @@ Workspace Directory: ${workDir}
     };
     newMessages.push(assistantMessage);
 
-    // 6. Async persist (fire and forget)
     this.conversationService
       .batchAddMessages(conversationId, newMessages)
       .catch(err => {
@@ -345,9 +313,6 @@ Workspace Directory: ${workDir}
     };
   }
 
-  /**
-   * Run agent execution loop, driving MessageFSM via events.
-   */
   async runSession(
     session: SessionFSM,
     agent: Agent,
@@ -385,10 +350,8 @@ Workspace Directory: ${workDir}
           );
         }
 
-        // Update MessageFSM
         messageFSM.handleEvent(event);
 
-        // Send via SSE
         if (!session.send(event)) {
           this.logger.warn(
             `SSE not connected for ${session.conversationId}, event persisted`,
@@ -398,7 +361,6 @@ Workspace Directory: ${workDir}
         if (event.type === 'error') break;
       }
     } catch (err) {
-      // If error is due to abort, don't treat as error - let finally handle cancel
       if (messageFSM.ctx.signal.aborted) {
         this.logger.info(
           `Agent execution aborted session=${session.conversationId}`,
@@ -410,17 +372,16 @@ Workspace Directory: ${workDir}
       if (messageFSM.ctx.signal.aborted) {
         this.handleAgentCancel(messageFSM, session);
       }
-      // Trigger memory turn-complete hook before persist
-      // so that summaries can be persisted together with the message
-      await memory.onTurnComplete(messageFSM.message);
 
-      await messageFSM.persist();
+      await memory.completeTurn(messageFSM.message);
 
-      // Calculate context usage after persist (includes assistant reply)
-      await messageFSM.ctx.pushContextUsage([
-        ...(await memory.summarize()),
-        messageFSM.message,
-      ]);
+      await this.conversationService.updateMessage(
+        messageFSM.message.id,
+        messageFSM.message.content,
+        messageFSM.message.meta,
+      );
+
+      await this.pushContextUsage(session, messageFSM);
 
       const totalTime = Date.now() - startTime;
       const ttft = firstTokenTime ? firstTokenTime - startTime : null;
@@ -432,49 +393,41 @@ Workspace Directory: ${workDir}
     }
   }
 
-  /**
-   * Setup context usage callback for ExecutionContext.
-   * Agent/tool can call ctx.pushContextUsage(messages) to report context usage.
-   */
-  setupContextUsageCallback(
+  private async pushContextUsage(
     session: SessionFSM,
     messageFSM: MessageFSM,
-    modelId: string | undefined,
-  ): void {
-    if (!modelId) return;
+  ): Promise<void> {
+    const memory = session.memory;
+    if (!memory) return;
 
-    const model = this.providerService.getModel(modelId);
+    const messages = [...(await memory.summarize()), messageFSM.message];
+
+    const modelId = (messageFSM.message as any).modelId as string | undefined;
+    const model = modelId ? this.providerService.getModel(modelId) : undefined;
+
     if (!model?.contextSize) return;
 
-    messageFSM.ctx.setOnPushContextUsage(async messages => {
-      const memory = session.memory;
-      if (!memory) return;
+    try {
+      const used = estimateTokens(messages, modelId!);
+      const total = model.contextSize;
 
-      try {
-        const used = estimateTokens(messages, modelId);
-        const total = model.contextSize!;
+      this.contextUsageService.set(session.conversationId, { used, total });
 
-        // Store in context usage service
-        this.contextUsageService.set(session.conversationId, { used, total });
+      session.send({
+        type: 'context_usage',
+        messageId: messageFSM.messageId,
+        used,
+        total,
+        seq: Date.now(),
+        at: Date.now(),
+      });
 
-        // Send context_usage event to client
-        session.send({
-          type: 'context_usage',
-          messageId: messageFSM.messageId,
-          used,
-          total,
-          seq: Date.now(),
-          at: Date.now(),
-        });
-
-        // Notify memory of context usage change
-        await memory.onContextUsageChange({ used, total });
-      } catch (err) {
-        this.logger.warn(
-          `Failed to calculate context usage: ${(err as Error)?.message}`,
-        );
-      }
-    });
+      await memory.notifyContextUsage({ used, total });
+    } catch (err) {
+      this.logger.warn(
+        `Failed to calculate context usage: ${(err as Error)?.message}`,
+      );
+    }
   }
 
   private handleAgentError(
@@ -499,7 +452,6 @@ Workspace Directory: ${workDir}
       `Agent cancelled: ${reason} session=${session.conversationId}`,
     );
     const cancelledEvent = messageFSM.ctx.agentCancelledEvent(reason);
-    // Send event BEFORE updating FSM state, otherwise cleanup may close SSE
     messageFSM.handleEvent(cancelledEvent);
     session.send(cancelledEvent);
   }

@@ -9,7 +9,6 @@ const MSG_ID = 'msg-1';
 
 describe('MessageFSM (server)', () => {
   let message: Message;
-  let persister: ReturnType<typeof vi.fn>;
   let pendingMessage: PendingMessage;
   let onTransition: ReturnType<typeof vi.fn>;
 
@@ -24,10 +23,18 @@ describe('MessageFSM (server)', () => {
 
   beforeEach(() => {
     message = createMessage();
-    persister = vi.fn().mockResolvedValue(undefined);
     pendingMessage = new PendingMessage(message);
     onTransition = vi.fn();
   });
+
+  const createFSM = (): MessageFSM => {
+    const fsm = new MessageFSM(MSG_ID, pendingMessage);
+    fsm.addEventListener('transition', e => {
+      const { from, to } = (e as CustomEvent).detail;
+      onTransition(MSG_ID, from, to);
+    });
+    return fsm;
+  };
 
   describe('initial state', () => {
     it('should start with initialized phase', () => {
@@ -52,7 +59,7 @@ describe('MessageFSM (server)', () => {
 
   describe('handleEvent - state transitions', () => {
     it('should transition from initialized to streaming on start event', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
 
       fsm.handleEvent({
         type: 'start',
@@ -70,7 +77,7 @@ describe('MessageFSM (server)', () => {
     });
 
     it('should transition from initialized to streaming on stream event', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
 
       fsm.handleEvent({
         type: 'stream',
@@ -84,7 +91,7 @@ describe('MessageFSM (server)', () => {
     });
 
     it('should transition from initialized to streaming on thought event', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
 
       fsm.handleEvent({
         type: 'thought',
@@ -98,7 +105,7 @@ describe('MessageFSM (server)', () => {
     });
 
     it('should transition from initialized to streaming on tool_call event', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
 
       fsm.handleEvent({
         type: 'tool_call',
@@ -210,7 +217,7 @@ describe('MessageFSM (server)', () => {
 
   describe('handleEvent - awaiting_input', () => {
     it('should transition to awaiting_input on tool_progress with awaiting_input status', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
       fsm.handleEvent({
         type: 'start',
         messageId: MSG_ID,
@@ -232,7 +239,7 @@ describe('MessageFSM (server)', () => {
     });
 
     it('should transition from awaiting_input to streaming on tool_result', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
       fsm.handleEvent({
         type: 'start',
         messageId: MSG_ID,
@@ -264,7 +271,7 @@ describe('MessageFSM (server)', () => {
     });
 
     it('should transition from awaiting_input to streaming on tool_error', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
       fsm.handleEvent({
         type: 'start',
         messageId: MSG_ID,
@@ -296,7 +303,7 @@ describe('MessageFSM (server)', () => {
     });
 
     it('should transition from awaiting_input to canceled on cancelled event', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
       fsm.handleEvent({
         type: 'start',
         messageId: MSG_ID,
@@ -327,7 +334,7 @@ describe('MessageFSM (server)', () => {
     });
 
     it('should transition from awaiting_input to error on error event', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
       fsm.handleEvent({
         type: 'start',
         messageId: MSG_ID,
@@ -405,7 +412,7 @@ describe('MessageFSM (server)', () => {
 
   describe('cancel', () => {
     it('should transition to canceling from initialized', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
 
       fsm.cancel();
 
@@ -413,7 +420,7 @@ describe('MessageFSM (server)', () => {
     });
 
     it('should transition to canceling from streaming', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
       fsm.handleEvent({
         type: 'start',
         messageId: MSG_ID,
@@ -427,7 +434,7 @@ describe('MessageFSM (server)', () => {
     });
 
     it('should transition to canceling from awaiting_input', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
       fsm.handleEvent({
         type: 'start',
         messageId: MSG_ID,
@@ -450,7 +457,7 @@ describe('MessageFSM (server)', () => {
     });
 
     it('should not cancel from terminal state', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
       fsm.handleEvent({
         type: 'start',
         messageId: MSG_ID,
@@ -472,46 +479,12 @@ describe('MessageFSM (server)', () => {
     });
 
     it('should not cancel from canceling state', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
       fsm.cancel();
 
       fsm.cancel(); // Second cancel
 
       expect(onTransition).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('persist', () => {
-    it('should persist the message after events', async () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, {
-        onPersist: persister,
-      });
-      fsm.handleEvent({
-        type: 'start',
-        messageId: MSG_ID,
-        seq: 1,
-        at: Date.now(),
-      });
-      fsm.handleEvent({
-        type: 'final',
-        messageId: MSG_ID,
-        seq: 2,
-        at: Date.now(),
-      });
-
-      await fsm.persist();
-
-      expect(persister).toHaveBeenCalled();
-    });
-
-    it('should call onPersist with message', async () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, {
-        onPersist: persister,
-      });
-
-      await fsm.persist();
-
-      expect(persister).toHaveBeenCalledWith(message);
     });
   });
 
@@ -546,7 +519,7 @@ describe('MessageFSM (server)', () => {
 
   describe('transition validation', () => {
     it('should not allow invalid transition from initialized to final', () => {
-      const fsm = new MessageFSM(MSG_ID, pendingMessage, { onTransition });
+      const fsm = createFSM();
 
       fsm.handleEvent({
         type: 'final',

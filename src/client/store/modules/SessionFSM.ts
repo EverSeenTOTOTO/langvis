@@ -15,52 +15,64 @@ const VALID_TRANSITIONS: Record<ConversationPhase, ConversationPhase[]> = {
   canceled: ['connecting'],
 };
 
-export interface ConversationFSMOptions {
-  onEvent: (conversationId: string, event: AgentEvent) => void;
-  onError: (conversationId: string, error: string) => void;
-  onRefreshMessages: (conversationId: string) => void;
-  onContextUsage?: (
-    conversationId: string,
-    used: number,
-    total: number,
-  ) => void;
+export interface SessionFSMEventMap {
+  transition: CustomEvent<{
+    from: ConversationPhase;
+    to: ConversationPhase;
+  }>;
+  dispose: Event;
+  message: CustomEvent<AgentEvent>;
 }
 
-export class ConversationFSM {
+export class SessionFSM {
   readonly conversationId: string;
 
   private _conversation: Conversation | null = null;
   private transport: SSEClientTransport | null = null;
-  private options: ConversationFSMOptions;
   private messageFSMs = new Map<string, MessageFSM>();
   private _phase: ConversationPhase;
   private sm: StateMachine<ConversationPhase>;
 
-  constructor(conversationId: string, options: ConversationFSMOptions) {
+  constructor(conversationId: string) {
     this.conversationId = conversationId;
-    this.options = options;
     this._phase = 'idle';
 
     this.sm = new StateMachine({
       initialPhase: 'idle',
       transitions: VALID_TRANSITIONS,
-      onTransition: (from, to) => {
-        this._phase = to;
-        console.log(
-          `[ConversationFSM] ${this.conversationId}: ${from} -> ${to}`,
-        );
-      },
     });
 
-    makeAutoObservable<this, 'transport' | 'options' | 'messageFSMs' | 'sm'>(
-      this,
-      {
-        transport: false,
-        options: false,
-        messageFSMs: false,
-        sm: false,
-      },
-    );
+    this.sm.addEventListener('transition', e => {
+      this._phase = (e as CustomEvent).detail.to;
+    });
+
+    makeAutoObservable<this, 'transport' | 'messageFSMs' | 'sm'>(this, {
+      transport: false,
+      messageFSMs: false,
+      sm: false,
+    });
+  }
+
+  addEventListener<K extends keyof SessionFSMEventMap>(
+    type: K,
+    listener: (ev: SessionFSMEventMap[K]) => void,
+  ): void;
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ): void;
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ): void {
+    this.sm.addEventListener(type, listener);
+  }
+
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ): void {
+    this.sm.removeEventListener(type, listener);
   }
 
   // === Entity access ===
@@ -98,9 +110,8 @@ export class ConversationFSM {
   restoreMessageFSM(message: Message): MessageFSM {
     let fsm = this.messageFSMs.get(message.id);
     if (!fsm) {
-      fsm = MessageFSM.fromMessage(message, {
-        onTransition: this.createMessageOnTransition(),
-      });
+      fsm = MessageFSM.fromMessage(message);
+      this.bindMessageFSMListeners(fsm);
       this.messageFSMs.set(message.id, fsm);
     }
     return fsm;
@@ -109,9 +120,8 @@ export class ConversationFSM {
   createMessageFSM(msgId: string, message: Message): MessageFSM {
     let fsm = this.messageFSMs.get(msgId);
     if (!fsm) {
-      fsm = new MessageFSM(msgId, message, {
-        onTransition: this.createMessageOnTransition(),
-      });
+      fsm = new MessageFSM(msgId, message);
+      this.bindMessageFSMListeners(fsm);
       this.messageFSMs.set(msgId, fsm);
     } else {
       fsm.setMessage(message);
@@ -119,8 +129,8 @@ export class ConversationFSM {
     return fsm;
   }
 
-  private createMessageOnTransition() {
-    return (fsm: MessageFSM) => {
+  private bindMessageFSMListeners(fsm: MessageFSM): void {
+    fsm.addEventListener('transition', () => {
       if (fsm.isTerminated) {
         this.onMessageTerminated();
         return;
@@ -128,9 +138,8 @@ export class ConversationFSM {
 
       if (fsm.isActive) {
         this.onMessageActive();
-        return;
       }
-    };
+    });
   }
 
   private onMessageActive(): void {
@@ -181,17 +190,17 @@ export class ConversationFSM {
     });
 
     transport.addEventListener('disconnect', () => {
-      if (this.phase === 'connecting') {
+      if (
+        this.phase === 'connecting' ||
+        this.phase === 'connected' ||
+        this.phase === 'active'
+      ) {
         this.sm.transition('error');
-      } else if (this.phase === 'connected' || this.phase === 'active') {
-        this.sm.transition('error');
-        this.options.onError(this.conversationId, 'SSE connection lost');
       }
     });
 
-    transport.addEventListener('error', (e: CustomEvent<string>) => {
+    transport.addEventListener('error', () => {
       this.sm.transition('error');
-      this.options.onError(this.conversationId, e.detail);
     });
 
     return transport.connect().then(() => {
@@ -263,16 +272,6 @@ export class ConversationFSM {
   // === Private methods ===
 
   private handleEvent(event: AgentEvent): void {
-    // Handle context_usage event separately - not message-specific
-    if (event.type === 'context_usage') {
-      this.options.onContextUsage?.(
-        this.conversationId,
-        event.used,
-        event.total,
-      );
-      return;
-    }
-
     // Route event to the corresponding MessageFSM by messageId
     const messageId = (event as any).messageId as string | undefined;
     if (messageId) {
@@ -280,27 +279,17 @@ export class ConversationFSM {
       if (messageFSM) {
         messageFSM.handleEvent(event);
       } else {
-        console.warn(`[ConversationFSM] MessageFSM not found for ${messageId}`);
+        console.warn(`[SessionFSM] MessageFSM not found for ${messageId}`);
       }
     } else {
-      // Fallback: dispatch to first active FSM (backward compatibility)
       const activeFsm = this.getFirstActiveFSM();
       if (activeFsm) {
         activeFsm.handleEvent(event);
       }
     }
 
-    // Forward to ChatStore for backward compatibility
-    this.options.onEvent(this.conversationId, event);
-
-    // Handle terminal events
-    if (
-      event.type === 'final' ||
-      event.type === 'cancelled' ||
-      event.type === 'error'
-    ) {
-      this.options.onRefreshMessages(this.conversationId);
-    }
+    // Forward business event to listeners
+    this.sm.dispatchEvent(new CustomEvent('message', { detail: event }));
   }
 
   private getFirstActiveFSM(): MessageFSM | undefined {
@@ -317,17 +306,7 @@ export class ConversationFSM {
 
   private reset(): void {
     this.closeTransport();
-    // Reset state machine to idle
+    this.sm.reset();
     this._phase = 'idle';
-    this.sm = new StateMachine({
-      initialPhase: 'idle',
-      transitions: VALID_TRANSITIONS,
-      onTransition: (from, to) => {
-        this._phase = to;
-        console.log(
-          `[ConversationFSM] ${this.conversationId}: ${from} -> ${to}`,
-        );
-      },
-    });
   }
 }

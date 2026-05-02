@@ -39,59 +39,57 @@ export interface AwaitingInputData {
   schema: Record<string, unknown>;
 }
 
-export interface MessageFSMOptions {
-  onTransition?: (
-    fsm: MessageFSM,
-    from: MessagePhase,
-    to: MessagePhase,
-  ) => void;
-}
-
 export class MessageFSM {
-  private _messageId: string;
   private _message: Message;
   private _awaitingInputData: AwaitingInputData | null = null;
   private _phase: MessagePhase;
   private sm: StateMachine<MessagePhase>;
 
-  constructor(
-    messageId: string,
-    message: Message,
-    options?: MessageFSMOptions,
-  ) {
-    this._messageId = messageId;
+  constructor(_messageId: string, message: Message) {
     this._message = message;
     this._phase = 'initialized';
 
     this.sm = new StateMachine({
       initialPhase: 'initialized',
       transitions: DEFAULT_TRANSITIONS,
-      onTransition: (from, to) => {
-        this._phase = to;
-        console.log(`[MessageFSM] ${this._messageId}: ${from} -> ${to}`);
-        if (from === 'awaiting_input') this._awaitingInputData = null;
-        options?.onTransition?.(this, from, to);
-      },
     });
 
-    makeAutoObservable<this, 'sm'>(this, { sm: false });
+    this.sm.addEventListener('transition', e => {
+      const { from, to } = (e as CustomEvent).detail;
+      this._phase = to;
+      if (from === 'awaiting_input') this._awaitingInputData = null;
+    });
+
+    makeAutoObservable<this, 'sm'>(this, {
+      sm: false,
+    });
+  }
+
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ): void {
+    this.sm.addEventListener(type, listener);
+  }
+
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ): void {
+    this.sm.removeEventListener(type, listener);
   }
 
   // === Factory method for historical messages ===
 
-  static fromMessage(msg: Message, options?: MessageFSMOptions): MessageFSM {
-    // Save events before creating FSM (MobX may wrap the message object)
+  static fromMessage(msg: Message): MessageFSM {
     const events = msg.meta?.events ? [...msg.meta.events] : [];
 
-    const fsm = new MessageFSM(msg.id, msg, options);
+    const fsm = new MessageFSM(msg.id, msg);
 
-    // Clear events on FSM's internal message (may be a MobX proxy)
     if (fsm._message.meta?.events) {
       fsm._message.meta.events = [];
     }
 
-    // Replay events to restore state, triggering onTransition callbacks
-    // so ConversationFSM can sync aggregate state (e.g., detect awaiting_input)
     for (const event of events) {
       fsm.handleEvent(event);
     }
@@ -224,7 +222,6 @@ export class MessageFSM {
   }
 
   replaceMessageId(newId: string): void {
-    this._messageId = newId;
     this._message.id = newId;
   }
 
@@ -238,7 +235,6 @@ export class MessageFSM {
     if (!this._message.meta) {
       this._message.meta = { events: [event] };
     } else {
-      // Create new array to trigger MobX reactivity
       this._message.meta = {
         ...this._message.meta,
         events: [...(this._message.meta.events ?? []), event],
@@ -252,7 +248,6 @@ export class MessageFSM {
         this.appendEvent(event);
         break;
 
-      // stream msg will never append to reduce memory
       case 'stream':
         this._message.content += event.content;
         break;

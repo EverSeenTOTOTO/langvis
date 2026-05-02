@@ -4,7 +4,6 @@ import { generateId } from '@/shared/utils';
 import { Conversation } from '@/shared/entities/Conversation';
 import { EmailEntity } from '@/shared/entities/Email';
 import { Role } from '@/shared/entities/Message';
-import type { Message } from '@/shared/types/entities';
 import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../core/agent';
@@ -236,16 +235,7 @@ export default class EmailController {
     memory.setContext(messages);
 
     const pendingMessage = new PendingMessage(assistantMessage);
-    const messageFSM = session.addMessageFSM(
-      assistantId,
-      pendingMessage,
-      (message: Message) => this.conversationService.saveMessage(message),
-    );
-
-    // Setup context usage callback for agent/tool to report usage
-    const modelId = (conversation.config as Record<string, any>)?.model
-      ?.modelId;
-    this.chatService.setupContextUsageCallback(session, messageFSM, modelId);
+    session.addMessageFSM(assistantId, pendingMessage);
 
     this.chatService.runSession(
       session,

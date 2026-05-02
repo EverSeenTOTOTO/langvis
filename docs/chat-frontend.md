@@ -1,20 +1,17 @@
 # Chat 前端状态机设计
 
-> 日期：2026-04-06
-> 状态：已批准
-
 ## 设计原则
 
 1. **与后端状态命名统一**：使用 `initialized` 替代 `placeholder`/`loading`，与后端 MessagePhase 保持一致。
 2. **事件重放兼容**：SSE 重连时，后端会先重放所有累积事件，最后发送 `connected`。前端必须正确处理重放期间的事件流。
-3. **无静默转换**：所有状态转换触发 `onTransition` 回调，确保 ConversationFSM 能同步聚合状态。
+3. **无静默转换**：所有状态转换触发 `onTransition` 回调，确保 SessionFSM 能同步聚合状态。
 4. **事件路由精确**：通过 `messageId` 精确路由事件到对应 MessageFSM，不再使用「最后一条消息」兜底。
 
 ## 分层概念
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    ConversationFSM                           │
+│                    SessionFSM                           │
 │  会话层：管理 SSE 连接生命周期，聚合消息状态                  │
 │  phase: idle | connecting | connected | active | ...         │
 └─────────────────────────────────────────────────────────────┘
@@ -49,14 +46,14 @@
     ◄────────────── 收到 connected
     │
     ▼
-ConversationFSM 检查是否有活跃 MessageFSM
+SessionFSM 检查是否有活跃 MessageFSM
     ├── 有 ──► transition('active')
     └── 无 ──► 保持 connected
 ```
 
 **关键保证**：收到 `connected` 时，所有历史事件已处理完毕，状态已同步。
 
-### ConversationFSM.connect()
+### SessionFSM.connect()
 
 ```typescript
 connect(): Promise<void> {
@@ -130,7 +127,7 @@ connect(): Promise<void> {
 }
 ```
 
-## 2. 会话层状态机 ConversationFSM
+## 2. 会话层状态机 SessionFSM
 
 ### 状态定义
 
@@ -175,7 +172,7 @@ canceled ──► connecting   （重新激活）
 
 ### Phase 同步机制
 
-ConversationFSM 通过给每个 MessageFSM 传入 `onTransition` 回调来感知消息状态变化：
+SessionFSM 通过给每个 MessageFSM 传入 `onTransition` 回调来感知消息状态变化：
 
 ```typescript
 private createMessageOnTransition() {
@@ -271,7 +268,7 @@ static fromMessage(msg: Message, options?: MessageFSMOptions): MessageFSM {
   const events = msg.meta?.events ?? [];
 
   // 重放历史事件，正常触发 transition（非静默）
-  // 这样 ConversationFSM 能感知到 awaiting_input 等状态
+  // 这样 SessionFSM 能感知到 awaiting_input 等状态
   for (const event of events) {
     fsm.handleEvent(event);
   }
@@ -280,7 +277,7 @@ static fromMessage(msg: Message, options?: MessageFSMOptions): MessageFSM {
 }
 ```
 
-**注意**：与旧设计不同，不再使用 `silentTransition`。重放历史事件时正常触发 `onTransition`，确保 ConversationFSM 正确聚合状态。
+**注意**：与旧设计不同，不再使用 `silentTransition`。重放历史事件时正常触发 `onTransition`，确保 SessionFSM 正确聚合状态。
 
 ### 核心接口
 
@@ -399,10 +396,10 @@ private resolveTargetPhase(event: AgentEvent): MessagePhase | null {
 ```typescript
 class ChatStore {
   // 会话管理
-  private sessions = new Map<string, ConversationFSM>();
+  private sessions = new Map<string, SessionFSM>();
 
-  acquireSession(conversationId: string): ConversationFSM;
-  getSession(conversationId: string): ConversationFSM | undefined;
+  acquireSession(conversationId: string): SessionFSM;
+  getSession(conversationId: string): SessionFSM | undefined;
 
   // 核心流程
   async startChat(params: StartChatRequest): Promise<void>;
@@ -477,7 +474,7 @@ async activateConversation(conversationId: string): Promise<void> {
 | 组件                     | 数据来源                                  |
 | ------------------------ | ----------------------------------------- |
 | `AssistantMessage.tsx`   | `MessageFSM.content`, `MessageFSM.phase`  |
-| `Chat/index.tsx`         | `ConversationFSM.phase`                   |
+| `Chat/index.tsx`         | `SessionFSM.phase`                        |
 | `UniversalEventRenderer` | `MessageFSM.toolCallTimeline`, `thoughts` |
 | `HumanInputForm`         | `MessageFSM.awaitingInput`                |
 | `CancelButton`           | `MessageFSM.isCancellable`                |
@@ -487,7 +484,7 @@ async activateConversation(conversationId: string): Promise<void> {
 ```
 src/client/store/modules/
 ├── chat.ts                 # ChatStore（会话管理、流程编排）
-├── ConversationFSM.ts      # 会话层状态机
+├── SessionFSM.ts      # 会话层状态机
 ├── MessageFSM.ts           # 消息层状态机
 └── conversation.ts         # ConversationStore（消息数据持久化）
 

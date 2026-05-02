@@ -5,7 +5,6 @@ import {
 import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
 import { PendingMessage } from '../core/PendingMessage';
-import type { Message } from '@/shared/types/entities';
 import { Memory } from '../core/memory';
 import { SSEServerTransport } from '../core/transport';
 import { TraceContext } from '../core/TraceContext';
@@ -197,18 +196,9 @@ export default class ChatController {
 
     res.status(200).json({ success: true, messageId: assistantId });
 
-    // Create PendingMessage and register with persist callback
+    // Create PendingMessage and register with session
     const pendingMessage = new PendingMessage(assistantMessage);
-    const messageFSM = session.addMessageFSM(
-      assistantId,
-      pendingMessage,
-      (message: Message) => this.conversationService.saveMessage(message),
-    );
-
-    // Setup context usage callback for agent/tool to report usage
-    const modelId = (conversation.config as Record<string, any>)?.model
-      ?.modelId;
-    this.chatService.setupContextUsageCallback(session, messageFSM, modelId);
+    session.addMessageFSM(assistantId, pendingMessage);
 
     this.chatService.runSession(
       session,
