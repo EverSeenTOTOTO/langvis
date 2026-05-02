@@ -1,18 +1,22 @@
+export interface StateMachineEventMap<TPhase extends string> {
+  transition: CustomEvent<{ from: TPhase; to: TPhase }>;
+}
+
 export interface StateMachineOptions<TPhase extends string> {
   initialPhase: TPhase;
   transitions: Record<TPhase, TPhase[]>;
-  onTransition?: (from: TPhase, to: TPhase) => void;
 }
 
-export class StateMachine<TPhase extends string> {
+export class StateMachine<TPhase extends string> extends EventTarget {
   private _phase: TPhase;
+  private readonly initialPhase: TPhase;
   private readonly transitions: Record<TPhase, TPhase[]>;
-  private readonly onTransition?: (from: TPhase, to: TPhase) => void;
 
   constructor(options: StateMachineOptions<TPhase>) {
+    super();
     this._phase = options.initialPhase;
+    this.initialPhase = options.initialPhase;
     this.transitions = options.transitions;
-    this.onTransition = options.onTransition;
   }
 
   get phase(): TPhase {
@@ -27,7 +31,7 @@ export class StateMachine<TPhase extends string> {
     if (!this.canTransitionTo(to)) return false;
     const from = this._phase;
     this._phase = to;
-    this.onTransition?.(from, to);
+    this.dispatchEvent(new CustomEvent('transition', { detail: { from, to } }));
     return true;
   }
 
@@ -35,5 +39,24 @@ export class StateMachine<TPhase extends string> {
     if (!this.canTransitionTo(to)) return false;
     this._phase = to;
     return true;
+  }
+
+  reset(): void {
+    this._phase = this.initialPhase;
+  }
+
+  addEventListener<K extends keyof StateMachineEventMap<TPhase>>(
+    type: K,
+    listener: (ev: StateMachineEventMap<TPhase>[K]) => void,
+  ): void;
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ): void;
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ): void {
+    super.addEventListener(type, listener);
   }
 }

@@ -38,6 +38,7 @@ describe('ChatService', () => {
       getMessagesByConversationId: vi.fn().mockResolvedValue([]),
       batchAddMessages: vi.fn().mockResolvedValue([]),
       getMessages: vi.fn().mockResolvedValue([]),
+      updateMessage: vi.fn().mockResolvedValue(undefined),
     };
 
     // Create mock DatabaseService
@@ -170,8 +171,8 @@ describe('ChatService', () => {
 
       const mockMemory = {
         summarize: vi.fn().mockResolvedValue([]),
-        onTurnComplete: vi.fn(),
-        onContextUsageChange: vi.fn(),
+        completeTurn: vi.fn(),
+        notifyContextUsage: vi.fn(),
       } as unknown as Memory;
 
       session!.setMemory(mockMemory);
@@ -185,15 +186,13 @@ describe('ChatService', () => {
         conversationId: 'conv-123',
       };
 
-      const updateMessage = vi.fn().mockResolvedValue(undefined);
       const pendingMessage = new PendingMessage(mockMessage);
-      session!.addMessageFSM(mockMessage.id, pendingMessage, updateMessage);
+      session!.addMessageFSM(mockMessage.id, pendingMessage);
 
       await chatService.runSession(session!, mockAgent, {}, mockMessage.id);
 
       expect(mockAgent.call).toHaveBeenCalled();
-      expect(updateMessage).toHaveBeenCalled();
-      expect(mockMemory.onTurnComplete).toHaveBeenCalled();
+      expect(mockMemory.completeTurn).toHaveBeenCalled();
       expect(session!.phase).toBe('waiting');
     });
   });

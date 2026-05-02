@@ -15,7 +15,6 @@ const VALID_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
     'error',
     'canceling',
   ],
-  // submitting: user submits input; streaming: tool_result received
   awaiting_input: ['submitting', 'streaming', 'canceling', 'canceled', 'error'],
   submitting: ['streaming', 'error', 'canceled', 'canceling'],
   canceling: ['canceled', 'error'],
@@ -24,30 +23,19 @@ const VALID_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
   error: [],
 };
 
-export interface MessageFSMOptions {
-  onTransition?: (
-    messageId: string,
-    from: MessagePhase,
-    to: MessagePhase,
-  ) => void;
-  onPersist?: (message: Message) => Promise<unknown>;
+export interface MessageFSMEventMap {
+  transition: CustomEvent<{ from: MessagePhase; to: MessagePhase }>;
 }
 
 export class MessageFSM {
   readonly messageId: string;
   private readonly pendingMessage: PendingMessage;
-  private readonly onPersist?: MessageFSMOptions['onPersist'];
   readonly executionContext: ExecutionContext;
   private sm: StateMachine<MessagePhase>;
 
-  constructor(
-    messageId: string,
-    pendingMessage: PendingMessage,
-    options?: MessageFSMOptions,
-  ) {
+  constructor(messageId: string, pendingMessage: PendingMessage) {
     this.messageId = messageId;
     this.pendingMessage = pendingMessage;
-    this.onPersist = options?.onPersist;
     this.executionContext = new ExecutionContext(
       new AbortController(),
       messageId,
@@ -56,13 +44,28 @@ export class MessageFSM {
     this.sm = new StateMachine({
       initialPhase: 'initialized',
       transitions: VALID_TRANSITIONS,
-      onTransition: (from, to) => {
-        logger.info(`Message phase changed: ${from} -> ${to}`, {
-          messageId,
-        });
-        options?.onTransition?.(messageId, from, to);
-      },
     });
+
+    this.sm.addEventListener('transition', e => {
+      const { from, to } = (e as CustomEvent).detail;
+      logger.info(`Message phase changed: ${from} -> ${to}`, {
+        messageId,
+      });
+    });
+  }
+
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ): void {
+    this.sm.addEventListener(type, listener);
+  }
+
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ): void {
+    this.sm.removeEventListener(type, listener);
   }
 
   get ctx(): ExecutionContext {
@@ -170,9 +173,5 @@ export class MessageFSM {
     if (!this.sm.transition('canceling')) {
       this.sm.transition('canceled');
     }
-  }
-
-  async persist(): Promise<void> {
-    await this.onPersist?.(this.pendingMessage.toMessage());
   }
 }

@@ -5,11 +5,11 @@ import {
   SessionPhase,
 } from '@/shared/types';
 import { Transport } from '@/shared/transport';
+import { StateMachine } from '@/shared/utils/StateMachine';
 import logger from '../utils/logger';
 import { Memory } from './memory';
-import { MessageFSM, type MessageFSMOptions } from './MessageFSM';
+import { MessageFSM } from './MessageFSM';
 import { PendingMessage } from './PendingMessage';
-import { StateMachine } from '@/shared/utils/StateMachine';
 
 const VALID_TRANSITIONS: Record<SessionPhase, SessionPhase[]> = {
   waiting: ['active', 'done'],
@@ -19,13 +19,9 @@ const VALID_TRANSITIONS: Record<SessionPhase, SessionPhase[]> = {
   done: [],
 };
 
-export interface SessionFSMOptions {
-  idleTimeoutMs: number;
-  onDispose: (conversationId: string) => Promise<void>;
-  onPhaseChange?: (
-    conversationId: string,
-    phase: SessionPhase,
-  ) => Promise<void>;
+export interface SessionFSMEventMap {
+  transition: CustomEvent<{ from: SessionPhase; to: SessionPhase }>;
+  dispose: CustomEvent<string>;
 }
 
 export class SessionFSM {
@@ -37,34 +33,33 @@ export class SessionFSM {
   private transport: Transport<SSEMessage> | null = null;
   private messageFSMs = new Map<string, MessageFSM>();
   private idleTimeout: ReturnType<typeof setTimeout>;
-  private options: SessionFSMOptions;
 
-  constructor(conversationId: string, options: SessionFSMOptions) {
+  constructor(conversationId: string, idleTimeoutMs: number) {
     this.conversationId = conversationId;
-    this.options = options;
 
     this.sm = new StateMachine({
       initialPhase: 'waiting',
       transitions: VALID_TRANSITIONS,
-      onTransition: (_from, to) => {
-        if (to !== 'waiting') clearTimeout(this.idleTimeout);
-        logger.info(`Session phase changed: ${_from} -> ${to}`, {
-          sessionId: this.conversationId,
-        });
-        this.options.onPhaseChange?.(this.conversationId, to);
-      },
+    });
+
+    this.sm.addEventListener('transition', e => {
+      const { from, to } = (e as CustomEvent).detail;
+      if (to !== 'waiting') clearTimeout(this.idleTimeout);
+      logger.info(`Session phase changed: ${from} -> ${to}`, {
+        sessionId: this.conversationId,
+      });
     });
 
     this.idleTimeout = setTimeout(() => {
       if (this.phase === 'waiting') {
         logger.warn(
-          `Session ${this.conversationId} idle timeout after ${this.options.idleTimeoutMs}ms`,
+          `Session ${this.conversationId} idle timeout after ${idleTimeoutMs}ms`,
         );
         this.cleanup().catch(err =>
           logger.error(`Failed to cleanup session on idle timeout:`, err),
         );
       }
-    }, this.options.idleTimeoutMs);
+    }, idleTimeoutMs);
   }
 
   get phase(): SessionPhase {
@@ -79,17 +74,36 @@ export class SessionFSM {
     this._memory = memory;
   }
 
+  addEventListener<K extends keyof SessionFSMEventMap>(
+    type: K,
+    listener: (ev: SessionFSMEventMap[K]) => void,
+  ): void;
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ): void;
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ): void {
+    this.sm.addEventListener(type, listener);
+  }
+
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ): void {
+    this.sm.removeEventListener(type, listener);
+  }
+
   attachTransport(newTransport: Transport<SSEMessage>): void {
-    // 1. Close old transport if exists
     if (this.transport) {
       this.transport.disconnect();
       logger.info(`Kicked old transport for ${this.conversationId}`);
     }
 
-    // 2. Bind new transport (connected already sent by transport on construction)
     this.transport = newTransport;
 
-    // 3. Replay accumulated events from all non-terminal MessageFSMs
     for (const [messageId, messageFSM] of this.messageFSMs) {
       if (!messageFSM.isTerminated) {
         const events = messageFSM.getReplayEvents();
@@ -108,15 +122,16 @@ export class SessionFSM {
     });
   }
 
-  addMessageFSM(
-    messageId: string,
-    pendingMessage: PendingMessage,
-    onPersist?: MessageFSMOptions['onPersist'],
-  ): MessageFSM {
-    const fsm = new MessageFSM(messageId, pendingMessage, {
-      onTransition: (id, from, to) => this.onMessagePhaseChange(id, from, to),
-      onPersist,
+  addMessageFSM(messageId: string, pendingMessage: PendingMessage): MessageFSM {
+    const fsm = new MessageFSM(messageId, pendingMessage);
+
+    fsm.addEventListener('transition', e => {
+      const { to } = (
+        e as CustomEvent<{ from: MessagePhase; to: MessagePhase }>
+      ).detail;
+      this.onMessagePhaseChange(messageId, to);
     });
+
     this.messageFSMs.set(messageId, fsm);
     return fsm;
   }
@@ -147,14 +162,7 @@ export class SessionFSM {
   async handleDisconnect(): Promise<void> {
     logger.info(`SSE disconnected for ${this.conversationId}`);
 
-    // Always clear transport reference on disconnect — the connection is gone
     this.transport = null;
-
-    for (const fsm of this.messageFSMs.values()) {
-      if (!fsm.isTerminated) {
-        await fsm.persist();
-      }
-    }
 
     if (this.phase === 'waiting') {
       await this.cleanup();
@@ -174,14 +182,12 @@ export class SessionFSM {
     this.transport = null;
     this.messageFSMs.clear();
 
-    await this.options.onDispose(this.conversationId);
+    this.sm.dispatchEvent(
+      new CustomEvent('dispose', { detail: this.conversationId }),
+    );
   }
 
-  private onMessagePhaseChange(
-    _messageId: string,
-    _from: MessagePhase,
-    _to: MessagePhase,
-  ): void {
+  private onMessagePhaseChange(_messageId: string, _to: MessagePhase): void {
     const hasActive = Array.from(this.messageFSMs.values()).some(
       fsm => fsm.isActive,
     );

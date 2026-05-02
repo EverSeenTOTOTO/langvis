@@ -16,31 +16,19 @@ export abstract class Memory {
     this.windowSize = size;
   }
 
-  /**
-   * Set the context messages for this turn.
-   * Called by ChatService before agent execution.
-   * This replaces the old initialize/retrieve flow —
-   * the caller constructs messages, Memory just holds and summarizes them.
-   */
   setContext(messages: Message[]): void {
     this.context = messages;
   }
 
-  /** Get current context messages */
   protected getContext(): Message[] {
     return this.context;
   }
 
-  /**
-   * Assemble runtime context for the LLM.
-   * Default implementation returns context as-is (full history).
-   * Subclasses can override to compress/filter.
-   */
   async summarize(): Promise<Message[]> {
     return this.context;
   }
 
-  async onTurnComplete(_currentMessage?: Message): Promise<void> {}
+  async completeTurn(_currentMessage?: Message): Promise<void> {}
 
-  async onContextUsageChange(_usage: ContextUsage): Promise<void> {}
+  async notifyContextUsage(_usage: ContextUsage): Promise<void> {}
 }

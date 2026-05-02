@@ -74,13 +74,16 @@ describe('StateMachine', () => {
     });
   });
 
-  describe('onTransition callback', () => {
-    it('should call onTransition with (from, to) on valid transition', () => {
+  describe('transition event', () => {
+    it('should dispatch transition event with { from, to } on valid transition', () => {
       const cb = vi.fn();
       const sm = new StateMachine({
         initialPhase: 'idle',
         transitions: TRANSITIONS,
-        onTransition: cb,
+      });
+      sm.addEventListener('transition', e => {
+        const { from, to } = (e as CustomEvent).detail;
+        cb(from, to);
       });
 
       sm.transition('running');
@@ -89,12 +92,15 @@ describe('StateMachine', () => {
       expect(cb).toHaveBeenCalledWith('idle', 'running');
     });
 
-    it('should NOT call onTransition on invalid transition', () => {
+    it('should NOT dispatch transition event on invalid transition', () => {
       const cb = vi.fn();
       const sm = new StateMachine({
         initialPhase: 'idle',
         transitions: TRANSITIONS,
-        onTransition: cb,
+      });
+      sm.addEventListener('transition', e => {
+        const { from, to } = (e as CustomEvent).detail;
+        cb(from, to);
       });
 
       sm.transition('paused');
@@ -102,12 +108,15 @@ describe('StateMachine', () => {
       expect(cb).not.toHaveBeenCalled();
     });
 
-    it('should call onTransition for each step in a chain', () => {
+    it('should dispatch transition event for each step in a chain', () => {
       const cb = vi.fn();
       const sm = new StateMachine({
         initialPhase: 'idle',
         transitions: TRANSITIONS,
-        onTransition: cb,
+      });
+      sm.addEventListener('transition', e => {
+        const { from, to } = (e as CustomEvent).detail;
+        cb(from, to);
       });
 
       sm.transition('running');
@@ -121,12 +130,15 @@ describe('StateMachine', () => {
   });
 
   describe('silentTransition', () => {
-    it('should change phase and return true without calling onTransition', () => {
+    it('should change phase and return true without dispatching transition event', () => {
       const cb = vi.fn();
       const sm = new StateMachine({
         initialPhase: 'idle',
         transitions: TRANSITIONS,
-        onTransition: cb,
+      });
+      sm.addEventListener('transition', e => {
+        const { from, to } = (e as CustomEvent).detail;
+        cb(from, to);
       });
 
       const result = sm.silentTransition('running');
@@ -168,20 +180,18 @@ describe('StateMachine', () => {
     });
   });
 
-  describe('without onTransition callback', () => {
-    it('should work normally without onTransition callback', () => {
-      // No callback provided
+  describe('without transition event listener', () => {
+    it('should work normally without listener', () => {
       const sm = new StateMachine({
         initialPhase: 'idle',
         transitions: TRANSITIONS,
       });
 
-      // Should not throw
       expect(() => sm.transition('running')).not.toThrow();
       expect(sm.phase).toBe('running');
     });
 
-    it('should return true for valid transition without callback', () => {
+    it('should return true for valid transition without listener', () => {
       const sm = new StateMachine({
         initialPhase: 'idle',
         transitions: TRANSITIONS,
@@ -193,7 +203,7 @@ describe('StateMachine', () => {
       expect(sm.phase).toBe('running');
     });
 
-    it('should return false for invalid transition without callback', () => {
+    it('should return false for invalid transition without listener', () => {
       const sm = new StateMachine({
         initialPhase: 'idle',
         transitions: TRANSITIONS,

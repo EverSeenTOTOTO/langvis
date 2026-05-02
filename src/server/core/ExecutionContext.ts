@@ -21,22 +21,11 @@ export class ExecutionContext {
 
   private seqCounter = 0;
   private callIdStack: string[] = [];
-  private onPushContextUsage?: (messages: LlmMessage[]) => Promise<void>;
 
   constructor(
     private readonly controller: AbortController,
     private readonly messageId: string = '',
   ) {}
-
-  setOnPushContextUsage(
-    callback: (messages: LlmMessage[]) => Promise<void>,
-  ): void {
-    this.onPushContextUsage = callback;
-  }
-
-  async pushContextUsage(messages: LlmMessage[]): Promise<void> {
-    await this.onPushContextUsage?.(messages);
-  }
 
   private nextSeq(): number {
     return ++this.seqCounter;

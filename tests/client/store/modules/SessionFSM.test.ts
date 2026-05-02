@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ConversationFSM } from '@/client/store/modules/ConversationFSM';
+import { SessionFSM } from '@/client/store/modules/SessionFSM';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
 import type { AgentEvent } from '@/shared/types';
@@ -42,13 +42,9 @@ class MockEventSource {
 
 vi.stubGlobal('EventSource', MockEventSource);
 
-describe('ConversationFSM', () => {
-  let fsm: ConversationFSM;
-  let options: {
-    onEvent: ReturnType<typeof vi.fn>;
-    onError: ReturnType<typeof vi.fn>;
-    onRefreshMessages: ReturnType<typeof vi.fn>;
-  };
+describe('SessionFSM', () => {
+  let fsm: SessionFSM;
+  let onEvent: ReturnType<typeof vi.fn>;
 
   const createMessage = (id = 'msg-1'): Message => ({
     id,
@@ -60,12 +56,14 @@ describe('ConversationFSM', () => {
   });
 
   beforeEach(() => {
-    options = {
-      onEvent: vi.fn(),
-      onError: vi.fn(),
-      onRefreshMessages: vi.fn(),
-    };
-    fsm = new ConversationFSM('conv-1', options);
+    onEvent = vi.fn();
+
+    fsm = new SessionFSM('conv-1');
+
+    fsm.addEventListener('message', e => {
+      const event = (e as CustomEvent).detail as AgentEvent;
+      onEvent(event);
+    });
   });
 
   describe('initial state', () => {

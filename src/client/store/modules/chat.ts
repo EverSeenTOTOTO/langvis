@@ -13,13 +13,13 @@ import { generateId } from '@/shared/utils';
 import { message } from 'antd';
 import { makeAutoObservable, reaction } from 'mobx';
 import { inject } from 'tsyringe';
-import { ConversationFSM } from './ConversationFSM';
+import { SessionFSM } from './SessionFSM';
 import { ConversationStore } from './conversation';
 import { SettingStore } from './setting';
 
 @store()
 export class ChatStore {
-  private sessions = new Map<string, ConversationFSM>();
+  private sessions = new Map<string, SessionFSM>();
 
   constructor(
     @inject(ConversationStore) private conversationStore: ConversationStore,
@@ -68,28 +68,40 @@ export class ChatStore {
     }
   }
 
-  getSession(conversationId: string): ConversationFSM | undefined {
+  getSession(conversationId: string): SessionFSM | undefined {
     return this.sessions.get(conversationId);
   }
 
-  acquireSession(conversationId: string): ConversationFSM {
+  acquireSession(conversationId: string): SessionFSM {
     let session = this.sessions.get(conversationId);
     if (!session) {
-      session = new ConversationFSM(conversationId, {
-        onEvent: convId => {
-          if (this.conversationStore.currentConversationId !== convId) {
-            console.warn(
-              `Ignoring SSE message for non-current conversation: ${conversationId}`,
-            );
-          }
-        },
-        onError: convId => this.refreshMessages(convId),
-        onRefreshMessages: convId => this.refreshMessages(convId),
-        onContextUsage: (_convId, used, total) => {
-          this.conversationStore.contextUsage = { used, total };
-        },
+      session = new SessionFSM(conversationId);
+
+      session.addEventListener('message', (e: CustomEvent) => {
+        const event = e.detail;
+        if (event.type === 'context_usage') {
+          this.conversationStore.contextUsage = {
+            used: event.used,
+            total: event.total,
+          };
+        }
+
+        if (
+          event.type === 'final' ||
+          event.type === 'cancelled' ||
+          event.type === 'error'
+        ) {
+          this.refreshMessages(conversationId);
+        }
       });
-      // Set conversation object if available
+
+      session.addEventListener('transition', (e: CustomEvent) => {
+        const { to } = e.detail;
+        if (to === 'error') {
+          this.refreshMessages(conversationId);
+        }
+      });
+
       const conversation =
         this.conversationStore.findConversationById(conversationId);
       if (conversation) {
@@ -100,7 +112,7 @@ export class ChatStore {
     return session;
   }
 
-  get currentSession(): ConversationFSM | undefined {
+  get currentSession(): SessionFSM | undefined {
     const conversationId = this.conversationStore.currentConversationId;
     if (!conversationId) return undefined;
     return this.sessions.get(conversationId);

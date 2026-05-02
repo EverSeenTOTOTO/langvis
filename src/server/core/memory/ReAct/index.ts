@@ -12,7 +12,7 @@ export default class ReActMemory extends SlideWindowMemory {
    * Generate tool summaries from the current assistant message's events
    * and store them in meta.toolSummaries before persist.
    */
-  override async onTurnComplete(currentMessage?: Message): Promise<void> {
+  override async completeTurn(currentMessage?: Message): Promise<void> {
     if (!currentMessage || currentMessage.role !== Role.ASSIST) return;
 
     const events = currentMessage.meta?.events;
