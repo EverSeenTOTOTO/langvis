@@ -11,7 +11,13 @@ import { In } from 'typeorm';
 import { service } from '../decorator/service';
 import { DatabaseService } from './DatabaseService';
 
-const TERMINAL_EVENT_TYPES = new Set(['final', 'cancelled', 'error']);
+const NON_TERMINAL_STATUSES = new Set([
+  'initialized',
+  'streaming',
+  'awaiting_input',
+  'submitting',
+  'canceling',
+]);
 
 @service()
 export class ConversationService {
@@ -195,10 +201,10 @@ export class ConversationService {
   }
 
   /**
-   * Find all assistant messages without terminal events (final/cancelled/error).
+   * Find all assistant messages with non-terminal status.
    * Used for zombie detection after server restart.
    */
-  async findNonTerminalAssistantMessages(
+  async findActiveAssistantMessages(
     conversationId: string,
   ): Promise<Message[]> {
     const messageRepository = this.db.getRepository(MessageEntity);
@@ -207,11 +213,9 @@ export class ConversationService {
       order: { createdAt: 'ASC' },
     });
 
-    return messages.filter(msg => {
-      const events = msg.meta?.events;
-      if (!Array.isArray(events) || events.length === 0) return true;
-      return !events.some(e => TERMINAL_EVENT_TYPES.has(e.type));
-    });
+    return messages.filter(
+      msg => !msg.status || NON_TERMINAL_STATUSES.has(msg.status),
+    );
   }
 
   async getMessagesByConversationId(
@@ -250,8 +254,7 @@ export class ConversationService {
 
   async updateMessage(
     messageId: string,
-    content: string,
-    meta?: Record<string, any> | null,
+    partial: Partial<Message>,
   ): Promise<Message | null> {
     const messageRepository = this.db.getRepository(MessageEntity);
     const message = await messageRepository.findOneBy({ id: messageId });
@@ -260,10 +263,7 @@ export class ConversationService {
       return null;
     }
 
-    message.content = content;
-    if (meta !== undefined) {
-      message.meta = meta;
-    }
+    Object.assign(message, partial);
     return await messageRepository.save(message);
   }
 

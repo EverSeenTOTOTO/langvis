@@ -6,13 +6,11 @@ export class PendingMessage {
   constructor(private message: Message) {}
 
   handleEvent(event: AgentEvent): void {
-    // 1. Accumulate stream content to message
     if (event.type === 'stream') {
       this.message.content += event.content;
       return;
     }
 
-    // 2. Special handling for error event - set content
     if (event.type === 'error') {
       this.message.content = event.error;
     }
@@ -21,18 +19,14 @@ export class PendingMessage {
       this.message.content = event.reason;
     }
 
-    // 3. Persist non-stream and non-llm events to message.meta.events
     if (
       (event as Extract<AgentEvent, { type: 'tool_call' }>).toolName !==
       ToolIds.LLM_CALL
     ) {
-      if (!this.message.meta) {
-        this.message.meta = {};
+      if (!this.message.events) {
+        this.message.events = [];
       }
-      if (!this.message.meta.events) {
-        this.message.meta.events = [];
-      }
-      this.message.meta.events.push(event);
+      this.message.events.push(event);
     }
   }
 
@@ -45,6 +39,6 @@ export class PendingMessage {
   }
 
   get events(): AgentEvent[] {
-    return this.message.meta?.events ?? [];
+    return this.message.events ?? [];
   }
 }

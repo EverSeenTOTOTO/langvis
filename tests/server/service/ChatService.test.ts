@@ -181,7 +181,8 @@ describe('ChatService', () => {
         id: MSG_ID,
         role: Role.ASSIST,
         content: '',
-        meta: { events: [] },
+        events: [],
+        status: 'initialized' as const,
         createdAt: new Date(),
         conversationId: 'conv-123',
       };

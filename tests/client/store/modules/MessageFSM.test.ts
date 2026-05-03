@@ -11,7 +11,8 @@ describe('MessageFSM', () => {
     id,
     role: Role.ASSIST,
     content: '',
-    meta: { events },
+    events,
+    status: 'initialized',
     createdAt: new Date(),
     conversationId: 'conv-1',
   });
@@ -994,7 +995,7 @@ describe('MessageFSM', () => {
       const msg = createMessage('msg-1', events);
       const fsm = MessageFSM.fromMessage(msg);
 
-      expect(fsm.msg.meta?.events).toStrictEqual(events);
+      expect(fsm.msg.events).toStrictEqual(events);
     });
 
     it('should expose conversationId', () => {
@@ -1197,8 +1198,8 @@ describe('MessageFSM', () => {
       });
 
       // Clear events before replay
-      if (fsm.msg.meta?.events) {
-        fsm.msg.meta.events = [];
+      if (fsm.msg.events) {
+        fsm.msg.events = [];
       }
       for (const event of events) {
         fsm.handleEvent(event);
@@ -1476,11 +1477,11 @@ describe('MessageFSM', () => {
       const fsm = new MessageFSM('msg-1', message);
 
       const newMessage = createMessage('msg-1');
-      newMessage.meta = { events };
+      newMessage.events = events;
 
       fsm.setMessage(newMessage);
 
-      expect(fsm.msg.meta?.events).toHaveLength(1);
+      expect(fsm.msg.events).toHaveLength(1);
     });
   });
 });

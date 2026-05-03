@@ -18,13 +18,10 @@ export class PendingMessage {
       this.message.content = event.reason;
     }
 
-    if (!this.message.meta) {
-      this.message.meta = {};
+    if (!this.message.events) {
+      this.message.events = [];
     }
-    if (!this.message.meta.events) {
-      this.message.meta.events = [];
-    }
-    this.message.meta.events.push(event);
+    this.message.events.push(event);
   }
 
   get content(): string {
@@ -32,7 +29,7 @@ export class PendingMessage {
   }
 
   get events(): AgentEvent[] {
-    return this.message.meta?.events ?? [];
+    return this.message.events ?? [];
   }
 
   toMessage(): Message {
