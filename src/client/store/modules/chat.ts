@@ -234,7 +234,8 @@ export class ChatStore {
         conversationId,
         role: Role.ASSIST,
         content: '',
-        meta: { events: [] },
+        events: [],
+        status: 'initialized',
         createdAt: new Date(),
       },
     ];

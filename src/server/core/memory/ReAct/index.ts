@@ -15,7 +15,7 @@ export default class ReActMemory extends SlideWindowMemory {
   override async completeTurn(currentMessage?: Message): Promise<void> {
     if (!currentMessage || currentMessage.role !== Role.ASSIST) return;
 
-    const events = currentMessage.meta?.events;
+    const events = currentMessage.events;
     if (!events?.length) return;
 
     const timeline = buildToolTimeline(events);

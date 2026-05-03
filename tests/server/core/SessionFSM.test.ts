@@ -17,7 +17,8 @@ describe('SessionFSM', () => {
     id,
     role: Role.ASSIST,
     content: '',
-    meta: { events: [] as AgentEvent[] },
+    events: [],
+    status: 'initialized',
     createdAt: new Date(),
     conversationId: 'conv-1',
   });

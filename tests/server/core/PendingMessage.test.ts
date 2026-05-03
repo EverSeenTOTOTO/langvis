@@ -11,7 +11,8 @@ describe('PendingMessage', () => {
     id: MSG_ID,
     role: Role.ASSIST,
     content: '',
-    meta: { events: [] as AgentEvent[] },
+    events: [] as AgentEvent[],
+    status: 'initialized' as const,
     createdAt: new Date(),
     conversationId: 'conv-123',
   });
@@ -40,7 +41,7 @@ describe('PendingMessage', () => {
       expect(pending.contentLength).toBe(11);
     });
 
-    it('should persist non-stream events to meta.events', () => {
+    it('should persist non-stream events to message.events', () => {
       const msg = createMessage();
       const pending = new PendingMessage(msg);
 
@@ -56,8 +57,8 @@ describe('PendingMessage', () => {
 
       pending.handleEvent(toolCallEvent);
 
-      expect(msg.meta!.events).toHaveLength(1);
-      expect(msg.meta!.events[0]).toEqual(toolCallEvent);
+      expect(msg.events).toHaveLength(1);
+      expect(msg.events![0]).toEqual(toolCallEvent);
     });
 
     it('should not persist LLM_CALL tool events', () => {
@@ -74,7 +75,7 @@ describe('PendingMessage', () => {
         at: Date.now(),
       });
 
-      expect(msg.meta!.events).toHaveLength(0);
+      expect(msg.events).toHaveLength(0);
     });
 
     it('should set content on error event', () => {
@@ -91,12 +92,12 @@ describe('PendingMessage', () => {
       });
 
       expect(msg.content).toBe('Something went wrong');
-      expect(msg.meta!.events).toHaveLength(1);
+      expect(msg.events).toHaveLength(1);
     });
 
-    it('should initialize meta if not present', () => {
+    it('should initialize events array if not present', () => {
       const msg = createMessage();
-      (msg as any).meta = undefined;
+      (msg as any).events = undefined;
       const pending = new PendingMessage(msg);
 
       pending.handleEvent({
@@ -109,8 +110,8 @@ describe('PendingMessage', () => {
         at: Date.now(),
       });
 
-      expect(msg.meta).toBeDefined();
-      expect(msg.meta!.events).toHaveLength(1);
+      expect(msg.events).toBeDefined();
+      expect(msg.events).toHaveLength(1);
     });
 
     it('should handle multiple event types in sequence', () => {
@@ -174,7 +175,7 @@ describe('PendingMessage', () => {
       });
 
       expect(msg.content).toBe('Hello!');
-      expect(msg.meta!.events).toHaveLength(4); // start, tool_call, tool_result, final
+      expect(msg.events).toHaveLength(4); // start, tool_call, tool_result, final
     });
   });
 

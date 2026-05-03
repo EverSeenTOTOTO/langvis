@@ -1,4 +1,4 @@
-import { AgentEvent } from '.';
+import { AgentEvent, MessagePhase } from '.';
 
 export enum Role {
   SYSTEM = 'system',
@@ -18,12 +18,9 @@ export type Message = {
   role: Role;
   content: string;
   attachments?: MessageAttachment[] | null;
-  meta?:
-    | (Record<string, unknown> & {
-        events?: AgentEvent[];
-        hidden?: boolean;
-      })
-    | null;
+  events?: AgentEvent[] | null;
+  status?: MessagePhase | null;
+  meta?: Record<string, unknown> | null;
   createdAt: Date;
   conversationId: string;
   loading?: boolean;

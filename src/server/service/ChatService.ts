@@ -152,7 +152,7 @@ export class ChatService {
       });
 
       const staleMessages =
-        await this.conversationService.findNonTerminalAssistantMessages(
+        await this.conversationService.findActiveAssistantMessages(
           conversationId,
         );
 
@@ -167,13 +167,13 @@ export class ChatService {
 
         await Promise.all(
           staleMessages.map(msg => {
-            const events = msg.meta?.events ?? [];
-            events.push(errorEvent);
-            return this.conversationService.updateMessage(
-              msg.id,
-              msg.content || 'Generation interrupted (server restarted)',
-              { ...msg.meta, events },
-            );
+            const events = [...(msg.events ?? []), errorEvent];
+            return this.conversationService.updateMessage(msg.id, {
+              content:
+                msg.content || 'Generation interrupted (server restarted)',
+              events,
+              status: 'error',
+            });
           }),
         );
       }
@@ -268,6 +268,8 @@ Workspace Directory: ${workDir}
       role: Role.ASSIST,
       content: '',
       attachments: null,
+      events: null,
+      status: 'initialized',
       meta: null,
       createdAt: new Date(baseTime + index++),
       conversationId,
@@ -349,11 +351,12 @@ Workspace Directory: ${workDir}
 
       await memory.completeTurn(messageFSM.message);
 
-      await this.conversationService.updateMessage(
-        messageFSM.message.id,
-        messageFSM.message.content,
-        messageFSM.message.meta,
-      );
+      await this.conversationService.updateMessage(messageFSM.message.id, {
+        content: messageFSM.message.content,
+        events: messageFSM.message.events,
+        status: messageFSM.phase,
+        meta: messageFSM.message.meta,
+      });
 
       await this.pushContextUsage(session, messageFSM);
 

@@ -51,9 +51,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
   }
 
   // Terminated or no FSM: render from entity
-  const hasError = msg.meta?.events?.some(
-    e => e.type === 'error' || e.type === 'cancelled',
-  );
+  const hasError = msg.status === 'error' || msg.status === 'canceled';
 
   return (
     <Bubble

@@ -85,13 +85,13 @@ export class MessageFSM {
   // === Factory method for historical messages ===
 
   static fromMessage(msg: Message): MessageFSM {
-    const events = msg.meta?.events ? [...msg.meta.events] : [];
+    const events = msg.events ? [...msg.events] : [];
 
     const fsm = new MessageFSM(msg.id, msg);
 
     // Clear existing events before replay
-    if (fsm.msg.meta?.events) {
-      fsm.msg.meta.events = [];
+    if (fsm.msg.events) {
+      fsm.msg.events = [];
     }
 
     for (const event of events) {

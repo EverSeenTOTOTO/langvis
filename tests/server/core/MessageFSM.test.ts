@@ -3,7 +3,6 @@ import { MessageFSM } from '@/server/core/MessageFSM';
 import { PendingMessage } from '@/server/core/PendingMessage';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
-import type { AgentEvent } from '@/shared/types';
 
 const MSG_ID = 'msg-1';
 
@@ -16,7 +15,8 @@ describe('MessageFSM (server)', () => {
     id,
     role: Role.ASSIST,
     content: '',
-    meta: { events: [] as AgentEvent[] },
+    events: [],
+    status: 'initialized',
     createdAt: new Date(),
     conversationId: 'conv-1',
   });
@@ -406,7 +406,7 @@ describe('MessageFSM (server)', () => {
         at: Date.now(),
       });
 
-      expect(message.meta!.events).toHaveLength(2);
+      expect(message.events).toHaveLength(2);
     });
   });
 

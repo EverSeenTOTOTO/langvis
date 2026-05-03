@@ -356,10 +356,9 @@ describe('ConversationService', () => {
       save: vi.fn().mockResolvedValue(mockMessage),
     });
 
-    const result = await conversationService.updateMessage(
-      '1',
-      'Hello world updated',
-    );
+    const result = await conversationService.updateMessage('1', {
+      content: 'Hello world updated',
+    });
     expect(result).toEqual(mockMessage);
   });
 
@@ -369,10 +368,9 @@ describe('ConversationService', () => {
       findOneBy: vi.fn().mockResolvedValue(null),
     });
 
-    const result = await conversationService.updateMessage(
-      'non-existent-id',
-      'Hello world',
-    );
+    const result = await conversationService.updateMessage('non-existent-id', {
+      content: 'Hello world',
+    });
     expect(result).toBeNull();
   });
 
