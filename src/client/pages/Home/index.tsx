@@ -47,10 +47,7 @@ const Chat: React.FC = () => {
 
   // Loading = connecting or actively streaming
   const session = chatStore.currentSession;
-  const isLoading =
-    !isCancelling && session
-      ? session.isConnecting || session.hasActiveMessage
-      : false;
+  const isLoading = !isCancelling && session?.isLoading;
 
   const {
     attachments,
@@ -58,7 +55,7 @@ const Chat: React.FC = () => {
     attachmentTags,
     clearAttachments,
     buildMarkdownContent,
-  } = useFileUpload(isLoading);
+  } = useFileUpload(!!isLoading);
 
   const handleSend = async () => {
     if (!value && attachments.length === 0) return;

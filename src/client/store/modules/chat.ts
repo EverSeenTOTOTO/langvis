@@ -10,7 +10,7 @@ import type {
 } from '@/shared/dto/controller';
 import { Role } from '@/shared/types/entities';
 import { generateId } from '@/shared/utils';
-import { message } from 'antd';
+import { message as antMessage } from 'antd';
 import { makeAutoObservable, reaction } from 'mobx';
 import { inject } from 'tsyringe';
 import { SessionFSM } from './SessionFSM';
@@ -30,7 +30,6 @@ export class ChatStore {
     reaction(
       () => this.conversationStore.currentConversationId,
       async (newId, oldId) => {
-        // Cleanup old sessions to limit memory
         if (oldId) {
           this.cleanupOldSessions(oldId);
         }
@@ -38,8 +37,6 @@ export class ChatStore {
         if (!newId) return;
 
         await this.conversationStore.getMessagesByConversationId({ id: newId });
-        // Initialize FSM for all assistant messages
-        this.initializeMessageFSMs(newId);
         await this.activateConversation(newId);
       },
     );
@@ -102,6 +99,10 @@ export class ChatStore {
         }
       });
 
+      session.addEventListener('dispose', () => {
+        this.sessions.delete(conversationId);
+      });
+
       const conversation =
         this.conversationStore.findConversationById(conversationId);
       if (conversation) {
@@ -156,10 +157,10 @@ export class ChatStore {
     params: StartChatRequest,
     req?: ApiRequest<StartChatRequest>,
   ) {
-    const conversationId = this.conversationStore.currentConversationId;
+    const conversationId = params.conversationId;
 
     if (!conversationId) {
-      message.error(
+      antMessage.error(
         this.settingStore.tr('Failed to create or get conversation'),
       );
       return;
@@ -167,21 +168,8 @@ export class ChatStore {
 
     const session = this.acquireSession(conversationId);
 
-    // Add temporary optimistic messages for immediate UI feedback
-    const tempAssistantId = generateId('msg');
-    this.addPendingMessages(
-      conversationId,
-      params.content!,
-      generateId('msg'),
-      tempAssistantId,
-    );
-
-    // Create MessageFSM for the initialized assistant message
-    const messages = this.conversationStore.messages[conversationId];
-    const assistantMessage = messages?.[messages.length - 1];
-    if (assistantMessage && assistantMessage.id === tempAssistantId) {
-      session.createMessageFSM(tempAssistantId, assistantMessage);
-    }
+    // Add optimistic user message for immediate UI feedback
+    this.addOptimisticUserMessage(conversationId, params.content!);
 
     try {
       await session.connect();
@@ -193,20 +181,15 @@ export class ChatStore {
     try {
       const res = (await req!.send()) as StartChatResponse;
 
-      // Replace temporary assistant message ID with the real one from backend
+      // Create assistant message entity with real ID from backend
       if (res.messageId) {
-        this.replaceAssistantMessageId(
-          conversationId,
-          tempAssistantId,
-          res.messageId,
-        );
-        // Update MessageFSM with new ID
-        session.removeMessageFSM(tempAssistantId);
-        const updatedMessages = this.conversationStore.messages[conversationId];
-        const updatedAssistant = updatedMessages?.[updatedMessages.length - 1];
-        if (updatedAssistant && updatedAssistant.id === res.messageId) {
-          const fsm = session.createMessageFSM(res.messageId, updatedAssistant);
-          fsm.start();
+        this.addAssistantMessage(conversationId, res.messageId);
+
+        // Create MessageFSM for the new assistant message
+        const messages = this.conversationStore.messages[conversationId];
+        const assistantMessage = messages?.find(m => m.id === res.messageId);
+        if (assistantMessage) {
+          session.createMessageFSM(res.messageId, assistantMessage);
         }
       }
     } catch {
@@ -214,45 +197,40 @@ export class ChatStore {
     }
   }
 
-  // Initialize FSMs for all assistant messages in a conversation
-  private initializeMessageFSMs(conversationId: string): void {
-    const session = this.acquireSession(conversationId);
-    const messages = this.conversationStore.messages[conversationId];
-
-    if (!messages) return;
-
-    for (const msg of messages) {
-      if (msg.role === Role.ASSIST) {
-        session.restoreMessageFSM(msg);
-      }
-    }
-  }
-
   private refreshMessages(conversationId: string): void {
     this.conversationStore.getMessagesByConversationId({ id: conversationId });
   }
 
-  private addPendingMessages(
+  private addOptimisticUserMessage(
     conversationId: string,
-    userContent: string,
-    userId?: string,
-    assistantId?: string,
+    content: string,
   ): void {
     const existingMessages =
       this.conversationStore.messages[conversationId] ?? [];
 
-    // Create new array to trigger MobX reactivity
     this.conversationStore.messages[conversationId] = [
       ...existingMessages,
       {
-        id: userId ?? generateId('msg'),
+        id: generateId('msg'),
         conversationId,
         role: Role.USER,
-        content: userContent,
+        content,
         createdAt: new Date(),
       },
+    ];
+  }
+
+  private addAssistantMessage(
+    conversationId: string,
+    assistantId: string,
+  ): void {
+    const existingMessages =
+      this.conversationStore.messages[conversationId] ?? [];
+
+    this.conversationStore.messages[conversationId] = [
+      ...existingMessages,
       {
-        id: assistantId ?? generateId('msg'),
+        id: assistantId,
         conversationId,
         role: Role.ASSIST,
         content: '',
@@ -262,21 +240,6 @@ export class ChatStore {
     ];
   }
 
-  private replaceAssistantMessageId(
-    conversationId: string,
-    oldId: string,
-    newId: string,
-  ): void {
-    const messages = this.conversationStore.messages[conversationId];
-    if (!messages) return;
-
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage && lastMessage.id === oldId) {
-      lastMessage.id = newId;
-    }
-  }
-
-  // Deactivate and remove old session
   private cleanupOldSessions(oldId: string): void {
     const session = this.sessions.get(oldId);
     if (session) {

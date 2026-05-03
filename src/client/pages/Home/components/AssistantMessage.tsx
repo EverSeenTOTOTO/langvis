@@ -13,50 +13,61 @@ import.meta.glob('./AgentMessage/*/index.tsx', { eager: true });
 
 const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
   const chatStore = useStore('chat');
-
-  // Get FSM for this message
   const session = chatStore.currentSession;
-  const messageFSM = session?.restoreMessageFSM(msg);
+  const messageFSM = session?.getMessageFSM(msg.id);
 
-  // Fallback if no FSM available (shouldn't happen in normal flow)
-  if (!messageFSM) {
+  // Active message: render from FSM
+  if (messageFSM && !messageFSM.isTerminated) {
+    const agent = (session?.conv?.config?.agent as string) || AgentIds.CHAT;
+    const { content } = getAgentRenderer(agent)(messageFSM);
+    const hasError =
+      messageFSM.phase === 'error' || messageFSM.phase === 'canceled';
+
     return (
       <Bubble
         key={msg.id}
         placement="start"
-        content={msg.content}
-        footer={<MessageFooter content={msg.content} />}
+        content={
+          messageFSM.isInitialized ? (
+            <Typography.Text type="secondary" italic>
+              <LoadingOutlined style={{ marginInlineEnd: 4 }} />
+              Thinking...
+            </Typography.Text>
+          ) : (
+            content
+          )
+        }
+        footer={<MessageFooter content={messageFSM.msg.content} />}
+        loading={messageFSM.isInitialized}
         avatar={<Avatar icon={<RobotOutlined />} />}
+        styles={{
+          content: {
+            backgroundColor: hasError ? 'var(--ant-red-1)' : undefined,
+            color: hasError ? 'var(--ant-red-7)' : undefined,
+          },
+        }}
       />
     );
   }
 
-  // Get agent from conversation config
-  const agent = (session?.conv?.config?.agent as string) || AgentIds.CHAT;
-
-  // Render content using agent renderer
-  const { content } = getAgentRenderer(agent)(messageFSM);
-
-  // Check for error or canceled state
-  const hasError =
-    messageFSM.phase === 'error' || messageFSM.phase === 'canceled';
+  // Terminated or no FSM: render from entity
+  const hasError = msg.meta?.events?.some(
+    e => e.type === 'error' || e.type === 'cancelled',
+  );
 
   return (
     <Bubble
       key={msg.id}
       placement="start"
       content={
-        messageFSM.isInitialized ? (
+        msg.content || (
           <Typography.Text type="secondary" italic>
             <LoadingOutlined style={{ marginInlineEnd: 4 }} />
             Thinking...
           </Typography.Text>
-        ) : (
-          content
         )
       }
-      footer={<MessageFooter content={messageFSM.msg.content} />}
-      loading={messageFSM.isInitialized}
+      footer={<MessageFooter content={msg.content} />}
       avatar={<Avatar icon={<RobotOutlined />} />}
       styles={{
         content: {

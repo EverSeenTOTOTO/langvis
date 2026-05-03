@@ -140,9 +140,10 @@ export default class ChatController {
         .json({ error: `Conversation ${conversationId} not found` });
     }
 
-    const agent = container.resolve(conversation.config!.agent) as Agent;
-
-    if (!agent) {
+    let agent: Agent;
+    try {
+      agent = container.resolve(conversation.config!.agent) as Agent;
+    } catch {
       return res
         .status(400)
         .json({ error: `Agent ${conversation.config!.agent} not found` });
@@ -194,11 +195,11 @@ export default class ChatController {
     });
     TraceContext.freeze();
 
-    res.status(200).json({ success: true, messageId: assistantId });
-
-    // Create PendingMessage and register with session
+    // Create PendingMessage and register with session before responding
     const pendingMessage = new PendingMessage(assistantMessage);
     session.addMessageFSM(assistantId, pendingMessage);
+
+    res.status(200).json({ success: true, messageId: assistantId });
 
     this.chatService.runSession(
       session,

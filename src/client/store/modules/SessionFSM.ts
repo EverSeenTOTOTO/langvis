@@ -1,24 +1,31 @@
-import { AgentEvent, ConversationPhase, SSEMessage } from '@/shared/types';
+import { AgentEvent, SSEMessage } from '@/shared/types';
 import type { Conversation, Message } from '@/shared/types/entities';
 import { StateMachine } from '@/shared/utils/StateMachine';
 import { makeAutoObservable } from 'mobx';
 import { MessageFSM } from './MessageFSM';
 import { SSEClientTransport } from './transport';
 
-const VALID_TRANSITIONS: Record<ConversationPhase, ConversationPhase[]> = {
-  idle: ['connecting'],
-  connecting: ['connected', 'error', 'canceled'],
-  connected: ['active', 'idle', 'error', 'canceled'],
-  active: ['connected', 'canceling', 'error', 'canceled'],
-  canceling: ['canceled', 'error'],
-  error: ['canceled'],
-  canceled: ['connecting'],
+export type ClientSessionPhase =
+  | 'connecting'
+  | 'connected'
+  | 'active'
+  | 'canceling'
+  | 'error'
+  | 'done';
+
+const VALID_TRANSITIONS: Record<ClientSessionPhase, ClientSessionPhase[]> = {
+  connecting: ['connected', 'error', 'done'],
+  connected: ['active', 'error', 'done'],
+  active: ['connected', 'canceling', 'error', 'done'],
+  canceling: ['connected', 'done', 'error'],
+  error: ['connecting', 'done'],
+  done: [],
 };
 
 export interface SessionFSMEventMap {
   transition: CustomEvent<{
-    from: ConversationPhase;
-    to: ConversationPhase;
+    from: ClientSessionPhase;
+    to: ClientSessionPhase;
   }>;
   dispose: Event;
   message: CustomEvent<AgentEvent>;
@@ -30,20 +37,15 @@ export class SessionFSM {
   private _conversation: Conversation | null = null;
   private transport: SSEClientTransport | null = null;
   private messageFSMs = new Map<string, MessageFSM>();
-  private _phase: ConversationPhase;
-  private sm: StateMachine<ConversationPhase>;
+  private _phase: ClientSessionPhase | null = null;
+  private sm: StateMachine<ClientSessionPhase>;
 
   constructor(conversationId: string) {
     this.conversationId = conversationId;
-    this._phase = 'idle';
 
-    this.sm = new StateMachine({
-      initialPhase: 'idle',
+    this.sm = new StateMachine<ClientSessionPhase>({
+      initialPhase: 'connecting',
       transitions: VALID_TRANSITIONS,
-    });
-
-    this.sm.addEventListener('transition', e => {
-      this._phase = (e as CustomEvent).detail.to;
     });
 
     makeAutoObservable<this, 'transport' | 'messageFSMs' | 'sm'>(this, {
@@ -83,20 +85,24 @@ export class SessionFSM {
 
   // === Lifecycle state ===
 
-  get phase(): ConversationPhase {
+  get phase(): ClientSessionPhase | null {
     return this._phase;
   }
 
-  get hasActiveMessage(): boolean {
-    return this.phase === 'active';
+  get isLoading(): boolean {
+    return this._phase === 'connecting' || this._phase === 'active';
   }
 
   get canStartChat(): boolean {
-    return this.phase === 'idle' || this.phase === 'connected';
+    return this._phase === 'connected';
   }
 
   get isConnecting(): boolean {
-    return this.phase === 'connecting';
+    return this._phase === 'connecting';
+  }
+
+  get isConnected(): boolean {
+    return this._phase === 'connected' || this._phase === 'active';
   }
 
   // === Conversation management ===
@@ -106,16 +112,6 @@ export class SessionFSM {
   }
 
   // === Message FSM management ===
-
-  restoreMessageFSM(message: Message): MessageFSM {
-    let fsm = this.messageFSMs.get(message.id);
-    if (!fsm) {
-      fsm = MessageFSM.fromMessage(message);
-      this.bindMessageFSMListeners(fsm);
-      this.messageFSMs.set(message.id, fsm);
-    }
-    return fsm;
-  }
 
   createMessageFSM(msgId: string, message: Message): MessageFSM {
     let fsm = this.messageFSMs.get(msgId);
@@ -160,7 +156,7 @@ export class SessionFSM {
       return;
     }
     if (this.phase === 'canceling') {
-      this.sm.transition('canceled');
+      this.cleanup();
       return;
     }
   }
@@ -176,8 +172,23 @@ export class SessionFSM {
   // === Connection management ===
 
   connect(): Promise<void> {
-    this.reset();
-    this.sm.transition('connecting');
+    if (this.isConnected) return Promise.resolve();
+
+    // Reset sm for fresh connection (only if not already in a valid state)
+    if (this._phase !== null && this._phase !== 'error') {
+      return Promise.resolve();
+    }
+
+    // Create a fresh sm for this connection attempt
+    this.sm = new StateMachine<ClientSessionPhase>({
+      initialPhase: 'connecting',
+      transitions: VALID_TRANSITIONS,
+    });
+    this._phase = 'connecting';
+
+    this.sm.addEventListener('transition', () => {
+      this._phase = this.sm.phase;
+    });
 
     const transport = new SSEClientTransport(
       `/api/chat/sse/${this.conversationId}`,
@@ -190,11 +201,7 @@ export class SessionFSM {
     });
 
     transport.addEventListener('disconnect', () => {
-      if (
-        this.phase === 'connecting' ||
-        this.phase === 'connected' ||
-        this.phase === 'active'
-      ) {
+      if (this.phase !== 'done' && this.phase !== 'error') {
         this.sm.transition('error');
       }
     });
@@ -203,39 +210,22 @@ export class SessionFSM {
       this.sm.transition('error');
     });
 
-    return transport.connect().then(() => {
-      this.sm.transition('connected');
-      const hasActive = Array.from(this.messageFSMs.values()).some(
-        fsm => fsm.isActive,
-      );
-      if (hasActive) {
-        this.sm.transition('active');
-      }
-    });
+    return transport.connect().then(
+      () => {
+        this.sm.transition('connected');
+      },
+      () => {
+        this.sm.transition('error');
+        throw new Error('SSE connection failed');
+      },
+    );
   }
 
   deactivate(): void {
-    switch (this.phase) {
-      case 'idle':
-        this.closeTransport();
-        break;
-
-      case 'connecting':
-      case 'connected':
-      case 'active':
-      case 'canceling':
-        this.sm.transition('canceled');
-        this.closeTransport();
-        for (const fsm of this.messageFSMs.values()) {
-          fsm.close();
-        }
-        break;
-
-      case 'error':
-      case 'canceled':
-        this.closeTransport();
-        break;
+    for (const fsm of this.messageFSMs.values()) {
+      fsm.close();
     }
+    this.cleanup();
   }
 
   async cancelConversation(sendCancelApi: () => Promise<void>): Promise<void> {
@@ -254,59 +244,46 @@ export class SessionFSM {
 
     try {
       await sendCancelApi();
-      this.sm.transition('canceled');
     } catch (e) {
-      if (e instanceof Error && e.message.includes('404')) {
-        this.sm.transition('canceled');
-      } else {
+      if (!(e instanceof Error && e.message.includes('404'))) {
         this.sm.transition('error');
         throw e;
       }
     }
   }
 
-  isConnected(): boolean {
-    return this.transport?.isConnected ?? false;
-  }
-
   // === Private methods ===
 
   private handleEvent(event: AgentEvent): void {
-    // Route event to the corresponding MessageFSM by messageId
-    const messageId = (event as any).messageId as string | undefined;
-    if (messageId) {
-      const messageFSM = this.messageFSMs.get(messageId);
-      if (messageFSM) {
-        messageFSM.handleEvent(event);
-      } else {
-        console.warn(`[SessionFSM] MessageFSM not found for ${messageId}`);
-      }
-    } else {
-      const activeFsm = this.getFirstActiveFSM();
-      if (activeFsm) {
-        activeFsm.handleEvent(event);
-      }
+    if (event.type === 'context_usage') {
+      this.sm.dispatchEvent(new CustomEvent('message', { detail: event }));
+      return;
     }
 
-    // Forward business event to listeners
+    const messageFSM = this.messageFSMs.get(event.messageId);
+    if (messageFSM) {
+      messageFSM.handleEvent(event);
+    } else {
+      console.warn(`[SessionFSM] MessageFSM not found for ${event.messageId}`);
+    }
+
     this.sm.dispatchEvent(new CustomEvent('message', { detail: event }));
   }
 
-  private getFirstActiveFSM(): MessageFSM | undefined {
-    for (const fsm of this.messageFSMs.values()) {
-      if (!fsm.isTerminated) return fsm;
+  private cleanup(): void {
+    this.closeTransport();
+    if (this._phase !== null) {
+      this.sm.transition('done');
     }
-    return this.messageFSMs.values().next().value;
+    this._phase = null;
+    this.messageFSMs.clear();
+    this.sm.dispatchEvent(
+      new CustomEvent('dispose', { detail: this.conversationId }),
+    );
   }
 
   private closeTransport(): void {
     this.transport?.close();
     this.transport = null;
-  }
-
-  private reset(): void {
-    this.closeTransport();
-    this.sm.reset();
-    this._phase = 'idle';
   }
 }

@@ -668,13 +668,11 @@ describe('MessageFSM', () => {
     });
   });
 
-  describe('replaceMessageId', () => {
-    it('should replace the message ID', () => {
+  describe('messageId', () => {
+    it('should expose the message ID', () => {
       const fsm = new MessageFSM('msg-1', message);
 
-      fsm.replaceMessageId('msg-2');
-
-      expect(fsm.msg.id).toBe('msg-2');
+      expect(fsm.messageId).toBe('msg-1');
     });
   });
 
@@ -1198,8 +1196,9 @@ describe('MessageFSM', () => {
         onTransition(from, to);
       });
 
+      // Clear events before replay
       if (fsm.msg.meta?.events) {
-        (fsm as any)._message.meta.events = [];
+        fsm.msg.meta.events = [];
       }
       for (const event of events) {
         fsm.handleEvent(event);

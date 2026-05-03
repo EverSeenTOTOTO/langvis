@@ -103,109 +103,83 @@ export class ChatService {
       return existing;
     }
 
-    const lockKey = RedisKeys.CHAT_SESSION_LOCK(conversationId);
-    const lockAcquired = await this.redisService.acquireLock(lockKey, 5);
+    // Clean up stale Redis state from previous server instance
+    await this.cleanupStaleState(conversationId);
 
-    if (!lockAcquired) {
-      this.logger.warn(`Failed to acquire lock for ${conversationId}`);
-      return null;
-    }
+    this.logger.info(`Session created`, { sessionId: conversationId });
 
-    try {
-      const existingAfterLock = this.sessions.get(conversationId);
-      if (existingAfterLock) return existingAfterLock;
+    const session = new SessionFSM(conversationId, 30_000);
 
-      if (await this.detectAndCleanupZombie(conversationId)) {
-        return null;
-      }
-
-      this.logger.info(`Session created`, { sessionId: conversationId });
-
-      const session = new SessionFSM(conversationId, 30_000);
-
-      session.addEventListener('dispose', (e: Event) => {
-        const id = (e as CustomEvent<string>).detail;
-        this.sessions.delete(id);
-        this.redisService.del(RedisKeys.CHAT_SESSION(id));
-      });
-
-      session.addEventListener('transition', (e: Event) => {
-        const { to } = (
-          e as CustomEvent<{ from: SessionPhase; to: SessionPhase }>
-        ).detail;
-        this.updateSessionPhase(conversationId, to);
-      });
-
-      this.sessions.set(conversationId, session);
-
-      await this.redisService.set(
-        RedisKeys.CHAT_SESSION(conversationId),
-        {
-          conversationId,
-          phase: 'waiting',
-          messages: [],
-          startedAt: Date.now(),
-          agentId: null,
-        },
-        3600,
-      );
-
-      return session;
-    } finally {
-      await this.redisService.releaseLock(lockKey);
-    }
-  }
-
-  async detectAndCleanupZombie(conversationId: string): Promise<boolean> {
-    const state = await this.getSessionState(conversationId);
-
-    if (!state) return false;
-
-    if (this.sessions.has(conversationId)) return false;
-
-    if (state.phase === 'done' || state.phase === 'waiting') {
-      await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
-      return false;
-    }
-
-    this.logger.warn(`Zombie session detected`, {
-      sessionId: conversationId,
-      phase: state.phase,
+    session.addEventListener('dispose', (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      this.sessions.delete(id);
+      this.redisService.del(RedisKeys.CHAT_SESSION(id));
     });
 
-    const zombieMessages =
-      await this.conversationService.findNonTerminalAssistantMessages(
+    session.addEventListener('transition', (e: Event) => {
+      const { to } = (
+        e as CustomEvent<{ from: SessionPhase; to: SessionPhase }>
+      ).detail;
+      this.updateSessionPhase(conversationId, to);
+    });
+
+    this.sessions.set(conversationId, session);
+
+    await this.redisService.set(
+      RedisKeys.CHAT_SESSION(conversationId),
+      {
         conversationId,
-      );
-
-    if (zombieMessages.length === 0) {
-      await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
-      return false;
-    }
-
-    const errorEvent = {
-      type: 'error' as const,
-      messageId: 'zombie',
-      error: 'Generation interrupted (server restarted)',
-      seq: Date.now(),
-      at: Date.now(),
-    };
-
-    await Promise.all(
-      zombieMessages.map(msg => {
-        const events = msg.meta?.events ?? [];
-        events.push(errorEvent);
-        return this.conversationService.updateMessage(
-          msg.id,
-          msg.content || 'Generation interrupted (server restarted)',
-          { ...msg.meta, events },
-        );
-      }),
+        phase: 'waiting',
+        messages: [],
+        startedAt: Date.now(),
+        agentId: null,
+      },
+      3600,
     );
 
-    await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
+    return session;
+  }
 
-    return false;
+  private async cleanupStaleState(conversationId: string): Promise<void> {
+    const state = await this.getSessionState(conversationId);
+    if (!state) return;
+
+    // Mark any non-terminal messages as error (server restarted mid-stream)
+    if (state.phase !== 'done' && state.phase !== 'waiting') {
+      this.logger.warn(`Stale session detected`, {
+        sessionId: conversationId,
+        phase: state.phase,
+      });
+
+      const staleMessages =
+        await this.conversationService.findNonTerminalAssistantMessages(
+          conversationId,
+        );
+
+      if (staleMessages.length > 0) {
+        const errorEvent = {
+          type: 'error' as const,
+          messageId: 'zombie',
+          error: 'Generation interrupted (server restarted)',
+          seq: Date.now(),
+          at: Date.now(),
+        };
+
+        await Promise.all(
+          staleMessages.map(msg => {
+            const events = msg.meta?.events ?? [];
+            events.push(errorEvent);
+            return this.conversationService.updateMessage(
+              msg.id,
+              msg.content || 'Generation interrupted (server restarted)',
+              { ...msg.meta, events },
+            );
+          }),
+        );
+      }
+    }
+
+    await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
   }
 
   async prepareTurn(params: {
