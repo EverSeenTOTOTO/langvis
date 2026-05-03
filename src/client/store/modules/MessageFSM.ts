@@ -7,6 +7,7 @@ import {
 import type { Message } from '@/shared/types/entities';
 import { StateMachine } from '@/shared/utils/StateMachine';
 import { makeAutoObservable } from 'mobx';
+import { PendingMessage } from './PendingMessage';
 
 const DEFAULT_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
   initialized: ['streaming', 'canceling', 'error'],
@@ -40,13 +41,15 @@ export interface AwaitingInputData {
 }
 
 export class MessageFSM {
-  private _message: Message;
+  readonly messageId: string;
+  private pendingMessage: PendingMessage;
   private _awaitingInputData: AwaitingInputData | null = null;
   private _phase: MessagePhase;
   private sm: StateMachine<MessagePhase>;
 
-  constructor(_messageId: string, message: Message) {
-    this._message = message;
+  constructor(messageId: string, message: Message) {
+    this.messageId = messageId;
+    this.pendingMessage = new PendingMessage(message);
     this._phase = 'initialized';
 
     this.sm = new StateMachine({
@@ -55,8 +58,8 @@ export class MessageFSM {
     });
 
     this.sm.addEventListener('transition', e => {
-      const { from, to } = (e as CustomEvent).detail;
-      this._phase = to;
+      const { from } = (e as CustomEvent).detail;
+      this._phase = this.sm.phase;
       if (from === 'awaiting_input') this._awaitingInputData = null;
     });
 
@@ -86,8 +89,9 @@ export class MessageFSM {
 
     const fsm = new MessageFSM(msg.id, msg);
 
-    if (fsm._message.meta?.events) {
-      fsm._message.meta.events = [];
+    // Clear existing events before replay
+    if (fsm.msg.meta?.events) {
+      fsm.msg.meta.events = [];
     }
 
     for (const event of events) {
@@ -99,7 +103,7 @@ export class MessageFSM {
   // === Entity access ===
 
   get msg(): Message {
-    return this._message;
+    return this.pendingMessage.toMessage();
   }
 
   // === Lifecycle state ===
@@ -147,18 +151,18 @@ export class MessageFSM {
     return ['streaming', 'awaiting_input'].includes(this.phase);
   }
 
-  // === Content rendering state (derived from events) ===
+  // === Content rendering state (derived from pending message) ===
 
   get hasContent(): boolean {
-    return this._message.content.length > 0;
+    return this.pendingMessage.content.length > 0;
   }
 
   get hasEvents(): boolean {
-    return (this._message.meta?.events?.length ?? 0) > 0;
+    return this.pendingMessage.events.length > 0;
   }
 
   get toolCallTimeline(): ToolCallTimeline[] {
-    return buildToolTimeline(this._message.meta?.events ?? []);
+    return buildToolTimeline(this.pendingMessage.events);
   }
 
   get pendingToolCalls(): ToolCallTimeline[] {
@@ -194,11 +198,60 @@ export class MessageFSM {
   handleEvent(event: AgentEvent): void {
     if (this.isTerminated) return;
 
-    this.applyEvent(event);
+    this.pendingMessage.handleEvent(event);
+    this.handleAwaitingInput(event);
 
-    const target = this.resolveTargetPhase(event);
+    switch (event.type) {
+      case 'start':
+      case 'stream':
+      case 'thought':
+      case 'tool_call':
+        if (this.phase === 'initialized' || this.phase === 'submitting') {
+          this.sm.transition('streaming');
+        }
+        break;
 
-    this.sm.transition(target);
+      case 'tool_progress': {
+        if (this.phase === 'initialized' || this.phase === 'submitting') {
+          this.sm.transition('streaming');
+        }
+        const data = event.data as
+          | { status?: string; event?: AgentEvent }
+          | undefined;
+        if (data?.status === 'awaiting_input') {
+          this.sm.transition('awaiting_input');
+        } else if (data?.status === 'agent_event' && data.event) {
+          const nestedAwaiting = this.extractAwaitingInput(data.event);
+          if (nestedAwaiting) {
+            this.sm.transition('awaiting_input');
+          }
+        }
+        break;
+      }
+
+      case 'tool_result':
+      case 'tool_error':
+        if (
+          this.phase === 'initialized' ||
+          this.phase === 'submitting' ||
+          this.phase === 'awaiting_input'
+        ) {
+          this.sm.transition('streaming');
+        }
+        break;
+
+      case 'final':
+        this.sm.transition('final');
+        break;
+
+      case 'cancelled':
+        this.sm.transition('canceled');
+        break;
+
+      case 'error':
+        this.sm.transition('error');
+        break;
+    }
   }
 
   // === Actions ===
@@ -221,59 +274,11 @@ export class MessageFSM {
     return this.sm.transition('submitting');
   }
 
-  replaceMessageId(newId: string): void {
-    this._message.id = newId;
-  }
-
   setMessage(message: Message): void {
-    this._message = message;
+    this.pendingMessage = new PendingMessage(message);
   }
 
   // === Private methods ===
-
-  private appendEvent(event: AgentEvent): void {
-    if (!this._message.meta) {
-      this._message.meta = { events: [event] };
-    } else {
-      this._message.meta = {
-        ...this._message.meta,
-        events: [...(this._message.meta.events ?? []), event],
-      };
-    }
-  }
-
-  private applyEvent(event: AgentEvent): void {
-    switch (event.type) {
-      case 'start':
-        this.appendEvent(event);
-        break;
-
-      case 'stream':
-        this._message.content += event.content;
-        break;
-
-      case 'thought':
-      case 'tool_call':
-      case 'tool_result':
-      case 'tool_error':
-      case 'cancelled':
-        this.appendEvent(event);
-        break;
-
-      case 'tool_progress':
-        this.appendEvent(event);
-        this.handleAwaitingInput(event);
-        break;
-
-      case 'final':
-        this.appendEvent(event);
-        break;
-      case 'error':
-        this.appendEvent(event);
-        this._message.content = event.error;
-        break;
-    }
-  }
 
   private handleAwaitingInput(event: AgentEvent): void {
     if (event.type !== 'tool_progress') return;
@@ -303,58 +308,11 @@ export class MessageFSM {
     }
   }
 
-  private resolveTargetPhase(event: AgentEvent) {
-    const { phase } = this.sm;
-
-    switch (event.type) {
-      case 'start':
-      case 'stream':
-      case 'thought':
-      case 'tool_call':
-        if (phase === 'initialized') return 'streaming';
-        break;
-
-      case 'tool_progress': {
-        const data = event.data as
-          | { status?: string; event?: AgentEvent }
-          | undefined;
-        if (data?.status === 'awaiting_input') return 'awaiting_input';
-        if (data?.status === 'agent_event' && data.event) {
-          const nestedAwaiting = this.extractAwaitingInput(data.event);
-          if (nestedAwaiting) return 'awaiting_input';
-        }
-        if (phase === 'initialized') return 'streaming';
-        break;
-      }
-
-      case 'tool_result':
-      case 'tool_error':
-        if (phase === 'awaiting_input') return 'streaming';
-        break;
-
-      case 'final':
-        return 'final';
-
-      case 'cancelled':
-        return 'canceled';
-
-      case 'error':
-        return 'error';
-
-      default:
-        return phase;
-    }
-
-    return phase;
-  }
-
-  // === Derivation methods ===
-
   private deriveThoughts(): ThoughtItem[] {
     const thoughts: ThoughtItem[] = [];
     let pendingThought: string | undefined;
 
-    for (const event of this._message.meta?.events ?? []) {
+    for (const event of this.pendingMessage.events) {
       switch (event.type) {
         case 'thought':
           pendingThought = event.content;
@@ -379,7 +337,7 @@ export class MessageFSM {
     }
 
     if (pendingThought) {
-      const lastEvent = (this._message.meta?.events ?? []).at(-1);
+      const lastEvent = this.pendingMessage.events.at(-1);
       thoughts.push({
         content: pendingThought,
         seq: lastEvent?.seq ?? 0,

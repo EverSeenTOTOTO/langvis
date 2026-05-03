@@ -137,18 +137,6 @@ export type SSEMessage =
   | { type: 'session_error'; error: string }
   | AgentEvent;
 
-/**
- * ConversationPhase - frontend conversation FSM phases
- */
-export type ConversationPhase =
-  | 'idle'
-  | 'connecting'
-  | 'connected'
-  | 'active'
-  | 'canceling'
-  | 'error'
-  | 'canceled';
-
 export type SessionPhase =
   | 'waiting'
   | 'active'

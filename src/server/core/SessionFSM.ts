@@ -181,6 +181,7 @@ export class SessionFSM {
     this.transport?.close();
     this.transport = null;
     this.messageFSMs.clear();
+    this._memory = undefined;
 
     this.sm.dispatchEvent(
       new CustomEvent('dispose', { detail: this.conversationId }),
