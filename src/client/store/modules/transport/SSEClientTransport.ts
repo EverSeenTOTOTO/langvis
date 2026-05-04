@@ -88,6 +88,10 @@ export class SSEClientTransport extends Transport<SSEMessage> {
     this.disconnect();
   }
 
+  get isConnecting(): boolean {
+    return this.eventSource?.readyState === EventSource.CONNECTING;
+  }
+
   get isConnected(): boolean {
     return this.eventSource?.readyState === EventSource.OPEN;
   }

@@ -1,31 +1,17 @@
-import { AgentEvent, SSEMessage } from '@/shared/types';
+import { AgentEvent, SSEMessage, SessionPhase } from '@/shared/types';
 import type { Conversation, Message } from '@/shared/types/entities';
-import { StateMachine } from '@/shared/utils/StateMachine';
+import {
+  SESSION_PHASE_TRANSITIONS,
+  StateMachine,
+} from '@/shared/utils/StateMachine';
 import { makeAutoObservable } from 'mobx';
 import { MessageFSM } from './MessageFSM';
 import { SSEClientTransport } from './transport';
 
-export type ClientSessionPhase =
-  | 'connecting'
-  | 'connected'
-  | 'active'
-  | 'canceling'
-  | 'error'
-  | 'done';
-
-const VALID_TRANSITIONS: Record<ClientSessionPhase, ClientSessionPhase[]> = {
-  connecting: ['connected', 'error', 'done'],
-  connected: ['active', 'error', 'done'],
-  active: ['connected', 'canceling', 'error', 'done'],
-  canceling: ['connected', 'done', 'error'],
-  error: ['connecting', 'done'],
-  done: [],
-};
-
 export interface SessionFSMEventMap {
   transition: CustomEvent<{
-    from: ClientSessionPhase;
-    to: ClientSessionPhase;
+    from: SessionPhase;
+    to: SessionPhase;
   }>;
   dispose: Event;
   message: CustomEvent<AgentEvent>;
@@ -37,15 +23,15 @@ export class SessionFSM {
   private _conversation: Conversation | null = null;
   private transport: SSEClientTransport | null = null;
   private messageFSMs = new Map<string, MessageFSM>();
-  private _phase: ClientSessionPhase | null = null;
-  private sm: StateMachine<ClientSessionPhase>;
+  private _phase: SessionPhase | null = null;
+  private sm: StateMachine<SessionPhase>;
 
   constructor(conversationId: string) {
     this.conversationId = conversationId;
 
-    this.sm = new StateMachine<ClientSessionPhase>({
-      initialPhase: 'connecting',
-      transitions: VALID_TRANSITIONS,
+    this.sm = new StateMachine<SessionPhase>({
+      initialPhase: 'waiting',
+      transitions: SESSION_PHASE_TRANSITIONS,
     });
 
     makeAutoObservable<this, 'transport' | 'messageFSMs' | 'sm'>(this, {
@@ -85,24 +71,24 @@ export class SessionFSM {
 
   // === Lifecycle state ===
 
-  get phase(): ClientSessionPhase | null {
+  get phase(): SessionPhase | null {
     return this._phase;
   }
 
-  get isLoading(): boolean {
-    return this._phase === 'connecting' || this._phase === 'active';
-  }
-
-  get canStartChat(): boolean {
-    return this._phase === 'connected';
-  }
-
   get isConnecting(): boolean {
-    return this._phase === 'connecting';
+    return this.transport?.isConnecting ?? false;
   }
 
   get isConnected(): boolean {
-    return this._phase === 'connected' || this._phase === 'active';
+    return this.transport?.isConnected ?? false;
+  }
+
+  get isLoading(): boolean {
+    return this.isConnecting || this._phase === 'active';
+  }
+
+  get canStartChat(): boolean {
+    return this._phase === 'waiting' && this.isConnected;
   }
 
   // === Conversation management ===
@@ -139,7 +125,7 @@ export class SessionFSM {
   }
 
   private onMessageActive(): void {
-    if (this.phase === 'connected') {
+    if (this.phase === 'waiting') {
       this.sm.transition('active');
     }
   }
@@ -152,7 +138,7 @@ export class SessionFSM {
     if (hasActive) return;
 
     if (this.phase === 'active') {
-      this.sm.transition('connected');
+      this.sm.transition('waiting');
       return;
     }
     if (this.phase === 'canceling') {
@@ -174,17 +160,17 @@ export class SessionFSM {
   connect(): Promise<void> {
     if (this.isConnected) return Promise.resolve();
 
-    // Reset sm for fresh connection (only if not already in a valid state)
+    // Only allow connection from initial state or after error
     if (this._phase !== null && this._phase !== 'error') {
       return Promise.resolve();
     }
 
     // Create a fresh sm for this connection attempt
-    this.sm = new StateMachine<ClientSessionPhase>({
-      initialPhase: 'connecting',
-      transitions: VALID_TRANSITIONS,
+    this.sm = new StateMachine<SessionPhase>({
+      initialPhase: 'waiting',
+      transitions: SESSION_PHASE_TRANSITIONS,
     });
-    this._phase = 'connecting';
+    this._phase = 'waiting';
 
     this.sm.addEventListener('transition', () => {
       this._phase = this.sm.phase;
@@ -210,15 +196,10 @@ export class SessionFSM {
       this.sm.transition('error');
     });
 
-    return transport.connect().then(
-      () => {
-        this.sm.transition('connected');
-      },
-      () => {
-        this.sm.transition('error');
-        throw new Error('SSE connection failed');
-      },
-    );
+    return transport.connect().then(undefined, () => {
+      this.sm.transition('error');
+      throw new Error('SSE connection failed');
+    });
   }
 
   deactivate(): void {

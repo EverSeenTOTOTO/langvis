@@ -5,19 +5,14 @@ import {
   SessionPhase,
 } from '@/shared/types';
 import { Transport } from '@/shared/transport';
-import { StateMachine } from '@/shared/utils/StateMachine';
+import {
+  SESSION_PHASE_TRANSITIONS,
+  StateMachine,
+} from '@/shared/utils/StateMachine';
 import logger from '../utils/logger';
 import { Memory } from './memory';
 import { MessageFSM } from './MessageFSM';
 import { PendingMessage } from './PendingMessage';
-
-const VALID_TRANSITIONS: Record<SessionPhase, SessionPhase[]> = {
-  waiting: ['active', 'done'],
-  active: ['waiting', 'canceling', 'error', 'done'],
-  canceling: ['done', 'error'],
-  error: ['done'],
-  done: [],
-};
 
 export interface SessionFSMEventMap {
   transition: CustomEvent<{ from: SessionPhase; to: SessionPhase }>;
@@ -39,7 +34,7 @@ export class SessionFSM {
 
     this.sm = new StateMachine({
       initialPhase: 'waiting',
-      transitions: VALID_TRANSITIONS,
+      transitions: SESSION_PHASE_TRANSITIONS,
     });
 
     this.sm.addEventListener('transition', e => {

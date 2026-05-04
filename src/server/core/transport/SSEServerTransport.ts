@@ -68,6 +68,10 @@ export class SSEServerTransport extends Transport<SSEMessage> {
     }
   }
 
+  get isConnecting(): boolean {
+    return false;
+  }
+
   get isConnected(): boolean {
     return !this.closed && this.response.writable;
   }

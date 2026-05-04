@@ -90,21 +90,29 @@ describe('SessionFSM', () => {
   });
 
   describe('connect', () => {
-    it('should transition to connecting on connect', () => {
+    it('should transition to waiting on connect', () => {
       fsm.connect();
-      expect(fsm.phase).toBe('connecting');
+      expect(fsm.phase).toBe('waiting');
     });
 
-    it('should transition to connected after connection succeeds', async () => {
+    it('should be connecting while SSE handshake in progress', () => {
+      fsm.connect();
+      // EventSource.readyState is CONNECTING (0) initially
+      expect(fsm.isConnecting).toBe(true);
+      expect(fsm.isConnected).toBe(false);
+    });
+
+    it('should be connected after SSE handshake succeeds', async () => {
       const connectPromise = fsm.connect();
       await new Promise(r => setTimeout(r, 0));
       const transport = (fsm as any).transport;
       const es = (transport as any).eventSource as MockEventSource;
+      es.readyState = MockEventSource.OPEN;
       es.emit('message', { type: 'connected' });
 
       await connectPromise;
 
-      expect(fsm.phase).toBe('connected');
+      expect(fsm.phase).toBe('waiting');
       expect(fsm.isConnecting).toBe(false);
       expect(fsm.isConnected).toBe(true);
     });
@@ -114,19 +122,21 @@ describe('SessionFSM', () => {
       await new Promise(r => setTimeout(r, 0));
       const transport = (fsm as any).transport;
       const es = (transport as any).eventSource as MockEventSource;
+      es.readyState = MockEventSource.OPEN;
       es.emit('message', { type: 'connected' });
       await connectPromise;
 
       // Second connect should resolve immediately
       await fsm.connect();
-      expect(fsm.phase).toBe('connected');
+      expect(fsm.phase).toBe('waiting');
     });
 
-    it('should be able to start chat when connected', async () => {
+    it('should be able to start chat when connected and waiting', async () => {
       const connectPromise = fsm.connect();
       await new Promise(r => setTimeout(r, 0));
       const transport = (fsm as any).transport;
       const es = (transport as any).eventSource as MockEventSource;
+      es.readyState = MockEventSource.OPEN;
       es.emit('message', { type: 'connected' });
       await connectPromise;
 
@@ -155,19 +165,20 @@ describe('SessionFSM', () => {
       const reconnectPromise = fsm.connect();
       await new Promise(r => setTimeout(r, 0));
       const newTransport = (fsm as any).transport;
-      (newTransport.eventSource as MockEventSource).emit('message', {
-        type: 'connected',
-      });
+      const es = newTransport.eventSource as MockEventSource;
+      es.readyState = MockEventSource.OPEN;
+      es.emit('message', { type: 'connected' });
       await reconnectPromise;
-      expect(fsm.phase).toBe('connected');
+      expect(fsm.phase).toBe('waiting');
     });
   });
 
-  describe('connected↔active driving', () => {
+  describe('waiting↔active driving', () => {
     async function connectSession() {
       const connectPromise = fsm.connect();
       await new Promise(r => setTimeout(r, 0));
       const transport = (fsm as any).transport;
+      transport.eventSource.readyState = MockEventSource.OPEN;
       transport.eventSource.emit('message', { type: 'connected' });
       await connectPromise;
     }
@@ -189,7 +200,7 @@ describe('SessionFSM', () => {
       expect(fsm.phase).toBe('active');
     });
 
-    it('should transition back to connected when all MessageFSMs terminate', async () => {
+    it('should transition back to waiting when all MessageFSMs terminate', async () => {
       await connectSession();
 
       const message = createMessage('msg-1');
@@ -210,7 +221,7 @@ describe('SessionFSM', () => {
         seq: 2,
         at: Date.now(),
       });
-      expect(fsm.phase).toBe('connected');
+      expect(fsm.phase).toBe('waiting');
     });
   });
 
@@ -219,10 +230,12 @@ describe('SessionFSM', () => {
       expect(fsm.isLoading).toBe(false);
 
       fsm.connect();
+      // While connecting (transport.isConnecting = true)
       expect(fsm.isLoading).toBe(true);
 
       // Complete connection
       const transport = (fsm as any).transport;
+      transport.eventSource.readyState = MockEventSource.OPEN;
       transport.eventSource.emit('message', { type: 'connected' });
       await new Promise(r => setTimeout(r, 0));
       expect(fsm.isLoading).toBe(false);
@@ -239,13 +252,15 @@ describe('SessionFSM', () => {
       expect(fsm.isLoading).toBe(true);
     });
 
-    it('canStartChat should be true only in connected phase', async () => {
+    it('canStartChat should be true only when waiting and connected', async () => {
       expect(fsm.canStartChat).toBe(false);
 
       fsm.connect();
+      // connecting but not yet connected
       expect(fsm.canStartChat).toBe(false);
 
       const transport = (fsm as any).transport;
+      transport.eventSource.readyState = MockEventSource.OPEN;
       transport.eventSource.emit('message', { type: 'connected' });
       await new Promise(r => setTimeout(r, 0));
       expect(fsm.canStartChat).toBe(true);
@@ -292,7 +307,9 @@ describe('SessionFSM', () => {
       // Connect
       const connectPromise = fsm.connect();
       await new Promise(r => setTimeout(r, 0));
-      (fsm as any).transport.eventSource.emit('message', { type: 'connected' });
+      const transport = (fsm as any).transport;
+      transport.eventSource.readyState = MockEventSource.OPEN;
+      transport.eventSource.emit('message', { type: 'connected' });
       await connectPromise;
 
       // Drive to active
@@ -317,7 +334,9 @@ describe('SessionFSM', () => {
       // Connect
       const connectPromise = fsm.connect();
       await new Promise(r => setTimeout(r, 0));
-      (fsm as any).transport.eventSource.emit('message', { type: 'connected' });
+      const transport = (fsm as any).transport;
+      transport.eventSource.readyState = MockEventSource.OPEN;
+      transport.eventSource.emit('message', { type: 'connected' });
       await connectPromise;
 
       // Drive to active
