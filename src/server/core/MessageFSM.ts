@@ -1,27 +1,12 @@
 import { AgentEvent, MessagePhase } from '@/shared/types';
 import type { Message } from '@/shared/types/entities';
-import { StateMachine } from '@/shared/utils/StateMachine';
+import {
+  MESSAGE_PHASE_TRANSITIONS,
+  StateMachine,
+} from '@/shared/utils/StateMachine';
 import { ExecutionContext } from './ExecutionContext';
 import logger from '../utils/logger';
 import type { PendingMessage } from './PendingMessage';
-
-const VALID_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
-  initialized: ['streaming', 'canceling', 'error'],
-  streaming: [
-    'streaming',
-    'awaiting_input',
-    'final',
-    'canceled',
-    'error',
-    'canceling',
-  ],
-  awaiting_input: ['submitting', 'streaming', 'canceling', 'canceled', 'error'],
-  submitting: ['streaming', 'error', 'canceled', 'canceling'],
-  canceling: ['canceled', 'error'],
-  final: [],
-  canceled: [],
-  error: [],
-};
 
 export interface MessageFSMEventMap {
   transition: CustomEvent<{ from: MessagePhase; to: MessagePhase }>;
@@ -43,7 +28,7 @@ export class MessageFSM {
 
     this.sm = new StateMachine({
       initialPhase: 'initialized',
-      transitions: VALID_TRANSITIONS,
+      transitions: MESSAGE_PHASE_TRANSITIONS,
     });
 
     this.sm.addEventListener('transition', e => {

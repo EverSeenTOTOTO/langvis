@@ -5,27 +5,12 @@ import {
   buildToolTimeline,
 } from '@/shared/types';
 import type { Message } from '@/shared/types/entities';
-import { StateMachine } from '@/shared/utils/StateMachine';
+import {
+  MESSAGE_PHASE_TRANSITIONS,
+  StateMachine,
+} from '@/shared/utils/StateMachine';
 import { makeAutoObservable } from 'mobx';
 import { PendingMessage } from './PendingMessage';
-
-const DEFAULT_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
-  initialized: ['streaming', 'canceling', 'error'],
-  streaming: [
-    'streaming',
-    'awaiting_input',
-    'final',
-    'canceled',
-    'error',
-    'canceling',
-  ],
-  awaiting_input: ['submitting', 'streaming', 'canceling', 'canceled', 'error'],
-  submitting: ['streaming', 'error', 'canceled', 'canceling'],
-  canceling: ['canceled', 'error'],
-  final: [],
-  canceled: [],
-  error: [],
-};
 
 export type { ToolCallTimeline };
 
@@ -54,7 +39,7 @@ export class MessageFSM {
 
     this.sm = new StateMachine({
       initialPhase: 'initialized',
-      transitions: DEFAULT_TRANSITIONS,
+      transitions: MESSAGE_PHASE_TRANSITIONS,
     });
 
     this.sm.addEventListener('transition', e => {

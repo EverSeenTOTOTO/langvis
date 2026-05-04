@@ -108,10 +108,10 @@ describe('SessionFSM', () => {
       expect(session.phase).toBe('done');
     });
 
-    it('should not allow transition from waiting to error', () => {
+    it('should allow transition from waiting to error', () => {
       session['sm'].transition('error');
 
-      expect(session.phase).toBe('waiting');
+      expect(session.phase).toBe('error');
     });
   });
 
@@ -549,12 +549,12 @@ describe('SessionFSM', () => {
       expect(session.phase).toBe('done');
     });
 
-    it('should not allow transition from waiting to error', () => {
+    it('should allow transition from waiting to error', () => {
       expect(session.phase).toBe('waiting');
 
       session['sm'].transition('error');
 
-      expect(session.phase).toBe('waiting');
+      expect(session.phase).toBe('error');
     });
 
     it('should allow transition from canceling to error', () => {

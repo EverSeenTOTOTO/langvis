@@ -10,6 +10,7 @@ export abstract class Transport<T> extends EventTarget {
   abstract send(message: T): boolean;
   abstract close(): void;
   abstract readonly isConnected: boolean;
+  abstract readonly isConnecting: boolean;
 
   addEventListener<K extends keyof TransportEventMap<T>>(
     type: K,

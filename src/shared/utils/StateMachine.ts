@@ -1,3 +1,31 @@
+import type { MessagePhase, SessionPhase } from '@/shared/types';
+
+export const MESSAGE_PHASE_TRANSITIONS: Record<MessagePhase, MessagePhase[]> = {
+  initialized: ['streaming', 'canceling', 'error'],
+  streaming: [
+    'streaming',
+    'awaiting_input',
+    'final',
+    'canceled',
+    'error',
+    'canceling',
+  ],
+  awaiting_input: ['submitting', 'streaming', 'canceling', 'canceled', 'error'],
+  submitting: ['streaming', 'error', 'canceled', 'canceling'],
+  canceling: ['canceled', 'error'],
+  final: [],
+  canceled: [],
+  error: [],
+};
+
+export const SESSION_PHASE_TRANSITIONS: Record<SessionPhase, SessionPhase[]> = {
+  waiting: ['active', 'error', 'done'],
+  active: ['waiting', 'canceling', 'error', 'done'],
+  canceling: ['done', 'error'],
+  error: ['done'],
+  done: [],
+};
+
 export interface StateMachineEventMap<TPhase extends string> {
   transition: CustomEvent<{ from: TPhase; to: TPhase }>;
 }
