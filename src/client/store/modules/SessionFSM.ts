@@ -101,15 +101,26 @@ export class SessionFSM {
 
   // === Message FSM management ===
 
-  createMessageFSM(msgId: string, message: Message): MessageFSM {
-    let fsm = this.messageFSMs.get(msgId);
-    if (!fsm) {
-      fsm = new MessageFSM(msgId, message);
-      this.bindMessageFSMListeners(fsm);
-      this.messageFSMs.set(msgId, fsm);
-    } else {
+  createMessageFSM(message: Message): MessageFSM {
+    let fsm = this.messageFSMs.get(message.id);
+    if (fsm) {
       fsm.setMessage(message);
+      return fsm;
     }
+
+    const isTerminal =
+      message.status &&
+      (['final', 'canceled', 'error'] as string[]).includes(message.status);
+
+    fsm = new MessageFSM(message.id, message);
+
+    if (isTerminal) {
+      fsm.replayEvents();
+    } else {
+      this.bindMessageFSMListeners(fsm);
+    }
+
+    this.messageFSMs.set(message.id, fsm);
     return fsm;
   }
 

@@ -21,7 +21,13 @@ describe('MessageFSM', () => {
     message = createMessage();
   });
 
-  describe('fromMessage', () => {
+  const replayFromMessage = (msg: Message): MessageFSM => {
+    const fsm = new MessageFSM(msg.id, msg);
+    fsm.replayEvents();
+    return fsm;
+  };
+
+  describe('replayEvents', () => {
     it('should create FSM and replay events to reach correct phase', () => {
       const events: AgentEvent[] = [
         { type: 'start', messageId: 'msg-1', seq: 1, at: Date.now() },
@@ -35,20 +41,18 @@ describe('MessageFSM', () => {
         { type: 'final', messageId: 'msg-1', seq: 3, at: Date.now() },
       ];
       const msg = createMessage('msg-1', events);
-      msg.content = 'Hello';
 
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.phase).toBe('final');
       expect(fsm.isTerminated).toBe(true);
-      // Content is rebuilt from events (stream events append to content)
-      expect(fsm.msg.content).toBe('HelloHello'); // 'Hello' from msg.content + 'Hello' from stream event
+      expect(fsm.msg.content).toBe('Hello');
     });
 
     it('should handle empty events gracefully', () => {
       const msg = createMessage('msg-1', []);
 
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.phase).toBe('initialized');
       expect(fsm.isTerminated).toBe(false);
@@ -69,7 +73,7 @@ describe('MessageFSM', () => {
       ];
       const msg = createMessage('msg-1', events);
 
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.phase).toBe('streaming');
     });
@@ -422,7 +426,7 @@ describe('MessageFSM', () => {
         { type: 'final', messageId: 'msg-1', seq: 5, at: Date.now() },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.phase).toBe('final');
       expect(fsm.isTerminated).toBe(true);
@@ -458,7 +462,7 @@ describe('MessageFSM', () => {
         },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.phase).toBe('canceled');
       expect(fsm.isTerminated).toBe(true);
@@ -494,7 +498,7 @@ describe('MessageFSM', () => {
         },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.phase).toBe('error');
       expect(fsm.isTerminated).toBe(true);
@@ -560,7 +564,7 @@ describe('MessageFSM', () => {
         { type: 'final', messageId: 'msg-1', seq: 8, at: Date.now() },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.phase).toBe('final');
       expect(fsm.isTerminated).toBe(true);
@@ -804,7 +808,7 @@ describe('MessageFSM', () => {
         },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       const timeline = fsm.toolCallTimeline;
 
@@ -838,7 +842,7 @@ describe('MessageFSM', () => {
         },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       const timeline = fsm.toolCallTimeline;
 
@@ -858,7 +862,7 @@ describe('MessageFSM', () => {
         },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.hasPendingTools).toBe(true);
       expect(fsm.pendingToolCalls).toHaveLength(1);
@@ -878,7 +882,7 @@ describe('MessageFSM', () => {
         { type: 'final', messageId: 'msg-1', seq: 2, at: Date.now() },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.thoughts).toHaveLength(1);
       expect(fsm.thoughts[0].content).toBe('Final answer');
@@ -913,7 +917,7 @@ describe('MessageFSM', () => {
         },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.thoughts).toHaveLength(0);
     });
@@ -925,7 +929,7 @@ describe('MessageFSM', () => {
         { type: 'start', messageId: 'msg-1', seq: 1, at: Date.now() },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.isThinking).toBe(true);
     });
@@ -943,7 +947,7 @@ describe('MessageFSM', () => {
       ];
       const msg = createMessage('msg-1', events);
       msg.content = 'Hi';
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.isThinking).toBe(false);
     });
@@ -962,7 +966,7 @@ describe('MessageFSM', () => {
         },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.isThinking).toBe(false);
     });
@@ -973,7 +977,7 @@ describe('MessageFSM', () => {
         { type: 'final', messageId: 'msg-1', seq: 2, at: Date.now() },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.isThinking).toBe(false);
     });
@@ -983,7 +987,7 @@ describe('MessageFSM', () => {
     it('should expose message content', () => {
       const msg = createMessage('msg-1', []);
       msg.content = 'Hello world';
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.msg.content).toBe('Hello world');
     });
@@ -993,14 +997,14 @@ describe('MessageFSM', () => {
         { type: 'start', messageId: 'msg-1', seq: 1, at: Date.now() },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.msg.events).toStrictEqual(events);
     });
 
     it('should expose conversationId', () => {
       const msg = createMessage('msg-1', []);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.msg.conversationId).toBe('conv-1');
     });
@@ -1044,7 +1048,7 @@ describe('MessageFSM', () => {
         },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.phase).toBe('awaiting_input');
       expect(fsm.awaitingInput?.message).toBe('Nested input required');
@@ -1087,7 +1091,7 @@ describe('MessageFSM', () => {
         },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.phase).toBe('awaiting_input');
       expect(fsm.awaitingInput?.message).toBe('请填写信息');
@@ -1125,7 +1129,7 @@ describe('MessageFSM', () => {
         },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.phase).toBe('streaming');
       expect(fsm.awaitingInput).toBeNull();
@@ -1152,7 +1156,7 @@ describe('MessageFSM', () => {
         },
       ];
       const msg = createMessage('msg-1', events);
-      const fsm = MessageFSM.fromMessage(msg);
+      const fsm = replayFromMessage(msg);
 
       expect(fsm.phase).toBe('error');
       expect(fsm.awaitingInput).toBeNull();
@@ -1190,20 +1194,13 @@ describe('MessageFSM', () => {
       ];
       const msg = createMessage('msg-1', events);
 
-      // Use constructor + manual replay so listener is attached before events fire
       const fsm = new MessageFSM('msg-1', msg);
       fsm.addEventListener('transition', e => {
         const { from, to } = (e as CustomEvent).detail;
         onTransition(from, to);
       });
 
-      // Clear events before replay
-      if (fsm.msg.events) {
-        fsm.msg.events = [];
-      }
-      for (const event of events) {
-        fsm.handleEvent(event);
-      }
+      fsm.replayEvents();
 
       expect(onTransition).toHaveBeenCalledWith('initialized', 'streaming');
       expect(onTransition).toHaveBeenCalledWith('streaming', 'awaiting_input');

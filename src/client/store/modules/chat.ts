@@ -53,20 +53,19 @@ export class ChatStore {
   }
 
   async activateConversation(conversationId: string): Promise<void> {
-    const state = await this.getSessionState({ conversationId });
-
-    if (!state || state.phase === 'done') return;
-
     const session = this.acquireSession(conversationId);
 
-    // Create MessageFSMs for non-terminal assistant messages so SSE
-    // replay events have somewhere to land
+    // Create MessageFSMs for all assistant messages so both active and
+    // terminated messages can render via agent renderers (e.g. TTS audio)
     const messages = this.conversationStore.messages[conversationId] ?? [];
     for (const msg of messages) {
       if (msg.role !== Role.ASSIST) continue;
-      if (msg.status && ['final', 'canceled', 'error'].includes(msg.status)) continue;
-      session.createMessageFSM(msg.id, msg);
+      session.createMessageFSM(msg);
     }
+
+    const state = await this.getSessionState({ conversationId });
+
+    if (!state || state.phase === 'done') return;
 
     try {
       await session.connect();
@@ -199,7 +198,7 @@ export class ChatStore {
         const messages = this.conversationStore.messages[conversationId];
         const assistantMessage = messages?.find(m => m.id === res.messageId);
         if (assistantMessage) {
-          session.createMessageFSM(res.messageId, assistantMessage);
+          session.createMessageFSM(assistantMessage);
         }
       }
     } catch {

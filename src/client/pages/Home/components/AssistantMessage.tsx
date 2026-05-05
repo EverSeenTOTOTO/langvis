@@ -18,10 +18,10 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
   const chatStore = useStore('chat');
   const session = chatStore.currentSession;
   const messageFSM = session?.getMessageFSM(msg.id);
+  const agent = (session?.conv?.config?.agent as string) || AgentIds.CHAT;
 
-  // Active message: render from FSM
-  if (messageFSM && !messageFSM.isTerminated) {
-    const agent = (session?.conv?.config?.agent as string) || AgentIds.CHAT;
+  // FSM-driven rendering (both active and terminated messages)
+  if (messageFSM) {
     const { content } = getAgentRenderer(agent)(messageFSM);
     const hasError =
       messageFSM.phase === 'error' || messageFSM.phase === 'canceled';
@@ -53,7 +53,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
     );
   }
 
-  // Terminated or no FSM: render from entity
+  // Fallback: no FSM available, render from entity
   const hasError = msg.status === 'error' || msg.status === 'canceled';
 
   return (
@@ -62,7 +62,11 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
       placement="start"
       content={
         msg.content ? (
-          <Suspense fallback={<Typography.Paragraph>{msg.content}</Typography.Paragraph>}>
+          <Suspense
+            fallback={
+              <Typography.Paragraph>{msg.content}</Typography.Paragraph>
+            }
+          >
             <MarkdownRender>{msg.content}</MarkdownRender>
           </Suspense>
         ) : (
