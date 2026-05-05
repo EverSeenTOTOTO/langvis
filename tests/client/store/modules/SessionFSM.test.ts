@@ -187,7 +187,7 @@ describe('SessionFSM', () => {
       await connectSession();
 
       const message = createMessage('msg-1');
-      fsm.createMessageFSM('msg-1', message);
+      fsm.createMessageFSM(message);
 
       const msgFsm = fsm.getMessageFSM('msg-1')!;
       msgFsm.handleEvent({
@@ -204,7 +204,7 @@ describe('SessionFSM', () => {
       await connectSession();
 
       const message = createMessage('msg-1');
-      fsm.createMessageFSM('msg-1', message);
+      fsm.createMessageFSM(message);
 
       const msgFsm = fsm.getMessageFSM('msg-1')!;
       msgFsm.handleEvent({
@@ -242,7 +242,7 @@ describe('SessionFSM', () => {
 
       // Drive to active
       const message = createMessage('msg-1');
-      fsm.createMessageFSM('msg-1', message);
+      fsm.createMessageFSM(message);
       fsm.getMessageFSM('msg-1')!.handleEvent({
         type: 'start',
         messageId: 'msg-1',
@@ -267,7 +267,7 @@ describe('SessionFSM', () => {
 
       // Drive to active
       const message = createMessage('msg-1');
-      fsm.createMessageFSM('msg-1', message);
+      fsm.createMessageFSM(message);
       fsm.getMessageFSM('msg-1')!.handleEvent({
         type: 'start',
         messageId: 'msg-1',
@@ -286,7 +286,7 @@ describe('SessionFSM', () => {
 
     it('should close all MessageFSMs when deactivating', () => {
       const message = createMessage('msg-1');
-      const msgFsm = fsm.createMessageFSM('msg-1', message);
+      const msgFsm = fsm.createMessageFSM(message);
       const closeSpy = vi.spyOn(msgFsm, 'close');
 
       fsm.deactivate();
@@ -314,7 +314,7 @@ describe('SessionFSM', () => {
 
       // Drive to active
       const message = createMessage('msg-1');
-      fsm.createMessageFSM('msg-1', message);
+      fsm.createMessageFSM(message);
       fsm.getMessageFSM('msg-1')!.handleEvent({
         type: 'start',
         messageId: 'msg-1',
@@ -341,7 +341,7 @@ describe('SessionFSM', () => {
 
       // Drive to active
       const message = createMessage('msg-1');
-      fsm.createMessageFSM('msg-1', message);
+      fsm.createMessageFSM(message);
       fsm.getMessageFSM('msg-1')!.handleEvent({
         type: 'start',
         messageId: 'msg-1',
@@ -362,8 +362,8 @@ describe('SessionFSM', () => {
     it('should route event to correct MessageFSM by messageId', () => {
       const message1 = createMessage('msg-1');
       const message2 = createMessage('msg-2');
-      fsm.createMessageFSM('msg-1', message1);
-      fsm.createMessageFSM('msg-2', message2);
+      fsm.createMessageFSM(message1);
+      fsm.createMessageFSM(message2);
 
       const msgFsm1 = fsm.getMessageFSM('msg-1')!;
       const msgFsm2 = fsm.getMessageFSM('msg-2')!;
@@ -387,7 +387,7 @@ describe('SessionFSM', () => {
 
     it('should intercept context_usage at session level, not route to MessageFSM', () => {
       const message1 = createMessage('msg-1');
-      fsm.createMessageFSM('msg-1', message1);
+      fsm.createMessageFSM(message1);
 
       const msgFsm1 = fsm.getMessageFSM('msg-1')!;
       const handleEventSpy = vi.spyOn(msgFsm1, 'handleEvent');

@@ -108,13 +108,13 @@ connect(): Promise<void> {
 
 ### 状态定义（与后端统一）
 
-| 状态        | 是否终态 | 含义                                         |
-| ----------- | -------- | -------------------------------------------- |
-| `waiting`   | 否       | SSE 已连接（或可连接），无活跃消息           |
-| `active`    | 否       | 至少有一个 MessageFSM 处于非终态             |
-| `canceling` | 否       | 取消 API 请求飞行中（会话级）                |
-| `error`     | 否       | 不可恢复的连接/启动错误                      |
-| `done`      | 是       | 会话已关闭，触发 cleanup                     |
+| 状态        | 是否终态 | 含义                               |
+| ----------- | -------- | ---------------------------------- |
+| `waiting`   | 否       | SSE 已连接（或可连接），无活跃消息 |
+| `active`    | 否       | 至少有一个 MessageFSM 处于非终态   |
+| `canceling` | 否       | 取消 API 请求飞行中（会话级）      |
+| `error`     | 否       | 不可恢复的连接/启动错误            |
+| `done`      | 是       | 会话已关闭，触发 cleanup           |
 
 ### 连接状态（从 Transport 派生）
 
@@ -326,13 +326,13 @@ class ChatStore {
 
 ## 5. 组件使用
 
-| 组件                     | 数据来源                                  |
-| ------------------------ | ----------------------------------------- |
-| `AssistantMessage.tsx`   | `MessageFSM.msg`, `MessageFSM.phase`      |
+| 组件                     | 数据来源                                   |
+| ------------------------ | ------------------------------------------ |
+| `AssistantMessage.tsx`   | `MessageFSM.msg`, `MessageFSM.phase`       |
 | `Chat/index.tsx`         | `SessionFSM.phase`, `SessionFSM.isLoading` |
-| `UniversalEventRenderer` | `MessageFSM.toolCallTimeline`, `thoughts` |
-| `HumanInputForm`         | `MessageFSM.awaitingInput`                |
-| `CancelButton`           | `MessageFSM.isCancellable`                |
+| `UniversalEventRenderer` | `MessageFSM.toolCallTimeline`, `thoughts`  |
+| `HumanInputForm`         | `MessageFSM.awaitingInput`                 |
+| `CancelButton`           | `MessageFSM.isCancellable`                 |
 
 ## 6. 文件结构
 

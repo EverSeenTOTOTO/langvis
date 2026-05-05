@@ -113,8 +113,8 @@
 
     .chat-messages {
       flex: 1;
-      padding-inline: 16px;
       padding-block-end: 12px;
+      padding-inline: 16px;
       overflow-y: auto;
       scroll-padding-bottom: calc(var(--chat-input-height, 60px) + 12px);
 

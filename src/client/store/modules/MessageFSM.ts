@@ -67,22 +67,17 @@ export class MessageFSM {
     this.sm.removeEventListener(type, listener);
   }
 
-  // === Factory method for historical messages ===
+  // === Event replay ===
 
-  static fromMessage(msg: Message): MessageFSM {
-    const events = msg.events ? [...msg.events] : [];
-
-    const fsm = new MessageFSM(msg.id, msg);
-
-    // Clear existing events before replay
-    if (fsm.msg.events) {
-      fsm.msg.events = [];
-    }
+  replayEvents(): void {
+    const events = this.msg.events ? [...this.msg.events] : [];
+    // Clear events to avoid duplication — stream events are not stored in
+    // msg.events so content is safe to keep as the final text source.
+    this.msg.events = [];
 
     for (const event of events) {
-      fsm.handleEvent(event);
+      this.handleEvent(event);
     }
-    return fsm;
   }
 
   // === Entity access ===
