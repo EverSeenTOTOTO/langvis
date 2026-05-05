@@ -99,12 +99,13 @@ bindConnection(connection: SSEConnection): void {
 
 ```
 waiting ──► active        （任一 MessageFSM 进入非终态）
+waiting ──► error         （基础设施错误）
 waiting ──► done          （idle timeout / SSE disconnect，且无活跃消息）
 
 active  ──► waiting       （所有 MessageFSM 到达终态）
 active  ──► canceling     （cancelAllMessages 被调用）
-active  ──► done          （SSE disconnect，但 agent 继续运行）
 active  ──► error         （基础设施错误）
+active  ──► done          （SSE disconnect，但 agent 继续运行）
 
 canceling ──► done        （所有 agent aborted successfully）
 canceling ──► error       （abort failed）
@@ -454,14 +455,18 @@ interface ChatSessionState {
 
 ```
 src/shared/utils/
-└── StateMachine.ts        # 泛型同步状态机
+└── StateMachine.ts        # 泛型同步状态机 + 共享 transition map 常量
+
+src/shared/transport/
+└── Transport.ts           # Transport 抽象基类
 
 src/server/core/
 ├── SessionFSM.ts          # 会话层状态机
 ├── MessageFSM.ts          # 消息层状态机
 ├── PendingMessage.ts      # 事件累积载体
 ├── ExecutionContext.ts    # 执行上下文
-├── SSEConnection.ts       # SSE 连接（延迟 handshake）
+├── transport/
+│   └── SSEServerTransport.ts  # 服务端 SSE Transport 实现
 └── agent/                 # Agent 实现
 
 src/server/service/

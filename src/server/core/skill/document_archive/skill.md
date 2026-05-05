@@ -1,6 +1,6 @@
 ---
 name: 文档归档与检索
-description: 将网页/邮件内容归档到数据库（理解内容→确认方式→元数据提取→分块→向量化→存储）
+description: Archive web pages and emails to vector database with metadata extraction, chunking, and embeddings. Use when user wants to save, archive, or store web content or emails for later retrieval, or mentions archiving documents, saving links, or building a knowledge base.
 ---
 
 ## 邮件归档工作流

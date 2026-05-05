@@ -84,7 +84,9 @@ export class SessionFSM {
   }
 
   get isLoading(): boolean {
-    return this.isConnecting || this._phase === 'active';
+    const connecting = this.transport?.isConnecting ?? false;
+    const active = this._phase === 'active';
+    return connecting || active;
   }
 
   get canStartChat(): boolean {

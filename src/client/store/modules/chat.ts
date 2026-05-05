@@ -58,6 +58,16 @@ export class ChatStore {
     if (!state || state.phase === 'done') return;
 
     const session = this.acquireSession(conversationId);
+
+    // Create MessageFSMs for non-terminal assistant messages so SSE
+    // replay events have somewhere to land
+    const messages = this.conversationStore.messages[conversationId] ?? [];
+    for (const msg of messages) {
+      if (msg.role !== Role.ASSIST) continue;
+      if (msg.status && ['final', 'canceled', 'error'].includes(msg.status)) continue;
+      session.createMessageFSM(msg.id, msg);
+    }
+
     try {
       await session.connect();
     } catch {
