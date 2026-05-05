@@ -5,6 +5,7 @@ import { container, inject } from 'tsyringe';
 import { AgentConstructor } from '../core/agent';
 import { registerAgent } from '../decorator/core';
 import { service } from '../decorator/service';
+import { SkillService } from './SkillService';
 import { ToolService } from './ToolService';
 import { isProd } from '../utils';
 import Logger from '../utils/logger';
@@ -19,8 +20,13 @@ export class AgentService {
   constructor(
     @inject(ToolService)
     private toolService: ToolService,
+    @inject(SkillService)
+    private skillService: SkillService,
   ) {
-    this.toolService.initialize().then(() => {
+    Promise.all([
+      this.toolService.initialize(),
+      this.skillService.initialize(),
+    ]).then(() => {
       this.initialize();
     });
   }

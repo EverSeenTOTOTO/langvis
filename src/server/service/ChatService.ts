@@ -28,7 +28,7 @@ export interface ChatSessionState {
 }
 
 export interface PrepareTurnResult {
-  messages: import('@/shared/entities/Message').Message[];
+  messages: Message[];
   assistantId: string;
   assistantMessage: import('@/shared/entities/Message').Message;
 }
@@ -282,8 +282,10 @@ Workspace Directory: ${workDir}
         this.logger.error('Failed to persist turn messages', err);
       });
 
+    // Don't include assistantMessage in context — it's empty and would confuse the model.
+    // Memory context should only contain messages up to (and including) the user's query.
     return {
-      messages: [...existingMessages, ...newMessages],
+      messages: [...existingMessages, ...newMessages.slice(0, -1)],
       assistantId,
       assistantMessage,
     };

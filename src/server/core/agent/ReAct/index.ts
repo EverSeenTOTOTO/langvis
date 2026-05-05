@@ -1,6 +1,8 @@
 import { agent } from '@/server/decorator/core';
 import { config } from '@/server/decorator/param';
 import { CacheService } from '@/server/service/CacheService';
+import { SkillService } from '@/server/service/SkillService';
+import { ToolService } from '@/server/service/ToolService';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds } from '@/shared/constants';
 import { Message, Role } from '@/shared/entities/Message';
@@ -50,12 +52,30 @@ export default class ReActAgent extends Agent {
 
   constructor(
     @inject(CacheService) private readonly cacheService: CacheService,
+    @inject(ToolService) private readonly toolService: ToolService,
+    @inject(SkillService) private readonly skillService: SkillService,
   ) {
     super();
   }
 
   get systemPrompt(): Prompt {
-    return createPrompt(this, super.systemPrompt);
+    let prompt = createPrompt(this, super.systemPrompt);
+
+    const builtinIds = new Set((this.tools ?? []).map(t => t.id));
+    const otherToolIds = this.toolService
+      .getCachedToolIds()
+      .filter(id => !builtinIds.has(id));
+    const skillIds = this.skillService.getCachedSkillIds();
+
+    if (otherToolIds.length > 0 || skillIds.length > 0) {
+      prompt = prompt.insertAfter(
+        'Skills',
+        'Other Tools and Skills',
+        [...otherToolIds, ...skillIds].join(', '),
+      );
+    }
+
+    return prompt;
   }
 
   async *call(

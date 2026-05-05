@@ -212,15 +212,15 @@ describe('ChatService', () => {
         },
       });
 
-      expect(result.messages.length).toBe(4); // system + session context + user + assistant
+      expect(result.messages.length).toBe(3); // system + session context + user (assistant not in context)
       expect(result.messages[0].role).toBe(Role.SYSTEM);
       expect(result.messages[0].content).toBe('You are a helpful assistant.');
       expect(result.messages[1].role).toBe(Role.USER);
       expect(result.messages[1].meta).toEqual({ hidden: true });
       expect(result.messages[2].role).toBe(Role.USER);
       expect(result.messages[2].content).toBe('Hello');
-      expect(result.messages[3].role).toBe(Role.ASSIST);
-      expect(result.assistantId).toBe(result.messages[3].id);
+      expect(result.assistantId).toBeDefined();
+      expect(result.assistantMessage.role).toBe(Role.ASSIST);
     });
 
     it('should include existing history for subsequent turns', async () => {
@@ -244,12 +244,11 @@ describe('ChatService', () => {
         },
       });
 
-      // existing (1) + new user + new assistant = 3
-      expect(result.messages.length).toBe(3);
+      // existing (1) + new user (assistant not included in context) = 2
+      expect(result.messages.length).toBe(2);
       expect(result.messages[0].role).toBe(Role.SYSTEM);
       expect(result.messages[1].role).toBe(Role.USER);
       expect(result.messages[1].content).toBe('Follow up');
-      expect(result.messages[2].role).toBe(Role.ASSIST);
       expect(result.assistantMessage).toBeDefined();
       expect(result.assistantMessage.id).toBe(result.assistantId);
     });

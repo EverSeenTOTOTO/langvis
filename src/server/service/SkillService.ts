@@ -1,3 +1,4 @@
+import fs from 'fs';
 import matter from 'gray-matter';
 import { globby } from 'globby';
 import { service } from '../decorator/service';
@@ -10,13 +11,13 @@ export interface SkillInfo {
   description: string;
 }
 
-export interface SkillData extends SkillInfo {
-  content: string;
+interface SkillEntry extends SkillInfo {
+  filePath: string;
 }
 
 @service()
 export class SkillService {
-  private skills = new Map<string, SkillData>();
+  private skills = new Map<string, SkillEntry>();
   private isInitialized = false;
 
   private readonly logger = Logger.child({ source: 'SkillService' });
@@ -35,11 +36,9 @@ export class SkillService {
 
       for (const absolutePath of skillPaths) {
         try {
-          const { default: fs } = await import('fs');
           const raw = fs.readFileSync(absolutePath, 'utf-8');
-          const { data, content } = matter(raw);
+          const { data } = matter(raw);
 
-          // Extract skill id from folder name
           const parts = absolutePath.split('/');
           const skillFolder = parts[parts.length - 2];
           const id = skillFolder;
@@ -47,7 +46,12 @@ export class SkillService {
           const name = data.name ?? id;
           const description = data.description ?? '';
 
-          this.skills.set(id, { id, name, description, content });
+          this.skills.set(id, {
+            id,
+            name,
+            description,
+            filePath: absolutePath,
+          });
         } catch (error) {
           this.logger.error(`Failed to load skill at ${absolutePath}:`, error);
         }
@@ -65,11 +69,17 @@ export class SkillService {
 
   async getAllSkillInfo(): Promise<SkillInfo[]> {
     await this.initialize();
-    return [...this.skills.values()].map(({ content: _, ...info }) => info);
+    return [...this.skills.values()].map(({ filePath: _, ...info }) => info);
+  }
+
+  getCachedSkillIds(): string[] {
+    return [...this.skills.keys()];
   }
 
   async getSkillContent(id: string): Promise<string | undefined> {
     await this.initialize();
-    return this.skills.get(id)?.content;
+    const skill = this.skills.get(id);
+    if (!skill) return undefined;
+    return fs.readFileSync(skill.filePath, 'utf-8');
   }
 }
