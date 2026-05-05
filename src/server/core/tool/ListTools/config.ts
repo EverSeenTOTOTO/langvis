@@ -13,7 +13,7 @@ export interface ListToolsOutput {
 export const config: ToolConfig<ListToolsInput, ListToolsOutput> = {
   name: 'list_tools',
   description:
-    '查看所有可用工具和代理。当你需要执行某个操作但不确定有什么工具时，调用此工具浏览。',
+    '查看所有可用工具和代理。当你需要执行某个操作但不确定有什么工具、或者需要详细查阅某工具的 input schema 时，调用此工具浏览。',
   inputSchema: {
     type: 'object',
     properties: {

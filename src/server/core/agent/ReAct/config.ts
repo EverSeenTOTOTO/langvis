@@ -10,7 +10,7 @@ export const config: AgentConfig = {
     ToolIds.ASK_USER,
     ToolIds.CACHED_READ,
     ToolIds.AGENT_CALL,
-    ToolIds.LIST_TOOLS,
     ToolIds.SKILL_CALL,
+    ToolIds.LIST_TOOLS,
   ],
 };

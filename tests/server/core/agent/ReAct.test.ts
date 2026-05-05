@@ -92,7 +92,13 @@ describe('ReActAgent', () => {
 
   beforeEach(() => {
     const cacheService = new CacheService(mockWorkspaceService as any);
-    reactAgent = new ReActAgent(cacheService);
+    const toolService = { getCachedToolIds: vi.fn().mockReturnValue([]) };
+    const skillService = { getCachedSkillIds: vi.fn().mockReturnValue([]) };
+    reactAgent = new ReActAgent(
+      cacheService,
+      toolService as any,
+      skillService as any,
+    );
     Object.defineProperty(reactAgent, 'logger', {
       value: {
         debug: vi.fn(),

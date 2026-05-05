@@ -23,6 +23,10 @@ export class ToolService {
     }));
   }
 
+  getCachedToolIds(): string[] {
+    return this.tools;
+  }
+
   async initialize(): Promise<void> {
     if (this.isInitialized) {
       return;
