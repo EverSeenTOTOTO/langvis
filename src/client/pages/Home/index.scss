@@ -114,7 +114,9 @@
     .chat-messages {
       flex: 1;
       padding-inline: 16px;
+      padding-block-end: 12px;
       overflow-y: auto;
+      scroll-padding-bottom: calc(var(--chat-input-height, 60px) + 12px);
 
       .ant-bubble {
         .ant-bubble-content {
@@ -216,7 +218,7 @@
     }
 
     .chat-placeholder {
-      height: var(--chat-input-height, 60px);
+      height: calc(var(--chat-input-height, 60px) + 14px);
     }
   }
 

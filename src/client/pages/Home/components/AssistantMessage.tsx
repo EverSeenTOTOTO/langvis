@@ -5,8 +5,11 @@ import { Message } from '@/shared/types/entities';
 import { LoadingOutlined, RobotOutlined } from '@ant-design/icons';
 import { Avatar, Typography } from 'antd';
 import { observer } from 'mobx-react-lite';
+import { lazy, Suspense } from 'react';
 import { getAgentRenderer } from './agentRenderers';
 import MessageFooter from './MessageFooter';
+
+const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
 // Dynamically load all agent renderers (side effect: auto-registration)
 import.meta.glob('./AgentMessage/*/index.tsx', { eager: true });
@@ -58,7 +61,11 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
       key={msg.id}
       placement="start"
       content={
-        msg.content || (
+        msg.content ? (
+          <Suspense fallback={<Typography.Paragraph>{msg.content}</Typography.Paragraph>}>
+            <MarkdownRender>{msg.content}</MarkdownRender>
+          </Suspense>
+        ) : (
           <Typography.Text type="secondary" italic>
             <LoadingOutlined style={{ marginInlineEnd: 4 }} />
             Thinking...
