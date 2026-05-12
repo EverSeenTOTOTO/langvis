@@ -14,6 +14,10 @@ import type {
   TextToSpeechInput,
   TextToSpeechOutput,
 } from '../core/tool/TextToSpeech';
+import type {
+  SpeechToTextInput,
+  SpeechToTextOutput,
+} from '../core/tool/SpeechToText';
 
 function toMultimodalContent(
   content: string,
@@ -107,7 +111,7 @@ export class LlmService {
 
   private resolveModel(
     modelId: string | undefined,
-    type: 'chat' | 'embedding' | 'tts',
+    type: 'chat' | 'embedding' | 'tts' | 'stt',
   ): string {
     if (modelId) return modelId;
     const model = this.providerService.getDefaultModel(type);
@@ -284,5 +288,69 @@ export class LlmService {
     await fs.writeFile(filePath, audioBuffer);
 
     return { voice: params.voice, filePath: `tts/${filename}` };
+  }
+
+  async stt(
+    modelId: string | undefined,
+    params: SpeechToTextInput,
+    signal: AbortSignal,
+  ): Promise<SpeechToTextOutput> {
+    const resolved = this.resolveModel(modelId, 'stt');
+    const providerId = this.resolveProviderId(resolved);
+    const modelCode = this.resolveModelCode(resolved);
+    const provider = this.providerService.getProvider(providerId);
+    if (!provider) throw new Error(`Provider not found: ${providerId}`);
+
+    const model = this.providerService.getModel(resolved);
+    const endpoint = model?.endpoint ?? '/audio/transcriptions';
+    const url = `${provider.baseUrl}${endpoint}`;
+
+    const fs = await import('fs/promises');
+    const nodePath = await import('path');
+    const fileBuffer = await fs.readFile(
+      nodePath.join(process.cwd(), 'upload', params.filePath),
+    );
+    const filename = nodePath.basename(params.filePath);
+    const file = new File([new Uint8Array(fileBuffer)], filename, {
+      type: params.mimeType,
+    });
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('model', modelCode);
+    formData.append('language', params.language || '');
+    formData.append('temperature', String(params.temperature ?? 0));
+    formData.append('response_format', 'verbose_json');
+    formData.append('timestamp_granularities[]', 'word');
+    formData.append('diarize', String(params.diarize ?? true));
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${provider.apiKey}`,
+      },
+      body: formData,
+      signal,
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`STT API failed: ${response.status} - ${text}`);
+    }
+
+    const data = await response.json();
+
+    if (data.error) {
+      throw new Error(
+        `STT API error: ${data.error.message || JSON.stringify(data.error)}`,
+      );
+    }
+
+    return {
+      task: data.task,
+      language: data.language,
+      text: data.text,
+      requestId: data.request_id,
+    };
   }
 }

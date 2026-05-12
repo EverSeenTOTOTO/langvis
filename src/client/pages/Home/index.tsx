@@ -15,6 +15,7 @@ import { useAsyncFn, useMedia } from 'react-use';
 import ConversationsSider from './components/ConversationsSider';
 import Messages, { type MessagesRef } from './components/Messages';
 import { useFileUpload } from './hooks/useFileUpload';
+import { useVoiceInput } from './hooks/useVoiceInput';
 import './index.scss';
 
 const { Content } = Layout;
@@ -49,13 +50,20 @@ const Chat: React.FC = () => {
   const session = chatStore.currentSession;
   const isLoading = !isCancelling && session?.isLoading;
 
+  const { micButton, isVoiceProcessing } = useVoiceInput(
+    !!isLoading,
+    (text: string) => {
+      setValue(prev => (prev ? `${prev}\n${text}` : text));
+    },
+  );
+
   const {
     attachments,
     uploadButton,
     attachmentTags,
     clearAttachments,
     buildMarkdownContent,
-  } = useFileUpload(!!isLoading);
+  } = useFileUpload(!!isLoading || isVoiceProcessing);
 
   const handleSend = async () => {
     if (!value && attachments.length === 0) return;
@@ -185,12 +193,18 @@ const Chat: React.FC = () => {
                   attachmentTags
                 )
               }
-              suffix={uploadButton}
+              suffix={
+                <>
+                  {micButton}
+                  {uploadButton}
+                </>
+              }
               placeholder={settingStore.tr('Type a message...')}
               loading={
                 createConversationApi[0].loading ||
                 chatApi[0].loading ||
-                isLoading
+                isLoading ||
+                isVoiceProcessing
               }
               cancelling={isCancelling}
             />
@@ -203,3 +217,4 @@ const Chat: React.FC = () => {
 };
 
 export default observer(Chat);
+

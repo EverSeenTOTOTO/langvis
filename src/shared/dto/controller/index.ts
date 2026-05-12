@@ -7,4 +7,5 @@ export * from './email.dto';
 export * from './file.dto';
 export * from './human-input.dto';
 export * from './user.dto';
+export * from './stt.dto';
 export * from './tts.dto';

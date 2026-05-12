@@ -278,9 +278,9 @@ describe('FileController - Upload', () => {
       mimeType: 'text/plain',
     });
 
-    await controller.uploadFile(mockFile, mockRes);
+    await controller.uploadFile(mockFile, {}, mockRes);
 
-    expect(mockFileService.saveFile).toHaveBeenCalledWith(mockFile);
+    expect(mockFileService.saveFile).toHaveBeenCalledWith(mockFile, undefined);
     expect(mockRes.json).toHaveBeenCalledWith({
       filename: '1234567890-abc123.txt',
       url: '/api/files/download/1234567890-abc123.txt',
@@ -295,7 +295,7 @@ describe('FileController - Upload', () => {
       status: vi.fn().mockReturnThis(),
     } as any;
 
-    await controller.uploadFile(undefined as any, mockRes);
+    await controller.uploadFile(undefined as any, {}, mockRes);
 
     expect(mockRes.status).toHaveBeenCalledWith(400);
     expect(mockRes.json).toHaveBeenCalledWith({ error: 'No file uploaded' });
@@ -315,7 +315,7 @@ describe('FileController - Upload', () => {
       status: vi.fn().mockReturnThis(),
     } as any;
 
-    await controller.uploadFile(mockFile, mockRes, { agent: 'MockAgent' });
+    await controller.uploadFile(mockFile, { agent: 'MockAgent' }, mockRes);
 
     expect(mockRes.status).toHaveBeenCalledWith(400);
     expect(mockRes.json).toHaveBeenCalledWith({
@@ -337,7 +337,7 @@ describe('FileController - Upload', () => {
       status: vi.fn().mockReturnThis(),
     } as any;
 
-    await controller.uploadFile(mockFile, mockRes, { agent: 'MockAgent' });
+    await controller.uploadFile(mockFile, { agent: 'MockAgent' }, mockRes);
 
     expect(mockRes.status).toHaveBeenCalledWith(400);
     expect(mockRes.json).toHaveBeenCalledWith({
@@ -366,7 +366,7 @@ describe('FileController - Upload', () => {
       mimeType: 'image/png',
     });
 
-    await controller.uploadFile(mockFile, mockRes, { agent: 'MockAgent' });
+    await controller.uploadFile(mockFile, { agent: 'MockAgent' }, mockRes);
 
     expect(mockFileService.saveFile).toHaveBeenCalled();
   });
