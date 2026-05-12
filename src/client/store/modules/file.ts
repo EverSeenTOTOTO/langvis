@@ -1,6 +1,9 @@
 import { api, ApiRequest } from '@/client/decorator/api';
 import { store } from '@/client/decorator/store';
-import type { UploadFileResponse } from '@/shared/dto/controller';
+import type {
+  SpeechToTextResponse,
+  UploadFileResponse,
+} from '@/shared/dto/controller';
 import { makeAutoObservable } from 'mobx';
 
 export interface FileListItem {
@@ -26,8 +29,8 @@ export class FileStore {
 
   @api('/api/files/upload', { method: 'post' })
   async upload(
-    _params: { file: File; agent?: string },
-    req?: ApiRequest<{ file: File; agent?: string }>,
+    _params: { file: File; agent?: string; dir?: string },
+    req?: ApiRequest<{ file: File; agent?: string; dir?: string }>,
   ): Promise<UploadFileResponse> {
     return req!.send() as Promise<UploadFileResponse>;
   }
@@ -66,5 +69,25 @@ export class FileStore {
     req?: ApiRequest<{ filename: string }>,
   ): Promise<void> {
     return req!.send();
+  }
+
+  @api('/api/stt/transcribe', { method: 'post' })
+  async stt(
+    _params: {
+      filePath: string;
+      mimeType: string;
+      language?: string;
+      temperature?: number;
+      diarize?: boolean;
+    },
+    req?: ApiRequest<{
+      filePath: string;
+      mimeType: string;
+      language?: string;
+      temperature?: number;
+      diarize?: boolean;
+    }>,
+  ): Promise<SpeechToTextResponse> {
+    return req!.send() as Promise<SpeechToTextResponse>;
   }
 }

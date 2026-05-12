@@ -6,6 +6,7 @@ import { Agent } from '../core/agent';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import {
+  body,
   file as fileParam,
   param,
   query as queryParam,
@@ -293,15 +294,16 @@ export default class FileController {
   @api('/upload', { method: 'post' })
   async uploadFile(
     @fileParam('file') file: Express.Multer.File,
+    @body() formBody: { dir?: string; agent?: string },
     @response() res: Response,
-    @queryParam() query?: { agent?: string },
   ): Promise<void> {
     if (!file) {
       res.status(400).json({ error: 'No file uploaded' });
       return;
     }
 
-    const uploadConfig = this.getUploadConfig(query?.agent);
+    const dir = formBody?.dir;
+    const uploadConfig = this.getUploadConfig(formBody?.agent);
     const validationError = this.validateFile(file, uploadConfig);
 
     if (validationError) {
@@ -310,7 +312,7 @@ export default class FileController {
     }
 
     try {
-      const result = await this.fileService.saveFile(file);
+      const result = await this.fileService.saveFile(file, dir);
       res.json(result);
     } catch (error) {
       this.logger.error('Error in uploadFile:', error);

@@ -81,6 +81,13 @@
         }
       },
       {
+        "id": "whisper-v3-turbo",
+        "name": "Whisper V3 Turbo",
+        "type": "stt",
+        "endpoint": "/audio/transcriptions",
+        "defaults": { "language": "", "temperature": 0 }
+      },
+      {
         "id": "text-embedding-ada-002",
         "name": "OpenAI Embedding",
         "type": "embedding"

@@ -81,6 +81,29 @@
   padding: 0;
 }
 
+.mic-button-recording {
+  color: #ff4d4f !important;
+  background-color: rgb(255 77 79 / 8%) !important;
+  border-color: #ff4d4f !important;
+  animation: mic-pulse 1.5s ease-in-out infinite;
+
+  &:hover {
+    color: #ff7875 !important;
+    border-color: #ff7875 !important;
+  }
+}
+
+@keyframes mic-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(255 77 79 / 40%);
+  }
+
+  50% {
+    box-shadow: 0 0 0 6px rgb(255 77 79 / 0%);
+  }
+}
+
 .root-dark {
   .chat-input-container {
     background-color: rgb(255 255 255 / 6%);
@@ -89,5 +112,9 @@
 
   .chat-input-header {
     background-color: rgb(255 255 255 / 4%);
+  }
+
+  .mic-button-recording {
+    background-color: rgb(255 77 79 / 15%) !important;
   }
 }

@@ -3,6 +3,7 @@ export enum ToolIds {
   DATETIME_GET = 'datetime_get',
   LLM_CALL = 'llm_call',
   TEXT_TO_SPEECH = 'text_to_speech',
+  SPEECH_TO_TEXT = 'speech_to_text',
   WEB_FETCH = 'web_fetch',
   ASK_USER = 'ask_user',
   DOCUMENT_SEARCH = 'document_search',

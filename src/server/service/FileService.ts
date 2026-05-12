@@ -90,7 +90,10 @@ export class FileService {
     return this.validatePath(filename);
   }
 
-  async saveFile(file: Express.Multer.File): Promise<{
+  async saveFile(
+    file: Express.Multer.File,
+    dir?: string,
+  ): Promise<{
     filename: string;
     url: string;
     size: number;
@@ -99,9 +102,11 @@ export class FileService {
     const ext = path.extname(file.originalname) || '';
     const timestamp = Date.now();
     const random = Math.random().toString(36).slice(2, 8);
-    const filename = `${timestamp}-${random}${ext}`;
+    const baseName = `${timestamp}-${random}${ext}`;
+    const filename = dir ? `${dir}/${baseName}` : baseName;
 
     const filePath = this.getFilePath(filename);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, file.buffer);
 
     const publicUrl = process.env.PUBLIC_URL || '';
