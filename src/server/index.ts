@@ -7,6 +7,7 @@ import express, { Express } from 'express';
 import path from 'node:path';
 import 'reflect-metadata';
 import bindControllers from './controller';
+import { disposeAllServices } from './decorator/service';
 import bindAuthMiddleware from './middleware/auth';
 import bindRequestId from './middleware/requestId';
 import bindSSRMiddleware from './middleware/ssr';
@@ -46,9 +47,33 @@ export const createServer = async (): Promise<Express> => {
 const port = process.env.PORT || 3000;
 
 createServer()
-  .then(server => {
-    server.listen(port, () => {
+  .then(app => {
+    const server = app.listen(port, () => {
       logger.info(`Server started at http://localhost:${port}`);
     });
+
+    const shutdown = () => {
+      logger.info('Shutting down server...');
+
+      disposeAllServices()
+        .then(() => {
+          server.close(() => {
+            logger.info('Server shut down');
+            process.exit(0);
+          });
+        })
+        .catch(err => {
+          logger.error('Error during shutdown:', err);
+          server.close(() => process.exit(1));
+        });
+
+      setTimeout(() => {
+        logger.warn('Forcing exit after timeout');
+        process.exit(1);
+      }, 5000).unref();
+    };
+
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
   })
   .catch(logger.error);

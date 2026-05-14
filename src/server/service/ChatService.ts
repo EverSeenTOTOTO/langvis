@@ -71,6 +71,14 @@ export class ChatService {
     return this.sessions.get(conversationId);
   }
 
+  async dispose(): Promise<void> {
+    const count = this.sessions.size;
+    for (const session of this.sessions.values()) {
+      await session.cleanup();
+    }
+    this.logger.info(`Closed ${count} SSE sessions`);
+  }
+
   async getSessionState(
     conversationId: string,
   ): Promise<ChatSessionState | null> {
@@ -436,4 +444,3 @@ Workspace Directory: ${workDir}
     session.send(cancelledEvent);
   }
 }
-
