@@ -67,4 +67,11 @@ export class DatabaseService {
   get isInitialized(): boolean {
     return this._dataSource?.isInitialized ?? false;
   }
+
+  async dispose(): Promise<void> {
+    if (this._dataSource?.isInitialized) {
+      await this._dataSource.destroy();
+      logger.info('PostgreSQL connection closed');
+    }
+  }
 }

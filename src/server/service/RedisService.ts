@@ -132,4 +132,13 @@ export class RedisService {
   get subscriber(): RedisClientType {
     return this.redisSubscriber;
   }
+
+  async dispose(): Promise<void> {
+    if (this.connected) {
+      await this.redis.quit();
+      await this.redisSubscriber.quit();
+      this.connected = false;
+      this.logger.info('Redis connections closed');
+    }
+  }
 }
