@@ -395,8 +395,6 @@ describe('ReActAgent', () => {
         return smallContent;
       });
 
-      vi.clearAllMocks();
-
       const events = await withTraceContext(async () => {
         return collectEvents(reactAgent.call(memory, ctx, {}));
       });

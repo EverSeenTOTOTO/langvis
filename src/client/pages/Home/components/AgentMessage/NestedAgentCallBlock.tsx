@@ -4,13 +4,21 @@ import {
   CheckCircleOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
-import { Flex, Tag, Typography } from 'antd';
+import { Button, Flex, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import type { ToolCallTimeline } from '@/client/store/modules/MessageFSM';
+import Modal from '@/client/components/Modal';
+import { useStore } from '@/client/store';
 import { ToolBlockItem, getToolColor } from './ToolBlockItem';
-import { buildToolTimeline, extractNestedEvents } from './utils';
+import {
+  buildToolTimeline,
+  extractNestedEvents,
+  type ProgressData,
+} from './utils';
 import './ReActAgent/index.scss';
+
+const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
 export interface NestedAgentCallBlockProps {
   toolCall: ToolCallTimeline;
@@ -34,23 +42,35 @@ export function NestedAgentCallBlock({
   depth = 0,
   customToolRender,
 }: NestedAgentCallBlockProps): React.ReactElement {
+  const settingStore = useStore('setting');
   const [expanded, setExpanded] = useState(depth === 0);
 
   // Extract nested events from this agent_call's progress
   const nestedEvents = extractNestedEvents(toolCall.progress);
   const nestedTimeline = buildToolTimeline(nestedEvents);
 
-  // Get agentId from toolArgs
+  // Get agentId from toolArgs or agent_start progress
   const agentId = toolCall.toolArgs?.agentId as string | undefined;
 
-  const Icon =
-    toolCall.status === 'pending' ? (
-      <SyncOutlined spin style={{ color: 'var(--ant-color-primary)' }} />
-    ) : toolCall.status === 'done' ? (
-      <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
-    ) : (
-      <span style={{ color: 'var(--ant-color-error)' }}>✕</span>
-    );
+  // Extract context/query from agent_start progress event
+  const agentStartProgress = toolCall.progress.find(p => {
+    const data = p.data as ProgressData;
+    return data?.status === 'agent_start';
+  });
+  const startData = agentStartProgress?.data as ProgressData | undefined;
+  const context = startData?.context as string | undefined;
+  const query = startData?.query as string | undefined;
+  const hasDetail = !!context || !!query;
+
+  const isPending = toolCall.status === 'pending';
+
+  const Icon = isPending ? (
+    <SyncOutlined spin style={{ color: 'var(--ant-color-primary)' }} />
+  ) : toolCall.status === 'done' ? (
+    <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
+  ) : (
+    <span style={{ color: 'var(--ant-color-error)' }}>✕</span>
+  );
 
   return (
     <div className={`react-agent-call-block nested-depth-${depth}`}>
@@ -70,7 +90,41 @@ export function NestedAgentCallBlock({
         <Typography.Text type="secondary" className="react-tool-time">
           {dayjs(toolCall.at).format('HH:mm:ss')}
         </Typography.Text>
-        <Typography.Text type="secondary" style={{ marginLeft: 'auto' }}>
+        {hasDetail && (
+          <Modal
+            title={`Agent Detail: ${agentId ?? 'unknown'}`}
+            width="75%"
+            footer={false}
+            trigger={
+              <Button size="small" type="link" style={{ marginLeft: 'auto' }}>
+                {settingStore.tr('View')}
+              </Button>
+            }
+          >
+            {context && (
+              <Typography.Paragraph>
+                <Typography.Text strong>Context:</Typography.Text>
+                <br />
+                <Suspense
+                  fallback={<Typography.Text>{context}</Typography.Text>}
+                >
+                  <MarkdownRender>{context}</MarkdownRender>
+                </Suspense>
+              </Typography.Paragraph>
+            )}
+            {query && (
+              <Typography.Paragraph>
+                <Typography.Text strong>Query:</Typography.Text>
+                <br />
+                <Suspense fallback={<Typography.Text>{query}</Typography.Text>}>
+                  <MarkdownRender>{query}</MarkdownRender>
+                </Suspense>
+              </Typography.Paragraph>
+            )}
+          </Modal>
+        )}
+
+        <Typography.Text type="secondary">
           {expanded ? <CaretDownOutlined /> : <CaretLeftOutlined />}
         </Typography.Text>
       </Flex>

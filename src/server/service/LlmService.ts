@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import OpenAI, { type APIError } from 'openai';
 import type {
   ChatCompletionCreateParams,
   ChatCompletionMessageParam,
@@ -141,15 +141,27 @@ export class LlmService {
       messages: messages.filter(msg => msg.role !== Role.SYSTEM),
     });
 
-    const response = await client.chat.completions.create(
-      {
-        model: modelCode,
-        ...data,
-        messages,
-        stream: true,
-      },
-      { signal },
-    );
+    let response;
+    try {
+      response = await client.chat.completions.create(
+        {
+          model: modelCode,
+          ...data,
+          messages,
+          stream: true,
+        },
+        { signal },
+      );
+    } catch (err) {
+      const apiError = err as APIError;
+      logger.error('LLM call failed', {
+        model: resolved,
+        provider: providerId,
+        status: apiError?.status ?? 'unknown',
+        error: apiError?.error ?? apiError?.message ?? String(err),
+      });
+      throw err;
+    }
 
     let content = '';
 

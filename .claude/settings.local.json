@@ -4,7 +4,8 @@
       "Bash(bunx vitest:*)",
       "Bash(make lint:*)",
       "Bash(timeout 10 make dev)",
-      "Bash(bunx tsc *)"
+      "Bash(bunx tsc *)",
+      "Bash(npx tsc *)"
     ]
   }
 }

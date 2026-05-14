@@ -30,7 +30,7 @@ export interface ChatSessionState {
 export interface PrepareTurnResult {
   messages: Message[];
   assistantId: string;
-  assistantMessage: import('@/shared/entities/Message').Message;
+  assistantMessage: Message;
 }
 
 @service()
@@ -263,7 +263,7 @@ Workspace Directory: ${workDir}
     });
 
     const assistantId = preGeneratedAssistantId ?? generateId('msg');
-    const assistantMessage: import('@/shared/entities/Message').Message = {
+    const assistantMessage: Message = {
       id: assistantId,
       role: Role.ASSIST,
       content: '',
@@ -414,9 +414,10 @@ Workspace Directory: ${workDir}
     messageFSM: MessageFSM,
     session: SessionFSM,
   ): void {
-    this.logger.error(
-      `Agent error: ${(err as Error)?.message || String(err)} session=${session.conversationId}`,
-    );
+    this.logger.error(`Agent error session=${session.conversationId}`, {
+      error: (err as Error)?.message || String(err),
+      stack: (err as Error)?.stack,
+    });
     const errorEvent = messageFSM.ctx.agentErrorEvent(
       (err as Error)?.message || String(err),
     );
@@ -435,3 +436,4 @@ Workspace Directory: ${workDir}
     session.send(cancelledEvent);
   }
 }
+

@@ -3,7 +3,7 @@ import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, MemoryIds, ToolIds } from '@/shared/constants';
 import { AgentEvent, ToolConfig } from '@/shared/types';
-import { Role } from '@/shared/types/entities';
+import { Message, Role } from '@/shared/types/entities';
 import { generateId } from '@/shared/utils';
 import { container } from 'tsyringe';
 import { Tool } from '..';
@@ -27,7 +27,7 @@ export default class AgentCallTool extends Tool<
     ctx: ExecutionContext,
   ): AsyncGenerator<AgentEvent, AgentCallOutput, void> {
     const { context, query, config: callConfig = {} } = params;
-    const { timeout = 60000 } = callConfig;
+    const { timeout = 600_000 } = callConfig;
 
     // Resolve target agent (always ReAct)
     let agent: Agent;
@@ -37,6 +37,8 @@ export default class AgentCallTool extends Tool<
       return { success: false, error: 'Agent not available' };
     }
 
+    const systemPrompt = agent.systemPrompt.build();
+
     // Create child context with timeout and callId prefix
     const [controller, cleanup] = createTimeoutController(timeout, ctx.signal);
     // Use current callId as prefix for child's callIds
@@ -45,13 +47,13 @@ export default class AgentCallTool extends Tool<
     // Initialize child memory with fabricated history
     const memory = container.resolve<ChildMemory>(MemoryIds.CHILD);
     const baseTime = Date.now();
-    const childMessages: import('@/shared/entities/Message').Message[] = [];
+    const childMessages: Message[] = [];
 
-    if (agent.systemPrompt.build()) {
+    if (systemPrompt) {
       childMessages.push({
         id: generateId('msg'),
         role: Role.SYSTEM,
-        content: agent.systemPrompt.build(),
+        content: systemPrompt,
         attachments: null,
         meta: null,
         createdAt: new Date(baseTime),
@@ -82,6 +84,14 @@ export default class AgentCallTool extends Tool<
     });
 
     memory.setContext(childMessages);
+
+    // Emit agent_start with context/query info so frontend can display it
+    yield ctx.agentToolProgressEvent(this.id, {
+      status: 'agent_start',
+      agentId: AgentIds.REACT,
+      context,
+      query,
+    });
 
     // Execute child agent and wrap events
     let content = '';

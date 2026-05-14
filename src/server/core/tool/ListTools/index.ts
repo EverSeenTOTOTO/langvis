@@ -14,14 +14,6 @@ import {
 } from '@/server/utils/formatTools';
 import type { ListToolsInput, ListToolsOutput } from './config';
 
-const CORE_TOOLS = new Set([
-  ToolIds.ASK_USER,
-  ToolIds.CACHED_READ,
-  ToolIds.AGENT_CALL,
-  ToolIds.LIST_TOOLS,
-  ToolIds.SKILL_CALL,
-]);
-
 @tool(ToolIds.LIST_TOOLS)
 export default class ListToolsTool extends Tool<
   ListToolsInput,
@@ -52,10 +44,10 @@ export default class ListToolsTool extends Tool<
       return keywords.some(k => hay.includes(k));
     };
 
-    // Tools
+    // Tools — exclude only list_tools itself
     const allTools = await this.toolService.getAllToolInfo();
     const filteredTools = allTools.filter(t => {
-      if (CORE_TOOLS.has(t.id)) return false;
+      if (t.id === ToolIds.LIST_TOOLS) return false;
       return matchFilter(`${t.id} ${t.name} ${t.description ?? ''}`);
     });
 

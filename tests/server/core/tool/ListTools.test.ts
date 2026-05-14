@@ -119,16 +119,16 @@ describe('ListToolsTool', () => {
     resolveSpy.mockRestore();
   });
 
-  it('should return non-core tools without query', () =>
+  it('should return all tools except list_tools itself', () =>
     wrapTrace(async () => {
       const ctx = new ExecutionContext(new AbortController(), 'test-msg');
       const { result } = await collectEvents(toolInstance.call({}, ctx));
 
       expect(result.tools).toContain('### file_edit');
       expect(result.tools).toContain('### bash');
-      expect(result.tools).not.toContain('### ask_user');
-      expect(result.tools).not.toContain('### cached_read');
-      expect(result.tools).not.toContain('### agent_call');
+      expect(result.tools).toContain('### ask_user');
+      expect(result.tools).toContain('### cached_read');
+      expect(result.tools).toContain('### agent_call');
       expect(result.tools).not.toContain('### list_tools');
     }));
 
@@ -154,10 +154,10 @@ describe('ListToolsTool', () => {
       expect(result.tools).not.toContain('### bash');
     }));
 
-  it('should return no tools message when no non-core tools exist', () =>
+  it('should return no tools message when only list_tools exists', () =>
     wrapTrace(async () => {
       mockToolService.getAllToolInfo.mockResolvedValue([
-        { id: 'ask_user', name: 'ask_user', description: 'Ask' },
+        { id: 'list_tools', name: 'list_tools', description: 'List tools' },
       ]);
       const ctx = new ExecutionContext(new AbortController(), 'test-msg');
       const { result } = await collectEvents(toolInstance.call({}, ctx));
