@@ -66,28 +66,28 @@ description: Archive web pages and emails to vector database with metadata extra
 
 ### Step 1: 提取元数据
 
-调用 `document_metadata_extract`：
+调用 `document_metadata_extract` 工具：
 
 - input: `{ "content": "<原文>", "sourceUrl": "<来源URL，可选>", "sourceType": "<web|email|text>" }`
 - output: `{ title, summary, keywords, category, metadata }`
 
 ### Step 2: 内容分块
 
-调用 `content_chunk`：
+调用 `content_chunk` 工具：
 
 - input: `{ "content": "<原文>", "strategy": "paragraph", "options": { "maxChunkSize": 1000 } }`
 - output: `{ chunks: [{ content, index, metadata? }] }`
 
 ### Step 3: 生成向量
 
-调用 `embedding_generate`：
+调用 `embedding_generate` 工具：
 
 - input: `{ "chunks": <Step 2 的 chunks 输出> }`
 - output: `{ chunks: [{ content, index, embedding, metadata? }], model, dimension }`
 
 ### Step 4: 存储到数据库
 
-调用 `document_store`：
+调用 `document_store` 工具：
 
 - input:
   ```json

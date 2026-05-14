@@ -217,4 +217,3 @@ const Chat: React.FC = () => {
 };
 
 export default observer(Chat);
-

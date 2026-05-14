@@ -149,10 +149,16 @@ describe('AgentCallTool', () => {
 
       expect(result.success).toBe(true);
       expect(result.content).toBe('hello world');
-      expect(events.length).toBe(4);
+      expect(events.length).toBe(5);
 
-      // All child events should be wrapped as tool_progress with status agent_event
-      for (const event of events) {
+      // First event should be agent_start with context/query
+      expect(events[0].type).toBe('tool_progress');
+      expect((events[0] as any).data.status).toBe('agent_start');
+      expect((events[0] as any).data.context).toBe('some context');
+      expect((events[0] as any).data.query).toBe('say hello');
+
+      // Remaining events should be wrapped as agent_event
+      for (const event of events.slice(1)) {
         expect(event.type).toBe('tool_progress');
         expect((event as any).data.status).toBe('agent_event');
       }
