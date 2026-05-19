@@ -5,7 +5,7 @@ description: Archive web pages and emails to vector database with metadata extra
 
 ## 关键规则
 
-1. **rawContent 必须是完整原文**，绝不能是摘要、链接简介、或模型自己概括的文字。邮件归档时 rawContent = 邮件全文；网页归档时 rawContent = web_fetch 返回的完整 content。
+1. **rawContent 必须是完整原文**，绝不能是摘要、链接简介、或模型自己概括的文字。邮件内容归档时 rawContent = 邮件全文；网页归档时 rawContent = web_fetch 返回的完整 content。
 2. **每条链接是独立文档**。从邮件提取多个链接时，每个链接单独执行 web_fetch → 归档管线，各自存入一条 Document 记录。不要把多个链接的内容合并到同一条 Document。
 3. **利用缓存传递原文**。web_fetch 等工具返回大量内容时会被缓存为 `{ "$cached": "...", "$size": ..., "$preview": "..." }` 格式。后续工具（content_chunk、document_metadata_extract、document_store 等）需要原文作为入参时，直接传入该 `$cached` 对象，系统会自动解析为完整内容，无需手动展开或概括。
 
@@ -42,7 +42,7 @@ description: Archive web pages and emails to vector database with metadata extra
 根据用户选择：
 
 - **archive_email**: 邮件原文作为 content，sourceType = "email"，直接执行下方「归档管线」
-- **archive_links**: 调用 `links_extract` 提取链接 → 筛选：侧重文章、教程、深度内容类链接，排除推广、版本发布通知、产品更新等轻量链接 → `ask_user` 多选确认要归档哪些链接 → 对每个选中链接，逐个执行：`web_fetch` 获取网页内容 → 以网页内容作为 content、sourceType = "web" → 执行「归档管线」。注意：此时 rawContent = web_fetch 返回的完整网页内容，不是邮件中的链接简介文字。
+- **archive_links**: 调用 `links_extract` 提取链接 → 筛选：侧重文章、教程、深度内容类链接，排除推广、版本发布通知、产品更新等轻量链接 → `ask_user` 多选确认要归档哪些链接 → 对每个选中链接，逐个执行：`web_fetch` 获取网页内容 → 以网页内容作为 content、sourceType = "web" → 执行「归档管线」。注意。
 - **cancel**: 返回 `final_answer` 取消
 
 ## 网页归档工作流
