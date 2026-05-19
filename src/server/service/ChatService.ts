@@ -12,10 +12,8 @@ import { registerMemory } from '../decorator/core';
 import { service } from '../decorator/service';
 import { isProd } from '../utils';
 import Logger from '../utils/logger';
-import { estimateTokens } from '../utils/estimateTokens';
 import { ConversationService } from './ConversationService';
 import { RedisService } from './RedisService';
-import { ContextUsageService } from './ContextUsageService';
 import { ProviderService } from './ProviderService';
 import { WorkspaceService } from './WorkspaceService';
 
@@ -42,8 +40,6 @@ export class ChatService {
     @inject(RedisService) private redisService: RedisService,
     @inject(ConversationService)
     private conversationService: ConversationService,
-    @inject(ContextUsageService)
-    private contextUsageService: ContextUsageService,
     @inject(ProviderService) private providerService: ProviderService,
     @inject(WorkspaceService) private workspaceService: WorkspaceService,
   ) {
@@ -325,6 +321,20 @@ Workspace Directory: ${workDir}
     const startTime = Date.now();
     let firstTokenTime: number | undefined;
 
+    // Configure memory with model info for context usage estimation
+    const convConfig = config as { model?: { modelId?: string } } | undefined;
+    const modelId = convConfig?.model?.modelId;
+    const model = modelId ? this.providerService.getModel(modelId) : undefined;
+    if (model) {
+      memory.configure({ modelId, contextSize: model.contextSize });
+    }
+
+    // preTurn: yield any memory events before agent starts
+    for await (const event of memory.preTurn(await memory.summarize())) {
+      messageFSM.handleEvent(event);
+      session.send(event);
+    }
+
     try {
       for await (const event of agent.call(memory, messageFSM.ctx, config)) {
         if (messageFSM.ctx.signal.aborted) break;
@@ -359,7 +369,11 @@ Workspace Directory: ${workDir}
         this.handleAgentCancel(messageFSM, session);
       }
 
-      await memory.completeTurn(messageFSM.message);
+      // postTurn: yield memory events (context_usage, tool summaries, etc.)
+      for await (const event of memory.postTurn(messageFSM.message)) {
+        messageFSM.handleEvent(event);
+        session.send(event);
+      }
 
       await this.conversationService.updateMessage(messageFSM.message.id, {
         content: messageFSM.message.content,
@@ -368,51 +382,12 @@ Workspace Directory: ${workDir}
         meta: messageFSM.message.meta,
       });
 
-      await this.pushContextUsage(session, messageFSM);
-
       const totalTime = Date.now() - startTime;
       const ttft = firstTokenTime ? firstTokenTime - startTime : null;
       const contentLength = messageFSM.message.content.length;
       const avgTokenTime = contentLength > 0 ? totalTime / contentLength : 0;
       this.logger.info(
         `Agent completed: totalTime=${totalTime}ms tokens=${contentLength} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${session.conversationId}`,
-      );
-    }
-  }
-
-  private async pushContextUsage(
-    session: SessionFSM,
-    messageFSM: MessageFSM,
-  ): Promise<void> {
-    const memory = session.memory;
-    if (!memory) return;
-
-    const messages = [...(await memory.summarize()), messageFSM.message];
-
-    const modelId = (messageFSM.message as any).modelId as string | undefined;
-    const model = modelId ? this.providerService.getModel(modelId) : undefined;
-
-    if (!model?.contextSize) return;
-
-    try {
-      const used = estimateTokens(messages, modelId!);
-      const total = model.contextSize;
-
-      this.contextUsageService.set(session.conversationId, { used, total });
-
-      session.send({
-        type: 'context_usage',
-        messageId: messageFSM.messageId,
-        used,
-        total,
-        seq: Date.now(),
-        at: Date.now(),
-      });
-
-      await memory.notifyContextUsage({ used, total });
-    } catch (err) {
-      this.logger.warn(
-        `Failed to calculate context usage: ${(err as Error)?.message}`,
       );
     }
   }

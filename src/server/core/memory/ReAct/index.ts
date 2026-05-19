@@ -1,18 +1,19 @@
+import { AgentEvent } from '@/shared/types';
 import { memory } from '@/server/decorator/core';
 import { MemoryIds } from '@/shared/constants';
 import { buildToolTimeline, type ToolCallTimeline } from '@/shared/types/tool';
 import { Message, Role } from '@/shared/entities/Message';
+import type { LlmMessage } from '@/shared/types/entities';
 import { container } from 'tsyringe';
+import { TraceContext } from '../../TraceContext';
 import SlideWindowMemory from '../SlideWindow';
 import { Tool } from '../../tool';
 
 @memory(MemoryIds.REACT)
 export default class ReActMemory extends SlideWindowMemory {
-  /**
-   * Generate tool summaries from the current assistant message's events
-   * and store them in meta.toolSummaries before persist.
-   */
-  override async completeTurn(currentMessage?: Message): Promise<void> {
+  override async *postTurn(
+    currentMessage?: Message,
+  ): AsyncGenerator<AgentEvent, void, void> {
     if (!currentMessage || currentMessage.role !== Role.ASSIST) return;
 
     const events = currentMessage.events;
@@ -25,6 +26,17 @@ export default class ReActMemory extends SlideWindowMemory {
       if (!currentMessage.meta) currentMessage.meta = {};
       currentMessage.meta.toolSummaries = summaries;
     }
+
+    const messages = [...(await this.summarize()), currentMessage];
+    yield* this.yieldContextUsage(messages, currentMessage.id);
+  }
+
+  override async *postStep(
+    _stepIndex: number,
+    iterMessages: LlmMessage[],
+  ): AsyncGenerator<AgentEvent, void, void> {
+    const messageId = TraceContext.getOrFail().messageId ?? '';
+    yield* this.yieldContextUsage(iterMessages, messageId);
   }
 
   private generateToolSummaries(timeline: ToolCallTimeline[]): string[] {
@@ -33,7 +45,6 @@ export default class ReActMemory extends SlideWindowMemory {
         const tool = container.resolve<Tool>(entry.toolName);
         return tool.summarize(entry);
       } catch {
-        // Fallback if tool resolution fails
         if (entry.status === 'error') {
           return `调用${entry.toolName}: 失败 - ${entry.error}`;
         }

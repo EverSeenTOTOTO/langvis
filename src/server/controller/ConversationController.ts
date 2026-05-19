@@ -146,7 +146,7 @@ export default class ConversationController {
     const messages =
       await this.conversationService.getMessagesByConversationId(id);
 
-    // Calculate context usage
+    // Calculate context usage for historical conversations
     let contextUsage: { used: number; total: number } | null = null;
     const conversation = await this.conversationService.getConversationById(id);
     const modelId = conversation?.config?.model?.modelId;

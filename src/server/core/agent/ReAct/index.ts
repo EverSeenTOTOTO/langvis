@@ -91,6 +91,8 @@ export default class ReActAgent extends Agent {
     for (let i = 0; i < this.maxIterations; i++) {
       ctx.signal.throwIfAborted();
 
+      yield* memory.preStep(i, iterMessages);
+
       const modelId = options?.model?.modelId;
 
       const content = yield* ctx.callLlm({
@@ -124,6 +126,8 @@ export default class ReActAgent extends Agent {
           role: Role.USER,
           content: `Observation: ${observation}`,
         });
+
+        yield* memory.postStep(i, iterMessages);
         continue;
       }
 
@@ -152,6 +156,7 @@ export default class ReActAgent extends Agent {
           content: `Observation: ${observation}\n`,
         });
 
+        yield* memory.postStep(i, iterMessages);
         continue;
       }
 
@@ -160,6 +165,8 @@ export default class ReActAgent extends Agent {
         role: Role.USER,
         content: `Observation: ${observation}`,
       });
+
+      yield* memory.postStep(i, iterMessages);
     }
 
     yield ctx.agentErrorEvent('Max iterations reached');

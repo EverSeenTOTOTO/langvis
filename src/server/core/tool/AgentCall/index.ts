@@ -83,7 +83,7 @@ export default class AgentCallTool extends Tool<
       conversationId: '',
     });
 
-    memory.setContext(childMessages);
+    memory.configure({ messages: childMessages });
 
     // Emit agent_start with context/query info so frontend can display it
     yield ctx.agentToolProgressEvent(this.id, {
