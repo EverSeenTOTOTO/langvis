@@ -62,6 +62,14 @@ vi.mock('tsyringe', async () => {
   };
 });
 
+function createMockMemory(summarizeResult: any[] = []) {
+  return {
+    summarize: vi.fn().mockResolvedValue(summarizeResult),
+    async *preStep() {},
+    async *postStep() {},
+  } as any;
+}
+
 function createMockContext(traceId = 'test-trace-id'): ExecutionContext {
   let ctx: ExecutionContext | undefined;
   TraceContext.run(
@@ -120,11 +128,7 @@ describe('ReActAgent', () => {
   });
 
   it('should correctly handle tool execution with nested sub-tools', async () => {
-    const memory = {
-      summarize: vi
-        .fn()
-        .mockResolvedValue([{ role: 'user', content: 'test query' }]),
-    } as any;
+    const memory = createMockMemory([{ role: 'user', content: 'test query' }]);
     const ctx = createMockContext();
 
     let llmCallCount = 0;
@@ -181,11 +185,7 @@ describe('ReActAgent', () => {
   });
 
   it('should return final answer correctly', async () => {
-    const memory = {
-      summarize: vi
-        .fn()
-        .mockResolvedValue([{ role: 'user', content: 'hello' }]),
-    } as any;
+    const memory = createMockMemory([{ role: 'user', content: 'hello' }]);
     const ctx = createMockContext();
 
     vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
@@ -215,11 +215,9 @@ describe('ReActAgent', () => {
 
   describe('cache compression and resolution', () => {
     it('should compress large string output from tool to file', async () => {
-      const memory = {
-        summarize: vi
-          .fn()
-          .mockResolvedValue([{ role: 'user', content: 'fetch large' }]),
-      } as any;
+      const memory = createMockMemory([
+        { role: 'user', content: 'fetch large' },
+      ]);
       const ctx = createMockContext();
 
       let llmCallCount = 0;
@@ -263,11 +261,9 @@ describe('ReActAgent', () => {
     });
 
     it('should resolve CachedReference in tool input', async () => {
-      const memory = {
-        summarize: vi
-          .fn()
-          .mockResolvedValue([{ role: 'user', content: 'process cached' }]),
-      } as any;
+      const memory = createMockMemory([
+        { role: 'user', content: 'process cached' },
+      ]);
       const ctx = createMockContext();
 
       const cachedContent = 'cached large content';
@@ -316,11 +312,9 @@ describe('ReActAgent', () => {
     });
 
     it('should compress large array output', async () => {
-      const memory = {
-        summarize: vi
-          .fn()
-          .mockResolvedValue([{ role: 'user', content: 'list items' }]),
-      } as any;
+      const memory = createMockMemory([
+        { role: 'user', content: 'list items' },
+      ]);
       const ctx = createMockContext();
 
       let llmCallCount = 0;
@@ -366,11 +360,7 @@ describe('ReActAgent', () => {
     });
 
     it('should not compress small output', async () => {
-      const memory = {
-        summarize: vi
-          .fn()
-          .mockResolvedValue([{ role: 'user', content: 'small' }]),
-      } as any;
+      const memory = createMockMemory([{ role: 'user', content: 'small' }]);
       const ctx = createMockContext();
 
       let llmCallCount = 0;
@@ -412,11 +402,7 @@ describe('ReActAgent', () => {
 
   describe('untrusted output wrapping', () => {
     it('should wrap tool output with untrusted_content tags when untrustedOutput is true', async () => {
-      const memory = {
-        summarize: vi
-          .fn()
-          .mockResolvedValue([{ role: 'user', content: 'test' }]),
-      } as any;
+      const memory = createMockMemory([{ role: 'user', content: 'test' }]);
       const ctx = createMockContext();
 
       mockNestedTool.config = { untrustedOutput: true };
@@ -457,11 +443,7 @@ describe('ReActAgent', () => {
     });
 
     it('should not wrap tool output when untrustedOutput is false', async () => {
-      const memory = {
-        summarize: vi
-          .fn()
-          .mockResolvedValue([{ role: 'user', content: 'test' }]),
-      } as any;
+      const memory = createMockMemory([{ role: 'user', content: 'test' }]);
       const ctx = createMockContext();
 
       mockNestedTool.config = {};

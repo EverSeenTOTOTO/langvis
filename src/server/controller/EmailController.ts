@@ -193,9 +193,6 @@ export default class EmailController {
     const memory = container.resolve<Memory>(
       conversation.config?.memory?.type ?? MemoryIds.SLIDE_WINDOW,
     );
-    if (conversation.config?.memory?.windowSize) {
-      memory.setWindowSize(conversation.config.memory.windowSize);
-    }
     session.setMemory(memory);
 
     // Pre-generate assistantId so we can compress before prepareTurn
@@ -231,8 +228,11 @@ export default class EmailController {
       assistantId,
     });
 
-    // Inject context into memory
-    memory.setContext(messages);
+    // Configure memory with context and window size
+    memory.configure({
+      messages,
+      windowSize: conversation.config?.memory?.windowSize,
+    });
 
     const pendingMessage = new PendingMessage(assistantMessage);
     session.addMessageFSM(assistantId, pendingMessage);

@@ -167,9 +167,6 @@ export default class ChatController {
     const memory = container.resolve<Memory>(
       conversation.config?.memory?.type ?? MemoryIds.SLIDE_WINDOW,
     );
-    if (conversation.config?.memory?.windowSize) {
-      memory.setWindowSize(conversation.config.memory.windowSize);
-    }
     session.setMemory(memory);
 
     // Prepare turn messages
@@ -185,8 +182,11 @@ export default class ChatController {
         },
       });
 
-    // Inject context into memory (full history including new turn)
-    memory.setContext(messages);
+    // Configure memory with context and window size
+    memory.configure({
+      messages,
+      windowSize: conversation.config?.memory?.windowSize,
+    });
 
     // Update TraceContext with messageId
     TraceContext.update({

@@ -37,7 +37,7 @@ function createMockAgent(
 }
 
 const mockChildMemory = {
-  setContext: vi.fn(),
+  configure: vi.fn(),
   summarize: vi.fn().mockResolvedValue([]),
 };
 
@@ -351,18 +351,20 @@ describe('AgentCallTool', () => {
         ),
       );
 
-      expect(mockChildMemory.setContext).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({
-            role: 'user',
-            content: 'file: report.pdf',
-            meta: { hidden: true },
-          }),
-          expect.objectContaining({
-            role: 'user',
-            content: 'analyze this',
-          }),
-        ]),
+      expect(mockChildMemory.configure).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: 'user',
+              content: 'file: report.pdf',
+              meta: { hidden: true },
+            }),
+            expect.objectContaining({
+              role: 'user',
+              content: 'analyze this',
+            }),
+          ]),
+        }),
       );
     }));
 

@@ -34,6 +34,10 @@ export class SessionFSM {
       transitions: SESSION_PHASE_TRANSITIONS,
     });
 
+    this.sm.addEventListener('transition', () => {
+      this._phase = this.sm.phase;
+    });
+
     makeAutoObservable<this, 'transport' | 'messageFSMs' | 'sm'>(this, {
       transport: false,
       messageFSMs: false,
@@ -178,16 +182,10 @@ export class SessionFSM {
       return Promise.resolve();
     }
 
-    // Create a fresh sm for this connection attempt
-    this.sm = new StateMachine<SessionPhase>({
-      initialPhase: 'waiting',
-      transitions: SESSION_PHASE_TRANSITIONS,
-    });
+    // Reset existing sm phase instead of replacing it, so externally
+    // registered listeners (e.g., ChatStore's context_usage handler) keep working
+    this.sm.reset();
     this._phase = 'waiting';
-
-    this.sm.addEventListener('transition', () => {
-      this._phase = this.sm.phase;
-    });
 
     const transport = new SSEClientTransport(
       `/api/chat/sse/${this.conversationId}`,

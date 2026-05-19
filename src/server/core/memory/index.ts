@@ -1,5 +1,14 @@
-import { Logger } from '@/server/utils/logger';
-import { Message } from '@/shared/entities/Message';
+import { AgentEvent } from '@/shared/types';
+import { LlmMessage, Message } from '@/shared/types/entities';
+import type { Logger } from '@/server/utils/logger';
+import { estimateTokens } from '@/server/utils/estimateTokens';
+
+export interface MemoryConfig {
+  messages?: Message[];
+  windowSize?: number;
+  modelId?: string;
+  contextSize?: number;
+}
 
 export interface ContextUsage {
   used: number;
@@ -8,27 +17,58 @@ export interface ContextUsage {
 
 export abstract class Memory {
   protected readonly logger!: Logger;
+  protected config: MemoryConfig = {};
   protected windowSize: number = Number.MAX_SAFE_INTEGER;
 
-  private context: Message[] = [];
+  protected context: Message[] = [];
 
-  setWindowSize(size: number): void {
-    this.windowSize = size;
-  }
-
-  setContext(messages: Message[]): void {
-    this.context = messages;
-  }
-
-  protected getContext(): Message[] {
-    return this.context;
+  configure(config: MemoryConfig): void {
+    this.config = { ...this.config, ...config };
+    if (config.windowSize !== undefined) {
+      this.windowSize = config.windowSize;
+    }
+    if (config.messages) {
+      this.context = config.messages;
+    }
   }
 
   async summarize(): Promise<Message[]> {
     return this.context;
   }
 
-  async completeTurn(_currentMessage?: Message): Promise<void> {}
+  async *preTurn(
+    _messages: Message[],
+  ): AsyncGenerator<AgentEvent, void, void> {}
 
-  async notifyContextUsage(_usage: ContextUsage): Promise<void> {}
+  async *postTurn(
+    _currentMessage?: Message,
+  ): AsyncGenerator<AgentEvent, void, void> {}
+
+  async *preStep(
+    _stepIndex: number,
+    _iterMessages: LlmMessage[],
+  ): AsyncGenerator<AgentEvent, void, void> {}
+
+  async *postStep(
+    _stepIndex: number,
+    _iterMessages: LlmMessage[],
+  ): AsyncGenerator<AgentEvent, void, void> {}
+
+  protected async *yieldContextUsage(
+    messages: LlmMessage[],
+    messageId: string,
+  ): AsyncGenerator<AgentEvent, void, void> {
+    const { modelId, contextSize } = this.config;
+    if (!modelId || !contextSize) return;
+
+    const used = estimateTokens(messages, modelId);
+    yield {
+      type: 'context_usage',
+      messageId,
+      used,
+      total: contextSize,
+      seq: Date.now(),
+      at: Date.now(),
+    };
+  }
 }

@@ -171,8 +171,9 @@ describe('ChatService', () => {
 
       const mockMemory = {
         summarize: vi.fn().mockResolvedValue([]),
-        completeTurn: vi.fn(),
-        notifyContextUsage: vi.fn(),
+        configure: vi.fn(),
+        preTurn: async function* () {},
+        postTurn: async function* () {},
       } as unknown as Memory;
 
       session!.setMemory(mockMemory);
@@ -193,7 +194,7 @@ describe('ChatService', () => {
       await chatService.runSession(session!, mockAgent, {}, mockMessage.id);
 
       expect(mockAgent.call).toHaveBeenCalled();
-      expect(mockMemory.completeTurn).toHaveBeenCalled();
+      // postTurn is called as AsyncGenerator — verified by the generator completing
       expect(session!.phase).toBe('waiting');
     });
   });

@@ -31,46 +31,48 @@ describe('SlideWindowMemory', () => {
     memory = new SlideWindowMemory();
   });
 
-  describe('setWindowSize', () => {
+  describe('configure', () => {
     it('should allow setting window size', () => {
-      memory.setWindowSize(5);
+      memory.configure({ windowSize: 5 });
       expect((memory as any).windowSize).toBe(5);
     });
   });
 
   describe('summarize', () => {
     it('should return all messages when under window size', async () => {
-      memory.setWindowSize(10);
-      memory.setContext([
-        createMessage('msg-1', Role.SYSTEM, 'System prompt'),
-        createMessage('msg-2', Role.USER, 'Question 1'),
-        createMessage('msg-3', Role.ASSIST, 'Answer 1'),
-        createMessage('msg-4', Role.USER, 'Question 2'),
-        createMessage('msg-5', Role.ASSIST, ''),
-      ]);
+      memory.configure({
+        windowSize: 10,
+        messages: [
+          createMessage('msg-1', Role.SYSTEM, 'System prompt'),
+          createMessage('msg-2', Role.USER, 'Question 1'),
+          createMessage('msg-3', Role.ASSIST, 'Answer 1'),
+          createMessage('msg-4', Role.USER, 'Question 2'),
+          createMessage('msg-5', Role.ASSIST, ''),
+        ],
+      });
 
       const result = await memory.summarize();
 
-      // No truncation notice when all messages fit
       expect(result).toHaveLength(5);
       expect(result.every(m => !m.content?.includes('truncated'))).toBe(true);
     });
 
     it('should show truncation notice with correct turn count', async () => {
-      memory.setWindowSize(1);
-      memory.setContext([
-        createMessage('msg-1', Role.SYSTEM, 'System prompt'),
-        createMessage('msg-2', Role.USER, 'Q1'),
-        createMessage('msg-3', Role.ASSIST, 'A1'),
-        createMessage('msg-4', Role.USER, 'Q2'),
-        createMessage('msg-5', Role.ASSIST, 'A2'),
-        createMessage('msg-6', Role.USER, 'Q3'),
-        createMessage('msg-7', Role.ASSIST, ''),
-      ]);
+      memory.configure({
+        windowSize: 1,
+        messages: [
+          createMessage('msg-1', Role.SYSTEM, 'System prompt'),
+          createMessage('msg-2', Role.USER, 'Q1'),
+          createMessage('msg-3', Role.ASSIST, 'A1'),
+          createMessage('msg-4', Role.USER, 'Q2'),
+          createMessage('msg-5', Role.ASSIST, 'A2'),
+          createMessage('msg-6', Role.USER, 'Q3'),
+          createMessage('msg-7', Role.ASSIST, ''),
+        ],
+      });
 
       const result = await memory.summarize();
 
-      // 3 turns total, keep 1, truncated 2
       const truncationNotice = result.find(
         m =>
           m.role === Role.USER &&
@@ -82,20 +84,21 @@ describe('SlideWindowMemory', () => {
     });
 
     it('should keep only last N turns when over window size', async () => {
-      memory.setWindowSize(2);
-      memory.setContext([
-        createMessage('msg-1', Role.SYSTEM, 'System prompt'),
-        createMessage('msg-2', Role.USER, 'Question 1'),
-        createMessage('msg-3', Role.ASSIST, 'Answer 1'),
-        createMessage('msg-4', Role.USER, 'Question 2'),
-        createMessage('msg-5', Role.ASSIST, 'Answer 2'),
-        createMessage('msg-6', Role.USER, 'Question 3'),
-        createMessage('msg-7', Role.ASSIST, ''),
-      ]);
+      memory.configure({
+        windowSize: 2,
+        messages: [
+          createMessage('msg-1', Role.SYSTEM, 'System prompt'),
+          createMessage('msg-2', Role.USER, 'Question 1'),
+          createMessage('msg-3', Role.ASSIST, 'Answer 1'),
+          createMessage('msg-4', Role.USER, 'Question 2'),
+          createMessage('msg-5', Role.ASSIST, 'Answer 2'),
+          createMessage('msg-6', Role.USER, 'Question 3'),
+          createMessage('msg-7', Role.ASSIST, ''),
+        ],
+      });
 
       const result = await memory.summarize();
 
-      // system + truncation notice + turn2 + turn3 = 6 messages
       expect(result).toHaveLength(6);
       expect(result[0].role).toBe(Role.SYSTEM);
       expect(result[1].role).toBe(Role.USER);
@@ -108,14 +111,16 @@ describe('SlideWindowMemory', () => {
     });
 
     it('should always include system message', async () => {
-      memory.setWindowSize(1);
-      memory.setContext([
-        createMessage('msg-1', Role.SYSTEM, 'System prompt'),
-        createMessage('msg-2', Role.USER, 'Question 1'),
-        createMessage('msg-3', Role.ASSIST, 'Answer 1'),
-        createMessage('msg-4', Role.USER, 'Question 2'),
-        createMessage('msg-5', Role.ASSIST, ''),
-      ]);
+      memory.configure({
+        windowSize: 1,
+        messages: [
+          createMessage('msg-1', Role.SYSTEM, 'System prompt'),
+          createMessage('msg-2', Role.USER, 'Question 1'),
+          createMessage('msg-3', Role.ASSIST, 'Answer 1'),
+          createMessage('msg-4', Role.USER, 'Question 2'),
+          createMessage('msg-5', Role.ASSIST, ''),
+        ],
+      });
 
       const result = await memory.summarize();
 
@@ -123,20 +128,23 @@ describe('SlideWindowMemory', () => {
     });
 
     it('should always include hidden user messages', async () => {
-      memory.setWindowSize(1);
-      memory.setContext([
-        createMessage('msg-1', Role.SYSTEM, 'System prompt'),
-        createMessage('msg-2', Role.USER, 'Session context', { hidden: true }),
-        createMessage('msg-3', Role.USER, 'Workflow instructions', {
-          hidden: true,
-        }),
-        createMessage('msg-4', Role.USER, 'Question'),
-        createMessage('msg-5', Role.ASSIST, ''),
-      ]);
+      memory.configure({
+        windowSize: 1,
+        messages: [
+          createMessage('msg-1', Role.SYSTEM, 'System prompt'),
+          createMessage('msg-2', Role.USER, 'Session context', {
+            hidden: true,
+          }),
+          createMessage('msg-3', Role.USER, 'Workflow instructions', {
+            hidden: true,
+          }),
+          createMessage('msg-4', Role.USER, 'Question'),
+          createMessage('msg-5', Role.ASSIST, ''),
+        ],
+      });
 
       const result = await memory.summarize();
 
-      // system + hidden messages + last turn (user + assist)
       expect(result).toHaveLength(5);
       expect(result[0].role).toBe(Role.SYSTEM);
       expect(result[1].content).toBe('Session context');
@@ -146,11 +154,13 @@ describe('SlideWindowMemory', () => {
     });
 
     it('should handle incomplete turn (user without assistant)', async () => {
-      memory.setWindowSize(5);
-      memory.setContext([
-        createMessage('msg-1', Role.SYSTEM, 'System prompt'),
-        createMessage('msg-2', Role.USER, 'Question'),
-      ]);
+      memory.configure({
+        windowSize: 5,
+        messages: [
+          createMessage('msg-1', Role.SYSTEM, 'System prompt'),
+          createMessage('msg-2', Role.USER, 'Question'),
+        ],
+      });
 
       const result = await memory.summarize();
 
@@ -160,7 +170,7 @@ describe('SlideWindowMemory', () => {
     });
 
     it('should return empty array when no context', async () => {
-      memory.setContext([]);
+      memory.configure({ messages: [] });
 
       const result = await memory.summarize();
 
@@ -168,7 +178,9 @@ describe('SlideWindowMemory', () => {
     });
 
     it('should handle only system message', async () => {
-      memory.setContext([createMessage('msg-1', Role.SYSTEM, 'System prompt')]);
+      memory.configure({
+        messages: [createMessage('msg-1', Role.SYSTEM, 'System prompt')],
+      });
 
       const result = await memory.summarize();
 
@@ -177,18 +189,19 @@ describe('SlideWindowMemory', () => {
     });
 
     it('should handle window size 1 (single turn)', async () => {
-      memory.setWindowSize(1);
-      memory.setContext([
-        createMessage('msg-1', Role.SYSTEM, 'System prompt'),
-        createMessage('msg-2', Role.USER, 'Question 1'),
-        createMessage('msg-3', Role.ASSIST, 'Answer 1'),
-        createMessage('msg-4', Role.USER, 'Question 2'),
-        createMessage('msg-5', Role.ASSIST, ''),
-      ]);
+      memory.configure({
+        windowSize: 1,
+        messages: [
+          createMessage('msg-1', Role.SYSTEM, 'System prompt'),
+          createMessage('msg-2', Role.USER, 'Question 1'),
+          createMessage('msg-3', Role.ASSIST, 'Answer 1'),
+          createMessage('msg-4', Role.USER, 'Question 2'),
+          createMessage('msg-5', Role.ASSIST, ''),
+        ],
+      });
 
       const result = await memory.summarize();
 
-      // system + truncation notice + last turn = 4 messages
       expect(result).toHaveLength(4);
       expect(result[0].role).toBe(Role.SYSTEM);
       expect(result[1].role).toBe(Role.USER);
@@ -200,32 +213,33 @@ describe('SlideWindowMemory', () => {
     });
 
     it('should handle user message without preceding assistant (consecutive user messages)', async () => {
-      memory.setWindowSize(5);
-      memory.setContext([
-        createMessage('msg-1', Role.USER, 'First question'),
-        createMessage('msg-2', Role.USER, 'Follow up question'),
-        createMessage('msg-3', Role.ASSIST, ''),
-      ]);
+      memory.configure({
+        windowSize: 5,
+        messages: [
+          createMessage('msg-1', Role.USER, 'First question'),
+          createMessage('msg-2', Role.USER, 'Follow up question'),
+          createMessage('msg-3', Role.ASSIST, ''),
+        ],
+      });
 
       const result = await memory.summarize();
 
-      // Should treat consecutive user messages as part of same turn
       expect(result).toHaveLength(3);
     });
 
     it('should use default window size when not set', async () => {
-      // Default is MAX_SAFE_INTEGER, so all messages should be kept
-      memory.setContext([
-        createMessage('msg-1', Role.SYSTEM, 'System'),
-        ...Array.from({ length: 100 }, (_, i) => [
-          createMessage(`user-${i}`, Role.USER, `Question ${i}`),
-          createMessage(`assist-${i}`, Role.ASSIST, `Answer ${i}`),
-        ]).flat(),
-      ]);
+      memory.configure({
+        messages: [
+          createMessage('msg-1', Role.SYSTEM, 'System'),
+          ...Array.from({ length: 100 }, (_, i) => [
+            createMessage(`user-${i}`, Role.USER, `Question ${i}`),
+            createMessage(`assist-${i}`, Role.ASSIST, `Answer ${i}`),
+          ]).flat(),
+        ],
+      });
 
       const result = await memory.summarize();
 
-      // system + 100 turns (each 2 messages) = 201
       expect(result).toHaveLength(201);
     });
   });

@@ -51,7 +51,7 @@ const ContextUsageBar: React.FC = () => {
         styles={styles}
       />
       <span className="context-usage-text">
-        {formatNumber(used)} / {formatNumber(total)}
+        {formatNumber(used)} / {formatNumber(total)} ({percentage.toFixed(1)}%)
       </span>
     </div>
   );
