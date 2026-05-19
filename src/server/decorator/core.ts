@@ -13,11 +13,33 @@ import { PARAM_METADATA_KEY, ParamMetadata, ParamType } from './param';
 
 const metaDataKey = Symbol.for('config');
 
+export const toolRegistry: any[] = [];
+
+/** Call dispose() on all registered tools that implement it.
+ *  Errors are logged but do not stop other tools from being disposed. */
+export async function disposeAllTools(): Promise<void> {
+  for (const token of toolRegistry) {
+    try {
+      const instance = container.resolve(token) as unknown as {
+        dispose?: () => Promise<void>;
+      };
+      if (instance && typeof instance.dispose === 'function') {
+        await instance.dispose();
+      }
+    } catch (err) {
+      logger.error(`Failed to dispose tool ${token.name}:`, err);
+    }
+  }
+}
+
 function createConfigDecorator(type: 'agent' | 'tool' | 'memory') {
   return (token?: ToolIds | AgentIds | MemoryIds) =>
     function configDecorator(target: any) {
       injectable()(target);
       Reflect.defineMetadata(metaDataKey, { type, token }, target);
+      if (type === 'tool') {
+        toolRegistry.push(target);
+      }
     };
 }
 

@@ -7,10 +7,12 @@ import { createTimeoutController } from '@/server/utils/abort';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import TurndownService from 'turndown';
+import type { Browser } from 'playwright';
+import { chromium } from 'playwright';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { sanitizeHtml } from '@/server/utils/sanitizeHtml';
-import type { WebFetchInput, WebFetchOutput } from './config';
+import type { RenderMode, WebFetchInput, WebFetchOutput } from './config';
 
 const turndownService = new TurndownService({
   headingStyle: 'atx',
@@ -18,11 +20,17 @@ const turndownService = new TurndownService({
   bulletListMarker: '-',
 });
 
+const CONTENT_RATIO_THRESHOLD = 0.1;
+
+const SPA_ROOT_SELECTORS = ['#root', '#app', '#__next', '#__nuxt'];
+
 @tool(ToolIds.WEB_FETCH)
 export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
+
+  private browser: Browser | null = null;
 
   private async doFetch(
     url: string,
@@ -63,6 +71,79 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
     return response;
   }
 
+  extractContent(
+    html: string,
+    url: string,
+  ): {
+    article: ReturnType<Readability['parse']>;
+    markdown: string;
+  } {
+    const sanitizedHTML = sanitizeHtml(html);
+    const sanitizedDOM = new JSDOM(sanitizedHTML, { url });
+    const reader = new Readability(sanitizedDOM.window.document);
+    const article = reader.parse();
+    const markdown = article?.content
+      ? turndownService.turndown(article.content)
+      : '';
+    return { article, markdown };
+  }
+
+  needsFallback(markdown: string, html: string): boolean {
+    // Signal 1: Readability returned null (no article extracted)
+    if (!markdown) return true;
+
+    // Signal 2: Content ratio too low (sparse shell HTML)
+    if (
+      html.length > 1000 &&
+      markdown.length / html.length < CONTENT_RATIO_THRESHOLD
+    ) {
+      return true;
+    }
+
+    // Signal 3: SPA markers — empty root div with no text content
+    for (const selector of SPA_ROOT_SELECTORS) {
+      const match = html.match(
+        new RegExp(`<div[^>]*id="${selector.slice(1)}"[^>]*>(.*?)</div>`, 's'),
+      );
+      if (match && match[1].trim().length === 0) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private async getBrowser(): Promise<Browser> {
+    if (this.browser?.isConnected()) return this.browser;
+    this.browser = await chromium.launch({ headless: true });
+    this.logger.info('Playwright browser launched');
+    return this.browser;
+  }
+
+  private async fetchWithPlaywright(
+    url: string,
+    timeout: number,
+    signal: AbortSignal,
+  ): Promise<string> {
+    const browser = await this.getBrowser();
+    const page = await browser.newPage();
+
+    try {
+      await page.goto(url, {
+        waitUntil: 'networkidle',
+        timeout,
+      });
+
+      signal.throwIfAborted();
+
+      const html = await page.content();
+      this.logger.info(`Playwright rendered: ${url}`);
+      return html;
+    } finally {
+      await page.close();
+    }
+  }
+
   async *call(
     @input() data: WebFetchInput,
     ctx: ExecutionContext,
@@ -74,9 +155,31 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
       timeout = 30000,
       retry = 0,
       response_format = 'concise',
+      render = 'auto',
     } = data;
     const proxy = process.env.WEB_FETCH_PROXY;
+    const renderMode = render as RenderMode;
 
+    // Direct browser mode: skip fetch entirely
+    if (renderMode === 'browser') {
+      const html = await this.fetchWithPlaywright(url, timeout, ctx.signal);
+      const { article, markdown } = this.extractContent(html, url);
+
+      if (!article) {
+        throw new Error(
+          `Failed to extract content from URL even with headless browser. URL: ${url}`,
+        );
+      }
+
+      yield ctx.agentToolProgressEvent(this.id, {
+        message: `Rendered with headless browser`,
+        data: { render: 'browser', contentLength: markdown.length },
+      });
+
+      return this.formatOutput(article!, markdown, url, response_format);
+    }
+
+    // Static or auto mode: try fetch first
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= retry; attempt++) {
@@ -89,46 +192,59 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
 
       try {
         const response = await this.doFetch(url, controller.signal, proxy);
-
         const html = await response.text();
+        const { article, markdown } = this.extractContent(html, url);
 
-        const sanitizedHTML = sanitizeHtml(html);
+        // Static mode: no fallback, throw if content is sparse
+        if (renderMode === 'static') {
+          if (!article) {
+            throw new Error(
+              `Failed to extract content from URL. The page may require JavaScript rendering. Try render="auto" or render="browser". URL: ${url}`,
+            );
+          }
+          return this.formatOutput(article!, markdown, url, response_format);
+        }
 
-        const sanitizedDOM = new JSDOM(sanitizedHTML, { url });
-        const reader = new Readability(sanitizedDOM.window.document);
-        const article = reader.parse();
-
-        if (!article) {
-          throw new Error(
-            `Failed to extract article content from URL. ` +
-              `Possible causes: (1) page requires JavaScript rendering, ` +
-              `(2) content is behind a paywall or login, ` +
-              `(3) page has non-standard HTML structure. ` +
-              `Try: fetch a different URL, or provide content directly. URL: ${url}`,
+        // Auto mode: check if fallback is needed
+        if (this.needsFallback(markdown, html)) {
+          this.logger.info(
+            `Content sparse (markdown=${markdown.length}, html=${html.length}), falling back to Playwright: ${url}`,
           );
+          cleanup();
+          const browserHtml = await this.fetchWithPlaywright(
+            url,
+            timeout,
+            ctx.signal,
+          );
+          const { article: browserArticle, markdown: browserMarkdown } =
+            this.extractContent(browserHtml, url);
+
+          if (browserArticle && browserMarkdown.length > markdown.length) {
+            yield ctx.agentToolProgressEvent(this.id, {
+              message: `Content was sparse, re-rendered with headless browser`,
+              data: {
+                render: 'auto → browser',
+                fetchLength: markdown.length,
+                browserLength: browserMarkdown.length,
+              },
+            });
+            return this.formatOutput(
+              browserArticle,
+              browserMarkdown,
+              url,
+              response_format,
+            );
+          }
+
+          // Playwright didn't help — return whatever we got from fetch
+          if (!article) {
+            throw new Error(
+              `Failed to extract content from URL even with headless browser fallback. URL: ${url}`,
+            );
+          }
         }
 
-        this.logger.info(`Successfully extracted content from: ${url}`);
-
-        const markdownContent = article.content
-          ? turndownService.turndown(article.content)
-          : '';
-
-        if (response_format === 'concise') {
-          return {
-            title: article.title || '',
-            content: markdownContent,
-          };
-        }
-
-        return {
-          title: article.title || '',
-          content: markdownContent,
-          excerpt: article.excerpt || '',
-          author: article.byline || null,
-          siteName: article.siteName || null,
-          url,
-        };
+        return this.formatOutput(article!, markdown, url, response_format);
       } catch (error) {
         lastError = error as Error;
 
@@ -143,6 +259,37 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
     }
 
     throw lastError;
+  }
+
+  private formatOutput(
+    article: NonNullable<ReturnType<Readability['parse']>>,
+    markdown: string,
+    url: string,
+    format: string,
+  ): WebFetchOutput {
+    if (format === 'concise') {
+      return {
+        title: article.title || '',
+        content: markdown,
+      };
+    }
+
+    return {
+      title: article.title || '',
+      content: markdown,
+      excerpt: article.excerpt || '',
+      author: article.byline || null,
+      siteName: article.siteName || null,
+      url,
+    };
+  }
+
+  async dispose(): Promise<void> {
+    if (this.browser?.isConnected()) {
+      await this.browser.close();
+      this.browser = null;
+      this.logger.info('Playwright browser closed');
+    }
   }
 
   override summarizeArgs(args: Record<string, unknown>): string {

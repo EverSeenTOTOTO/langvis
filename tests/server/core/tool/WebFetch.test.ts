@@ -288,3 +288,171 @@ describe('WebFetchTool - proxy and retry', () => {
     expect(global.fetch).toHaveBeenCalledTimes(4); // initial + 3 retries
   });
 });
+
+describe('WebFetchTool - needsFallback', () => {
+  let tool: WebFetchTool;
+
+  beforeEach(() => {
+    tool = new WebFetchTool();
+    (tool as any).logger = logger;
+  });
+
+  it('should fallback when markdown is empty (Readability failed)', () => {
+    expect(tool.needsFallback('', '<html><body></body></html>')).toBe(true);
+  });
+
+  it('should not fallback when content is rich', () => {
+    const html = mockHTML;
+    // Use extractContent to get real markdown
+    const { markdown } = tool.extractContent(html, 'https://example.com');
+    expect(tool.needsFallback(markdown, html)).toBe(false);
+  });
+
+  it('should fallback when content ratio is too low', () => {
+    // 50KB HTML shell with only 100 chars of extracted content
+    const bigHtml = 'x'.repeat(50000);
+    expect(tool.needsFallback('x'.repeat(100), bigHtml)).toBe(true);
+  });
+
+  it('should not fallback for short pages (ratio check only for large HTML)', () => {
+    // 500 chars HTML with 10 chars content — ratio is 2% but HTML is too short to trigger
+    expect(tool.needsFallback('x'.repeat(10), 'y'.repeat(500))).toBe(false);
+  });
+
+  it('should fallback when SPA root div is empty', () => {
+    const spaHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><title>SPA</title></head>
+        <body>
+          <div id="root"></div>
+          <script src="/bundle.js"></script>
+        </body>
+      </html>
+    `;
+    // Readability will likely return null for this, but test SPA detection directly
+    const { markdown } = tool.extractContent(spaHtml, 'https://example.com');
+    expect(tool.needsFallback(markdown, spaHtml)).toBe(true);
+  });
+
+  it('should not fallback when SPA root div has content', () => {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head><title>Article</title></head>
+        <body>
+          <div id="root">
+            <article>
+              <h1>Title</h1>
+              <p>Content paragraph with enough text for Readability to parse successfully. We need multiple paragraphs to ensure the article is detected properly by the parser algorithm.</p>
+              <p>Another paragraph with more content to ensure proper extraction by the Readability library.</p>
+              <p>Third paragraph to meet the minimum threshold requirements for article detection.</p>
+            </article>
+          </div>
+        </body>
+      </html>
+    `;
+    const { markdown } = tool.extractContent(html, 'https://example.com');
+    expect(tool.needsFallback(markdown, html)).toBe(false);
+  });
+});
+
+describe('WebFetchTool - render modes', () => {
+  let tool: WebFetchTool;
+
+  beforeEach(() => {
+    tool = new WebFetchTool();
+    // @ts-expect-error readonly
+    tool.id = ToolIds.WEB_FETCH;
+    // @ts-expect-error readonly
+    tool.config = {
+      name: { en: 'Web Fetch Tool' },
+      description: { en: 'Test tool' },
+    };
+    (tool as any).logger = logger;
+    vi.clearAllMocks();
+  });
+
+  it('should skip fetch when render=browser', async () => {
+    // Mock fetch to ensure it's NOT called
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+    });
+
+    // Mock Playwright — can't fully mock in unit test,
+    // but verify fetch is not called for render=browser
+    // This test verifies the code path; actual Playwright testing needs integration
+    const ctx = createMockContext();
+
+    // render=browser will try Playwright which won't work in unit test env,
+    // so we mock getBrowser to throw, verifying the path was taken
+    const spy = vi.spyOn(tool as any, 'getBrowser').mockImplementation(() => {
+      throw new Error('Playwright not available in test');
+    });
+
+    await expect(
+      getResult(
+        tool.call({ url: 'https://example.com/spa', render: 'browser' }, ctx),
+      ),
+    ).rejects.toThrow('Playwright not available in test');
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('should not fallback when render=static even if content is sparse', async () => {
+    const sparseHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><title>Sparse</title></head>
+        <body>
+          <div id="root"></div>
+          <script src="/bundle.js"></script>
+        </body>
+      </html>
+    `;
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => sparseHtml,
+    });
+
+    const ctx = createMockContext();
+    await expect(
+      getResult(
+        tool.call({ url: 'https://example.com/spa', render: 'static' }, ctx),
+      ),
+    ).rejects.toThrow('may require JavaScript rendering');
+  });
+
+  it('should use auto mode by default with fallback', async () => {
+    // First fetch returns sparse content, then Playwright fallback provides rich content
+    const sparseHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><title>SPA Page</title></head>
+        <body><div id="root"></div><script src="/app.js"></script></body>
+      </html>
+    `;
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => sparseHtml,
+    });
+
+    // Mock Playwright to return rich content
+    vi.spyOn(tool as any, 'fetchWithPlaywright').mockResolvedValue(mockHTML);
+
+    const ctx = createMockContext();
+    const result = await getResult(
+      tool.call({ url: 'https://example.com/spa' }, ctx),
+    );
+
+    expect(result).toHaveProperty('content');
+    expect(result.content.length).toBeGreaterThan(0);
+  });
+});

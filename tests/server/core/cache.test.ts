@@ -3,7 +3,11 @@ import path from 'path';
 import os from 'os';
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { container } from 'tsyringe';
-import { CacheService, STRING_THRESHOLD } from '@/server/service/CacheService';
+import {
+  CacheService,
+  STRING_THRESHOLD,
+  ARRAY_THRESHOLD,
+} from '@/server/service/CacheService';
 import { WorkspaceService } from '@/server/service/WorkspaceService';
 
 let testDir: string;
@@ -82,8 +86,11 @@ describe('CacheService', () => {
       expect(result).toBe(shortString);
     });
 
-    it('should compress array with more than 50 items', async () => {
-      const largeArray = Array.from({ length: 51 }, (_, i) => ({ id: i }));
+    it(`should compress array with more than ${ARRAY_THRESHOLD} items`, async () => {
+      const largeArray = Array.from(
+        { length: ARRAY_THRESHOLD + 1 },
+        (_, i) => ({ id: i }),
+      );
 
       const result = (await cacheService.compress(
         conversationId,
@@ -95,8 +102,11 @@ describe('CacheService', () => {
       expect(result.$cached).toMatch(/^fc_/);
     });
 
-    it('should not compress array with 50 or fewer items', async () => {
-      const smallArray = Array.from({ length: 50 }, (_, i) => `item-${i}`);
+    it(`should not compress array with ${ARRAY_THRESHOLD} or fewer items`, async () => {
+      const smallArray = Array.from(
+        { length: ARRAY_THRESHOLD },
+        (_, i) => `item-${i}`,
+      );
 
       const result = await cacheService.compress(conversationId, smallArray);
 
