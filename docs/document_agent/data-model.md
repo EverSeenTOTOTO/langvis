@@ -77,7 +77,7 @@ class DocumentChunk {
 
   @Column({
     type: 'vector',
-    dimension: 1536, // OpenAI text-embedding-3-small 维度
+    dimension: 1536, // OpenAI text-embedding-ada-002 维度
     nullable: true,
   })
   embedding: number[]; // 向量

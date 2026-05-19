@@ -2,11 +2,14 @@ import { ToolConfig } from '@/shared/types';
 
 export type ResponseFormat = 'concise' | 'detailed';
 
+export type RenderMode = 'auto' | 'static' | 'browser';
+
 export interface WebFetchInput {
   url: string;
   timeout?: number;
   retry?: number;
   response_format?: ResponseFormat;
+  render?: RenderMode;
 }
 
 export interface WebFetchOutputConcise {
@@ -58,6 +61,14 @@ export const config: ToolConfig<WebFetchInput, WebFetchOutput> = {
         default: 0,
         description:
           'Number of retry attempts on failure. Default is 0 (no retry).',
+        nullable: true,
+      },
+      render: {
+        type: 'string',
+        enum: ['auto', 'static', 'browser'],
+        default: 'auto',
+        description:
+          'Page rendering strategy. "auto" (default): fetch first, fallback to headless browser if content is sparse. "static": fetch only, fast but may miss JS-rendered content. "browser": use headless browser directly, reliable but slower.',
         nullable: true,
       },
       response_format: {

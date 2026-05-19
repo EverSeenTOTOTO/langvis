@@ -53,7 +53,11 @@ const Chat: React.FC = () => {
   const { micButton, isVoiceProcessing } = useVoiceInput(
     !!isLoading,
     (text: string) => {
-      setValue(prev => (prev ? `${prev}\n${text}` : text));
+      setValue(prev =>
+        prev
+          ? `${prev}\n<speech>\n${text}\n</speech>`
+          : `<speech>\n${text}\n</speech>`,
+      );
     },
   );
 
@@ -63,7 +67,7 @@ const Chat: React.FC = () => {
     attachmentTags,
     clearAttachments,
     buildMarkdownContent,
-  } = useFileUpload(!!isLoading || isVoiceProcessing);
+  } = useFileUpload(!!isLoading);
 
   const handleSend = async () => {
     if (!value && attachments.length === 0) return;

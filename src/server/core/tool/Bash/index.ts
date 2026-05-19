@@ -12,7 +12,7 @@ import { createTimeoutController } from '@/server/utils/abort';
 import { inject } from 'tsyringe';
 import { container } from 'tsyringe';
 import type { BashInput, BashOutput } from './config';
-import HumanInTheLoopTool from '../HumanInTheLoop';
+import AskUserTool from '../AskUser';
 
 const FLUSH_INTERVAL = 100; // 100ms
 const DEFAULT_TIMEOUT = 60;
@@ -92,7 +92,7 @@ export default class BashTool extends Tool<BashInput, BashOutput> {
       MAX_TIMEOUT,
     );
 
-    const hitl = container.resolve<HumanInTheLoopTool>(ToolIds.ASK_USER);
+    const hitl = container.resolve<AskUserTool>(ToolIds.ASK_USER);
     const message =
       `### 执行命令\n\n` +
       `\`\`\`bash\n${command}\n\`\`\`\n\n` +

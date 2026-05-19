@@ -13,7 +13,7 @@ export interface CachedReference {
 }
 
 export const STRING_THRESHOLD = 20000;
-export const ARRAY_THRESHOLD = 50;
+export const ARRAY_THRESHOLD = 100;
 export const PREVIEW_LENGTH = 200;
 
 export function isCachedReference(value: unknown): value is CachedReference {

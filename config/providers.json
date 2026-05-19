@@ -22,8 +22,8 @@
         "defaults": { "temperature": 0.7 }
       },
       {
-        "id": "moonshotai/kimi-k2.5",
-        "name": "Kimi K2.5",
+        "id": "moonshotai/kimi-k2.6",
+        "name": "Kimi K2.6",
         "type": "chat",
         "contextSize": 262144,
         "multimodal": false,

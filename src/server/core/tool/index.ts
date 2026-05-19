@@ -35,6 +35,9 @@ export abstract class Tool<I = unknown, O = unknown> {
   summarizeOutput(_output: unknown): string {
     return '完成';
   }
+
+  /** Override to clean up persistent resources (e.g. browser, connections) on shutdown. */
+  async dispose(): Promise<void> {}
 }
 
 export type ToolConstructor = new (...args: any[]) => Tool;

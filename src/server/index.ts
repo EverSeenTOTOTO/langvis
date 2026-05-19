@@ -8,6 +8,7 @@ import path from 'node:path';
 import 'reflect-metadata';
 import bindControllers from './controller';
 import { disposeAllServices } from './decorator/service';
+import { disposeAllTools } from './decorator/core';
 import bindAuthMiddleware from './middleware/auth';
 import bindRequestId from './middleware/requestId';
 import bindSSRMiddleware from './middleware/ssr';
@@ -56,6 +57,7 @@ createServer()
       logger.info('Shutting down server...');
 
       disposeAllServices()
+        .then(() => disposeAllTools())
         .then(() => {
           server.close(() => {
             logger.info('Server shut down');

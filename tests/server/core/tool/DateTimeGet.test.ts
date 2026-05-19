@@ -1,0 +1,83 @@
+import DateTimeGetTool from '@/server/core/tool/DateTimeGet';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { createMockContext } from '../../helpers/context';
+
+async function getResult<T>(gen: AsyncGenerator<unknown, T, void>): Promise<T> {
+  let result = await gen.next();
+  while (!result.done) {
+    result = await gen.next();
+  }
+  return result.value;
+}
+
+describe('DateTimeGetTool', () => {
+  let dateTimeTool: DateTimeGetTool;
+
+  beforeEach(() => {
+    dateTimeTool = new DateTimeGetTool();
+  });
+
+  it('should return current time in ISO-like format by default', async () => {
+    const ctx = createMockContext();
+    const result = await getResult(dateTimeTool.call({}, ctx));
+    expect(result.result).toMatch(
+      /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[-+]\d{2}:\d{2}/,
+    );
+  });
+
+  it('should return time in specified format', async () => {
+    const ctx = createMockContext();
+    const result = await getResult(
+      dateTimeTool.call(
+        {
+          format: 'YYYY-MM-DD HH:mm:ss',
+        },
+        ctx,
+      ),
+    );
+    expect(result.result).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
+  });
+
+  it('should return time in specified timezone', async () => {
+    const ctx = createMockContext();
+    const result = await getResult(
+      dateTimeTool.call(
+        {
+          timezone: 'America/New_York',
+        },
+        ctx,
+      ),
+    );
+    expect(result.result).toMatch(
+      /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[-+]\d{2}:\d{2}/,
+    );
+  });
+
+  it('should return time in specified timezone and format', async () => {
+    const ctx = createMockContext();
+    const result = await getResult(
+      dateTimeTool.call(
+        {
+          timezone: 'Asia/Tokyo',
+          format: 'YYYY年MM月DD日 HH:mm:ss',
+        },
+        ctx,
+      ),
+    );
+    expect(result.result).toMatch(/\d{4}年\d{2}月\d{2}日 \d{2}:\d{2}:\d{2}/);
+  });
+
+  it('should throw error for invalid timezone', async () => {
+    const ctx = createMockContext();
+    await expect(
+      getResult(
+        dateTimeTool.call(
+          {
+            timezone: 'Invalid/Timezone',
+          },
+          ctx,
+        ),
+      ),
+    ).rejects.toThrow('Invalid time zone specified: Invalid/Timezone');
+  });
+});
