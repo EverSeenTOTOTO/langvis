@@ -3,11 +3,12 @@ import { config } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import { AgentConfig, AgentEvent } from '@/shared/types';
-import { container } from 'tsyringe';
+import { container, inject } from 'tsyringe';
 import { Agent } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
 import { Prompt } from '../../PromptBuilder';
+import { LlmService } from '@/server/service/LlmService';
 import { Tool } from '../../tool';
 import { TraceContext } from '../../TraceContext';
 import type TextToSpeechTool from '../../tool/TextToSpeech';
@@ -33,6 +34,10 @@ export default class GirlFriendAgent extends Agent {
   protected readonly logger!: Logger;
   readonly tools!: Tool[];
 
+  constructor(@inject(LlmService) private readonly llmService: LlmService) {
+    super();
+  }
+
   get systemPrompt(): Prompt {
     return createPrompt(this, super.systemPrompt);
   }
@@ -45,17 +50,26 @@ export default class GirlFriendAgent extends Agent {
     yield ctx.agentStartEvent();
 
     const messages = await memory.summarize();
-
     const modelId = options?.model?.modelId;
 
-    const accumulatedContent = yield* ctx.callLlm(
+    const generator = this.llmService.chat(
+      modelId,
       {
-        modelId,
-        temperature: options?.model?.temperature,
         messages,
+        temperature: options?.model?.temperature,
       },
-      false,
+      ctx.signal,
+      this.logger,
     );
+
+    let accumulatedContent = '';
+    let next = await generator.next();
+    while (!next.done) {
+      yield ctx.agentStreamEvent(next.value);
+      accumulatedContent += next.value;
+      next = await generator.next();
+    }
+    accumulatedContent = next.value ?? accumulatedContent;
 
     const tts = container.resolve<TextToSpeechTool>(ToolIds.TEXT_TO_SPEECH);
     const ttsArgs = {

@@ -1,3 +1,5 @@
+import * as fs from 'fs/promises';
+import * as nodePath from 'path';
 import OpenAI, { type APIError } from 'openai';
 import type {
   ChatCompletionCreateParams,
@@ -6,9 +8,7 @@ import type {
 import { inject, singleton } from 'tsyringe';
 import type { Logger } from '../utils/logger';
 import { ProviderService } from './ProviderService';
-import { ToolIds } from '@/shared/constants';
 import { TraceContext } from '../core/TraceContext';
-import type { AgentEvent } from '@/shared/types';
 import { Role, type LlmMessage, type Message } from '@/shared/types/entities';
 import type {
   TextToSpeechInput,
@@ -124,7 +124,7 @@ export class LlmService {
     data: Partial<ChatCompletionCreateParams>,
     signal: AbortSignal,
     logger: Logger,
-  ): AsyncGenerator<AgentEvent, string, void> {
+  ): AsyncGenerator<string, string, void> {
     const resolved = this.resolveModel(modelId, 'chat');
     const providerId = this.resolveProviderId(resolved);
     const modelCode = this.resolveModelCode(resolved);
@@ -172,15 +172,7 @@ export class LlmService {
 
       if (delta) {
         content += delta;
-        yield {
-          type: 'tool_progress',
-          messageId: '',
-          callId: '',
-          toolName: ToolIds.LLM_CALL,
-          data: delta,
-          seq: 0,
-          at: Date.now(),
-        };
+        yield delta;
       }
 
       if (finishReason) {
@@ -195,6 +187,20 @@ export class LlmService {
     }
 
     return content;
+  }
+
+  async chatContent(
+    modelId: string | undefined,
+    data: Partial<ChatCompletionCreateParams>,
+    signal: AbortSignal,
+    logger: Logger,
+  ): Promise<string> {
+    const generator = this.chat(modelId, data, signal, logger);
+    let next = await generator.next();
+    while (!next.done) {
+      next = await generator.next();
+    }
+    return next.value ?? '';
   }
 
   async embed(
@@ -289,8 +295,6 @@ export class LlmService {
       throw new Error('No audio data received from TTS API');
     }
 
-    const fs = await import('fs/promises');
-    const nodePath = await import('path');
     const ttsDir = nodePath.join(process.cwd(), 'upload', 'tts');
     await fs.mkdir(ttsDir, { recursive: true });
 
@@ -317,8 +321,6 @@ export class LlmService {
     const endpoint = model?.endpoint ?? '/audio/transcriptions';
     const url = `${provider.baseUrl}${endpoint}`;
 
-    const fs = await import('fs/promises');
-    const nodePath = await import('path');
     const fileBuffer = await fs.readFile(
       nodePath.join(process.cwd(), 'upload', params.filePath),
     );

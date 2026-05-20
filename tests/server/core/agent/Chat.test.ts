@@ -1,32 +1,8 @@
 import ChatAgent from '@/server/core/agent/Chat';
-import { ToolIds } from '@/shared/constants';
+import type { LlmService } from '@/server/service/LlmService';
 import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext } from '../../helpers/context';
-
-const mockLlmCallTool = {
-  call: vi.fn(),
-};
-
-vi.mock('tsyringe', async () => {
-  const actual = await vi.importActual('tsyringe');
-  return {
-    ...actual,
-    container: {
-      resolve: vi.fn((token: any) => {
-        if (token === ToolIds.LLM_CALL) {
-          return mockLlmCallTool;
-        }
-        return new (class MockLogger {
-          info = vi.fn();
-          error = vi.fn();
-          warn = vi.fn();
-          debug = vi.fn();
-        })();
-      }),
-    },
-  };
-});
 
 async function collectEvents(
   generator: AsyncGenerator<AgentEvent, void, void>,
@@ -40,9 +16,16 @@ async function collectEvents(
 
 describe('ChatAgent', () => {
   let chatAgent: ChatAgent;
+  let mockLlmService: LlmService;
 
   beforeEach(() => {
-    chatAgent = new ChatAgent();
+    mockLlmService = {
+      chat: vi.fn().mockImplementation(async function* () {
+        return '';
+      }),
+    } as unknown as LlmService;
+
+    chatAgent = new ChatAgent(mockLlmService);
     Object.defineProperty(chatAgent, 'logger', {
       value: {
         debug: vi.fn(),
@@ -63,16 +46,13 @@ describe('ChatAgent', () => {
     } as any;
     const ctx = createMockContext();
 
-    mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
-      AgentEvent,
-      string,
-      void
-    > {
-      yield ctx.agentToolProgressEvent('llm-call', 'Hello');
-      yield ctx.agentToolProgressEvent('llm-call', ' world');
-      yield ctx.agentToolResultEvent('llm-call', 'Hello world');
-      return 'Hello world';
-    });
+    (mockLlmService.chat as any).mockImplementation(
+      async function* (): AsyncGenerator<string, string, void> {
+        yield 'Hello';
+        yield ' world';
+        return 'Hello world';
+      },
+    );
 
     const events = await collectEvents(chatAgent.call(memory, ctx, {}));
 
@@ -87,25 +67,26 @@ describe('ChatAgent', () => {
       type: 'stream',
       content: ' world',
     });
+    expect(events[events.length - 1]).toMatchObject({
+      type: 'final',
+    });
   });
 
-  it('should pass context to llmCallTool.call', async () => {
+  it('should pass options to llmService.chat', async () => {
     const memory = {
       summarize: vi.fn().mockResolvedValue([]),
     } as any;
     const ctx = createMockContext();
 
-    mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
-      AgentEvent,
-      string,
-      void
-    > {
-      yield ctx.agentToolResultEvent('llm-call', '');
-      return '';
-    });
-
     await collectEvents(chatAgent.call(memory, ctx, {}));
 
-    expect(mockLlmCallTool.call).toHaveBeenCalledWith(expect.any(Object), ctx);
+    expect(mockLlmService.chat).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({
+        messages: [],
+      }),
+      ctx.signal,
+      expect.anything(),
+    );
   });
 });

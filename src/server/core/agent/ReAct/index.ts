@@ -1,6 +1,7 @@
 import { agent } from '@/server/decorator/core';
 import { config } from '@/server/decorator/param';
 import { CacheService } from '@/server/service/CacheService';
+import { LlmService } from '@/server/service/LlmService';
 import { SkillService } from '@/server/service/SkillService';
 import { ToolService } from '@/server/service/ToolService';
 import type { Logger } from '@/server/utils/logger';
@@ -54,6 +55,7 @@ export default class ReActAgent extends Agent {
     @inject(CacheService) private readonly cacheService: CacheService,
     @inject(ToolService) private readonly toolService: ToolService,
     @inject(SkillService) private readonly skillService: SkillService,
+    @inject(LlmService) private readonly llmService: LlmService,
   ) {
     super();
   }
@@ -95,12 +97,16 @@ export default class ReActAgent extends Agent {
 
       const modelId = options?.model?.modelId;
 
-      const content = yield* ctx.callLlm({
+      const content = await this.llmService.chatContent(
         modelId,
-        messages: iterMessages,
-        temperature: options?.model?.temperature,
-        stop: ['Observation:', 'Observation：'],
-      });
+        {
+          messages: iterMessages,
+          temperature: options?.model?.temperature,
+          stop: ['Observation:', 'Observation：'],
+        },
+        ctx.signal,
+        this.logger,
+      );
 
       if (!content) {
         yield ctx.agentErrorEvent('No response from model');

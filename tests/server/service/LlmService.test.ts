@@ -5,6 +5,8 @@ import type { ProviderDefinition } from '@/shared/types/provider';
 
 vi.mock('fs/promises', () => ({
   readFile: vi.fn().mockResolvedValue(Buffer.from('audio-bytes')),
+  mkdir: vi.fn().mockResolvedValue(undefined),
+  writeFile: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('path', async importOriginal => {

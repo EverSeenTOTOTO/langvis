@@ -4,8 +4,10 @@ import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { AgentEvent, ToolConfig } from '@/shared/types';
 import { wrapUntrusted } from '@/shared/utils';
+import { inject } from 'tsyringe';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
+import { LlmService } from '@/server/service/LlmService';
 import { Prompt } from '../../PromptBuilder';
 import type {
   DocumentMetadataExtractInput,
@@ -51,6 +53,10 @@ export default class DocumentMetadataExtractTool extends Tool<
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
+  constructor(@inject(LlmService) private readonly llmService: LlmService) {
+    super();
+  }
+
   async *call(
     @input() data: DocumentMetadataExtractInput,
     ctx: ExecutionContext,
@@ -72,14 +78,19 @@ ${wrapUntrusted(truncatedContent)}`;
       data: { sourceUrl, sourceType },
     });
 
-    const responseContent = yield* ctx.callLlm({
-      messages: [
-        { role: 'system', content: systemPrompt.build() },
-        { role: 'user', content: userPrompt },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3,
-    });
+    const responseContent = await this.llmService.chatContent(
+      undefined,
+      {
+        messages: [
+          { role: 'system', content: systemPrompt.build() },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
+      },
+      ctx.signal,
+      this.logger,
+    );
 
     if (!responseContent) {
       throw new Error(

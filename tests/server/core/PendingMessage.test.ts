@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PendingMessage } from '@/server/core/PendingMessage';
 import { Role } from '@/shared/entities/Message';
-import { ToolIds } from '@/shared/constants';
 import type { AgentEvent } from '@/shared/types';
 
 const MSG_ID = 'msg-123';
@@ -61,7 +60,7 @@ describe('PendingMessage', () => {
       expect(msg.events![0]).toEqual(toolCallEvent);
     });
 
-    it('should not persist LLM_CALL tool events', () => {
+    it('should persist all non-stream events to message.events', () => {
       const msg = createMessage();
       const pending = new PendingMessage(msg);
 
@@ -69,13 +68,13 @@ describe('PendingMessage', () => {
         type: 'tool_call',
         messageId: MSG_ID,
         callId: 'tc_123',
-        toolName: ToolIds.LLM_CALL,
+        toolName: 'any_tool',
         toolArgs: {},
         seq: 1,
         at: Date.now(),
       });
 
-      expect(msg.events).toHaveLength(0);
+      expect(msg.events).toHaveLength(1);
     });
 
     it('should set content on error event', () => {

@@ -1,12 +1,9 @@
 import GirlFriendAgent from '@/server/core/agent/GirlFriend';
 import { ToolIds } from '@/shared/constants';
+import type { LlmService } from '@/server/service/LlmService';
 import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext, withTraceContext } from '../../helpers/context';
-
-const mockLlmCallTool = {
-  call: vi.fn(),
-};
 
 const mockTtsTool = {
   call: vi.fn(),
@@ -18,9 +15,6 @@ vi.mock('tsyringe', async () => {
     ...actual,
     container: {
       resolve: vi.fn((token: any) => {
-        if (token === ToolIds.LLM_CALL) {
-          return mockLlmCallTool;
-        }
         if (token === ToolIds.TEXT_TO_SPEECH) {
           return mockTtsTool;
         }
@@ -47,9 +41,16 @@ async function collectEvents(
 
 describe('GirlFriendAgent', () => {
   let girlFriendAgent: GirlFriendAgent;
+  let mockLlmService: LlmService;
 
   beforeEach(() => {
-    girlFriendAgent = new GirlFriendAgent();
+    mockLlmService = {
+      chat: vi.fn().mockImplementation(async function* () {
+        return '';
+      }),
+    } as unknown as LlmService;
+
+    girlFriendAgent = new GirlFriendAgent(mockLlmService);
     Object.defineProperty(girlFriendAgent, 'logger', {
       value: {
         debug: vi.fn(),
@@ -70,16 +71,13 @@ describe('GirlFriendAgent', () => {
     } as any;
     const ctx = createMockContext();
 
-    mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
-      AgentEvent,
-      string,
-      void
-    > {
-      yield ctx.agentToolProgressEvent('llm-call', 'Hello');
-      yield ctx.agentToolProgressEvent('llm-call', ' world');
-      yield ctx.agentToolResultEvent('llm-call', 'Hello world');
-      return 'Hello world';
-    });
+    (mockLlmService.chat as any).mockImplementation(
+      async function* (): AsyncGenerator<string, string, void> {
+        yield 'Hello';
+        yield ' world';
+        return 'Hello world';
+      },
+    );
 
     mockTtsTool.call.mockImplementation(async function* (): AsyncGenerator<
       AgentEvent,
@@ -116,20 +114,11 @@ describe('GirlFriendAgent', () => {
     });
   });
 
-  it('should pass context to llmCallTool.call and tts.call', async () => {
+  it('should pass options to llmService.chat and tts.call', async () => {
     const memory = {
       summarize: vi.fn().mockResolvedValue([]),
     } as any;
     const ctx = createMockContext();
-
-    mockLlmCallTool.call.mockImplementation(async function* (): AsyncGenerator<
-      AgentEvent,
-      string,
-      void
-    > {
-      yield ctx.agentToolResultEvent('llm-call', '');
-      return '';
-    });
 
     mockTtsTool.call.mockImplementation(async function* (): AsyncGenerator<
       AgentEvent,
@@ -144,7 +133,12 @@ describe('GirlFriendAgent', () => {
       collectEvents(girlFriendAgent.call(memory, ctx, {})),
     );
 
-    expect(mockLlmCallTool.call).toHaveBeenCalledWith(expect.any(Object), ctx);
+    expect(mockLlmService.chat).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ messages: [] }),
+      ctx.signal,
+      expect.anything(),
+    );
     expect(mockTtsTool.call).toHaveBeenCalledWith(expect.any(Object), ctx);
   });
 });
