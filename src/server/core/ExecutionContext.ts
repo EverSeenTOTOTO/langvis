@@ -1,18 +1,5 @@
-import { ToolIds } from '@/shared/constants';
-import type { LlmMessage } from '@/shared/types/entities';
 import { AgentEvent } from '@/shared/types';
 import { generateId } from '@/shared/utils';
-import { container } from 'tsyringe';
-import type LlmCallTool from './tool/LlmCall';
-
-export type CallLlmOptions = {
-  modelId?: string;
-  messages?: LlmMessage[];
-  temperature?: number;
-  topP?: number;
-  stop?: string[];
-  response_format?: { type: string };
-};
 
 export class ExecutionContext {
   public get signal(): AbortSignal {
@@ -168,26 +155,5 @@ export class ExecutionContext {
     };
     this.popCallId();
     return event;
-  }
-
-  // === LlmCall util ===
-
-  async *callLlm(
-    options: CallLlmOptions,
-    ignore: boolean = true,
-  ): AsyncGenerator<AgentEvent, string, void> {
-    const llmCallTool = container.resolve<LlmCallTool>(ToolIds.LLM_CALL);
-    let content = '';
-
-    for await (const event of llmCallTool.call(options, this)) {
-      if (event.type === 'tool_progress' && typeof event.data === 'string') {
-        content += event.data;
-        if (!ignore) {
-          yield this.agentStreamEvent(event.data);
-        }
-      }
-    }
-
-    return content;
   }
 }

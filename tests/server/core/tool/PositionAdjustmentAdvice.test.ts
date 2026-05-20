@@ -1,6 +1,7 @@
 import { ExecutionContext } from '@/server/core/ExecutionContext';
 import { TraceContext } from '@/server/core/TraceContext';
 import PositionAdjustmentAdviceTool from '@/server/core/tool/PositionAdjustmentAdvice';
+import type { LlmService } from '@/server/service/LlmService';
 import { ToolIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -44,9 +45,14 @@ async function collectEvents<T>(
 
 describe('PositionAdjustmentAdviceTool', () => {
   let tool: PositionAdjustmentAdviceTool;
+  let mockLlmService: LlmService;
 
   beforeEach(() => {
-    tool = new PositionAdjustmentAdviceTool();
+    mockLlmService = {
+      chatContent: vi.fn().mockResolvedValue(''),
+    } as unknown as LlmService;
+
+    tool = new PositionAdjustmentAdviceTool(mockLlmService);
     (tool as any).id = ToolIds.POSITION_ADJUSTMENT_ADVICE;
     (tool as any).config = {};
     (tool as any).logger = {
@@ -127,10 +133,7 @@ describe('PositionAdjustmentAdviceTool', () => {
       });
 
       const mockAdvice = '建议减少股票仓位...';
-      vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
-        yield ctx.agentStreamEvent(mockAdvice);
-        return mockAdvice;
-      });
+      (mockLlmService.chatContent as any).mockResolvedValue(mockAdvice);
 
       const generator = tool.call({ conversationId: 'test-conv' }, ctx);
 
@@ -141,9 +144,8 @@ describe('PositionAdjustmentAdviceTool', () => {
         advice: mockAdvice,
       });
 
-      const callLlmSpy = vi.mocked(ctx.callLlm);
-      expect(callLlmSpy).toHaveBeenCalled();
-      const callArgs = callLlmSpy.mock.calls[0][0];
+      expect(mockLlmService.chatContent).toHaveBeenCalled();
+      const callArgs = (mockLlmService.chatContent as any).mock.calls[0][1];
       expect(callArgs.messages).toHaveLength(2);
       expect(callArgs.messages![0].role).toBe('system');
       expect(callArgs.messages![1].role).toBe('user');
@@ -186,15 +188,12 @@ describe('PositionAdjustmentAdviceTool', () => {
         return { submitted: true, data: formData };
       });
 
-      const callLlmSpy = vi
-        .spyOn(ctx, 'callLlm')
-        .mockImplementation(async function* () {
-          return 'Advice';
-        });
+      (mockLlmService.chatContent as any).mockResolvedValue('Advice');
 
       await collectEvents(tool.call({ conversationId: 'test-conv' }, ctx));
 
-      const userMessage = callLlmSpy.mock.calls[0][0].messages![1].content;
+      const callArgs = (mockLlmService.chatContent as any).mock.calls[0][1];
+      const userMessage = callArgs.messages![1].content;
 
       expect(userMessage).toContain('50万');
       expect(userMessage).toContain('20万');
@@ -216,9 +215,7 @@ describe('PositionAdjustmentAdviceTool', () => {
         return { submitted: true, data: formData };
       });
 
-      vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
-        return 'Simple advice';
-      });
+      (mockLlmService.chatContent as any).mockResolvedValue('Simple advice');
 
       const { result } = await collectEvents(
         tool.call({ conversationId: 'test-conv' }, ctx),

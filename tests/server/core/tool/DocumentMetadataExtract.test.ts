@@ -1,5 +1,6 @@
 import DocumentMetadataExtractTool from '@/server/core/tool/DocumentMetadataExtract';
 import type { DocumentMetadataExtractOutput } from '@/server/core/tool/DocumentMetadataExtract/config';
+import type { LlmService } from '@/server/service/LlmService';
 import logger from '@/server/utils/logger';
 import { AgentEvent } from '@/shared/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,11 +30,16 @@ async function collectEvents(
 
 describe('DocumentMetadataExtractTool', () => {
   let metaExtractTool: DocumentMetadataExtractTool;
+  let mockLlmService: LlmService;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    metaExtractTool = new DocumentMetadataExtractTool();
+    mockLlmService = {
+      chatContent: vi.fn().mockResolvedValue(''),
+    } as unknown as LlmService;
+
+    metaExtractTool = new DocumentMetadataExtractTool(mockLlmService);
     (metaExtractTool as any).logger = logger;
   });
 
@@ -46,23 +52,15 @@ describe('DocumentMetadataExtractTool', () => {
       const content = 'This is a test document about technology.';
       const ctx = createMockContext();
 
-      // Mock callLlm to return content
-      vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
-        yield {
-          type: 'stream',
-          messageId: 'test-msg',
-          content: 'test',
-          seq: 1,
-          at: Date.now(),
-        };
-        return JSON.stringify({
+      (mockLlmService.chatContent as any).mockResolvedValue(
+        JSON.stringify({
           title: 'Test Document Title',
           summary: 'A brief summary',
           keywords: ['test', 'document'],
           category: 'tech_blog',
           metadata: { platform: 'github' },
-        });
-      });
+        }),
+      );
 
       const { progress, result } = await collectEvents(
         metaExtractTool.call({ content }, ctx),
@@ -84,18 +82,9 @@ describe('DocumentMetadataExtractTool', () => {
       const content = 'Document content';
       const ctx = createMockContext();
 
-      const callLlmSpy = vi
-        .spyOn(ctx, 'callLlm')
-        .mockImplementation(async function* () {
-          yield {
-            type: 'stream',
-            messageId: 'test-msg',
-            content: 'test',
-            seq: 1,
-            at: Date.now(),
-          };
-          return JSON.stringify({ title: 'Test' });
-        });
+      (mockLlmService.chatContent as any).mockResolvedValue(
+        JSON.stringify({ title: 'Test' }),
+      );
 
       await collectEvents(
         metaExtractTool.call(
@@ -108,13 +97,15 @@ describe('DocumentMetadataExtractTool', () => {
         ),
       );
 
-      // First arg is options, second is ignoreProgress flag
-      expect(callLlmSpy).toHaveBeenCalledWith(
+      expect(mockLlmService.chatContent).toHaveBeenCalledWith(
+        undefined,
         expect.objectContaining({
           messages: expect.arrayContaining([
             expect.objectContaining({ role: 'user' }),
           ]),
         }),
+        ctx.signal,
+        expect.anything(),
       );
     });
 
@@ -122,23 +113,13 @@ describe('DocumentMetadataExtractTool', () => {
       const longContent = 'A'.repeat(10000);
       const ctx = createMockContext();
 
-      const callLlmSpy = vi
-        .spyOn(ctx, 'callLlm')
-        .mockImplementation(async function* () {
-          yield {
-            type: 'stream',
-            messageId: 'test-msg',
-            content: 'test',
-            seq: 1,
-            at: Date.now(),
-          };
-          return JSON.stringify({ title: 'Test' });
-        });
+      (mockLlmService.chatContent as any).mockResolvedValue(
+        JSON.stringify({ title: 'Test' }),
+      );
 
       await collectEvents(metaExtractTool.call({ content: longContent }, ctx));
 
-      // Content should be truncated to 8000 chars in the prompt
-      const callArgs = callLlmSpy.mock.calls[0][0];
+      const callArgs = (mockLlmService.chatContent as any).mock.calls[0][1];
       const userMessage = callArgs.messages!.find(
         (m: any) => m.role === 'user',
       );
@@ -148,16 +129,7 @@ describe('DocumentMetadataExtractTool', () => {
     it('should provide defaults for missing fields', async () => {
       const ctx = createMockContext();
 
-      vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
-        yield {
-          type: 'stream',
-          messageId: 'test-msg',
-          content: '{}',
-          seq: 1,
-          at: Date.now(),
-        };
-        return JSON.stringify({});
-      });
+      (mockLlmService.chatContent as any).mockResolvedValue(JSON.stringify({}));
 
       const { result } = await collectEvents(
         metaExtractTool.call({ content: 'test' }, ctx),
@@ -173,9 +145,7 @@ describe('DocumentMetadataExtractTool', () => {
     it('should throw error on empty LLM response', async () => {
       const ctx = createMockContext();
 
-      vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
-        return '';
-      });
+      (mockLlmService.chatContent as any).mockResolvedValue('');
 
       await expect(
         collectEvents(metaExtractTool.call({ content: 'test' }, ctx)),
@@ -185,9 +155,7 @@ describe('DocumentMetadataExtractTool', () => {
     it('should throw error on invalid JSON response', async () => {
       const ctx = createMockContext();
 
-      vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
-        return 'not valid json';
-      });
+      (mockLlmService.chatContent as any).mockResolvedValue('not valid json');
 
       await expect(
         collectEvents(metaExtractTool.call({ content: 'test' }, ctx)),
@@ -198,9 +166,9 @@ describe('DocumentMetadataExtractTool', () => {
       const longSummary = 'A'.repeat(100);
       const ctx = createMockContext();
 
-      vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
-        return JSON.stringify({ summary: longSummary });
-      });
+      (mockLlmService.chatContent as any).mockResolvedValue(
+        JSON.stringify({ summary: longSummary }),
+      );
 
       const { result } = await collectEvents(
         metaExtractTool.call({ content: 'test' }, ctx),
@@ -212,21 +180,14 @@ describe('DocumentMetadataExtractTool', () => {
     it('should include keyword count in progress', async () => {
       const ctx = createMockContext();
 
-      vi.spyOn(ctx, 'callLlm').mockImplementation(async function* () {
-        yield {
-          type: 'stream',
-          messageId: 'test-msg',
-          content: 'test',
-          seq: 1,
-          at: Date.now(),
-        };
-        return JSON.stringify({
+      (mockLlmService.chatContent as any).mockResolvedValue(
+        JSON.stringify({
           title: 'Test',
           summary: 'Summary',
           keywords: ['test', 'document'],
           category: 'tech_blog',
-        });
-      });
+        }),
+      );
 
       const { progress } = await collectEvents(
         metaExtractTool.call({ content: 'test' }, ctx),

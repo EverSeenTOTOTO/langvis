@@ -4,10 +4,12 @@ import type { Logger } from '@/server/utils/logger';
 import { AgentIds } from '@/shared/constants';
 import { AgentConfig, AgentEvent } from '@/shared/types';
 import chalk from 'chalk';
+import { inject } from 'tsyringe';
 import { Agent } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
 import { Memory } from '../../memory';
 import { Prompt } from '../../PromptBuilder';
+import { LlmService } from '@/server/service/LlmService';
 import { Tool } from '../../tool';
 import { createPrompt } from './prompt';
 
@@ -25,6 +27,10 @@ export default class ChatAgent extends Agent {
   readonly config!: AgentConfig;
   protected readonly logger!: Logger;
   readonly tools!: Tool[];
+
+  constructor(@inject(LlmService) private readonly llmService: LlmService) {
+    super();
+  }
 
   get systemPrompt(): Prompt {
     return createPrompt(this, super.systemPrompt);
@@ -45,15 +51,22 @@ export default class ChatAgent extends Agent {
       messages,
     );
 
-    yield* ctx.callLlm(
+    const generator = this.llmService.chat(
+      modelId,
       {
-        modelId,
-        temperature: options?.model?.temperature,
-        topP: options?.model?.topP,
         messages,
+        temperature: options?.model?.temperature,
+        top_p: options?.model?.topP,
       },
-      false,
+      ctx.signal,
+      this.logger,
     );
+
+    let next = await generator.next();
+    while (!next.done) {
+      yield ctx.agentStreamEvent(next.value);
+      next = await generator.next();
+    }
 
     yield ctx.agentFinalEvent();
   }

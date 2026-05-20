@@ -1,4 +1,3 @@
-import { ToolIds } from '@/shared/constants';
 import { AgentEvent } from '@/shared/types';
 import type { Message } from '@/shared/types/entities';
 
@@ -19,15 +18,10 @@ export class PendingMessage {
       this.message.content = event.reason;
     }
 
-    if (
-      (event as Extract<AgentEvent, { type: 'tool_call' }>).toolName !==
-      ToolIds.LLM_CALL
-    ) {
-      if (!this.message.events) {
-        this.message.events = [];
-      }
-      this.message.events.push(event);
+    if (!this.message.events) {
+      this.message.events = [];
     }
+    this.message.events.push(event);
   }
 
   get contentLength(): number {

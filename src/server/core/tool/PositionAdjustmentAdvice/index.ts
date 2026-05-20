@@ -3,10 +3,11 @@ import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { AgentEvent, ToolConfig } from '@/shared/types';
-import { container } from 'tsyringe';
+import { container, inject } from 'tsyringe';
 import { wrapUntrusted } from '@/shared/utils';
 import { Tool } from '..';
 import { ExecutionContext } from '../../ExecutionContext';
+import { LlmService } from '@/server/service/LlmService';
 import { Prompt } from '../../PromptBuilder';
 import AskUserTool from '../AskUser';
 import type {
@@ -22,6 +23,10 @@ export default class PositionAdjustmentAdviceTool extends Tool<
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
+
+  constructor(@inject(LlmService) private readonly llmService: LlmService) {
+    super();
+  }
 
   async *call(
     @input() _params: PositionAdjustmentAdviceInput,
@@ -94,7 +99,12 @@ export default class PositionAdjustmentAdviceTool extends Tool<
       { role: 'user' as const, content: userPrompt },
     ];
 
-    return yield* ctx.callLlm({ messages });
+    return await this.llmService.chatContent(
+      undefined,
+      { messages },
+      ctx.signal,
+      this.logger,
+    );
   }
 
   private buildAdvicePrompt(formData: Record<string, any>): string {
