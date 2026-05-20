@@ -7,8 +7,7 @@ import express, { Express } from 'express';
 import path from 'node:path';
 import 'reflect-metadata';
 import bindControllers from './controller';
-import { disposeAllServices } from './decorator/service';
-import { disposeAllTools } from './decorator/core';
+import { disposeAll } from './decorator/disposal';
 import bindAuthMiddleware from './middleware/auth';
 import bindRequestId from './middleware/requestId';
 import bindSSRMiddleware from './middleware/ssr';
@@ -56,8 +55,7 @@ createServer()
     const shutdown = () => {
       logger.info('Shutting down server...');
 
-      disposeAllServices()
-        .then(() => disposeAllTools())
+      disposeAll()
         .then(() => {
           server.close(() => {
             logger.info('Server shut down');

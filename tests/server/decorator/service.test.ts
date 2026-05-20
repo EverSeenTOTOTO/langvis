@@ -1,6 +1,7 @@
 import { container } from 'tsyringe';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { service, disposeAllServices } from '@/server/decorator/service';
+import { service } from '@/server/decorator/service';
+import { disposeAll } from '@/server/decorator/disposal';
 
 describe('service decorator', () => {
   beforeEach(() => {
@@ -25,7 +26,7 @@ describe('service decorator', () => {
     }
     void DisposableService;
 
-    await disposeAllServices();
+    await disposeAll();
     expect(disposeFn).toHaveBeenCalledTimes(1);
   });
 
@@ -34,7 +35,7 @@ describe('service decorator', () => {
     class PlainService {}
     void PlainService;
 
-    await disposeAllServices();
+    await disposeAll();
   });
 
   it('should continue disposing other services when one fails', async () => {
@@ -53,7 +54,7 @@ describe('service decorator', () => {
     void FailingService;
     void SucceedingService;
 
-    await disposeAllServices();
+    await disposeAll();
     expect(dispose1).toHaveBeenCalledTimes(1);
     expect(dispose2).toHaveBeenCalledTimes(1);
   });
@@ -74,12 +75,12 @@ describe('service decorator', () => {
     void ServiceA;
     void ServiceB;
 
-    await disposeAllServices();
+    await disposeAll();
     expect(dispose1).toHaveBeenCalledTimes(1);
     expect(dispose2).toHaveBeenCalledTimes(1);
   });
 
   it('should skip services that fail to resolve', async () => {
-    await disposeAllServices();
+    await disposeAll();
   });
 });
