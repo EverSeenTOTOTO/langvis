@@ -360,19 +360,9 @@ const Documents: React.FC = () => {
                   label={settingStore.tr('Source URL')}
                   span={2}
                 >
-                  <Paragraph
-                    copyable
-                    ellipsis={{ rows: 2, expandable: true }}
-                    style={{ margin: 0 }}
-                  >
-                    <a
-                      href={selectedDocument.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {selectedDocument.sourceUrl}
-                    </a>
-                  </Paragraph>
+                  <Typography.Link copyable ellipsis style={{ margin: 0 }}>
+                    {selectedDocument.sourceUrl}
+                  </Typography.Link>
                 </Descriptions.Item>
               )}
               <Descriptions.Item label={settingStore.tr('Keywords')} span={2}>

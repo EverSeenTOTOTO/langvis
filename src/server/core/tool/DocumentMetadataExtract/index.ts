@@ -119,7 +119,7 @@ ${wrapUntrusted(truncatedContent)}`;
     const output: DocumentMetadataExtractOutput = {
       title: parsed.title || 'Untitled',
       summary: parsed.summary?.slice(0, 50) || '',
-      keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
+      keywords: coerceKeywords(parsed.keywords),
       category: parsed.category || 'other',
       metadata: parsed.metadata || {},
     };
@@ -135,6 +135,17 @@ ${wrapUntrusted(truncatedContent)}`;
 
     return output;
   }
+}
+
+function coerceKeywords(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter(k => typeof k === 'string');
+  if (typeof value === 'string') {
+    return value
+      .split(/[,，;；\s]+/)
+      .map(k => k.trim())
+      .filter(k => k);
+  }
+  return [];
 }
 
 export { config };

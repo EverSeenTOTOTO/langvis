@@ -31,6 +31,16 @@ export default class DocumentStoreTool extends Tool<
   ): AsyncGenerator<AgentEvent, DocumentStoreOutput, void> {
     const { document, chunks } = data;
 
+    // Coerce keywords: LLM may pass comma-separated string(s).
+    // Ajv coerceTypes wraps a bare string as single-element array,
+    // so flatMap splits any comma-separated elements.
+    const keywords = (document.keywords as string[]).flatMap(k =>
+      k
+        .split(/[,，;；\s]+/)
+        .map(s => s.trim())
+        .filter(s => s),
+    );
+
     yield ctx.agentToolProgressEvent(this.id, {
       message: `Saving document "${document.title}" to database...`,
       data: { title: document.title, chunkCount: chunks.length },
@@ -41,7 +51,7 @@ export default class DocumentStoreTool extends Tool<
       const doc = manager.create(DocumentEntity, {
         title: document.title,
         summary: document.summary,
-        keywords: document.keywords,
+        keywords: keywords,
         category: document.category,
         metadata: document.metadata,
         sourceUrl: document.sourceUrl,
