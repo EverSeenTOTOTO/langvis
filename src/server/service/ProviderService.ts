@@ -77,12 +77,15 @@ export class ProviderService {
     return this.models.get(id);
   }
 
-  /** Get the first model of a given type as default */
+  /** Get the default model of a given type (isDefault flag, fallback to first found) */
   getDefaultModel(type: ModelType): ModelDefinition | undefined {
+    let fallback: ModelDefinition | undefined;
     for (const model of this.models.values()) {
-      if (model.type === type) return model;
+      if (model.type !== type) continue;
+      if (model.primary) return model;
+      if (!fallback) fallback = model;
     }
-    return undefined;
+    return fallback;
   }
 
   /** Get all models of a given type, flat list */

@@ -6,6 +6,7 @@ export interface ModelDefaults {
   voice?: string;
   emotion?: string;
   speedRatio?: number;
+  extraBody?: Record<string, unknown>;
 }
 
 export interface ModelDefinition {
@@ -15,6 +16,7 @@ export interface ModelDefinition {
   contextSize?: number;
   multimodal?: boolean;
   endpoint?: string;
+  primary?: boolean;
   defaults?: ModelDefaults;
 }
 

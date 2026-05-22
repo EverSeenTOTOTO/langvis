@@ -130,13 +130,21 @@ export class LlmService {
     const modelCode = this.resolveModelCode(resolved);
     const client = this.getOrCreateClient(providerId);
 
+    const modelDef = this.providerService.getModel(resolved);
+    const defaults = modelDef?.defaults;
+    const defaultParams = {
+      temperature: defaults?.temperature,
+      top_p: defaults?.topP,
+      ...(defaults?.extraBody ?? {}),
+    };
+
     const rawMessages = data.messages ?? [];
     const messages = toOpenAIMessages(rawMessages as LlmMessage[]);
 
     logger.debug('LLM call request', {
       traceId: TraceContext.getOrFail().traceId!,
       model: resolved,
-      temperature: data.temperature,
+      temperature: data.temperature ?? defaultParams.temperature,
       stop: data.stop,
       messages: messages.filter(msg => msg.role !== Role.SYSTEM),
     });
@@ -146,9 +154,10 @@ export class LlmService {
       response = await client.chat.completions.create(
         {
           model: modelCode,
+          ...defaultParams,
           ...data,
           messages,
-          stream: true,
+          stream: true as const,
         },
         { signal },
       );
@@ -195,12 +204,63 @@ export class LlmService {
     signal: AbortSignal,
     logger: Logger,
   ): Promise<string> {
-    const generator = this.chat(modelId, data, signal, logger);
-    let next = await generator.next();
-    while (!next.done) {
-      next = await generator.next();
+    const resolved = this.resolveModel(modelId, 'chat');
+    const providerId = this.resolveProviderId(resolved);
+    const modelCode = this.resolveModelCode(resolved);
+    const client = this.getOrCreateClient(providerId);
+
+    const modelDef = this.providerService.getModel(resolved);
+    const defaults = modelDef?.defaults;
+    const defaultParams = {
+      temperature: defaults?.temperature,
+      top_p: defaults?.topP,
+      ...(defaults?.extraBody ?? {}),
+    };
+
+    const rawMessages = data.messages ?? [];
+    const messages = toOpenAIMessages(rawMessages as LlmMessage[]);
+
+    logger.debug('LLM call request', {
+      traceId: TraceContext.getOrFail().traceId!,
+      model: resolved,
+      temperature: data.temperature ?? defaultParams.temperature,
+      stop: data.stop,
+      messages: messages.filter(msg => msg.role !== Role.SYSTEM),
+    });
+
+    try {
+      const response = await client.chat.completions.create(
+        {
+          model: modelCode,
+          ...defaultParams,
+          ...data,
+          messages,
+          stream: false,
+        },
+        { signal },
+      );
+
+      const content = response.choices[0]?.message?.content ?? '';
+      const finishReason = response.choices[0]?.finish_reason;
+
+      if (finishReason === 'content_filter') {
+        throw new Error('Content filter triggered - response incomplete.');
+      }
+      if (finishReason === 'length') {
+        logger.warn('LLM response truncated: max_tokens limit reached');
+      }
+
+      return content;
+    } catch (err) {
+      const apiError = err as APIError;
+      logger.error('LLM call failed', {
+        model: resolved,
+        provider: providerId,
+        status: apiError?.status ?? 'unknown',
+        error: apiError?.error ?? apiError?.message ?? String(err),
+      });
+      throw err;
     }
-    return next.value ?? '';
   }
 
   async embed(

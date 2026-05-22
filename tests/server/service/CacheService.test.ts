@@ -6,7 +6,7 @@ import { container } from 'tsyringe';
 import {
   CacheService,
   STRING_THRESHOLD,
-  ARRAY_THRESHOLD,
+  isCachedReference,
 } from '@/server/service/CacheService';
 import { WorkspaceService } from '@/server/service/WorkspaceService';
 
@@ -50,26 +50,18 @@ describe('CacheService', () => {
   describe('compress', () => {
     const conversationId = 'conv-test-123';
 
-    it(`should compress string longer than ${STRING_THRESHOLD} chars to file`, async () => {
+    it(`should compress string longer than ${STRING_THRESHOLD} chars`, async () => {
       const longString = 'a'.repeat(STRING_THRESHOLD + 1);
 
       const result = (await cacheService.compress(
         conversationId,
         longString,
-      )) as {
-        $cached: string;
-        $size: number;
-        $preview: string;
-      };
+      )) as { $cached: string; $size: number; $preview: string };
 
       expect(result.$cached).toMatch(/^fc_/);
       expect(result.$size).toBe(STRING_THRESHOLD + 1);
       expect(result.$preview).toBe('a'.repeat(200));
-      expect(mockWorkspaceService.getWorkDir).toHaveBeenCalledWith(
-        conversationId,
-      );
 
-      // Verify file was actually written
       const workDir = await mockWorkspaceService.getWorkDir();
       const fileResult = await mockWorkspaceService.readFile(
         result.$cached,
@@ -86,36 +78,38 @@ describe('CacheService', () => {
       expect(result).toBe(shortString);
     });
 
-    it(`should compress array with more than ${ARRAY_THRESHOLD} items`, async () => {
-      const largeArray = Array.from(
-        { length: ARRAY_THRESHOLD + 1 },
-        (_, i) => ({ id: i }),
+    it('should compress array whose stringify exceeds threshold', async () => {
+      const items = Array.from({ length: 30 }, (_, i) =>
+        `item-${i}-`.repeat(200),
       );
 
-      const result = (await cacheService.compress(
-        conversationId,
-        largeArray,
-      )) as {
+      const result = (await cacheService.compress(conversationId, items)) as {
         $cached: string;
       };
 
       expect(result.$cached).toMatch(/^fc_/);
+
+      const resolved = (await cacheService.resolve(
+        conversationId,
+        result,
+      )) as unknown[];
+      expect(resolved.length).toBe(30);
+      for (let i = 0; i < 30; i++) {
+        expect(resolved[i]).toBe(items[i]);
+      }
     });
 
-    it(`should not compress array with ${ARRAY_THRESHOLD} or fewer items`, async () => {
-      const smallArray = Array.from(
-        { length: ARRAY_THRESHOLD },
-        (_, i) => `item-${i}`,
-      );
+    it('should not compress small array', async () => {
+      const arr = ['short1', 'short2', 'short3'];
 
-      const result = await cacheService.compress(conversationId, smallArray);
+      const result = await cacheService.compress(conversationId, arr);
 
-      expect(result).toEqual(smallArray);
+      expect(result).toEqual(arr);
     });
 
-    it('should recursively compress nested values while preserving first-level keys', async () => {
-      const nested = {
-        short: 'short string',
+    it('should recursively compress object — keep structure, compress individual strings', async () => {
+      const obj = {
+        short: 'hi',
         long: 'a'.repeat(STRING_THRESHOLD + 1),
         nested: {
           deep: 'b'.repeat(STRING_THRESHOLD + 1),
@@ -124,35 +118,68 @@ describe('CacheService', () => {
 
       const result = (await cacheService.compress(
         conversationId,
-        nested,
+        obj,
       )) as Record<string, unknown>;
 
-      expect(result.short).toBe('short string');
-      expect((result.long as { $cached: string }).$cached).toMatch(/^fc_/);
+      // Structure preserved — short stays inline, long gets $cached
+      expect(result.short).toBe('hi');
+      expect(isCachedReference(result.long)).toBe(true);
       expect(
-        ((result.nested as Record<string, unknown>).deep as { $cached: string })
-          .$cached,
-      ).toMatch(/^fc_/);
+        isCachedReference((result.nested as Record<string, unknown>).deep),
+      ).toBe(true);
+
+      // Resolve restores original
+      const resolved = (await cacheService.resolve(
+        conversationId,
+        result,
+      )) as Record<string, unknown>;
+      expect(resolved.short).toBe('hi');
+      expect(resolved.long).toBe('a'.repeat(STRING_THRESHOLD + 1));
+      expect((resolved.nested as Record<string, unknown>).deep).toBe(
+        'b'.repeat(STRING_THRESHOLD + 1),
+      );
     });
 
-    it('should recursively compress array items', async () => {
-      const nested = {
-        items: [
-          'a'.repeat(STRING_THRESHOLD + 1),
-          'short',
-          'b'.repeat(STRING_THRESHOLD + 1),
-        ],
+    it('should compress nested array inside object as whole', async () => {
+      const obj = {
+        title: 'Test Doc',
+        chunks: Array.from({ length: 25 }, (_, i) => ({
+          content: `chunk-${i}-`.repeat(200),
+          index: i,
+        })),
       };
 
       const result = (await cacheService.compress(
         conversationId,
-        nested,
+        obj,
       )) as Record<string, unknown>;
-      const items = result.items as unknown[];
 
-      expect((items[0] as { $cached: string }).$cached).toMatch(/^fc_/);
-      expect(items[1]).toBe('short');
-      expect((items[2] as { $cached: string }).$cached).toMatch(/^fc_/);
+      // title stays inline, chunks (array) gets whole-compressed
+      expect(result.title).toBe('Test Doc');
+      expect(isCachedReference(result.chunks)).toBe(true);
+
+      const resolved = (await cacheService.resolve(
+        conversationId,
+        result,
+      )) as Record<string, unknown>;
+      expect(resolved.title).toBe('Test Doc');
+      const resolvedChunks = resolved.chunks as Array<{
+        content: string;
+        index: number;
+      }>;
+      expect(resolvedChunks.length).toBe(25);
+      for (let i = 0; i < 25; i++) {
+        expect(resolvedChunks[i].content).toBe(obj.chunks[i].content);
+        expect(resolvedChunks[i].index).toBe(i);
+      }
+    });
+
+    it('should not compress small object', async () => {
+      const obj = { name: 'test', count: 42 };
+
+      const result = await cacheService.compress(conversationId, obj);
+
+      expect(result).toEqual(obj);
     });
 
     it('should skip compression when strategy is "skip"', async () => {
@@ -185,15 +212,10 @@ describe('CacheService', () => {
     it('should resolve CachedReference by reading file', async () => {
       const longString = 'a'.repeat(STRING_THRESHOLD + 1);
 
-      // First compress to create the file
       const compressed = (await cacheService.compress(
         conversationId,
         longString,
-      )) as {
-        $cached: string;
-      };
-
-      // Then resolve it
+      )) as { $cached: string };
       const result = await cacheService.resolve(conversationId, compressed);
 
       expect(result).toBe(longString);
@@ -202,7 +224,6 @@ describe('CacheService', () => {
     it('should resolve CachedReference containing JSON object', async () => {
       const jsonObject = { key: 'value', count: 42 };
 
-      // Manually create a cache file with JSON content
       const workDir = await mockWorkspaceService.getWorkDir();
       const filename = 'fc_testjson';
       await fs.writeFile(
@@ -218,29 +239,7 @@ describe('CacheService', () => {
       expect(result).toEqual(jsonObject);
     });
 
-    it('should recursively resolve nested CachedReferences', async () => {
-      const content1 = 'a'.repeat(STRING_THRESHOLD + 1);
-      const content2 = 'b'.repeat(STRING_THRESHOLD + 1);
-
-      const ref1 = (await cacheService.compress(conversationId, content1)) as {
-        $cached: string;
-      };
-      const ref2 = (await cacheService.compress(conversationId, content2)) as {
-        $cached: string;
-      };
-
-      const input = { nested: { ref1, ref2 } };
-      const result = (await cacheService.resolve(
-        conversationId,
-        input,
-      )) as Record<string, unknown>;
-      const nested = result.nested as Record<string, unknown>;
-
-      expect(nested.ref1).toBe(content1);
-      expect(nested.ref2).toBe(content2);
-    });
-
-    it('should resolve CachedReference in array', async () => {
+    it('should resolve CachedReference in array context', async () => {
       const content = 'a'.repeat(STRING_THRESHOLD + 1);
       const ref = (await cacheService.compress(conversationId, content)) as {
         $cached: string;
@@ -253,6 +252,30 @@ describe('CacheService', () => {
       )) as Record<string, unknown>;
 
       expect((result.items as unknown[])[0]).toBe(content);
+    });
+
+    it('should resolve $cached property in object back to string', async () => {
+      // Key pass-through scenario: LLM passes { content: { $cached } } to next tool
+      const obj = {
+        content: 'a'.repeat(STRING_THRESHOLD + 1),
+        url: 'https://example.com',
+        status: 200,
+      };
+
+      const compressed = (await cacheService.compress(
+        conversationId,
+        obj,
+      )) as Record<string, unknown>;
+      const resolved = (await cacheService.resolve(
+        conversationId,
+        compressed,
+      )) as Record<string, unknown>;
+
+      // content resolves back to string (not object)
+      expect(typeof resolved.content).toBe('string');
+      expect(resolved.content).toBe(obj.content);
+      expect(resolved.url).toBe(obj.url);
+      expect(resolved.status).toBe(200);
     });
 
     it('should not modify non-CachedReference objects', async () => {
@@ -270,6 +293,35 @@ describe('CacheService', () => {
           $size: 100,
         }),
       ).rejects.toThrow('Cache miss: fc_nonexistent');
+    });
+
+    it('should roundtrip compress-resolve for string', async () => {
+      const value = 'x'.repeat(STRING_THRESHOLD + 500);
+      const compressed = await cacheService.compress(conversationId, value);
+      const resolved = await cacheService.resolve(conversationId, compressed);
+      expect(resolved).toBe(value);
+    });
+
+    it('should roundtrip compress-resolve for object with nested array', async () => {
+      const value = {
+        title: 'Test Doc',
+        chunks: Array.from({ length: 25 }, (_, i) => ({
+          content: `chunk-${i}-`.repeat(200),
+          index: i,
+        })),
+      };
+      const compressed = await cacheService.compress(conversationId, value);
+      const resolved = await cacheService.resolve(conversationId, compressed);
+      expect(resolved).toEqual(value);
+    });
+
+    it('should roundtrip compress-resolve for array', async () => {
+      const value = Array.from({ length: 20 }, (_, i) =>
+        `item-${i}-`.repeat(200),
+      );
+      const compressed = await cacheService.compress(conversationId, value);
+      const resolved = await cacheService.resolve(conversationId, compressed);
+      expect(resolved).toEqual(value);
     });
   });
 

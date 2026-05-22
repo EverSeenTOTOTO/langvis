@@ -18,7 +18,7 @@ export type ConversationConfig = CreateConversationRequest['config'];
 @dto<CreateConversationRequest>({
   type: 'object',
   properties: {
-    name: { type: 'string', minLength: 1 },
+    name: { type: 'string', minLength: 1, maxLength: 100 },
     config: {
       type: 'object',
       properties: {
@@ -92,7 +92,7 @@ export interface UpdateConversationRequest {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    name: { type: 'string', minLength: 1 },
+    name: { type: 'string', minLength: 1, maxLength: 100 },
     config: {
       type: 'object',
       nullable: true,

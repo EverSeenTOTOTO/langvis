@@ -13,7 +13,6 @@ export interface CachedReference {
 }
 
 export const STRING_THRESHOLD = 20000;
-export const ARRAY_THRESHOLD = 100;
 export const PREVIEW_LENGTH = 200;
 
 export function isCachedReference(value: unknown): value is CachedReference {
@@ -42,18 +41,23 @@ export class CacheService {
       return value;
     }
 
-    if (this.shouldCompress(value)) {
-      return this.storeFile(conversationId, value);
+    // String: whole compression if exceeds threshold
+    if (typeof value === 'string' && value.length > STRING_THRESHOLD) {
+      return this.storeSerialized(conversationId, value);
     }
 
+    // Array: whole compression if stringify exceeds threshold
     if (Array.isArray(value)) {
-      const result: unknown[] = [];
-      for (const item of value) {
-        result.push(await this.compress(conversationId, item, strategy));
+      const serialized = JSON.stringify(value);
+      if (serialized.length > STRING_THRESHOLD) {
+        return this.storeSerialized(conversationId, serialized);
       }
-      return result;
+      return Promise.all(
+        value.map(item => this.compress(conversationId, item, strategy)),
+      );
     }
 
+    // Object: recursive compression — keep structure visible, compress individual strings
     if (value && typeof value === 'object' && !isCachedReference(value)) {
       const result: Record<string, unknown> = {};
       for (const [key, val] of Object.entries(value)) {
@@ -67,32 +71,18 @@ export class CacheService {
 
   async resolve(conversationId: string, value: unknown): Promise<unknown> {
     if (isCachedReference(value)) {
-      const workDir = await this.workspaceService.getWorkDir(conversationId);
-      const fileResult = await this.workspaceService.readFile(
-        value.$cached,
-        workDir,
-      );
-      if (!fileResult) {
-        throw new Error(`Cache miss: ${value.$cached}`);
-      }
-      try {
-        return JSON.parse(fileResult.content);
-      } catch {
-        return fileResult.content;
-      }
+      return this.expandCached(conversationId, value.$cached);
     }
 
     if (Array.isArray(value)) {
-      const result: unknown[] = [];
-      for (const item of value) {
-        result.push(await this.resolve(conversationId, item));
-      }
-      return result;
+      return Promise.all(value.map(item => this.resolve(conversationId, item)));
     }
 
     if (value && typeof value === 'object') {
       const result: Record<string, unknown> = {};
-      for (const [key, val] of Object.entries(value)) {
+      for (const [key, val] of Object.entries(
+        value as Record<string, unknown>,
+      )) {
         result[key] = await this.resolve(conversationId, val);
       }
       return result;
@@ -125,13 +115,11 @@ export class CacheService {
     }
   }
 
-  private async storeFile(
+  private async storeSerialized(
     conversationId: string,
-    value: unknown,
+    serialized: string,
   ): Promise<CachedReference> {
     const workDir = await this.workspaceService.getWorkDir(conversationId);
-    const serialized =
-      typeof value === 'string' ? value : JSON.stringify(value);
     const filename = `fc_${generateId('')}`;
     const filePath = path.join(workDir, filename);
     await fs.writeFile(filePath, serialized, 'utf-8');
@@ -143,13 +131,19 @@ export class CacheService {
     };
   }
 
-  private shouldCompress(value: unknown): boolean {
-    if (typeof value === 'string') {
-      return value.length > STRING_THRESHOLD;
+  private async expandCached(
+    conversationId: string,
+    filename: string,
+  ): Promise<unknown> {
+    const workDir = await this.workspaceService.getWorkDir(conversationId);
+    const fileResult = await this.workspaceService.readFile(filename, workDir);
+    if (!fileResult) {
+      throw new Error(`Cache miss: ${filename}`);
     }
-    if (Array.isArray(value)) {
-      return value.length > ARRAY_THRESHOLD;
+    try {
+      return JSON.parse(fileResult.content);
+    } catch {
+      return fileResult.content;
     }
-    return false;
   }
 }

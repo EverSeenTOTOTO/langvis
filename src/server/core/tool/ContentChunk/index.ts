@@ -19,33 +19,26 @@ interface ContentChunkStrategyHandler {
 
 class ParagraphStrategy implements ContentChunkStrategyHandler {
   chunk(content: string, options: ContentChunkOptions): ContentChunkItem[] {
-    const maxContentChunkSize = options.maxContentChunkSize || 1000;
-    const minContentChunkSize = options.minContentChunkSize ?? 200;
-    const paragraphs = content.split(/\n\s*\n/).filter(p => p.trim());
-    const chunks: ContentChunkItem[] = [];
+    const maxChunkSize = options.maxChunkSize || 1000;
+    const minChunkSize = options.minChunkSize ?? 200;
 
+    const paragraphs = this.splitParagraphs(content);
+    const chunks: ContentChunkItem[] = [];
     let currentContentChunk = '';
     let chunkIndex = 0;
 
     for (const paragraph of paragraphs) {
       const trimmed = paragraph.trim();
 
-      if (
-        currentContentChunk.length + trimmed.length + 1 <=
-        maxContentChunkSize
-      ) {
+      if (currentContentChunk.length + trimmed.length + 1 <= maxChunkSize) {
         currentContentChunk += (currentContentChunk ? '\n\n' : '') + trimmed;
       } else {
         if (currentContentChunk) {
           chunks.push({ content: currentContentChunk, index: chunkIndex++ });
         }
 
-        // If single paragraph exceeds max, split it
-        if (trimmed.length > maxContentChunkSize) {
-          const subContentChunks = this.splitLongText(
-            trimmed,
-            maxContentChunkSize,
-          );
+        if (trimmed.length > maxChunkSize) {
+          const subContentChunks = this.splitLongText(trimmed, maxChunkSize);
           for (const sub of subContentChunks) {
             chunks.push({ content: sub, index: chunkIndex++ });
           }
@@ -60,20 +53,36 @@ class ParagraphStrategy implements ContentChunkStrategyHandler {
       chunks.push({ content: currentContentChunk, index: chunkIndex });
     }
 
-    // Merge small final chunks into the previous one
-    return this.mergeSmallContentChunks(chunks, minContentChunkSize);
+    return this.mergeSmallContentChunks(chunks, minChunkSize, maxChunkSize);
+  }
+
+  private splitParagraphs(content: string): string[] {
+    const doubleNewline = content.split(/\n\s*\n/).filter(p => p.trim());
+
+    if (doubleNewline.length > 1) return doubleNewline;
+
+    const singleNewline = content.split(/\n/).filter(p => p.trim());
+    if (singleNewline.length > 1) return singleNewline;
+
+    return [content];
   }
 
   private mergeSmallContentChunks(
     chunks: ContentChunkItem[],
-    minContentChunkSize: number,
+    minChunkSize: number,
+    maxChunkSize: number,
   ): ContentChunkItem[] {
     if (chunks.length <= 1) return chunks;
 
     const result: ContentChunkItem[] = [];
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
-      if (chunk.content.length < minContentChunkSize && result.length > 0) {
+      if (
+        chunk.content.length < minChunkSize &&
+        result.length > 0 &&
+        result[result.length - 1].content.length + chunk.content.length + 2 <=
+          maxChunkSize
+      ) {
         result[result.length - 1].content += '\n\n' + chunk.content;
       } else {
         result.push({ ...chunk, index: result.length });
@@ -84,22 +93,28 @@ class ParagraphStrategy implements ContentChunkStrategyHandler {
   }
 
   private splitLongText(text: string, maxSize: number): string[] {
+    const delimiters = ['\n', '。', '！', '？', '；', '.', '?', '!', ';'];
     const chunks: string[] = [];
     let remaining = text;
 
     while (remaining.length > maxSize) {
-      // Try to split at sentence boundary
-      let splitPos = remaining.lastIndexOf('。', maxSize);
-      if (splitPos === -1 || splitPos < maxSize / 2) {
-        splitPos = remaining.lastIndexOf('.', maxSize);
+      let splitPos = -1;
+
+      for (const delim of delimiters) {
+        const pos = remaining.lastIndexOf(delim, maxSize);
+        if (pos !== -1 && pos >= maxSize * 0.3) {
+          splitPos = pos + 1;
+          break;
+        }
       }
-      if (splitPos === -1 || splitPos < maxSize / 2) {
-        splitPos = remaining.lastIndexOf(' ', maxSize);
-      }
-      if (splitPos === -1 || splitPos < maxSize / 2) {
-        splitPos = maxSize;
-      } else {
-        splitPos += 1; // Include the delimiter
+
+      if (splitPos === -1) {
+        const spacePos = remaining.lastIndexOf(' ', maxSize);
+        if (spacePos !== -1 && spacePos >= maxSize * 0.3) {
+          splitPos = spacePos + 1;
+        } else {
+          splitPos = maxSize;
+        }
       }
 
       chunks.push(remaining.slice(0, splitPos).trim());
@@ -116,14 +131,14 @@ class ParagraphStrategy implements ContentChunkStrategyHandler {
 
 class FixedStrategy implements ContentChunkStrategyHandler {
   chunk(content: string, options: ContentChunkOptions): ContentChunkItem[] {
-    const maxContentChunkSize = options.maxContentChunkSize || 1000;
+    const maxChunkSize = options.maxChunkSize || 1000;
     const overlap = options.overlap || 0;
     const chunks: ContentChunkItem[] = [];
     let index = 0;
     let start = 0;
 
     while (start < content.length) {
-      const end = Math.min(start + maxContentChunkSize, content.length);
+      const end = Math.min(start + maxChunkSize, content.length);
       const chunkContent = content.slice(start, end);
 
       chunks.push({
@@ -181,7 +196,7 @@ export default class ContentChunkTool extends Tool<
       data: {
         strategy,
         chunkCount: chunks.length,
-        avgContentChunkSize: Math.round(
+        avgChunkSize: Math.round(
           chunks.reduce((sum, c) => sum + c.content.length, 0) / chunks.length,
         ),
       },

@@ -186,4 +186,3 @@ export const registerMemory = async (Clz: new (...params: any[]) => Memory) => {
 
   return token;
 };
-
