@@ -5,9 +5,9 @@ description: Archive web pages and emails to vector database with metadata extra
 
 ## 关键规则
 
-1. **rawContent 必须是完整原文**，绝不能是摘要、链接简介、或模型自己概括的文字。邮件内容归档时 rawContent = 邮件全文；网页归档时 rawContent = web_fetch 返回的完整 content。
-2. **每条链接是独立文档**。从邮件提取多个链接时，每个链接单独执行 web_fetch → 归档管线，各自存入一条 Document 记录。不要把多个链接的内容合并到同一条 Document。
-3. **利用缓存传递原文**。web_fetch 等工具返回大量内容时会被缓存为 `{ "$cached": "...", "$size": ..., "$preview": "..." }` 格式。后续工具（content_chunk、document_metadata_extract、document_store 等）需要原文作为入参时，直接传入该 $cached 对象，系统会自动解析为完整内容，无需手动展开或概括。
+1. **rawContent 必须是完整原文**，绝不能是摘要、链接简介、或模型自己概括的文字。邮件内容归档时 rawContent = 那件全文；网页归档时 rawContent = web_fetch 返回的内容（可能是 `$cached` 引用 — 直接透传即可，系统会自动解析）。
+2. **每条链接是独立文档**。从邮件提取多个链接时，每个链接单独执行 web_fetch → 归档管线，各自存入一条 Document 记录。不要把多个链接的内容混淆到一起。
+3. **尽量透传缓存，避免读取原文**。归档管线中，`content`、`rawContent` 等需要完整原文的参数，直接传入 `$cached` 引用对象即可，系统会在工具调用前自动 resolve 为完整内容。非必要不加载完整原文。
 
 ## 入口判断
 
@@ -42,7 +42,7 @@ description: Archive web pages and emails to vector database with metadata extra
 根据用户选择：
 
 - **archive_email**: 邮件原文作为 content，sourceType = "email"，直接执行下方「归档管线」
-- **archive_links**: 调用 `links_extract` 提取链接 → 筛选：侧重文章、教程、深度内容类链接，排除推广、版本发布通知、产品更新等轻量链接 → `ask_user` 多选确认要归档哪些链接 → 对每个选中链接，逐个执行：`web_fetch` 获取网页内容 → 以网页内容作为 content、sourceType = "web" → 执行「归档管线」。注意。
+- **archive_links**: 调用 `links_extract` 提取链接 → 筛选：侧重文章、教程、深度内容类链接，排除推广、版本发布通知、产品更新等轻量链接 → `ask_user` 多选确认要归档哪些链接 → 对每个选中链接，逐个执行：`web_fetch` 获取网页内容 → 以网页内容作为 content、sourceType = "web" → 执行「归档管线」
 - **cancel**: 返回 `final_answer` 取消
 
 ## 网页归档工作流
@@ -71,35 +71,35 @@ description: Archive web pages and emails to vector database with metadata extra
 
 ## 归档管线
 
-给定一段完整原文内容，按以下步骤依次调用工具完成归档：
+给定一段内容（可能是完整原文字符串，也可能是 `$cached` 引用），按以下步骤依次调用工具完成归档。
 
 ### Step 1: 提取元数据
 
 调用 `document_metadata_extract`：
 
-- input: `{ "content": "<完整原文>", "sourceUrl": "<来源URL>", "sourceType": "<web|email|text>" }`
+- input: `{ "content": "<原文或$cached引用>", "sourceUrl": "<来源URL>", "sourceType": "<web|email|text>" }`
 - output: `{ title, summary, keywords, category, metadata }`
 
 ### Step 2: 内容分块
 
 调用 `content_chunk`：
 
-- input: `{ "content": "<完整原文>", "strategy": "paragraph", "options": { "maxChunkSize": 1000 } }`
+- input: `{ "content": "<原文或$cached引用>", "strategy": "paragraph", "options": { "maxChunkSize": 1000 } }`
 - output: `{ chunks: [{ content, index, metadata? }] }`
 
-注意：maxChunkSize 不要随意调大，最多 2000。如果分块数量较多（>32），应在 Step 3 分批调用 embedding_generate，而不是增加 maxChunkSize 来减少分块数——较大的分块会降低检索精度。
+注意：maxChunkSize 不要随意调大，最多 2000。
 
 ### Step 3: 生成向量
 
 **如果 chunks ≤ 32**，一次调用 `embedding_generate`：
 
-- input: `{ "chunks": <Step 2 的 chunks 输出> }`
+- input: `{ "chunks": <Step 2 输出的 .chunks 数组> }`
 - output: `{ chunks: [{ content, index, embedding, metadata? }], model, dimension }`
 
 **如果 chunks > 32**，分批调用 `embedding_generate`，每批最多 32 个 chunks：
 
 - 将 Step 2 的 chunks 按顺序分成多批，每批 ≤ 32 个
-- 对每批调用 `embedding_generate`：`{ "chunks": <该批 chunks> }`
+- 对每批调用 `embedding_generate`：`{ "chunks": <该批 .chunks 数组> }`
 - 收集所有批次的输出，将各批 `chunks` 按顺序合并为一个完整数组
 - 最终合并结果格式与一次调用相同：`{ chunks: [{ content, index, embedding, metadata? }], model, dimension }`
 
@@ -118,9 +118,9 @@ description: Archive web pages and emails to vector database with metadata extra
       "metadata": "<Step1.metadata>",
       "sourceUrl": "<来源URL>",
       "sourceType": "<来源类型>",
-      "rawContent": "<完整原文，非摘要>"
+      "rawContent": "<原文或$cached引用>"
     },
-    "chunks": "<Step3 的最终合并 chunks 输出>"
+    "chunks": "<Step3 输出的 .chunks 数组>"
   }
   ```
 - output: `{ documentId, chunkCount }`

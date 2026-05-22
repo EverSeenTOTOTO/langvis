@@ -9,7 +9,7 @@ export interface DocumentStoreInput {
   document: {
     title: string;
     summary: string;
-    keywords: string[];
+    keywords: string[] | string;
     category: DocumentCategory;
     metadata: DocumentMetadata;
     sourceUrl?: string;
@@ -41,7 +41,12 @@ export const config: ToolConfig<DocumentStoreInput, DocumentStoreOutput> = {
         properties: {
           title: { type: 'string' },
           summary: { type: 'string' },
-          keywords: { type: 'array', items: { type: 'string' } },
+          keywords: {
+            anyOf: [
+              { type: 'array', items: { type: 'string' } },
+              { type: 'string' },
+            ],
+          },
           category: { type: 'string' },
           metadata: { type: 'object' },
           sourceUrl: { type: 'string', nullable: true },
@@ -73,7 +78,7 @@ export const config: ToolConfig<DocumentStoreInput, DocumentStoreOutput> = {
       },
     },
     required: ['document', 'chunks'],
-  },
+  } as any,
   outputSchema: {
     type: 'object',
     properties: {
