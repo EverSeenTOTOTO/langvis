@@ -21,7 +21,7 @@ export class DocumentChunkEntity {
   @Column({ type: 'text' })
   content!: string;
 
-  @Column('vector', { length: 1536, nullable: true })
+  @Column('vector', { length: 1024, nullable: true })
   embedding!: number[] | null;
 
   @Column({ type: 'jsonb', nullable: true })
