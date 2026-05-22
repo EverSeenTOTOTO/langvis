@@ -3,8 +3,8 @@ import { ToolConfig } from '@/shared/types';
 export type ContentChunkStrategy = 'paragraph' | 'fixed';
 
 export interface ContentChunkOptions {
-  maxContentChunkSize?: number;
-  minContentChunkSize?: number;
+  maxChunkSize?: number;
+  minChunkSize?: number;
   overlap?: number;
 }
 
@@ -45,12 +45,12 @@ export const config: ToolConfig<ContentChunkInput, ContentChunkOutput> = {
         type: 'object',
         nullable: true,
         properties: {
-          maxContentChunkSize: {
+          maxChunkSize: {
             type: 'number',
             nullable: true,
             description: 'Maximum chunk size in characters. Defaults to 1000',
           },
-          minContentChunkSize: {
+          minChunkSize: {
             type: 'number',
             nullable: true,
             description:

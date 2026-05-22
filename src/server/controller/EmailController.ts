@@ -137,7 +137,14 @@ export default class EmailController {
     const conversation = await this.conversationService.createConversation(
       `归档邮件: ${email.subject}`,
       userId,
-      { agent: AgentIds.REACT, model: { modelId: defaultModel?.id } },
+      {
+        agent: AgentIds.REACT,
+        model: { modelId: defaultModel?.id },
+        memory: {
+          type: MemoryIds.REACT,
+          windowSize: 10,
+        },
+      },
       null,
       'Email Archive',
     );

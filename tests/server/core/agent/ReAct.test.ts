@@ -6,10 +6,7 @@ import type { LlmService } from '@/server/service/LlmService';
 import { WorkspaceService } from '@/server/service/WorkspaceService';
 import { AgentEvent } from '@/shared/types';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  STRING_THRESHOLD,
-  ARRAY_THRESHOLD,
-} from '@/server/service/CacheService';
+import { STRING_THRESHOLD } from '@/server/service/CacheService';
 import { withTraceContext } from '../../helpers/context';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -313,8 +310,8 @@ describe('ReActAgent', () => {
       });
 
       const largeArray = Array.from(
-        { length: ARRAY_THRESHOLD + 1 },
-        (_, i) => ({ id: i }),
+        { length: Math.ceil(STRING_THRESHOLD / 10) + 1 },
+        (_, i) => ({ id: i, data: 'x'.repeat(10) }),
       );
       mockNestedTool.call.mockImplementation(async function* (): AsyncGenerator<
         AgentEvent,

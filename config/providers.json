@@ -11,19 +11,25 @@
         "type": "chat",
         "contextSize": 8192,
         "multimodal": true,
-        "defaults": { "temperature": 0.7, "topP": 0.7 }
+        "defaults": {
+          "temperature": 0.7,
+          "topP": 0.7,
+          "extraBody": { "chat_template_kwargs": { "enable_thinking": false } }
+        }
       },
       {
         "id": "faster-whisper-large-v3",
         "name": "Faster Whisper Large V3",
         "type": "stt",
         "endpoint": "/audio/transcriptions",
+        "primary": true,
         "defaults": { "language": "", "temperature": 0 }
       },
       {
         "id": "bge-m3",
         "name": "BEG M3",
         "type": "embedding",
+        "primary": true,
         "endpoint": "/embeddings"
       }
     ]
@@ -64,6 +70,7 @@
         "type": "chat",
         "contextSize": 262000,
         "multimodal": true,
+        "primary": true,
         "defaults": { "temperature": 0.7, "topP": 0.7 }
       }
     ]

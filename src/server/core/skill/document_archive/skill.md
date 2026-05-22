@@ -7,7 +7,7 @@ description: Archive web pages and emails to vector database with metadata extra
 
 1. **rawContent 必须是完整原文**，绝不能是摘要、链接简介、或模型自己概括的文字。邮件内容归档时 rawContent = 邮件全文；网页归档时 rawContent = web_fetch 返回的完整 content。
 2. **每条链接是独立文档**。从邮件提取多个链接时，每个链接单独执行 web_fetch → 归档管线，各自存入一条 Document 记录。不要把多个链接的内容合并到同一条 Document。
-3. **利用缓存传递原文**。web_fetch 等工具返回大量内容时会被缓存为 `{ "$cached": "...", "$size": ..., "$preview": "..." }` 格式。后续工具（content_chunk、document_metadata_extract、document_store 等）需要原文作为入参时，直接传入该 `$cached` 对象，系统会自动解析为完整内容，无需手动展开或概括。
+3. **利用缓存传递原文**。web_fetch 等工具返回大量内容时会被缓存为 `{ "$cached": "...", "$size": ..., "$preview": "..." }` 格式。后续工具（content_chunk、document_metadata_extract、document_store 等）需要原文作为入参时，直接传入该 $cached 对象，系统会自动解析为完整内容，无需手动展开或概括。
 
 ## 入口判断
 
@@ -71,7 +71,7 @@ description: Archive web pages and emails to vector database with metadata extra
 
 ## 归档管线
 
-给定一段完整原文内容，按以下 4 步依次调用工具完成归档：
+给定一段完整原文内容，按以下步骤依次调用工具完成归档：
 
 ### Step 1: 提取元数据
 
@@ -87,12 +87,21 @@ description: Archive web pages and emails to vector database with metadata extra
 - input: `{ "content": "<完整原文>", "strategy": "paragraph", "options": { "maxChunkSize": 1000 } }`
 - output: `{ chunks: [{ content, index, metadata? }] }`
 
+注意：maxChunkSize 不要随意调大，最多 2000。如果分块数量较多（>32），应在 Step 3 分批调用 embedding_generate，而不是增加 maxChunkSize 来减少分块数——较大的分块会降低检索精度。
+
 ### Step 3: 生成向量
 
-调用 `embedding_generate`：
+**如果 chunks ≤ 32**，一次调用 `embedding_generate`：
 
 - input: `{ "chunks": <Step 2 的 chunks 输出> }`
 - output: `{ chunks: [{ content, index, embedding, metadata? }], model, dimension }`
+
+**如果 chunks > 32**，分批调用 `embedding_generate`，每批最多 32 个 chunks：
+
+- 将 Step 2 的 chunks 按顺序分成多批，每批 ≤ 32 个
+- 对每批调用 `embedding_generate`：`{ "chunks": <该批 chunks> }`
+- 收集所有批次的输出，将各批 `chunks` 按顺序合并为一个完整数组
+- 最终合并结果格式与一次调用相同：`{ chunks: [{ content, index, embedding, metadata? }], model, dimension }`
 
 ### Step 4: 存储到数据库
 
@@ -111,7 +120,7 @@ description: Archive web pages and emails to vector database with metadata extra
       "sourceType": "<来源类型>",
       "rawContent": "<完整原文，非摘要>"
     },
-    "chunks": "<Step3 的 chunks 输出>"
+    "chunks": "<Step3 的最终合并 chunks 输出>"
   }
   ```
 - output: `{ documentId, chunkCount }`

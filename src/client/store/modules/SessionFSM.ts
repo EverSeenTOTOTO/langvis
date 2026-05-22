@@ -220,7 +220,7 @@ export class SessionFSM {
     this.cleanup();
   }
 
-  async cancelConversation(sendCancelApi: () => Promise<void>): Promise<void> {
+  async cancelConversation(cancelBackend: () => Promise<void>): Promise<void> {
     if (this.phase !== 'active') return;
 
     const cancellable = Array.from(this.messageFSMs.values()).filter(
@@ -235,7 +235,7 @@ export class SessionFSM {
     this.sm.transition('canceling');
 
     try {
-      await sendCancelApi();
+      await cancelBackend();
     } catch (e) {
       if (!(e instanceof Error && e.message.includes('404'))) {
         this.sm.transition('error');

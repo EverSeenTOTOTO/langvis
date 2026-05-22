@@ -101,7 +101,7 @@ const ConversationModal = ({
                 },
                 {
                   type: 'string',
-                  max: 20,
+                  max: 100,
                 },
               ]}
             >

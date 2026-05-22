@@ -65,7 +65,7 @@ describe('ContentChunkTool', () => {
       expect(result!.chunks[0].content).toBe(content);
     });
 
-    it('should respect maxContentChunkSize option', async () => {
+    it('should respect maxChunkSize option', async () => {
       const content = 'A'.repeat(500) + '\n\n' + 'B'.repeat(600);
       const ctx = createMockContext();
       const { result } = await collectEvents(
@@ -73,7 +73,7 @@ describe('ContentChunkTool', () => {
           {
             content,
             strategy: 'paragraph',
-            options: { maxContentChunkSize: 400 },
+            options: { maxChunkSize: 400 },
           },
           ctx,
         ),
@@ -91,7 +91,7 @@ describe('ContentChunkTool', () => {
           {
             content,
             strategy: 'fixed',
-            options: { maxContentChunkSize: 500 },
+            options: { maxChunkSize: 500 },
           },
           ctx,
         ),
@@ -113,7 +113,7 @@ describe('ContentChunkTool', () => {
           {
             content,
             strategy: 'fixed',
-            options: { maxContentChunkSize: 500, overlap: 100 },
+            options: { maxChunkSize: 500, overlap: 100 },
           },
           ctx,
         ),
@@ -161,7 +161,7 @@ describe('ContentChunkTool', () => {
           {
             content,
             strategy: 'fixed',
-            options: { maxContentChunkSize: 500 },
+            options: { maxChunkSize: 500 },
           },
           ctx,
         ),
@@ -185,9 +185,9 @@ describe('ContentChunkTool', () => {
     });
   });
 
-  describe('minContentChunkSize', () => {
+  describe('minChunkSize', () => {
     it('should merge small final chunk into previous one', async () => {
-      // 600 + 50 = two chunks: 600 chars then 50 chars (below minContentChunkSize 200)
+      // 600 + 50 = two chunks: 600 chars then 50 chars (below minChunkSize 200)
       const content = 'A'.repeat(600) + '\n\n' + 'B'.repeat(50);
       const ctx = createMockContext();
       const { result } = await collectEvents(
@@ -195,7 +195,7 @@ describe('ContentChunkTool', () => {
           {
             content,
             strategy: 'paragraph',
-            options: { maxContentChunkSize: 800, minContentChunkSize: 200 },
+            options: { maxChunkSize: 800, minChunkSize: 200 },
           },
           ctx,
         ),
@@ -208,8 +208,8 @@ describe('ContentChunkTool', () => {
 
     it('should merge small middle chunk into previous one', async () => {
       // 500 chars + 30 chars + 500 chars
-      // Without minContentChunkSize: chunk1(500), chunk2(30), chunk3(500)
-      // With minContentChunkSize=200: chunk2(30) merged into chunk1 → chunk1(531), chunk3(500)
+      // Without minChunkSize: chunk1(500), chunk2(30), chunk3(500)
+      // With minChunkSize=200: chunk2(30) merged into chunk1 → chunk1(531), chunk3(500)
       const content =
         'A'.repeat(500) + '\n\n' + 'B'.repeat(30) + '\n\n' + 'C'.repeat(500);
       const ctx = createMockContext();
@@ -218,7 +218,7 @@ describe('ContentChunkTool', () => {
           {
             content,
             strategy: 'paragraph',
-            options: { maxContentChunkSize: 600, minContentChunkSize: 200 },
+            options: { maxChunkSize: 600, minChunkSize: 200 },
           },
           ctx,
         ),
@@ -235,7 +235,7 @@ describe('ContentChunkTool', () => {
       expect(result!.chunks[1].index).toBe(1);
     });
 
-    it('should not merge chunks when all chunks meet minContentChunkSize', async () => {
+    it('should not merge chunks when all chunks meet minChunkSize', async () => {
       const content =
         'A'.repeat(300) + '\n\n' + 'B'.repeat(300) + '\n\n' + 'C'.repeat(300);
       const ctx = createMockContext();
@@ -244,19 +244,19 @@ describe('ContentChunkTool', () => {
           {
             content,
             strategy: 'paragraph',
-            options: { maxContentChunkSize: 400, minContentChunkSize: 200 },
+            options: { maxChunkSize: 400, minChunkSize: 200 },
           },
           ctx,
         ),
       );
 
       expect(result).not.toBeNull();
-      // Each paragraph is 300 chars (> minContentChunkSize 200), no merging needed
+      // Each paragraph is 300 chars (> minChunkSize 200), no merging needed
       expect(result!.chunks).toHaveLength(3);
     });
 
-    it('should use default minContentChunkSize of 200 when not specified', async () => {
-      // 1000 chars + 30 chars — the 30-char tail is below default minContentChunkSize
+    it('should use default minChunkSize of 200 when not specified', async () => {
+      // 1000 chars + 30 chars — the 30-char tail is below default minChunkSize
       const content = 'A'.repeat(1000) + '\n\n' + 'B'.repeat(30);
       const ctx = createMockContext();
       const { result } = await collectEvents(
@@ -264,7 +264,7 @@ describe('ContentChunkTool', () => {
           {
             content,
             strategy: 'paragraph',
-            options: { maxContentChunkSize: 1200 },
+            options: { maxChunkSize: 1200 },
           },
           ctx,
         ),
@@ -274,9 +274,9 @@ describe('ContentChunkTool', () => {
       expect(result!.chunks).toHaveLength(1);
     });
 
-    it('should disable merging when minContentChunkSize is 0', async () => {
+    it('should disable merging when minChunkSize is 0', async () => {
       // 400 + 380 + 30 → chunks: [400], [380], [30]
-      // With minContentChunkSize=0, the 30-char chunk stays separate
+      // With minChunkSize=0, the 30-char chunk stays separate
       const content =
         'A'.repeat(400) + '\n\n' + 'B'.repeat(380) + '\n\n' + 'C'.repeat(30);
       const ctx = createMockContext();
@@ -285,7 +285,7 @@ describe('ContentChunkTool', () => {
           {
             content,
             strategy: 'paragraph',
-            options: { maxContentChunkSize: 400, minContentChunkSize: 0 },
+            options: { maxChunkSize: 400, minChunkSize: 0 },
           },
           ctx,
         ),
@@ -315,7 +315,7 @@ describe('ContentChunkTool', () => {
           {
             content,
             strategy: 'paragraph',
-            options: { maxContentChunkSize: 600, minContentChunkSize: 200 },
+            options: { maxChunkSize: 600, minChunkSize: 200 },
           },
           ctx,
         ),
@@ -339,7 +339,7 @@ describe('ContentChunkTool', () => {
           {
             content,
             strategy: 'paragraph',
-            options: { maxContentChunkSize: 400, minContentChunkSize: 200 },
+            options: { maxChunkSize: 400, minChunkSize: 200 },
           },
           ctx,
         ),
