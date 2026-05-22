@@ -214,7 +214,9 @@ export class LlmService {
     const provider = this.providerService.getProvider(providerId);
     if (!provider) throw new Error(`Provider not found: ${providerId}`);
 
-    const url = `${provider.baseUrl}/embeddings`;
+    const model = this.providerService.getModel(resolved);
+    const endpoint = model?.endpoint ?? '/embeddings';
+    const url = `${provider.baseUrl}${endpoint}`;
 
     const response = await fetch(url, {
       method: 'POST',
@@ -222,7 +224,7 @@ export class LlmService {
         Authorization: `Bearer ${provider.apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ model: modelCode, input: texts }),
+      body: JSON.stringify({ model: modelCode, texts }),
       signal,
     });
 
@@ -231,11 +233,8 @@ export class LlmService {
       throw new Error(`Embedding API failed: ${response.status} - ${text}`);
     }
 
-    const result = (await response.json()) as {
-      data: Array<{ embedding: number[]; index: number }>;
-    };
-
-    return result.data.sort((a, b) => a.index - b.index);
+    const result = (await response.json()) as { embeddings: number[][] };
+    return result.embeddings.map(emb => ({ embedding: emb }));
   }
 
   async tts(

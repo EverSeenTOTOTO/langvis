@@ -48,8 +48,7 @@ export const config: ToolConfig<
       model: {
         type: 'string',
         nullable: true,
-        description:
-          'EmbeddingGenerateding model to use. Defaults to text-embedding-ada-002',
+        description: 'Embedding model to use. Defaults to bge-m3',
       },
       timeout: {
         type: 'number',

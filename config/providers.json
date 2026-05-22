@@ -1,5 +1,34 @@
 [
   {
+    "id": "localhost",
+    "name": "localhost",
+    "baseUrl": "http://localhost:5000/v1",
+    "apiKey": "sk-placeholder",
+    "models": [
+      {
+        "id": "qwen3.5-9b",
+        "name": "Qwen 3.5 9B",
+        "type": "chat",
+        "contextSize": 8192,
+        "multimodal": true,
+        "defaults": { "temperature": 0.7, "topP": 0.7 }
+      },
+      {
+        "id": "faster-whisper-large-v3",
+        "name": "Faster Whisper Large V3",
+        "type": "stt",
+        "endpoint": "/audio/transcriptions",
+        "defaults": { "language": "", "temperature": 0 }
+      },
+      {
+        "id": "bge-m3",
+        "name": "BEG M3",
+        "type": "embedding",
+        "endpoint": "/embeddings"
+      }
+    ]
+  },
+  {
     "id": "openrouter",
     "name": "OpenRouter",
     "baseUrl": "https://openrouter.ai/api/v1",
@@ -86,11 +115,6 @@
         "type": "stt",
         "endpoint": "/audio/transcriptions",
         "defaults": { "language": "", "temperature": 0 }
-      },
-      {
-        "id": "text-embedding-ada-002",
-        "name": "OpenAI Embedding",
-        "type": "embedding"
       }
     ]
   }
