@@ -158,3 +158,15 @@ export type MessagePhase =
   | 'error';
 
 export * from './tool';
+
+// ─── DDD 新类型（Phase 1）───
+// 注意：不 re-export 新的 AgentEvent（与旧版同名冲突）。
+// 新 AgentEvent 从 '@/shared/types/events' 直接导入。
+export type { StreamChunk, ContextUsageMeta, SSEFrame } from './events';
+export type {
+  RunStatus,
+  AgentBinding,
+  EffectiveConfig,
+  ConversationConfig,
+} from './agent';
+export type { ToolCallRecord, RunSnapshot } from './render';
