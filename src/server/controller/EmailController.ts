@@ -265,6 +265,6 @@ export default class EmailController {
 
     const run = await this.runAgentSessionHandler.prepare(runCommand);
 
-    this.runAgentSessionHandler.stream(conversationId, agent, run);
+    this.runAgentSessionHandler.stream(conversationId, run);
   }
 }

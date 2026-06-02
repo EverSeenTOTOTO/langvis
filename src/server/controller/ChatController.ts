@@ -219,7 +219,7 @@ export default class ChatController {
 
     res.status(200).json({ success: true, messageId: assistantId });
 
-    this.runAgentSessionHandler.stream(conversationId, agent, run);
+    this.runAgentSessionHandler.stream(conversationId, run);
 
     return;
   }

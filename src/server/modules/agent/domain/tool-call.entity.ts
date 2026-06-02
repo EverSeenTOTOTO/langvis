@@ -1,5 +1,5 @@
 import type { ToolCallRecord } from '@/shared/types/render';
-import type { CachePort } from '@/server/modules/memory/ports/cache.port';
+import type { CacheService } from '@/server/modules/memory/adapters/cache.adapter';
 import type { EnrichedEvent } from './agent.types';
 import { Entity } from '@/server/libs/ddd';
 
@@ -25,7 +25,7 @@ export class ToolCall extends Entity<string> {
     readonly id: string;
     readonly config?: { compression?: string; untrustedOutput?: boolean };
   };
-  private cachePort: CachePort;
+  private cache: CacheService;
 
   private _status: 'pending' | 'completed' | 'failed' = 'pending';
   private _output?: unknown;
@@ -36,13 +36,13 @@ export class ToolCall extends Entity<string> {
     callId: string,
     tool: ToolCall['tool'],
     toolArgs: Record<string, unknown>,
-    cachePort: CachePort,
+    cache: CacheService,
   ) {
     super(callId);
     this.toolName = tool.id;
     this.tool = tool;
     this.toolArgs = toolArgs;
-    this.cachePort = cachePort;
+    this.cache = cache;
     this.startedAt = Date.now();
   }
 
@@ -70,10 +70,10 @@ export class ToolCall extends Entity<string> {
       error: string,
     ) => EnrichedEvent;
   }): AsyncGenerator<EnrichedEvent, void, void> {
-    const resolvedInput = await this.cachePort.resolve(
+    const resolvedInput = (await this.cache.resolve(
       run.runId,
       this.toolArgs,
-    );
+    )) as Record<string, unknown>;
 
     yield run.emitToolCall(this.id, this.toolName, resolvedInput);
 
@@ -94,7 +94,7 @@ export class ToolCall extends Entity<string> {
       }
 
       const output = result.value;
-      const compressed = await this.cachePort.compress(
+      const compressed = await this.cache.compress(
         run.runId,
         output,
         this.tool.config?.compression as 'skip' | 'file' | undefined,
