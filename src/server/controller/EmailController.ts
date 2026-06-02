@@ -1,17 +1,14 @@
 import { AgentIds } from '@/shared/constants';
 import { ListEmailsRequestDto } from '@/shared/dto/controller';
 import { generateId } from '@/shared/utils';
+import type { AgentBinding } from '@/shared/types/agent';
+import type { Message } from '@/shared/types/entities';
 import { Conversation } from '@/shared/entities/Conversation';
 import { EmailEntity } from '@/shared/entities/Email';
 import { Role } from '@/shared/entities/Message';
 import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
 import type { Agent } from '../modules/agent/domain/agent.base';
-import { AgentRun } from '../modules/agent/domain/agent-run.entity';
-import { resolveEffectiveConfig } from '../modules/agent/domain/effective-config';
-import { MEMORY_SERVICE, CACHE_PORT } from '../modules/agent/agent.di-tokens';
-import type { MemoryService } from '../modules/memory/domain/memory-service';
-import type { CachePort } from '../modules/memory/ports/cache.port';
 import { TraceContext } from '../core/TraceContext';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
@@ -227,30 +224,29 @@ export default class EmailController {
       assistantId,
     });
 
-    // Resolve EffectiveConfig
-    const effectiveConfig = resolveEffectiveConfig(
-      agent.config,
-      {
-        agentId: agent.id,
-        config: conversation.config ?? {},
-      },
-      this.providerService,
-      agent.systemPrompt.build(),
-    );
+    const binding: AgentBinding = {
+      agentId: agent.id,
+      config: conversation.config ?? {},
+    };
 
-    const memoryService = container.resolve<MemoryService>(MEMORY_SERVICE);
-    const cachePort = container.resolve<CachePort>(CACHE_PORT);
+    const assistantMessage: Message = {
+      id: assistantId,
+      role: Role.ASSIST,
+      content: '',
+      attachments: null,
+      status: 'initialized',
+      meta: null,
+      createdAt: new Date(),
+      conversationId,
+    };
 
-    const run = new AgentRun(
-      generateId('run'),
-      assistantId,
-      effectiveConfig,
-      memoryService,
-      cachePort,
+    const run = await this.chatService.startRun({
+      conversationId,
+      agent,
       messages,
-    );
-
-    session.registerRun(run);
+      assistantMessage,
+      binding,
+    });
 
     this.chatService.runSession(session, agent, run);
   }

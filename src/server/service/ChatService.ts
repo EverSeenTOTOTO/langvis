@@ -3,16 +3,22 @@ import { Role } from '@/shared/entities/Message';
 import type { Message, MessageAttachment } from '@/shared/types/entities';
 import type { SessionPhase } from '@/shared/types';
 import type { SSEFrame } from '@/shared/types/events';
+import type { AgentBinding } from '@/shared/types/agent';
 import { generateId } from '@/shared/utils';
-import { inject } from 'tsyringe';
+import { container, inject } from 'tsyringe';
 import type { Agent } from '../modules/agent/domain/agent.base';
-import type { AgentRun } from '../modules/agent/domain/agent-run.entity';
-import { SessionFSM } from '../core/SessionFSM';
+import { AgentRun } from '../modules/agent/domain/agent-run.entity';
+import { resolveEffectiveConfig } from '../modules/agent/domain/effective-config';
+import { MEMORY_SERVICE, CACHE_PORT } from '../modules/agent/agent.di-tokens';
+import type { MemoryService } from '../modules/memory/domain/memory-service';
+import type { CachePort } from '../modules/memory/ports/cache.port';
+import { Conversation } from '../modules/conversation';
 import { service } from '../decorator/service';
 import Logger from '../utils/logger';
 import { ConversationService } from './ConversationService';
 import { RedisService } from './RedisService';
 import { WorkspaceService } from './WorkspaceService';
+import { ProviderService } from './ProviderService';
 
 export interface ChatSessionState {
   conversationId: string;
@@ -31,23 +37,24 @@ export interface PrepareTurnResult {
 @service()
 export class ChatService {
   private readonly logger = Logger.child({ source: 'ChatService' });
-  private sessions = new Map<string, SessionFSM>();
+  private sessions = new Map<string, Conversation>();
 
   constructor(
     @inject(RedisService) private redisService: RedisService,
     @inject(ConversationService)
     private conversationService: ConversationService,
     @inject(WorkspaceService) private workspaceService: WorkspaceService,
+    @inject(ProviderService) private providerService: ProviderService,
   ) {}
 
-  getSession(conversationId: string): SessionFSM | undefined {
+  getSession(conversationId: string): Conversation | undefined {
     return this.sessions.get(conversationId);
   }
 
   async dispose(): Promise<void> {
     const count = this.sessions.size;
-    for (const session of this.sessions.values()) {
-      await session.cleanup();
+    for (const conversation of this.sessions.values()) {
+      conversation.dispose();
     }
     this.logger.info(`Closed ${count} SSE sessions`);
   }
@@ -74,7 +81,7 @@ export class ChatService {
     );
   }
 
-  async acquireSession(conversationId: string): Promise<SessionFSM | null> {
+  async acquireSession(conversationId: string): Promise<Conversation | null> {
     const existing = this.sessions.get(conversationId);
     if (existing) {
       this.logger.info(`Session reconnected`, {
@@ -88,22 +95,18 @@ export class ChatService {
 
     this.logger.info(`Session created`, { sessionId: conversationId });
 
-    const session = new SessionFSM(conversationId, 30_000);
-
-    session.addEventListener('dispose', (e: Event) => {
-      const id = (e as CustomEvent<string>).detail;
-      this.sessions.delete(id);
-      this.redisService.del(RedisKeys.CHAT_SESSION(id));
+    const conversation = new Conversation(conversationId, {
+      idleTimeoutMs: 30_000,
+      onDispose: id => {
+        this.sessions.delete(id);
+        this.redisService.del(RedisKeys.CHAT_SESSION(id));
+      },
+      onPhaseChange: (id, phase) => {
+        this.updateSessionPhase(id, phase);
+      },
     });
 
-    session.addEventListener('transition', (e: Event) => {
-      const { to } = (
-        e as CustomEvent<{ from: SessionPhase; to: SessionPhase }>
-      ).detail;
-      this.updateSessionPhase(conversationId, to);
-    });
-
-    this.sessions.set(conversationId, session);
+    this.sessions.set(conversationId, conversation);
 
     await this.redisService.set(
       RedisKeys.CHAT_SESSION(conversationId),
@@ -117,7 +120,7 @@ export class ChatService {
       3600,
     );
 
-    return session;
+    return conversation;
   }
 
   private async cleanupStaleState(conversationId: string): Promise<void> {
@@ -258,13 +261,46 @@ Workspace Directory: ${workDir}
     };
   }
 
+  async startRun(params: {
+    conversationId: string;
+    agent: Agent;
+    messages: Message[];
+    assistantMessage: Message;
+    binding: AgentBinding;
+  }): Promise<AgentRun> {
+    const conversation = this.sessions.get(params.conversationId);
+    if (!conversation) throw new Error('No session');
+
+    const effectiveConfig = resolveEffectiveConfig(
+      params.agent.config,
+      params.binding,
+      this.providerService,
+      params.agent.systemPrompt.build(),
+    );
+
+    const memoryService = container.resolve<MemoryService>(MEMORY_SERVICE);
+    const cachePort = container.resolve<CachePort>(CACHE_PORT);
+
+    const run = new AgentRun(
+      generateId('run'),
+      params.assistantMessage.id,
+      effectiveConfig,
+      memoryService,
+      cachePort,
+      params.messages,
+    );
+
+    conversation.registerRun(params.assistantMessage, run);
+    return run;
+  }
+
   async runSession(
-    session: SessionFSM,
+    conversation: Conversation,
     agent: Agent,
     run: AgentRun,
   ): Promise<void> {
     this.logger.info(`Starting agent=${agent.id}`, {
-      sessionId: session.conversationId,
+      sessionId: conversation.id,
       messageId: run.messageId,
     });
 
@@ -278,15 +314,15 @@ Workspace Directory: ${workDir}
         if (event.type === 'text_chunk' && !firstTokenTime) {
           firstTokenTime = Date.now();
           this.logger.info(
-            `First token: ttft=${firstTokenTime - startTime}ms session=${session.conversationId}`,
+            `First token: ttft=${firstTokenTime - startTime}ms session=${conversation.id}`,
           );
         }
 
         const frame = { ...event, messageId: run.messageId } as SSEFrame;
 
-        if (!session.send(frame)) {
+        if (!conversation.send(frame)) {
           this.logger.warn(
-            `SSE not connected for ${session.conversationId}, event persisted`,
+            `SSE not connected for ${conversation.id}, event persisted`,
           );
         }
 
@@ -294,23 +330,24 @@ Workspace Directory: ${workDir}
       }
     } catch (err) {
       if (run.signal.aborted) {
-        this.logger.info(
-          `Agent execution aborted session=${session.conversationId}`,
-        );
+        this.logger.info(`Agent execution aborted session=${conversation.id}`);
       } else {
-        this.logger.error(`Agent error session=${session.conversationId}`, {
+        this.logger.error(`Agent error session=${conversation.id}`, {
           error: (err as Error)?.message || String(err),
           stack: (err as Error)?.stack,
         });
         const errEvent = run.fail((err as Error)?.message || String(err));
-        session.send({ ...errEvent, messageId: run.messageId } as SSEFrame);
+        conversation.send({
+          ...errEvent,
+          messageId: run.messageId,
+        } as SSEFrame);
       }
     } finally {
       if (run.signal.aborted && !run.isTerminated) {
         try {
           const reason = (run.signal.reason as Error)?.message ?? 'Cancelled';
           const cancelEvent = run.cancel(reason);
-          session.send({
+          conversation.send({
             ...cancelEvent,
             messageId: run.messageId,
           } as SSEFrame);
@@ -330,7 +367,7 @@ Workspace Directory: ${workDir}
         total: usage.total,
         reason: 'turn_completed',
       };
-      session.send(usageFrame);
+      conversation.send(usageFrame);
 
       // Persist final message state
       await this.conversationService.updateMessage(run.messageId, {
@@ -345,12 +382,15 @@ Workspace Directory: ${workDir}
               : 'error',
       });
 
+      // Finalize run in conversation
+      conversation.finalizeRun(run.messageId);
+
       const totalTime = Date.now() - startTime;
       const ttft = firstTokenTime ? firstTokenTime - startTime : null;
       const contentLength = run.content.length;
       const avgTokenTime = contentLength > 0 ? totalTime / contentLength : 0;
       this.logger.info(
-        `Agent completed: totalTime=${totalTime}ms tokens=${contentLength} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${session.conversationId}`,
+        `Agent completed: totalTime=${totalTime}ms tokens=${contentLength} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${conversation.id}`,
       );
     }
   }
