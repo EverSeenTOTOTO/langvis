@@ -6,7 +6,7 @@ import type { ToolConfig } from '@/shared/types';
 import { wrapUntrusted } from '@/shared/utils';
 import { inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
-import { LlmService } from '@/server/service/LlmService';
+import { LlmService } from '@/server/modules/memory/adapters/llm.adapter';
 import { Prompt } from '../../PromptBuilder';
 import type {
   DocumentMetadataExtractInput,

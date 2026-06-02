@@ -1,7 +1,7 @@
 import { Express } from 'express';
 import { container } from 'tsyringe';
 import { generateId } from '@/shared/utils';
-import { AuthService } from '../service/AuthService';
+import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import Logger from '../utils/logger';
 import { TraceContext } from '../core/TraceContext';
 

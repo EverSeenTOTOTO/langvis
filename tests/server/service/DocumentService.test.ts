@@ -1,9 +1,9 @@
 import { DocumentService } from '@/server/service/DocumentService';
-import { DatabaseService } from '@/server/service/DatabaseService';
+import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the DatabaseService module
-vi.mock('@/server/service/DatabaseService', () => ({
+vi.mock('@/server/libs/infrastructure/database.service', () => ({
   DatabaseService: vi.fn().mockImplementation(() => ({
     getRepository: vi.fn().mockImplementation((entity: any) => {
       if (entity.name === 'DocumentEntity') {

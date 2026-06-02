@@ -5,7 +5,7 @@ import { controller } from '@/server/decorator/controller';
 import { body, param, response } from '@/server/decorator/param';
 import type { Response } from 'express';
 import { inject } from 'tsyringe';
-import { RedisService } from '../service/RedisService';
+import { RedisService } from '@/server/libs/infrastructure/redis.service';
 
 // Lua script for atomic check-and-set
 // Returns: 1 if success, 0 if already submitted, -1 if not found

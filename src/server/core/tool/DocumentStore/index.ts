@@ -7,7 +7,7 @@ import type { Logger } from '@/server/utils/logger';
 import type { ToolConfig } from '@/shared/types';
 import { inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
-import { DatabaseService } from '@/server/service/DatabaseService';
+import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import type { DocumentStoreInput, DocumentStoreOutput } from './config';
 import { config } from './config';
 

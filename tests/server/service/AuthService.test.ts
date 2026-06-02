@@ -1,9 +1,9 @@
-import { AuthService } from '@/server/service/AuthService';
-import { DatabaseService } from '@/server/service/DatabaseService';
+import { AuthService } from '@/server/libs/infrastructure/auth.service';
+import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { container } from 'tsyringe';
 
-vi.mock('@/server/service/DatabaseService');
+vi.mock('@/server/libs/infrastructure/database.service');
 vi.mock('@/server/service/redis');
 
 describe('AuthService', () => {

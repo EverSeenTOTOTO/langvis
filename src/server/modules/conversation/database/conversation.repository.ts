@@ -5,7 +5,7 @@ import {
 import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
 import { AgentIds, UNGROUPED_GROUP_NAME } from '@/shared/constants';
 import type { ConversationRepositoryPort } from './conversation.repository.port';
-import { DatabaseService } from '@/server/service/DatabaseService';
+import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import { inject, singleton } from 'tsyringe';
 
 @singleton()

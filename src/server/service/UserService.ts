@@ -1,7 +1,7 @@
 import { User, UserEntity } from '@/shared/entities/User';
 import { inject } from 'tsyringe';
 import { service } from '../decorator/service';
-import { DatabaseService } from './DatabaseService';
+import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 
 @service()
 export class UserService {

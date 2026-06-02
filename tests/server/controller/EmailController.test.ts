@@ -78,7 +78,7 @@ vi.mock('@/server/service/ChatService', () => ({
   },
 }));
 
-vi.mock('@/server/service/AuthService', () => ({
+vi.mock('@/server/libs/infrastructure/auth.service', () => ({
   AuthService: class {
     getUserId = mockAuthService.getUserId;
   },

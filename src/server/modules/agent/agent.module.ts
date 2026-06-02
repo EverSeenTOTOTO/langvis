@@ -1,8 +1,8 @@
 import { container, Lifecycle } from 'tsyringe';
 import { MEMORY_SERVICE, CACHE_PORT, LLM_PORT } from './agent.di-tokens';
 import { MemoryService } from '@/server/modules/memory/domain/memory-service';
-import { CacheService } from '@/server/service/CacheService';
-import { LlmService } from '@/server/service/LlmService';
+import { CacheService } from '@/server/modules/memory/adapters/cache.adapter';
+import { LlmService } from '@/server/modules/memory/adapters/llm.adapter';
 
 // Register MemoryService as a singleton under the MEMORY_SERVICE token
 container.register(MEMORY_SERVICE, MemoryService, {

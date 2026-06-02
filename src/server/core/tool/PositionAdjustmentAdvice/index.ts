@@ -6,7 +6,7 @@ import type { ToolConfig } from '@/shared/types';
 import { container, inject } from 'tsyringe';
 import { wrapUntrusted } from '@/shared/utils';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
-import { LlmService } from '@/server/service/LlmService';
+import { LlmService } from '@/server/modules/memory/adapters/llm.adapter';
 import { Prompt } from '@/server/core/PromptBuilder';
 import AskUserTool from '../AskUser';
 import type {

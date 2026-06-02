@@ -7,7 +7,7 @@ import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, request, response } from '../decorator/param';
-import { AuthService } from '../service/AuthService';
+import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import { getSessionHeaders } from '../utils';
 
 @controller('/api/auth')

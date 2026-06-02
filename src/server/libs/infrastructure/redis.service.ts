@@ -1,6 +1,6 @@
 import { createClient, RedisClientType } from 'redis';
-import { service } from '../decorator/service';
-import Logger from '../utils/logger';
+import { service } from '@/server/decorator/service';
+import Logger from '@/server/utils/logger';
 
 @service()
 export class RedisService {
@@ -40,10 +40,6 @@ export class RedisService {
     this.connected = true;
   }
 
-  /**
-   * Get value with automatic JSON parsing.
-   * Returns null if key doesn't exist.
-   */
   async get<T>(key: string): Promise<T | null> {
     const data = await this.redis.get(key);
     if (!data) return null;
@@ -54,9 +50,6 @@ export class RedisService {
     }
   }
 
-  /**
-   * Set value with automatic JSON serialization.
-   */
   async set(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
     const serialized =
       typeof value === 'string' ? value : JSON.stringify(value);
@@ -67,17 +60,10 @@ export class RedisService {
     }
   }
 
-  /**
-   * Delete key(s).
-   */
   async del(key: string): Promise<void> {
     await this.redis.del(key);
   }
 
-  /**
-   * Acquire a distributed lock.
-   * Returns true if lock acquired, false if already locked.
-   */
   async acquireLock(key: string, ttlSeconds: number): Promise<boolean> {
     const result = await this.redis.set(key, '1', {
       NX: true,
@@ -86,25 +72,16 @@ export class RedisService {
     return result === 'OK';
   }
 
-  /**
-   * Release a distributed lock.
-   */
   async releaseLock(key: string): Promise<void> {
     await this.redis.del(key);
   }
 
-  /**
-   * Publish message to channel.
-   */
   async publish(channel: string, message: unknown): Promise<void> {
     const serialized =
       typeof message === 'string' ? message : JSON.stringify(message);
     await this.redis.publish(channel, serialized);
   }
 
-  /**
-   * Subscribe to channel.
-   */
   async subscribe(
     channel: string,
     handler: (data: unknown) => void,
@@ -119,16 +96,10 @@ export class RedisService {
     });
   }
 
-  /**
-   * Raw Redis client for advanced operations.
-   */
   get client(): RedisClientType {
     return this.redis;
   }
 
-  /**
-   * Raw subscriber client for advanced Pub/Sub operations.
-   */
   get subscriber(): RedisClientType {
     return this.redisSubscriber;
   }

@@ -2,9 +2,9 @@ import { typeormAdapter } from '@hedystia/better-auth-typeorm';
 import { betterAuth } from 'better-auth';
 import type { Request } from 'express';
 import { inject } from 'tsyringe';
-import { service } from '../decorator/service';
-import { getSessionHeaders } from '../utils';
-import { DatabaseService } from './DatabaseService';
+import { service } from '@/server/decorator/service';
+import { getSessionHeaders } from '@/server/utils';
+import { DatabaseService } from './database.service';
 
 @service()
 export class AuthService {

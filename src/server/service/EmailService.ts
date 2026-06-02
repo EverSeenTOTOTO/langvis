@@ -12,7 +12,7 @@ import { service } from '../decorator/service';
 import Logger from '../utils/logger';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 import type { simpleParser as SimpleParserFn } from 'mailparser';
-import { DatabaseService } from './DatabaseService';
+import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 
 export interface EmailListParams {
   from?: string;

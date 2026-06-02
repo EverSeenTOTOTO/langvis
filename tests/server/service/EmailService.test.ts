@@ -1,8 +1,8 @@
 import { EmailService } from '@/server/service/EmailService';
-import { DatabaseService } from '@/server/service/DatabaseService';
+import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/server/service/DatabaseService', () => ({
+vi.mock('@/server/libs/infrastructure/database.service', () => ({
   DatabaseService: vi.fn().mockImplementation(() => ({
     getRepository: vi.fn(),
   })),

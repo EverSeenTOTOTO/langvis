@@ -6,18 +6,18 @@ import type {
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 import { inject, singleton } from 'tsyringe';
-import type { Logger } from '../utils/logger';
-import { ProviderService } from './ProviderService';
-import { TraceContext } from '../core/TraceContext';
+import type { Logger } from '@/server/utils/logger';
+import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import { TraceContext } from '@/server/core/TraceContext';
 import { Role, type LlmMessage, type Message } from '@/shared/types/entities';
 import type {
   TextToSpeechInput,
   TextToSpeechOutput,
-} from '../core/tool/TextToSpeech';
+} from '@/server/core/tool/TextToSpeech';
 import type {
   SpeechToTextInput,
   SpeechToTextOutput,
-} from '../core/tool/SpeechToText';
+} from '@/server/core/tool/SpeechToText';
 
 function toMultimodalContent(
   content: string,

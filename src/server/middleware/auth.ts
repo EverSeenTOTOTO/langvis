@@ -1,6 +1,6 @@
 import { Express, Request, Response, NextFunction } from 'express';
 import { container } from 'tsyringe';
-import { AuthService } from '../service/AuthService';
+import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import { TraceContext } from '../core/TraceContext';
 
 declare global {

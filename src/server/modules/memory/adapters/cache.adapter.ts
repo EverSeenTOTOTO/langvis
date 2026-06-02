@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { singleton, inject } from 'tsyringe';
 import { generateId } from '@/shared/utils';
-import { WorkspaceService } from './WorkspaceService';
+import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 
 export type CompressionStrategy = 'skip' | 'file';
 

@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { service } from '../decorator/service';
-import { resolveSafePath } from '../utils/pathSafety';
+import { service } from '@/server/decorator/service';
+import { resolveSafePath } from '@/server/utils/pathSafety';
 
 @service()
 export class WorkspaceService {

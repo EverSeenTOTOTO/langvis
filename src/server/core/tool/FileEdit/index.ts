@@ -5,7 +5,7 @@ import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
 import { TraceContext } from '../../TraceContext';
-import { WorkspaceService } from '../../../service/WorkspaceService';
+import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import { inject, container } from 'tsyringe';
 import type { FileEditInput, FileEditOutput } from './config';
 import AskUserTool from '../AskUser';

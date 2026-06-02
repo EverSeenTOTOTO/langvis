@@ -7,8 +7,8 @@ import { MessageEntity } from '@/shared/entities/Message';
 import { SettingsEntity } from '@/shared/entities/Settings';
 import { entities, migrations } from '@hedystia/better-auth-typeorm';
 import { DataSource, type EntityTarget, type Repository } from 'typeorm';
-import logger from '../utils/logger';
-import { service } from '../decorator/service';
+import logger from '@/server/utils/logger';
+import { service } from '@/server/decorator/service';
 
 @service()
 export class DatabaseService {
