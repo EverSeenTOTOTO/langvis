@@ -4,9 +4,8 @@ import { inject } from 'tsyringe';
 import { CacheService } from '@/server/service/CacheService';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { ToolConfig, AgentEvent } from '@/shared/types';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import { ToolConfig } from '@/shared/types';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 import { TraceContext } from '../../TraceContext';
 
 export interface CachedReadInput {
@@ -34,8 +33,12 @@ export default class CachedReadTool extends Tool<
 
   async *call(
     @input() readCacheInput: CachedReadInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, CachedReadOutput, void> {
+    _ctx: { signal: AbortSignal },
+  ): AsyncGenerator<
+    { type: 'tool_progress'; data: unknown },
+    CachedReadOutput,
+    void
+  > {
     const conversationId = TraceContext.getOrFail().conversationId!;
 
     const result = await this.cacheService.readFile(
@@ -46,9 +49,9 @@ export default class CachedReadTool extends Tool<
     );
 
     if (typeof result === 'string') {
-      yield ctx.agentToolProgressEvent(this.id, { size: result.length });
+      yield { type: 'tool_progress' as const, data: { size: result.length } };
     } else {
-      yield ctx.agentToolProgressEvent(this.id, { type: 'object' });
+      yield { type: 'tool_progress' as const, data: { type: 'object' } };
     }
 
     return result;

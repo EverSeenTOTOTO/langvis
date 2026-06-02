@@ -3,10 +3,9 @@ import { input } from '@/server/decorator/param';
 import { LlmService } from '@/server/service/LlmService';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { ToolConfig, AgentEvent } from '@/shared/types';
+import type { ToolConfig } from '@/shared/types';
 import { inject } from 'tsyringe';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 
 export interface SpeechToTextInput {
   modelId?: string;
@@ -39,8 +38,8 @@ export default class SpeechToTextTool extends Tool<
 
   async *call(
     @input() params: SpeechToTextInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, SpeechToTextOutput, void> {
+    ctx: { signal: AbortSignal },
+  ): AsyncGenerator<never, SpeechToTextOutput, void> {
     ctx.signal.throwIfAborted();
 
     this.logger.info(

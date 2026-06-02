@@ -2,10 +2,9 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import type { AgentEvent, ToolConfig } from '@/shared/types';
+import type { ToolConfig } from '@/shared/types';
 import { JSDOM } from 'jsdom';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 import type { LinksExtractInput, LinksExtractOutput, LinkInfo } from './config';
 
 @tool(ToolIds.LINKS_EXTRACT)
@@ -19,8 +18,8 @@ export default class LinksExtractTool extends Tool<
 
   async *call(
     @input() data: LinksExtractInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, LinksExtractOutput, void> {
+    ctx: { signal: AbortSignal },
+  ): AsyncGenerator<never, LinksExtractOutput, void> {
     ctx.signal.throwIfAborted();
 
     const { content } = data;

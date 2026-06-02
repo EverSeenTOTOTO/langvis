@@ -4,10 +4,9 @@ import { ToolIds } from '@/shared/constants';
 import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
 import { DocumentEntity } from '@/shared/entities/Document';
 import type { Logger } from '@/server/utils/logger';
-import type { ToolConfig, AgentEvent } from '@/shared/types';
+import type { ToolConfig } from '@/shared/types';
 import { inject } from 'tsyringe';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 import { DatabaseService } from '@/server/service/DatabaseService';
 import type { DocumentStoreInput, DocumentStoreOutput } from './config';
 import { config } from './config';
@@ -27,8 +26,12 @@ export default class DocumentStoreTool extends Tool<
 
   async *call(
     @input() data: DocumentStoreInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, DocumentStoreOutput, void> {
+    _ctx: { signal: AbortSignal },
+  ): AsyncGenerator<
+    { type: 'tool_progress'; data: unknown },
+    DocumentStoreOutput,
+    void
+  > {
     const { document, chunks } = data;
 
     // Coerce keywords: LLM may pass comma-separated string(s).
@@ -41,10 +44,13 @@ export default class DocumentStoreTool extends Tool<
         .filter(s => s),
     );
 
-    yield ctx.agentToolProgressEvent(this.id, {
-      message: `Saving document "${document.title}" to database...`,
-      data: { title: document.title, chunkCount: chunks.length },
-    });
+    yield {
+      type: 'tool_progress' as const,
+      data: {
+        message: `Saving document "${document.title}" to database...`,
+        data: { title: document.title, chunkCount: chunks.length },
+      },
+    };
 
     const result = await this.db.dataSource.transaction(async manager => {
       // Create document
@@ -81,10 +87,13 @@ export default class DocumentStoreTool extends Tool<
       return { documentId: doc.id, chunkCount: chunks.length };
     });
 
-    yield ctx.agentToolProgressEvent(this.id, {
-      message: `Document saved with ${result.chunkCount} chunks`,
-      data: { documentId: result.documentId },
-    });
+    yield {
+      type: 'tool_progress' as const,
+      data: {
+        message: `Document saved with ${result.chunkCount} chunks`,
+        data: { documentId: result.documentId },
+      },
+    };
 
     const output: DocumentStoreOutput = result;
 

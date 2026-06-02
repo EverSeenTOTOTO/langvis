@@ -1,15 +1,20 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
-import { AgentIds, MemoryIds, ToolIds } from '@/shared/constants';
-import { AgentEvent, ToolConfig } from '@/shared/types';
-import { Message, Role } from '@/shared/types/entities';
+import { AgentIds, ToolIds } from '@/shared/constants';
+import type { ToolConfig } from '@/shared/types';
+import { Message, Role } from '@/shared/entities/Message';
 import { generateId } from '@/shared/utils';
-import { container } from 'tsyringe';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
-import { Agent } from '../../agent';
-import ChildMemory from '../../memory/Child';
+import { container, inject } from 'tsyringe';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
+import { AgentRun } from '@/server/modules/agent/domain/agent-run.entity';
+import {
+  MEMORY_SERVICE,
+  CACHE_PORT,
+} from '@/server/modules/agent/agent.di-tokens';
+import type { MemoryService } from '@/server/modules/memory/domain/memory-service';
+import type { CachePort } from '@/server/modules/memory/ports/cache.port';
+import { Agent } from '@/server/modules/agent/domain/agent.base';
 import type { AgentCallInput, AgentCallOutput } from './config';
 import { createTimeoutController } from '@/server/utils';
 
@@ -22,14 +27,24 @@ export default class AgentCallTool extends Tool<
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
+  constructor(
+    @inject(MEMORY_SERVICE) private memoryService: MemoryService,
+    @inject(CACHE_PORT) private cachePort: CachePort,
+  ) {
+    super();
+  }
+
   async *call(
     @input() params: AgentCallInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, AgentCallOutput, void> {
+    ctx: { signal: AbortSignal },
+  ): AsyncGenerator<
+    { type: 'tool_progress'; data: unknown },
+    AgentCallOutput,
+    void
+  > {
     const { context, query, config: callConfig = {} } = params;
     const { timeout = 600_000 } = callConfig;
 
-    // Resolve target agent (always ReAct)
     let agent: Agent;
     try {
       agent = container.resolve<Agent>(AgentIds.REACT);
@@ -39,13 +54,8 @@ export default class AgentCallTool extends Tool<
 
     const systemPrompt = agent.systemPrompt.build();
 
-    // Create child context with timeout and callId prefix
-    const [controller, cleanup] = createTimeoutController(timeout, ctx.signal);
-    // Use current callId as prefix for child's callIds
-    const childCtx = new ExecutionContext(controller, ctx.currentCallId);
+    const [, cleanup] = createTimeoutController(timeout, ctx.signal);
 
-    // Initialize child memory with fabricated history
-    const memory = container.resolve<ChildMemory>(MemoryIds.CHILD);
     const baseTime = Date.now();
     const childMessages: Message[] = [];
 
@@ -83,37 +93,43 @@ export default class AgentCallTool extends Tool<
       conversationId: '',
     });
 
-    memory.configure({ messages: childMessages });
+    const childRun = new AgentRun(
+      generateId('run'),
+      '',
+      {
+        agentId: AgentIds.REACT,
+        agentName: 'ReAct',
+        systemPrompt,
+        tools: [],
+        contextSize: 128_000,
+        runtimeConfig: {},
+      },
+      this.memoryService,
+      this.cachePort,
+      childMessages,
+    );
 
-    // Emit agent_start with context/query info so frontend can display it
-    yield ctx.agentToolProgressEvent(this.id, {
-      status: 'agent_start',
-      agentId: AgentIds.REACT,
-      context,
-      query,
-    });
+    yield {
+      type: 'tool_progress' as const,
+      data: { status: 'agent_start', agentId: AgentIds.REACT, context, query },
+    };
 
-    // Execute child agent and wrap events
     let content = '';
     try {
-      for await (const event of agent.call(memory, childCtx, {})) {
-        // Wrap child event in tool_progress
-        yield ctx.agentToolProgressEvent(this.id, {
-          status: 'agent_event',
-          event,
-        });
+      for await (const event of agent.call(childRun)) {
+        yield {
+          type: 'tool_progress' as const,
+          data: { status: 'agent_event', event },
+        };
 
-        // Accumulate stream content
-        if (event.type === 'stream') {
+        if (event.type === 'text_chunk') {
           content += event.content;
         }
 
-        // Check for errors
         if (event.type === 'error') {
           return { success: false, error: event.error };
         }
 
-        // Check for cancellation
         if (event.type === 'cancelled') {
           return { success: false, error: event.reason };
         }

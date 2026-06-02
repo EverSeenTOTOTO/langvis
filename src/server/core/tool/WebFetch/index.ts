@@ -2,15 +2,15 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { AgentEvent, ToolConfig } from '@/shared/types';
+import type { ToolConfig } from '@/shared/types';
 import { createTimeoutController } from '@/server/utils/abort';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import TurndownService from 'turndown';
 import type { Browser } from 'playwright';
 import { chromium } from 'playwright';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import type { ToolProgress } from '@/server/modules/agent/domain/tool-call.entity';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 import { sanitizeHtml } from '@/server/utils/sanitizeHtml';
 import type { RenderMode, WebFetchInput, WebFetchOutput } from './config';
 
@@ -146,8 +146,8 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
 
   async *call(
     @input() data: WebFetchInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, WebFetchOutput, void> {
+    ctx: { signal: AbortSignal },
+  ): AsyncGenerator<ToolProgress, WebFetchOutput, void> {
     ctx.signal.throwIfAborted();
 
     const {
@@ -171,10 +171,13 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
         );
       }
 
-      yield ctx.agentToolProgressEvent(this.id, {
-        message: `Rendered with headless browser`,
-        data: { render: 'browser', contentLength: markdown.length },
-      });
+      yield {
+        type: 'tool_progress' as const,
+        data: {
+          message: `Rendered with headless browser`,
+          data: { render: 'browser', contentLength: markdown.length },
+        },
+      };
 
       return this.formatOutput(article!, markdown, url, response_format);
     }
@@ -220,14 +223,17 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
             this.extractContent(browserHtml, url);
 
           if (browserArticle && browserMarkdown.length > markdown.length) {
-            yield ctx.agentToolProgressEvent(this.id, {
-              message: `Content was sparse, re-rendered with headless browser`,
+            yield {
+              type: 'tool_progress' as const,
               data: {
-                render: 'auto → browser',
-                fetchLength: markdown.length,
-                browserLength: browserMarkdown.length,
+                message: `Content was sparse, re-rendered with headless browser`,
+                data: {
+                  render: 'auto → browser',
+                  fetchLength: markdown.length,
+                  browserLength: browserMarkdown.length,
+                },
               },
-            });
+            };
             return this.formatOutput(
               browserArticle,
               browserMarkdown,

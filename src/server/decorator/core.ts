@@ -1,12 +1,11 @@
-import { AgentIds, MemoryIds, ToolIds } from '@/shared/constants';
+import { AgentIds, ToolIds } from '@/shared/constants';
 import { AgentConfig, ToolConfig } from '@/shared/types';
 import { JSONSchemaType } from 'ajv';
 import chalk from 'chalk';
 import { merge } from 'lodash-es';
 import { container, injectable, Lifecycle } from 'tsyringe';
-import { Agent } from '../core/agent';
-import { Memory } from '../core/memory';
-import { Tool } from '../core/tool';
+import { Agent } from '../modules/agent/domain/agent.base';
+import { Tool } from '../modules/agent/domain/tool.base';
 import logger from '../utils/logger';
 import { parse } from '../utils/schemaValidator';
 import { registerDisposableToken } from './disposal';
@@ -14,8 +13,8 @@ import { PARAM_METADATA_KEY, ParamMetadata, ParamType } from './param';
 
 const metaDataKey = Symbol.for('config');
 
-function createConfigDecorator(type: 'agent' | 'tool' | 'memory') {
-  return (token?: ToolIds | AgentIds | MemoryIds) =>
+function createConfigDecorator(type: 'agent' | 'tool') {
+  return (token?: ToolIds | AgentIds) =>
     function configDecorator(target: any) {
       injectable()(target);
       Reflect.defineMetadata(metaDataKey, { type, token }, target);
@@ -25,7 +24,6 @@ function createConfigDecorator(type: 'agent' | 'tool' | 'memory') {
 
 export const agent = createConfigDecorator('agent');
 export const tool = createConfigDecorator('tool');
-export const memory = createConfigDecorator('memory');
 
 const resolveConfig = <T extends AgentConfig | ToolConfig>(config: T): T => {
   if (!config.extends) return config;
@@ -114,13 +112,7 @@ export const registerAgent = async <T>(
         );
       }
 
-      proxyValidation(
-        instance,
-        'call',
-        ParamType.CONFIG,
-        (merged as AgentConfig<T>).configSchema,
-        token,
-      );
+      // Config validation happens at resolveEffectiveConfig() time, not here
     },
     { frequency: 'Once' },
   );
@@ -160,28 +152,6 @@ export const registerTool = async <I, O>(
       );
     },
     { frequency: 'Once' },
-  );
-
-  return token;
-};
-
-export const registerMemory = async (Clz: new (...params: any[]) => Memory) => {
-  const { token } = Reflect.getMetadata(metaDataKey, Clz);
-
-  logger.info(
-    `Register memory module ${chalk.cyan(Clz.name)} with token ${chalk.yellow(token)}`,
-  );
-
-  container.register<Memory>(token, Clz, {
-    lifecycle: Lifecycle.Transient,
-  });
-
-  container.afterResolution(
-    token,
-    async (_token, instance: any) => {
-      Reflect.set(instance, 'logger', logger.child({ source: token }));
-    },
-    { frequency: 'Always' },
   );
 
   return token;

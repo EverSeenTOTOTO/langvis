@@ -1,4 +1,5 @@
-import { AgentEvent, MessagePhase } from '.';
+import type { AgentEvent, MessagePhase } from '.';
+import type { ToolCallRecord } from './render';
 
 export enum Role {
   SYSTEM = 'system',
@@ -19,6 +20,10 @@ export type Message = {
   content: string;
   attachments?: MessageAttachment[] | null;
   events?: AgentEvent[] | null;
+  parentId?: string | null;
+  agentRunId?: string | null;
+  toolCallRecords?: ToolCallRecord[] | null;
+  thoughts?: string[] | null;
   status?: MessagePhase | null;
   meta?: Record<string, unknown> | null;
   createdAt: Date;

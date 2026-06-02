@@ -1,20 +1,17 @@
 import { RedisKeys } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { Message, MessageAttachment } from '@/shared/types/entities';
-import { SessionPhase } from '@/shared/types';
+import type { SessionPhase } from '@/shared/types';
+import type { SSEFrame } from '@/shared/types/events';
 import { generateId } from '@/shared/utils';
-import { globby } from 'globby';
 import { inject } from 'tsyringe';
-import type { Agent } from '../core/agent';
-import { MessageFSM } from '../core/MessageFSM';
+import type { Agent } from '../modules/agent/domain/agent.base';
+import type { AgentRun } from '../modules/agent/domain/agent-run.entity';
 import { SessionFSM } from '../core/SessionFSM';
-import { registerMemory } from '../decorator/core';
 import { service } from '../decorator/service';
-import { isProd } from '../utils';
 import Logger from '../utils/logger';
 import { ConversationService } from './ConversationService';
 import { RedisService } from './RedisService';
-import { ProviderService } from './ProviderService';
 import { WorkspaceService } from './WorkspaceService';
 
 export interface ChatSessionState {
@@ -40,28 +37,8 @@ export class ChatService {
     @inject(RedisService) private redisService: RedisService,
     @inject(ConversationService)
     private conversationService: ConversationService,
-    @inject(ProviderService) private providerService: ProviderService,
     @inject(WorkspaceService) private workspaceService: WorkspaceService,
-  ) {
-    const suffix = isProd ? '.js' : '.ts';
-    const pattern = `./${isProd ? 'dist' : 'src'}/server/core/memory/*/index${suffix}`;
-
-    globby(pattern, {
-      cwd: process.cwd(),
-      absolute: true,
-    })
-      .then(memoryPaths => {
-        return Promise.all(
-          memoryPaths.map(async memoryPath => {
-            const { default: clazz } = await import(memoryPath);
-            registerMemory(clazz);
-          }),
-        );
-      })
-      .catch(error => {
-        this.logger.error('Failed to register memory modules:', error);
-      });
-  }
+  ) {}
 
   getSession(conversationId: string): SessionFSM | undefined {
     return this.sessions.get(conversationId);
@@ -107,7 +84,6 @@ export class ChatService {
       return existing;
     }
 
-    // Clean up stale Redis state from previous server instance
     await this.cleanupStaleState(conversationId);
 
     this.logger.info(`Session created`, { sessionId: conversationId });
@@ -148,7 +124,6 @@ export class ChatService {
     const state = await this.getSessionState(conversationId);
     if (!state) return;
 
-    // Mark any non-terminal messages as error (server restarted mid-stream)
     if (state.phase !== 'done' && state.phase !== 'waiting') {
       this.logger.warn(`Stale session detected`, {
         sessionId: conversationId,
@@ -161,24 +136,14 @@ export class ChatService {
         );
 
       if (staleMessages.length > 0) {
-        const errorEvent = {
-          type: 'error' as const,
-          messageId: 'zombie',
-          error: 'Generation interrupted (server restarted)',
-          seq: Date.now(),
-          at: Date.now(),
-        };
-
         await Promise.all(
-          staleMessages.map(msg => {
-            const events = [...(msg.events ?? []), errorEvent];
-            return this.conversationService.updateMessage(msg.id, {
+          staleMessages.map(msg =>
+            this.conversationService.updateMessage(msg.id, {
               content:
                 msg.content || 'Generation interrupted (server restarted)',
-              events,
               status: 'error',
-            });
-          }),
+            }),
+          ),
         );
       }
     }
@@ -286,8 +251,6 @@ Workspace Directory: ${workDir}
         this.logger.error('Failed to persist turn messages', err);
       });
 
-    // Don't include assistantMessage in context — it's empty and would confuse the model.
-    // Memory context should only contain messages up to (and including) the user's query.
     return {
       messages: [...existingMessages, ...newMessages.slice(0, -1)],
       assistantId,
@@ -298,57 +261,30 @@ Workspace Directory: ${workDir}
   async runSession(
     session: SessionFSM,
     agent: Agent,
-    config: unknown,
-    messageId: string,
+    run: AgentRun,
   ): Promise<void> {
-    const messageFSM = session.getMessageFSM(messageId);
-    if (!messageFSM) {
-      this.logger.error(`MessageFSM not found for ${messageId}`);
-      return;
-    }
-
-    const memory = session.memory;
-    if (!memory) {
-      this.logger.error(`Memory not set for session ${session.conversationId}`);
-      return;
-    }
-
     this.logger.info(`Starting agent=${agent.id}`, {
       sessionId: session.conversationId,
-      messageId,
+      messageId: run.messageId,
     });
 
     const startTime = Date.now();
     let firstTokenTime: number | undefined;
 
-    // Configure memory with model info for context usage estimation
-    const convConfig = config as { model?: { modelId?: string } } | undefined;
-    const modelId = convConfig?.model?.modelId;
-    const model = modelId ? this.providerService.getModel(modelId) : undefined;
-    if (model) {
-      memory.configure({ modelId, contextSize: model.contextSize });
-    }
-
-    // preTurn: yield any memory events before agent starts
-    for await (const event of memory.preTurn(await memory.summarize())) {
-      messageFSM.handleEvent(event);
-      session.send(event);
-    }
-
     try {
-      for await (const event of agent.call(memory, messageFSM.ctx, config)) {
-        if (messageFSM.ctx.signal.aborted) break;
+      for await (const event of agent.call(run)) {
+        if (run.signal.aborted) break;
 
-        if (event.type === 'stream' && !firstTokenTime) {
+        if (event.type === 'text_chunk' && !firstTokenTime) {
           firstTokenTime = Date.now();
           this.logger.info(
             `First token: ttft=${firstTokenTime - startTime}ms session=${session.conversationId}`,
           );
         }
 
-        messageFSM.handleEvent(event);
+        const frame = { ...event, messageId: run.messageId } as SSEFrame;
 
-        if (!session.send(event)) {
+        if (!session.send(frame)) {
           this.logger.warn(
             `SSE not connected for ${session.conversationId}, event persisted`,
           );
@@ -357,65 +293,65 @@ Workspace Directory: ${workDir}
         if (event.type === 'error') break;
       }
     } catch (err) {
-      if (messageFSM.ctx.signal.aborted) {
+      if (run.signal.aborted) {
         this.logger.info(
           `Agent execution aborted session=${session.conversationId}`,
         );
       } else {
-        this.handleAgentError(err, messageFSM, session);
+        this.logger.error(`Agent error session=${session.conversationId}`, {
+          error: (err as Error)?.message || String(err),
+          stack: (err as Error)?.stack,
+        });
+        const errEvent = run.fail((err as Error)?.message || String(err));
+        session.send({ ...errEvent, messageId: run.messageId } as SSEFrame);
       }
     } finally {
-      if (messageFSM.ctx.signal.aborted) {
-        this.handleAgentCancel(messageFSM, session);
+      if (run.signal.aborted && !run.isTerminated) {
+        try {
+          const reason = (run.signal.reason as Error)?.message ?? 'Cancelled';
+          const cancelEvent = run.cancel(reason);
+          session.send({
+            ...cancelEvent,
+            messageId: run.messageId,
+          } as SSEFrame);
+        } catch {
+          // Already terminated
+        }
       }
 
-      // postTurn: yield memory events (context_usage, tool summaries, etc.)
-      for await (const event of memory.postTurn(messageFSM.message)) {
-        messageFSM.handleEvent(event);
-        session.send(event);
-      }
+      // Emit context_usage
+      const usage = run.getContextUsage();
+      const usageFrame: SSEFrame = {
+        type: 'context_usage',
+        messageId: run.messageId,
+        seq: run.nextSeq(),
+        at: Date.now(),
+        used: usage.used,
+        total: usage.total,
+        reason: 'turn_completed',
+      };
+      session.send(usageFrame);
 
-      await this.conversationService.updateMessage(messageFSM.message.id, {
-        content: messageFSM.message.content,
-        events: messageFSM.message.events,
-        status: messageFSM.phase,
-        meta: messageFSM.message.meta,
+      // Persist final message state
+      await this.conversationService.updateMessage(run.messageId, {
+        content: run.content,
+        toolCallRecords: run.getToolCallRecords(),
+        thoughts: run.toSnapshot().thoughts,
+        status:
+          run.status === 'completed'
+            ? 'final'
+            : run.status === 'cancelled'
+              ? 'canceled'
+              : 'error',
       });
 
       const totalTime = Date.now() - startTime;
       const ttft = firstTokenTime ? firstTokenTime - startTime : null;
-      const contentLength = messageFSM.message.content.length;
+      const contentLength = run.content.length;
       const avgTokenTime = contentLength > 0 ? totalTime / contentLength : 0;
       this.logger.info(
         `Agent completed: totalTime=${totalTime}ms tokens=${contentLength} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${session.conversationId}`,
       );
     }
-  }
-
-  private handleAgentError(
-    err: unknown,
-    messageFSM: MessageFSM,
-    session: SessionFSM,
-  ): void {
-    this.logger.error(`Agent error session=${session.conversationId}`, {
-      error: (err as Error)?.message || String(err),
-      stack: (err as Error)?.stack,
-    });
-    const errorEvent = messageFSM.ctx.agentErrorEvent(
-      (err as Error)?.message || String(err),
-    );
-    messageFSM.handleEvent(errorEvent);
-    session.send(errorEvent);
-  }
-
-  private handleAgentCancel(messageFSM: MessageFSM, session: SessionFSM): void {
-    const reason =
-      (messageFSM.ctx.signal.reason as Error)?.message ?? 'Unknown';
-    this.logger.info(
-      `Agent cancelled: ${reason} session=${session.conversationId}`,
-    );
-    const cancelledEvent = messageFSM.ctx.agentCancelledEvent(reason);
-    messageFSM.handleEvent(cancelledEvent);
-    session.send(cancelledEvent);
   }
 }

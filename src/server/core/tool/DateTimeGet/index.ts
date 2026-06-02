@@ -2,12 +2,11 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { ToolConfig, AgentEvent } from '@/shared/types';
+import type { ToolConfig } from '@/shared/types';
 import dayjs from 'dayjs';
 import tz from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 
 dayjs.extend(utc);
 dayjs.extend(tz);
@@ -32,8 +31,8 @@ export default class DateTimeGetTool extends Tool<
 
   async *call(
     @input() data: DateTimeGetInput,
-    _ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, DateTimeGetOutput, void> {
+    _ctx: { signal: AbortSignal },
+  ): AsyncGenerator<never, DateTimeGetOutput, void> {
     const timezone = data?.timezone;
     const format = data?.format;
 

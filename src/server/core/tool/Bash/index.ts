@@ -3,9 +3,9 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { AgentEvent, ToolConfig } from '@/shared/types';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import type { ToolConfig } from '@/shared/types';
+import type { ToolProgress } from '@/server/modules/agent/domain/tool-call.entity';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 import { TraceContext } from '../../TraceContext';
 import { WorkspaceService } from '../../../service/WorkspaceService';
 import { createTimeoutController } from '@/server/utils/abort';
@@ -80,8 +80,8 @@ export default class BashTool extends Tool<BashInput, BashOutput> {
 
   async *call(
     @input() { command, timeout }: BashInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, BashOutput, void> {
+    ctx: { signal: AbortSignal },
+  ): AsyncGenerator<ToolProgress, BashOutput, void> {
     ctx.signal.throwIfAborted();
     this.ensureCleanupRegistered();
 
@@ -190,7 +190,7 @@ export default class BashTool extends Tool<BashInput, BashOutput> {
       killProcessTree(child);
     });
 
-    const flushOutput = (source: 'stdout' | 'stderr'): AgentEvent | null => {
+    const flushOutput = (source: 'stdout' | 'stderr'): ToolProgress | null => {
       if (progressSent >= PROGRESS_LIMIT) return null;
 
       const output = source === 'stdout' ? stdout : stderr;
@@ -213,7 +213,7 @@ export default class BashTool extends Tool<BashInput, BashOutput> {
       if (source === 'stdout') lastFlushedStdout = flushed + text.length;
       else lastFlushedStderr = flushed + text.length;
 
-      return ctx.agentToolProgressEvent(this.id, { type: source, text });
+      return { type: 'tool_progress' as const, data: { type: source, text } };
     };
 
     try {

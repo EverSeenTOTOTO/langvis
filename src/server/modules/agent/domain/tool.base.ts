@@ -1,0 +1,36 @@
+import type { Logger } from '@/server/utils/logger';
+import type { ToolConfig, ToolCallTimeline } from '@/shared/types';
+import type { ToolProgress } from './tool-call.entity';
+
+export abstract class Tool<I = unknown, O = unknown> {
+  abstract readonly id: string;
+  abstract readonly config: ToolConfig;
+
+  protected abstract readonly logger: Logger;
+
+  abstract call(
+    input: I,
+    ctx: { signal: AbortSignal },
+  ): AsyncGenerator<ToolProgress, O, void>;
+
+  summarize(timeline: ToolCallTimeline): string {
+    const argsHint = this.summarizeArgs(timeline.toolArgs);
+    if (timeline.status === 'error') {
+      return `调用${timeline.toolName}${argsHint}: 失败 - ${timeline.error}`;
+    }
+    const outputHint = this.summarizeOutput(timeline.output);
+    return `调用${timeline.toolName}${argsHint}: ${outputHint}`;
+  }
+
+  summarizeArgs(_args: Record<string, unknown>): string {
+    return '';
+  }
+
+  summarizeOutput(_output: unknown): string {
+    return '完成';
+  }
+
+  async dispose(): Promise<void> {}
+}
+
+export type ToolConstructor = new (...args: any[]) => Tool;

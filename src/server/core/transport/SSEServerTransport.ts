@@ -1,9 +1,9 @@
 import type { Request, Response } from 'express';
 import { Transport } from '@/shared/transport';
-import type { SSEMessage } from '@/shared/types';
+import type { SSEFrame } from '@/shared/types/events';
 import logger from '../../utils/logger';
 
-export class SSEServerTransport extends Transport<SSEMessage> {
+export class SSEServerTransport extends Transport<SSEFrame> {
   private closed = false;
 
   constructor(
@@ -40,7 +40,7 @@ export class SSEServerTransport extends Transport<SSEMessage> {
     return Promise.resolve();
   }
 
-  send(message: SSEMessage): boolean {
+  send(message: SSEFrame): boolean {
     if (this.closed || !this.response.writable) return false;
 
     const payload = `data: ${JSON.stringify(message)}\n\n`;
