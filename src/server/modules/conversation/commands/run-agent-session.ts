@@ -14,7 +14,8 @@ import { Conversation } from '../domain/conversation.entity';
 import { service } from '@/server/decorator/service';
 import Logger from '@/server/utils/logger';
 import { SessionManager } from '../session-manager';
-import { ConversationService } from '@/server/service/ConversationService';
+import { MESSAGE_REPOSITORY } from '../conversation.di-tokens';
+import type { MessageRepositoryPort } from '../database/message.repository.port';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 
 @service()
@@ -24,8 +25,8 @@ export class RunAgentSession {
   constructor(
     @inject(SessionManager)
     private sessionManager: SessionManager,
-    @inject(ConversationService)
-    private conversationService: ConversationService,
+    @inject(MESSAGE_REPOSITORY)
+    private messageRepo: MessageRepositoryPort,
     @inject(ProviderService)
     private providerService: ProviderService,
   ) {}
@@ -62,8 +63,8 @@ export class RunAgentSession {
     conversation.registerRun(params.assistantMessage, run);
     this.sessionManager.handleDomainEvents(conversation);
 
-    this.conversationService
-      .updateMessage(params.assistantMessage.id, {
+    this.messageRepo
+      .update(params.assistantMessage.id, {
         agentRunId: run.runId,
       })
       .catch(err => {
@@ -160,7 +161,7 @@ export class RunAgentSession {
       conversation.send(usageFrame);
 
       // Persist final message state
-      await this.conversationService.updateMessage(run.messageId, {
+      await this.messageRepo.update(run.messageId, {
         content: run.content,
         toolCallRecords: run.getToolCallRecords(),
         thoughts: run.toSnapshot().thoughts,
@@ -192,7 +193,7 @@ export class RunAgentSession {
       case 'tool_error': {
         const toolCall = run.getToolCall(event.callId);
         if (toolCall) {
-          await this.conversationService.appendToolCallRecord(
+          await this.messageRepo.appendToolCallRecord(
             messageId,
             toolCall.toRecord(),
           );
@@ -200,7 +201,7 @@ export class RunAgentSession {
         break;
       }
       case 'thought': {
-        await this.conversationService.appendThought(messageId, event.content);
+        await this.messageRepo.appendThought(messageId, event.content);
         break;
       }
     }

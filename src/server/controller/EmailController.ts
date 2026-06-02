@@ -14,7 +14,8 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, query, request, response } from '../decorator/param';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
-import { ConversationService } from '../service/ConversationService';
+import { CONVERSATION_REPOSITORY } from '../modules/conversation/conversation.di-tokens';
+import type { ConversationRepositoryPort } from '../modules/conversation/database/conversation.repository.port';
 import { EmailService } from '@/server/modules/email/email.service';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import {
@@ -39,8 +40,8 @@ export default class EmailController {
   constructor(
     @inject(EmailService)
     private readonly emailService: EmailService,
-    @inject(ConversationService)
-    private readonly conversationService: ConversationService,
+    @inject(CONVERSATION_REPOSITORY)
+    private readonly convRepo: ConversationRepositoryPort,
     @inject(SessionManager)
     private readonly sessionManager: SessionManager,
     @inject(StartChatTurn)
@@ -143,7 +144,7 @@ export default class EmailController {
 
     const userId = await this.authService.getUserId(req);
     const defaultModel = this.providerService.getDefaultModel('chat');
-    const conversation = await this.conversationService.createConversation(
+    const conversation = await this.convRepo.create(
       `归档邮件: ${email.subject}`,
       userId,
       {

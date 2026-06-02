@@ -5,7 +5,8 @@ import { Conversation } from './domain/conversation.entity';
 import { service } from '@/server/decorator/service';
 import Logger from '@/server/utils/logger';
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
-import { ConversationService } from '@/server/service/ConversationService';
+import { MESSAGE_REPOSITORY } from './conversation.di-tokens';
+import type { MessageRepositoryPort } from './database/message.repository.port';
 
 @service()
 export class SessionManager {
@@ -14,8 +15,8 @@ export class SessionManager {
 
   constructor(
     @inject(RedisService) private redisService: RedisService,
-    @inject(ConversationService)
-    private conversationService: ConversationService,
+    @inject(MESSAGE_REPOSITORY)
+    private messageRepo: MessageRepositoryPort,
   ) {}
 
   getSession(conversationId: string): Conversation | undefined {
@@ -138,14 +139,12 @@ export class SessionManager {
       });
 
       const staleMessages =
-        await this.conversationService.findActiveAssistantMessages(
-          conversationId,
-        );
+        await this.messageRepo.findActiveAssistantMessages(conversationId);
 
       if (staleMessages.length > 0) {
         await Promise.all(
           staleMessages.map(msg =>
-            this.conversationService.updateMessage(msg.id, {
+            this.messageRepo.update(msg.id, {
               content:
                 msg.content || 'Generation interrupted (server restarted)',
               status: 'failed',

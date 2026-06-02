@@ -7,15 +7,16 @@ describe('ConversationController', () => {
   let conversationController: ConversationController;
   let mockReq: Partial<Request>;
   let mockRes: Partial<Response>;
-  const mockConversationService = {
-    createConversation: vi.fn(),
-    getConversationById: vi.fn(),
-    updateConversation: vi.fn(),
-    deleteConversation: vi.fn(),
-    addMessageToConversation: vi.fn(),
-    batchAddMessages: vi.fn(),
-    getMessagesByConversationId: vi.fn(),
-    batchDeleteMessagesInConversation: vi.fn(),
+  const mockConvRepo = {
+    create: vi.fn(),
+    findById: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  };
+  const mockMessageRepo = {
+    batchCreate: vi.fn(),
+    findByConversationId: vi.fn(),
+    batchDeleteInConversation: vi.fn(),
   };
   const mockProviderService = {
     getModel: vi.fn(),
@@ -23,7 +24,8 @@ describe('ConversationController', () => {
 
   beforeEach(() => {
     conversationController = new ConversationController(
-      mockConversationService as any,
+      mockConvRepo as any,
+      mockMessageRepo as any,
       mockProviderService as any,
     );
     mockReq = {
@@ -45,9 +47,7 @@ describe('ConversationController', () => {
     };
 
     mockReq.body = { name: 'Test Conversation' };
-    mockConversationService.createConversation.mockResolvedValue(
-      mockConversation,
-    );
+    mockConvRepo.create.mockResolvedValue(mockConversation);
 
     await conversationController.createConversation(
       mockReq.body,
@@ -71,9 +71,7 @@ describe('ConversationController', () => {
       name: 'Test Conversation',
       config: { model: 'gpt-4', temperature: 0.7 },
     };
-    mockConversationService.createConversation.mockResolvedValue(
-      mockConversation,
-    );
+    mockConvRepo.create.mockResolvedValue(mockConversation);
 
     await conversationController.createConversation(
       mockReq.body,
@@ -81,7 +79,7 @@ describe('ConversationController', () => {
       mockRes as Response,
     );
 
-    expect(mockConversationService.createConversation).toHaveBeenCalledWith(
+    expect(mockConvRepo.create).toHaveBeenCalledWith(
       'Test Conversation',
       'test-user-id',
       { model: 'gpt-4', temperature: 0.7 },
@@ -118,9 +116,7 @@ describe('ConversationController', () => {
       name: 'Test Conversation',
       config: { agent: 'gpt-4', extra: 'field' },
     };
-    mockConversationService.createConversation.mockResolvedValue(
-      mockConversation,
-    );
+    mockConvRepo.create.mockResolvedValue(mockConversation);
 
     const { CreateConversationRequestDto } = await import(
       '@/shared/dto/controller'
@@ -136,7 +132,7 @@ describe('ConversationController', () => {
       mockRes as Response,
     );
 
-    expect(mockConversationService.createConversation).toHaveBeenCalledWith(
+    expect(mockConvRepo.create).toHaveBeenCalledWith(
       'Test Conversation',
       'test-user-id',
       { agent: 'gpt-4', extra: 'field' },
@@ -172,9 +168,7 @@ describe('ConversationController', () => {
     };
 
     mockReq.params = { id: '1' };
-    mockConversationService.getConversationById.mockResolvedValue(
-      mockConversation,
-    );
+    mockConvRepo.findById.mockResolvedValue(mockConversation);
 
     await conversationController.getConversationById(
       '1',
@@ -187,7 +181,7 @@ describe('ConversationController', () => {
 
   it('should return 404 if conversation not found when getting by id', async () => {
     mockReq.params = { id: '1' };
-    mockConversationService.getConversationById.mockResolvedValue(null);
+    mockConvRepo.findById.mockResolvedValue(null);
 
     await conversationController.getConversationById(
       '1',
@@ -211,9 +205,7 @@ describe('ConversationController', () => {
 
     mockReq.params = { id: '1' };
     mockReq.body = { name: 'Updated Conversation' };
-    mockConversationService.updateConversation.mockResolvedValue(
-      mockConversation,
-    );
+    mockConvRepo.update.mockResolvedValue(mockConversation);
 
     await conversationController.updateConversation(
       '1',
@@ -238,9 +230,7 @@ describe('ConversationController', () => {
       name: 'Updated Conversation',
       config: { model: 'gpt-4', temperature: 0.7 },
     };
-    mockConversationService.updateConversation.mockResolvedValue(
-      mockConversation,
-    );
+    mockConvRepo.update.mockResolvedValue(mockConversation);
 
     await conversationController.updateConversation(
       '1',
@@ -249,7 +239,7 @@ describe('ConversationController', () => {
       mockRes as Response,
     );
 
-    expect(mockConversationService.updateConversation).toHaveBeenCalledWith(
+    expect(mockConvRepo.update).toHaveBeenCalledWith(
       '1',
       'Updated Conversation',
       'test-user-id',
@@ -263,7 +253,7 @@ describe('ConversationController', () => {
   it('should return 404 if conversation not found when updating', async () => {
     mockReq.params = { id: '1' };
     mockReq.body = { name: 'Updated Conversation' };
-    mockConversationService.updateConversation.mockResolvedValue(null);
+    mockConvRepo.update.mockResolvedValue(null);
 
     await conversationController.updateConversation(
       '1',
@@ -280,7 +270,7 @@ describe('ConversationController', () => {
 
   it('should delete a conversation', async () => {
     mockReq.params = { id: '1' };
-    mockConversationService.deleteConversation.mockResolvedValue(true);
+    mockConvRepo.delete.mockResolvedValue(true);
 
     await conversationController.deleteConversation(
       '1',
@@ -294,7 +284,7 @@ describe('ConversationController', () => {
 
   it('should return 404 if conversation not found when deleting', async () => {
     mockReq.params = { id: '1' };
-    mockConversationService.deleteConversation.mockResolvedValue(false);
+    mockConvRepo.delete.mockResolvedValue(false);
 
     await conversationController.deleteConversation(
       '1',
@@ -319,7 +309,7 @@ describe('ConversationController', () => {
 
     mockReq.params = { id: '1' };
     mockReq.body = { role: Role.USER, content: 'Hello' };
-    mockConversationService.batchAddMessages.mockResolvedValue([mockMessage]);
+    mockMessageRepo.batchCreate.mockResolvedValue([mockMessage]);
 
     await conversationController.addMessageToConversation(
       '1',
@@ -386,10 +376,8 @@ describe('ConversationController', () => {
     ];
 
     mockReq.params = { id: '1' };
-    mockConversationService.getMessagesByConversationId.mockResolvedValue(
-      mockMessages,
-    );
-    mockConversationService.getConversationById.mockResolvedValue({
+    mockMessageRepo.findByConversationId.mockResolvedValue(mockMessages);
+    mockConvRepo.findById.mockResolvedValue({
       id: '1',
       config: { model: { modelId: 'openai:gpt-4' } },
     });

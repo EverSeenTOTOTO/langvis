@@ -4,8 +4,9 @@ import { generateId } from '@/shared/utils';
 import { inject } from 'tsyringe';
 import { service } from '@/server/decorator/service';
 import Logger from '@/server/utils/logger';
-import { ConversationService } from '@/server/service/ConversationService';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
+import { MESSAGE_REPOSITORY } from '../conversation.di-tokens';
+import type { MessageRepositoryPort } from '../database/message.repository.port';
 
 export interface PrepareTurnResult {
   messages: Message[];
@@ -18,8 +19,8 @@ export class StartChatTurn {
   private readonly logger = Logger.child({ source: 'StartChatTurn' });
 
   constructor(
-    @inject(ConversationService)
-    private conversationService: ConversationService,
+    @inject(MESSAGE_REPOSITORY)
+    private messageRepo: MessageRepositoryPort,
     @inject(WorkspaceService)
     private workspaceService: WorkspaceService,
   ) {}
@@ -47,9 +48,7 @@ export class StartChatTurn {
     } = params;
 
     const existingMessages =
-      await this.conversationService.getMessagesByConversationId(
-        conversationId,
-      );
+      await this.messageRepo.findByConversationId(conversationId);
     const isFirstTurn = existingMessages.length === 0;
 
     const baseTime = Date.now();
@@ -117,11 +116,9 @@ Workspace Directory: ${workDir}
     };
     newMessages.push(assistantMessage);
 
-    this.conversationService
-      .batchAddMessages(conversationId, newMessages)
-      .catch(err => {
-        this.logger.error('Failed to persist turn messages', err);
-      });
+    this.messageRepo.batchCreate(conversationId, newMessages).catch(err => {
+      this.logger.error('Failed to persist turn messages', err);
+    });
 
     return {
       messages: [...existingMessages, ...newMessages.slice(0, -1)],

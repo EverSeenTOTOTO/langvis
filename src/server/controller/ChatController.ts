@@ -13,7 +13,8 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
-import { ConversationService } from '../service/ConversationService';
+import { CONVERSATION_REPOSITORY } from '../modules/conversation/conversation.di-tokens';
+import type { ConversationRepositoryPort } from '../modules/conversation/database/conversation.repository.port';
 import { SessionManager } from '../modules/conversation/session-manager';
 import { StartChatTurn } from '../modules/conversation/commands/start-chat-turn';
 import { RunAgentSession } from '../modules/conversation/commands/run-agent-session';
@@ -22,8 +23,8 @@ import { GetSessionState } from '../modules/conversation/queries/get-session-sta
 @controller('/api/chat')
 export default class ChatController {
   constructor(
-    @inject(ConversationService)
-    private conversationService: ConversationService,
+    @inject(CONVERSATION_REPOSITORY)
+    private convRepo: ConversationRepositoryPort,
     @inject(SessionManager)
     private sessionManager: SessionManager,
     @inject(StartChatTurn)
@@ -146,8 +147,7 @@ export default class ChatController {
       });
     }
 
-    const dbConversation =
-      await this.conversationService.getConversationById(conversationId);
+    const dbConversation = await this.convRepo.findById(conversationId);
 
     if (!dbConversation) {
       return res
