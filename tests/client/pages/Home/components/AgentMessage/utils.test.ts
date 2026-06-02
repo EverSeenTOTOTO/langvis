@@ -2,46 +2,42 @@ import { describe, it, expect } from 'vitest';
 import {
   buildToolBlocks,
   extractNestedEvents,
-  buildToolTimeline,
+  buildUIToolCallsFromEvents,
 } from '@/client/pages/Home/components/AgentMessage/utils';
+import type { UIToolCall } from '@/client/store/modules/message-node';
 import type { AgentEvent } from '@/shared/types';
-import type { ToolCallTimeline } from '@/client/store/modules/MessageFSM';
 
 describe('buildToolBlocks', () => {
-  it('should build tool blocks from timeline', () => {
-    const timeline: ToolCallTimeline[] = [
+  it('should build tool blocks from UIToolCalls', () => {
+    const toolCalls: UIToolCall[] = [
       {
         callId: 'tc_1',
         toolName: 'test_tool',
         toolArgs: { arg: 'value' },
-        seq: 1,
-        at: Date.now(),
-        status: 'done',
+        status: 'completed',
         output: { result: 'ok' },
         progress: [],
       },
     ];
 
-    const blocks = buildToolBlocks(timeline);
+    const blocks = buildToolBlocks(toolCalls);
     expect(blocks).toHaveLength(1);
     expect(blocks[0].toolCall.callId).toBe('tc_1');
     expect(blocks[0].isPending).toBe(false);
   });
 
   it('should mark pending tools correctly', () => {
-    const timeline: ToolCallTimeline[] = [
+    const toolCalls: UIToolCall[] = [
       {
         callId: 'tc_1',
         toolName: 'test_tool',
         toolArgs: {},
-        seq: 1,
-        at: Date.now(),
         status: 'pending',
         progress: [],
       },
     ];
 
-    const blocks = buildToolBlocks(timeline);
+    const blocks = buildToolBlocks(toolCalls);
     expect(blocks[0].isPending).toBe(true);
   });
 });
@@ -59,8 +55,8 @@ describe('extractNestedEvents', () => {
     };
 
     const progress = [
-      { data: { status: 'agent_event', event: nestedEvent } },
-      { data: { status: 'other' } },
+      { status: 'agent_event', event: nestedEvent },
+      { status: 'other' },
     ];
 
     const events = extractNestedEvents(progress);
@@ -69,8 +65,8 @@ describe('extractNestedEvents', () => {
   });
 });
 
-describe('buildToolTimeline', () => {
-  it('should build timeline from events', () => {
+describe('buildUIToolCallsFromEvents', () => {
+  it('should build UIToolCalls from events', () => {
     const events: AgentEvent[] = [
       {
         type: 'tool_call',
@@ -92,8 +88,36 @@ describe('buildToolTimeline', () => {
       },
     ];
 
-    const timeline = buildToolTimeline(events);
-    expect(timeline).toHaveLength(1);
-    expect(timeline[0].status).toBe('done');
+    const toolCalls = buildUIToolCallsFromEvents(events);
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0].status).toBe('completed');
+    expect(toolCalls[0].callId).toBe('tc_1');
+  });
+
+  it('should convert error status to failed', () => {
+    const events: AgentEvent[] = [
+      {
+        type: 'tool_call',
+        messageId: 'msg-1',
+        callId: 'tc_1',
+        toolName: 'test_tool',
+        toolArgs: {},
+        seq: 1,
+        at: Date.now(),
+      },
+      {
+        type: 'tool_error',
+        messageId: 'msg-1',
+        callId: 'tc_1',
+        toolName: 'test_tool',
+        error: 'something went wrong',
+        seq: 2,
+        at: Date.now(),
+      },
+    ];
+
+    const toolCalls = buildUIToolCallsFromEvents(events);
+    expect(toolCalls[0].status).toBe('failed');
+    expect(toolCalls[0].error).toBe('something went wrong');
   });
 });

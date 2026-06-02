@@ -1,5 +1,5 @@
 import type { Message, MessageAttachment } from '@/shared/types/entities';
-import type { AgentEvent, MessagePhase } from '@/shared/types';
+import type { MessagePhase } from '@/shared/types';
 import type { ToolCallRecord } from '@/shared/types/render';
 import {
   BeforeInsert,
@@ -38,9 +38,6 @@ export class MessageEntity implements Message {
 
   @Column({ type: 'json', nullable: true })
   attachments!: MessageAttachment[] | null;
-
-  @Column({ type: 'jsonb', nullable: true })
-  events!: AgentEvent[] | null;
 
   @Column({ type: 'varchar', length: 16, nullable: true })
   parentId!: string | null;

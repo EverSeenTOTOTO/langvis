@@ -47,8 +47,7 @@ const Chat: React.FC = () => {
   const isCancelling = cancelApi[0].loading;
 
   // Loading = connecting or actively streaming
-  const session = chatStore.currentSession;
-  const isLoading = !isCancelling && session?.isLoading;
+  const isLoading = !isCancelling && chatStore.currentSessionActive;
 
   const { micButton, isVoiceProcessing } = useVoiceInput(
     !!isLoading,

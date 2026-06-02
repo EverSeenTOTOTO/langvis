@@ -57,6 +57,7 @@ vi.mock('@/server/service/DatabaseService', () => {
       getRepository: mockGetRepository,
       dataSource: {
         transaction: vi.fn(async (cb: any) => cb({})),
+        query: vi.fn().mockResolvedValue({ rowCount: 1 }),
       },
     })),
   };
@@ -675,5 +676,57 @@ describe('ConversationService', () => {
       null, // null groupId should assign to ungrouped
     );
     expect(result?.groupId).toBe('ungrouped-id');
+  });
+
+  // ── Incremental JSONB projection ──
+
+  it('should append a tool call record using JSONB concatenation', async () => {
+    const querySpy = vi.fn().mockResolvedValue({ rowCount: 1 });
+    (mockDb as any).dataSource.query = querySpy;
+
+    const record = {
+      callId: 'tc_1',
+      toolName: 'read_file',
+      toolArgs: { path: '/tmp/test.txt' },
+      status: 'completed' as const,
+      output: 'file contents',
+      error: undefined,
+      duration: 150,
+      startedAt: 1000,
+      completedAt: 1150,
+    };
+
+    await conversationService.appendToolCallRecord('msg_1', record);
+
+    expect(querySpy).toHaveBeenCalledTimes(1);
+    expect(querySpy).toHaveBeenCalledWith(
+      expect.stringContaining('"toolCallRecords"'),
+      [JSON.stringify([record]), 'msg_1'],
+    );
+  });
+
+  it('should append a thought using JSONB concatenation', async () => {
+    const querySpy = vi.fn().mockResolvedValue({ rowCount: 1 });
+    (mockDb as any).dataSource.query = querySpy;
+
+    await conversationService.appendThought('msg_1', 'Let me analyze this...');
+
+    expect(querySpy).toHaveBeenCalledTimes(1);
+    expect(querySpy).toHaveBeenCalledWith(expect.stringContaining('thoughts'), [
+      JSON.stringify(['Let me analyze this...']),
+      'msg_1',
+    ]);
+  });
+
+  it('should use CASE WHEN NULL pattern for JSONB append', async () => {
+    const querySpy = vi.fn().mockResolvedValue({ rowCount: 1 });
+    (mockDb as any).dataSource.query = querySpy;
+
+    await conversationService.appendThought('msg_1', 'thinking...');
+
+    const sql = querySpy.mock.calls[0][0] as string;
+    expect(sql).toContain('CASE');
+    expect(sql).toContain('IS NULL');
+    expect(sql).toContain('||');
   });
 });

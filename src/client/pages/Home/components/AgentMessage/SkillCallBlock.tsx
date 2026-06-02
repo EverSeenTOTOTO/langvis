@@ -2,7 +2,7 @@ import { CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { Button, Flex, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { lazy, Suspense } from 'react';
-import type { ToolCallTimeline } from '@/client/store/modules/MessageFSM';
+import type { UIToolCall } from '@/client/store/modules/message-node';
 import Modal from '@/client/components/Modal';
 import './ReActAgent/index.scss';
 import { useStore } from '@/client/store';
@@ -13,7 +13,7 @@ import { getToolColor } from './ToolBlockItem';
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
 export interface SkillCallBlockProps {
-  toolCall: ToolCallTimeline;
+  toolCall: UIToolCall;
   depth?: number;
 }
 
@@ -28,14 +28,14 @@ export function SkillCallBlock({
 
   const Icon = isPending ? (
     <SyncOutlined spin style={{ color: 'var(--ant-color-primary)' }} />
-  ) : toolCall.status === 'done' ? (
+  ) : toolCall.status === 'completed' ? (
     <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
   ) : (
     <span style={{ color: 'var(--ant-color-error)' }}>✕</span>
   );
 
   const skillContent =
-    (toolCall.status === 'done' &&
+    (toolCall.status === 'completed' &&
       safeJsonParse<SkillCallOutput>(toolCall.output)?.content) ||
     (toolCall.output as string);
 
@@ -47,9 +47,11 @@ export function SkillCallBlock({
         {Icon}
         <Tag color="cyan">Skill</Tag>
         <Tag color={getToolColor(skillId)}>{skillId}</Tag>
-        <Typography.Text type="secondary" className="react-tool-time">
-          {dayjs(toolCall.at).format('HH:mm:ss')}
-        </Typography.Text>
+        {toolCall.startedAt && (
+          <Typography.Text type="secondary" className="react-tool-time">
+            {dayjs(toolCall.startedAt).format('HH:mm:ss')}
+          </Typography.Text>
+        )}
         {!isPending && (
           <Modal
             title={`技能: ${skillId}`}
@@ -72,7 +74,7 @@ export function SkillCallBlock({
         )}
       </Flex>
 
-      {toolCall.status === 'error' && (
+      {toolCall.status === 'failed' && (
         <Typography.Text type="danger" className="react-tool-error">
           {toolCall.error}
         </Typography.Text>

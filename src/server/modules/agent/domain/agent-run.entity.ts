@@ -209,6 +209,10 @@ export class AgentRun {
     return [...this._toolCalls.values()].map(tc => tc.toRecord());
   }
 
+  getToolCall(callId: string): ToolCall | undefined {
+    return this._toolCalls.get(callId);
+  }
+
   toSnapshot(): RunSnapshot {
     return {
       runId: this.runId,

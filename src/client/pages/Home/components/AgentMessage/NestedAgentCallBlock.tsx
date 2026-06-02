@@ -7,12 +7,12 @@ import {
 import { Button, Flex, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { lazy, Suspense, useState } from 'react';
-import type { ToolCallTimeline } from '@/client/store/modules/MessageFSM';
+import type { UIToolCall } from '@/client/store/modules/message-node';
 import Modal from '@/client/components/Modal';
 import { useStore } from '@/client/store';
 import { ToolBlockItem, getToolColor } from './ToolBlockItem';
 import {
-  buildToolTimeline,
+  buildUIToolCallsFromEvents,
   extractNestedEvents,
   type ProgressData,
 } from './utils';
@@ -21,12 +21,12 @@ import './ReActAgent/index.scss';
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
 export interface NestedAgentCallBlockProps {
-  toolCall: ToolCallTimeline;
+  toolCall: UIToolCall;
   conversationId: string;
   /** Nesting depth for visual indentation */
   depth?: number;
   /** Custom render function for tool-specific visualization */
-  customToolRender?: (toolCall: ToolCallTimeline) => React.ReactNode;
+  customToolRender?: (toolCall: UIToolCall) => React.ReactNode;
 }
 
 /**
@@ -47,17 +47,17 @@ export function NestedAgentCallBlock({
 
   // Extract nested events from this agent_call's progress
   const nestedEvents = extractNestedEvents(toolCall.progress);
-  const nestedTimeline = buildToolTimeline(nestedEvents);
+  const nestedToolCalls = buildUIToolCallsFromEvents(nestedEvents);
 
   // Get agentId from toolArgs or agent_start progress
   const agentId = toolCall.toolArgs?.agentId as string | undefined;
 
   // Extract context/query from agent_start progress event
   const agentStartProgress = toolCall.progress.find(p => {
-    const data = p.data as ProgressData;
+    const data = p as ProgressData;
     return data?.status === 'agent_start';
   });
-  const startData = agentStartProgress?.data as ProgressData | undefined;
+  const startData = agentStartProgress as ProgressData | undefined;
   const context = startData?.context as string | undefined;
   const query = startData?.query as string | undefined;
   const hasDetail = !!context || !!query;
@@ -66,7 +66,7 @@ export function NestedAgentCallBlock({
 
   const Icon = isPending ? (
     <SyncOutlined spin style={{ color: 'var(--ant-color-primary)' }} />
-  ) : toolCall.status === 'done' ? (
+  ) : toolCall.status === 'completed' ? (
     <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
   ) : (
     <span style={{ color: 'var(--ant-color-error)' }}>✕</span>
@@ -85,11 +85,13 @@ export function NestedAgentCallBlock({
         <Tag color="pink">Agent</Tag>
         <Tag color={getToolColor(agentId ?? 'unknown')}>{agentId}</Tag>
         <Typography.Text type="secondary">
-          {nestedTimeline.length} tool(s)
+          {nestedToolCalls.length} tool(s)
         </Typography.Text>
-        <Typography.Text type="secondary" className="react-tool-time">
-          {dayjs(toolCall.at).format('HH:mm:ss')}
-        </Typography.Text>
+        {toolCall.startedAt && (
+          <Typography.Text type="secondary" className="react-tool-time">
+            {dayjs(toolCall.startedAt).format('HH:mm:ss')}
+          </Typography.Text>
+        )}
         {hasDetail && (
           <Modal
             title={`Agent Detail: ${agentId ?? 'unknown'}`}
@@ -129,9 +131,9 @@ export function NestedAgentCallBlock({
         </Typography.Text>
       </Flex>
 
-      {expanded && nestedTimeline.length > 0 && (
+      {expanded && nestedToolCalls.length > 0 && (
         <div className="react-agent-call-nested">
-          {nestedTimeline.map(item => {
+          {nestedToolCalls.map(item => {
             // Recursively render nested agent_call blocks
             if (item.toolName === 'agent_call') {
               return (
@@ -157,7 +159,7 @@ export function NestedAgentCallBlock({
         </div>
       )}
 
-      {toolCall.status === 'error' && (
+      {toolCall.status === 'failed' && (
         <Typography.Text type="danger" className="react-tool-error">
           {toolCall.error}
         </Typography.Text>
