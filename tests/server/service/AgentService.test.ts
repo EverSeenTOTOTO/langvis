@@ -80,7 +80,9 @@ describe('AgentService', () => {
       const result = await agentService.getAllAgentInfo();
 
       expect(globby).toHaveBeenCalledWith(
-        expect.stringContaining('server/core/agent/*/index'),
+        expect.stringContaining(
+          'server/modules/agent/implementations/agents/*.agent',
+        ),
         expect.any(Object),
       );
       expect(result).toBeDefined();

@@ -2,11 +2,10 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import type { AgentEvent, ToolConfig } from '@/shared/types';
+import type { ToolConfig } from '@/shared/types';
 import { wrapUntrusted } from '@/shared/utils';
 import { inject } from 'tsyringe';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 import { LlmService } from '@/server/service/LlmService';
 import { Prompt } from '../../PromptBuilder';
 import type {
@@ -59,8 +58,12 @@ export default class DocumentMetadataExtractTool extends Tool<
 
   async *call(
     @input() data: DocumentMetadataExtractInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, DocumentMetadataExtractOutput, void> {
+    ctx: { signal: AbortSignal },
+  ): AsyncGenerator<
+    { type: 'tool_progress'; data: unknown },
+    DocumentMetadataExtractOutput,
+    void
+  > {
     const { content, sourceUrl, sourceType } = data;
 
     // Truncate content if too long (keep first 8000 chars)
@@ -73,10 +76,13 @@ ${sourceUrl ? `Source URL: ${sourceUrl}\n` : ''}${sourceType ? `Source Type: ${s
 Document Content:
 ${wrapUntrusted(truncatedContent)}`;
 
-    yield ctx.agentToolProgressEvent(this.id, {
-      message: `Analyzing document content (${Math.round(truncatedContent.length / 1024)}KB) via LLM...`,
-      data: { sourceUrl, sourceType },
-    });
+    yield {
+      type: 'tool_progress' as const,
+      data: {
+        message: `Analyzing document content (${Math.round(truncatedContent.length / 1024)}KB) via LLM...`,
+        data: { sourceUrl, sourceType },
+      },
+    };
 
     const responseContent = await this.llmService.chatContent(
       undefined,
@@ -124,14 +130,17 @@ ${wrapUntrusted(truncatedContent)}`;
       metadata: parsed.metadata || {},
     };
 
-    yield ctx.agentToolProgressEvent(this.id, {
-      message: `Extracted: "${output.title}" (${output.category})`,
+    yield {
+      type: 'tool_progress' as const,
       data: {
-        title: output.title,
-        category: output.category,
-        keywordCount: output.keywords.length,
+        message: `Extracted: "${output.title}" (${output.category})`,
+        data: {
+          title: output.title,
+          category: output.category,
+          keywordCount: output.keywords.length,
+        },
       },
-    });
+    };
 
     return output;
   }

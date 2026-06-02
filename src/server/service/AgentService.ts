@@ -1,8 +1,8 @@
-import { AgentConfig } from '@/shared/types';
+import type { AgentConfig } from '@/shared/types';
 import { globby } from 'globby';
 import path from 'path';
 import { container, inject } from 'tsyringe';
-import { AgentConstructor } from '../core/agent';
+import type { AgentConstructor } from '../modules/agent/domain/agent.base';
 import { registerAgent } from '../decorator/core';
 import { service } from '../decorator/service';
 import { SkillService } from './SkillService';
@@ -69,7 +69,7 @@ export class AgentService {
 
   private async discoverAgents() {
     const suffix = isProd ? '.js' : '.ts';
-    const pattern = `./${isProd ? 'dist' : 'src'}/server/core/agent/*/index${suffix}`;
+    const pattern = `./${isProd ? 'dist' : 'src'}/server/modules/agent/implementations/agents/*.agent${suffix}`;
 
     const agentPaths = await globby(pattern, {
       cwd: process.cwd(),
@@ -83,9 +83,15 @@ export class AgentService {
 
     for (const absolutePath of agentPaths) {
       try {
+        const agentName = path.basename(absolutePath, `.agent${suffix}`);
+        const configPath = path.resolve(
+          path.dirname(absolutePath),
+          `${agentName}.config${suffix}`,
+        );
+
         const [{ default: clazz }, { config }] = await Promise.all([
           import(absolutePath),
-          import(path.resolve(path.dirname(absolutePath), `config${suffix}`)),
+          import(configPath),
         ]);
 
         if (clazz && config) {

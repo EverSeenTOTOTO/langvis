@@ -2,11 +2,11 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { RedisKeys, ToolIds } from '@/shared/constants';
-import { ToolConfig, AgentEvent } from '@/shared/types';
+import type { ToolConfig } from '@/shared/types';
 import { JSONSchemaType } from 'ajv';
 import type { RedisClientType } from 'redis';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import type { ToolProgress } from '@/server/modules/agent/domain/tool-call.entity';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 import { RedisService } from '../../../service/RedisService';
 import { TraceContext } from '../../TraceContext';
 import { inject } from 'tsyringe';
@@ -75,8 +75,8 @@ export default class AskUserTool<
 
   async *call(
     @input() params: AskUserInput<I>,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, AskUserOutput<O>, void> {
+    ctx: { signal: AbortSignal },
+  ): AsyncGenerator<ToolProgress, AskUserOutput<O>, void> {
     ctx.signal.throwIfAborted();
 
     const traceStore = TraceContext.getOrFail();
@@ -96,12 +96,15 @@ export default class AskUserTool<
 
     this.logger.info(`AskUser request created: ${messageId}`);
 
-    yield ctx.agentToolProgressEvent(this.id, {
-      status: 'awaiting_input',
-      messageId,
-      message,
-      schema: formSchema,
-    });
+    yield {
+      type: 'tool_progress' as const,
+      data: {
+        status: 'awaiting_input',
+        messageId,
+        message,
+        schema: formSchema,
+      },
+    };
 
     const startTime = Date.now();
 

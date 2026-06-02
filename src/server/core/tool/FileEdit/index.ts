@@ -2,15 +2,13 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { AgentEvent, ToolConfig } from '@/shared/types';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import type { ToolConfig } from '@/shared/types';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 import { TraceContext } from '../../TraceContext';
 import { WorkspaceService } from '../../../service/WorkspaceService';
-import { inject } from 'tsyringe';
+import { inject, container } from 'tsyringe';
 import type { FileEditInput, FileEditOutput } from './config';
 import AskUserTool from '../AskUser';
-import { container } from 'tsyringe';
 
 @tool(ToolIds.FILE_EDIT)
 export default class FileEditTool extends Tool<FileEditInput, FileEditOutput> {
@@ -26,8 +24,8 @@ export default class FileEditTool extends Tool<FileEditInput, FileEditOutput> {
 
   async *call(
     @input() { path, old_string, new_string }: FileEditInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, FileEditOutput, void> {
+    ctx: { signal: AbortSignal },
+  ) {
     ctx.signal.throwIfAborted();
 
     const conversationId = TraceContext.getOrFail().conversationId!;

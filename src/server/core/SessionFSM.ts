@@ -1,18 +1,12 @@
-import {
-  AgentEvent,
-  MessagePhase,
-  SSEMessage,
-  SessionPhase,
-} from '@/shared/types';
+import type { SessionPhase } from '@/shared/types';
+import type { SSEFrame } from '@/shared/types/events';
 import { Transport } from '@/shared/transport';
 import {
   SESSION_PHASE_TRANSITIONS,
   StateMachine,
 } from '@/shared/utils/StateMachine';
 import logger from '../utils/logger';
-import { Memory } from './memory';
-import { MessageFSM } from './MessageFSM';
-import { PendingMessage } from './PendingMessage';
+import type { AgentRun } from '../modules/agent/domain/agent-run.entity';
 
 export interface SessionFSMEventMap {
   transition: CustomEvent<{ from: SessionPhase; to: SessionPhase }>;
@@ -23,10 +17,9 @@ export class SessionFSM {
   readonly conversationId: string;
   readonly createdAt = Date.now();
 
-  private _memory?: Memory;
   private sm: StateMachine<SessionPhase>;
-  private transport: Transport<SSEMessage> | null = null;
-  private messageFSMs = new Map<string, MessageFSM>();
+  private transport: Transport<SSEFrame> | null = null;
+  private runs = new Map<string, AgentRun>();
   private idleTimeout: ReturnType<typeof setTimeout>;
 
   constructor(conversationId: string, idleTimeoutMs: number) {
@@ -61,14 +54,6 @@ export class SessionFSM {
     return this.sm.phase;
   }
 
-  get memory(): Memory | undefined {
-    return this._memory;
-  }
-
-  setMemory(memory: Memory): void {
-    this._memory = memory;
-  }
-
   addEventListener<K extends keyof SessionFSMEventMap>(
     type: K,
     listener: (ev: SessionFSMEventMap[K]) => void,
@@ -91,7 +76,7 @@ export class SessionFSM {
     this.sm.removeEventListener(type, listener);
   }
 
-  attachTransport(newTransport: Transport<SSEMessage>): void {
+  attachTransport(newTransport: Transport<SSEFrame>): void {
     if (this.transport) {
       this.transport.disconnect();
       logger.info(`Kicked old transport for ${this.conversationId}`);
@@ -99,14 +84,14 @@ export class SessionFSM {
 
     this.transport = newTransport;
 
-    for (const [messageId, messageFSM] of this.messageFSMs) {
-      if (!messageFSM.isTerminated) {
-        const events = messageFSM.getReplayEvents();
-        for (const event of events) {
-          newTransport.send(event);
+    for (const [messageId, run] of this.runs) {
+      if (!run.isTerminated) {
+        for (const event of run.bufferedEvents) {
+          const frame = { ...event, messageId } as SSEFrame;
+          newTransport.send(frame);
         }
         logger.info(
-          `Replayed ${events.length} events for message ${messageId}`,
+          `Replayed ${run.bufferedEvents.length} events for message ${messageId}`,
           { sessionId: this.conversationId, messageId },
         );
       }
@@ -117,41 +102,42 @@ export class SessionFSM {
     });
   }
 
-  addMessageFSM(messageId: string, pendingMessage: PendingMessage): MessageFSM {
-    const fsm = new MessageFSM(messageId, pendingMessage);
-
-    fsm.addEventListener('transition', e => {
-      const { to } = (
-        e as CustomEvent<{ from: MessagePhase; to: MessagePhase }>
-      ).detail;
-      this.onMessagePhaseChange(messageId, to);
-    });
-
-    this.messageFSMs.set(messageId, fsm);
-    return fsm;
+  registerRun(run: AgentRun): void {
+    this.runs.set(run.messageId, run);
+    this.updatePhase();
   }
 
-  getMessageFSM(messageId: string): MessageFSM | undefined {
-    return this.messageFSMs.get(messageId);
+  getRun(messageId: string): AgentRun | undefined {
+    return this.runs.get(messageId);
   }
 
   cancelMessage(messageId: string): void {
-    const fsm = this.messageFSMs.get(messageId);
-    if (fsm && !fsm.isTerminated) {
-      fsm.cancel();
+    const run = this.runs.get(messageId);
+    if (run && !run.isTerminated) {
+      try {
+        run.cancel('Cancelled by user');
+      } catch {
+        // Run already terminated
+      }
+      this.updatePhase();
     }
   }
 
   cancelAllMessages(reason: string): void {
     logger.info(`Canceling all messages for ${this.conversationId}: ${reason}`);
 
-    for (const fsm of this.messageFSMs.values()) {
-      if (!fsm.isTerminated) {
-        fsm.cancel();
+    for (const run of this.runs.values()) {
+      if (!run.isTerminated) {
+        try {
+          run.cancel(reason);
+        } catch {
+          // Run already terminated
+        }
       }
     }
 
     this.sm.transition('canceling');
+    this.updatePhase();
   }
 
   async handleDisconnect(): Promise<void> {
@@ -164,9 +150,9 @@ export class SessionFSM {
     }
   }
 
-  send(event: AgentEvent | { type: string; [key: string]: unknown }): boolean {
+  send(event: SSEFrame): boolean {
     if (!this.transport?.isConnected) return false;
-    return this.transport.send(event as SSEMessage);
+    return this.transport.send(event);
   }
 
   async cleanup(): Promise<void> {
@@ -175,17 +161,16 @@ export class SessionFSM {
 
     this.transport?.close();
     this.transport = null;
-    this.messageFSMs.clear();
-    this._memory = undefined;
+    this.runs.clear();
 
     this.sm.dispatchEvent(
       new CustomEvent('dispose', { detail: this.conversationId }),
     );
   }
 
-  private onMessagePhaseChange(_messageId: string, _to: MessagePhase): void {
-    const hasActive = Array.from(this.messageFSMs.values()).some(
-      fsm => fsm.isActive,
+  private updatePhase(): void {
+    const hasActive = Array.from(this.runs.values()).some(
+      run => !run.isTerminated,
     );
 
     if (hasActive && this.phase === 'waiting') {

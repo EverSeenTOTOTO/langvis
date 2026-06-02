@@ -3,10 +3,9 @@ import { input } from '@/server/decorator/param';
 import { LlmService } from '@/server/service/LlmService';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import type { AgentEvent, ToolConfig } from '@/shared/types';
+import type { ToolConfig } from '@/shared/types';
 import { inject } from 'tsyringe';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 import type { EmbeddingGenerateInput, EmbeddingGenerateOutput } from './config';
 import { config } from './config';
 
@@ -27,8 +26,12 @@ export default class EmbeddingGenerateTool extends Tool<
 
   async *call(
     @input() data: EmbeddingGenerateInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, EmbeddingGenerateOutput, void> {
+    _ctx: { signal: AbortSignal },
+  ): AsyncGenerator<
+    { type: 'tool_progress'; data: unknown },
+    EmbeddingGenerateOutput,
+    void
+  > {
     const { chunks, model, timeout = DEFAULT_TIMEOUT_MS } = data;
 
     const texts = chunks.map(c => c.content);
@@ -37,10 +40,14 @@ export default class EmbeddingGenerateTool extends Tool<
       `Generating embeddings for ${chunks.length} chunks using ${model}`,
     );
 
-    yield ctx.agentToolProgressEvent(this.id, {
-      message: `Calling embedding API (${model}) for ${chunks.length} texts...`,
-      data: { model, textCount: chunks.length },
-    });
+    yield {
+      type: 'tool_progress' as const,
+      data: {
+        message: `Calling embedding API (${model}) for ${chunks.length} texts...`,
+        model,
+        textCount: chunks.length,
+      },
+    };
 
     const signal = AbortSignal.timeout(timeout);
 

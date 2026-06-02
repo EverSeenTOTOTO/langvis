@@ -100,4 +100,5 @@ export type SSEFrame =
       reason: ContextUsageMeta['reason'];
     }
   | { type: 'connected' }
+  | { type: 'session_replaced' }
   | { type: 'session_error'; error: string };

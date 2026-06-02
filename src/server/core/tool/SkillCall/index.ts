@@ -2,9 +2,8 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { AgentEvent, ToolConfig } from '@/shared/types';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import type { ToolConfig } from '@/shared/types';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 import { SkillService } from '../../../service/SkillService';
 import { inject } from 'tsyringe';
 import type { SkillCallInput, SkillCallOutput } from './config';
@@ -24,8 +23,8 @@ export default class SkillCallTool extends Tool<
 
   async *call(
     @input() { skillId }: SkillCallInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, SkillCallOutput, void> {
+    ctx: { signal: AbortSignal },
+  ): AsyncGenerator<never, SkillCallOutput, void> {
     ctx.signal.throwIfAborted();
 
     const content = await this.skillService.getSkillContent(skillId);

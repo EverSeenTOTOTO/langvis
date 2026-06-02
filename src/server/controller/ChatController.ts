@@ -4,18 +4,22 @@ import {
 } from '@/shared/dto/controller';
 import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
-import { PendingMessage } from '../core/PendingMessage';
-import { Memory } from '../core/memory';
 import { SSEServerTransport } from '../core/transport';
 import { TraceContext } from '../core/TraceContext';
-import type { Agent } from '../core/agent';
+import type { Agent } from '../modules/agent/domain/agent.base';
+import { AgentRun } from '../modules/agent/domain/agent-run.entity';
+import { resolveEffectiveConfig } from '../modules/agent/domain/effective-config';
+import { MEMORY_SERVICE, CACHE_PORT } from '../modules/agent/agent.di-tokens';
+import type { MemoryService } from '../modules/memory/domain/memory-service';
+import type { CachePort } from '../modules/memory/ports/cache.port';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
 import { AuthService } from '../service/AuthService';
 import { ChatService } from '../service/ChatService';
 import { ConversationService } from '../service/ConversationService';
-import { MemoryIds } from '@/shared/constants';
+import { ProviderService } from '../service/ProviderService';
+import { generateId } from '@/shared/utils';
 
 @controller('/api/chat')
 export default class ChatController {
@@ -26,6 +30,8 @@ export default class ChatController {
     private chatService: ChatService,
     @inject(AuthService)
     private authService: AuthService,
+    @inject(ProviderService)
+    private providerService: ProviderService,
   ) {}
 
   @api('/sse/:conversationId', { method: 'get' })
@@ -100,8 +106,8 @@ export default class ChatController {
       });
     }
 
-    const messageFSM = session.getMessageFSM(messageId);
-    if (!messageFSM || messageFSM.isTerminated) {
+    const run = session.getRun(messageId);
+    if (!run || run.isTerminated) {
       return res.status(404).json({
         error: `No active message ${messageId}`,
       });
@@ -163,29 +169,16 @@ export default class ChatController {
       userId,
     });
 
-    // Create memory for this session
-    const memory = container.resolve<Memory>(
-      conversation.config?.memory?.type ?? MemoryIds.SLIDE_WINDOW,
-    );
-    session.setMemory(memory);
-
     // Prepare turn messages
-    const { messages, assistantId, assistantMessage } =
-      await this.chatService.prepareTurn({
-        conversationId,
-        userId: conversation.userId,
-        systemPrompt: agent.systemPrompt.build(),
-        userMessage: {
-          role: dto.role,
-          content: dto.content,
-          attachments: dto.attachments,
-        },
-      });
-
-    // Configure memory with context and window size
-    memory.configure({
-      messages,
-      windowSize: conversation.config?.memory?.windowSize,
+    const { messages, assistantId } = await this.chatService.prepareTurn({
+      conversationId,
+      userId: conversation.userId,
+      systemPrompt: agent.systemPrompt.build(),
+      userMessage: {
+        role: dto.role,
+        content: dto.content,
+        attachments: dto.attachments,
+      },
     });
 
     // Update TraceContext with messageId
@@ -195,18 +188,35 @@ export default class ChatController {
     });
     TraceContext.freeze();
 
-    // Create PendingMessage and register with session before responding
-    const pendingMessage = new PendingMessage(assistantMessage);
-    session.addMessageFSM(assistantId, pendingMessage);
+    // Resolve EffectiveConfig
+    const effectiveConfig = resolveEffectiveConfig(
+      agent.config,
+      {
+        agentId: agent.id,
+        config: conversation.config ?? {},
+      },
+      this.providerService,
+      agent.systemPrompt.build(),
+    );
+
+    // Create AgentRun
+    const memoryService = container.resolve<MemoryService>(MEMORY_SERVICE);
+    const cachePort = container.resolve<CachePort>(CACHE_PORT);
+
+    const run = new AgentRun(
+      generateId('run'),
+      assistantId,
+      effectiveConfig,
+      memoryService,
+      cachePort,
+      messages,
+    );
+
+    session.registerRun(run);
 
     res.status(200).json({ success: true, messageId: assistantId });
 
-    this.chatService.runSession(
-      session,
-      agent,
-      conversation.config,
-      assistantId,
-    );
+    this.chatService.runSession(session, agent, run);
 
     return;
   }

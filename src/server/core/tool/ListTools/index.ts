@@ -2,9 +2,8 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import { AgentEvent, ToolConfig } from '@/shared/types';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import type { ToolConfig } from '@/shared/types';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 import { ToolService } from '../../../service/ToolService';
 import { SkillService } from '../../../service/SkillService';
 import { inject, container } from 'tsyringe';
@@ -32,8 +31,8 @@ export default class ListToolsTool extends Tool<
 
   async *call(
     @input() { query }: ListToolsInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, ListToolsOutput, void> {
+    ctx: { signal: AbortSignal },
+  ): AsyncGenerator<never, ListToolsOutput, void> {
     ctx.signal.throwIfAborted();
 
     const keywords = query?.toLowerCase().split(/\s+/);

@@ -2,9 +2,8 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import type { ToolConfig, AgentEvent } from '@/shared/types';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import type { ToolConfig } from '@/shared/types';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 import type {
   ContentChunkInput,
   ContentChunkOutput,
@@ -171,8 +170,12 @@ export default class ContentChunkTool extends Tool<
 
   async *call(
     @input() data: ContentChunkInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, ContentChunkOutput, void> {
+    _ctx: { signal: AbortSignal },
+  ): AsyncGenerator<
+    { type: 'tool_progress'; data: unknown },
+    ContentChunkOutput,
+    void
+  > {
     const { content, strategy = 'paragraph', options = {} } = data;
 
     const handler = this.strategies.get(strategy);
@@ -191,16 +194,17 @@ export default class ContentChunkTool extends Tool<
       `ContentChunked content into ${chunks.length} chunks using ${strategy} strategy`,
     );
 
-    yield ctx.agentToolProgressEvent(this.id, {
-      message: `Split into ${chunks.length} chunks using "${strategy}" strategy`,
+    yield {
+      type: 'tool_progress' as const,
       data: {
+        message: `Split into ${chunks.length} chunks using "${strategy}" strategy`,
         strategy,
         chunkCount: chunks.length,
         avgChunkSize: Math.round(
           chunks.reduce((sum, c) => sum + c.content.length, 0) / chunks.length,
         ),
       },
-    });
+    };
 
     const output: ContentChunkOutput = { chunks };
 

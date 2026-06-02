@@ -5,7 +5,7 @@ import Logger from '../utils/logger';
 import path from 'path';
 import { registerTool } from '../decorator/core';
 import { ToolConfig } from '@/shared/types';
-import { ToolConstructor } from '../core/tool';
+import type { ToolConstructor } from '../modules/agent/domain/tool.base';
 import { isProd } from '../utils';
 
 @service()

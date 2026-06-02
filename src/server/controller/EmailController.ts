@@ -1,4 +1,4 @@
-import { AgentIds, MemoryIds } from '@/shared/constants';
+import { AgentIds } from '@/shared/constants';
 import { ListEmailsRequestDto } from '@/shared/dto/controller';
 import { generateId } from '@/shared/utils';
 import { Conversation } from '@/shared/entities/Conversation';
@@ -6,9 +6,12 @@ import { EmailEntity } from '@/shared/entities/Email';
 import { Role } from '@/shared/entities/Message';
 import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
-import type { Agent } from '../core/agent';
-import { Memory } from '../core/memory';
-import { PendingMessage } from '../core/PendingMessage';
+import type { Agent } from '../modules/agent/domain/agent.base';
+import { AgentRun } from '../modules/agent/domain/agent-run.entity';
+import { resolveEffectiveConfig } from '../modules/agent/domain/effective-config';
+import { MEMORY_SERVICE, CACHE_PORT } from '../modules/agent/agent.di-tokens';
+import type { MemoryService } from '../modules/memory/domain/memory-service';
+import type { CachePort } from '../modules/memory/ports/cache.port';
 import { TraceContext } from '../core/TraceContext';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
@@ -141,7 +144,7 @@ export default class EmailController {
         agent: AgentIds.REACT,
         model: { modelId: defaultModel?.id },
         memory: {
-          type: MemoryIds.REACT,
+          type: 'react_memory',
           windowSize: 10,
         },
       },
@@ -184,28 +187,18 @@ export default class EmailController {
   ): Promise<void> {
     const conversationId = conversation.id;
 
-    // Set TraceContext for this conversation
     TraceContext.update({
       conversationId,
       userId: conversation.userId,
     });
 
-    // Create session BEFORE preparing turn to avoid race with frontend SSE
     const session = await this.chatService.acquireSession(conversationId);
     if (!session) {
       throw new Error(`Failed to acquire session for ${conversationId}`);
     }
 
-    // Create memory for this session
-    const memory = container.resolve<Memory>(
-      conversation.config?.memory?.type ?? MemoryIds.SLIDE_WINDOW,
-    );
-    session.setMemory(memory);
-
-    // Pre-generate assistantId so we can compress before prepareTurn
     const assistantId = generateId('msg');
 
-    // Update TraceContext with messageId for cache lookup
     TraceContext.update({
       messageId: assistantId,
       traceId: assistantId,
@@ -222,8 +215,7 @@ export default class EmailController {
       contentOrCached as string | CachedReference,
     );
 
-    // Prepare turn messages with actual content (no placeholder needed)
-    const { messages, assistantMessage } = await this.chatService.prepareTurn({
+    const { messages } = await this.chatService.prepareTurn({
       conversationId,
       userId: conversation.userId,
       systemPrompt: agent.systemPrompt.build(),
@@ -235,20 +227,31 @@ export default class EmailController {
       assistantId,
     });
 
-    // Configure memory with context and window size
-    memory.configure({
-      messages,
-      windowSize: conversation.config?.memory?.windowSize,
-    });
-
-    const pendingMessage = new PendingMessage(assistantMessage);
-    session.addMessageFSM(assistantId, pendingMessage);
-
-    this.chatService.runSession(
-      session,
-      agent,
-      conversation.config,
-      assistantId,
+    // Resolve EffectiveConfig
+    const effectiveConfig = resolveEffectiveConfig(
+      agent.config,
+      {
+        agentId: agent.id,
+        config: conversation.config ?? {},
+      },
+      this.providerService,
+      agent.systemPrompt.build(),
     );
+
+    const memoryService = container.resolve<MemoryService>(MEMORY_SERVICE);
+    const cachePort = container.resolve<CachePort>(CACHE_PORT);
+
+    const run = new AgentRun(
+      generateId('run'),
+      assistantId,
+      effectiveConfig,
+      memoryService,
+      cachePort,
+      messages,
+    );
+
+    session.registerRun(run);
+
+    this.chatService.runSession(session, agent, run);
   }
 }

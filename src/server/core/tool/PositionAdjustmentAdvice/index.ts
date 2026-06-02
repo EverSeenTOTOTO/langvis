@@ -2,13 +2,12 @@ import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
-import type { AgentEvent, ToolConfig } from '@/shared/types';
+import type { ToolConfig } from '@/shared/types';
 import { container, inject } from 'tsyringe';
 import { wrapUntrusted } from '@/shared/utils';
-import { Tool } from '..';
-import { ExecutionContext } from '../../ExecutionContext';
+import { Tool } from '@/server/modules/agent/domain/tool.base';
 import { LlmService } from '@/server/service/LlmService';
-import { Prompt } from '../../PromptBuilder';
+import { Prompt } from '@/server/core/PromptBuilder';
 import AskUserTool from '../AskUser';
 import type {
   PositionAdjustmentAdviceInput,
@@ -30,8 +29,8 @@ export default class PositionAdjustmentAdviceTool extends Tool<
 
   async *call(
     @input() _params: PositionAdjustmentAdviceInput,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, PositionAdjustmentAdviceOutput, void> {
+    ctx: { signal: AbortSignal },
+  ) {
     ctx.signal.throwIfAborted();
 
     const humanInputTool = container.resolve<AskUserTool>(ToolIds.ASK_USER);
@@ -67,8 +66,8 @@ export default class PositionAdjustmentAdviceTool extends Tool<
 
   private async *generateAdvice(
     formData: Record<string, any>,
-    ctx: ExecutionContext,
-  ): AsyncGenerator<AgentEvent, string, void> {
+    ctx: { signal: AbortSignal },
+  ) {
     const systemPrompt = Prompt.empty()
       .with(
         'Role & Goal',
