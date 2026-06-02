@@ -12,7 +12,6 @@ export enum ToolIds {
   POSITION_ADJUSTMENT_ADVICE = 'position_adjustment_advice',
   FILE_EDIT = 'file_edit',
   BASH = 'bash',
-  AGENT_CALL = 'agent_call',
   LIST_TOOLS = 'list_tools',
   SKILL_CALL = 'skill_call',
 

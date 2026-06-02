@@ -4,7 +4,6 @@ import type { UIToolCall } from '@/client/store/modules/message-node';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Collapse, Typography } from 'antd';
 import { useEffect, useState } from 'react';
-import { NestedAgentCallBlock } from './NestedAgentCallBlock';
 import { SkillCallBlock } from './SkillCallBlock';
 import { StandaloneThoughtBlock, ToolBlockItem } from './ToolBlockItem';
 import { buildToolBlocks } from './utils';
@@ -53,18 +52,6 @@ export function UniversalEventRenderer({
             children: (
               <div className="react-tool-list">
                 {toolBlocks.map(block => {
-                  // Use NestedAgentCallBlock for agent_call tools
-                  if (block.toolCall.toolName === 'agent_call') {
-                    return (
-                      <NestedAgentCallBlock
-                        key={block.toolCall.callId}
-                        toolCall={block.toolCall}
-                        conversationId={node.conversationId}
-                        depth={0}
-                        customToolRender={customToolRender}
-                      />
-                    );
-                  }
                   // Use SkillCallBlock for skill_call tools
                   if (block.toolCall.toolName === 'skill_call') {
                     return (
