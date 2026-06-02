@@ -62,7 +62,7 @@ export default class ChatController {
       req.log.error('SSE connection error:', e.detail);
     });
 
-    conversation.attachTransport(transport);
+    this.sessionManager.attachTransport(conversationId, transport);
 
     req.log.info('SSE connection established', {
       sessionId: conversationId,
@@ -215,12 +215,11 @@ export default class ChatController {
       binding,
     );
 
-    const { conversation: conv, run } =
-      await this.runAgentSessionHandler.prepare(runCommand);
+    const run = await this.runAgentSessionHandler.prepare(runCommand);
 
     res.status(200).json({ success: true, messageId: assistantId });
 
-    this.runAgentSessionHandler.stream(conv, agent, run);
+    this.runAgentSessionHandler.stream(conversationId, agent, run);
 
     return;
   }

@@ -13,7 +13,6 @@ import {
 import type { MemoryService } from '../../memory/domain/memory-service';
 import type { CachePort } from '../../memory/ports/cache.port';
 import type { ToolResolver } from '../../agent/domain/tool-resolver.port';
-import { Conversation } from '../domain/conversation.entity';
 import { service } from '@/server/decorator/service';
 import Logger from '@/server/utils/logger';
 import { SessionManager } from '../session-manager';
@@ -41,15 +40,9 @@ export class RunAgentSessionHandler {
     private toolResolver: ToolResolver,
   ) {}
 
-  async prepare(command: RunAgentSessionCommand): Promise<{
-    conversation: Conversation;
-    run: AgentRun;
-  }> {
+  async prepare(command: RunAgentSessionCommand): Promise<AgentRun> {
     const { conversationId, agent, messages, assistantMessage, binding } =
       command;
-
-    const conversation = this.sessionManager.getSession(conversationId);
-    if (!conversation) throw new Error('No session');
 
     const effectiveConfig = resolveEffectiveConfig(
       agent.config,
@@ -68,8 +61,7 @@ export class RunAgentSessionHandler {
       messages,
     );
 
-    conversation.registerRun(assistantMessage, run);
-    this.sessionManager.handleDomainEvents(conversation);
+    this.sessionManager.registerRun(conversationId, assistantMessage, run);
 
     this.messageRepo
       .update(assistantMessage.id, {
@@ -79,16 +71,16 @@ export class RunAgentSessionHandler {
         this.logger.warn('Failed to persist agentRunId', err);
       });
 
-    return { conversation, run };
+    return run;
   }
 
   async stream(
-    conversation: Conversation,
+    conversationId: string,
     agent: Agent,
     run: AgentRun,
   ): Promise<void> {
     this.logger.info(`Starting agent=${agent.id}`, {
-      sessionId: conversation.id,
+      sessionId: conversationId,
       messageId: run.messageId,
     });
 
@@ -102,15 +94,15 @@ export class RunAgentSessionHandler {
         if (event.type === 'text_chunk' && !firstTokenTime) {
           firstTokenTime = Date.now();
           this.logger.info(
-            `First token: ttft=${firstTokenTime - startTime}ms session=${conversation.id}`,
+            `First token: ttft=${firstTokenTime - startTime}ms session=${conversationId}`,
           );
         }
 
         const frame = { ...event, messageId: run.messageId } as SSEFrame;
 
-        if (!conversation.send(frame)) {
+        if (!this.sessionManager.sendFrame(conversationId, frame)) {
           this.logger.warn(
-            `SSE not connected for ${conversation.id}, event persisted`,
+            `SSE not connected for ${conversationId}, event persisted`,
           );
         }
 
@@ -129,14 +121,14 @@ export class RunAgentSessionHandler {
       }
     } catch (err) {
       if (run.signal.aborted) {
-        this.logger.info(`Agent execution aborted session=${conversation.id}`);
+        this.logger.info(`Agent execution aborted session=${conversationId}`);
       } else {
-        this.logger.error(`Agent error session=${conversation.id}`, {
+        this.logger.error(`Agent error session=${conversationId}`, {
           error: (err as Error)?.message || String(err),
           stack: (err as Error)?.stack,
         });
         const errEvent = run.fail((err as Error)?.message || String(err));
-        conversation.send({
+        this.sessionManager.sendFrame(conversationId, {
           ...errEvent,
           messageId: run.messageId,
         } as SSEFrame);
@@ -146,7 +138,7 @@ export class RunAgentSessionHandler {
         try {
           const reason = (run.signal.reason as Error)?.message ?? 'Cancelled';
           const cancelEvent = run.cancel(reason);
-          conversation.send({
+          this.sessionManager.sendFrame(conversationId, {
             ...cancelEvent,
             messageId: run.messageId,
           } as SSEFrame);
@@ -166,7 +158,7 @@ export class RunAgentSessionHandler {
         total: usage.total,
         reason: 'turn_completed',
       };
-      conversation.send(usageFrame);
+      this.sessionManager.sendFrame(conversationId, usageFrame);
 
       // Persist final message state
       await this.messageRepo.update(run.messageId, {
@@ -177,16 +169,15 @@ export class RunAgentSessionHandler {
         status: run.status,
       });
 
-      // Finalize run in conversation
-      conversation.finalizeRun(run.messageId);
-      this.sessionManager.handleDomainEvents(conversation);
+      // Finalize run
+      this.sessionManager.finalizeRun(conversationId, run.messageId);
 
       const totalTime = Date.now() - startTime;
       const ttft = firstTokenTime ? firstTokenTime - startTime : null;
       const contentLength = run.content.length;
       const avgTokenTime = contentLength > 0 ? totalTime / contentLength : 0;
       this.logger.info(
-        `Agent completed: totalTime=${totalTime}ms tokens=${contentLength} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${conversation.id}`,
+        `Agent completed: totalTime=${totalTime}ms tokens=${contentLength} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${conversationId}`,
       );
     }
   }

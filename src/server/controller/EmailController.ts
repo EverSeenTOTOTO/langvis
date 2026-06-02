@@ -263,9 +263,8 @@ export default class EmailController {
       binding,
     );
 
-    const { conversation: conv, run } =
-      await this.runAgentSessionHandler.prepare(runCommand);
+    const run = await this.runAgentSessionHandler.prepare(runCommand);
 
-    this.runAgentSessionHandler.stream(conv, agent, run);
+    this.runAgentSessionHandler.stream(conversationId, agent, run);
   }
 }

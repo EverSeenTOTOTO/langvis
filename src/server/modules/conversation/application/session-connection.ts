@@ -1,15 +1,15 @@
 import type { SSEFrame } from '@/shared/types/events';
 import type { Transport } from '@/shared/transport';
-import { Entity } from '@/server/libs/ddd';
 import logger from '@/server/utils/logger';
 
 /**
- * SessionConnection — 会话的 SSE 连接管理实体。
+ * SessionConnection — SSE connection manager (application layer).
  *
- * 支持多个 SSE 连接同时存活（多标签页场景），事件广播到所有连接。
- * 单个 transport 断连时不发送 session_replaced（使用 close() 而非 disconnect()）。
+ * Supports multiple concurrent SSE connections (multi-tab),
+ * broadcasting events to all. Not a domain entity — it's an
+ * infrastructure component managed by SessionManager.
  */
-export class SessionConnection extends Entity<string> {
+export class SessionConnection {
   private transports = new Set<Transport<SSEFrame>>();
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly idleTimeout: number;
@@ -19,16 +19,11 @@ export class SessionConnection extends Entity<string> {
     return this.transports.size;
   }
 
-  get conversationId(): string {
-    return this.id;
-  }
-
   constructor(
-    conversationId: string,
+    readonly conversationId: string,
     idleTimeout: number,
     onDispose: () => void,
   ) {
-    super(conversationId);
     this.idleTimeout = idleTimeout;
     this.onDispose = onDispose;
   }
