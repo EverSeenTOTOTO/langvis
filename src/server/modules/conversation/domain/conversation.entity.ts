@@ -7,6 +7,7 @@ import type { AgentRun } from '@/server/modules/agent/domain/agent-run.entity';
 import type { SessionConnection } from './session-connection.entity';
 import { DuplicateRunError, NoActiveRunError } from './conversation.errors';
 import { SessionConnection as SessionConnectionClass } from './session-connection.entity';
+import { AggregateRoot, createDomainEvent } from '@/server/libs/ddd';
 import logger from '@/server/utils/logger';
 
 type ActiveEntry = { message: Message; run: AgentRun };
@@ -16,9 +17,10 @@ type ActiveEntry = { message: Message; run: AgentRun };
  *
  * 替换 SessionFSM。管理 SSE 连接（多标签页）+ AgentRun 注册/取消/终结。
  * phase 由 run 状态派生，不使用 StateMachine。
+ *
+ * 领域事件：phase_changed, conversation_disposed
  */
-export class Conversation {
-  readonly id: string;
+export class Conversation extends AggregateRoot<string> {
   readonly createdAt = Date.now();
 
   private connection: SessionConnection | null = null;
@@ -26,23 +28,16 @@ export class Conversation {
   private _disposed = false;
   private _cancelingRequested = false;
   private _lastPhase: SessionPhase = 'waiting';
-
-  private readonly onDispose?: (id: string) => void;
-  private readonly onPhaseChange?: (id: string, phase: SessionPhase) => void;
   private readonly idleTimeoutMs: number;
 
   constructor(
     id: string,
     opts?: {
       idleTimeoutMs?: number;
-      onDispose?: (id: string) => void;
-      onPhaseChange?: (id: string, phase: SessionPhase) => void;
     },
   ) {
-    this.id = id;
+    super(id);
     this.idleTimeoutMs = opts?.idleTimeoutMs ?? 30_000;
-    this.onDispose = opts?.onDispose;
-    this.onPhaseChange = opts?.onPhaseChange;
   }
 
   // ════════════════════════════════════════
@@ -212,7 +207,7 @@ export class Conversation {
     this.connection = null;
 
     this.notifyPhaseChange();
-    this.onDispose?.(this.id);
+    this.addEvent(createDomainEvent('conversation_disposed', this.id, {}));
   }
 
   // ── 内部 ──
@@ -220,11 +215,14 @@ export class Conversation {
   private notifyPhaseChange(): void {
     const newPhase = this.phase;
     if (newPhase !== this._lastPhase) {
-      logger.info(`Session phase changed: ${this._lastPhase} -> ${newPhase}`, {
+      const from = this._lastPhase;
+      logger.info(`Session phase changed: ${from} -> ${newPhase}`, {
         sessionId: this.id,
       });
       this._lastPhase = newPhase;
-      this.onPhaseChange?.(this.id, newPhase);
+      this.addEvent(
+        createDomainEvent('phase_changed', this.id, { from, to: newPhase }),
+      );
     }
   }
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Conversation } from '@/server/modules/conversation/domain/conversation.entity';
 import {
   DuplicateRunError,
@@ -66,25 +66,30 @@ class MockTransport extends Transport<SSEFrame> {
 }
 
 describe('Conversation', () => {
-  let onDispose: ReturnType<typeof vi.fn>;
-  let phaseChanges: Array<{ id: string; phase: SessionPhase }>;
-
-  beforeEach(() => {
-    onDispose = vi.fn();
-    phaseChanges = [];
-  });
-
   function createConversation(
     id = 'conv_1',
     opts?: { idleTimeoutMs?: number },
   ) {
     return new Conversation(id, {
       idleTimeoutMs: opts?.idleTimeoutMs,
-      onDispose,
-      onPhaseChange: (convId, phase) => {
-        phaseChanges.push({ id: convId, phase });
-      },
     });
+  }
+
+  /** Extract phase_changed events from domain events */
+  function getPhaseChanges(
+    conv: Conversation,
+  ): Array<{ id: string; phase: SessionPhase }> {
+    return conv.domainEvents
+      .filter(e => e.type === 'phase_changed')
+      .map(e => ({
+        id: e.aggregateId,
+        phase: (e.payload as { to: SessionPhase }).to,
+      }));
+  }
+
+  /** Check if conversation_disposed event exists */
+  function hasDisposedEvent(conv: Conversation): boolean {
+    return conv.domainEvents.some(e => e.type === 'conversation_disposed');
   }
 
   // ── Phase derivation ──
@@ -104,7 +109,7 @@ describe('Conversation', () => {
 
     expect(conv.phase).toBe('active');
     expect(conv.isActive).toBe(true);
-    expect(phaseChanges).toEqual([{ id: 'conv_1', phase: 'active' }]);
+    expect(getPhaseChanges(conv)).toEqual([{ id: 'conv_1', phase: 'active' }]);
   });
 
   it('should return to waiting after finalizeRun', () => {
@@ -115,7 +120,8 @@ describe('Conversation', () => {
     conv.finalizeRun('msg_1');
 
     expect(conv.phase).toBe('waiting');
-    expect(phaseChanges.at(-1)).toEqual({ id: 'conv_1', phase: 'waiting' });
+    const phases = getPhaseChanges(conv);
+    expect(phases.at(-1)).toEqual({ id: 'conv_1', phase: 'waiting' });
   });
 
   it('should transition to done after dispose', () => {
@@ -282,7 +288,7 @@ describe('Conversation', () => {
 
   // ── dispose ──
 
-  it('should dispose everything and call onDispose', () => {
+  it('should dispose everything and emit domain event', () => {
     const conv = createConversation();
     const run = createMockRun();
     conv.registerRun(createMockMessage(), run);
@@ -290,7 +296,7 @@ describe('Conversation', () => {
     conv.dispose();
 
     expect(run.cancel).toHaveBeenCalled();
-    expect(onDispose).toHaveBeenCalledWith('conv_1');
+    expect(hasDisposedEvent(conv)).toBe(true);
     expect(conv.isDisposed).toBe(true);
     expect(conv.phase).toBe('done');
   });
@@ -300,24 +306,16 @@ describe('Conversation', () => {
     conv.dispose();
     conv.dispose();
 
-    expect(onDispose).toHaveBeenCalledTimes(1);
+    // Only one conversation_disposed event (second dispose returns early)
+    const disposedCount = conv.domainEvents.filter(
+      e => e.type === 'conversation_disposed',
+    ).length;
+    expect(disposedCount).toBe(1);
   });
 
-  // ── getActiveSnapshots ──
+  // ── Phase change domain events ──
 
-  it('should return active snapshots', () => {
-    const conv = createConversation();
-    const run = createMockRun();
-    conv.registerRun(createMockMessage(), run);
-
-    const snapshots = conv.getActiveSnapshots();
-    expect(snapshots).toHaveLength(1);
-    expect(snapshots[0].messageId).toBe('msg_1');
-  });
-
-  // ── Phase change notifications ──
-
-  it('should not notify if phase unchanged', () => {
+  it('should not emit event if phase unchanged', () => {
     const conv = createConversation();
     // phase is 'waiting', register and finalize should yield:
     // waiting → active → waiting = 2 changes
@@ -325,8 +323,8 @@ describe('Conversation', () => {
     conv.registerRun(createMockMessage(), run);
     conv.finalizeRun('msg_1');
 
-    // Only 2 notifications (active, then waiting)
-    expect(phaseChanges).toEqual([
+    // Only 2 phase_changed events (active, then waiting)
+    expect(getPhaseChanges(conv)).toEqual([
       { id: 'conv_1', phase: 'active' },
       { id: 'conv_1', phase: 'waiting' },
     ]);

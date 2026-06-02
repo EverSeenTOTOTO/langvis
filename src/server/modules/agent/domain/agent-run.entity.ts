@@ -9,6 +9,8 @@ import { ToolCall } from './tool-call.entity';
 import type { CachePort } from '@/server/modules/memory/ports/cache.port';
 import type { MemoryService } from '@/server/modules/memory/domain/memory-service';
 import type { ContextUsage } from '@/server/modules/memory/domain/memory.types';
+import { AggregateRoot } from '@/server/libs/ddd';
+import type { DomainEvent } from '@/server/libs/ddd';
 
 /**
  * AgentRun — Agent 上下文的核心聚合根。
@@ -19,7 +21,7 @@ import type { ContextUsage } from '@/server/modules/memory/domain/memory.types';
  *
  * Agent 的唯一入口：所有状态变更通过聚合根方法进行。
  */
-export class AgentRun {
+export class AgentRun extends AggregateRoot<string> {
   // ── 身份 ──
   readonly runId: string;
   readonly messageId: string;
@@ -47,12 +49,6 @@ export class AgentRun {
   private _toolCalls = new Map<string, ToolCall>();
   private seq = 0;
 
-  // ── 事件缓冲（用于断线重连 replay）──
-  private _bufferedEvents: EnrichedEvent[] = [];
-  get bufferedEvents(): EnrichedEvent[] {
-    return this._bufferedEvents;
-  }
-
   // ── 依赖 ──
   private memoryService: MemoryService;
   private cachePort: CachePort;
@@ -66,12 +62,21 @@ export class AgentRun {
     cachePort: CachePort,
     historyMessages: Message[],
   ) {
+    super(runId);
     this.runId = runId;
     this.messageId = messageId;
     this.config = config;
     this.memoryService = memoryService;
     this.cachePort = cachePort;
     this.historyMessages = historyMessages;
+  }
+
+  // ════════════════════════════════════════
+  // 事件缓冲（用于断线重连 replay）
+  // ════════════════════════════════════════
+
+  get bufferedEvents(): EnrichedEvent[] {
+    return this.domainEvents as unknown as EnrichedEvent[];
   }
 
   // ════════════════════════════════════════
@@ -241,7 +246,7 @@ export class AgentRun {
       seq: ++this.seq,
       at: Date.now(),
     };
-    this._bufferedEvents.push(enriched);
+    this.addEvent(enriched as unknown as DomainEvent);
     return enriched;
   }
 }

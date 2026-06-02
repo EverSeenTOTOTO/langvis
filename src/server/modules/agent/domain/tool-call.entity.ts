@@ -1,6 +1,7 @@
 import type { ToolCallRecord } from '@/shared/types/render';
 import type { CachePort } from '@/server/modules/memory/ports/cache.port';
 import type { EnrichedEvent } from './agent.types';
+import { Entity } from '@/server/libs/ddd';
 
 export type ToolProgress = { type: 'tool_progress'; data: unknown };
 
@@ -11,8 +12,7 @@ export type ToolProgress = { type: 'tool_progress'; data: unknown };
  * 手动迭代 tool.call() 以拦截 tool_progress yield，
  * 通过 run.emitToolProgress() 注入 runId/callId/seq/at。
  */
-export class ToolCall {
-  readonly callId: string;
+export class ToolCall extends Entity<string> {
   readonly toolName: string;
   readonly toolArgs: Record<string, unknown>;
   readonly startedAt: number;
@@ -38,7 +38,7 @@ export class ToolCall {
     toolArgs: Record<string, unknown>,
     cachePort: CachePort,
   ) {
-    this.callId = callId;
+    super(callId);
     this.toolName = tool.id;
     this.tool = tool;
     this.toolArgs = toolArgs;
@@ -75,7 +75,7 @@ export class ToolCall {
       this.toolArgs,
     );
 
-    yield run.emitToolCall(this.callId, this.toolName, resolvedInput);
+    yield run.emitToolCall(this.id, this.toolName, resolvedInput);
 
     try {
       const gen = this.tool.call(resolvedInput, { signal: run.signal });
@@ -88,7 +88,7 @@ export class ToolCall {
           'type' in result.value &&
           result.value.type === 'tool_progress'
         ) {
-          yield run.emitToolProgress(this.callId, result.value.data);
+          yield run.emitToolProgress(this.id, result.value.data);
         }
         result = await gen.next();
       }
@@ -101,11 +101,11 @@ export class ToolCall {
       );
 
       this.complete(compressed);
-      yield run.emitToolResult(this.callId, this.toolName, compressed);
+      yield run.emitToolResult(this.id, this.toolName, compressed);
     } catch (error) {
       const errMsg = (error as Error)?.message ?? String(error);
       this.fail(errMsg);
-      yield run.emitToolError(this.callId, this.toolName, errMsg);
+      yield run.emitToolError(this.id, this.toolName, errMsg);
     }
   }
 
@@ -145,7 +145,7 @@ export class ToolCall {
 
   toRecord(): ToolCallRecord {
     return {
-      callId: this.callId,
+      callId: this.id,
       toolName: this.toolName,
       toolArgs: this.toolArgs,
       status: this._status as 'completed' | 'failed',

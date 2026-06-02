@@ -56,6 +56,7 @@ export class ChatService {
     const count = this.sessions.size;
     for (const conversation of this.sessions.values()) {
       conversation.dispose();
+      this.handleDomainEvents(conversation);
     }
     this.logger.info(`Closed ${count} SSE sessions`);
   }
@@ -98,13 +99,6 @@ export class ChatService {
 
     const conversation = new Conversation(conversationId, {
       idleTimeoutMs: 30_000,
-      onDispose: id => {
-        this.sessions.delete(id);
-        this.redisService.del(RedisKeys.CHAT_SESSION(id));
-      },
-      onPhaseChange: (id, phase) => {
-        this.updateSessionPhase(id, phase);
-      },
     });
 
     this.sessions.set(conversationId, conversation);
@@ -291,6 +285,7 @@ Workspace Directory: ${workDir}
     );
 
     conversation.registerRun(params.assistantMessage, run);
+    this.handleDomainEvents(conversation);
 
     this.conversationService
       .updateMessage(params.assistantMessage.id, {
@@ -400,6 +395,7 @@ Workspace Directory: ${workDir}
 
       // Finalize run in conversation
       conversation.finalizeRun(run.messageId);
+      this.handleDomainEvents(conversation);
 
       const totalTime = Date.now() - startTime;
       const ttft = firstTokenTime ? firstTokenTime - startTime : null;
@@ -433,5 +429,50 @@ Workspace Directory: ${workDir}
         break;
       }
     }
+  }
+
+  /**
+   * 处理聚合根收集的领域事件。
+   * 在每次 conversation 操作后调用。
+   */
+  private handleDomainEvents(conversation: Conversation): void {
+    for (const event of conversation.domainEvents) {
+      switch (event.type) {
+        case 'phase_changed': {
+          const { to } = event.payload as {
+            from: SessionPhase;
+            to: SessionPhase;
+          };
+          this.updateSessionPhase(event.aggregateId, to);
+          break;
+        }
+        case 'conversation_disposed': {
+          this.sessions.delete(event.aggregateId);
+          this.redisService.del(RedisKeys.CHAT_SESSION(event.aggregateId));
+          break;
+        }
+      }
+    }
+    conversation.clearEvents();
+  }
+
+  /**
+   * 取消会话中所有 AgentRun（由 Controller 调用）。
+   */
+  cancelConversation(conversationId: string, reason: string): void {
+    const conversation = this.sessions.get(conversationId);
+    if (!conversation) return;
+    conversation.cancelAll(reason);
+    this.handleDomainEvents(conversation);
+  }
+
+  /**
+   * 取消指定消息的 AgentRun（由 Controller 调用）。
+   */
+  cancelMessage(conversationId: string, messageId: string): void {
+    const conversation = this.sessions.get(conversationId);
+    if (!conversation) return;
+    conversation.cancelMessage(messageId);
+    this.handleDomainEvents(conversation);
   }
 }

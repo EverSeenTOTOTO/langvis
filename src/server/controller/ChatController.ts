@@ -75,7 +75,10 @@ export default class ChatController {
       });
     }
 
-    conversation.cancelAll(dto.reason ?? 'Cancelled by user');
+    this.chatService.cancelConversation(
+      conversationId,
+      dto.reason ?? 'Cancelled by user',
+    );
 
     req.log.info(
       `Cancelled streaming for conversation ${conversationId}, message ${dto.messageId}`,
@@ -101,7 +104,7 @@ export default class ChatController {
     }
 
     try {
-      conversation.cancelMessage(messageId);
+      this.chatService.cancelMessage(conversationId, messageId);
     } catch (e) {
       if (e instanceof NoActiveRunError) {
         return res.status(404).json({
