@@ -2,14 +2,19 @@ import type { Message } from '@/shared/types/entities';
 import type { SSEFrame } from '@/shared/types/events';
 import type { AgentBinding } from '@/shared/types/agent';
 import { generateId } from '@/shared/utils';
-import { container, inject } from 'tsyringe';
+import { inject } from 'tsyringe';
 import type { Agent } from '../../agent/domain/agent.base';
 import { AgentRun } from '../../agent/domain/agent-run.entity';
 import { resolveEffectiveConfig } from '../../agent/domain/effective-config';
 import type { AgentEvent, StreamChunk } from '@/shared/types/events';
-import { MEMORY_SERVICE, CACHE_PORT } from '../../agent/agent.di-tokens';
+import {
+  MEMORY_SERVICE,
+  CACHE_PORT,
+  TOOL_RESOLVER,
+} from '../../agent/agent.di-tokens';
 import type { MemoryService } from '../../memory/domain/memory-service';
 import type { CachePort } from '../../memory/ports/cache.port';
+import type { ToolResolver } from '../../agent/domain/tool-resolver.port';
 import { Conversation } from '../domain/conversation.entity';
 import { service } from '@/server/decorator/service';
 import Logger from '@/server/utils/logger';
@@ -29,6 +34,12 @@ export class RunAgentSession {
     private messageRepo: MessageRepositoryPort,
     @inject(ProviderService)
     private providerService: ProviderService,
+    @inject(MEMORY_SERVICE)
+    private memoryService: MemoryService,
+    @inject(CACHE_PORT)
+    private cachePort: CachePort,
+    @inject(TOOL_RESOLVER)
+    private toolResolver: ToolResolver,
   ) {}
 
   async startRun(params: {
@@ -48,15 +59,13 @@ export class RunAgentSession {
       params.agent.systemPrompt.build(),
     );
 
-    const memoryService = container.resolve<MemoryService>(MEMORY_SERVICE);
-    const cachePort = container.resolve<CachePort>(CACHE_PORT);
-
     const run = new AgentRun(
       generateId('run'),
       params.assistantMessage.id,
       effectiveConfig,
-      memoryService,
-      cachePort,
+      this.memoryService,
+      this.cachePort,
+      this.toolResolver,
       params.messages,
     );
 
