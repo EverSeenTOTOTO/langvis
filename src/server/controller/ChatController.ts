@@ -2,24 +2,19 @@ import {
   CancelChatRequestDto,
   StartChatRequestDto,
 } from '@/shared/dto/controller';
+import type { AgentBinding } from '@/shared/types/agent';
 import type { Request, Response } from 'express';
 import { container, inject } from 'tsyringe';
 import { SSEServerTransport } from '../core/transport';
 import { TraceContext } from '../core/TraceContext';
 import type { Agent } from '../modules/agent/domain/agent.base';
-import { AgentRun } from '../modules/agent/domain/agent-run.entity';
-import { resolveEffectiveConfig } from '../modules/agent/domain/effective-config';
-import { MEMORY_SERVICE, CACHE_PORT } from '../modules/agent/agent.di-tokens';
-import type { MemoryService } from '../modules/memory/domain/memory-service';
-import type { CachePort } from '../modules/memory/ports/cache.port';
+import { NoActiveRunError } from '../modules/conversation';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
 import { AuthService } from '../service/AuthService';
 import { ChatService } from '../service/ChatService';
 import { ConversationService } from '../service/ConversationService';
-import { ProviderService } from '../service/ProviderService';
-import { generateId } from '@/shared/utils';
 
 @controller('/api/chat')
 export default class ChatController {
@@ -30,8 +25,6 @@ export default class ChatController {
     private chatService: ChatService,
     @inject(AuthService)
     private authService: AuthService,
-    @inject(ProviderService)
-    private providerService: ProviderService,
   ) {}
 
   @api('/sse/:conversationId', { method: 'get' })
@@ -40,8 +33,8 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const session = await this.chatService.acquireSession(conversationId);
-    if (!session) {
+    const conversation = await this.chatService.acquireSession(conversationId);
+    if (!conversation) {
       return res.sendStatus(204);
     }
 
@@ -49,16 +42,17 @@ export default class ChatController {
 
     transport.addEventListener('disconnect', () => {
       req.log.info('SSE connection closed:', conversationId);
-      session.handleDisconnect();
     });
 
     transport.addEventListener('error', (e: CustomEvent<string>) => {
       req.log.error('SSE connection error:', e.detail);
     });
 
-    session.attachTransport(transport);
+    conversation.attachTransport(transport);
 
-    req.log.info('SSE connection established', { sessionId: conversationId });
+    req.log.info('SSE connection established', {
+      sessionId: conversationId,
+    });
 
     return;
   }
@@ -70,18 +64,18 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const session = this.chatService.getSession(conversationId);
+    const conversation = this.chatService.getSession(conversationId);
 
     if (
-      !session ||
-      (session.phase !== 'active' && session.phase !== 'waiting')
+      !conversation ||
+      (conversation.phase !== 'active' && conversation.phase !== 'waiting')
     ) {
       return res.status(404).json({
         error: `No active session for conversation ${conversationId}`,
       });
     }
 
-    session.cancelAllMessages(dto.reason ?? 'Cancelled by user');
+    conversation.cancelAll(dto.reason ?? 'Cancelled by user');
 
     req.log.info(
       `Cancelled streaming for conversation ${conversationId}, message ${dto.messageId}`,
@@ -98,22 +92,24 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const session = this.chatService.getSession(conversationId);
+    const conversation = this.chatService.getSession(conversationId);
 
-    if (!session) {
+    if (!conversation) {
       return res.status(404).json({
         error: `No session for conversation ${conversationId}`,
       });
     }
 
-    const run = session.getRun(messageId);
-    if (!run || run.isTerminated) {
-      return res.status(404).json({
-        error: `No active message ${messageId}`,
-      });
+    try {
+      conversation.cancelMessage(messageId);
+    } catch (e) {
+      if (e instanceof NoActiveRunError) {
+        return res.status(404).json({
+          error: `No active message ${messageId}`,
+        });
+      }
+      throw e;
     }
-
-    session.cancelMessage(messageId);
 
     req.log.info(
       `Cancelled message ${messageId} for conversation ${conversationId}`,
@@ -129,36 +125,38 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const session = this.chatService.getSession(conversationId);
+    const conversation = this.chatService.getSession(conversationId);
 
-    if (!session) {
+    if (!conversation) {
       return res.status(400).json({
         error: 'SSE connection not established',
       });
     }
 
-    const conversation =
+    const dbConversation =
       await this.conversationService.getConversationById(conversationId);
 
-    if (!conversation) {
+    if (!dbConversation) {
       return res
         .status(400)
         .json({ error: `Conversation ${conversationId} not found` });
     }
 
+    const binding = this.extractBinding(dbConversation);
+
     let agent: Agent;
     try {
-      agent = container.resolve(conversation.config!.agent) as Agent;
+      agent = container.resolve(binding.agentId) as Agent;
     } catch {
       return res
         .status(400)
-        .json({ error: `Agent ${conversation.config!.agent} not found` });
+        .json({ error: `Agent ${binding.agentId} not found` });
     }
 
     // Verify user is authenticated
     const userId = await this.authService.getUserId(req);
 
-    if (userId !== conversation.userId) {
+    if (userId !== dbConversation.userId) {
       return res.status(401).json({
         error: `Mismatched conversation user: ${userId}`,
       });
@@ -170,16 +168,17 @@ export default class ChatController {
     });
 
     // Prepare turn messages
-    const { messages, assistantId } = await this.chatService.prepareTurn({
-      conversationId,
-      userId: conversation.userId,
-      systemPrompt: agent.systemPrompt.build(),
-      userMessage: {
-        role: dto.role,
-        content: dto.content,
-        attachments: dto.attachments,
-      },
-    });
+    const { messages, assistantId, assistantMessage } =
+      await this.chatService.prepareTurn({
+        conversationId,
+        userId: dbConversation.userId,
+        systemPrompt: agent.systemPrompt.build(),
+        userMessage: {
+          role: dto.role,
+          content: dto.content,
+          attachments: dto.attachments,
+        },
+      });
 
     // Update TraceContext with messageId
     TraceContext.update({
@@ -188,35 +187,17 @@ export default class ChatController {
     });
     TraceContext.freeze();
 
-    // Resolve EffectiveConfig
-    const effectiveConfig = resolveEffectiveConfig(
-      agent.config,
-      {
-        agentId: agent.id,
-        config: conversation.config ?? {},
-      },
-      this.providerService,
-      agent.systemPrompt.build(),
-    );
-
-    // Create AgentRun
-    const memoryService = container.resolve<MemoryService>(MEMORY_SERVICE);
-    const cachePort = container.resolve<CachePort>(CACHE_PORT);
-
-    const run = new AgentRun(
-      generateId('run'),
-      assistantId,
-      effectiveConfig,
-      memoryService,
-      cachePort,
+    const run = await this.chatService.startRun({
+      conversationId,
+      agent,
       messages,
-    );
-
-    session.registerRun(run);
+      assistantMessage,
+      binding,
+    });
 
     res.status(200).json({ success: true, messageId: assistantId });
 
-    this.chatService.runSession(session, agent, run);
+    this.chatService.runSession(conversation, agent, run);
 
     return;
   }
@@ -229,5 +210,13 @@ export default class ChatController {
     const state = await this.chatService.getSessionState(conversationId);
 
     return res.status(200).json(state ? { phase: state.phase } : null);
+  }
+
+  private extractBinding(conv: {
+    config?: Record<string, any> | null;
+  }): AgentBinding {
+    const config = conv.config ?? {};
+    const { agent: agentId, ...restConfig } = config as any;
+    return { agentId: agentId ?? 'chat_agent', config: restConfig };
   }
 }
