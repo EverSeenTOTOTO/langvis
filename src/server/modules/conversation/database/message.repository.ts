@@ -3,7 +3,7 @@ import type { MessageAttachment } from '@/shared/types/entities';
 import type { ToolCallRecord } from '@/shared/types/render';
 import { MessageEntity, Role } from '@/shared/entities/Message';
 import type { MessageRepositoryPort } from './message.repository.port';
-import { DatabaseService } from '@/server/service/DatabaseService';
+import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import { inject, singleton } from 'tsyringe';
 import { In } from 'typeorm';
 

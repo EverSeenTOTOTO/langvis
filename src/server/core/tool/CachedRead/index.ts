@@ -1,7 +1,7 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
 import { inject } from 'tsyringe';
-import { CacheService } from '@/server/service/CacheService';
+import { CacheService } from '@/server/modules/memory/adapters/cache.adapter';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';

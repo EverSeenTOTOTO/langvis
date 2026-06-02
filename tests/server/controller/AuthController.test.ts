@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach, vi, expect } from 'vitest';
 import AuthController from '@/server/controller/AuthController';
-import { AuthService } from '@/server/service/AuthService';
+import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import type { Request } from 'express';
 
 // Create a proper mock for AuthService

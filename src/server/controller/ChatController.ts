@@ -12,7 +12,7 @@ import { NoActiveRunError } from '../modules/conversation';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
-import { AuthService } from '../service/AuthService';
+import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import { ChatService } from '../service/ChatService';
 import { ConversationService } from '../service/ConversationService';
 

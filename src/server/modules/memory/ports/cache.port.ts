@@ -1,4 +1,4 @@
-import type { CompressionStrategy } from '@/server/service/CacheService';
+import type { CompressionStrategy } from '@/server/modules/memory/adapters/cache.adapter';
 
 export interface CachePort {
   compress(

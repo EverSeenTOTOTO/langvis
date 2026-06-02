@@ -17,9 +17,9 @@ import { Conversation } from '../modules/conversation';
 import { service } from '../decorator/service';
 import Logger from '../utils/logger';
 import { ConversationService } from './ConversationService';
-import { RedisService } from './RedisService';
-import { WorkspaceService } from './WorkspaceService';
-import { ProviderService } from './ProviderService';
+import { RedisService } from '@/server/libs/infrastructure/redis.service';
+import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
+import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 
 export interface ChatSessionState {
   conversationId: string;

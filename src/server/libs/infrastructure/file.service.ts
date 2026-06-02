@@ -1,8 +1,8 @@
 import { createReadStream, promises as fs } from 'fs';
 import mime from 'mime-types';
 import path from 'path';
-import { service } from '../decorator/service';
-import { resolveSafePath } from '../utils/pathSafety';
+import { service } from '@/server/decorator/service';
+import { resolveSafePath } from '@/server/utils/pathSafety';
 
 @service()
 export class FileService {
@@ -19,11 +19,7 @@ export class FileService {
   async downloadFile(filename: string): Promise<Buffer | null> {
     try {
       const filePath = this.validatePath(filename);
-
-      // Check if file exists
       await fs.access(filePath);
-
-      // Read and return file buffer
       const fileBuffer = await fs.readFile(filePath);
       return fileBuffer;
     } catch (error) {
@@ -32,7 +28,7 @@ export class FileService {
         'code' in error &&
         error.code === 'ENOENT'
       ) {
-        return null; // File not found
+        return null;
       }
       throw error;
     }
@@ -44,7 +40,6 @@ export class FileService {
   ): Promise<NodeJS.ReadableStream> {
     const filePath = this.validatePath(filename);
 
-    // Check if file exists first
     try {
       await fs.access(filePath);
     } catch (error) {
@@ -59,7 +54,6 @@ export class FileService {
     }
 
     const stream = createReadStream(filePath, options);
-
     return stream;
   }
 
@@ -68,7 +62,6 @@ export class FileService {
   ): Promise<{ size: number; mtime: Date } | null> {
     try {
       const filePath = this.validatePath(filename);
-
       const stats = await fs.stat(filePath);
       return {
         size: stats.size,
@@ -80,7 +73,7 @@ export class FileService {
         'code' in error &&
         error.code === 'ENOENT'
       ) {
-        return null; // File not found
+        return null;
       }
       throw error;
     }

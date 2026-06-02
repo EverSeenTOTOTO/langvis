@@ -1,5 +1,5 @@
 import { agent } from '@/server/decorator/core';
-import { LlmService } from '@/server/service/LlmService';
+import { LlmService } from '@/server/modules/memory/adapters/llm.adapter';
 import { SkillService } from '@/server/service/SkillService';
 import { ToolService } from '@/server/service/ToolService';
 import type { Logger } from '@/server/utils/logger';

@@ -7,7 +7,7 @@ import type { ToolConfig } from '@/shared/types';
 import type { ToolProgress } from '@/server/modules/agent/domain/tool-call.entity';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
 import { TraceContext } from '../../TraceContext';
-import { WorkspaceService } from '../../../service/WorkspaceService';
+import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import { createTimeoutController } from '@/server/utils/abort';
 import { inject } from 'tsyringe';
 import { container } from 'tsyringe';

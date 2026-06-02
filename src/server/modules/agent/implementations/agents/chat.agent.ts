@@ -8,7 +8,7 @@ import { inject } from 'tsyringe';
 import { Agent } from '@/server/modules/agent/domain/agent.base';
 import type { AgentRun } from '@/server/modules/agent/domain/agent-run.entity';
 import type { Tool } from '@/server/modules/agent/domain/tool.base';
-import { LlmService } from '@/server/service/LlmService';
+import { LlmService } from '@/server/modules/memory/adapters/llm.adapter';
 import { Prompt } from '@/server/core/PromptBuilder';
 import { createPrompt } from './chat.prompt';
 

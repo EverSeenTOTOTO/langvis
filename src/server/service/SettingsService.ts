@@ -1,8 +1,8 @@
 import { Settings, SettingsEntity } from '@/shared/entities/Settings';
 import { inject } from 'tsyringe';
 import { service } from '../decorator/service';
-import { DatabaseService } from './DatabaseService';
-import { LocaleService } from './LocaleService';
+import { DatabaseService } from '@/server/libs/infrastructure/database.service';
+import { LocaleService } from '@/server/libs/infrastructure/locale.service';
 
 @service()
 export class SettingsService {

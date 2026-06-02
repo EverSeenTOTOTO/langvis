@@ -7,7 +7,7 @@ import { JSONSchemaType } from 'ajv';
 import type { RedisClientType } from 'redis';
 import type { ToolProgress } from '@/server/modules/agent/domain/tool-call.entity';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
-import { RedisService } from '../../../service/RedisService';
+import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { TraceContext } from '../../TraceContext';
 import { inject } from 'tsyringe';
 

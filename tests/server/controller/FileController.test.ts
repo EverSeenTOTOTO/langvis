@@ -1,5 +1,5 @@
 import FileController from '@/server/controller/FileController';
-import { FileService } from '@/server/service/FileService';
+import { FileService } from '@/server/libs/infrastructure/file.service';
 import type { Request, Response } from 'express';
 import { Readable } from 'stream';
 import { container } from 'tsyringe';

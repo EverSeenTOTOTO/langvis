@@ -1,6 +1,6 @@
 import type { AgentConfig } from '@/shared/types';
 import type { AgentBinding, EffectiveConfig } from '@/shared/types/agent';
-import type { ProviderService } from '@/server/service/ProviderService';
+import type { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { parse } from '@/server/utils/schemaValidator';
 import { ConfigValidationError } from './agent.errors';
 

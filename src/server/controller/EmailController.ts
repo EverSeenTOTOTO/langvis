@@ -13,12 +13,15 @@ import { TraceContext } from '../core/TraceContext';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, query, request, response } from '../decorator/param';
-import { AuthService } from '../service/AuthService';
+import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import { ChatService } from '../service/ChatService';
 import { ConversationService } from '../service/ConversationService';
 import { EmailService } from '../service/EmailService';
-import { ProviderService } from '../service/ProviderService';
-import { CacheService, type CachedReference } from '../service/CacheService';
+import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import {
+  CacheService,
+  type CachedReference,
+} from '@/server/modules/memory/adapters/cache.adapter';
 import Logger from '../utils/logger';
 
 const INBOUND_SECRET = import.meta.env.VITE_INBOUND_SECRET || '';

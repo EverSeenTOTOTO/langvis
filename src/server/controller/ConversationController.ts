@@ -10,7 +10,7 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
 import { ConversationService } from '../service/ConversationService';
-import { ProviderService } from '../service/ProviderService';
+import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { estimateTokens } from '../utils/estimateTokens';
 
 @controller('/api/conversation')

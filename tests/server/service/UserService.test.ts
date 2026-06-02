@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach, vi, expect } from 'vitest';
 import { UserService } from '@/server/service/UserService';
-import { DatabaseService } from '@/server/service/DatabaseService';
+import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 
 // Create a mock repository with the needed methods
 const mockRepository = {
@@ -9,7 +9,7 @@ const mockRepository = {
 };
 
 // Mock the DatabaseService module
-vi.mock('@/server/service/DatabaseService', () => {
+vi.mock('@/server/libs/infrastructure/database.service', () => {
   return {
     DatabaseService: vi.fn().mockImplementation(() => ({
       getRepository: vi.fn(() => mockRepository),

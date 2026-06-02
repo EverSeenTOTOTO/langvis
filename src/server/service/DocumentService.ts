@@ -8,7 +8,7 @@ import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
 import { inject } from 'tsyringe';
 import { Between, LessThanOrEqual, Like, MoreThanOrEqual } from 'typeorm';
 import { service } from '../decorator/service';
-import { DatabaseService } from './DatabaseService';
+import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 
 @service()
 export class DocumentService {

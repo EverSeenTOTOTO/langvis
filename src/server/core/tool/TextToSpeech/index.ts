@@ -1,6 +1,6 @@
 import { tool } from '@/server/decorator/core';
 import { input } from '@/server/decorator/param';
-import { LlmService } from '@/server/service/LlmService';
+import { LlmService } from '@/server/modules/memory/adapters/llm.adapter';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';

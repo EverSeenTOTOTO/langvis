@@ -13,7 +13,7 @@ import {
   request,
   response,
 } from '../decorator/param';
-import { FileService } from '../service/FileService';
+import { FileService } from '@/server/libs/infrastructure/file.service';
 import type { UploadConfig } from '@/shared/types';
 import Logger from '../utils/logger';
 

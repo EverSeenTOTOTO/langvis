@@ -1,13 +1,13 @@
 import path from 'path';
 import fs from 'fs';
-import logger from '../utils/logger';
+import logger from '@/server/utils/logger';
 import type {
   GroupedModels,
   ModelDefinition,
   ModelType,
   ProviderDefinition,
 } from '@/shared/types/provider';
-import { service } from '../decorator/service';
+import { service } from '@/server/decorator/service';
 import chalk from 'chalk';
 
 const ENV_VAR_RE = /\$\{([^}]+)\}/g;
@@ -77,7 +77,6 @@ export class ProviderService {
     return this.models.get(id);
   }
 
-  /** Get the default model of a given type (isDefault flag, fallback to first found) */
   getDefaultModel(type: ModelType): ModelDefinition | undefined {
     let fallback: ModelDefinition | undefined;
     for (const model of this.models.values()) {
@@ -88,7 +87,6 @@ export class ProviderService {
     return fallback;
   }
 
-  /** Get all models of a given type, flat list */
   getModelsByType(type: ModelType): ModelDefinition[] {
     const result: ModelDefinition[] = [];
     for (const model of this.models.values()) {
@@ -99,7 +97,6 @@ export class ProviderService {
     return result;
   }
 
-  /** Get models grouped by provider for TreeSelect */
   getGroupedModelsByType(type: ModelType): GroupedModels[] {
     const grouped = new Map<string, GroupedModels>();
 

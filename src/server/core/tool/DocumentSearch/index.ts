@@ -5,7 +5,7 @@ import type { Logger } from '@/server/utils/logger';
 import type { ToolConfig } from '@/shared/types';
 import { container, inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
-import { DatabaseService } from '@/server/service/DatabaseService';
+import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import type EmbeddingGenerateTool from '../EmbeddingGenerate';
 import type { DocumentSearchInput, DocumentSearchOutput } from './config';
 import { config } from './config';

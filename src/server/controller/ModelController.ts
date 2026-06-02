@@ -4,7 +4,7 @@ import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { query, response } from '../decorator/param';
-import { ProviderService } from '../service/ProviderService';
+import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 
 @controller('/api/models')
 export default class ModelController {
