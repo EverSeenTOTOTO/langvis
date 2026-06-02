@@ -61,7 +61,7 @@ vi.mock('@/server/utils/logger', () => ({
   },
 }));
 
-vi.mock('@/server/service/EmailService', () => ({
+vi.mock('@/server/modules/email/email.service', () => ({
   EmailService: class {
     list = mockEmailService.list;
     getById = mockEmailService.getById;

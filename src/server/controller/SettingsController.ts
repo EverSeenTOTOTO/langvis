@@ -4,7 +4,7 @@ import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { body, request, response } from '../decorator/param';
 import { controller } from '../decorator/controller';
-import { SettingsService } from '../service/SettingsService';
+import { SettingsService } from '@/server/modules/settings/settings.service';
 
 interface UpdateSettingsBody {
   themeMode?: ThemeMode;

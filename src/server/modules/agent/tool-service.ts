@@ -1,16 +1,16 @@
 import { globby } from 'globby';
 import { container } from 'tsyringe';
-import { service } from '../decorator/service';
-import Logger from '../utils/logger';
+import { service } from '@/server/decorator/service';
+import Logger from '@/server/utils/logger';
 import path from 'path';
-import { registerTool } from '../decorator/core';
+import { registerTool } from '@/server/decorator/core';
 import { ToolConfig } from '@/shared/types';
-import type { ToolConstructor } from '../modules/agent/domain/tool.base';
-import { isProd } from '../utils';
+import type { ToolConstructor } from './domain/tool.base';
+import { isProd } from '@/server/utils';
 
 @service()
 export class ToolService {
-  private readonly logger = Logger.child({ source: 'ConversationService' });
+  private readonly logger = Logger.child({ source: 'ToolService' });
 
   private tools: string[] = [];
   private isInitialized = false;
@@ -41,7 +41,6 @@ export class ToolService {
         tools.map(a => a.clazz.name),
       );
 
-      // Register tools
       this.tools = await Promise.all(
         tools.map(tool => registerTool(tool.clazz, tool.config)),
       );

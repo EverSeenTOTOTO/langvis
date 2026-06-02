@@ -1,9 +1,9 @@
 import fs from 'fs';
 import matter from 'gray-matter';
 import { globby } from 'globby';
-import { service } from '../decorator/service';
-import { isProd } from '../utils';
-import Logger from '../utils/logger';
+import { service } from '@/server/decorator/service';
+import { isProd } from '@/server/utils';
+import Logger from '@/server/utils/logger';
 
 export interface SkillInfo {
   id: string;

@@ -1,6 +1,6 @@
 import { User, UserEntity } from '@/shared/entities/User';
 import { inject } from 'tsyringe';
-import { service } from '../decorator/service';
+import { service } from '@/server/decorator/service';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 
 @service()

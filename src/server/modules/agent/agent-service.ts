@@ -1,14 +1,14 @@
-import type { AgentConfig } from '@/shared/types';
 import { globby } from 'globby';
 import path from 'path';
 import { container, inject } from 'tsyringe';
-import type { AgentConstructor } from '../modules/agent/domain/agent.base';
-import { registerAgent } from '../decorator/core';
-import { service } from '../decorator/service';
-import { SkillService } from './SkillService';
-import { ToolService } from './ToolService';
-import { isProd } from '../utils';
-import Logger from '../utils/logger';
+import type { AgentConfig } from '@/shared/types';
+import type { AgentConstructor } from './domain/agent.base';
+import { registerAgent } from '@/server/decorator/core';
+import { service } from '@/server/decorator/service';
+import { ToolService } from './tool-service';
+import { SkillService } from '@/server/core/skill/skill-service';
+import { isProd } from '@/server/utils';
+import Logger from '@/server/utils/logger';
 
 @service()
 export class AgentService {
@@ -47,7 +47,6 @@ export class AgentService {
     this.isInitialized = true;
 
     try {
-      // Initialize tools first
       await this.toolService.getAllToolInfo();
 
       const agents = await this.discoverAgents();
@@ -57,7 +56,6 @@ export class AgentService {
         agents.map(a => a.clazz.name),
       );
 
-      // Register agents
       this.agents = await Promise.all(
         agents.map(agent => registerAgent(agent.clazz, agent.config)),
       );

@@ -8,9 +8,9 @@ import {
   MoreThanOrEqual,
   type FindOptionsWhere,
 } from 'typeorm';
-import { service } from '../decorator/service';
-import Logger from '../utils/logger';
-import { sanitizeHtml } from '../utils/sanitizeHtml';
+import { service } from '@/server/decorator/service';
+import Logger from '@/server/utils/logger';
+import { sanitizeHtml } from '@/server/utils/sanitizeHtml';
 import type { simpleParser as SimpleParserFn } from 'mailparser';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 
@@ -200,7 +200,7 @@ export class EmailService {
     const { simpleParser } = await import('mailparser');
     const parsed = await Promise.race([
       simpleParser(rawEmail, {
-        maxHtmlLengthToParse: 10 * 1024 * 1024, // 10MB
+        maxHtmlLengthToParse: 10 * 1024 * 1024,
       }),
       new Promise<never>((_, reject) =>
         setTimeout(

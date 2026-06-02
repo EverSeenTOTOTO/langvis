@@ -1,7 +1,7 @@
 import { agent } from '@/server/decorator/core';
 import { LlmService } from '@/server/modules/memory/adapters/llm.adapter';
-import { SkillService } from '@/server/service/SkillService';
-import { ToolService } from '@/server/service/ToolService';
+import { SkillService } from '@/server/core/skill/skill-service';
+import { ToolService } from '@/server/modules/agent/tool-service';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';

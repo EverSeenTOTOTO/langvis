@@ -4,8 +4,8 @@ import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
-import { ToolService } from '../../../service/ToolService';
-import { SkillService } from '../../../service/SkillService';
+import { ToolService } from '@/server/modules/agent/tool-service';
+import { SkillService } from '@/server/core/skill/skill-service';
 import { inject, container } from 'tsyringe';
 import {
   formatToolsToMarkdown,
