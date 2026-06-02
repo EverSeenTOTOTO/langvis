@@ -1,36 +1,28 @@
 import { EmailService } from '@/server/modules/email/email.service';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
+import type { EmailRepositoryPort } from '@/server/modules/email/database/email.repository.port';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('@/server/libs/infrastructure/database.service', () => ({
-  DatabaseService: vi.fn().mockImplementation(() => ({
-    getRepository: vi.fn(),
-  })),
-}));
 
 vi.mock('@/shared/utils', () => ({
   generateId: vi.fn(prefix => `${prefix}_test123`),
   isTest: vi.fn(() => true),
 }));
 
+const mockRepo = {
+  list: vi.fn(),
+  getById: vi.fn(),
+  getByMessageId: vi.fn(),
+  existsByMessageId: vi.fn(),
+  save: vi.fn(),
+  deleteById: vi.fn(),
+  updateStatus: vi.fn(),
+} as unknown as EmailRepositoryPort;
+
 describe('EmailService', () => {
   let emailService: EmailService;
-  let mockDb: DatabaseService;
-  let mockRepository: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDb = new DatabaseService();
-    mockRepository = {
-      findAndCount: vi.fn(),
-      findOneBy: vi.fn(),
-      count: vi.fn(),
-      create: vi.fn(),
-      save: vi.fn(),
-      delete: vi.fn(),
-    };
-    (mockDb.getRepository as any).mockReturnValue(mockRepository as any);
-    emailService = new EmailService(mockDb);
+    emailService = new EmailService(mockRepo);
   });
 
   describe('list', () => {
@@ -38,7 +30,12 @@ describe('EmailService', () => {
       const mockEmails = [
         { id: 'mail_1', subject: 'Test Email', from: 'test@example.com' },
       ];
-      mockRepository.findAndCount.mockResolvedValueOnce([mockEmails, 1]);
+      vi.mocked(mockRepo.list).mockResolvedValueOnce({
+        items: mockEmails as any,
+        total: 1,
+        page: 1,
+        pageSize: 20,
+      });
 
       const result = await emailService.list({});
 
@@ -48,72 +45,41 @@ describe('EmailService', () => {
       expect(result.pageSize).toBe(20);
     });
 
-    it('should apply filters correctly', async () => {
-      mockRepository.findAndCount.mockResolvedValueOnce([[], 0]);
+    it('should delegate filters to repository', async () => {
+      vi.mocked(mockRepo.list).mockResolvedValueOnce({
+        items: [],
+        total: 0,
+        page: 2,
+        pageSize: 10,
+      });
 
-      await emailService.list({
+      const params = {
         from: 'sender@test.com',
         subject: 'test subject',
         startDate: '2024-01-01',
         endDate: '2024-12-31',
         page: 2,
         pageSize: 10,
-      });
+      };
+      await emailService.list(params);
 
-      expect(mockRepository.findAndCount).toHaveBeenCalledWith(
-        expect.objectContaining({
-          skip: 10,
-          take: 10,
-          order: { sentAt: 'DESC' },
-        }),
-      );
-    });
-
-    it('should use fuzzy search for from field', async () => {
-      mockRepository.findAndCount.mockResolvedValueOnce([[], 0]);
-
-      await emailService.list({ from: 'john' });
-
-      const callArgs = mockRepository.findAndCount.mock.calls[0][0];
-      expect(callArgs.where.from).toBeDefined();
-      // TypeORM Like wraps the value with % for fuzzy match
-      expect(callArgs.where.from._value).toBe('%john%');
-    });
-
-    it('should use fuzzy search for subject field', async () => {
-      mockRepository.findAndCount.mockResolvedValueOnce([[], 0]);
-
-      await emailService.list({ subject: 'meeting' });
-
-      const callArgs = mockRepository.findAndCount.mock.calls[0][0];
-      expect(callArgs.where.subject).toBeDefined();
-      expect(callArgs.where.subject._value).toBe('%meeting%');
-    });
-
-    it('should combine multiple fuzzy filters', async () => {
-      mockRepository.findAndCount.mockResolvedValueOnce([[], 0]);
-
-      await emailService.list({ from: 'john', subject: 'meeting' });
-
-      const callArgs = mockRepository.findAndCount.mock.calls[0][0];
-      expect(callArgs.where.from._value).toBe('%john%');
-      expect(callArgs.where.subject._value).toBe('%meeting%');
+      expect(mockRepo.list).toHaveBeenCalledWith(params);
     });
   });
 
   describe('getById', () => {
     it('should return email by id', async () => {
       const mockEmail = { id: 'mail_1', subject: 'Test' };
-      mockRepository.findOneBy.mockResolvedValueOnce(mockEmail);
+      vi.mocked(mockRepo.getById).mockResolvedValueOnce(mockEmail as any);
 
       const result = await emailService.getById('mail_1');
 
-      expect(mockRepository.findOneBy).toHaveBeenCalledWith({ id: 'mail_1' });
+      expect(mockRepo.getById).toHaveBeenCalledWith('mail_1');
       expect(result).toEqual(mockEmail);
     });
 
     it('should return null if not found', async () => {
-      mockRepository.findOneBy.mockResolvedValueOnce(null);
+      vi.mocked(mockRepo.getById).mockResolvedValueOnce(null);
 
       const result = await emailService.getById('nonexistent');
 
@@ -123,7 +89,7 @@ describe('EmailService', () => {
 
   describe('existsByMessageId', () => {
     it('should return true if email exists', async () => {
-      mockRepository.count.mockResolvedValueOnce(1);
+      vi.mocked(mockRepo.existsByMessageId).mockResolvedValueOnce(true);
 
       const result = await emailService.existsByMessageId('msg123');
 
@@ -131,7 +97,7 @@ describe('EmailService', () => {
     });
 
     it('should return false if email does not exist', async () => {
-      mockRepository.count.mockResolvedValueOnce(0);
+      vi.mocked(mockRepo.existsByMessageId).mockResolvedValueOnce(false);
 
       const result = await emailService.existsByMessageId('msg123');
 
@@ -141,15 +107,11 @@ describe('EmailService', () => {
 
   describe('archive', () => {
     it('should archive new email successfully', async () => {
-      mockRepository.count.mockResolvedValueOnce(0);
-      mockRepository.create.mockReturnValueOnce({
+      vi.mocked(mockRepo.existsByMessageId).mockResolvedValueOnce(false);
+      vi.mocked(mockRepo.save).mockResolvedValueOnce({
         id: 'mail_test123',
         messageId: 'msg123',
-      });
-      mockRepository.save.mockResolvedValueOnce({
-        id: 'mail_test123',
-        messageId: 'msg123',
-      });
+      } as any);
 
       const result = await emailService.archive({
         messageId: 'msg123',
@@ -166,7 +128,7 @@ describe('EmailService', () => {
     });
 
     it('should skip if email already archived', async () => {
-      mockRepository.count.mockResolvedValueOnce(1);
+      vi.mocked(mockRepo.existsByMessageId).mockResolvedValueOnce(true);
 
       const result = await emailService.archive({
         messageId: 'existing-msg',
@@ -180,41 +142,14 @@ describe('EmailService', () => {
 
       expect(result.success).toBe(true);
       expect(result.id).toBeUndefined();
-      expect(mockRepository.save).not.toHaveBeenCalled();
-    });
-
-    it('should extract attachment names from raw data', async () => {
-      mockRepository.count.mockResolvedValueOnce(0);
-      mockRepository.create.mockImplementation((data: unknown) => data);
-      mockRepository.save.mockImplementation((data: unknown) =>
-        Promise.resolve(data),
-      );
-
-      await emailService.archive({
-        messageId: 'msg123',
-        from: 'test@example.com',
-        to: 'recipient@example.com',
-        subject: 'Test',
-        sentAt: new Date(),
-        receivedAt: new Date(),
-        content: 'Content',
-        raw: {
-          'attachment-1': 'file1.pdf',
-          'attachment-2': 'file2.png',
-        },
-      });
-
-      expect(mockRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          attachmentNames: ['file1.pdf', 'file2.png'],
-        }),
-      );
+      expect(mockRepo.save).not.toHaveBeenCalled();
     });
 
     it('should handle archive errors', async () => {
-      mockRepository.count.mockResolvedValueOnce(0);
-      mockRepository.create.mockReturnValueOnce({});
-      mockRepository.save.mockRejectedValueOnce(new Error('Database error'));
+      vi.mocked(mockRepo.existsByMessageId).mockResolvedValueOnce(false);
+      vi.mocked(mockRepo.save).mockRejectedValueOnce(
+        new Error('Database error'),
+      );
 
       const result = await emailService.archive({
         messageId: 'msg123',
@@ -233,7 +168,7 @@ describe('EmailService', () => {
 
   describe('delete', () => {
     it('should delete email successfully', async () => {
-      mockRepository.delete.mockResolvedValueOnce({ affected: 1 });
+      vi.mocked(mockRepo.deleteById).mockResolvedValueOnce(true);
 
       const result = await emailService.delete('mail_1');
 
@@ -241,7 +176,7 @@ describe('EmailService', () => {
     });
 
     it('should return false if email not found', async () => {
-      mockRepository.delete.mockResolvedValueOnce({ affected: 0 });
+      vi.mocked(mockRepo.deleteById).mockResolvedValueOnce(false);
 
       const result = await emailService.delete('nonexistent');
 
@@ -251,46 +186,20 @@ describe('EmailService', () => {
 
   describe('updateStatus', () => {
     it('should update email status to archived', async () => {
-      const mockEmail = {
-        id: 'mail_1',
-        status: 'unarchived',
-        archivedAt: null,
-      };
-      mockRepository.findOneBy.mockResolvedValueOnce(mockEmail);
-      mockRepository.save.mockResolvedValueOnce({
-        ...mockEmail,
-        status: 'archived',
-        archivedAt: expect.any(Date),
-      });
+      vi.mocked(mockRepo.updateStatus).mockResolvedValueOnce(true);
 
       const result = await emailService.updateStatus('mail_1', 'archived');
 
       expect(result.success).toBe(true);
-      expect(mockRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: 'archived',
-          archivedAt: expect.any(Date),
-        }),
-      );
+      expect(mockRepo.updateStatus).toHaveBeenCalledWith('mail_1', 'archived');
     });
 
     it('should return false if email not found', async () => {
-      mockRepository.findOneBy.mockResolvedValueOnce(null);
+      vi.mocked(mockRepo.updateStatus).mockResolvedValueOnce(false);
 
       const result = await emailService.updateStatus('nonexistent', 'archived');
 
       expect(result.success).toBe(false);
-    });
-  });
-
-  describe('list with status filter', () => {
-    it('should filter by status', async () => {
-      mockRepository.findAndCount.mockResolvedValueOnce([[], 0]);
-
-      await emailService.list({ status: 'archived' });
-
-      const callArgs = mockRepository.findAndCount.mock.calls[0][0];
-      expect(callArgs.where.status).toBe('archived');
     });
   });
 });

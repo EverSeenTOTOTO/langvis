@@ -1,33 +1,19 @@
-import { describe, it, beforeEach, afterEach, vi, expect } from 'vitest';
 import { UserService } from '@/server/modules/user/user.service';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
+import { beforeEach, afterEach, vi, describe, it, expect } from 'vitest';
+import type { UserRepositoryPort } from '@/server/modules/user/database/user.repository.port';
 
-// Create a mock repository with the needed methods
-const mockRepository = {
-  find: vi.fn(),
-  findOneBy: vi.fn(),
-};
-
-// Mock the DatabaseService module
-vi.mock('@/server/libs/infrastructure/database.service', () => {
-  return {
-    DatabaseService: vi.fn().mockImplementation(() => ({
-      getRepository: vi.fn(() => mockRepository),
-    })),
-  };
-});
+const mockRepo = {
+  findAll: vi.fn(),
+  findById: vi.fn(),
+  findByEmail: vi.fn(),
+} as unknown as UserRepositoryPort;
 
 describe('UserService', () => {
   let userService: UserService;
-  let mockDb: DatabaseService;
 
   beforeEach(() => {
-    // Clear all mocks before each test
     vi.clearAllMocks();
-
-    // Create a new instance
-    mockDb = new DatabaseService();
-    userService = new UserService(mockDb);
+    userService = new UserService(mockRepo);
   });
 
   afterEach(() => {
@@ -56,12 +42,12 @@ describe('UserService', () => {
       },
     ];
 
-    mockRepository.find.mockResolvedValue(mockUsers);
+    vi.mocked(mockRepo.findAll).mockResolvedValue(mockUsers);
 
     const users = await userService.getAllUsers();
 
     expect(users).toEqual(mockUsers);
-    expect(mockRepository.find).toHaveBeenCalled();
+    expect(mockRepo.findAll).toHaveBeenCalled();
   });
 
   it('should get user by ID', async () => {
@@ -75,23 +61,21 @@ describe('UserService', () => {
       updatedAt: new Date(),
     };
 
-    mockRepository.findOneBy.mockResolvedValue(mockUser);
+    vi.mocked(mockRepo.findById).mockResolvedValue(mockUser);
 
     const user = await userService.getUserById('1');
 
     expect(user).toEqual(mockUser);
-    expect(mockRepository.findOneBy).toHaveBeenCalledWith({ id: '1' });
+    expect(mockRepo.findById).toHaveBeenCalledWith('1');
   });
 
   it('should return null when user is not found by ID', async () => {
-    mockRepository.findOneBy.mockResolvedValue(null);
+    vi.mocked(mockRepo.findById).mockResolvedValue(null);
 
     const user = await userService.getUserById('nonexistent');
 
     expect(user).toBeNull();
-    expect(mockRepository.findOneBy).toHaveBeenCalledWith({
-      id: 'nonexistent',
-    });
+    expect(mockRepo.findById).toHaveBeenCalledWith('nonexistent');
   });
 
   it('should get user by email', async () => {
@@ -105,24 +89,22 @@ describe('UserService', () => {
       updatedAt: new Date(),
     };
 
-    mockRepository.findOneBy.mockResolvedValue(mockUser);
+    vi.mocked(mockRepo.findByEmail).mockResolvedValue(mockUser);
 
     const user = await userService.getUserByEmail('john@example.com');
 
     expect(user).toEqual(mockUser);
-    expect(mockRepository.findOneBy).toHaveBeenCalledWith({
-      email: 'john@example.com',
-    });
+    expect(mockRepo.findByEmail).toHaveBeenCalledWith('john@example.com');
   });
 
   it('should return null when user is not found by email', async () => {
-    mockRepository.findOneBy.mockResolvedValue(null);
+    vi.mocked(mockRepo.findByEmail).mockResolvedValue(null);
 
     const user = await userService.getUserByEmail('nonexistent@example.com');
 
     expect(user).toBeNull();
-    expect(mockRepository.findOneBy).toHaveBeenCalledWith({
-      email: 'nonexistent@example.com',
-    });
+    expect(mockRepo.findByEmail).toHaveBeenCalledWith(
+      'nonexistent@example.com',
+    );
   });
 });
