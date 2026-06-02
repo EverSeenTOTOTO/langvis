@@ -1,5 +1,4 @@
 import { agent } from '@/server/decorator/core';
-import { LlmService } from '@/server/modules/memory/adapters/llm.adapter';
 import { SkillService } from '@/server/core/skill/skill-service';
 import { ToolService } from '@/server/modules/agent/tool-service';
 import type { Logger } from '@/server/utils/logger';
@@ -51,7 +50,6 @@ export default class ReActAgent extends Agent {
   constructor(
     @inject(ToolService) private readonly toolService: ToolService,
     @inject(SkillService) private readonly skillService: SkillService,
-    @inject(LlmService) private readonly llmService: LlmService,
   ) {
     super();
   }
@@ -79,8 +77,6 @@ export default class ReActAgent extends Agent {
   async *call(
     run: AgentRun,
   ): AsyncGenerator<AgentEvent | StreamChunk, void, void> {
-    yield run.start();
-
     const cfg = run.config.runtimeConfig as ReActAgentConfig;
     const messages = await run.summarize();
     const iterMessages = this.buildIterMessages(messages);
@@ -88,8 +84,7 @@ export default class ReActAgent extends Agent {
     for (let i = 0; i < this.maxIterations; i++) {
       run.signal.throwIfAborted();
 
-      const content = await this.llmService.chatContent(
-        cfg.model?.modelId,
+      const content = await run.llm.chatContent(
         {
           messages: iterMessages,
           temperature: cfg.model?.temperature,
@@ -134,7 +129,6 @@ export default class ReActAgent extends Agent {
           yield run.recordThought(parsed.thought);
         }
         yield run.appendContent(parsed.final_answer!);
-        yield run.complete();
         return;
       }
 

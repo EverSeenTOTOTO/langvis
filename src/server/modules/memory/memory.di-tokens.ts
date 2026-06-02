@@ -1,5 +1,4 @@
 export {
   MEMORY_SERVICE,
-  CACHE_PORT,
-  LLM_PORT,
+  AGENT_RUN_FACTORY,
 } from '@/server/modules/agent/agent.di-tokens';

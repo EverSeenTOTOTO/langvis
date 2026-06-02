@@ -2,24 +2,24 @@ import type { EffectiveConfig, RunStatus } from '@/shared/types/agent';
 import type { ToolCallRecord, RunSnapshot } from '@/shared/types/render';
 import type { LlmMessage, Message } from '@/shared/types/entities';
 import { generateId } from '@/shared/utils';
+import { container } from 'tsyringe';
 import type { EnrichedEvent } from './agent.types';
+import type { AgentEvent, StreamChunk } from '@/shared/types/events';
 import { RunAlreadyCompletedError, ToolNotFoundError } from './agent.errors';
+import type { Agent } from './agent.base';
 import { ToolCall } from './tool-call.entity';
 import type { MemoryService } from '@/server/modules/memory/domain/memory-service';
 import type { ContextUsage } from '@/server/modules/memory/domain/memory.types';
-import type { ToolResolver } from './tool-resolver.port';
-import type { CacheResolver } from './cache-resolver.port';
+import type { ChatLlm } from './chat-llm';
+import { CacheService } from '@/server/modules/memory/adapters/cache.adapter';
 import { AggregateRoot } from '@/server/libs/ddd';
 import type { DomainEvent } from '@/server/libs/ddd';
 
 /**
  * AgentRun — Agent 上下文的核心聚合根。
  *
- * 取代 ExecutionContext（事件发射 + 取消控制）+
- * PendingMessage（content 累积）+
- * MessageFSM（状态管理）。
- *
- * Agent 的唯一入口：所有状态变更通过聚合根方法进行。
+ * 拥有自己的执行生命周期：execute() 驱动 agent.call(this)，
+ * Agent 通过 run.llm 访问预绑定的 ChatLlm，通过 run.executeTool() 执行工具。
  */
 export class AgentRun extends AggregateRoot<string> {
   // ── 身份 ──
@@ -50,28 +50,52 @@ export class AgentRun extends AggregateRoot<string> {
   private seq = 0;
 
   // ── 依赖 ──
-  private memoryService: MemoryService;
-  private cacheResolver: CacheResolver;
-  private toolResolver: ToolResolver;
+  readonly agent: Agent;
+  private memory: MemoryService;
+  private cache: CacheService;
+  readonly llm: ChatLlm;
   private historyMessages: Message[];
 
   constructor(
     runId: string,
     messageId: string,
     config: EffectiveConfig,
-    memoryService: MemoryService,
-    cacheResolver: CacheResolver,
-    toolResolver: ToolResolver,
+    agent: Agent,
+    memory: MemoryService,
+    cache: CacheService,
+    llm: ChatLlm,
     historyMessages: Message[],
   ) {
     super(runId);
     this.runId = runId;
     this.messageId = messageId;
     this.config = config;
-    this.memoryService = memoryService;
-    this.cacheResolver = cacheResolver;
-    this.toolResolver = toolResolver;
+    this.agent = agent;
+    this.memory = memory;
+    this.cache = cache;
+    this.llm = llm;
     this.historyMessages = historyMessages;
+  }
+
+  // ════════════════════════════════════════
+  // 执行入口 — AgentRun 驱动自己的生命周期
+  // ════════════════════════════════════════
+
+  async *execute(): AsyncGenerator<
+    EnrichedEvent | AgentEvent | StreamChunk,
+    void,
+    void
+  > {
+    try {
+      yield this.start();
+      yield* this.agent.call(this);
+      if (!this.isTerminated) {
+        yield this.complete();
+      }
+    } catch (err) {
+      if (this.signal.aborted) return;
+      yield this.fail((err as Error)?.message || String(err));
+    }
   }
 
   // ════════════════════════════════════════
@@ -91,7 +115,7 @@ export class AgentRun extends AggregateRoot<string> {
       model?: { modelId?: string };
       memory?: { type?: string; windowSize?: number };
     };
-    return this.memoryService.summarize(this.historyMessages, {
+    return this.memory.summarize(this.historyMessages, {
       windowSize: cfg.memory?.windowSize,
       systemPrompt: this.config.systemPrompt,
       memoryType: cfg.memory?.type as 'slide_window' | 'react' | undefined,
@@ -104,7 +128,7 @@ export class AgentRun extends AggregateRoot<string> {
       model?: { modelId?: string };
     };
     const modelId = cfg.model?.modelId ?? '';
-    return this.memoryService.estimateUsage(
+    return this.memory.estimateUsage(
       this.historyMessages as unknown as LlmMessage[],
       this.config.contextSize,
       modelId,
@@ -117,22 +141,21 @@ export class AgentRun extends AggregateRoot<string> {
 
   /**
    * 创建 ToolCall 并委托执行。
-   * Agent 只需：`const observation = yield* run.executeTool(name, args);`
+   * 直接通过 container.resolve(toolName) 解析工具实例。
    */
   async *executeTool(
     toolName: string,
     toolArgs: Record<string, unknown>,
   ): AsyncGenerator<EnrichedEvent, string, void> {
-    const tool = this.toolResolver.resolve(toolName);
-    if (!tool) throw new ToolNotFoundError(toolName);
+    let tool;
+    try {
+      tool = container.resolve(toolName) as ToolCall['tool'];
+    } catch {
+      throw new ToolNotFoundError(toolName);
+    }
 
     const callId = generateId('tc');
-    const toolCall = new ToolCall(
-      callId,
-      tool,
-      toolArgs,
-      this.cacheResolver.resolve(),
-    );
+    const toolCall = new ToolCall(callId, tool, toolArgs, this.cache);
     this._toolCalls.set(callId, toolCall);
 
     yield* toolCall.execute(this);

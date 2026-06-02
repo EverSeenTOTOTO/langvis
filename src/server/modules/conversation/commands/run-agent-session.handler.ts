@@ -1,18 +1,11 @@
 import type { SSEFrame } from '@/shared/types/events';
 import { generateId } from '@/shared/utils';
 import { inject } from 'tsyringe';
-import type { Agent } from '../../agent/domain/agent.base';
 import { AgentRun } from '../../agent/domain/agent-run.entity';
 import { resolveEffectiveConfig } from '../../agent/domain/effective-config';
 import type { AgentEvent, StreamChunk } from '@/shared/types/events';
-import {
-  MEMORY_SERVICE,
-  TOOL_RESOLVER,
-  CACHE_RESOLVER,
-} from '../../agent/agent.di-tokens';
-import type { MemoryService } from '../../memory/domain/memory-service';
-import type { ToolResolver } from '../../agent/domain/tool-resolver.port';
-import type { CacheResolver } from '../../agent/domain/cache-resolver.port';
+import { AGENT_RUN_FACTORY } from '../../agent/agent.di-tokens';
+import type { AgentRunFactory } from '../../agent/application/agent-run.factory';
 import { service } from '@/server/decorator/service';
 import Logger from '@/server/utils/logger';
 import { SessionManager } from '../session-manager';
@@ -32,12 +25,8 @@ export class RunAgentSessionHandler {
     private messageRepo: MessageRepositoryPort,
     @inject(ProviderService)
     private providerService: ProviderService,
-    @inject(MEMORY_SERVICE)
-    private memoryService: MemoryService,
-    @inject(CACHE_RESOLVER)
-    private cacheResolver: CacheResolver,
-    @inject(TOOL_RESOLVER)
-    private toolResolver: ToolResolver,
+    @inject(AGENT_RUN_FACTORY)
+    private factory: AgentRunFactory,
   ) {}
 
   async prepare(command: RunAgentSessionCommand): Promise<AgentRun> {
@@ -51,13 +40,11 @@ export class RunAgentSessionHandler {
       agent.systemPrompt.build(),
     );
 
-    const run = new AgentRun(
+    const run = this.factory.create(
       generateId('run'),
       assistantMessage.id,
       effectiveConfig,
-      this.memoryService,
-      this.cacheResolver,
-      this.toolResolver,
+      agent,
       messages,
     );
 
@@ -74,12 +61,8 @@ export class RunAgentSessionHandler {
     return run;
   }
 
-  async stream(
-    conversationId: string,
-    agent: Agent,
-    run: AgentRun,
-  ): Promise<void> {
-    this.logger.info(`Starting agent=${agent.id}`, {
+  async stream(conversationId: string, run: AgentRun): Promise<void> {
+    this.logger.info(`Starting agent=${run.agent.id}`, {
       sessionId: conversationId,
       messageId: run.messageId,
     });
@@ -88,7 +71,7 @@ export class RunAgentSessionHandler {
     let firstTokenTime: number | undefined;
 
     try {
-      for await (const event of agent.call(run)) {
+      for await (const event of run.execute()) {
         if (run.signal.aborted) break;
 
         if (event.type === 'text_chunk' && !firstTokenTime) {
