@@ -1,156 +1,33 @@
-import { AgentIds, UNGROUPED_GROUP_NAME } from '@/shared/constants';
-import {
-  Conversation,
-  ConversationEntity,
-} from '@/shared/entities/Conversation';
-import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
-import { Message, MessageEntity, Role } from '@/shared/entities/Message';
+import { Message, Role } from '@/shared/entities/Message';
 import type { MessageAttachment } from '@/shared/types/entities';
 import type { ToolCallRecord } from '@/shared/types/render';
 import { inject } from 'tsyringe';
-import { In } from 'typeorm';
 import { service } from '../decorator/service';
-import { DatabaseService } from './DatabaseService';
+import {
+  MESSAGE_REPOSITORY,
+  CONVERSATION_REPOSITORY,
+} from '../modules/conversation/conversation.di-tokens';
+import type { MessageRepositoryPort } from '../modules/conversation/database/message.repository.port';
+import type { ConversationRepositoryPort } from '../modules/conversation/database/conversation.repository.port';
 
-const NON_TERMINAL_STATUSES = new Set(['initialized', 'running']);
-
+/**
+ * ConversationService — 薄 facade。
+ *
+ * 委托给 MessageRepository 和 ConversationRepository。
+ * 外部消费者（ChatService、Controllers）无需改动。
+ */
 @service()
 export class ConversationService {
-  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {}
+  constructor(
+    @inject(MESSAGE_REPOSITORY)
+    private readonly messageRepo: MessageRepositoryPort,
+    @inject(CONVERSATION_REPOSITORY)
+    private readonly convRepo: ConversationRepositoryPort,
+  ) {}
 
-  private async getOrCreateGroupByName(
-    groupName: string,
-    userId: string,
-  ): Promise<string> {
-    const groupRepository = this.db.getRepository(ConversationGroupEntity);
-
-    const existingGroup = await groupRepository.findOneBy({
-      name: groupName,
-      userId,
-    });
-
-    if (existingGroup) {
-      return existingGroup.id;
-    }
-
-    const maxOrder = await groupRepository
-      .createQueryBuilder('group')
-      .where('group.userId = :userId', { userId })
-      .select('MAX("order")', 'max')
-      .getRawOne();
-
-    const order = (maxOrder?.max ?? -100) + 100;
-
-    const newGroup = groupRepository.create({
-      name: groupName,
-      userId,
-      order,
-    });
-    const savedGroup = await groupRepository.save(newGroup);
-    return savedGroup.id;
-  }
-
-  async createConversation(
-    name: string,
-    userId: string,
-    config?: Record<string, any> | null,
-    groupId?: string | null,
-    groupName?: string,
-  ): Promise<Conversation> {
-    const finalConfig = config ?? {};
-    if (!finalConfig.agent) {
-      finalConfig.agent = AgentIds.CHAT;
-    }
-
-    const conversationRepository = this.db.getRepository(ConversationEntity);
-    const groupRepository = this.db.getRepository(ConversationGroupEntity);
-
-    let resolvedGroupId = groupId;
-
-    // If no groupId, find or create group by name (default to ungrouped)
-    if (!resolvedGroupId) {
-      resolvedGroupId = await this.getOrCreateGroupByName(
-        groupName ?? UNGROUPED_GROUP_NAME,
-        userId,
-      );
-    }
-
-    // Verify group exists and belongs to user
-    const group = await groupRepository.findOneBy({
-      id: resolvedGroupId,
-      userId,
-    });
-    if (!group) {
-      throw new Error('Group not found');
-    }
-
-    // Get max order for conversations in this group
-    const maxOrder = await conversationRepository
-      .createQueryBuilder('conversation')
-      .where('conversation.groupId = :groupId', { groupId: resolvedGroupId })
-      .select('MAX("order")', 'max')
-      .getRawOne();
-
-    const order = (maxOrder?.max ?? -100) + 100;
-
-    const conversation = conversationRepository.create({
-      name,
-      config: finalConfig,
-      userId,
-      groupId: resolvedGroupId,
-      order,
-    });
-    return await conversationRepository.save(conversation);
-  }
-
-  async getConversationById(
-    id: string,
-    userId?: string,
-  ): Promise<Conversation | null> {
-    const conversationRepository = this.db.getRepository(ConversationEntity);
-    const where: Record<string, any> = { id };
-    if (userId) {
-      where.userId = userId;
-    }
-    return await conversationRepository.findOneBy(where);
-  }
-
-  async updateConversation(
-    id: string,
-    name: string,
-    userId: string,
-    config?: Record<string, any> | null,
-    groupId?: string | null,
-    groupName?: string,
-  ): Promise<Conversation | null> {
-    const conversationRepository = this.db.getRepository(ConversationEntity);
-    const conversation = await conversationRepository.findOneBy({ id, userId });
-    if (!conversation) {
-      return null;
-    }
-    conversation.name = name;
-    if (config !== undefined) {
-      conversation.config = config ?? null;
-    }
-    if (groupId !== undefined || groupName !== undefined) {
-      const resolvedGroupId = groupId
-        ? groupId
-        : await this.getOrCreateGroupByName(
-            groupName ?? UNGROUPED_GROUP_NAME,
-            userId,
-          );
-      conversation.groupId = resolvedGroupId;
-    }
-    return await conversationRepository.save(conversation);
-  }
-
-  async deleteConversation(id: string, userId: string): Promise<boolean> {
-    const conversationRepository = this.db.getRepository(ConversationEntity);
-
-    const result = await conversationRepository.delete({ id, userId });
-
-    return result.affected ? result.affected > 0 : false;
-  }
+  // ════════════════════════════════════════
+  // Message 操作（委托 MessageRepository）
+  // ════════════════════════════════════════
 
   async batchAddMessages(
     conversationId: string,
@@ -162,159 +39,82 @@ export class ConversationService {
       meta?: Record<string, any> | null;
       createdAt?: Date;
     }>,
-  ): Promise<Message[]> {
-    const conversation = await this.getConversationById(conversationId);
-
-    if (!conversation) {
-      throw new Error(`Conversation ${conversationId} not found`);
-    }
-
-    const messageRepository = this.db.getRepository(MessageEntity);
-    const messages = messagesData.map(data =>
-      messageRepository.create({
-        ...(data.id && { id: data.id }),
-        conversationId,
-        role: data.role,
-        content: data.content,
-        attachments: data.attachments,
-        meta: data.meta,
-        ...(data.createdAt && { createdAt: data.createdAt }),
-      }),
-    );
-
-    return await messageRepository.save(messages);
+  ) {
+    return this.messageRepo.batchCreate(conversationId, messagesData);
   }
 
-  async findLastAssistantMessage(
-    conversationId: string,
-  ): Promise<Message | null> {
-    const messageRepository = this.db.getRepository(MessageEntity);
-    return await messageRepository.findOne({
-      where: { conversationId, role: Role.ASSIST },
-      order: { createdAt: 'DESC' },
-    });
+  async findLastAssistantMessage(conversationId: string) {
+    return this.messageRepo.findLastAssistantMessage(conversationId);
   }
 
-  /**
-   * Find all assistant messages with non-terminal status.
-   * Used for zombie detection after server restart.
-   */
-  async findActiveAssistantMessages(
-    conversationId: string,
-  ): Promise<Message[]> {
-    const messageRepository = this.db.getRepository(MessageEntity);
-    const messages = await messageRepository.find({
-      where: { conversationId, role: Role.ASSIST },
-      order: { createdAt: 'ASC' },
-    });
-
-    return messages.filter(
-      msg => !msg.status || NON_TERMINAL_STATUSES.has(msg.status),
-    );
+  async findActiveAssistantMessages(conversationId: string) {
+    return this.messageRepo.findActiveAssistantMessages(conversationId);
   }
 
-  async getMessagesByConversationId(
-    conversationId: string,
-  ): Promise<Message[]> {
-    const messageRepository = this.db.getRepository(MessageEntity);
-    return await messageRepository.find({
-      where: { conversationId },
-      order: { createdAt: 'ASC' },
-    });
+  async getMessagesByConversationId(conversationId: string) {
+    return this.messageRepo.findByConversationId(conversationId);
   }
 
-  /**
-   * Save (upsert) a message. If the message ID exists, updates it; otherwise inserts.
-   */
-  async saveMessage(message: Message): Promise<Message> {
-    const messageRepository = this.db.getRepository(MessageEntity);
-    return await messageRepository.save(message as MessageEntity);
+  async saveMessage(message: Message) {
+    return this.messageRepo.save(message);
   }
 
   async batchDeleteMessagesInConversation(
     conversationId: string,
     messageIds?: string[],
   ) {
-    const messageRepository = this.db.getRepository(MessageEntity);
-
-    if (!messageIds || messageIds.length === 0) {
-      return await messageRepository.delete({ conversationId });
-    }
-
-    return await messageRepository.delete({
+    return this.messageRepo.batchDeleteInConversation(
       conversationId,
-      id: In(messageIds),
-    });
-  }
-
-  async updateMessage(
-    messageId: string,
-    partial: Partial<Message>,
-  ): Promise<Message | null> {
-    const messageRepository = this.db.getRepository(MessageEntity);
-    const message = await messageRepository.findOneBy({ id: messageId });
-
-    if (!message) {
-      return null;
-    }
-
-    Object.assign(message, partial);
-    return await messageRepository.save(message);
-  }
-
-  async appendToolCallRecord(
-    messageId: string,
-    record: ToolCallRecord,
-  ): Promise<void> {
-    await this.db.dataSource.query(
-      `UPDATE messages SET "toolCallRecords" = CASE
-         WHEN "toolCallRecords" IS NULL THEN $1::jsonb
-         ELSE "toolCallRecords" || $1::jsonb
-       END WHERE id = $2`,
-      [JSON.stringify([record]), messageId],
+      messageIds,
     );
   }
 
-  async appendThought(messageId: string, thought: string): Promise<void> {
-    await this.db.dataSource.query(
-      `UPDATE messages SET thoughts = CASE
-         WHEN thoughts IS NULL THEN $1::jsonb
-         ELSE thoughts || $1::jsonb
-       END WHERE id = $2`,
-      [JSON.stringify([thought]), messageId],
-    );
+  async updateMessage(messageId: string, partial: Partial<Message>) {
+    return this.messageRepo.update(messageId, partial);
   }
 
-  /**
-   * Delete all messages after a specific message (for rollback operations)
-   */
-  async deleteMessagesAfter(
-    conversationId: string,
-    afterMessageId: string,
-  ): Promise<boolean> {
-    const messageRepository = this.db.getRepository(MessageEntity);
+  async appendToolCallRecord(messageId: string, record: ToolCallRecord) {
+    return this.messageRepo.appendToolCallRecord(messageId, record);
+  }
 
-    // Get the target message to get its timestamp
-    const targetMessage = await messageRepository.findOneBy({
-      id: afterMessageId,
-      conversationId,
-    });
+  async appendThought(messageId: string, thought: string) {
+    return this.messageRepo.appendThought(messageId, thought);
+  }
 
-    if (!targetMessage) {
-      return false;
-    }
+  async deleteMessagesAfter(conversationId: string, afterMessageId: string) {
+    return this.messageRepo.deleteAfter(conversationId, afterMessageId);
+  }
 
-    // Delete all messages created after the target message
-    await messageRepository
-      .createQueryBuilder()
-      .delete()
-      .from(MessageEntity)
-      .where('conversationId = :conversationId', { conversationId })
-      .andWhere('createdAt > :createdAt', {
-        createdAt: targetMessage.createdAt,
-      })
-      .execute();
+  // ════════════════════════════════════════
+  // Conversation 操作（委托 ConversationRepository）
+  // ════════════════════════════════════════
 
-    return true;
+  async createConversation(
+    name: string,
+    userId: string,
+    config?: Record<string, any> | null,
+    groupId?: string | null,
+    groupName?: string,
+  ) {
+    return this.convRepo.create(name, userId, config, groupId, groupName);
+  }
+
+  async getConversationById(id: string, userId?: string) {
+    return this.convRepo.findById(id, userId);
+  }
+
+  async updateConversation(
+    id: string,
+    name: string,
+    userId: string,
+    config?: Record<string, any> | null,
+    groupId?: string | null,
+    groupName?: string,
+  ) {
+    return this.convRepo.update(id, name, userId, config, groupId, groupName);
+  }
+
+  async deleteConversation(id: string, userId: string) {
+    return this.convRepo.delete(id, userId);
   }
 }

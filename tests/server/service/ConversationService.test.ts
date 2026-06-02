@@ -1,732 +1,158 @@
 import { ConversationService } from '@/server/service/ConversationService';
-import { DatabaseService } from '@/server/service/DatabaseService';
-import { AgentIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the DatabaseService module
-vi.mock('@/server/service/DatabaseService', () => {
-  const mockGetRepository = vi.fn().mockImplementation((entity: any) => {
-    if (entity.name === 'ConversationEntity') {
-      return {
-        create: vi.fn(e => e),
-        save: vi.fn(async e => e),
-        findOneBy: vi.fn(async () => null),
-        findOne: vi.fn(async () => null),
-        find: vi.fn(async () => []),
-        delete: vi.fn(async () => ({ affected: 0 })),
-        createQueryBuilder: vi.fn(() => ({
-          where: vi.fn().mockReturnThis(),
-          andWhere: vi.fn().mockReturnThis(),
-          select: vi.fn().mockReturnThis(),
-          getRawOne: vi.fn(async () => ({ max: 0 })),
-        })),
-      };
-    } else if (entity.name === 'MessageEntity') {
-      return {
-        create: vi.fn(e => e),
-        save: vi.fn(async e => e),
-        findOneBy: vi.fn(async () => null),
-        find: vi.fn(async () => []),
-        delete: vi.fn(async () => ({ affected: 0 })),
-      };
-    } else if (entity.name === 'ConversationGroupEntity') {
-      return {
-        create: vi.fn(e => e),
-        save: vi.fn(async e => e),
-        findOneBy: vi.fn(async () => null),
-        find: vi.fn(async () => []),
-        createQueryBuilder: vi.fn(() => ({
-          where: vi.fn().mockReturnThis(),
-          select: vi.fn().mockReturnThis(),
-          getRawOne: vi.fn(async () => ({ max: 0 })),
-        })),
-      };
-    }
-    return {
-      create: vi.fn(e => e),
-      save: vi.fn(async e => e),
-      findOneBy: vi.fn(async () => null),
-      find: vi.fn(async () => []),
-      delete: vi.fn(async () => ({ affected: 0 })),
-    };
-  });
-
+function createMockMessageRepo(): any {
   return {
-    DatabaseService: vi.fn().mockImplementation(() => ({
-      getRepository: mockGetRepository,
-      dataSource: {
-        transaction: vi.fn(async (cb: any) => cb({})),
-        query: vi.fn().mockResolvedValue({ rowCount: 1 }),
-      },
-    })),
+    batchCreate: vi.fn(async (_id: string, data: any) =>
+      data.map((d: any) => ({ ...d, id: d.id ?? 'msg_new' })),
+    ),
+    findLastAssistantMessage: vi.fn(async () => null),
+    findActiveAssistantMessages: vi.fn(async () => []),
+    findByConversationId: vi.fn(async () => []),
+    save: vi.fn(async m => m),
+    batchDeleteInConversation: vi.fn(async () => {}),
+    update: vi.fn(async () => null),
+    appendToolCallRecord: vi.fn(async () => {}),
+    appendThought: vi.fn(async () => {}),
+    deleteAfter: vi.fn(async () => false),
   };
-});
+}
 
-describe('ConversationService', () => {
-  let conversationService: ConversationService;
-  let mockDb: DatabaseService;
+function createMockConvRepo(): any {
+  return {
+    create: vi.fn(async () => ({ id: 'conv_1' }) as any),
+    findById: vi.fn(async () => null),
+    update: vi.fn(async () => null),
+    delete: vi.fn(async () => false),
+    createGroup: vi.fn(async () => ({ id: 'grp_1' }) as any),
+    findGroupsByUserId: vi.fn(async () => ({ groups: [] })),
+    updateGroup: vi.fn(async () => null),
+    deleteGroup: vi.fn(async () => ({
+      success: false,
+      deletedConversationIds: [],
+    })),
+    reorderGroups: vi.fn(async () => {}),
+    reorderConversationsInGroup: vi.fn(async () => {}),
+  };
+}
+
+describe('ConversationService (facade)', () => {
+  let service: ConversationService;
+  let messageRepo: any;
+  let convRepo: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDb = new DatabaseService();
-    conversationService = new ConversationService(mockDb);
+    messageRepo = createMockMessageRepo();
+    convRepo = createMockConvRepo();
+    service = new ConversationService(messageRepo, convRepo);
   });
 
-  it('should create a conversation', async () => {
-    const mockConversation = {
-      id: '1',
-      name: 'Test Conversation',
-      config: { agent: AgentIds.CHAT },
-      createdAt: new Date(),
-      messages: [],
-      userId: 'test-user-id',
-      order: 100,
-      groupId: 'ungrouped-group-id',
-    };
+  // ── Message delegation ──
 
-    const mockGroup = {
-      id: 'ungrouped-group-id',
-      name: 'ungrouped',
-      userId: 'test-user-id',
-      order: 0,
-    };
+  it('should delegate batchAddMessages to messageRepo.batchCreate', async () => {
+    const data = [{ role: Role.USER, content: 'hello' }];
+    await service.batchAddMessages('conv_1', data as any);
 
-    (mockDb.getRepository as any).mockImplementation((entity: any) => {
-      if (entity.name === 'ConversationEntity') {
-        return {
-          create: vi.fn().mockImplementation(data => {
-            expect(data.config).toEqual({ agent: AgentIds.CHAT });
-            return mockConversation;
-          }),
-          save: vi.fn().mockResolvedValue(mockConversation),
-          createQueryBuilder: vi.fn(() => ({
-            where: vi.fn().mockReturnThis(),
-            andWhere: vi.fn().mockReturnThis(),
-            select: vi.fn().mockReturnThis(),
-            getRawOne: vi.fn(async () => ({ max: 0 })),
-          })),
-        };
-      } else if (entity.name === 'ConversationGroupEntity') {
-        return {
-          findOneBy: vi.fn().mockResolvedValue(mockGroup),
-        };
-      }
-      return {};
-    });
-
-    const result = await conversationService.createConversation(
-      'Test Conversation',
-      'test-user-id',
-    );
-    expect(result).toEqual(mockConversation);
+    expect(messageRepo.batchCreate).toHaveBeenCalledWith('conv_1', data);
   });
 
-  it('should create a conversation with config', async () => {
-    const mockConversation = {
-      id: '1',
-      name: 'Test Conversation',
-      config: { model: 'gpt-4', temperature: 0.7, agent: AgentIds.CHAT },
-      createdAt: new Date(),
-      messages: [],
-      userId: 'test-user-id',
-      order: 100,
-      groupId: 'ungrouped-group-id',
-    };
-
-    const mockGroup = {
-      id: 'ungrouped-group-id',
-      name: 'ungrouped',
-      userId: 'test-user-id',
-      order: 0,
-    };
-
-    (mockDb.getRepository as any).mockImplementation((entity: any) => {
-      if (entity.name === 'ConversationEntity') {
-        return {
-          create: vi.fn().mockImplementation(data => {
-            expect(data.config).toEqual({
-              model: 'gpt-4',
-              temperature: 0.7,
-              agent: AgentIds.CHAT,
-            });
-            return mockConversation;
-          }),
-          save: vi.fn().mockResolvedValue(mockConversation),
-          createQueryBuilder: vi.fn(() => ({
-            where: vi.fn().mockReturnThis(),
-            andWhere: vi.fn().mockReturnThis(),
-            select: vi.fn().mockReturnThis(),
-            getRawOne: vi.fn(async () => ({ max: 0 })),
-          })),
-        };
-      } else if (entity.name === 'ConversationGroupEntity') {
-        return {
-          findOneBy: vi.fn().mockResolvedValue(mockGroup),
-        };
-      }
-      return {};
-    });
-
-    const result = await conversationService.createConversation(
-      'Test Conversation',
-      'test-user-id',
-      { model: 'gpt-4', temperature: 0.7 },
-    );
-    expect(result).toEqual(mockConversation);
+  it('should delegate getMessagesByConversationId to messageRepo', async () => {
+    await service.getMessagesByConversationId('conv_1');
+    expect(messageRepo.findByConversationId).toHaveBeenCalledWith('conv_1');
   });
 
-  it('should get a conversation by id', async () => {
-    const mockConversation = {
-      id: '1',
-      name: 'Test Conversation',
-      createdAt: new Date(),
-      messages: [],
-    };
-
-    (mockDb.getRepository as any).mockReturnValue({
-      findOneBy: vi.fn().mockResolvedValue(mockConversation),
-    });
-
-    const result = await conversationService.getConversationById('1');
-    expect(result).toEqual(mockConversation);
+  it('should delegate updateMessage to messageRepo', async () => {
+    const partial = { content: 'updated' };
+    await service.updateMessage('msg_1', partial);
+    expect(messageRepo.update).toHaveBeenCalledWith('msg_1', partial);
   });
 
-  it('should update a conversation', async () => {
-    const mockConversation = {
-      id: '1',
-      name: 'Updated Conversation',
-      config: null,
-      createdAt: new Date(),
-      messages: [],
-    };
-
-    (mockDb.getRepository as any).mockReturnValue({
-      findOneBy: vi.fn().mockResolvedValue(mockConversation),
-      save: vi.fn().mockResolvedValue(mockConversation),
-    });
-
-    const result = await conversationService.updateConversation(
-      '1',
-      'Updated Conversation',
-      'test-user-id',
-    );
-    expect(result).toEqual(mockConversation);
-  });
-
-  it('should update a conversation with config', async () => {
-    const mockConversation = {
-      id: '1',
-      name: 'Updated Conversation',
-      config: { model: 'gpt-4', temperature: 0.7 },
-      createdAt: new Date(),
-      messages: [],
-    };
-
-    (mockDb.getRepository as any).mockReturnValue({
-      findOneBy: vi.fn().mockResolvedValue(mockConversation),
-      save: vi.fn().mockResolvedValue(mockConversation),
-    });
-
-    const result = await conversationService.updateConversation(
-      '1',
-      'Updated Conversation',
-      'test-user-id',
-      { model: 'gpt-4', temperature: 0.7 },
-    );
-    expect(result).toEqual(mockConversation);
-  });
-
-  it('should update a conversation without changing config when not provided', async () => {
-    const mockConversation = {
-      id: '1',
-      name: 'Updated Conversation',
-      config: { model: 'gpt-3.5', temperature: 0.5 },
-      createdAt: new Date(),
-      messages: [],
-    };
-
-    (mockDb.getRepository as any).mockReturnValue({
-      findOneBy: vi.fn().mockResolvedValue(mockConversation),
-      save: vi.fn().mockImplementation(entity => {
-        expect(entity.name).toBe('Updated Conversation');
-        // When updating without providing new config, the existing config should remain unchanged
-        expect(entity.config).toEqual({ model: 'gpt-3.5', temperature: 0.5 });
-        return mockConversation;
-      }),
-    });
-
-    const result = await conversationService.updateConversation(
-      '1',
-      'Updated Conversation',
-      'test-user-id',
-    );
-    expect(result).toEqual(mockConversation);
-  });
-
-  it('should delete a conversation', async () => {
-    const deleteMock = vi.fn().mockResolvedValue({ affected: 1 });
-
-    (mockDb.getRepository as any).mockImplementation((entity: any) => {
-      if (entity.name === 'ConversationEntity') {
-        return {
-          delete: deleteMock,
-        };
-      }
-      return {
-        delete: vi.fn().mockResolvedValue({ affected: 0 }),
-      };
-    });
-
-    const result = await conversationService.deleteConversation(
-      '1',
-      'test-user-id',
-    );
-    expect(result).toBe(true);
-    expect(deleteMock).toHaveBeenCalledWith({
-      id: '1',
-      userId: 'test-user-id',
-    });
-  });
-
-  it('should cascade delete messages when conversation is deleted', async () => {
-    // Cascade delete is handled by database (onDelete: 'CASCADE' in entity)
-    // This test verifies the delete operation is called correctly
-    const deleteMock = vi.fn().mockResolvedValue({ affected: 1 });
-
-    (mockDb.getRepository as any).mockImplementation((entity: any) => {
-      if (entity.name === 'ConversationEntity') {
-        return {
-          delete: deleteMock,
-        };
-      }
-      return {
-        delete: vi.fn().mockResolvedValue({ affected: 0 }),
-      };
-    });
-
-    const result = await conversationService.deleteConversation(
-      '1',
-      'test-user-id',
-    );
-    expect(result).toBe(true);
-    expect(deleteMock).toHaveBeenCalledWith({
-      id: '1',
-      userId: 'test-user-id',
-    });
-  });
-
-  it('should get messages by conversation id', async () => {
-    const mockMessages = [
-      {
-        id: '1',
-        conversationId: '1',
-        role: Role.USER,
-        content: 'Hello',
-        createdAt: new Date(),
-      },
-      {
-        id: '2',
-        conversationId: '1',
-        role: Role.ASSIST,
-        content: 'Hi there!',
-        createdAt: new Date(),
-      },
-    ];
-
-    (mockDb.getRepository as any).mockReturnValue({
-      find: vi.fn().mockResolvedValue(mockMessages),
-    });
-
-    const result = await conversationService.getMessagesByConversationId('1');
-    expect(result).toEqual(mockMessages);
-  });
-
-  it('should update a message', async () => {
-    const mockMessage = {
-      id: '1',
-      conversationId: '1',
-      role: Role.ASSIST,
-      content: 'Hello world',
-      createdAt: new Date(),
-    };
-
-    // Mock message repository
-    (mockDb.getRepository as any).mockReturnValueOnce({
-      findOneBy: vi.fn().mockResolvedValue(mockMessage),
-      save: vi.fn().mockResolvedValue(mockMessage),
-    });
-
-    const result = await conversationService.updateMessage('1', {
-      content: 'Hello world updated',
-    });
-    expect(result).toEqual(mockMessage);
-  });
-
-  it('should return null when updating a non-existent message', async () => {
-    // Mock message repository
-    (mockDb.getRepository as any).mockReturnValueOnce({
-      findOneBy: vi.fn().mockResolvedValue(null),
-    });
-
-    const result = await conversationService.updateMessage('non-existent-id', {
-      content: 'Hello world',
-    });
-    expect(result).toBeNull();
-  });
-
-  it('should batch add messages to a conversation', async () => {
-    const mockConversation = { id: '1', name: 'Test Conversation' };
-    const messagesData = [
-      { role: Role.USER, content: 'Hello' },
-      { role: Role.ASSIST, content: '', meta: { loading: true } },
-    ];
-    const expectedMessages = [
-      { id: '1', conversationId: '1', role: Role.USER, content: 'Hello' },
-      {
-        id: '2',
-        conversationId: '1',
-        role: Role.ASSIST,
-        content: '',
-        meta: { loading: true },
-      },
-    ];
-
-    // Mock conversation repository
-    (mockDb.getRepository as any).mockReturnValueOnce({
-      findOneBy: vi.fn().mockResolvedValue(mockConversation),
-    });
-
-    // Mock message repository
-    (mockDb.getRepository as any).mockReturnValueOnce({
-      create: vi.fn().mockImplementation(data => data),
-      save: vi.fn().mockResolvedValue(expectedMessages),
-    });
-
-    const result = await conversationService.batchAddMessages(
-      '1',
-      messagesData,
-    );
-
-    expect(result).toEqual(expectedMessages);
-  });
-
-  it('should throw error when batch adding messages to non-existent conversation', async () => {
-    const messagesData = [{ role: Role.USER, content: 'Hello' }];
-
-    // Mock conversation repository to return null
-    (mockDb.getRepository as any).mockReturnValueOnce({
-      findOneBy: vi.fn().mockResolvedValue(null),
-    });
-
-    await expect(
-      conversationService.batchAddMessages('non-existent', messagesData),
-    ).rejects.toThrow('Conversation non-existent not found');
-  });
-
-  it('should create a conversation with specific groupId', async () => {
-    const mockConversation = {
-      id: '1',
-      name: 'Test Conversation',
-      config: { agent: AgentIds.CHAT },
-      createdAt: new Date(),
-      messages: [],
-      userId: 'test-user-id',
-      order: 100,
-      groupId: 'specific-group-id',
-    };
-
-    const mockGroup = {
-      id: 'specific-group-id',
-      name: 'Specific Group',
-      userId: 'test-user-id',
-      order: 0,
-    };
-
-    (mockDb.getRepository as any).mockImplementation((entity: any) => {
-      if (entity.name === 'ConversationEntity') {
-        return {
-          create: vi.fn().mockReturnValue(mockConversation),
-          save: vi.fn().mockResolvedValue(mockConversation),
-          createQueryBuilder: vi.fn(() => ({
-            where: vi.fn().mockReturnThis(),
-            select: vi.fn().mockReturnThis(),
-            getRawOne: vi.fn(async () => ({ max: 0 })),
-          })),
-        };
-      } else if (entity.name === 'ConversationGroupEntity') {
-        return {
-          findOneBy: vi.fn().mockResolvedValue(mockGroup),
-        };
-      }
-      return {};
-    });
-
-    const result = await conversationService.createConversation(
-      'Test Conversation',
-      'test-user-id',
-      {},
-      'specific-group-id',
-    );
-    expect(result).toEqual(mockConversation);
-    expect(result.groupId).toBe('specific-group-id');
-  });
-
-  it('should create a conversation with groupName and find existing group', async () => {
-    const mockConversation = {
-      id: '1',
-      name: 'Test Conversation',
-      config: { agent: AgentIds.CHAT },
-      createdAt: new Date(),
-      messages: [],
-      userId: 'test-user-id',
-      order: 100,
-      groupId: 'existing-group-id',
-    };
-
-    const mockGroup = {
-      id: 'existing-group-id',
-      name: 'My Group',
-      userId: 'test-user-id',
-      order: 100,
-    };
-
-    (mockDb.getRepository as any).mockImplementation((entity: any) => {
-      if (entity.name === 'ConversationEntity') {
-        return {
-          create: vi.fn().mockReturnValue(mockConversation),
-          save: vi.fn().mockResolvedValue(mockConversation),
-          createQueryBuilder: vi.fn(() => ({
-            where: vi.fn().mockReturnThis(),
-            select: vi.fn().mockReturnThis(),
-            getRawOne: vi.fn(async () => ({ max: 0 })),
-          })),
-        };
-      } else if (entity.name === 'ConversationGroupEntity') {
-        return {
-          findOneBy: vi.fn().mockImplementation(async (criteria: any) => {
-            if (criteria.name === 'My Group') return mockGroup;
-            if (criteria.id === 'existing-group-id') return mockGroup;
-            return null;
-          }),
-        };
-      }
-      return {};
-    });
-
-    const result = await conversationService.createConversation(
-      'Test Conversation',
-      'test-user-id',
-      {},
-      null,
-      'My Group',
-    );
-    expect(result).toEqual(mockConversation);
-    expect(result.groupId).toBe('existing-group-id');
-  });
-
-  it('should create a conversation with groupName and create new group if not found', async () => {
-    const mockConversation = {
-      id: '1',
-      name: 'Test Conversation',
-      config: { agent: AgentIds.CHAT },
-      createdAt: new Date(),
-      messages: [],
-      userId: 'test-user-id',
-      order: 100,
-      groupId: 'new-group-id',
-    };
-
-    const newGroup = {
-      id: 'new-group-id',
-      name: 'New Group',
-      userId: 'test-user-id',
-      order: 100,
-    };
-
-    (mockDb.getRepository as any).mockImplementation((entity: any) => {
-      if (entity.name === 'ConversationEntity') {
-        return {
-          create: vi.fn().mockReturnValue(mockConversation),
-          save: vi.fn().mockResolvedValue(mockConversation),
-          createQueryBuilder: vi.fn(() => ({
-            where: vi.fn().mockReturnThis(),
-            select: vi.fn().mockReturnThis(),
-            getRawOne: vi.fn(async () => ({ max: 0 })),
-          })),
-        };
-      } else if (entity.name === 'ConversationGroupEntity') {
-        return {
-          // Return null for name search, but return group for id search
-          findOneBy: vi.fn().mockImplementation(async (criteria: any) => {
-            if (criteria.name) return null; // Group name not found
-            if (criteria.id === 'new-group-id') return newGroup; // Verify by id
-            return null;
-          }),
-          create: vi.fn().mockReturnValue(newGroup),
-          save: vi.fn().mockResolvedValue(newGroup),
-          createQueryBuilder: vi.fn(() => ({
-            where: vi.fn().mockReturnThis(),
-            select: vi.fn().mockReturnThis(),
-            getRawOne: vi.fn(async () => ({ max: 0 })),
-          })),
-        };
-      }
-      return {};
-    });
-
-    const result = await conversationService.createConversation(
-      'Test Conversation',
-      'test-user-id',
-      {},
-      null,
-      'New Group',
-    );
-    expect(result).toEqual(mockConversation);
-    expect(result.groupId).toBe('new-group-id');
-  });
-
-  it('should create ungrouped group when no groupId provided', async () => {
-    const mockConversation = {
-      id: '1',
-      name: 'Test Conversation',
-      config: { agent: AgentIds.CHAT },
-      createdAt: new Date(),
-      messages: [],
-      userId: 'test-user-id',
-      order: 100,
-      groupId: 'ungrouped-id',
-    };
-
-    const ungroupedGroup = {
-      id: 'ungrouped-id',
-      name: 'ungrouped',
-      userId: 'test-user-id',
-      order: 0,
-    };
-
-    (mockDb.getRepository as any).mockImplementation((entity: any) => {
-      if (entity.name === 'ConversationEntity') {
-        return {
-          create: vi.fn().mockReturnValue(mockConversation),
-          save: vi.fn().mockResolvedValue(mockConversation),
-          createQueryBuilder: vi.fn(() => ({
-            where: vi.fn().mockReturnThis(),
-            select: vi.fn().mockReturnThis(),
-            getRawOne: vi.fn(async () => ({ max: 0 })),
-          })),
-        };
-      } else if (entity.name === 'ConversationGroupEntity') {
-        return {
-          findOneBy: vi.fn().mockResolvedValue(ungroupedGroup),
-        };
-      }
-      return {};
-    });
-
-    const result = await conversationService.createConversation(
-      'Test Conversation',
-      'test-user-id',
-    );
-    expect(result).toEqual(mockConversation);
-    expect(result.groupId).toBe('ungrouped-id');
-  });
-
-  it('should update conversation with null groupId to use ungrouped group', async () => {
-    const mockConversation = {
-      id: '1',
-      name: 'Updated Conversation',
-      config: {},
-      createdAt: new Date(),
-      messages: [],
-      groupId: 'old-group-id',
-    };
-
-    const ungroupedGroup = {
-      id: 'ungrouped-id',
-      name: 'Ungrouped',
-      userId: 'test-user-id',
-      order: 0,
-    };
-
-    (mockDb.getRepository as any).mockImplementation((entity: any) => {
-      if (entity.name === 'ConversationEntity') {
-        return {
-          findOneBy: vi.fn().mockResolvedValue(mockConversation),
-          save: vi.fn().mockImplementation(async (data: any) => data),
-        };
-      } else if (entity.name === 'ConversationGroupEntity') {
-        return {
-          // Return ungrouped group when searching by name or id
-          findOneBy: vi.fn().mockImplementation(async (criteria: any) => {
-            if (criteria.name === 'Ungrouped') return ungroupedGroup;
-            if (criteria.id === 'ungrouped-id') return ungroupedGroup;
-            return null;
-          }),
-        };
-      }
-      return {};
-    });
-
-    const result = await conversationService.updateConversation(
-      '1',
-      'Updated Conversation',
-      'test-user-id',
-      {},
-      null, // null groupId should assign to ungrouped
-    );
-    expect(result?.groupId).toBe('ungrouped-id');
-  });
-
-  // ── Incremental JSONB projection ──
-
-  it('should append a tool call record using JSONB concatenation', async () => {
-    const querySpy = vi.fn().mockResolvedValue({ rowCount: 1 });
-    (mockDb as any).dataSource.query = querySpy;
-
+  it('should delegate appendToolCallRecord to messageRepo', async () => {
     const record = {
       callId: 'tc_1',
-      toolName: 'read_file',
-      toolArgs: { path: '/tmp/test.txt' },
+      toolName: 'test',
       status: 'completed' as const,
-      output: 'file contents',
-      error: undefined,
-      duration: 150,
-      startedAt: 1000,
-      completedAt: 1150,
     };
-
-    await conversationService.appendToolCallRecord('msg_1', record);
-
-    expect(querySpy).toHaveBeenCalledTimes(1);
-    expect(querySpy).toHaveBeenCalledWith(
-      expect.stringContaining('"toolCallRecords"'),
-      [JSON.stringify([record]), 'msg_1'],
+    await service.appendToolCallRecord('msg_1', record as any);
+    expect(messageRepo.appendToolCallRecord).toHaveBeenCalledWith(
+      'msg_1',
+      record,
     );
   });
 
-  it('should append a thought using JSONB concatenation', async () => {
-    const querySpy = vi.fn().mockResolvedValue({ rowCount: 1 });
-    (mockDb as any).dataSource.query = querySpy;
-
-    await conversationService.appendThought('msg_1', 'Let me analyze this...');
-
-    expect(querySpy).toHaveBeenCalledTimes(1);
-    expect(querySpy).toHaveBeenCalledWith(expect.stringContaining('thoughts'), [
-      JSON.stringify(['Let me analyze this...']),
+  it('should delegate appendThought to messageRepo', async () => {
+    await service.appendThought('msg_1', 'thinking...');
+    expect(messageRepo.appendThought).toHaveBeenCalledWith(
       'msg_1',
-    ]);
+      'thinking...',
+    );
   });
 
-  it('should use CASE WHEN NULL pattern for JSONB append', async () => {
-    const querySpy = vi.fn().mockResolvedValue({ rowCount: 1 });
-    (mockDb as any).dataSource.query = querySpy;
+  it('should delegate findActiveAssistantMessages to messageRepo', async () => {
+    await service.findActiveAssistantMessages('conv_1');
+    expect(messageRepo.findActiveAssistantMessages).toHaveBeenCalledWith(
+      'conv_1',
+    );
+  });
 
-    await conversationService.appendThought('msg_1', 'thinking...');
+  it('should delegate saveMessage to messageRepo', async () => {
+    const msg = { id: 'msg_1', content: 'test' } as any;
+    await service.saveMessage(msg);
+    expect(messageRepo.save).toHaveBeenCalledWith(msg);
+  });
 
-    const sql = querySpy.mock.calls[0][0] as string;
-    expect(sql).toContain('CASE');
-    expect(sql).toContain('IS NULL');
-    expect(sql).toContain('||');
+  it('should delegate batchDeleteMessagesInConversation to messageRepo', async () => {
+    await service.batchDeleteMessagesInConversation('conv_1', ['msg_1']);
+    expect(messageRepo.batchDeleteInConversation).toHaveBeenCalledWith(
+      'conv_1',
+      ['msg_1'],
+    );
+  });
+
+  it('should delegate deleteMessagesAfter to messageRepo', async () => {
+    await service.deleteMessagesAfter('conv_1', 'msg_1');
+    expect(messageRepo.deleteAfter).toHaveBeenCalledWith('conv_1', 'msg_1');
+  });
+
+  // ── Conversation delegation ──
+
+  it('should delegate createConversation to convRepo', async () => {
+    await service.createConversation('Test', 'user_1');
+    expect(convRepo.create).toHaveBeenCalledWith(
+      'Test',
+      'user_1',
+      undefined,
+      undefined,
+      undefined,
+    );
+  });
+
+  it('should delegate getConversationById to convRepo', async () => {
+    await service.getConversationById('conv_1');
+    expect(convRepo.findById).toHaveBeenCalledWith('conv_1', undefined);
+  });
+
+  it('should delegate getConversationById with userId to convRepo', async () => {
+    await service.getConversationById('conv_1', 'user_1');
+    expect(convRepo.findById).toHaveBeenCalledWith('conv_1', 'user_1');
+  });
+
+  it('should delegate updateConversation to convRepo', async () => {
+    await service.updateConversation('conv_1', 'New Name', 'user_1');
+    expect(convRepo.update).toHaveBeenCalledWith(
+      'conv_1',
+      'New Name',
+      'user_1',
+      undefined,
+      undefined,
+      undefined,
+    );
+  });
+
+  it('should delegate deleteConversation to convRepo', async () => {
+    await service.deleteConversation('conv_1', 'user_1');
+    expect(convRepo.delete).toHaveBeenCalledWith('conv_1', 'user_1');
   });
 });

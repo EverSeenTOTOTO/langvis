@@ -166,15 +166,10 @@ export default class ConversationController {
     @body() dto: BatchDeleteMessagesInConversationRequestDto,
     @response() res: Response,
   ) {
-    const result =
-      await this.conversationService.batchDeleteMessagesInConversation(
-        id,
-        dto.messageIds,
-      );
-
-    if (!result) {
-      return res.status(404).json({ error: 'Conversation not found' });
-    }
+    await this.conversationService.batchDeleteMessagesInConversation(
+      id,
+      dto.messageIds,
+    );
 
     return res.status(204).json({ id });
   }
