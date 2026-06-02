@@ -24,6 +24,19 @@ const mockChatService = {
   updateSessionPhase: vi.fn(),
 };
 
+const mockSessionManager = {
+  acquireSession: mockChatService.acquireSession,
+};
+
+const mockStartChatTurn = {
+  execute: vi.fn(),
+};
+
+const mockRunAgentSession = {
+  startRun: vi.fn(),
+  execute: vi.fn(),
+};
+
 const mockAuthService = {
   getUserId: vi.fn(),
 };
@@ -69,12 +82,22 @@ vi.mock('@/server/service/ConversationService', () => ({
   },
 }));
 
-vi.mock('@/server/service/ChatService', () => ({
-  ChatService: class {
-    getSessionState = mockChatService.getSessionState;
+vi.mock('@/server/modules/conversation/session-manager', () => ({
+  SessionManager: class {
     acquireSession = mockChatService.acquireSession;
-    runSession = mockChatService.runSession;
-    updateSessionPhase = mockChatService.updateSessionPhase;
+  },
+}));
+
+vi.mock('@/server/modules/conversation/commands/start-chat-turn', () => ({
+  StartChatTurn: class {
+    execute = mockStartChatTurn.execute;
+  },
+}));
+
+vi.mock('@/server/modules/conversation/commands/run-agent-session', () => ({
+  RunAgentSession: class {
+    startRun = mockRunAgentSession.startRun;
+    execute = mockRunAgentSession.execute;
   },
 }));
 
@@ -131,7 +154,9 @@ describe('EmailController', () => {
       const emailController = new EmailController(
         mockEmailService as any,
         mockConversationService as any,
-        mockChatService as any,
+        mockSessionManager as any,
+        mockStartChatTurn as any,
+        mockRunAgentSession as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -166,7 +191,9 @@ describe('EmailController', () => {
       const emailController = new EmailController(
         mockEmailService as any,
         mockConversationService as any,
-        mockChatService as any,
+        mockSessionManager as any,
+        mockStartChatTurn as any,
+        mockRunAgentSession as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -222,7 +249,9 @@ describe('EmailController', () => {
       const emailController = new EmailController(
         mockEmailService as any,
         mockConversationService as any,
-        mockChatService as any,
+        mockSessionManager as any,
+        mockStartChatTurn as any,
+        mockRunAgentSession as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -243,7 +272,9 @@ describe('EmailController', () => {
       const emailController = new EmailController(
         mockEmailService as any,
         mockConversationService as any,
-        mockChatService as any,
+        mockSessionManager as any,
+        mockStartChatTurn as any,
+        mockRunAgentSession as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -266,7 +297,9 @@ describe('EmailController', () => {
       const emailController = new EmailController(
         mockEmailService as any,
         mockConversationService as any,
-        mockChatService as any,
+        mockSessionManager as any,
+        mockStartChatTurn as any,
+        mockRunAgentSession as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -287,7 +320,9 @@ describe('EmailController', () => {
       const emailController = new EmailController(
         mockEmailService as any,
         mockConversationService as any,
-        mockChatService as any,
+        mockSessionManager as any,
+        mockStartChatTurn as any,
+        mockRunAgentSession as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -311,7 +346,9 @@ describe('EmailController', () => {
       const emailController = new EmailController(
         mockEmailService as any,
         mockConversationService as any,
-        mockChatService as any,
+        mockSessionManager as any,
+        mockStartChatTurn as any,
+        mockRunAgentSession as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -339,7 +376,9 @@ describe('EmailController', () => {
       const emailController = new EmailController(
         mockEmailService as any,
         mockConversationService as any,
-        mockChatService as any,
+        mockSessionManager as any,
+        mockStartChatTurn as any,
+        mockRunAgentSession as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -367,7 +406,9 @@ describe('EmailController', () => {
       const emailController = new EmailController(
         mockEmailService as any,
         mockConversationService as any,
-        mockChatService as any,
+        mockSessionManager as any,
+        mockStartChatTurn as any,
+        mockRunAgentSession as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -402,7 +443,9 @@ describe('EmailController', () => {
       const emailController = new EmailController(
         mockEmailService as any,
         mockConversationService as any,
-        mockChatService as any,
+        mockSessionManager as any,
+        mockStartChatTurn as any,
+        mockRunAgentSession as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -447,7 +490,9 @@ This is the email body content.`;
       const emailController = new EmailController(
         mockEmailService as any,
         mockConversationService as any,
-        mockChatService as any,
+        mockSessionManager as any,
+        mockStartChatTurn as any,
+        mockRunAgentSession as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
