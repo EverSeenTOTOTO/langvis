@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SessionConnection } from '@/server/modules/conversation/domain/session-connection.entity';
+import { SessionConnection } from '@/server/modules/conversation/application/session-connection';
 import type { SSEFrame } from '@/shared/types/events';
 import { Transport } from '@/shared/transport';
 
