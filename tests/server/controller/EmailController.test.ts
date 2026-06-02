@@ -9,42 +9,12 @@ const mockEmailService = {
   processInbound: vi.fn(),
 };
 
-const mockConvRepo = {
-  create: vi.fn(),
-};
-
-const mockChatService = {
-  getSessionState: vi.fn(),
-  acquireSession: vi.fn(),
-  runSession: vi.fn(),
-  updateSessionPhase: vi.fn(),
-};
-
-const mockSessionManager = {
-  acquireSession: mockChatService.acquireSession,
-};
-
-const mockStartChatTurnHandler = {
+const mockArchiveHandler = {
   execute: vi.fn(),
-};
-
-const mockRunAgentSessionHandler = {
-  prepare: vi.fn(),
-  stream: vi.fn(),
 };
 
 const mockAuthService = {
   getUserId: vi.fn(),
-};
-
-const mockCacheService = {
-  compress: vi.fn(),
-  resolve: vi.fn(),
-  readFile: vi.fn(),
-};
-
-const mockProviderService = {
-  getDefaultModel: vi.fn().mockReturnValue({ id: 'test-provider:test-model' }),
 };
 
 vi.mock('@/server/utils/logger', () => ({
@@ -67,41 +37,28 @@ vi.mock('@/server/modules/email/email.service', () => ({
   },
 }));
 
-vi.mock('@/server/modules/conversation/conversation.di-tokens', () => ({
-  CONVERSATION_REPOSITORY: Symbol('CONVERSATION_REPOSITORY'),
-  MESSAGE_REPOSITORY: Symbol('MESSAGE_REPOSITORY'),
-}));
-
-vi.mock('@/server/modules/conversation/session-manager', () => ({
-  SessionManager: class {
-    acquireSession = mockChatService.acquireSession;
+vi.mock('@/server/modules/email/commands/archive-email.handler', () => ({
+  ArchiveEmailHandler: class {
+    execute = mockArchiveHandler.execute;
   },
 }));
-
-vi.mock(
-  '@/server/modules/conversation/commands/start-chat-turn.handler',
-  () => ({
-    StartChatTurnHandler: class {
-      execute = mockStartChatTurnHandler.execute;
-    },
-  }),
-);
-
-vi.mock(
-  '@/server/modules/conversation/commands/run-agent-session.handler',
-  () => ({
-    RunAgentSessionHandler: class {
-      prepare = mockRunAgentSessionHandler.prepare;
-      stream = mockRunAgentSessionHandler.stream;
-    },
-  }),
-);
 
 vi.mock('@/server/libs/infrastructure/auth.service', () => ({
   AuthService: class {
     getUserId = mockAuthService.getUserId;
   },
 }));
+
+async function createController() {
+  const { default: EmailController } = await import(
+    '@/server/controller/EmailController'
+  );
+  return new EmailController(
+    mockEmailService as any,
+    mockArchiveHandler as any,
+    mockAuthService as any,
+  );
+}
 
 describe('EmailController', () => {
   let mockReq: Partial<Request>;
@@ -144,19 +101,7 @@ describe('EmailController', () => {
 
       mockEmailService.list.mockResolvedValue(mockResult);
 
-      const { default: EmailController } = await import(
-        '@/server/controller/EmailController'
-      );
-      const emailController = new EmailController(
-        mockEmailService as any,
-        mockConvRepo as any,
-        mockSessionManager as any,
-        mockStartChatTurnHandler as any,
-        mockRunAgentSessionHandler as any,
-        mockAuthService as any,
-        mockProviderService as any,
-        mockCacheService as any,
-      );
+      const emailController = await createController();
 
       await emailController.list({}, mockRes as Response);
 
@@ -181,19 +126,7 @@ describe('EmailController', () => {
 
       mockEmailService.list.mockResolvedValue(mockResult);
 
-      const { default: EmailController } = await import(
-        '@/server/controller/EmailController'
-      );
-      const emailController = new EmailController(
-        mockEmailService as any,
-        mockConvRepo as any,
-        mockSessionManager as any,
-        mockStartChatTurnHandler as any,
-        mockRunAgentSessionHandler as any,
-        mockAuthService as any,
-        mockProviderService as any,
-        mockCacheService as any,
-      );
+      const emailController = await createController();
 
       await emailController.list(
         {
@@ -239,19 +172,7 @@ describe('EmailController', () => {
 
       mockEmailService.getById.mockResolvedValue(mockEmail);
 
-      const { default: EmailController } = await import(
-        '@/server/controller/EmailController'
-      );
-      const emailController = new EmailController(
-        mockEmailService as any,
-        mockConvRepo as any,
-        mockSessionManager as any,
-        mockStartChatTurnHandler as any,
-        mockRunAgentSessionHandler as any,
-        mockAuthService as any,
-        mockProviderService as any,
-        mockCacheService as any,
-      );
+      const emailController = await createController();
 
       await emailController.getById('mail_1', mockRes as Response);
 
@@ -262,19 +183,7 @@ describe('EmailController', () => {
     it('should return 404 if email not found', async () => {
       mockEmailService.getById.mockResolvedValue(null);
 
-      const { default: EmailController } = await import(
-        '@/server/controller/EmailController'
-      );
-      const emailController = new EmailController(
-        mockEmailService as any,
-        mockConvRepo as any,
-        mockSessionManager as any,
-        mockStartChatTurnHandler as any,
-        mockRunAgentSessionHandler as any,
-        mockAuthService as any,
-        mockProviderService as any,
-        mockCacheService as any,
-      );
+      const emailController = await createController();
 
       await emailController.getById('non-existent', mockRes as Response);
 
@@ -287,19 +196,7 @@ describe('EmailController', () => {
     it('should delete email successfully', async () => {
       mockEmailService.delete.mockResolvedValue(true);
 
-      const { default: EmailController } = await import(
-        '@/server/controller/EmailController'
-      );
-      const emailController = new EmailController(
-        mockEmailService as any,
-        mockConvRepo as any,
-        mockSessionManager as any,
-        mockStartChatTurnHandler as any,
-        mockRunAgentSessionHandler as any,
-        mockAuthService as any,
-        mockProviderService as any,
-        mockCacheService as any,
-      );
+      const emailController = await createController();
 
       await emailController.delete('mail_1', mockRes as Response);
 
@@ -310,19 +207,7 @@ describe('EmailController', () => {
     it('should return 404 if email not found', async () => {
       mockEmailService.delete.mockResolvedValue(false);
 
-      const { default: EmailController } = await import(
-        '@/server/controller/EmailController'
-      );
-      const emailController = new EmailController(
-        mockEmailService as any,
-        mockConvRepo as any,
-        mockSessionManager as any,
-        mockStartChatTurnHandler as any,
-        mockRunAgentSessionHandler as any,
-        mockAuthService as any,
-        mockProviderService as any,
-        mockCacheService as any,
-      );
+      const emailController = await createController();
 
       await emailController.delete('non-existent', mockRes as Response);
 
@@ -336,19 +221,7 @@ describe('EmailController', () => {
       vi.stubEnv('VITE_INBOUND_SECRET', 'test-secret');
       vi.resetModules();
 
-      const { default: EmailController } = await import(
-        '@/server/controller/EmailController'
-      );
-      const emailController = new EmailController(
-        mockEmailService as any,
-        mockConvRepo as any,
-        mockSessionManager as any,
-        mockStartChatTurnHandler as any,
-        mockRunAgentSessionHandler as any,
-        mockAuthService as any,
-        mockProviderService as any,
-        mockCacheService as any,
-      );
+      const emailController = await createController();
 
       await emailController.handleInbound(
         { raw: 'test' },
@@ -366,19 +239,7 @@ describe('EmailController', () => {
       vi.resetModules();
       mockReq.headers = { 'x-inbound-secret': 'wrong-secret' };
 
-      const { default: EmailController } = await import(
-        '@/server/controller/EmailController'
-      );
-      const emailController = new EmailController(
-        mockEmailService as any,
-        mockConvRepo as any,
-        mockSessionManager as any,
-        mockStartChatTurnHandler as any,
-        mockRunAgentSessionHandler as any,
-        mockAuthService as any,
-        mockProviderService as any,
-        mockCacheService as any,
-      );
+      const emailController = await createController();
 
       await emailController.handleInbound(
         { raw: 'test' },
@@ -396,19 +257,7 @@ describe('EmailController', () => {
       vi.resetModules();
       mockReq.headers = { 'x-inbound-secret': 'test-secret' };
 
-      const { default: EmailController } = await import(
-        '@/server/controller/EmailController'
-      );
-      const emailController = new EmailController(
-        mockEmailService as any,
-        mockConvRepo as any,
-        mockSessionManager as any,
-        mockStartChatTurnHandler as any,
-        mockRunAgentSessionHandler as any,
-        mockAuthService as any,
-        mockProviderService as any,
-        mockCacheService as any,
-      );
+      const emailController = await createController();
 
       await emailController.handleInbound(
         {} as any,
@@ -433,19 +282,7 @@ describe('EmailController', () => {
         id: 'mail_new',
       });
 
-      const { default: EmailController } = await import(
-        '@/server/controller/EmailController'
-      );
-      const emailController = new EmailController(
-        mockEmailService as any,
-        mockConvRepo as any,
-        mockSessionManager as any,
-        mockStartChatTurnHandler as any,
-        mockRunAgentSessionHandler as any,
-        mockAuthService as any,
-        mockProviderService as any,
-        mockCacheService as any,
-      );
+      const emailController = await createController();
 
       const rawEmail = `From: sender@example.com
 To: recipient@example.com
@@ -480,19 +317,7 @@ This is the email body content.`;
         error: 'Database error',
       });
 
-      const { default: EmailController } = await import(
-        '@/server/controller/EmailController'
-      );
-      const emailController = new EmailController(
-        mockEmailService as any,
-        mockConvRepo as any,
-        mockSessionManager as any,
-        mockStartChatTurnHandler as any,
-        mockRunAgentSessionHandler as any,
-        mockAuthService as any,
-        mockProviderService as any,
-        mockCacheService as any,
-      );
+      const emailController = await createController();
 
       const rawEmail = `From: sender@example.com
 To: recipient@example.com
@@ -510,6 +335,73 @@ Test content.`;
       expect(mockRes.status).toHaveBeenCalledWith(500);
       expect(mockRes.json).toHaveBeenCalledWith({ error: 'Database error' });
       vi.unstubAllEnvs();
+    });
+  });
+
+  describe('archive', () => {
+    it('should delegate to ArchiveEmailHandler and return conversationId', async () => {
+      mockAuthService.getUserId.mockResolvedValue('user_1');
+      mockArchiveHandler.execute.mockResolvedValue({
+        conversationId: 'conv_1',
+      });
+
+      const emailController = await createController();
+
+      await emailController.archive(
+        'mail_1',
+        mockReq as Request,
+        mockRes as Response,
+      );
+
+      expect(mockAuthService.getUserId).toHaveBeenCalledWith(mockReq);
+      expect(mockArchiveHandler.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          emailId: 'mail_1',
+          userId: 'user_1',
+        }),
+      );
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+      expect(mockRes.json).toHaveBeenCalledWith({ conversationId: 'conv_1' });
+    });
+
+    it('should return 404 when email not found', async () => {
+      mockAuthService.getUserId.mockResolvedValue('user_1');
+      mockArchiveHandler.execute.mockRejectedValue(
+        new Error('Email not found: mail_1'),
+      );
+
+      const emailController = await createController();
+
+      await emailController.archive(
+        'mail_1',
+        mockReq as Request,
+        mockRes as Response,
+      );
+
+      expect(mockRes.status).toHaveBeenCalledWith(404);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Email not found: mail_1',
+      });
+    });
+
+    it('should return 500 on unexpected error', async () => {
+      mockAuthService.getUserId.mockResolvedValue('user_1');
+      mockArchiveHandler.execute.mockRejectedValue(
+        new Error('Database connection failed'),
+      );
+
+      const emailController = await createController();
+
+      await emailController.archive(
+        'mail_1',
+        mockReq as Request,
+        mockRes as Response,
+      );
+
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Database connection failed',
+      });
     });
   });
 });
