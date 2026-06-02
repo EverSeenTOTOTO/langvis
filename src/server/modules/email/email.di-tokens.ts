@@ -1,0 +1,1 @@
+export const EMAIL_REPOSITORY = Symbol('EMAIL_REPOSITORY');

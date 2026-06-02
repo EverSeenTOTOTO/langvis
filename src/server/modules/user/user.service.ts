@@ -1,27 +1,25 @@
-import { User, UserEntity } from '@/shared/entities/User';
+import type { User } from '@/shared/entities/User';
 import { inject } from 'tsyringe';
 import { service } from '@/server/decorator/service';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
+import { USER_REPOSITORY } from './user.di-tokens';
+import type { UserRepositoryPort } from './database/user.repository.port';
 
 @service()
 export class UserService {
-  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {}
+  constructor(
+    @inject(USER_REPOSITORY)
+    private readonly repo: UserRepositoryPort,
+  ) {}
 
   async getAllUsers(): Promise<User[]> {
-    const userRepository = this.db.getRepository(UserEntity);
-    const users = await userRepository.find();
-    return users;
+    return this.repo.findAll();
   }
 
   async getUserById(id: string): Promise<User | null> {
-    const userRepository = this.db.getRepository(UserEntity);
-    const user = await userRepository.findOneBy({ id });
-    return user;
+    return this.repo.findById(id);
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
-    const userRepository = this.db.getRepository(UserEntity);
-    const user = await userRepository.findOneBy({ email });
-    return user;
+    return this.repo.findByEmail(email);
   }
 }

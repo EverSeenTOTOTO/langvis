@@ -1,119 +1,49 @@
 import { EmailEntity } from '@/shared/entities/Email';
 import { generateId } from '@/shared/utils';
 import { inject } from 'tsyringe';
-import {
-  Between,
-  LessThanOrEqual,
-  Like,
-  MoreThanOrEqual,
-  type FindOptionsWhere,
-} from 'typeorm';
 import { service } from '@/server/decorator/service';
 import Logger from '@/server/utils/logger';
 import { sanitizeHtml } from '@/server/utils/sanitizeHtml';
 import type { simpleParser as SimpleParserFn } from 'mailparser';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
+import { EMAIL_REPOSITORY } from './email.di-tokens';
+import type {
+  CreateEmailData,
+  EmailListParams,
+  EmailListResponse,
+  EmailRepositoryPort,
+  InboundEmailResult,
+} from './database/email.repository.port';
 
-export interface EmailListParams {
-  from?: string;
-  subject?: string;
-  startDate?: string;
-  endDate?: string;
-  status?: 'unarchived' | 'archived';
-  page?: number;
-  pageSize?: number;
-}
-
-export interface EmailListResponse {
-  items: EmailEntity[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
-export interface CreateEmailData {
-  messageId: string;
-  from: string;
-  fromName?: string | null;
-  to: string;
-  subject: string;
-  sentAt: Date;
-  receivedAt: Date;
-  content: string;
-  attachmentCount?: number;
-  attachmentNames?: string[];
-  raw?: Record<string, unknown>;
-}
-
-export interface InboundEmailResult {
-  success: boolean;
-  id?: string;
-  error?: string;
-}
+export type {
+  EmailListParams,
+  EmailListResponse,
+  CreateEmailData,
+  InboundEmailResult,
+};
 
 @service()
 export class EmailService {
   private readonly logger = Logger.child({ source: 'EmailService' });
 
-  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {}
-
-  private get repository() {
-    return this.db.getRepository(EmailEntity);
-  }
+  constructor(
+    @inject(EMAIL_REPOSITORY)
+    private readonly repo: EmailRepositoryPort,
+  ) {}
 
   async list(params: EmailListParams): Promise<EmailListResponse> {
-    const page = params.page ?? 1;
-    const pageSize = params.pageSize ?? 20;
-    const skip = (page - 1) * pageSize;
-
-    const where: FindOptionsWhere<EmailEntity> = {};
-
-    if (params.from) {
-      where.from = Like(`%${params.from}%`);
-    }
-
-    if (params.subject) {
-      where.subject = Like(`%${params.subject}%`);
-    }
-
-    if (params.startDate || params.endDate) {
-      const start = params.startDate ? new Date(params.startDate) : undefined;
-      const end = params.endDate ? new Date(params.endDate) : undefined;
-
-      if (start && end) {
-        where.sentAt = Between(start, end);
-      } else if (start) {
-        where.sentAt = MoreThanOrEqual(start);
-      } else if (end) {
-        where.sentAt = LessThanOrEqual(end);
-      }
-    }
-
-    if (params.status) {
-      where.status = params.status;
-    }
-
-    const [items, total] = await this.repository.findAndCount({
-      where,
-      order: { sentAt: 'DESC' },
-      skip,
-      take: pageSize,
-    });
-
-    return { items, total, page, pageSize };
+    return this.repo.list(params);
   }
 
   async getById(id: string): Promise<EmailEntity | null> {
-    return this.repository.findOneBy({ id });
+    return this.repo.getById(id);
   }
 
   async getByMessageId(messageId: string): Promise<EmailEntity | null> {
-    return this.repository.findOneBy({ messageId });
+    return this.repo.getByMessageId(messageId);
   }
 
   async existsByMessageId(messageId: string): Promise<boolean> {
-    const count = await this.repository.count({ where: { messageId } });
-    return count > 0;
+    return this.repo.existsByMessageId(messageId);
   }
 
   async archive(
@@ -121,7 +51,7 @@ export class EmailService {
   ): Promise<{ success: boolean; id?: string; error?: string }> {
     try {
       this.logger.info(`Checking if email exists: ${data.messageId}`);
-      const exists = await this.existsByMessageId(data.messageId);
+      const exists = await this.repo.existsByMessageId(data.messageId);
       if (exists) {
         return { success: true };
       }
@@ -131,24 +61,23 @@ export class EmailService {
         `Creating email record: from=${data.from}, to=${data.to}, subject=${data.subject}`,
       );
 
-      const email = this.repository.create({
-        id: generateId('mail'),
-        messageId: data.messageId,
-        from: data.from,
-        fromName: data.fromName || null,
-        to: data.to,
-        subject: data.subject,
-        sentAt: data.sentAt,
-        receivedAt: data.receivedAt,
-        createdAt: new Date(),
-        content: data.content,
-        attachmentCount: data.attachmentCount ?? 0,
-        attachmentNames:
-          attachmentNames.length > 0 ? attachmentNames : undefined,
-        metadata: data.raw ? { raw: data.raw } : undefined,
-      });
+      const email = new EmailEntity();
+      email.id = generateId('mail');
+      email.messageId = data.messageId;
+      email.from = data.from;
+      email.fromName = data.fromName || null;
+      email.to = data.to;
+      email.subject = data.subject;
+      email.sentAt = data.sentAt;
+      email.receivedAt = data.receivedAt;
+      email.createdAt = new Date();
+      email.content = data.content;
+      email.attachmentCount = data.attachmentCount ?? 0;
+      email.attachmentNames =
+        attachmentNames.length > 0 ? attachmentNames : null;
+      email.metadata = data.raw ? { raw: data.raw } : null;
 
-      await this.repository.save(email);
+      await this.repo.save(email);
 
       this.logger.info(
         `Email saved successfully: id=${email.id}, messageId=${data.messageId}`,
@@ -162,26 +91,15 @@ export class EmailService {
   }
 
   async delete(id: string): Promise<boolean> {
-    const result = await this.repository.delete(id);
-    return (result.affected ?? 0) > 0;
+    return this.repo.deleteById(id);
   }
 
   async updateStatus(
     id: string,
     status: 'unarchived' | 'archived',
   ): Promise<{ success: boolean }> {
-    const email = await this.repository.findOneBy({ id });
-    if (!email) {
-      return { success: false };
-    }
-
-    email.status = status;
-    if (status === 'archived') {
-      email.archivedAt = new Date();
-    }
-
-    await this.repository.save(email);
-    return { success: true };
+    const ok = await this.repo.updateStatus(id, status);
+    return { success: ok };
   }
 
   private extractAttachmentNames(raw?: Record<string, unknown>): string[] {
@@ -250,7 +168,12 @@ export class EmailService {
       },
     };
 
-    return this.archive(emailData);
+    const result = await this.archive(emailData);
+    return {
+      success: result.success,
+      id: result.id,
+      error: result.error,
+    };
   }
 
   private extractForwardedInfo(

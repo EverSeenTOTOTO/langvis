@@ -1,36 +1,19 @@
 import { DocumentService } from '@/server/modules/document/document.service';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DocumentRepositoryPort } from '@/server/modules/document/database/document.repository.port';
 
-// Mock the DatabaseService module
-vi.mock('@/server/libs/infrastructure/database.service', () => ({
-  DatabaseService: vi.fn().mockImplementation(() => ({
-    getRepository: vi.fn().mockImplementation((entity: any) => {
-      if (entity.name === 'DocumentEntity') {
-        return {
-          findAndCount: vi.fn(async () => [[], 0]),
-          findOneBy: vi.fn(async () => null),
-          delete: vi.fn(async () => ({ affected: 0 })),
-        };
-      } else if (entity.name === 'DocumentChunkEntity') {
-        return {
-          count: vi.fn(async () => 0),
-          delete: vi.fn(async () => ({ affected: 0 })),
-        };
-      }
-      return {};
-    }),
-  })),
-}));
+const mockRepo = {
+  listDocuments: vi.fn(),
+  getDocumentById: vi.fn(),
+  deleteDocument: vi.fn(),
+} as unknown as DocumentRepositoryPort;
 
 describe('DocumentService', () => {
   let documentService: DocumentService;
-  let mockDb: DatabaseService;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDb = new DatabaseService();
-    documentService = new DocumentService(mockDb);
+    documentService = new DocumentService(mockRepo);
   });
 
   describe('listDocuments', () => {
@@ -41,19 +24,20 @@ describe('DocumentService', () => {
           title: 'Test Document',
           summary: 'Test summary',
           keywords: ['test'],
-          category: 'tech_blog',
-          sourceType: 'web',
+          category: 'tech_blog' as const,
+          sourceType: 'web' as const,
           sourceUrl: 'https://example.com',
           createdAt: new Date(),
           updatedAt: new Date(),
         },
       ];
 
-      (mockDb.getRepository as any).mockReturnValueOnce({
-        findAndCount: vi.fn(async () => [mockDocuments, 1]),
-        findOneBy: vi.fn(),
-        delete: vi.fn(),
-      } as any);
+      vi.mocked(mockRepo.listDocuments).mockResolvedValue({
+        items: mockDocuments,
+        total: 1,
+        page: 1,
+        pageSize: 10,
+      });
 
       const result = await documentService.listDocuments({});
 
@@ -63,122 +47,24 @@ describe('DocumentService', () => {
       expect(result.pageSize).toBe(10);
     });
 
-    it('should list documents with keyword filter using OR for title and keywords', async () => {
-      const mockFindAndCount = vi.fn(async () => [[], 0]);
-      (mockDb.getRepository as any).mockReturnValueOnce({
-        findAndCount: mockFindAndCount,
-        findOneBy: vi.fn(),
-        delete: vi.fn(),
-      } as any);
-
-      await documentService.listDocuments({ keyword: 'react' });
-
-      expect(mockFindAndCount).toHaveBeenCalled();
-      const callArg = mockFindAndCount.mock.calls[0] as any[];
-      const where = callArg[0].where;
-      // Should use array-based OR condition for title and keywords
-      expect(Array.isArray(where)).toBe(true);
-      expect(where).toHaveLength(2);
-      // First condition: title LIKE
-      expect(where[0].title._value).toBe('%react%');
-      // Second condition: keywords LIKE
-      expect(where[1].keywords._value).toBe('%react%');
-    });
-
-    it('should use fuzzy search for title field', async () => {
-      const mockFindAndCount = vi.fn(async () => [[], 0]);
-      (mockDb.getRepository as any).mockReturnValueOnce({
-        findAndCount: mockFindAndCount,
-        findOneBy: vi.fn(),
-        delete: vi.fn(),
-      } as any);
-
-      await documentService.listDocuments({ keyword: 'typescript' });
-
-      expect(mockFindAndCount).toHaveBeenCalled();
-      const callArg = mockFindAndCount.mock.calls[0] as any[];
-      const where = callArg[0].where;
-      // Check that fuzzy match pattern is applied
-      expect(where[0].title._value).toBe('%typescript%');
-    });
-
-    it('should use fuzzy search for keywords field', async () => {
-      const mockFindAndCount = vi.fn(async () => [[], 0]);
-      (mockDb.getRepository as any).mockReturnValueOnce({
-        findAndCount: mockFindAndCount,
-        findOneBy: vi.fn(),
-        delete: vi.fn(),
-      } as any);
-
-      await documentService.listDocuments({ keyword: 'nodejs' });
-
-      expect(mockFindAndCount).toHaveBeenCalled();
-      const callArg = mockFindAndCount.mock.calls[0] as any[];
-      const where = callArg[0].where;
-      // Check that fuzzy match pattern is applied to keywords
-      expect(where[1].keywords._value).toBe('%nodejs%');
-    });
-
-    it('should combine keyword with category filter', async () => {
-      const mockFindAndCount = vi.fn(async () => [[], 0]);
-      (mockDb.getRepository as any).mockReturnValueOnce({
-        findAndCount: mockFindAndCount,
-        findOneBy: vi.fn(),
-        delete: vi.fn(),
-      } as any);
-
-      await documentService.listDocuments({
-        keyword: 'test',
-        category: 'tech_blog',
+    it('should delegate listDocuments to repository', async () => {
+      vi.mocked(mockRepo.listDocuments).mockResolvedValue({
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 10,
       });
 
-      expect(mockFindAndCount).toHaveBeenCalled();
-      const callArg = mockFindAndCount.mock.calls[0] as any[];
-      const where = callArg[0].where;
-      // Both OR conditions should have category filter
-      expect(where[0].category).toBe('tech_blog');
-      expect(where[1].category).toBe('tech_blog');
-    });
+      const params = { keyword: 'react', category: 'tech_blog' as const };
+      await documentService.listDocuments(params);
 
-    it('should list documents with category filter', async () => {
-      const mockFindAndCount = vi.fn(async () => [[], 0]);
-      (mockDb.getRepository as any).mockReturnValueOnce({
-        findAndCount: mockFindAndCount,
-        findOneBy: vi.fn(),
-        delete: vi.fn(),
-      } as any);
-
-      await documentService.listDocuments({ category: 'tech_blog' });
-
-      expect(mockFindAndCount).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ category: 'tech_blog' }),
-        }),
-      );
-    });
-
-    it('should use custom page and pageSize', async () => {
-      const mockFindAndCount = vi.fn(async () => [[], 0]);
-      (mockDb.getRepository as any).mockReturnValueOnce({
-        findAndCount: mockFindAndCount,
-        findOneBy: vi.fn(),
-        delete: vi.fn(),
-      } as any);
-
-      await documentService.listDocuments({ page: 2, pageSize: 20 });
-
-      expect(mockFindAndCount).toHaveBeenCalledWith(
-        expect.objectContaining({
-          skip: 20,
-          take: 20,
-        }),
-      );
+      expect(mockRepo.listDocuments).toHaveBeenCalledWith(params);
     });
   });
 
   describe('getDocumentById', () => {
-    it('should get document with chunk count', async () => {
-      const mockDocument = {
+    it('should get document by id', async () => {
+      vi.mocked(mockRepo.getDocumentById).mockResolvedValue({
         id: '1',
         title: 'Test Document',
         summary: 'Test summary',
@@ -190,18 +76,8 @@ describe('DocumentService', () => {
         metadata: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-      };
-
-      (mockDb.getRepository as any).mockReturnValueOnce({
-        findAndCount: vi.fn(),
-        findOneBy: vi.fn(async () => mockDocument),
-        delete: vi.fn(),
-      } as any);
-
-      (mockDb.getRepository as any).mockReturnValueOnce({
-        count: vi.fn(async () => 5),
-        delete: vi.fn(),
-      } as any);
+        chunkCount: 5,
+      });
 
       const result = await documentService.getDocumentById('1');
 
@@ -210,11 +86,7 @@ describe('DocumentService', () => {
     });
 
     it('should return null if document not found', async () => {
-      (mockDb.getRepository as any).mockReturnValueOnce({
-        findAndCount: vi.fn(),
-        findOneBy: vi.fn(async () => null),
-        delete: vi.fn(),
-      } as any);
+      vi.mocked(mockRepo.getDocumentById).mockResolvedValue(null);
 
       const result = await documentService.getDocumentById('non-existent');
 
@@ -223,12 +95,8 @@ describe('DocumentService', () => {
   });
 
   describe('deleteDocument', () => {
-    it('should delete document and its chunks', async () => {
-      (mockDb.getRepository as any).mockReturnValueOnce({
-        findAndCount: vi.fn(),
-        findOneBy: vi.fn(),
-        delete: vi.fn(async () => ({ affected: 1 })),
-      } as any);
+    it('should delete document', async () => {
+      vi.mocked(mockRepo.deleteDocument).mockResolvedValue(true);
 
       const result = await documentService.deleteDocument('1');
 
@@ -236,11 +104,7 @@ describe('DocumentService', () => {
     });
 
     it('should return false if document not found', async () => {
-      (mockDb.getRepository as any).mockReturnValueOnce({
-        findAndCount: vi.fn(),
-        findOneBy: vi.fn(),
-        delete: vi.fn(async () => ({ affected: 0 })),
-      } as any);
+      vi.mocked(mockRepo.deleteDocument).mockResolvedValue(false);
 
       const result = await documentService.deleteDocument('non-existent');
 

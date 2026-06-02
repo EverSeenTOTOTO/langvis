@@ -1,27 +1,26 @@
-import { Settings, SettingsEntity } from '@/shared/entities/Settings';
+import type { Settings } from '@/shared/entities/Settings';
 import { inject } from 'tsyringe';
 import { service } from '@/server/decorator/service';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import { LocaleService } from '@/server/libs/infrastructure/locale.service';
+import { SETTINGS_REPOSITORY } from './settings.di-tokens';
+import type { SettingsRepositoryPort } from './database/settings.repository.port';
 
 @service()
 export class SettingsService {
   constructor(
     @inject(LocaleService) private localeService: LocaleService,
-    @inject(DatabaseService) private readonly db: DatabaseService,
+    @inject(SETTINGS_REPOSITORY)
+    private readonly repo: SettingsRepositoryPort,
   ) {}
 
   async getOrCreateSettings(userId: string): Promise<Settings> {
-    const repo = this.db.getRepository(SettingsEntity);
-    let settings = await repo.findOne({ where: { userId } });
+    let settings = await this.repo.findByUserId(userId);
 
     if (!settings) {
-      settings = repo.create({
-        userId,
+      settings = await this.repo.create(userId, {
         themeMode: 'dark',
         locale: 'en_US',
       });
-      await repo.save(settings);
     }
 
     return settings;
@@ -31,8 +30,7 @@ export class SettingsService {
     userId: string,
     data: Partial<Pick<Settings, 'themeMode' | 'locale'>>,
   ): Promise<Settings> {
-    const repo = this.db.getRepository(SettingsEntity);
-    await repo.update({ userId }, data);
+    await this.repo.updateByUserId(userId, data);
     return this.getOrCreateSettings(userId);
   }
 
