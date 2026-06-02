@@ -5,10 +5,10 @@ import { generateId } from '@/shared/utils';
 import type { EnrichedEvent } from './agent.types';
 import { RunAlreadyCompletedError, ToolNotFoundError } from './agent.errors';
 import { ToolCall } from './tool-call.entity';
-import type { CachePort } from '@/server/modules/memory/ports/cache.port';
 import type { MemoryService } from '@/server/modules/memory/domain/memory-service';
 import type { ContextUsage } from '@/server/modules/memory/domain/memory.types';
 import type { ToolResolver } from './tool-resolver.port';
+import type { CacheResolver } from './cache-resolver.port';
 import { AggregateRoot } from '@/server/libs/ddd';
 import type { DomainEvent } from '@/server/libs/ddd';
 
@@ -51,7 +51,7 @@ export class AgentRun extends AggregateRoot<string> {
 
   // ── 依赖 ──
   private memoryService: MemoryService;
-  private cachePort: CachePort;
+  private cacheResolver: CacheResolver;
   private toolResolver: ToolResolver;
   private historyMessages: Message[];
 
@@ -60,7 +60,7 @@ export class AgentRun extends AggregateRoot<string> {
     messageId: string,
     config: EffectiveConfig,
     memoryService: MemoryService,
-    cachePort: CachePort,
+    cacheResolver: CacheResolver,
     toolResolver: ToolResolver,
     historyMessages: Message[],
   ) {
@@ -69,7 +69,7 @@ export class AgentRun extends AggregateRoot<string> {
     this.messageId = messageId;
     this.config = config;
     this.memoryService = memoryService;
-    this.cachePort = cachePort;
+    this.cacheResolver = cacheResolver;
     this.toolResolver = toolResolver;
     this.historyMessages = historyMessages;
   }
@@ -127,7 +127,12 @@ export class AgentRun extends AggregateRoot<string> {
     if (!tool) throw new ToolNotFoundError(toolName);
 
     const callId = generateId('tc');
-    const toolCall = new ToolCall(callId, tool, toolArgs, this.cachePort);
+    const toolCall = new ToolCall(
+      callId,
+      tool,
+      toolArgs,
+      this.cacheResolver.resolve(),
+    );
     this._toolCalls.set(callId, toolCall);
 
     yield* toolCall.execute(this);
