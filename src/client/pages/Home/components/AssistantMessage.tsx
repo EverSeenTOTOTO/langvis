@@ -56,7 +56,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
   }
 
   // Fallback: no MessageNode available, render from entity
-  const hasError = msg.status === 'error' || msg.status === 'canceled';
+  const hasError = msg.status === 'failed' || msg.status === 'cancelled';
 
   return (
     <Bubble

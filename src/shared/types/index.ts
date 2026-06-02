@@ -41,102 +41,6 @@ export interface ToolConfig<
   untrustedOutput?: boolean;
 }
 
-/**
- * AgentEvent - the single event type for SSE transmission
- * ExecutionContext collects non-stream events for persistence
- *
- * Tools yield tool_progress events and return results via generator return.
- * Agents manage tool_call/tool_result/tool_error events.
- *
- * All events carry messageId for frontend routing in multi-message scenarios.
- */
-export type AgentEvent =
-  | { type: 'start'; messageId: string; seq: number; at: number }
-  | {
-      type: 'thought';
-      messageId: string;
-      content: string;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'tool_call';
-      messageId: string;
-      callId: string;
-      toolName: string;
-      toolArgs: Record<string, unknown>;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'tool_progress';
-      messageId: string;
-      callId: string;
-      toolName: string;
-      data: unknown;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'tool_result';
-      messageId: string;
-      callId: string;
-      toolName: string;
-      output: unknown;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'tool_error';
-      messageId: string;
-      callId: string;
-      toolName: string;
-      error: string;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'stream';
-      messageId: string;
-      content: string;
-      seq: number;
-      at: number;
-    }
-  | { type: 'final'; messageId: string; seq: number; at: number }
-  | {
-      type: 'cancelled';
-      messageId: string;
-      reason: string;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'error';
-      messageId: string;
-      error: string;
-      seq: number;
-      at: number;
-    }
-  | {
-      type: 'context_usage';
-      messageId: string;
-      used: number;
-      total: number;
-      seq: number;
-      at: number;
-    };
-
-/**
- * SSEMessage - the transmission type over SSE channel
- * Includes control messages (connected, session_replaced, session_error) and business events (AgentEvent)
- * heartbeat is handled internally by Transport implementations
- */
-export type SSEMessage =
-  | { type: 'connected' }
-  | { type: 'session_replaced' }
-  | { type: 'session_error'; error: string }
-  | AgentEvent;
-
 export type SessionPhase =
   | 'waiting'
   | 'active'
@@ -144,24 +48,9 @@ export type SessionPhase =
   | 'error'
   | 'done';
 
-/**
- * MessagePhase - unified message FSM phases (frontend & backend)
- */
-export type MessagePhase =
-  | 'initialized'
-  | 'streaming'
-  | 'awaiting_input'
-  | 'submitting'
-  | 'canceling'
-  | 'final'
-  | 'canceled'
-  | 'error';
-
 export * from './tool';
 
-// ─── DDD 新类型（Phase 1）───
-// 注意：不 re-export 新的 AgentEvent（与旧版同名冲突）。
-// 新 AgentEvent 从 '@/shared/types/events' 直接导入。
+// ─── DDD 类型 ───
 export type { StreamChunk, ContextUsageMeta, SSEFrame } from './events';
 export type {
   RunStatus,

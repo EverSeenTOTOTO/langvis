@@ -12,13 +12,7 @@ import { In } from 'typeorm';
 import { service } from '../decorator/service';
 import { DatabaseService } from './DatabaseService';
 
-const NON_TERMINAL_STATUSES = new Set([
-  'initialized',
-  'streaming',
-  'awaiting_input',
-  'submitting',
-  'canceling',
-]);
+const NON_TERMINAL_STATUSES = new Set(['initialized', 'running']);
 
 @service()
 export class ConversationService {

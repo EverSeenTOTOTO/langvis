@@ -145,7 +145,7 @@ export class ChatService {
             this.conversationService.updateMessage(msg.id, {
               content:
                 msg.content || 'Generation interrupted (server restarted)',
-              status: 'error',
+              status: 'failed',
             }),
           ),
         );
@@ -395,12 +395,7 @@ Workspace Directory: ${workDir}
         toolCallRecords: run.getToolCallRecords(),
         thoughts: run.toSnapshot().thoughts,
         agentRunId: run.runId,
-        status:
-          run.status === 'completed'
-            ? 'final'
-            : run.status === 'cancelled'
-              ? 'canceled'
-              : 'error',
+        status: run.status,
       });
 
       // Finalize run in conversation

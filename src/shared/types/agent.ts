@@ -6,7 +6,6 @@
 
 /**
  * AgentRun 生命周期状态。
- * 替代 MessagePhase（混入了 UI 派生状态如 streaming / awaiting_input）。
  */
 export type RunStatus =
   | 'initialized'

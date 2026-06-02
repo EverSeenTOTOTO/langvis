@@ -1,5 +1,5 @@
 import type { Message, MessageAttachment } from '@/shared/types/entities';
-import type { MessagePhase } from '@/shared/types';
+import type { RunStatus } from '@/shared/types/agent';
 import type { ToolCallRecord } from '@/shared/types/render';
 import {
   BeforeInsert,
@@ -56,7 +56,7 @@ export class MessageEntity implements Message {
     length: 32,
     nullable: true,
   })
-  status!: MessagePhase | null;
+  status!: RunStatus | null;
 
   @Column({ type: 'jsonb', nullable: true })
   meta!: Record<string, any> | null;

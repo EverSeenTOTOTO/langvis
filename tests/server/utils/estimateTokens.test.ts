@@ -4,15 +4,10 @@ import type { Message } from '@/shared/types/entities';
 import { Role } from '@/shared/types/entities';
 
 describe('estimateTokens', () => {
-  const createMessage = (
-    role: Role,
-    content: string,
-    events?: Message['events'],
-  ): Message => ({
+  const createMessage = (role: Role, content: string): Message => ({
     id: 'msg_test',
     role,
     content,
-    events,
     createdAt: new Date(),
     conversationId: 'conv_test',
   });
@@ -79,27 +74,6 @@ describe('estimateTokens', () => {
   });
 
   describe('message with metadata', () => {
-    it('should not count events in estimation', () => {
-      const simpleMessage = createMessage(Role.ASSIST, 'Final answer');
-      const messageWithEvents = createMessage(Role.ASSIST, 'Final answer', [
-        {
-          type: 'tool_call',
-          messageId: 'msg_test',
-          callId: 'tc_1',
-          toolName: 'test_tool',
-          toolArgs: { query: 'some argument' },
-          seq: 1,
-          at: Date.now(),
-        },
-      ]);
-
-      const simpleTokens = estimateTokens([simpleMessage], 'openai:gpt-4');
-      const eventsTokens = estimateTokens([messageWithEvents], 'openai:gpt-4');
-
-      // events are UI-only data and should not affect token estimation
-      expect(eventsTokens).toBe(simpleTokens);
-    });
-
     it('should count attachments in estimation', () => {
       const messageWithoutAttachment = createMessage(Role.USER, 'Check this');
       const messageWithAttachment = createMessage(Role.USER, 'Check this');
