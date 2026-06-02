@@ -1,6 +1,4 @@
-import type { Message } from '@/shared/types/entities';
 import type { SSEFrame } from '@/shared/types/events';
-import type { AgentBinding } from '@/shared/types/agent';
 import { generateId } from '@/shared/utils';
 import { inject } from 'tsyringe';
 import type { Agent } from '../../agent/domain/agent.base';
@@ -22,10 +20,11 @@ import { SessionManager } from '../session-manager';
 import { MESSAGE_REPOSITORY } from '../conversation.di-tokens';
 import type { MessageRepositoryPort } from '../database/message.repository.port';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import { RunAgentSessionCommand } from './run-agent-session.command';
 
 @service()
-export class RunAgentSession {
-  private readonly logger = Logger.child({ source: 'RunAgentSession' });
+export class RunAgentSessionHandler {
+  private readonly logger = Logger.child({ source: 'RunAgentSessionHandler' });
 
   constructor(
     @inject(SessionManager)
@@ -42,48 +41,48 @@ export class RunAgentSession {
     private toolResolver: ToolResolver,
   ) {}
 
-  async startRun(params: {
-    conversationId: string;
-    agent: Agent;
-    messages: Message[];
-    assistantMessage: Message;
-    binding: AgentBinding;
-  }): Promise<AgentRun> {
-    const conversation = this.sessionManager.getSession(params.conversationId);
+  async prepare(command: RunAgentSessionCommand): Promise<{
+    conversation: Conversation;
+    run: AgentRun;
+  }> {
+    const { conversationId, agent, messages, assistantMessage, binding } =
+      command;
+
+    const conversation = this.sessionManager.getSession(conversationId);
     if (!conversation) throw new Error('No session');
 
     const effectiveConfig = resolveEffectiveConfig(
-      params.agent.config,
-      params.binding,
+      agent.config,
+      binding,
       this.providerService,
-      params.agent.systemPrompt.build(),
+      agent.systemPrompt.build(),
     );
 
     const run = new AgentRun(
       generateId('run'),
-      params.assistantMessage.id,
+      assistantMessage.id,
       effectiveConfig,
       this.memoryService,
       this.cachePort,
       this.toolResolver,
-      params.messages,
+      messages,
     );
 
-    conversation.registerRun(params.assistantMessage, run);
+    conversation.registerRun(assistantMessage, run);
     this.sessionManager.handleDomainEvents(conversation);
 
     this.messageRepo
-      .update(params.assistantMessage.id, {
+      .update(assistantMessage.id, {
         agentRunId: run.runId,
       })
       .catch(err => {
         this.logger.warn('Failed to persist agentRunId', err);
       });
 
-    return run;
+    return { conversation, run };
   }
 
-  async execute(
+  async stream(
     conversation: Conversation,
     agent: Agent,
     run: AgentRun,

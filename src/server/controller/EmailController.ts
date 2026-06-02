@@ -23,8 +23,10 @@ import {
   type CachedReference,
 } from '@/server/modules/memory/adapters/cache.adapter';
 import { SessionManager } from '../modules/conversation/session-manager';
-import { StartChatTurn } from '../modules/conversation/commands/start-chat-turn';
-import { RunAgentSession } from '../modules/conversation/commands/run-agent-session';
+import { StartChatTurnCommand } from '../modules/conversation/commands/start-chat-turn.command';
+import { StartChatTurnHandler } from '../modules/conversation/commands/start-chat-turn.handler';
+import { RunAgentSessionCommand } from '../modules/conversation/commands/run-agent-session.command';
+import { RunAgentSessionHandler } from '../modules/conversation/commands/run-agent-session.handler';
 import Logger from '../utils/logger';
 
 const INBOUND_SECRET = import.meta.env.VITE_INBOUND_SECRET || '';
@@ -44,10 +46,10 @@ export default class EmailController {
     private readonly convRepo: ConversationRepositoryPort,
     @inject(SessionManager)
     private readonly sessionManager: SessionManager,
-    @inject(StartChatTurn)
-    private readonly startChatTurn: StartChatTurn,
-    @inject(RunAgentSession)
-    private readonly runAgentSession: RunAgentSession,
+    @inject(StartChatTurnHandler)
+    private readonly startChatTurnHandler: StartChatTurnHandler,
+    @inject(RunAgentSessionHandler)
+    private readonly runAgentSessionHandler: RunAgentSessionHandler,
     @inject(AuthService)
     private readonly authService: AuthService,
     @inject(ProviderService)
@@ -222,17 +224,20 @@ export default class EmailController {
       contentOrCached as string | CachedReference,
     );
 
-    const { messages } = await this.startChatTurn.execute({
+    const turnCommand = new StartChatTurnCommand(
       conversationId,
-      userId: conversation.userId,
-      systemPrompt: agent.systemPrompt.build(),
-      userMessage: {
+      conversation.userId,
+      agent.systemPrompt.build(),
+      undefined,
+      {
         role: Role.USER,
         content: userContent,
         meta: { emailId: email.id },
       },
       assistantId,
-    });
+    );
+
+    const { messages } = await this.startChatTurnHandler.execute(turnCommand);
 
     const binding: AgentBinding = {
       agentId: agent.id,
@@ -250,14 +255,17 @@ export default class EmailController {
       conversationId,
     };
 
-    const run = await this.runAgentSession.startRun({
+    const runCommand = new RunAgentSessionCommand(
       conversationId,
       agent,
       messages,
       assistantMessage,
       binding,
-    });
+    );
 
-    this.runAgentSession.execute(session, agent, run);
+    const { conversation: conv, run } =
+      await this.runAgentSessionHandler.prepare(runCommand);
+
+    this.runAgentSessionHandler.stream(conv, agent, run);
   }
 }
