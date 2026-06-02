@@ -13,16 +13,25 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
-import { ChatService } from '../service/ChatService';
 import { ConversationService } from '../service/ConversationService';
+import { SessionManager } from '../modules/conversation/session-manager';
+import { StartChatTurn } from '../modules/conversation/commands/start-chat-turn';
+import { RunAgentSession } from '../modules/conversation/commands/run-agent-session';
+import { GetSessionState } from '../modules/conversation/queries/get-session-state';
 
 @controller('/api/chat')
 export default class ChatController {
   constructor(
     @inject(ConversationService)
     private conversationService: ConversationService,
-    @inject(ChatService)
-    private chatService: ChatService,
+    @inject(SessionManager)
+    private sessionManager: SessionManager,
+    @inject(StartChatTurn)
+    private startChatTurn: StartChatTurn,
+    @inject(RunAgentSession)
+    private runAgentSession: RunAgentSession,
+    @inject(GetSessionState)
+    private getSessionStateQuery: GetSessionState,
     @inject(AuthService)
     private authService: AuthService,
   ) {}
@@ -33,7 +42,8 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const conversation = await this.chatService.acquireSession(conversationId);
+    const conversation =
+      await this.sessionManager.acquireSession(conversationId);
     if (!conversation) {
       return res.sendStatus(204);
     }
@@ -64,7 +74,7 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const conversation = this.chatService.getSession(conversationId);
+    const conversation = this.sessionManager.getSession(conversationId);
 
     if (
       !conversation ||
@@ -75,7 +85,7 @@ export default class ChatController {
       });
     }
 
-    this.chatService.cancelConversation(
+    this.sessionManager.cancelConversation(
       conversationId,
       dto.reason ?? 'Cancelled by user',
     );
@@ -95,7 +105,7 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const conversation = this.chatService.getSession(conversationId);
+    const conversation = this.sessionManager.getSession(conversationId);
 
     if (!conversation) {
       return res.status(404).json({
@@ -104,7 +114,7 @@ export default class ChatController {
     }
 
     try {
-      this.chatService.cancelMessage(conversationId, messageId);
+      this.sessionManager.cancelMessage(conversationId, messageId);
     } catch (e) {
       if (e instanceof NoActiveRunError) {
         return res.status(404).json({
@@ -128,7 +138,7 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const conversation = this.chatService.getSession(conversationId);
+    const conversation = this.sessionManager.getSession(conversationId);
 
     if (!conversation) {
       return res.status(400).json({
@@ -172,7 +182,7 @@ export default class ChatController {
 
     // Prepare turn messages
     const { messages, assistantId, assistantMessage } =
-      await this.chatService.prepareTurn({
+      await this.startChatTurn.execute({
         conversationId,
         userId: dbConversation.userId,
         systemPrompt: agent.systemPrompt.build(),
@@ -190,7 +200,7 @@ export default class ChatController {
     });
     TraceContext.freeze();
 
-    const run = await this.chatService.startRun({
+    const run = await this.runAgentSession.startRun({
       conversationId,
       agent,
       messages,
@@ -200,7 +210,7 @@ export default class ChatController {
 
     res.status(200).json({ success: true, messageId: assistantId });
 
-    this.chatService.runSession(conversation, agent, run);
+    this.runAgentSession.execute(conversation, agent, run);
 
     return;
   }
@@ -210,7 +220,7 @@ export default class ChatController {
     @param('conversationId') conversationId: string,
     @response() res: Response,
   ) {
-    const state = await this.chatService.getSessionState(conversationId);
+    const state = await this.getSessionStateQuery.execute(conversationId);
 
     return res.status(200).json(state ? { phase: state.phase } : null);
   }

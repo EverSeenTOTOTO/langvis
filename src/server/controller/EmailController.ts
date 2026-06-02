@@ -14,7 +14,6 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, query, request, response } from '../decorator/param';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
-import { ChatService } from '../service/ChatService';
 import { ConversationService } from '../service/ConversationService';
 import { EmailService } from '../service/EmailService';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
@@ -22,6 +21,9 @@ import {
   CacheService,
   type CachedReference,
 } from '@/server/modules/memory/adapters/cache.adapter';
+import { SessionManager } from '../modules/conversation/session-manager';
+import { StartChatTurn } from '../modules/conversation/commands/start-chat-turn';
+import { RunAgentSession } from '../modules/conversation/commands/run-agent-session';
 import Logger from '../utils/logger';
 
 const INBOUND_SECRET = import.meta.env.VITE_INBOUND_SECRET || '';
@@ -39,8 +41,12 @@ export default class EmailController {
     private readonly emailService: EmailService,
     @inject(ConversationService)
     private readonly conversationService: ConversationService,
-    @inject(ChatService)
-    private readonly chatService: ChatService,
+    @inject(SessionManager)
+    private readonly sessionManager: SessionManager,
+    @inject(StartChatTurn)
+    private readonly startChatTurn: StartChatTurn,
+    @inject(RunAgentSession)
+    private readonly runAgentSession: RunAgentSession,
     @inject(AuthService)
     private readonly authService: AuthService,
     @inject(ProviderService)
@@ -192,7 +198,7 @@ export default class EmailController {
       userId: conversation.userId,
     });
 
-    const session = await this.chatService.acquireSession(conversationId);
+    const session = await this.sessionManager.acquireSession(conversationId);
     if (!session) {
       throw new Error(`Failed to acquire session for ${conversationId}`);
     }
@@ -215,7 +221,7 @@ export default class EmailController {
       contentOrCached as string | CachedReference,
     );
 
-    const { messages } = await this.chatService.prepareTurn({
+    const { messages } = await this.startChatTurn.execute({
       conversationId,
       userId: conversation.userId,
       systemPrompt: agent.systemPrompt.build(),
@@ -243,7 +249,7 @@ export default class EmailController {
       conversationId,
     };
 
-    const run = await this.chatService.startRun({
+    const run = await this.runAgentSession.startRun({
       conversationId,
       agent,
       messages,
@@ -251,6 +257,6 @@ export default class EmailController {
       binding,
     });
 
-    this.chatService.runSession(session, agent, run);
+    this.runAgentSession.execute(session, agent, run);
   }
 }
