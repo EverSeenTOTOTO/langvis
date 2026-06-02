@@ -9,13 +9,14 @@ import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
-import { ConversationGroupService } from '../service/ConversationGroupService';
+import { CONVERSATION_REPOSITORY } from '../modules/conversation/conversation.di-tokens';
+import type { ConversationRepositoryPort } from '../modules/conversation/database/conversation.repository.port';
 
 @controller('/api/conversation-group')
 export default class ConversationGroupController {
   constructor(
-    @inject(ConversationGroupService)
-    private conversationGroupService: ConversationGroupService,
+    @inject(CONVERSATION_REPOSITORY)
+    private convRepo: ConversationRepositoryPort,
   ) {}
 
   @api('/', { method: 'post' })
@@ -29,10 +30,7 @@ export default class ConversationGroupController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const group = await this.conversationGroupService.createGroup(
-      dto.name,
-      userId,
-    );
+    const group = await this.convRepo.createGroup(dto.name, userId);
     return res.status(201).json(group);
   }
 
@@ -43,8 +41,7 @@ export default class ConversationGroupController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const result =
-      await this.conversationGroupService.getGroupsByUserId(userId);
+    const result = await this.convRepo.findGroupsByUserId(userId);
     return res.json(result);
   }
 
@@ -60,11 +57,7 @@ export default class ConversationGroupController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const group = await this.conversationGroupService.updateGroup(
-      id,
-      dto.name,
-      userId,
-    );
+    const group = await this.convRepo.updateGroup(id, dto.name, userId);
     if (!group) {
       return res.status(404).json({ error: 'Group not found' });
     }
@@ -82,7 +75,7 @@ export default class ConversationGroupController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const result = await this.conversationGroupService.deleteGroup(id, userId);
+    const result = await this.convRepo.deleteGroup(id, userId);
     if (!result.success) {
       return res.status(404).json({ error: 'Group not found' });
     }
@@ -100,7 +93,7 @@ export default class ConversationGroupController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    await this.conversationGroupService.reorderGroups(dto.items, userId);
+    await this.convRepo.reorderGroups(dto.items, userId);
     return res.json({ success: true });
   }
 
@@ -115,7 +108,7 @@ export default class ConversationGroupController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    await this.conversationGroupService.reorderConversationsInGroup(
+    await this.convRepo.reorderConversationsInGroup(
       dto.groupId,
       dto.items,
       userId,

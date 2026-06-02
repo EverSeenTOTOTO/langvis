@@ -8,6 +8,7 @@ import path from 'node:path';
 import 'reflect-metadata';
 import bindControllers from './controller';
 import './modules/agent/agent.module';
+import './modules/conversation/conversation.module';
 import { disposeAll } from './decorator/disposal';
 import bindAuthMiddleware from './middleware/auth';
 import bindRequestId from './middleware/requestId';
