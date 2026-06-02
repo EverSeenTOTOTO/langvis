@@ -7,12 +7,12 @@ import { resolveEffectiveConfig } from '../../agent/domain/effective-config';
 import type { AgentEvent, StreamChunk } from '@/shared/types/events';
 import {
   MEMORY_SERVICE,
-  CACHE_PORT,
   TOOL_RESOLVER,
+  CACHE_RESOLVER,
 } from '../../agent/agent.di-tokens';
 import type { MemoryService } from '../../memory/domain/memory-service';
-import type { CachePort } from '../../memory/ports/cache.port';
 import type { ToolResolver } from '../../agent/domain/tool-resolver.port';
+import type { CacheResolver } from '../../agent/domain/cache-resolver.port';
 import { service } from '@/server/decorator/service';
 import Logger from '@/server/utils/logger';
 import { SessionManager } from '../session-manager';
@@ -34,8 +34,8 @@ export class RunAgentSessionHandler {
     private providerService: ProviderService,
     @inject(MEMORY_SERVICE)
     private memoryService: MemoryService,
-    @inject(CACHE_PORT)
-    private cachePort: CachePort,
+    @inject(CACHE_RESOLVER)
+    private cacheResolver: CacheResolver,
     @inject(TOOL_RESOLVER)
     private toolResolver: ToolResolver,
   ) {}
@@ -56,7 +56,7 @@ export class RunAgentSessionHandler {
       assistantMessage.id,
       effectiveConfig,
       this.memoryService,
-      this.cachePort,
+      this.cacheResolver,
       this.toolResolver,
       messages,
     );
