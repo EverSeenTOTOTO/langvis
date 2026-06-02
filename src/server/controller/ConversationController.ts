@@ -9,15 +9,22 @@ import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
-import { ConversationService } from '../service/ConversationService';
+import {
+  MESSAGE_REPOSITORY,
+  CONVERSATION_REPOSITORY,
+} from '../modules/conversation/conversation.di-tokens';
+import type { MessageRepositoryPort } from '../modules/conversation/database/message.repository.port';
+import type { ConversationRepositoryPort } from '../modules/conversation/database/conversation.repository.port';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { estimateTokens } from '../utils/estimateTokens';
 
 @controller('/api/conversation')
 export default class ConversationController {
   constructor(
-    @inject(ConversationService)
-    private conversationService: ConversationService,
+    @inject(CONVERSATION_REPOSITORY)
+    private convRepo: ConversationRepositoryPort,
+    @inject(MESSAGE_REPOSITORY)
+    private messageRepo: MessageRepositoryPort,
     @inject(ProviderService)
     private providerService: ProviderService,
   ) {}
@@ -33,7 +40,7 @@ export default class ConversationController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const conversation = await this.conversationService.createConversation(
+    const conversation = await this.convRepo.create(
       dto.name,
       userId,
       dto.config,
@@ -55,10 +62,7 @@ export default class ConversationController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const conversation = await this.conversationService.getConversationById(
-      id,
-      userId,
-    );
+    const conversation = await this.convRepo.findById(id, userId);
 
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' });
@@ -79,7 +83,7 @@ export default class ConversationController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const conversation = await this.conversationService.updateConversation(
+    const conversation = await this.convRepo.update(
       id,
       dto.name,
       userId,
@@ -106,10 +110,7 @@ export default class ConversationController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const result = await this.conversationService.deleteConversation(
-      id,
-      userId,
-    );
+    const result = await this.convRepo.delete(id, userId);
 
     if (!result) {
       return res.status(404).json({ error: 'Conversation not found' });
@@ -124,7 +125,7 @@ export default class ConversationController {
     @body() dto: AddMessageToConversationRequestDto,
     @response() res: Response,
   ) {
-    const message = await this.conversationService.batchAddMessages(id, [
+    const message = await this.messageRepo.batchCreate(id, [
       {
         role: dto.role,
         content: dto.content,
@@ -143,12 +144,11 @@ export default class ConversationController {
     @param('id') id: string,
     @response() res: Response,
   ) {
-    const messages =
-      await this.conversationService.getMessagesByConversationId(id);
+    const messages = await this.messageRepo.findByConversationId(id);
 
     // Calculate context usage for historical conversations
     let contextUsage: { used: number; total: number } | null = null;
-    const conversation = await this.conversationService.getConversationById(id);
+    const conversation = await this.convRepo.findById(id);
     const modelId = conversation?.config?.model?.modelId;
     const model = modelId ? this.providerService.getModel(modelId) : undefined;
 
@@ -166,10 +166,7 @@ export default class ConversationController {
     @body() dto: BatchDeleteMessagesInConversationRequestDto,
     @response() res: Response,
   ) {
-    await this.conversationService.batchDeleteMessagesInConversation(
-      id,
-      dto.messageIds,
-    );
+    await this.messageRepo.batchDeleteInConversation(id, dto.messageIds);
 
     return res.status(204).json({ id });
   }
