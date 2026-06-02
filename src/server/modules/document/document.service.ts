@@ -7,7 +7,7 @@ import { DocumentCategory, DocumentEntity } from '@/shared/entities/Document';
 import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
 import { inject } from 'tsyringe';
 import { Between, LessThanOrEqual, Like, MoreThanOrEqual } from 'typeorm';
-import { service } from '../decorator/service';
+import { service } from '@/server/decorator/service';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 
 @service()
@@ -49,7 +49,6 @@ export class DocumentService {
       }
     }
 
-    // Build where conditions - use array for OR logic when keyword is provided
     let where: Record<string, any> | Record<string, any>[];
     if (params.keyword) {
       where = [

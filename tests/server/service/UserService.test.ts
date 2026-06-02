@@ -1,5 +1,5 @@
 import { describe, it, beforeEach, afterEach, vi, expect } from 'vitest';
-import { UserService } from '@/server/service/UserService';
+import { UserService } from '@/server/modules/user/user.service';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 
 // Create a mock repository with the needed methods

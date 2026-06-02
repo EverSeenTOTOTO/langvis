@@ -4,7 +4,7 @@ import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
-import { SkillService } from '../../../service/SkillService';
+import { SkillService } from '@/server/core/skill/skill-service';
 import { inject } from 'tsyringe';
 import type { SkillCallInput, SkillCallOutput } from './config';
 

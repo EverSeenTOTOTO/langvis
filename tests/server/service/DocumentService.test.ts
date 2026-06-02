@@ -1,4 +1,4 @@
-import { DocumentService } from '@/server/service/DocumentService';
+import { DocumentService } from '@/server/modules/document/document.service';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

@@ -1,14 +1,14 @@
 import { container } from 'tsyringe';
-import { AgentService } from '@/server/service/AgentService';
-import { SkillService } from '@/server/service/SkillService';
-import { ToolService } from '@/server/service/ToolService';
+import { AgentService } from '@/server/modules/agent/agent-service';
+import { SkillService } from '@/server/core/skill/skill-service';
+import { ToolService } from '@/server/modules/agent/tool-service';
 import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { globby } from 'globby';
 import * as configModule from '@/server/decorator/core';
 
 vi.mock('globby');
-vi.mock('@/server/service/ToolService');
-vi.mock('@/server/service/SkillService');
+vi.mock('@/server/modules/agent/tool-service');
+vi.mock('@/server/core/skill/skill-service');
 vi.mock('@/server/decorator/core', async importOriginal => {
   const actual = await importOriginal<typeof configModule>();
   return {

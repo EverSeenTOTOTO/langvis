@@ -1,4 +1,4 @@
-import { EmailService } from '@/server/service/EmailService';
+import { EmailService } from '@/server/modules/email/email.service';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

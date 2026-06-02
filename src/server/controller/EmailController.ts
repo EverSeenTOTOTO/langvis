@@ -15,7 +15,7 @@ import { controller } from '../decorator/controller';
 import { body, param, query, request, response } from '../decorator/param';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import { ConversationService } from '../service/ConversationService';
-import { EmailService } from '../service/EmailService';
+import { EmailService } from '@/server/modules/email/email.service';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import {
   CacheService,

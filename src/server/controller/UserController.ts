@@ -3,7 +3,7 @@ import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { param, response } from '../decorator/param';
-import { UserService } from '../service/UserService';
+import { UserService } from '@/server/modules/user/user.service';
 
 @controller('/api/users')
 export default class UserController {

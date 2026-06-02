@@ -1,6 +1,6 @@
 import type { Tool } from '@/server/modules/agent/domain/tool.base';
 import type { JSONSchemaObject } from 'openai/lib/jsonschema.mjs';
-import type { SkillInfo } from '../service/SkillService';
+import type { SkillInfo } from '@/server/core/skill/skill-service';
 
 export function formatSkillsToMarkdown(skills: SkillInfo[]): string {
   if (!skills || skills.length === 0) {
