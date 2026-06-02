@@ -9,6 +9,7 @@ import { container, inject } from 'tsyringe';
 import type { Agent } from '../modules/agent/domain/agent.base';
 import { AgentRun } from '../modules/agent/domain/agent-run.entity';
 import { resolveEffectiveConfig } from '../modules/agent/domain/effective-config';
+import type { AgentEvent, StreamChunk } from '@/shared/types/events';
 import { MEMORY_SERVICE, CACHE_PORT } from '../modules/agent/agent.di-tokens';
 import type { MemoryService } from '../modules/memory/domain/memory-service';
 import type { CachePort } from '../modules/memory/ports/cache.port';
@@ -240,7 +241,6 @@ Workspace Directory: ${workDir}
       role: Role.ASSIST,
       content: '',
       attachments: null,
-      events: null,
       status: 'initialized',
       meta: null,
       createdAt: new Date(baseTime + index++),
@@ -291,6 +291,15 @@ Workspace Directory: ${workDir}
     );
 
     conversation.registerRun(params.assistantMessage, run);
+
+    this.conversationService
+      .updateMessage(params.assistantMessage.id, {
+        agentRunId: run.runId,
+      })
+      .catch(err => {
+        this.logger.warn('Failed to persist agentRunId', err);
+      });
+
     return run;
   }
 
@@ -325,6 +334,17 @@ Workspace Directory: ${workDir}
             `SSE not connected for ${conversation.id}, event persisted`,
           );
         }
+
+        this.projectToMessage(event, run.messageId, run).catch(err => {
+          this.logger.warn(
+            'Projection failed, will be corrected by final write',
+            {
+              messageId: run.messageId,
+              eventType: event.type,
+              error: (err as Error)?.message,
+            },
+          );
+        });
 
         if (event.type === 'error') break;
       }
@@ -374,6 +394,7 @@ Workspace Directory: ${workDir}
         content: run.content,
         toolCallRecords: run.getToolCallRecords(),
         thoughts: run.toSnapshot().thoughts,
+        agentRunId: run.runId,
         status:
           run.status === 'completed'
             ? 'final'
@@ -392,6 +413,30 @@ Workspace Directory: ${workDir}
       this.logger.info(
         `Agent completed: totalTime=${totalTime}ms tokens=${contentLength} ttft=${ttft ?? 'N/A'}ms avgTokenTime=${avgTokenTime.toFixed(2)}ms session=${conversation.id}`,
       );
+    }
+  }
+
+  private async projectToMessage(
+    event: AgentEvent | StreamChunk,
+    messageId: string,
+    run: AgentRun,
+  ): Promise<void> {
+    switch (event.type) {
+      case 'tool_result':
+      case 'tool_error': {
+        const toolCall = run.getToolCall(event.callId);
+        if (toolCall) {
+          await this.conversationService.appendToolCallRecord(
+            messageId,
+            toolCall.toRecord(),
+          );
+        }
+        break;
+      }
+      case 'thought': {
+        await this.conversationService.appendThought(messageId, event.content);
+        break;
+      }
     }
   }
 }

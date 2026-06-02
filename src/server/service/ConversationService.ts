@@ -6,6 +6,7 @@ import {
 import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
 import { Message, MessageEntity, Role } from '@/shared/entities/Message';
 import type { MessageAttachment } from '@/shared/types/entities';
+import type { ToolCallRecord } from '@/shared/types/render';
 import { inject } from 'tsyringe';
 import { In } from 'typeorm';
 import { service } from '../decorator/service';
@@ -265,6 +266,29 @@ export class ConversationService {
 
     Object.assign(message, partial);
     return await messageRepository.save(message);
+  }
+
+  async appendToolCallRecord(
+    messageId: string,
+    record: ToolCallRecord,
+  ): Promise<void> {
+    await this.db.dataSource.query(
+      `UPDATE messages SET "toolCallRecords" = CASE
+         WHEN "toolCallRecords" IS NULL THEN $1::jsonb
+         ELSE "toolCallRecords" || $1::jsonb
+       END WHERE id = $2`,
+      [JSON.stringify([record]), messageId],
+    );
+  }
+
+  async appendThought(messageId: string, thought: string): Promise<void> {
+    await this.db.dataSource.query(
+      `UPDATE messages SET thoughts = CASE
+         WHEN thoughts IS NULL THEN $1::jsonb
+         ELSE thoughts || $1::jsonb
+       END WHERE id = $2`,
+      [JSON.stringify([thought]), messageId],
+    );
   }
 
   /**

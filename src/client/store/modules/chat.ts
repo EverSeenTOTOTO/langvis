@@ -13,13 +13,17 @@ import { generateId } from '@/shared/utils';
 import { message as antMessage } from 'antd';
 import { makeAutoObservable, reaction } from 'mobx';
 import { inject } from 'tsyringe';
-import { SessionFSM } from './SessionFSM';
+import { MessageNode } from './message-node';
+import { SSEClientTransport } from './transport/SSEClientTransport';
 import { ConversationStore } from './conversation';
 import { SettingStore } from './setting';
+import type { Message } from '@/shared/types/entities';
+import type { SSEFrame } from '@/shared/types/events';
 
 @store()
 export class ChatStore {
-  private sessions = new Map<string, SessionFSM>();
+  private messageNodes = new Map<string, Map<string, MessageNode>>();
+  private transports = new Map<string, SSEClientTransport>();
 
   constructor(
     @inject(ConversationStore) private conversationStore: ConversationStore,
@@ -31,7 +35,7 @@ export class ChatStore {
       () => this.conversationStore.currentConversationId,
       async (newId, oldId) => {
         if (oldId) {
-          this.cleanupOldSessions(oldId);
+          this.cleanupConversation(oldId);
         }
 
         if (!newId) return;
@@ -41,6 +45,143 @@ export class ChatStore {
       },
     );
   }
+
+  // ════════════════════════════════════════
+  // Computed
+  // ════════════════════════════════════════
+
+  get currentSessionActive(): boolean {
+    const id = this.conversationStore.currentConversationId;
+    if (!id) return false;
+    const nodes = this.messageNodes.get(id);
+    const transport = this.transports.get(id);
+    const connecting = transport?.isConnecting ?? false;
+    const hasRunning = Array.from(nodes?.values() ?? []).some(
+      n => n.status === 'running',
+    );
+    return connecting || hasRunning;
+  }
+
+  // ════════════════════════════════════════
+  // MessageNode access
+  // ════════════════════════════════════════
+
+  getMessageNode(
+    conversationId: string,
+    messageId: string,
+  ): MessageNode | undefined {
+    return this.messageNodes.get(conversationId)?.get(messageId);
+  }
+
+  private getOrCreateMessageNode(
+    conversationId: string,
+    msg: Message,
+  ): MessageNode {
+    let nodes = this.messageNodes.get(conversationId);
+    if (!nodes) {
+      nodes = new Map();
+      this.messageNodes.set(conversationId, nodes);
+    }
+
+    let node = nodes.get(msg.id);
+    if (!node) {
+      node = new MessageNode({
+        id: msg.id,
+        conversationId: msg.conversationId,
+        role: msg.role,
+        createdAt: msg.createdAt,
+        content: msg.content,
+        status: msg.status as any,
+        toolCallRecords: msg.toolCallRecords ?? undefined,
+        thoughts: msg.thoughts ?? undefined,
+      });
+      nodes.set(msg.id, node);
+    }
+    return node;
+  }
+
+  // ════════════════════════════════════════
+  // Conversation lifecycle
+  // ════════════════════════════════════════
+
+  async activateConversation(conversationId: string): Promise<void> {
+    const messages = this.conversationStore.messages[conversationId] ?? [];
+
+    // Create MessageNodes for all assistant messages
+    for (const msg of messages) {
+      if (msg.role !== Role.ASSIST) continue;
+      this.getOrCreateMessageNode(conversationId, msg);
+    }
+
+    const state = await this.getSessionState({ conversationId });
+
+    if (!state || state.phase === 'done') return;
+
+    try {
+      await this.connectTransport(conversationId);
+    } catch {
+      this.refreshMessages(conversationId);
+    }
+  }
+
+  // ════════════════════════════════════════
+  // SSE Transport
+  // ════════════════════════════════════════
+
+  private async connectTransport(conversationId: string): Promise<void> {
+    let transport = this.transports.get(conversationId);
+    if (transport?.isConnected) return;
+
+    transport = new SSEClientTransport(`/api/chat/sse/${conversationId}`);
+    this.transports.set(conversationId, transport);
+
+    this.setupTransportListeners(conversationId, transport);
+
+    await transport.connect();
+  }
+
+  private setupTransportListeners(
+    conversationId: string,
+    transport: SSEClientTransport,
+  ): void {
+    transport.addEventListener('message', (e: CustomEvent) => {
+      const frame = e.detail as SSEFrame;
+
+      if (frame.type === 'connected') return;
+
+      if (frame.type === 'context_usage') {
+        this.conversationStore.contextUsage = {
+          used: frame.used,
+          total: frame.total,
+        };
+        return;
+      }
+
+      // Terminal events → refresh messages from server
+      if (
+        frame.type === 'final' ||
+        frame.type === 'cancelled' ||
+        frame.type === 'error'
+      ) {
+        this.refreshMessages(conversationId);
+      }
+
+      // Route to MessageNode
+      const msgId = (frame as any).messageId as string;
+      if (msgId) {
+        const node = this.messageNodes.get(conversationId)?.get(msgId);
+        if (node) node.handleFrame(frame);
+      }
+    });
+
+    transport.addEventListener('disconnect', () => {
+      this.refreshMessages(conversationId);
+    });
+  }
+
+  // ════════════════════════════════════════
+  // API methods
+  // ════════════════════════════════════════
 
   @api('/api/chat/session/:conversationId')
   async getSessionState(
@@ -52,95 +193,14 @@ export class ChatStore {
     } | null>;
   }
 
-  async activateConversation(conversationId: string): Promise<void> {
-    const session = this.acquireSession(conversationId);
-
-    // Create MessageFSMs for all assistant messages so both active and
-    // terminated messages can render via agent renderers (e.g. TTS audio)
-    const messages = this.conversationStore.messages[conversationId] ?? [];
-    for (const msg of messages) {
-      if (msg.role !== Role.ASSIST) continue;
-      session.createMessageFSM(msg);
-    }
-
-    const state = await this.getSessionState({ conversationId });
-
-    if (!state || state.phase === 'done') return;
-
-    try {
-      await session.connect();
-    } catch {
-      this.refreshMessages(conversationId);
-    }
-  }
-
-  getSession(conversationId: string): SessionFSM | undefined {
-    return this.sessions.get(conversationId);
-  }
-
-  acquireSession(conversationId: string): SessionFSM {
-    let session = this.sessions.get(conversationId);
-    if (!session) {
-      session = new SessionFSM(conversationId);
-
-      session.addEventListener('message', (e: CustomEvent) => {
-        const event = e.detail;
-        if (event.type === 'context_usage') {
-          this.conversationStore.contextUsage = {
-            used: event.used,
-            total: event.total,
-          };
-        }
-
-        if (
-          event.type === 'final' ||
-          event.type === 'cancelled' ||
-          event.type === 'error'
-        ) {
-          this.refreshMessages(conversationId);
-        }
-      });
-
-      session.addEventListener('transition', (e: CustomEvent) => {
-        const { to } = e.detail;
-        if (to === 'error') {
-          this.refreshMessages(conversationId);
-        }
-      });
-
-      session.addEventListener('dispose', () => {
-        this.sessions.delete(conversationId);
-      });
-
-      const conversation =
-        this.conversationStore.findConversationById(conversationId);
-      if (conversation) {
-        session.setConversation(conversation);
-      }
-      this.sessions.set(conversationId, session);
-    }
-    return session;
-  }
-
-  get currentSession(): SessionFSM | undefined {
-    const conversationId = this.conversationStore.currentConversationId;
-    if (!conversationId) return undefined;
-    return this.sessions.get(conversationId);
-  }
-
   @api('/api/chat/cancel/:conversationId', {
     method: 'post',
   })
   async cancelChat(
-    params: CancelChatRequest,
+    _params: CancelChatRequest,
     req?: ApiRequest<CancelChatRequest>,
   ) {
-    const session = this.getSession(params.conversationId);
-    if (!session) return;
-
-    await session.cancelConversation(async () => {
-      await req!.send();
-    });
+    await req!.send();
   }
 
   @api('/api/human-input/:messageId', { method: 'post' })
@@ -175,13 +235,11 @@ export class ChatStore {
       return;
     }
 
-    const session = this.acquireSession(conversationId);
-
     // Add optimistic user message for immediate UI feedback
     this.addOptimisticUserMessage(conversationId, params.content!);
 
     try {
-      await session.connect();
+      await this.connectTransport(conversationId);
     } catch {
       this.refreshMessages(conversationId);
       return;
@@ -190,21 +248,24 @@ export class ChatStore {
     try {
       const res = (await req!.send()) as StartChatResponse;
 
-      // Create assistant message entity with real ID from backend
       if (res.messageId) {
         this.addAssistantMessage(conversationId, res.messageId);
 
-        // Create MessageFSM for the new assistant message
+        // Create MessageNode for the new assistant message
         const messages = this.conversationStore.messages[conversationId];
         const assistantMessage = messages?.find(m => m.id === res.messageId);
         if (assistantMessage) {
-          session.createMessageFSM(assistantMessage);
+          this.getOrCreateMessageNode(conversationId, assistantMessage);
         }
       }
     } catch {
       this.refreshMessages(conversationId);
     }
   }
+
+  // ════════════════════════════════════════
+  // Private helpers
+  // ════════════════════════════════════════
 
   private refreshMessages(conversationId: string): void {
     this.conversationStore.getMessagesByConversationId({ id: conversationId });
@@ -243,18 +304,18 @@ export class ChatStore {
         conversationId,
         role: Role.ASSIST,
         content: '',
-        events: [],
         status: 'initialized',
         createdAt: new Date(),
       },
     ];
   }
 
-  private cleanupOldSessions(oldId: string): void {
-    const session = this.sessions.get(oldId);
-    if (session) {
-      session.deactivate();
-      this.sessions.delete(oldId);
+  private cleanupConversation(oldId: string): void {
+    const transport = this.transports.get(oldId);
+    if (transport) {
+      transport.close();
+      this.transports.delete(oldId);
     }
+    this.messageNodes.delete(oldId);
   }
 }

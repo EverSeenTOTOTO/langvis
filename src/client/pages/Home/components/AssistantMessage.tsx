@@ -16,22 +16,24 @@ import.meta.glob('./AgentMessage/*/index.tsx', { eager: true });
 
 const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
   const chatStore = useStore('chat');
-  const session = chatStore.currentSession;
-  const messageFSM = session?.getMessageFSM(msg.id);
-  const agent = (session?.conv?.config?.agent as string) || AgentIds.CHAT;
+  const node = chatStore.getMessageNode(msg.conversationId, msg.id);
+  const conversationStore = useStore('conversation');
+  const conversation = conversationStore.findConversationById(
+    msg.conversationId,
+  );
+  const agent = (conversation?.config?.agent as string) || AgentIds.CHAT;
 
-  // FSM-driven rendering (both active and terminated messages)
-  if (messageFSM) {
-    const { content } = getAgentRenderer(agent)(messageFSM);
-    const hasError =
-      messageFSM.phase === 'error' || messageFSM.phase === 'canceled';
+  // MessageNode-driven rendering (both active and historical messages)
+  if (node) {
+    const { content } = getAgentRenderer(agent)(node);
+    const hasError = node.status === 'failed' || node.status === 'cancelled';
 
     return (
       <Bubble
         key={msg.id}
         placement="start"
         content={
-          messageFSM.isInitialized ? (
+          node.isInitialized ? (
             <Typography.Text type="secondary" italic>
               <LoadingOutlined style={{ marginInlineEnd: 4 }} />
               Thinking...
@@ -40,8 +42,8 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
             content
           )
         }
-        footer={<MessageFooter content={messageFSM.msg.content} />}
-        loading={messageFSM.isInitialized}
+        footer={<MessageFooter content={node.content} />}
+        loading={node.isInitialized}
         avatar={<Avatar icon={<RobotOutlined />} />}
         styles={{
           content: {
@@ -53,7 +55,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
     );
   }
 
-  // Fallback: no FSM available, render from entity
+  // Fallback: no MessageNode available, render from entity
   const hasError = msg.status === 'error' || msg.status === 'canceled';
 
   return (

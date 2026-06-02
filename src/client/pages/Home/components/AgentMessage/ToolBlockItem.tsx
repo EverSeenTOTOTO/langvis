@@ -4,10 +4,7 @@ import dayjs from 'dayjs';
 import { isEmpty } from 'lodash-es';
 import { useMemo } from 'react';
 import type React from 'react';
-import type {
-  ToolCallTimeline,
-  ThoughtItem,
-} from '@/client/store/modules/MessageFSM';
+import type { UIToolCall } from '@/client/store/modules/message-node';
 import './ReActAgent/index.scss';
 
 const TAG_COLORS = [
@@ -37,11 +34,11 @@ export function getToolColor(toolName: string): string {
 }
 
 export interface ToolBlockItemProps {
-  toolCall: ToolCallTimeline;
+  toolCall: UIToolCall;
   /** Nesting depth for visual indentation */
   depth?: number;
   /** Custom render function for tool-specific visualization */
-  customRender?: (toolCall: ToolCallTimeline) => React.ReactNode;
+  customRender?: (toolCall: UIToolCall) => React.ReactNode;
 }
 
 /**
@@ -59,7 +56,7 @@ export function ToolBlockItem({
   const streamingChunks = useMemo(() => {
     const chunks: { type: 'stdout' | 'stderr'; text: string }[] = [];
     for (const p of toolCall.progress) {
-      const d = p.data as { type?: string; text?: string } | undefined;
+      const d = p as { type?: string; text?: string } | undefined;
       if (d?.type === 'stdout' && d.text)
         chunks.push({ type: 'stdout', text: d.text });
       else if (d?.type === 'stderr' && d.text)
@@ -68,13 +65,13 @@ export function ToolBlockItem({
     return chunks;
   }, [toolCall.progress]);
 
-  const latestProgress = toolCall.progress.at(-1)?.data as
+  const latestProgress = toolCall.progress.at(-1) as
     | { status?: string; message?: string }
     | undefined;
 
   const Icon = isPending ? (
     <SyncOutlined spin style={{ color: 'var(--ant-color-primary)' }} />
-  ) : toolCall.status === 'done' ? (
+  ) : toolCall.status === 'completed' ? (
     <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
   ) : (
     <span style={{ color: 'var(--ant-color-error)' }}>✕</span>
@@ -90,25 +87,15 @@ export function ToolBlockItem({
     <div
       className={`react-tool-block ${depth > 0 ? `nested-depth-${depth}` : ''}`}
     >
-      {toolCall.thought && (
-        <div className="react-tool-thought">
-          <Typography.Paragraph
-            type="secondary"
-            italic
-            ellipsis={{ rows: 2, expandable: 'collapsible' }}
-          >
-            💭 {toolCall.thought}
-          </Typography.Paragraph>
-        </div>
-      )}
-
       <Flex align="center" gap={8} className="react-tool-header">
         {Icon}
         <Tag color="geekblue">Tool</Tag>
         <Tag color={color}>{toolCall.toolName}</Tag>
-        <Typography.Text type="secondary" className="react-tool-time">
-          {dayjs(toolCall.at).format('HH:mm:ss')}
-        </Typography.Text>
+        {toolCall.startedAt && (
+          <Typography.Text type="secondary" className="react-tool-time">
+            {dayjs(toolCall.startedAt).format('HH:mm:ss')}
+          </Typography.Text>
+        )}
       </Flex>
 
       {!isEmpty(toolCall.toolArgs) && (
@@ -137,7 +124,7 @@ export function ToolBlockItem({
         </div>
       )}
 
-      {toolCall.status === 'done' && toolCall.output !== undefined && (
+      {toolCall.status === 'completed' && toolCall.output !== undefined && (
         <div className="react-tool-output">
           <Typography.Paragraph
             type="secondary"
@@ -151,7 +138,7 @@ export function ToolBlockItem({
         </div>
       )}
 
-      {toolCall.status === 'error' && (
+      {toolCall.status === 'failed' && (
         <Typography.Text type="danger" className="react-tool-error">
           {toolCall.error}
         </Typography.Text>
@@ -161,7 +148,7 @@ export function ToolBlockItem({
 }
 
 export interface StandaloneThoughtBlockProps {
-  thought: ThoughtItem;
+  thought: string;
 }
 
 export function StandaloneThoughtBlock({
@@ -172,9 +159,6 @@ export function StandaloneThoughtBlock({
       <Flex align="center" gap={8} className="react-tool-header">
         <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
         <Tag color="blue">Thought</Tag>
-        <Typography.Text type="secondary" className="react-tool-time">
-          {dayjs(thought.at).format('HH:mm:ss')}
-        </Typography.Text>
       </Flex>
       <Typography.Paragraph
         type="secondary"
@@ -182,7 +166,7 @@ export function StandaloneThoughtBlock({
         ellipsis={{ rows: 2, expandable: 'collapsible' }}
         className="react-thought-content"
       >
-        {thought.content}
+        💭 {thought}
       </Typography.Paragraph>
     </div>
   );

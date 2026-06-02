@@ -1,11 +1,11 @@
 import { Transport } from '@/shared/transport';
-import type { SSEMessage } from '@/shared/types';
+import type { SSEFrame } from '@/shared/types/events';
 import { isClient } from '@/shared/utils';
 import { getPrefetchPath } from '../../../decorator/api';
 
 const CONNECTION_TIMEOUT_MS = 30_000;
 
-export class SSEClientTransport extends Transport<SSEMessage> {
+export class SSEClientTransport extends Transport<SSEFrame> {
   private eventSource: EventSource | null = null;
 
   constructor(
@@ -45,29 +45,29 @@ export class SSEClientTransport extends Transport<SSEMessage> {
         clearTimeout(timeout);
 
         try {
-          const msg: SSEMessage = JSON.parse(event.data);
+          const frame: SSEFrame = JSON.parse(event.data);
 
-          if (msg.type === 'connected') {
+          if (frame.type === 'connected') {
             resolve();
             return;
           }
 
-          if (msg.type === 'session_replaced') {
+          if (frame.type === 'session_replaced') {
             eventSource.close();
             this.eventSource = null;
             this.emit('disconnect');
             return;
           }
 
-          if (msg.type === 'session_error') {
+          if (frame.type === 'session_error') {
             eventSource.close();
             this.eventSource = null;
-            this.emit('error', msg.error);
+            this.emit('error', frame.error);
             return;
           }
 
-          // Business event
-          this.emit('message', msg);
+          // Business frame
+          this.emit('message', frame);
         } catch {
           this.emit('error', 'Failed parsing SSE message');
         }
@@ -75,7 +75,7 @@ export class SSEClientTransport extends Transport<SSEMessage> {
     });
   }
 
-  send(_message: SSEMessage): boolean {
+  send(_message: SSEFrame): boolean {
     return false;
   }
 

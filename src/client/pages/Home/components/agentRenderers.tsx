@@ -1,5 +1,5 @@
 import { AgentIds } from '@/shared/constants';
-import type { MessageFSM } from '@/client/store/modules/MessageFSM';
+import type { MessageNode } from '@/client/store/modules/message-node';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Typography } from 'antd';
 import type React from 'react';
@@ -11,7 +11,7 @@ export type AgentRenderResult = {
   content: React.ReactNode;
 };
 
-export type AgentRenderer = (fsm: MessageFSM) => AgentRenderResult;
+export type AgentRenderer = (node: MessageNode) => AgentRenderResult;
 
 // Registry of agent renderers
 const agentRenderers = new Map<string, AgentRenderer>();
@@ -34,21 +34,19 @@ export function getAgentRenderer(agentId: string): AgentRenderer {
 }
 
 // Default chat renderer
-const defaultChatRenderer: AgentRenderer = fsm => ({
+const defaultChatRenderer: AgentRenderer = node => ({
   content: (
     <>
-      {fsm.isThinking && (
+      {node.isThinking && (
         <Typography.Text type="secondary" italic>
           <LoadingOutlined style={{ marginInlineEnd: 4 }} />
           Thinking...
         </Typography.Text>
       )}
       <Suspense
-        fallback={
-          <Typography.Paragraph>{fsm.msg.content}</Typography.Paragraph>
-        }
+        fallback={<Typography.Paragraph>{node.content}</Typography.Paragraph>}
       >
-        <MarkdownRender>{fsm.msg.content}</MarkdownRender>
+        <MarkdownRender>{node.content}</MarkdownRender>
       </Suspense>
     </>
   ),

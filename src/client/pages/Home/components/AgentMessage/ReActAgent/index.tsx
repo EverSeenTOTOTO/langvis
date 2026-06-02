@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { AgentIds } from '@/shared/constants';
-import type { MessageFSM } from '@/client/store/modules/MessageFSM';
+import type { MessageNode } from '@/client/store/modules/message-node';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Typography } from 'antd';
 import {
@@ -14,12 +14,14 @@ import './index.scss';
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
 const createReActRenderer = (agentId: string) => {
-  const renderer = (fsm: MessageFSM): AgentRenderResult => ({
+  const renderer = (node: MessageNode): AgentRenderResult => ({
     content: (
       <>
-        {fsm.hasEvents && <UniversalEventRenderer messageFSM={fsm} />}
+        {(node.toolCalls.length > 0 || node.thoughts.length > 0) && (
+          <UniversalEventRenderer node={node} />
+        )}
 
-        {fsm.isThinking && (
+        {node.isThinking && (
           <Typography.Text type="secondary" italic>
             <LoadingOutlined style={{ marginInlineEnd: 4 }} />
             Thinking...
@@ -27,11 +29,9 @@ const createReActRenderer = (agentId: string) => {
         )}
 
         <Suspense
-          fallback={
-            <Typography.Paragraph>{fsm.msg.content}</Typography.Paragraph>
-          }
+          fallback={<Typography.Paragraph>{node.content}</Typography.Paragraph>}
         >
-          <MarkdownRender>{fsm.msg.content}</MarkdownRender>
+          <MarkdownRender>{node.content}</MarkdownRender>
         </Suspense>
       </>
     ),

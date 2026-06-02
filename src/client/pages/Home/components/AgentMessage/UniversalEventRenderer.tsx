@@ -1,16 +1,17 @@
 import HumanInputForm from '@/client/components/HumanInputForm';
-import type { MessageFSM } from '@/client/store/modules/MessageFSM';
+import type { MessageNode } from '@/client/store/modules/message-node';
+import type { UIToolCall } from '@/client/store/modules/message-node';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Collapse, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { NestedAgentCallBlock } from './NestedAgentCallBlock';
 import { SkillCallBlock } from './SkillCallBlock';
 import { StandaloneThoughtBlock, ToolBlockItem } from './ToolBlockItem';
-import { buildToolBlocks, type ToolBlock } from './utils';
+import { buildToolBlocks } from './utils';
 
 export interface UniversalEventRendererProps {
-  messageFSM: MessageFSM;
-  customToolRender?: (toolCall: ToolBlock['toolCall']) => React.ReactNode;
+  node: MessageNode;
+  customToolRender?: (toolCall: UIToolCall) => React.ReactNode;
 }
 
 /**
@@ -18,16 +19,16 @@ export interface UniversalEventRendererProps {
  * Can be used by any Agent renderer that needs event timeline visualization.
  */
 export function UniversalEventRenderer({
-  messageFSM,
+  node,
   customToolRender,
 }: UniversalEventRendererProps): React.ReactElement | null {
-  const toolBlocks = buildToolBlocks(messageFSM.toolCallTimeline);
-  const thoughts = messageFSM.thoughts;
+  const toolBlocks = buildToolBlocks(node.toolCalls);
+  const thoughts = node.thoughts;
   const [activeKey, setActiveKey] = useState<string[]>([]);
 
   useEffect(() => {
-    setActiveKey(messageFSM.shouldExpandDetails ? ['1'] : []);
-  }, [messageFSM.shouldExpandDetails]);
+    setActiveKey(node.shouldExpandDetails ? ['1'] : []);
+  }, [node.shouldExpandDetails]);
 
   if (toolBlocks.length === 0 && thoughts.length === 0) {
     return null;
@@ -58,7 +59,7 @@ export function UniversalEventRenderer({
                       <NestedAgentCallBlock
                         key={block.toolCall.callId}
                         toolCall={block.toolCall}
-                        conversationId={messageFSM.msg.conversationId}
+                        conversationId={node.conversationId}
                         depth={0}
                         customToolRender={customToolRender}
                       />
@@ -83,13 +84,13 @@ export function UniversalEventRenderer({
                     />
                   );
                 })}
-                {thoughts.map(thought => (
+                {thoughts.map((thought, index) => (
                   <StandaloneThoughtBlock
-                    key={`thought-${thought.seq}`}
+                    key={`thought-${index}`}
                     thought={thought}
                   />
                 ))}
-                {messageFSM.isThinking && (
+                {node.isThinking && (
                   <div className="react-tool-processing">
                     <LoadingOutlined style={{ marginInlineEnd: 8 }} />
                     <Typography.Text type="secondary" italic>
@@ -103,12 +104,12 @@ export function UniversalEventRenderer({
         ]}
         style={{ width: '100%', marginBlock: 8 }}
       />
-      {messageFSM.awaitingInput && (
+      {node.awaitingInput && (
         <HumanInputForm
-          messageId={messageFSM.msg.id}
-          conversationId={messageFSM.msg.conversationId}
-          message={messageFSM.awaitingInput.message}
-          schema={messageFSM.awaitingInput.schema}
+          messageId={node.id}
+          conversationId={node.conversationId}
+          message={node.awaitingInput.message}
+          schema={node.awaitingInput.schema}
         />
       )}
     </>

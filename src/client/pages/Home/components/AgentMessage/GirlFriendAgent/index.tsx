@@ -4,7 +4,7 @@ import { lazy, Suspense } from 'react';
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 import { TextToSpeechOutput } from '@/server/core/tool/TextToSpeech';
 import { AgentIds, ToolIds } from '@/shared/constants';
-import type { MessageFSM } from '@/client/store/modules/MessageFSM';
+import type { MessageNode } from '@/client/store/modules/message-node';
 import { InfoCircleOutlined, LoadingOutlined } from '@ant-design/icons';
 import { Alert, Spin, Tooltip, Typography } from 'antd';
 import {
@@ -20,21 +20,21 @@ interface GirlFriendDerivedState {
   isProcessing: boolean;
 }
 
-function deriveGirlFriendState(fsm: MessageFSM): GirlFriendDerivedState {
-  const ttsCall = fsm.toolCallTimeline.find(
+function deriveGirlFriendState(node: MessageNode): GirlFriendDerivedState {
+  const ttsCall = node.toolCalls.find(
     t => t.toolName === ToolIds.TEXT_TO_SPEECH,
   );
 
   const isTtsPending = ttsCall?.status === 'pending';
-  const ttsError = ttsCall?.status === 'error' ? ttsCall.error : undefined;
+  const ttsError = ttsCall?.status === 'failed' ? ttsCall.error : undefined;
   const ttsOutput =
-    ttsCall?.status === 'done'
+    ttsCall?.status === 'completed'
       ? (ttsCall.output as TextToSpeechOutput | undefined)
       : undefined;
 
   const isProcessing =
-    fsm.hasContent &&
-    !fsm.isTerminated &&
+    node.hasContent &&
+    !node.isTerminal &&
     !isTtsPending &&
     !ttsOutput &&
     !ttsError;
@@ -42,13 +42,13 @@ function deriveGirlFriendState(fsm: MessageFSM): GirlFriendDerivedState {
   return { isTtsPending, ttsError, ttsOutput, isProcessing };
 }
 
-const GirlFriendAgentRenderer = (fsm: MessageFSM): AgentRenderResult => {
-  const derived = deriveGirlFriendState(fsm);
+const GirlFriendAgentRenderer = (node: MessageNode): AgentRenderResult => {
+  const derived = deriveGirlFriendState(node);
 
   return {
     content: (
       <>
-        {fsm.isThinking && (
+        {node.isThinking && (
           <Typography.Text type="secondary" italic>
             <LoadingOutlined style={{ marginInlineEnd: 4 }} />
             Thinking...
@@ -57,10 +57,10 @@ const GirlFriendAgentRenderer = (fsm: MessageFSM): AgentRenderResult => {
         <Spin spinning={derived.isTtsPending}>
           <Suspense
             fallback={
-              <Typography.Paragraph>{fsm.msg.content}</Typography.Paragraph>
+              <Typography.Paragraph>{node.content}</Typography.Paragraph>
             }
           >
-            <MarkdownRender>{fsm.msg.content}</MarkdownRender>
+            <MarkdownRender>{node.content}</MarkdownRender>
           </Suspense>
         </Spin>
         {derived.isProcessing && (
