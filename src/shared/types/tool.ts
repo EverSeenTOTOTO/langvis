@@ -1,4 +1,4 @@
-import type { AgentEvent } from '.';
+import type { AgentEvent } from './events';
 
 /**
  * ToolCallTimeline - structured view of a single tool invocation
@@ -8,12 +8,10 @@ export type ToolCallTimeline = {
   callId: string;
   toolName: string;
   toolArgs: Record<string, unknown>;
-  seq: number;
-  at: number;
   status: 'pending' | 'done' | 'error';
   output?: unknown;
   error?: string;
-  progress: Array<{ data: unknown; seq: number; at: number }>;
+  progress: unknown[];
   thought?: string;
 };
 
@@ -36,8 +34,6 @@ export function buildToolTimeline(events: AgentEvent[]): ToolCallTimeline[] {
           callId: event.callId,
           toolName: event.toolName,
           toolArgs: event.toolArgs,
-          seq: event.seq,
-          at: event.at,
           status: 'pending',
           progress: [],
           thought: pendingThought,
@@ -66,16 +62,12 @@ export function buildToolTimeline(events: AgentEvent[]): ToolCallTimeline[] {
       case 'tool_progress': {
         const existing = toolCallsMap.get(event.callId);
         if (existing) {
-          existing.progress.push({
-            data: event.data,
-            seq: event.seq,
-            at: event.at,
-          });
+          existing.progress.push(event.data);
         }
         break;
       }
     }
   }
 
-  return Array.from(toolCallsMap.values()).sort((a, b) => a.seq - b.seq);
+  return Array.from(toolCallsMap.values());
 }

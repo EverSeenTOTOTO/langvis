@@ -30,12 +30,6 @@ export enum AgentIds {
   GIRLFRIEND = 'girlfriend_agent',
 }
 
-export enum MemoryIds {
-  SLIDE_WINDOW = 'slide_window_memory',
-  CHILD = 'child_memory',
-  REACT = 'react_memory',
-}
-
 export const UNGROUPED_GROUP_NAME = 'Ungrouped';
 
 export const RedisKeys = {

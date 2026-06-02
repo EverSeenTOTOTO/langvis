@@ -5,7 +5,7 @@ import {
   buildUIToolCallsFromEvents,
 } from '@/client/pages/Home/components/AgentMessage/utils';
 import type { UIToolCall } from '@/client/store/modules/message-node';
-import type { AgentEvent } from '@/shared/types';
+import type { AgentEvent } from '@/shared/types/events';
 
 describe('buildToolBlocks', () => {
   it('should build tool blocks from UIToolCalls', () => {
@@ -46,12 +46,10 @@ describe('extractNestedEvents', () => {
   it('should extract agent_event from progress', () => {
     const nestedEvent: AgentEvent = {
       type: 'tool_call',
-      messageId: 'msg-1',
+      runId: 'run_1',
       callId: 'tc_nested',
       toolName: 'nested_tool',
       toolArgs: {},
-      seq: 2,
-      at: Date.now(),
     };
 
     const progress = [
@@ -70,21 +68,17 @@ describe('buildUIToolCallsFromEvents', () => {
     const events: AgentEvent[] = [
       {
         type: 'tool_call',
-        messageId: 'msg-1',
+        runId: 'run_1',
         callId: 'tc_1',
         toolName: 'test_tool',
         toolArgs: {},
-        seq: 1,
-        at: Date.now(),
       },
       {
         type: 'tool_result',
-        messageId: 'msg-1',
+        runId: 'run_1',
         callId: 'tc_1',
         toolName: 'test_tool',
         output: { success: true },
-        seq: 2,
-        at: Date.now(),
       },
     ];
 
@@ -98,21 +92,17 @@ describe('buildUIToolCallsFromEvents', () => {
     const events: AgentEvent[] = [
       {
         type: 'tool_call',
-        messageId: 'msg-1',
+        runId: 'run_1',
         callId: 'tc_1',
         toolName: 'test_tool',
         toolArgs: {},
-        seq: 1,
-        at: Date.now(),
       },
       {
         type: 'tool_error',
-        messageId: 'msg-1',
+        runId: 'run_1',
         callId: 'tc_1',
         toolName: 'test_tool',
         error: 'something went wrong',
-        seq: 2,
-        at: Date.now(),
       },
     ];
 

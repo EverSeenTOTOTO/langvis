@@ -4,7 +4,7 @@
  * Pure functions for event processing, tool block building, etc.
  */
 
-import type { AgentEvent } from '@/shared/types';
+import type { AgentEvent } from '@/shared/types/events';
 import { buildToolTimeline } from '@/shared/types/tool';
 import type { UIToolCall } from '@/client/store/modules/message-node';
 
@@ -70,9 +70,8 @@ export function buildUIToolCallsFromEvents(events: AgentEvent[]): UIToolCall[] {
         : tc.status === 'error'
           ? ('failed' as const)
           : ('pending' as const),
-    progress: tc.progress.map(p => p.data),
+    progress: tc.progress,
     output: tc.output,
     error: tc.error,
-    startedAt: tc.at,
   }));
 }
