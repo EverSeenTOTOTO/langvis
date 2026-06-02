@@ -24,13 +24,13 @@ const mockSessionManager = {
   acquireSession: mockChatService.acquireSession,
 };
 
-const mockStartChatTurn = {
+const mockStartChatTurnHandler = {
   execute: vi.fn(),
 };
 
-const mockRunAgentSession = {
-  startRun: vi.fn(),
-  execute: vi.fn(),
+const mockRunAgentSessionHandler = {
+  prepare: vi.fn(),
+  stream: vi.fn(),
 };
 
 const mockAuthService = {
@@ -78,18 +78,24 @@ vi.mock('@/server/modules/conversation/session-manager', () => ({
   },
 }));
 
-vi.mock('@/server/modules/conversation/commands/start-chat-turn', () => ({
-  StartChatTurn: class {
-    execute = mockStartChatTurn.execute;
-  },
-}));
+vi.mock(
+  '@/server/modules/conversation/commands/start-chat-turn.handler',
+  () => ({
+    StartChatTurnHandler: class {
+      execute = mockStartChatTurnHandler.execute;
+    },
+  }),
+);
 
-vi.mock('@/server/modules/conversation/commands/run-agent-session', () => ({
-  RunAgentSession: class {
-    startRun = mockRunAgentSession.startRun;
-    execute = mockRunAgentSession.execute;
-  },
-}));
+vi.mock(
+  '@/server/modules/conversation/commands/run-agent-session.handler',
+  () => ({
+    RunAgentSessionHandler: class {
+      prepare = mockRunAgentSessionHandler.prepare;
+      stream = mockRunAgentSessionHandler.stream;
+    },
+  }),
+);
 
 vi.mock('@/server/libs/infrastructure/auth.service', () => ({
   AuthService: class {
@@ -145,8 +151,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConvRepo as any,
         mockSessionManager as any,
-        mockStartChatTurn as any,
-        mockRunAgentSession as any,
+        mockStartChatTurnHandler as any,
+        mockRunAgentSessionHandler as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -182,8 +188,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConvRepo as any,
         mockSessionManager as any,
-        mockStartChatTurn as any,
-        mockRunAgentSession as any,
+        mockStartChatTurnHandler as any,
+        mockRunAgentSessionHandler as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -240,8 +246,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConvRepo as any,
         mockSessionManager as any,
-        mockStartChatTurn as any,
-        mockRunAgentSession as any,
+        mockStartChatTurnHandler as any,
+        mockRunAgentSessionHandler as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -263,8 +269,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConvRepo as any,
         mockSessionManager as any,
-        mockStartChatTurn as any,
-        mockRunAgentSession as any,
+        mockStartChatTurnHandler as any,
+        mockRunAgentSessionHandler as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -288,8 +294,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConvRepo as any,
         mockSessionManager as any,
-        mockStartChatTurn as any,
-        mockRunAgentSession as any,
+        mockStartChatTurnHandler as any,
+        mockRunAgentSessionHandler as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -311,8 +317,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConvRepo as any,
         mockSessionManager as any,
-        mockStartChatTurn as any,
-        mockRunAgentSession as any,
+        mockStartChatTurnHandler as any,
+        mockRunAgentSessionHandler as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -337,8 +343,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConvRepo as any,
         mockSessionManager as any,
-        mockStartChatTurn as any,
-        mockRunAgentSession as any,
+        mockStartChatTurnHandler as any,
+        mockRunAgentSessionHandler as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -367,8 +373,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConvRepo as any,
         mockSessionManager as any,
-        mockStartChatTurn as any,
-        mockRunAgentSession as any,
+        mockStartChatTurnHandler as any,
+        mockRunAgentSessionHandler as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -397,8 +403,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConvRepo as any,
         mockSessionManager as any,
-        mockStartChatTurn as any,
-        mockRunAgentSession as any,
+        mockStartChatTurnHandler as any,
+        mockRunAgentSessionHandler as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -434,8 +440,8 @@ describe('EmailController', () => {
         mockEmailService as any,
         mockConvRepo as any,
         mockSessionManager as any,
-        mockStartChatTurn as any,
-        mockRunAgentSession as any,
+        mockStartChatTurnHandler as any,
+        mockRunAgentSessionHandler as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,
@@ -481,8 +487,8 @@ This is the email body content.`;
         mockEmailService as any,
         mockConvRepo as any,
         mockSessionManager as any,
-        mockStartChatTurn as any,
-        mockRunAgentSession as any,
+        mockStartChatTurnHandler as any,
+        mockRunAgentSessionHandler as any,
         mockAuthService as any,
         mockProviderService as any,
         mockCacheService as any,

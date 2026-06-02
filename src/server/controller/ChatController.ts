@@ -16,9 +16,12 @@ import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import { CONVERSATION_REPOSITORY } from '../modules/conversation/conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../modules/conversation/database/conversation.repository.port';
 import { SessionManager } from '../modules/conversation/session-manager';
-import { StartChatTurn } from '../modules/conversation/commands/start-chat-turn';
-import { RunAgentSession } from '../modules/conversation/commands/run-agent-session';
-import { GetSessionState } from '../modules/conversation/queries/get-session-state';
+import { StartChatTurnCommand } from '../modules/conversation/commands/start-chat-turn.command';
+import { StartChatTurnHandler } from '../modules/conversation/commands/start-chat-turn.handler';
+import { RunAgentSessionCommand } from '../modules/conversation/commands/run-agent-session.command';
+import { RunAgentSessionHandler } from '../modules/conversation/commands/run-agent-session.handler';
+import { GetSessionStateQuery } from '../modules/conversation/queries/get-session-state.query';
+import { GetSessionStateHandler } from '../modules/conversation/queries/get-session-state.handler';
 
 @controller('/api/chat')
 export default class ChatController {
@@ -27,12 +30,12 @@ export default class ChatController {
     private convRepo: ConversationRepositoryPort,
     @inject(SessionManager)
     private sessionManager: SessionManager,
-    @inject(StartChatTurn)
-    private startChatTurn: StartChatTurn,
-    @inject(RunAgentSession)
-    private runAgentSession: RunAgentSession,
-    @inject(GetSessionState)
-    private getSessionStateQuery: GetSessionState,
+    @inject(StartChatTurnHandler)
+    private startChatTurnHandler: StartChatTurnHandler,
+    @inject(RunAgentSessionHandler)
+    private runAgentSessionHandler: RunAgentSessionHandler,
+    @inject(GetSessionStateHandler)
+    private getSessionStateHandler: GetSessionStateHandler,
     @inject(AuthService)
     private authService: AuthService,
   ) {}
@@ -181,17 +184,21 @@ export default class ChatController {
     });
 
     // Prepare turn messages
+    const turnCommand = new StartChatTurnCommand(
+      conversationId,
+      dbConversation.userId,
+      agent.systemPrompt.build(),
+      undefined,
+      {
+        role: dto.role,
+        content: dto.content,
+        attachments: dto.attachments,
+      },
+      undefined,
+    );
+
     const { messages, assistantId, assistantMessage } =
-      await this.startChatTurn.execute({
-        conversationId,
-        userId: dbConversation.userId,
-        systemPrompt: agent.systemPrompt.build(),
-        userMessage: {
-          role: dto.role,
-          content: dto.content,
-          attachments: dto.attachments,
-        },
-      });
+      await this.startChatTurnHandler.execute(turnCommand);
 
     // Update TraceContext with messageId
     TraceContext.update({
@@ -200,17 +207,20 @@ export default class ChatController {
     });
     TraceContext.freeze();
 
-    const run = await this.runAgentSession.startRun({
+    const runCommand = new RunAgentSessionCommand(
       conversationId,
       agent,
       messages,
       assistantMessage,
       binding,
-    });
+    );
+
+    const { conversation: conv, run } =
+      await this.runAgentSessionHandler.prepare(runCommand);
 
     res.status(200).json({ success: true, messageId: assistantId });
 
-    this.runAgentSession.execute(conversation, agent, run);
+    this.runAgentSessionHandler.stream(conv, agent, run);
 
     return;
   }
@@ -220,7 +230,8 @@ export default class ChatController {
     @param('conversationId') conversationId: string,
     @response() res: Response,
   ) {
-    const state = await this.getSessionStateQuery.execute(conversationId);
+    const query = new GetSessionStateQuery(conversationId);
+    const state = await this.getSessionStateHandler.execute(query);
 
     return res.status(200).json(state ? { phase: state.phase } : null);
   }
