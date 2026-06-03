@@ -1,7 +1,7 @@
 import { Express, Request, Response, NextFunction } from 'express';
 import { container } from 'tsyringe';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
-import { TraceContext } from '@/server/libs/infrastructure/TraceContext';
+import { TraceContext } from '@/server/middleware/trace-context';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
