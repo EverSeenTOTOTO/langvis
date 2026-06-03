@@ -3,25 +3,22 @@ import { generateId } from '@/shared/utils';
 import type { DomainEvent } from '@/server/libs/ddd';
 import type { SSEFrame } from '@/shared/types/events';
 import type { AgentEvent, StreamChunk } from '@/shared/types/events';
-import type { ChatStartedPayload } from '../../conversation/domain/events';
-import { ChatStarted } from '../../conversation/domain/events';
-import { AgentRun } from '../domain/agent-run.entity';
-import { AgentService } from './agent.service';
-import { service } from '@/server/decorator/service';
+import { ChatStarted } from '@/server/modules/conversation/contracts';
+import type { ChatStartedPayload } from '@/server/modules/conversation/contracts';
+import { AgentRun } from './domain/agent-run.entity';
+import { AgentService } from './application/agent.service';
+import { eventHandler } from '@/server/decorator/handler';
 import Logger from '@/server/utils/logger';
-import { SessionManager } from '../../conversation/session-manager';
-import { MESSAGE_REPOSITORY } from '../../conversation/conversation.di-tokens';
-import type { MessageRepositoryPort } from '../../conversation/database/message.repository.port';
+import { SessionManager } from '@/server/modules/conversation/session-manager';
+import { MESSAGE_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
+import type { MessageRepositoryPort } from '@/server/modules/conversation/database/message.repository.port';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
-import { EventBus } from '@/server/libs/ddd';
 
-@service()
+@eventHandler(ChatStarted)
 export class AgentRunHandler {
   private readonly logger = Logger.child({ source: 'AgentRunHandler' });
 
   constructor(
-    @inject(EventBus)
-    eventBus: EventBus,
     @inject(SessionManager)
     private sessionManager: SessionManager,
     @inject(AgentService)
@@ -30,13 +27,9 @@ export class AgentRunHandler {
     private messageRepo: MessageRepositoryPort,
     @inject(WorkspaceService)
     private workspaceService: WorkspaceService,
-  ) {
-    eventBus.on(ChatStarted, this.handle.bind(this));
-  }
+  ) {}
 
-  private async handle(
-    event: DomainEvent<string, ChatStartedPayload>,
-  ): Promise<void> {
+  async handle(event: DomainEvent<string, ChatStartedPayload>): Promise<void> {
     const { conversationId, assistantMessage, agentBinding, systemPrompt } =
       event.payload;
 

@@ -14,28 +14,26 @@ import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import { CONVERSATION_REPOSITORY } from '../modules/conversation/conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../modules/conversation/database/conversation.repository.port';
 import { SessionManager } from '../modules/conversation/session-manager';
-import { ConversationActivateCommand } from '../modules/conversation/commands/conversation-activate.command';
-import { StartChatCommand } from '../modules/conversation/commands/start-chat.command';
-import { ConversationActivateHandler } from '../modules/conversation/application/handlers/conversation-activate.handler';
-import { StartChatHandler } from '../modules/conversation/application/handlers/start-chat.handler';
-import { GetSessionStateQuery } from '../modules/conversation/queries/get-session-state.query';
-import { GetSessionStateHandler } from '../modules/conversation/application/handlers/get-session-state.handler';
+import { CommandBus, QueryBus } from '@/server/libs/ddd';
+import {
+  ConversationActivateCommand,
+  StartChatCommand,
+  GetSessionStateQuery,
+} from '../modules/conversation/contracts';
 
 @controller('/api/chat')
 export default class ChatController {
   constructor(
+    @inject(CommandBus)
+    private commandBus: CommandBus,
+    @inject(QueryBus)
+    private queryBus: QueryBus,
     @inject(SessionManager)
     private sessionManager: SessionManager,
-    @inject(ConversationActivateHandler)
-    private activateHandler: ConversationActivateHandler,
-    @inject(StartChatHandler)
-    private startChatHandler: StartChatHandler,
     @inject(CONVERSATION_REPOSITORY)
     private convRepo: ConversationRepositoryPort,
     @inject(AuthService)
     private authService: AuthService,
-    @inject(GetSessionStateHandler)
-    private getSessionStateHandler: GetSessionStateHandler,
   ) {}
 
   @api('/activate/:conversationId', { method: 'post' })
@@ -58,7 +56,7 @@ export default class ChatController {
       });
     }
 
-    await this.activateHandler.execute(
+    await this.commandBus.execute(
       new ConversationActivateCommand(conversationId, userId),
     );
 
@@ -178,7 +176,7 @@ export default class ChatController {
     const userId = await this.authService.getUserId(req);
     TraceContext.update({ userId });
 
-    const { assistantId } = await this.startChatHandler.execute(
+    const { assistantId } = await this.commandBus.execute(
       new StartChatCommand(conversationId, {
         role: dto.role,
         content: dto.content,
@@ -194,8 +192,9 @@ export default class ChatController {
     @param('conversationId') conversationId: string,
     @response() res: Response,
   ) {
-    const query = new GetSessionStateQuery(conversationId);
-    const state = await this.getSessionStateHandler.execute(query);
+    const state = await this.queryBus.execute(
+      new GetSessionStateQuery(conversationId),
+    );
 
     return res.status(200).json(state ? { phase: state.phase } : null);
   }

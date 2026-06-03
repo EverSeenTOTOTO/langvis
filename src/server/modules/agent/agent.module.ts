@@ -5,3 +5,5 @@ import { MemoryService } from '@/server/modules/memory/domain/memory-service';
 container.register(MEMORY_SERVICE, MemoryService, {
   lifecycle: Lifecycle.Singleton,
 });
+
+import './handlers';
