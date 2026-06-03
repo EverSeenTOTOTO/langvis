@@ -5,7 +5,7 @@ import {
 import type { Request, Response } from 'express';
 import { inject } from 'tsyringe';
 import { SSEServerTransport } from '@/server/libs/infrastructure/transport';
-import { TraceContext } from '@/server/libs/infrastructure/TraceContext';
+import { TraceContext } from '@/server/middleware/trace-context';
 import { NoActiveRunError } from '../modules/conversation';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';

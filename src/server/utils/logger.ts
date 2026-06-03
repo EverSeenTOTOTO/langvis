@@ -4,7 +4,7 @@ import { isEmpty, isObject } from 'lodash-es';
 import winston from 'winston';
 import 'winston-daily-rotate-file';
 import { isProd } from '.';
-import { TraceContext } from '@/server/libs/infrastructure/TraceContext';
+import { TraceContext } from '@/server/middleware/trace-context';
 
 export type Logger = winston.Logger;
 

@@ -3,7 +3,7 @@ import { container } from 'tsyringe';
 import { generateId } from '@/shared/utils';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import Logger from '../utils/logger';
-import { TraceContext } from '@/server/libs/infrastructure/TraceContext';
+import { TraceContext } from '@/server/middleware/trace-context';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace

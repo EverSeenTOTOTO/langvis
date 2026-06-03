@@ -8,7 +8,7 @@ import type {
 import { inject, singleton } from 'tsyringe';
 import type { Logger } from '@/server/utils/logger';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
-import { TraceContext } from '@/server/libs/infrastructure/TraceContext';
+import { TraceContext } from '@/server/middleware/trace-context';
 import { Role, type LlmMessage, type Message } from '@/shared/types/entities';
 import type {
   TextToSpeechInput,
