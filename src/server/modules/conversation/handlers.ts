@@ -8,12 +8,12 @@ import type { ConversationRepositoryPort } from './database/conversation.reposit
 import { AgentService } from '@/server/modules/agent/application/agent.service';
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { RedisKeys } from '@/shared/constants';
-import type { ChatSessionState } from './application/conversation.service';
+import type { ChatState } from './application/conversation.service';
 import {
   ConversationActivateCommand,
   StartChatCommand,
   GetSessionStateQuery,
-  ChatStarted,
+  TurnInitiated,
   ConversationActivated,
   extractBinding,
 } from './contracts';
@@ -91,8 +91,8 @@ export class StartChatHandler {
     const binding = extractBinding(dbConversation!);
 
     this.eventBus.emit(
-      ChatStarted,
-      createDomainEvent(ChatStarted, conversationId, {
+      TurnInitiated,
+      createDomainEvent(TurnInitiated, conversationId, {
         conversationId,
         assistantMessage: setup.assistantMessage,
         agentBinding: binding,
@@ -110,8 +110,8 @@ export class StartChatHandler {
 export class GetSessionStateHandler {
   constructor(@inject(RedisService) private redisService: RedisService) {}
 
-  async execute(query: GetSessionStateQuery): Promise<ChatSessionState | null> {
-    return this.redisService.get<ChatSessionState>(
+  async execute(query: GetSessionStateQuery): Promise<ChatState | null> {
+    return this.redisService.get<ChatState>(
       RedisKeys.CHAT_SESSION(query.conversationId),
     );
   }

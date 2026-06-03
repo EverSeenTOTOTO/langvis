@@ -42,14 +42,14 @@ export class GetSessionStateQuery extends Query {
 import type { Message } from '@/shared/types/entities';
 
 export const ConversationActivated = 'conversation_activated';
-export const ChatStarted = 'chat_started';
+export const TurnInitiated = 'turn_initiated';
 
 export interface ConversationActivatedPayload {
   conversationId: string;
   agentBinding: AgentBinding;
 }
 
-export interface ChatStartedPayload {
+export interface TurnInitiatedPayload {
   conversationId: string;
   assistantMessage: Message;
   agentBinding: AgentBinding;

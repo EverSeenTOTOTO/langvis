@@ -1,27 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { Conversation } from '@/server/modules/conversation/domain/conversation.entity';
+import { Chat } from '@/server/modules/conversation/domain/chat';
 import { DuplicateRunError } from '@/server/modules/conversation/domain/conversation.errors';
-import type { SessionPhase } from '@/shared/types';
+import type { ChatPhase } from '@/shared/types';
 
-describe('Conversation', () => {
+describe('Chat', () => {
   function createConversation(id = 'conv_1') {
-    return new Conversation(id);
+    return new Chat(id);
   }
 
   /** Extract phase_changed events from domain events */
   function getPhaseChanges(
-    conv: Conversation,
-  ): Array<{ id: string; phase: SessionPhase }> {
+    conv: Chat,
+  ): Array<{ id: string; phase: ChatPhase }> {
     return conv.domainEvents
       .filter(e => e.type === 'phase_changed')
       .map(e => ({
         id: e.aggregateId,
-        phase: (e.payload as { to: SessionPhase }).to,
+        phase: (e.payload as { to: ChatPhase }).to,
       }));
   }
 
   /** Check if conversation_disposed event exists */
-  function hasDisposedEvent(conv: Conversation): boolean {
+  function hasDisposedEvent(conv: Chat): boolean {
     return conv.domainEvents.some(e => e.type === 'conversation_disposed');
   }
 

@@ -1,12 +1,12 @@
-export { Conversation } from './domain/conversation.entity';
+export { Chat } from './domain/chat';
 export {
   ConversationNotFoundError,
   MessageNotFoundError,
   NoActiveRunError,
   DuplicateRunError,
 } from './domain/conversation.errors';
-export { ChatStarted, ConversationActivated } from './contracts';
+export { TurnInitiated, ConversationActivated } from './contracts';
 export type {
-  ChatStartedPayload,
+  TurnInitiatedPayload,
   ConversationActivatedPayload,
 } from './contracts';

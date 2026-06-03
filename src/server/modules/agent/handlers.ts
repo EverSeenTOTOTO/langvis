@@ -2,8 +2,8 @@ import { inject } from 'tsyringe';
 import { generateId } from '@/shared/utils';
 import type { DomainEvent } from '@/server/libs/ddd';
 import type { SSEFrame } from '@/shared/types/events';
-import { ChatStarted } from '@/server/modules/conversation/contracts';
-import type { ChatStartedPayload } from '@/server/modules/conversation/contracts';
+import { TurnInitiated } from '@/server/modules/conversation/contracts';
+import type { TurnInitiatedPayload } from '@/server/modules/conversation/contracts';
 import { AgentRun } from './domain/agent-run.entity';
 import { AgentService } from './application/agent.service';
 import { eventHandler } from '@/server/decorator/handler';
@@ -13,7 +13,7 @@ import { MESSAGE_REPOSITORY } from '@/server/modules/conversation/conversation.d
 import type { MessageRepositoryPort } from '@/server/modules/conversation/database/message.repository.port';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 
-@eventHandler(ChatStarted)
+@eventHandler(TurnInitiated)
 export class AgentRunHandler {
   private readonly logger = Logger.child({ source: 'AgentRunHandler' });
 
@@ -28,7 +28,9 @@ export class AgentRunHandler {
     private workspaceService: WorkspaceService,
   ) {}
 
-  async handle(event: DomainEvent<string, ChatStartedPayload>): Promise<void> {
+  async handle(
+    event: DomainEvent<string, TurnInitiatedPayload>,
+  ): Promise<void> {
     const { conversationId, assistantMessage, agentBinding, systemPrompt } =
       event.payload;
 
@@ -46,7 +48,7 @@ export class AgentRunHandler {
       historyMessages: history,
     });
 
-    const conv = this.conversationService.getSession(conversationId);
+    const conv = this.conversationService.getChat(conversationId);
     if (conv) {
       conv.startTurn(assistantMessage.id);
       this.conversationService.handleDomainEvents(conv);
@@ -77,7 +79,7 @@ export class AgentRunHandler {
   private async executeRun(
     conversationId: string,
     run: AgentRun,
-    conv?: ReturnType<ConversationService['getSession']>,
+    conv?: ReturnType<ConversationService['getChat']>,
   ): Promise<void> {
     this.logger.info(`Starting agent=${run.agent.id}`, {
       sessionId: conversationId,

@@ -3,7 +3,7 @@ import type { SSEFrame } from '@/shared/types/events';
 import type { RunEvent } from '../domain/pending-message';
 import { Role } from '@/shared/entities/Message';
 import { RedisKeys } from '@/shared/constants';
-import type { SessionPhase } from '@/shared/types';
+import type { ChatPhase } from '@/shared/types';
 import type { Transport } from '@/shared/transport';
 import { generateId } from '@/shared/utils';
 import { inject, singleton } from 'tsyringe';
@@ -11,14 +11,14 @@ import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { MESSAGE_REPOSITORY } from '../conversation.di-tokens';
 import type { MessageRepositoryPort } from '../database/message.repository.port';
-import { Conversation } from '../domain/conversation.entity';
-import { SessionConnection } from './session-connection';
+import { Chat } from '../domain/chat';
+import { SseConnection } from './sse-connection';
 import type { AgentRun } from '@/server/modules/agent/domain/agent-run.entity';
 import Logger from '@/server/utils/logger';
 
-export interface ChatSessionState {
+export interface ChatState {
   conversationId: string;
-  phase: SessionPhase;
+  phase: ChatPhase;
   messages: Array<{ messageId: string; phase: string }>;
   startedAt: number;
   agentId: string | null;
@@ -28,8 +28,8 @@ export interface ChatSessionState {
 export class ConversationService {
   private readonly logger = Logger.child({ source: 'ConversationService' });
 
-  private sessions = new Map<string, Conversation>();
-  private connections = new Map<string, SessionConnection>();
+  private chats = new Map<string, Chat>();
+  private connections = new Map<string, SseConnection>();
   private activeRuns = new Map<string, Map<string, AgentRun>>();
 
   constructor(
@@ -118,15 +118,15 @@ export class ConversationService {
   // 会话生命周期（从 SessionManager 搬入）
   // ════════════════════════════════════════
 
-  getSession(conversationId: string): Conversation | undefined {
-    return this.sessions.get(conversationId);
+  getChat(conversationId: string): Chat | undefined {
+    return this.chats.get(conversationId);
   }
 
-  async acquireSession(conversationId: string): Promise<Conversation | null> {
-    const existing = this.sessions.get(conversationId);
+  async acquireChat(conversationId: string): Promise<Chat | null> {
+    const existing = this.chats.get(conversationId);
     if (existing) {
-      this.logger.info(`Session reconnected`, {
-        sessionId: conversationId,
+      this.logger.info(`Chat reconnected`, {
+        chatId: conversationId,
         phase: existing.phase,
       });
       return existing;
@@ -134,10 +134,10 @@ export class ConversationService {
 
     await this.cleanupStaleState(conversationId);
 
-    this.logger.info(`Session created`, { sessionId: conversationId });
+    this.logger.info(`Chat created`, { chatId: conversationId });
 
-    const conversation = new Conversation(conversationId);
-    this.sessions.set(conversationId, conversation);
+    const conversation = new Chat(conversationId);
+    this.chats.set(conversationId, conversation);
 
     await this.redisService.set(
       RedisKeys.CHAT_SESSION(conversationId),
@@ -154,21 +154,21 @@ export class ConversationService {
     return conversation;
   }
 
-  disposeSession(conversationId: string): void {
-    const conv = this.sessions.get(conversationId);
+  disposeChat(conversationId: string): void {
+    const conv = this.chats.get(conversationId);
     if (!conv) return;
     conv.dispose();
     this.handleDomainEvents(conv);
   }
 
   async disposeAll(): Promise<void> {
-    const count = this.sessions.size;
-    for (const [id, conversation] of this.sessions) {
+    const count = this.chats.size;
+    for (const [id, conversation] of this.chats) {
       conversation.dispose();
       this.handleDomainEvents(conversation);
       this.connections.get(id)?.dispose();
     }
-    this.logger.info(`Closed ${count} SSE sessions`);
+    this.logger.info(`Closed ${count} SSE connections`);
   }
 
   // ════════════════════════════════════════
@@ -177,7 +177,7 @@ export class ConversationService {
 
   handleRunEvent(conversationId: string, event: RunEvent): void {
     // 1. 领域：Conversation → PendingMessage 累积
-    const conv = this.sessions.get(conversationId);
+    const conv = this.chats.get(conversationId);
     conv?.handleRunEvent(event);
 
     // 2. 传输：转发给 SSE
@@ -197,7 +197,7 @@ export class ConversationService {
   ): void {
     let conn = this.connections.get(conversationId);
     if (!conn) {
-      conn = new SessionConnection(conversationId, 30_000, () => {
+      conn = new SseConnection(conversationId, 30_000, () => {
         this.connections.delete(conversationId);
         onIdle?.();
       });
@@ -206,7 +206,7 @@ export class ConversationService {
     conn.attach(transport);
 
     // replay: 从 PendingMessage snapshot 恢复
-    const conv = this.sessions.get(conversationId);
+    const conv = this.chats.get(conversationId);
     const snapshot = conv?.getPendingSnapshot();
     if (snapshot && snapshot.status === 'running') {
       conn.send({
@@ -217,12 +217,12 @@ export class ConversationService {
       } as SSEFrame);
       this.logger.info(
         `Replayed snapshot: ${snapshot.content.length} chars, ${snapshot.steps.length} steps`,
-        { sessionId: conversationId, messageId: snapshot.messageId },
+        { chatId: conversationId, messageId: snapshot.messageId },
       );
     }
 
     this.logger.info(`Transport attached`, {
-      sessionId: conversationId,
+      chatId: conversationId,
     });
   }
 
@@ -252,7 +252,7 @@ export class ConversationService {
   }
 
   cancelAll(conversationId: string, reason: string): void {
-    const conv = this.sessions.get(conversationId);
+    const conv = this.chats.get(conversationId);
     if (conv) {
       conv.requestCancellation(undefined, reason);
       this.handleDomainEvents(conv);
@@ -273,7 +273,7 @@ export class ConversationService {
   }
 
   cancelRun(conversationId: string, messageId: string, reason: string): void {
-    const conv = this.sessions.get(conversationId);
+    const conv = this.chats.get(conversationId);
     if (conv) {
       conv.requestCancellation(messageId, reason);
       this.handleDomainEvents(conv);
@@ -293,10 +293,8 @@ export class ConversationService {
   // Redis session state（从 SessionManager 搬入）
   // ════════════════════════════════════════
 
-  async getSessionState(
-    conversationId: string,
-  ): Promise<ChatSessionState | null> {
-    return this.redisService.get<ChatSessionState>(
+  async getChatState(conversationId: string): Promise<ChatState | null> {
+    return this.redisService.get<ChatState>(
       RedisKeys.CHAT_SESSION(conversationId),
     );
   }
@@ -305,19 +303,19 @@ export class ConversationService {
    * 处理聚合根收集的领域事件。
    * 在每次 conversation 操作后调用。
    */
-  handleDomainEvents(conversation: Conversation): void {
+  handleDomainEvents(conversation: Chat): void {
     for (const event of conversation.domainEvents) {
       switch (event.type) {
         case 'phase_changed': {
           const { to } = event.payload as {
-            from: SessionPhase;
-            to: SessionPhase;
+            from: ChatPhase;
+            to: ChatPhase;
           };
-          this.updateSessionPhase(event.aggregateId, to);
+          this.updateChatPhase(event.aggregateId, to);
           break;
         }
         case 'conversation_disposed': {
-          this.sessions.delete(event.aggregateId);
+          this.chats.delete(event.aggregateId);
           this.activeRuns.delete(event.aggregateId);
           this.redisService.del(RedisKeys.CHAT_SESSION(event.aggregateId));
           break;
@@ -329,12 +327,12 @@ export class ConversationService {
 
   // ── 内部 ──
 
-  private async updateSessionPhase(
+  private async updateChatPhase(
     conversationId: string,
-    phase: SessionPhase,
+    phase: ChatPhase,
     agentId?: string,
   ): Promise<void> {
-    const state = await this.getSessionState(conversationId);
+    const state = await this.getChatState(conversationId);
     if (!state) return;
     await this.redisService.set(
       RedisKeys.CHAT_SESSION(conversationId),
@@ -344,12 +342,12 @@ export class ConversationService {
   }
 
   private async cleanupStaleState(conversationId: string): Promise<void> {
-    const state = await this.getSessionState(conversationId);
+    const state = await this.getChatState(conversationId);
     if (!state) return;
 
     if (state.phase !== 'done' && state.phase !== 'waiting') {
       this.logger.warn(`Stale session detected`, {
-        sessionId: conversationId,
+        chatId: conversationId,
         phase: state.phase,
       });
 
