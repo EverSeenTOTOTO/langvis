@@ -41,6 +41,7 @@ export class ChatStore {
         if (!newId) return;
 
         await this.conversationStore.getMessagesByConversationId({ id: newId });
+        await this.activateChat({ conversationId: newId }).catch(() => {});
         await this.activateConversation(newId);
       },
     );
@@ -182,6 +183,14 @@ export class ChatStore {
   // ════════════════════════════════════════
   // API methods
   // ════════════════════════════════════════
+
+  @api('/api/chat/activate/:conversationId', { method: 'post' })
+  async activateChat(
+    _params: { conversationId: string },
+    req?: ApiRequest<{ conversationId: string }>,
+  ): Promise<void> {
+    await req!.send();
+  }
 
   @api('/api/chat/session/:conversationId')
   async getSessionState(

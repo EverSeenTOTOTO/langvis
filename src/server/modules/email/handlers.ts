@@ -1,8 +1,8 @@
 import { AgentIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import { inject } from 'tsyringe';
-import { commandHandler } from '@/server/decorator/handler';
-import { CommandBus } from '@/server/libs/ddd';
+import { commandHandler, eventHandler } from '@/server/decorator/handler';
+import { CommandBus, EventBus, createDomainEvent } from '@/server/libs/ddd';
 import {
   CacheService,
   type CachedReference,
@@ -15,7 +15,17 @@ import { ConversationActivateCommand } from '@/server/modules/conversation/contr
 import { StartChatCommand } from '@/server/modules/conversation/contracts';
 import { EmailService } from './domain/email.service';
 import type { EmailEntity } from '@/shared/entities/Email';
-import { ArchiveEmailCommand, type ArchiveEmailResult } from './contracts';
+import {
+  ArchiveEmailCommand,
+  type ArchiveEmailResult,
+  EmailArchived,
+  type EmailArchivedPayload,
+} from './contracts';
+
+// ── ArchiveEmail (command handler) ────────────────────────
+// Only handles the email aggregate: mark archived, create conversation,
+// compress content, then emit EmailArchived event.
+// Cross-aggregate orchestration (activate + startChat) is in EmailArchivedHandler.
 
 @commandHandler(ArchiveEmailCommand)
 export class ArchiveEmailHandler {
@@ -24,14 +34,12 @@ export class ArchiveEmailHandler {
     private readonly emailService: EmailService,
     @inject(CONVERSATION_REPOSITORY)
     private readonly convRepo: ConversationRepositoryPort,
-    @inject(SessionManager)
-    private readonly sessionManager: SessionManager,
-    @inject(CommandBus)
-    private readonly commandBus: CommandBus,
     @inject(ProviderService)
     private readonly providerService: ProviderService,
     @inject(CacheService)
     private readonly cacheService: CacheService,
+    @inject(EventBus)
+    private readonly eventBus: EventBus,
   ) {}
 
   async execute(command: ArchiveEmailCommand): Promise<ArchiveEmailResult> {
@@ -64,7 +72,29 @@ export class ArchiveEmailHandler {
       throw new Error(`Mismatched conversation user: ${userId}`);
     }
 
-    await this.startArchiveSession(conversation, email);
+    const contentOrCached = await this.cacheService.compress(
+      conversation.id,
+      email.content,
+    );
+    const userContent = this.buildArchivePrompt(
+      email,
+      contentOrCached as string | CachedReference,
+    );
+
+    const { agent, ...restConfig } = (conversation.config ?? {}) as any;
+
+    this.eventBus.emit(
+      EmailArchived,
+      createDomainEvent(EmailArchived, conversation.id, {
+        conversationId: conversation.id,
+        userId: conversation.userId,
+        userContent,
+        agentBinding: {
+          agentId: agent ?? AgentIds.REACT,
+          config: restConfig,
+        },
+      } satisfies EmailArchivedPayload),
+    );
 
     return { conversationId: conversation.id };
   }
@@ -83,36 +113,37 @@ export class ArchiveEmailHandler {
 
     return `使用 document_archive 技能归档邮件：${email.subject}\n\n发件人：${fromDisplay}\n发件时间：${email.sentAt.toISOString()}\n\n内容已缓存：${JSON.stringify(contentOrCached)}`;
   }
+}
 
-  private async startArchiveSession(
-    conversation: { id: string; userId: string },
-    email: EmailEntity,
-  ): Promise<void> {
-    const conversationId = conversation.id;
+// ── EmailArchived (event handler / Saga) ───────────────────
+// Cross-aggregate orchestration: activate conversation + start chat.
+// This is the Saga pattern — event handler dispatching commands.
+
+@eventHandler(EmailArchived)
+export class EmailArchivedHandler {
+  constructor(
+    @inject(SessionManager)
+    private readonly sessionManager: SessionManager,
+    @inject(CommandBus)
+    private readonly commandBus: CommandBus,
+  ) {}
+
+  async handle(event: { payload: EmailArchivedPayload }): Promise<void> {
+    const { conversationId, userId, userContent } = event.payload;
 
     const session = await this.sessionManager.acquireSession(conversationId);
     if (!session) {
       throw new Error(`Failed to acquire session for ${conversationId}`);
     }
 
-    const contentOrCached = await this.cacheService.compress(
-      conversationId,
-      email.content,
-    );
-    const userContent = this.buildArchivePrompt(
-      email,
-      contentOrCached as string | CachedReference,
-    );
-
     await this.commandBus.execute(
-      new ConversationActivateCommand(conversationId, conversation.userId),
+      new ConversationActivateCommand(conversationId, userId),
     );
 
     await this.commandBus.execute(
       new StartChatCommand(conversationId, {
         role: Role.USER,
         content: userContent,
-        meta: { emailId: email.id },
       }),
     );
   }
