@@ -1,4 +1,5 @@
 import { Command } from '@/server/libs/ddd';
+import type { AgentBinding } from '@/shared/types/agent';
 
 export class ArchiveEmailCommand extends Command {
   constructor(
@@ -11,4 +12,13 @@ export class ArchiveEmailCommand extends Command {
 
 export interface ArchiveEmailResult {
   conversationId: string;
+}
+
+export const EmailArchived = 'email_archived';
+
+export interface EmailArchivedPayload {
+  conversationId: string;
+  userId: string;
+  userContent: string;
+  agentBinding: AgentBinding;
 }
