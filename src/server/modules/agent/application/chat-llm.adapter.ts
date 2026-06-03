@@ -1,7 +1,7 @@
 import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
 import type { Logger } from '@/server/utils/logger';
 import type { ChatLlm } from '../domain/chat-llm';
-import type { LlmService } from '@/server/modules/memory/adapters/llm.adapter';
+import type { LlmService } from '@/server/modules/memory/services/llm.service';
 
 export class ChatLlmAdapter implements ChatLlm {
   constructor(

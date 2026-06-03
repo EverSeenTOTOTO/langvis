@@ -11,7 +11,7 @@ import { ToolCall } from './tool-call.entity';
 import type { MemoryService } from '@/server/modules/memory/domain/memory-service';
 import type { ContextUsage } from '@/server/modules/memory/domain/memory.types';
 import type { ChatLlm } from './chat-llm';
-import { CacheService } from '@/server/modules/memory/adapters/cache.adapter';
+import { CacheService } from '@/server/modules/memory/services/cache.service';
 import { AggregateRoot } from '@/server/libs/ddd';
 import type { DomainEvent } from '@/server/libs/ddd';
 
@@ -51,6 +51,7 @@ export class AgentRun extends AggregateRoot<string> {
 
   // ── 依赖 ──
   readonly agent: Agent;
+  readonly workDir: string;
   private memory: MemoryService;
   private cache: CacheService;
   readonly llm: ChatLlm;
@@ -59,6 +60,7 @@ export class AgentRun extends AggregateRoot<string> {
   constructor(
     runId: string,
     messageId: string,
+    workDir: string,
     config: EffectiveConfig,
     agent: Agent,
     memory: MemoryService,
@@ -69,6 +71,7 @@ export class AgentRun extends AggregateRoot<string> {
     super(runId);
     this.runId = runId;
     this.messageId = messageId;
+    this.workDir = workDir;
     this.config = config;
     this.agent = agent;
     this.memory = memory;
@@ -155,7 +158,12 @@ export class AgentRun extends AggregateRoot<string> {
     }
 
     const callId = generateId('tc');
-    const toolCall = new ToolCall(callId, tool, toolArgs, this.cache);
+    const toolCall = new ToolCall(callId, tool, toolArgs, this.cache, {
+      signal: this.signal,
+      workDir: this.workDir,
+      messageId: this.messageId,
+      runId: this.runId,
+    });
     this._toolCalls.set(callId, toolCall);
 
     yield* toolCall.execute(this);

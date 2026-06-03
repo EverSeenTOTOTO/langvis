@@ -1,7 +1,7 @@
 import type { Logger } from '@/server/utils/logger';
 import type { AgentConfig } from '@/shared/types';
 import type { AgentEvent, StreamChunk } from '@/shared/types/events';
-import { Prompt } from '@/server/core/PromptBuilder';
+import { Prompt } from '@/server/modules/agent/domain/Prompt';
 import type { Tool } from '@/server/modules/agent/domain/tool.base';
 import type { AgentRun } from './agent-run.entity';
 

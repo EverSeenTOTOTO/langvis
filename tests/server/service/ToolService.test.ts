@@ -1,5 +1,5 @@
 import * as configModule from '@/server/decorator/core';
-import { ToolService } from '@/server/modules/agent/tool-service';
+import { ToolService } from '@/server/modules/agent/application/tool.service';
 import { globby } from 'globby';
 import { container } from 'tsyringe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -44,7 +44,9 @@ describe('ToolService', () => {
       const result = await toolService.getAllToolInfo();
 
       expect(globby).toHaveBeenCalledWith(
-        expect.stringContaining('server/core/tool/*/index'),
+        expect.stringContaining(
+          'server/modules/agent/implementations/tools/*/index',
+        ),
         expect.any(Object),
       );
       expect(result).toBeDefined();

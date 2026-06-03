@@ -1,4 +1,4 @@
-import { DocumentService } from '@/server/modules/document/document.service';
+import { DocumentService } from '@/server/modules/document/domain/document.service';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DocumentRepositoryPort } from '@/server/modules/document/database/document.repository.port';
 

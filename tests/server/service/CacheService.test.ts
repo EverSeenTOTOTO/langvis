@@ -9,7 +9,7 @@ import {
   PREVIEW_LENGTH,
   isCachedReference,
   type CachedReference,
-} from '@/server/modules/memory/adapters/cache.adapter';
+} from '@/server/modules/memory/services/cache.service';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 
 let testDir: string;

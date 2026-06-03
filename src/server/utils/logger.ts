@@ -4,7 +4,7 @@ import { isEmpty, isObject } from 'lodash-es';
 import winston from 'winston';
 import 'winston-daily-rotate-file';
 import { isProd } from '.';
-import { TraceContext } from '../core/TraceContext';
+import { TraceContext } from '@/server/libs/infrastructure/TraceContext';
 
 export type Logger = winston.Logger;
 
@@ -166,7 +166,6 @@ const createSafeLogger = (winstonLogger: winston.Logger) => {
       const traceMeta: Record<string, any> = {};
       if (trace.requestId) traceMeta.requestId = trace.requestId;
       if (trace.userId) traceMeta.userId = trace.userId;
-      if (trace.conversationId) traceMeta.conversationId = trace.conversationId;
 
       // Merge trace meta with first meta object if it exists
       if (safeMeta.length > 0 && typeof safeMeta[0] === 'object') {
