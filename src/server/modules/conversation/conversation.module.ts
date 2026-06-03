@@ -12,3 +12,5 @@ container.register(MESSAGE_REPOSITORY, MessageRepository, {
 container.register(CONVERSATION_REPOSITORY, ConversationRepository, {
   lifecycle: Lifecycle.Singleton,
 });
+
+import './handlers';

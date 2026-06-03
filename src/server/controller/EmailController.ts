@@ -5,8 +5,8 @@ import { controller } from '../decorator/controller';
 import { body, param, query, request, response } from '../decorator/param';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import { EmailService } from '@/server/modules/email/domain/email.service';
-import { ArchiveEmailHandler } from '@/server/modules/email/application/handlers/archive-email.handler';
-import { ArchiveEmailCommand } from '@/server/modules/email/commands/archive-email.command';
+import { CommandBus } from '@/server/libs/ddd';
+import { ArchiveEmailCommand } from '@/server/modules/email/contracts';
 import { ListEmailsRequestDto } from '@/shared/dto/controller';
 import Logger from '../utils/logger';
 
@@ -23,8 +23,8 @@ export default class EmailController {
   constructor(
     @inject(EmailService)
     private readonly emailService: EmailService,
-    @inject(ArchiveEmailHandler)
-    private readonly archiveHandler: ArchiveEmailHandler,
+    @inject(CommandBus)
+    private readonly commandBus: CommandBus,
     @inject(AuthService)
     private readonly authService: AuthService,
   ) {}
@@ -110,7 +110,7 @@ export default class EmailController {
     const userId = await this.authService.getUserId(req);
 
     try {
-      const { conversationId } = await this.archiveHandler.execute(
+      const { conversationId } = await this.commandBus.execute(
         new ArchiveEmailCommand(id, userId),
       );
 
