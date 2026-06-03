@@ -26,8 +26,37 @@ export type ToolCallRecord = {
 };
 
 /**
+ * ReAct 推理步骤 — 将 thought + action + observation 绑定为一个原子单元。
+ * ChatAgent 场景下 steps 为空，仅累积 content。
+ */
+export interface ReActStep {
+  thought: string;
+  action?: {
+    callId: string;
+    toolName: string;
+    toolArgs: Record<string, unknown>;
+  };
+  observation?: string;
+  startedAt: number;
+  completedAt?: number;
+}
+
+/**
+ * PendingMessage 快照 — SSE 断线重连时的状态恢复依据。
+ * 由 Conversation 聚合根内的 PendingMessage 实体产出。
+ */
+export interface PendingMessageSnapshot {
+  messageId: string;
+  content: string;
+  steps: ReActStep[];
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+}
+
+/**
  * AgentRun 运行时快照 — 用于断线重连。
  * 前端请求快照 → 恢复渲染状态 → 重新订阅 SSE 实时流。
+ *
+ * @deprecated 由 PendingMessageSnapshot 替代，保留用于过渡期兼容。
  */
 export type RunSnapshot = {
   runId: string;

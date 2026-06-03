@@ -1,5 +1,5 @@
 import type { RunStatus } from './agent';
-import type { ToolCallRecord } from './render';
+import type { ReActStep } from './render';
 
 export enum Role {
   SYSTEM = 'system',
@@ -21,8 +21,7 @@ export type Message = {
   attachments?: MessageAttachment[] | null;
   parentId?: string | null;
   agentRunId?: string | null;
-  toolCallRecords?: ToolCallRecord[] | null;
-  thoughts?: string[] | null;
+  steps?: ReActStep[] | null;
   status?: RunStatus | null;
   meta?: Record<string, unknown> | null;
   createdAt: Date;

@@ -7,7 +7,7 @@ import logger from '@/server/utils/logger';
  *
  * Supports multiple concurrent SSE connections (multi-tab),
  * broadcasting events to all. Not a domain entity — it's an
- * infrastructure component managed by SessionManager.
+ * infrastructure component managed by ConversationService.
  */
 export class SessionConnection {
   private transports = new Set<Transport<SSEFrame>>();

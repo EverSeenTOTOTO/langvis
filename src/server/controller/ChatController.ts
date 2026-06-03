@@ -6,14 +6,13 @@ import type { Request, Response } from 'express';
 import { inject } from 'tsyringe';
 import { SSEServerTransport } from '@/server/libs/infrastructure/transport';
 import { TraceContext } from '@/server/middleware/trace-context';
-import { NoActiveRunError } from '../modules/conversation';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import { CONVERSATION_REPOSITORY } from '../modules/conversation/conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../modules/conversation/database/conversation.repository.port';
-import { SessionManager } from '../modules/conversation/session-manager';
+import { ConversationService } from '../modules/conversation/application/conversation.service';
 import { CommandBus, QueryBus } from '@/server/libs/ddd';
 import {
   ConversationActivateCommand,
@@ -28,8 +27,8 @@ export default class ChatController {
     private commandBus: CommandBus,
     @inject(QueryBus)
     private queryBus: QueryBus,
-    @inject(SessionManager)
-    private sessionManager: SessionManager,
+    @inject(ConversationService)
+    private conversationService: ConversationService,
     @inject(CONVERSATION_REPOSITORY)
     private convRepo: ConversationRepositoryPort,
     @inject(AuthService)
@@ -70,7 +69,7 @@ export default class ChatController {
     @response() res: Response,
   ) {
     const conversation =
-      await this.sessionManager.acquireSession(conversationId);
+      await this.conversationService.acquireSession(conversationId);
     if (!conversation) {
       return res.sendStatus(204);
     }
@@ -85,7 +84,9 @@ export default class ChatController {
       req.log.error('SSE connection error:', e.detail);
     });
 
-    this.sessionManager.attachTransport(conversationId, transport);
+    this.conversationService.attachTransport(conversationId, transport, () =>
+      this.conversationService.disposeSession(conversationId),
+    );
 
     req.log.info('SSE connection established', {
       sessionId: conversationId,
@@ -101,7 +102,7 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const conversation = this.sessionManager.getSession(conversationId);
+    const conversation = this.conversationService.getSession(conversationId);
 
     if (
       !conversation ||
@@ -112,7 +113,7 @@ export default class ChatController {
       });
     }
 
-    this.sessionManager.cancelConversation(
+    this.conversationService.cancelAll(
       conversationId,
       dto.reason ?? 'Cancelled by user',
     );
@@ -128,11 +129,11 @@ export default class ChatController {
   async cancelMessage(
     @param('conversationId') conversationId: string,
     @param('messageId') messageId: string,
-    @body() _dto: { reason?: string },
+    @body() dto: { reason?: string },
     @request() req: Request,
     @response() res: Response,
   ) {
-    const conversation = this.sessionManager.getSession(conversationId);
+    const conversation = this.conversationService.getSession(conversationId);
 
     if (!conversation) {
       return res.status(404).json({
@@ -140,16 +141,17 @@ export default class ChatController {
       });
     }
 
-    try {
-      this.sessionManager.cancelMessage(conversationId, messageId);
-    } catch (e) {
-      if (e instanceof NoActiveRunError) {
-        return res.status(404).json({
-          error: `No active message ${messageId}`,
-        });
-      }
-      throw e;
+    if (!conversation.hasActiveMessage(messageId)) {
+      return res.status(404).json({
+        error: `No active message ${messageId}`,
+      });
     }
+
+    this.conversationService.cancelRun(
+      conversationId,
+      messageId,
+      dto.reason ?? 'Cancelled by user',
+    );
 
     req.log.info(
       `Cancelled message ${messageId} for conversation ${conversationId}`,
@@ -165,14 +167,6 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const conversation = this.sessionManager.getSession(conversationId);
-
-    if (!conversation) {
-      return res.status(400).json({
-        error: 'SSE connection not established',
-      });
-    }
-
     const userId = await this.authService.getUserId(req);
     TraceContext.update({ userId });
 

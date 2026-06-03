@@ -1,6 +1,6 @@
 import type { Message, LlmMessage } from '@/shared/types/entities';
 import { Role } from '@/shared/entities/Message';
-import type { ToolCallRecord } from '@/shared/types/render';
+import type { ReActStep } from '@/shared/types/render';
 import { ContextWindow } from './context-window';
 import type { ContextUsage } from './memory.types';
 
@@ -46,9 +46,9 @@ export class MemoryService {
         if (
           msg.role === Role.ASSIST &&
           options.memoryType === 'react' &&
-          msg.toolCallRecords?.length
+          msg.steps?.length
         ) {
-          const summary = this.summarizeToolCalls(msg.toolCallRecords);
+          const summary = this.summarizeSteps(msg.steps);
           if (summary) {
             content = `${summary}\n\n${content}`;
           }
@@ -61,16 +61,18 @@ export class MemoryService {
     return messages;
   }
 
-  summarizeToolCalls(toolCallRecords: ToolCallRecord[]): string {
-    if (toolCallRecords.length === 0) return '';
+  summarizeSteps(steps: ReActStep[]): string {
+    if (steps.length === 0) return '';
 
-    const lines = toolCallRecords.map(tc => {
-      if (tc.status === 'failed') {
-        return `> 调用 ${tc.toolName}: 失败 - ${tc.error}`;
+    const lines = steps.map(step => {
+      const parts = [`> 思考: ${step.thought}`];
+      if (step.action) {
+        const outputHint = step.observation
+          ? step.observation.slice(0, 100)
+          : '完成';
+        parts.push(`> 调用 ${step.action.toolName}: ${outputHint}`);
       }
-      const outputHint =
-        typeof tc.output === 'string' ? tc.output.slice(0, 100) : '完成';
-      return `> 调用 ${tc.toolName}: ${outputHint}`;
+      return parts.join('\n');
     });
 
     return lines.join('\n');
