@@ -1,4 +1,1 @@
-export {
-  MEMORY_SERVICE,
-  AGENT_RUN_FACTORY,
-} from '@/server/modules/agent/agent.di-tokens';
+export { MEMORY_SERVICE } from '@/server/modules/agent/agent.di-tokens';

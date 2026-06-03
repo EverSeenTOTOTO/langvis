@@ -1,4 +1,4 @@
-import { UserService } from '@/server/modules/user/user.service';
+import { UserService } from '@/server/modules/user/domain/user.service';
 import { beforeEach, afterEach, vi, describe, it, expect } from 'vitest';
 import type { UserRepositoryPort } from '@/server/modules/user/database/user.repository.port';
 

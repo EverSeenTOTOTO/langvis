@@ -1,6 +1,7 @@
 import type { Logger } from '@/server/utils/logger';
 import type { ToolConfig, ToolCallTimeline } from '@/shared/types';
 import type { ToolProgress } from './tool-call.entity';
+import type { ToolCall } from './tool-call.entity';
 
 export abstract class Tool<I = unknown, O = unknown> {
   abstract readonly id: string;
@@ -10,7 +11,7 @@ export abstract class Tool<I = unknown, O = unknown> {
 
   abstract call(
     input: I,
-    ctx: { signal: AbortSignal },
+    toolCall: ToolCall,
   ): AsyncGenerator<ToolProgress, O, void>;
 
   summarize(timeline: ToolCallTimeline): string {

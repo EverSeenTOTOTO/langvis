@@ -1,14 +1,14 @@
 import { container } from 'tsyringe';
-import { AgentService } from '@/server/modules/agent/agent-service';
-import { SkillService } from '@/server/core/skill/skill-service';
-import { ToolService } from '@/server/modules/agent/tool-service';
+import { AgentService } from '@/server/modules/agent/application/agent.service';
+import { SkillService } from '@/server/modules/agent/application/skill.service';
+import { ToolService } from '@/server/modules/agent/application/tool.service';
 import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { globby } from 'globby';
 import * as configModule from '@/server/decorator/core';
 
 vi.mock('globby');
-vi.mock('@/server/modules/agent/tool-service');
-vi.mock('@/server/core/skill/skill-service');
+vi.mock('@/server/modules/agent/application/tool.service');
+vi.mock('@/server/modules/agent/application/skill.service');
 vi.mock('@/server/decorator/core', async importOriginal => {
   const actual = await importOriginal<typeof configModule>();
   return {
@@ -81,7 +81,7 @@ describe('AgentService', () => {
 
       expect(globby).toHaveBeenCalledWith(
         expect.stringContaining(
-          'server/modules/agent/implementations/agents/*.agent',
+          'server/modules/agent/implementations/agents/*/index',
         ),
         expect.any(Object),
       );

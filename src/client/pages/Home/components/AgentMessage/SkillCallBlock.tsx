@@ -6,7 +6,7 @@ import type { UIToolCall } from '@/client/store/modules/message-node';
 import Modal from '@/client/components/Modal';
 import './ReActAgent/index.scss';
 import { useStore } from '@/client/store';
-import type { SkillCallOutput } from '@/server/core/tool/SkillCall/config';
+import type { SkillCallOutput } from '@/server/modules/agent/implementations/tools/SkillCall/config';
 import { safeJsonParse } from '@/shared/utils';
 import { getToolColor } from './ToolBlockItem';
 

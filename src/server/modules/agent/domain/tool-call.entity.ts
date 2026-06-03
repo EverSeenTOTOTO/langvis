@@ -1,30 +1,55 @@
 import type { ToolCallRecord } from '@/shared/types/render';
-import type { CacheService } from '@/server/modules/memory/adapters/cache.adapter';
+import type { CacheService } from '@/server/modules/memory/services/cache.service';
 import type { EnrichedEvent } from './agent.types';
 import { Entity } from '@/server/libs/ddd';
+import type { Tool } from './tool.base';
 
 export type ToolProgress = { type: 'tool_progress'; data: unknown };
+
+export interface ToolCallContext {
+  signal: AbortSignal;
+  workDir: string;
+  messageId: string;
+  runId: string;
+}
+
+export type ToolCallEmitter = {
+  emitToolCall: (
+    callId: string,
+    toolName: string,
+    toolArgs: Record<string, unknown>,
+  ) => EnrichedEvent;
+  emitToolProgress: (callId: string, data: unknown) => EnrichedEvent;
+  emitToolResult: (
+    callId: string,
+    toolName: string,
+    output: unknown,
+  ) => EnrichedEvent;
+  emitToolError: (
+    callId: string,
+    toolName: string,
+    error: string,
+  ) => EnrichedEvent;
+};
 
 /**
  * ToolCall — 聚合内实体。
  * 封装一次工具调用的完整业务流程：输入解析 → 执行 → 输出压缩 → 格式化。
  *
- * 手动迭代 tool.call() 以拦截 tool_progress yield，
- * 通过 run.emitToolProgress() 注入 runId/callId/seq/at。
+ * 持有完整执行上下文（signal, workDir, messageId, runId），
+ * 通过 tool.call(input, this) 传给 Tool — 对称 agent.call(run)。
  */
 export class ToolCall extends Entity<string> {
   readonly toolName: string;
   readonly toolArgs: Record<string, unknown>;
   readonly startedAt: number;
 
-  private tool: {
-    call: (
-      input: unknown,
-      ctx: { signal: AbortSignal },
-    ) => AsyncGenerator<ToolProgress, unknown, void>;
-    readonly id: string;
-    readonly config?: { compression?: string; untrustedOutput?: boolean };
-  };
+  readonly signal: AbortSignal;
+  readonly workDir: string;
+  readonly messageId: string;
+  readonly runId: string;
+
+  private tool: Tool;
   private cache: CacheService;
 
   private _status: 'pending' | 'completed' | 'failed' = 'pending';
@@ -34,9 +59,10 @@ export class ToolCall extends Entity<string> {
 
   constructor(
     callId: string,
-    tool: ToolCall['tool'],
+    tool: Tool,
     toolArgs: Record<string, unknown>,
     cache: CacheService,
+    context: ToolCallContext,
   ) {
     super(callId);
     this.toolName = tool.id;
@@ -44,41 +70,29 @@ export class ToolCall extends Entity<string> {
     this.toolArgs = toolArgs;
     this.cache = cache;
     this.startedAt = Date.now();
+
+    this.signal = context.signal;
+    this.workDir = context.workDir;
+    this.messageId = context.messageId;
+    this.runId = context.runId;
   }
 
   /**
    * 完整的工具调用生命周期。
-   * 通过 run.emitXxx() 发射事件，事件通过 yield 透传到 Agent → 应用层。
+   * emitter 由 AgentRun 提供 — ToolCall 自身已持有全部执行上下文。
    */
-  async *execute(run: {
-    runId: string;
-    signal: AbortSignal;
-    emitToolCall: (
-      callId: string,
-      toolName: string,
-      toolArgs: Record<string, unknown>,
-    ) => EnrichedEvent;
-    emitToolProgress: (callId: string, data: unknown) => EnrichedEvent;
-    emitToolResult: (
-      callId: string,
-      toolName: string,
-      output: unknown,
-    ) => EnrichedEvent;
-    emitToolError: (
-      callId: string,
-      toolName: string,
-      error: string,
-    ) => EnrichedEvent;
-  }): AsyncGenerator<EnrichedEvent, void, void> {
+  async *execute(
+    emitter: ToolCallEmitter,
+  ): AsyncGenerator<EnrichedEvent, void, void> {
     const resolvedInput = (await this.cache.resolve(
-      run.runId,
+      this.runId,
       this.toolArgs,
     )) as Record<string, unknown>;
 
-    yield run.emitToolCall(this.id, this.toolName, resolvedInput);
+    yield emitter.emitToolCall(this.id, this.toolName, resolvedInput);
 
     try {
-      const gen = this.tool.call(resolvedInput, { signal: run.signal });
+      const gen = this.tool.call(resolvedInput, this);
       let result = await gen.next();
 
       while (!result.done) {
@@ -88,24 +102,24 @@ export class ToolCall extends Entity<string> {
           'type' in result.value &&
           result.value.type === 'tool_progress'
         ) {
-          yield run.emitToolProgress(this.id, result.value.data);
+          yield emitter.emitToolProgress(this.id, result.value.data);
         }
         result = await gen.next();
       }
 
       const output = result.value;
       const compressed = await this.cache.compress(
-        run.runId,
+        this.runId,
         output,
         this.tool.config?.compression as 'skip' | 'file' | undefined,
       );
 
       this.complete(compressed);
-      yield run.emitToolResult(this.id, this.toolName, compressed);
+      yield emitter.emitToolResult(this.id, this.toolName, compressed);
     } catch (error) {
       const errMsg = (error as Error)?.message ?? String(error);
       this.fail(errMsg);
-      yield run.emitToolError(this.id, this.toolName, errMsg);
+      yield emitter.emitToolError(this.id, this.toolName, errMsg);
     }
   }
 

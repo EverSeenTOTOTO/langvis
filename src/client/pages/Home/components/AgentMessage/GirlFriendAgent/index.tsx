@@ -2,7 +2,7 @@ import AudioPlayer from '@/client/components/AudioPlayer';
 import { lazy, Suspense } from 'react';
 
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
-import { TextToSpeechOutput } from '@/server/core/tool/TextToSpeech';
+import { TextToSpeechOutput } from '@/server/modules/agent/implementations/tools/TextToSpeech';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import type { MessageNode } from '@/client/store/modules/message-node';
 import { InfoCircleOutlined, LoadingOutlined } from '@ant-design/icons';

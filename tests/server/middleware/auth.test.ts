@@ -1,5 +1,5 @@
 import authMiddleware from '@/server/middleware/auth';
-import { TraceContext } from '@/server/core/TraceContext';
+import { TraceContext } from '@/server/libs/infrastructure/TraceContext';
 import { Express, Request, Response } from 'express';
 import { container } from 'tsyringe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

@@ -3,7 +3,7 @@ import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { request, response } from '../decorator/param';
-import { AgentService } from '@/server/modules/agent/agent-service';
+import { AgentService } from '@/server/modules/agent/application/agent.service';
 
 @controller('/api/agent')
 export default class AgentController {
