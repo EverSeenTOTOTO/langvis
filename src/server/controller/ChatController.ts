@@ -69,7 +69,7 @@ export default class ChatController {
     @response() res: Response,
   ) {
     const conversation =
-      await this.conversationService.acquireSession(conversationId);
+      await this.conversationService.acquireChat(conversationId);
     if (!conversation) {
       return res.sendStatus(204);
     }
@@ -85,7 +85,7 @@ export default class ChatController {
     });
 
     this.conversationService.attachTransport(conversationId, transport, () =>
-      this.conversationService.disposeSession(conversationId),
+      this.conversationService.disposeChat(conversationId),
     );
 
     req.log.info('SSE connection established', {
@@ -102,7 +102,7 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const conversation = this.conversationService.getSession(conversationId);
+    const conversation = this.conversationService.getChat(conversationId);
 
     if (
       !conversation ||
@@ -133,7 +133,7 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const conversation = this.conversationService.getSession(conversationId);
+    const conversation = this.conversationService.getChat(conversationId);
 
     if (!conversation) {
       return res.status(404).json({

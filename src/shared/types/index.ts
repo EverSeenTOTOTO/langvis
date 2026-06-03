@@ -41,12 +41,7 @@ export interface ToolConfig<
   untrustedOutput?: boolean;
 }
 
-export type SessionPhase =
-  | 'waiting'
-  | 'active'
-  | 'canceling'
-  | 'error'
-  | 'done';
+export type ChatPhase = 'waiting' | 'active' | 'canceling' | 'error' | 'done';
 
 export * from './tool';
 

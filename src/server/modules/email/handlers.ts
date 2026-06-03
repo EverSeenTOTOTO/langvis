@@ -131,8 +131,7 @@ export class EmailArchivedHandler {
   async handle(event: { payload: EmailArchivedPayload }): Promise<void> {
     const { conversationId, userId, userContent } = event.payload;
 
-    const session =
-      await this.conversationService.acquireSession(conversationId);
+    const session = await this.conversationService.acquireChat(conversationId);
     if (!session) {
       throw new Error(`Failed to acquire session for ${conversationId}`);
     }

@@ -1,4 +1,4 @@
-import type { SessionPhase } from '@/shared/types';
+import type { ChatPhase } from '@/shared/types';
 import type { PendingMessageSnapshot } from '@/shared/types/render';
 import { DuplicateRunError } from './conversation.errors';
 import { AggregateRoot, createDomainEvent } from '@/server/libs/ddd';
@@ -15,10 +15,10 @@ import type { RunEvent } from './pending-message';
  * 领域事件：turn_started, turn_completed, turn_cancellation_requested,
  *           conversation_disposed, phase_changed
  */
-export class Conversation extends AggregateRoot<string> {
+export class Chat extends AggregateRoot<string> {
   readonly createdAt = Date.now();
 
-  private _phase: SessionPhase = 'waiting';
+  private _phase: ChatPhase = 'waiting';
   private _disposed = false;
   private activeMessageIds = new Set<string>();
   private pendingMessage?: PendingMessage;
@@ -31,7 +31,7 @@ export class Conversation extends AggregateRoot<string> {
   // 状态查询
   // ════════════════════════════════════════
 
-  get phase(): SessionPhase {
+  get phase(): ChatPhase {
     if (this._disposed) return 'done';
     return this._phase;
   }
@@ -113,7 +113,7 @@ export class Conversation extends AggregateRoot<string> {
 
   // ── 内部 ──
 
-  private transitionPhase(newPhase: SessionPhase): void {
+  private transitionPhase(newPhase: ChatPhase): void {
     if (newPhase === this._phase) return;
     const from = this._phase;
     logger.info(`Session phase changed: ${from} -> ${newPhase}`, {
