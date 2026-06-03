@@ -101,4 +101,10 @@ export type SSEFrame =
     }
   | { type: 'connected' }
   | { type: 'session_replaced' }
-  | { type: 'session_error'; error: string };
+  | { type: 'session_error'; error: string }
+  | {
+      type: 'state_snapshot';
+      messageId: string;
+      content: string;
+      steps: import('./render').ReActStep[];
+    };

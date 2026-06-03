@@ -1,6 +1,6 @@
 import type { SSEFrame } from '@/shared/types/events';
 import type { RunStatus } from '@/shared/types/agent';
-import type { RunSnapshot, ToolCallRecord } from '@/shared/types/render';
+import type { ReActStep, PendingMessageSnapshot } from '@/shared/types/render';
 import type { Role } from '@/shared/types/entities';
 import { makeAutoObservable } from 'mobx';
 
@@ -40,6 +40,7 @@ export class MessageNode {
   cancelReason?: string;
   toolCalls: UIToolCall[] = [];
   thoughts: string[] = [];
+  steps: ReActStep[] = [];
   contextUsage?: { used: number; total: number };
   private _awaitingInputData: AwaitingInputData | null = null;
 
@@ -50,8 +51,7 @@ export class MessageNode {
     createdAt: Date;
     content?: string;
     status?: RunStatus;
-    toolCallRecords?: ToolCallRecord[] | null;
-    thoughts?: string[] | null;
+    steps?: ReActStep[] | null;
   }) {
     this.id = data.id;
     this.conversationId = data.conversationId;
@@ -62,19 +62,10 @@ export class MessageNode {
     if (data.status && data.status !== 'initialized') {
       this.content = data.content ?? '';
       this.status = data.status;
-      this.toolCalls = (data.toolCallRecords ?? []).map(tc => ({
-        callId: tc.callId,
-        toolName: tc.toolName,
-        toolArgs: tc.toolArgs,
-        status: tc.status,
-        progress: [],
-        output: tc.output,
-        error: tc.error,
-        duration: tc.duration,
-        startedAt: tc.startedAt,
-        completedAt: tc.completedAt,
-      }));
-      this.thoughts = data.thoughts ?? [];
+      this.steps = data.steps ?? [];
+      // Derive toolCalls and thoughts from steps for UI compatibility
+      this.toolCalls = this.stepsToToolCalls(this.steps);
+      this.thoughts = this.stepsToThoughts(this.steps);
     }
 
     makeAutoObservable(this);
@@ -161,22 +152,15 @@ export class MessageNode {
     }
   }
 
-  applySnapshot(snapshot: RunSnapshot): void {
+  /**
+   * 从 PendingMessage snapshot 恢复状态（SSE 断线重连）。
+   */
+  applySnapshot(snapshot: PendingMessageSnapshot): void {
     this.content = snapshot.content;
-    this.status = snapshot.status;
-    this.toolCalls = snapshot.toolCallRecords.map(tc => ({
-      callId: tc.callId,
-      toolName: tc.toolName,
-      toolArgs: tc.toolArgs,
-      status: tc.status,
-      progress: [],
-      output: tc.output,
-      error: tc.error,
-      duration: tc.duration,
-      startedAt: tc.startedAt,
-      completedAt: tc.completedAt,
-    }));
-    this.thoughts = snapshot.thoughts;
+    this.status = snapshot.status as RunStatus;
+    this.steps = snapshot.steps;
+    this.toolCalls = this.stepsToToolCalls(this.steps);
+    this.thoughts = this.stepsToThoughts(this.steps);
   }
 
   // ════════════════════════════════════════
@@ -227,6 +211,25 @@ export class MessageNode {
   }
 
   // ── 内部 ──
+
+  private stepsToToolCalls(steps: ReActStep[]): UIToolCall[] {
+    return steps
+      .filter(s => s.action)
+      .map(s => ({
+        callId: s.action!.callId,
+        toolName: s.action!.toolName,
+        toolArgs: s.action!.toolArgs,
+        status: 'completed' as const,
+        progress: [],
+        output: s.observation,
+        startedAt: s.startedAt,
+        completedAt: s.completedAt,
+      }));
+  }
+
+  private stepsToThoughts(steps: ReActStep[]): string[] {
+    return steps.map(s => s.thought);
+  }
 
   private extractAwaitingInput(frame: SSEFrame): void {
     if (frame.type !== 'tool_progress') return;

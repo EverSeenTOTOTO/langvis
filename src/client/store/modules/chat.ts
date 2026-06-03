@@ -93,8 +93,7 @@ export class ChatStore {
         createdAt: msg.createdAt,
         content: msg.content,
         status: msg.status as any,
-        toolCallRecords: msg.toolCallRecords ?? undefined,
-        thoughts: msg.thoughts ?? undefined,
+        steps: msg.steps ?? undefined,
       });
       nodes.set(msg.id, node);
     }
@@ -155,6 +154,18 @@ export class ChatStore {
           used: frame.used,
           total: frame.total,
         };
+        return;
+      }
+
+      // State snapshot → initialize MessageNode from server state
+      if (frame.type === 'state_snapshot') {
+        const msgId = (frame as any).messageId as string;
+        if (msgId) {
+          const node = this.messageNodes.get(conversationId)?.get(msgId);
+          if (node) {
+            node.applySnapshot(frame as any);
+          }
+        }
         return;
       }
 
@@ -248,23 +259,21 @@ export class ChatStore {
     this.addOptimisticUserMessage(conversationId, params.content!);
 
     try {
-      await this.connectTransport(conversationId);
-    } catch {
-      this.refreshMessages(conversationId);
-      return;
-    }
-
-    try {
       const res = (await req!.send()) as StartChatResponse;
 
       if (res.messageId) {
         this.addAssistantMessage(conversationId, res.messageId);
 
-        // Create MessageNode for the new assistant message
         const messages = this.conversationStore.messages[conversationId];
         const assistantMessage = messages?.find(m => m.id === res.messageId);
         if (assistantMessage) {
           this.getOrCreateMessageNode(conversationId, assistantMessage);
+        }
+
+        try {
+          await this.connectTransport(conversationId);
+        } catch {
+          this.refreshMessages(conversationId);
         }
       }
     } catch {

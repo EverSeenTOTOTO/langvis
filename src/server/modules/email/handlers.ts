@@ -8,7 +8,7 @@ import {
   type CachedReference,
 } from '@/server/modules/memory/services/cache.service';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
-import { SessionManager } from '@/server/modules/conversation/session-manager';
+import { ConversationService } from '@/server/modules/conversation/application/conversation.service';
 import { CONVERSATION_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
 import type { ConversationRepositoryPort } from '@/server/modules/conversation/database/conversation.repository.port';
 import { ConversationActivateCommand } from '@/server/modules/conversation/contracts';
@@ -122,8 +122,8 @@ export class ArchiveEmailHandler {
 @eventHandler(EmailArchived)
 export class EmailArchivedHandler {
   constructor(
-    @inject(SessionManager)
-    private readonly sessionManager: SessionManager,
+    @inject(ConversationService)
+    private readonly conversationService: ConversationService,
     @inject(CommandBus)
     private readonly commandBus: CommandBus,
   ) {}
@@ -131,7 +131,8 @@ export class EmailArchivedHandler {
   async handle(event: { payload: EmailArchivedPayload }): Promise<void> {
     const { conversationId, userId, userContent } = event.payload;
 
-    const session = await this.sessionManager.acquireSession(conversationId);
+    const session =
+      await this.conversationService.acquireSession(conversationId);
     if (!session) {
       throw new Error(`Failed to acquire session for ${conversationId}`);
     }

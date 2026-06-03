@@ -1,6 +1,5 @@
 import type { Message } from '@/shared/types/entities';
 import type { MessageAttachment } from '@/shared/types/entities';
-import type { ToolCallRecord } from '@/shared/types/render';
 import { Role } from '@/shared/types/entities';
 
 export interface MessageRepositoryPort {
@@ -30,13 +29,6 @@ export interface MessageRepositoryPort {
   ): Promise<void>;
 
   update(messageId: string, partial: Partial<Message>): Promise<Message | null>;
-
-  appendToolCallRecord(
-    messageId: string,
-    record: ToolCallRecord,
-  ): Promise<void>;
-
-  appendThought(messageId: string, thought: string): Promise<void>;
 
   deleteAfter(conversationId: string, afterMessageId: string): Promise<boolean>;
 }

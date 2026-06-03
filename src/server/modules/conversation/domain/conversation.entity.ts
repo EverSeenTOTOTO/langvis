@@ -1,7 +1,10 @@
 import type { SessionPhase } from '@/shared/types';
+import type { PendingMessageSnapshot } from '@/shared/types/render';
 import { DuplicateRunError } from './conversation.errors';
 import { AggregateRoot, createDomainEvent } from '@/server/libs/ddd';
 import logger from '@/server/utils/logger';
+import { PendingMessage } from './pending-message';
+import type { RunEvent } from './pending-message';
 
 /**
  * Conversation — 会话聚合根。
@@ -18,6 +21,7 @@ export class Conversation extends AggregateRoot<string> {
   private _phase: SessionPhase = 'waiting';
   private _disposed = false;
   private activeMessageIds = new Set<string>();
+  private pendingMessage?: PendingMessage;
 
   constructor(id: string) {
     super(id);
@@ -49,16 +53,26 @@ export class Conversation extends AggregateRoot<string> {
       throw new DuplicateRunError(messageId);
     }
     this.activeMessageIds.add(messageId);
+    this.pendingMessage = new PendingMessage(messageId);
     this.transitionPhase('active');
     this.addEvent(createDomainEvent('turn_started', this.id, { messageId }));
   }
 
   completeTurn(messageId: string): void {
     this.activeMessageIds.delete(messageId);
+    this.pendingMessage = undefined;
     this.addEvent(createDomainEvent('turn_completed', this.id, { messageId }));
     if (this.activeMessageIds.size === 0) {
       this.transitionPhase('waiting');
     }
+  }
+
+  handleRunEvent(event: RunEvent): void {
+    this.pendingMessage?.handleEvent(event);
+  }
+
+  getPendingSnapshot(): PendingMessageSnapshot | undefined {
+    return this.pendingMessage?.toSnapshot();
   }
 
   requestCancellation(messageId?: string, reason?: string): void {

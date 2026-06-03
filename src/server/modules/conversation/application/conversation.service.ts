@@ -1,19 +1,49 @@
 import type { Message, MessageAttachment } from '@/shared/types/entities';
+import type { SSEFrame } from '@/shared/types/events';
+import type { RunEvent } from '../domain/pending-message';
 import { Role } from '@/shared/entities/Message';
+import { RedisKeys } from '@/shared/constants';
+import type { SessionPhase } from '@/shared/types';
+import type { Transport } from '@/shared/transport';
 import { generateId } from '@/shared/utils';
 import { inject, singleton } from 'tsyringe';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
+import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { MESSAGE_REPOSITORY } from '../conversation.di-tokens';
 import type { MessageRepositoryPort } from '../database/message.repository.port';
+import { Conversation } from '../domain/conversation.entity';
+import { SessionConnection } from './session-connection';
+import type { AgentRun } from '@/server/modules/agent/domain/agent-run.entity';
+import Logger from '@/server/utils/logger';
+
+export interface ChatSessionState {
+  conversationId: string;
+  phase: SessionPhase;
+  messages: Array<{ messageId: string; phase: string }>;
+  startedAt: number;
+  agentId: string | null;
+}
 
 @singleton()
 export class ConversationService {
+  private readonly logger = Logger.child({ source: 'ConversationService' });
+
+  private sessions = new Map<string, Conversation>();
+  private connections = new Map<string, SessionConnection>();
+  private activeRuns = new Map<string, Map<string, AgentRun>>();
+
   constructor(
     @inject(MESSAGE_REPOSITORY)
     private messageRepo: MessageRepositoryPort,
     @inject(WorkspaceService)
     private workspaceService: WorkspaceService,
+    @inject(RedisService)
+    private redisService: RedisService,
   ) {}
+
+  // ════════════════════════════════════════
+  // 消息构建（原有）
+  // ════════════════════════════════════════
 
   async activate(params: {
     conversationId: string;
@@ -82,6 +112,264 @@ export class ConversationService {
       assistantId,
       assistantMessage: newMessages[1],
     };
+  }
+
+  // ════════════════════════════════════════
+  // 会话生命周期（从 SessionManager 搬入）
+  // ════════════════════════════════════════
+
+  getSession(conversationId: string): Conversation | undefined {
+    return this.sessions.get(conversationId);
+  }
+
+  async acquireSession(conversationId: string): Promise<Conversation | null> {
+    const existing = this.sessions.get(conversationId);
+    if (existing) {
+      this.logger.info(`Session reconnected`, {
+        sessionId: conversationId,
+        phase: existing.phase,
+      });
+      return existing;
+    }
+
+    await this.cleanupStaleState(conversationId);
+
+    this.logger.info(`Session created`, { sessionId: conversationId });
+
+    const conversation = new Conversation(conversationId);
+    this.sessions.set(conversationId, conversation);
+
+    await this.redisService.set(
+      RedisKeys.CHAT_SESSION(conversationId),
+      {
+        conversationId,
+        phase: 'waiting',
+        messages: [],
+        startedAt: Date.now(),
+        agentId: null,
+      },
+      3600,
+    );
+
+    return conversation;
+  }
+
+  disposeSession(conversationId: string): void {
+    const conv = this.sessions.get(conversationId);
+    if (!conv) return;
+    conv.dispose();
+    this.handleDomainEvents(conv);
+  }
+
+  async disposeAll(): Promise<void> {
+    const count = this.sessions.size;
+    for (const [id, conversation] of this.sessions) {
+      conversation.dispose();
+      this.handleDomainEvents(conversation);
+      this.connections.get(id)?.dispose();
+    }
+    this.logger.info(`Closed ${count} SSE sessions`);
+  }
+
+  // ════════════════════════════════════════
+  // Run 事件协调（核心：领域累积 + SSE 投递）
+  // ════════════════════════════════════════
+
+  handleRunEvent(conversationId: string, event: RunEvent): void {
+    // 1. 领域：Conversation → PendingMessage 累积
+    const conv = this.sessions.get(conversationId);
+    conv?.handleRunEvent(event);
+
+    // 2. 传输：转发给 SSE
+    const snapshot = conv?.getPendingSnapshot();
+    const frame = { ...event, messageId: snapshot?.messageId } as SSEFrame;
+    this.connections.get(conversationId)?.send(frame);
+  }
+
+  // ════════════════════════════════════════
+  // Transport 管理（从 SessionManager 搬入）
+  // ════════════════════════════════════════
+
+  attachTransport(
+    conversationId: string,
+    transport: Transport<SSEFrame>,
+    onIdle?: () => void,
+  ): void {
+    let conn = this.connections.get(conversationId);
+    if (!conn) {
+      conn = new SessionConnection(conversationId, 30_000, () => {
+        this.connections.delete(conversationId);
+        onIdle?.();
+      });
+      this.connections.set(conversationId, conn);
+    }
+    conn.attach(transport);
+
+    // replay: 从 PendingMessage snapshot 恢复
+    const conv = this.sessions.get(conversationId);
+    const snapshot = conv?.getPendingSnapshot();
+    if (snapshot && snapshot.status === 'running') {
+      conn.send({
+        type: 'state_snapshot',
+        messageId: snapshot.messageId,
+        content: snapshot.content,
+        steps: snapshot.steps,
+      } as SSEFrame);
+      this.logger.info(
+        `Replayed snapshot: ${snapshot.content.length} chars, ${snapshot.steps.length} steps`,
+        { sessionId: conversationId, messageId: snapshot.messageId },
+      );
+    }
+
+    this.logger.info(`Transport attached`, {
+      sessionId: conversationId,
+    });
+  }
+
+  sendFrame(conversationId: string, frame: SSEFrame): boolean {
+    return this.connections.get(conversationId)?.send(frame) ?? false;
+  }
+
+  // ════════════════════════════════════════
+  // Run 管理（从 SessionManager 搬入）
+  // ════════════════════════════════════════
+
+  registerRun(conversationId: string, messageId: string, run: AgentRun): void {
+    if (!this.activeRuns.has(conversationId)) {
+      this.activeRuns.set(conversationId, new Map());
+    }
+    this.activeRuns.get(conversationId)!.set(messageId, run);
+  }
+
+  finalizeRun(conversationId: string, messageId: string): void {
+    const runs = this.activeRuns.get(conversationId);
+    if (!runs) return;
+    runs.delete(messageId);
+    if (runs.size === 0) {
+      this.activeRuns.delete(conversationId);
+      this.connections.get(conversationId)?.markIdle();
+    }
+  }
+
+  cancelAll(conversationId: string, reason: string): void {
+    const conv = this.sessions.get(conversationId);
+    if (conv) {
+      conv.requestCancellation(undefined, reason);
+      this.handleDomainEvents(conv);
+    }
+
+    const runs = this.activeRuns.get(conversationId);
+    if (runs) {
+      for (const run of runs.values()) {
+        if (!run.isTerminated) {
+          try {
+            run.cancel(reason);
+          } catch {
+            // Already terminated
+          }
+        }
+      }
+    }
+  }
+
+  cancelRun(conversationId: string, messageId: string, reason: string): void {
+    const conv = this.sessions.get(conversationId);
+    if (conv) {
+      conv.requestCancellation(messageId, reason);
+      this.handleDomainEvents(conv);
+    }
+
+    const run = this.activeRuns.get(conversationId)?.get(messageId);
+    if (run && !run.isTerminated) {
+      try {
+        run.cancel(reason);
+      } catch {
+        // Already terminated
+      }
+    }
+  }
+
+  // ════════════════════════════════════════
+  // Redis session state（从 SessionManager 搬入）
+  // ════════════════════════════════════════
+
+  async getSessionState(
+    conversationId: string,
+  ): Promise<ChatSessionState | null> {
+    return this.redisService.get<ChatSessionState>(
+      RedisKeys.CHAT_SESSION(conversationId),
+    );
+  }
+
+  /**
+   * 处理聚合根收集的领域事件。
+   * 在每次 conversation 操作后调用。
+   */
+  handleDomainEvents(conversation: Conversation): void {
+    for (const event of conversation.domainEvents) {
+      switch (event.type) {
+        case 'phase_changed': {
+          const { to } = event.payload as {
+            from: SessionPhase;
+            to: SessionPhase;
+          };
+          this.updateSessionPhase(event.aggregateId, to);
+          break;
+        }
+        case 'conversation_disposed': {
+          this.sessions.delete(event.aggregateId);
+          this.activeRuns.delete(event.aggregateId);
+          this.redisService.del(RedisKeys.CHAT_SESSION(event.aggregateId));
+          break;
+        }
+      }
+    }
+    conversation.clearEvents();
+  }
+
+  // ── 内部 ──
+
+  private async updateSessionPhase(
+    conversationId: string,
+    phase: SessionPhase,
+    agentId?: string,
+  ): Promise<void> {
+    const state = await this.getSessionState(conversationId);
+    if (!state) return;
+    await this.redisService.set(
+      RedisKeys.CHAT_SESSION(conversationId),
+      { ...state, phase, agentId: agentId ?? state.agentId },
+      3600,
+    );
+  }
+
+  private async cleanupStaleState(conversationId: string): Promise<void> {
+    const state = await this.getSessionState(conversationId);
+    if (!state) return;
+
+    if (state.phase !== 'done' && state.phase !== 'waiting') {
+      this.logger.warn(`Stale session detected`, {
+        sessionId: conversationId,
+        phase: state.phase,
+      });
+
+      const staleMessages =
+        await this.messageRepo.findActiveAssistantMessages(conversationId);
+
+      if (staleMessages.length > 0) {
+        await Promise.all(
+          staleMessages.map(msg =>
+            this.messageRepo.update(msg.id, {
+              content:
+                msg.content || 'Generation interrupted (server restarted)',
+              status: 'failed',
+            }),
+          ),
+        );
+      }
+    }
+
+    await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
   }
 
   private buildSystemMessages(params: {

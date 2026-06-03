@@ -8,7 +8,7 @@ import type { ConversationRepositoryPort } from './database/conversation.reposit
 import { AgentService } from '@/server/modules/agent/application/agent.service';
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { RedisKeys } from '@/shared/constants';
-import type { ChatSessionState } from './session-manager';
+import type { ChatSessionState } from './application/conversation.service';
 import {
   ConversationActivateCommand,
   StartChatCommand,

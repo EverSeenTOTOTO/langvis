@@ -1,10 +1,8 @@
-import type { EffectiveConfig, RunStatus } from '@/shared/types/agent';
-import type { ToolCallRecord, RunSnapshot } from '@/shared/types/render';
+import type { EffectiveConfig } from '@/shared/types/agent';
 import type { LlmMessage, Message } from '@/shared/types/entities';
 import { generateId } from '@/shared/utils';
 import { container } from 'tsyringe';
 import type { EnrichedEvent } from './agent.types';
-import type { AgentEvent, StreamChunk } from '@/shared/types/events';
 import { RunAlreadyCompletedError, ToolNotFoundError } from './agent.errors';
 import type { Agent } from './agent.base';
 import { ToolCall } from './tool-call.entity';
@@ -12,23 +10,21 @@ import type { MemoryService } from '@/server/modules/memory/domain/memory-servic
 import type { ContextUsage } from '@/server/modules/memory/domain/memory.types';
 import type { ChatLlm } from './chat-llm';
 import { CacheService } from '@/server/modules/memory/services/cache.service';
-import { AggregateRoot } from '@/server/libs/ddd';
-import type { DomainEvent } from '@/server/libs/ddd';
+import { EventEmitter } from 'events';
 
 /**
- * AgentRun — Agent 上下文的核心聚合根。
+ * AgentRun — 无状态执行器。
  *
- * 拥有自己的执行生命周期：execute() 驱动 agent.call(this)，
- * Agent 通过 run.llm 访问预绑定的 ChatLlm，通过 run.executeTool() 执行工具。
+ * 驱动 agent.call(this) 循环，通过 EventEmitter 发布事件。
+ * 不累积 content / thoughts / toolCalls — 状态累积由 Conversation 聚合根内的 PendingMessage 负责。
+ *
+ * 生命周期方法（appendContent / recordThought 等）仍返回 EnrichedEvent
+ * 以兼容 Agent 实现中的 yield 语法，但同时通过 emit('run:event') 推送给消费者。
  */
-export class AgentRun extends AggregateRoot<string> {
+export class AgentRun extends EventEmitter {
   // ── 身份 ──
   readonly runId: string;
   readonly messageId: string;
-  private _status: RunStatus = 'initialized';
-  get status(): RunStatus {
-    return this._status;
-  }
 
   // ── 配置快照 ──
   readonly config: EffectiveConfig;
@@ -39,15 +35,9 @@ export class AgentRun extends AggregateRoot<string> {
     return this.abortController.signal;
   }
 
-  // ── 累积状态 ──
-  private _content = '';
-  get content(): string {
-    return this._content;
-  }
-
-  private _thoughts: string[] = [];
-  private _toolCalls = new Map<string, ToolCall>();
+  // ── 内部执行控制 ──
   private seq = 0;
+  private _terminated = false;
 
   // ── 依赖 ──
   readonly agent: Agent;
@@ -68,7 +58,7 @@ export class AgentRun extends AggregateRoot<string> {
     llm: ChatLlm,
     historyMessages: Message[],
   ) {
-    super(runId);
+    super();
     this.runId = runId;
     this.messageId = messageId;
     this.workDir = workDir;
@@ -81,32 +71,22 @@ export class AgentRun extends AggregateRoot<string> {
   }
 
   // ════════════════════════════════════════
-  // 执行入口 — AgentRun 驱动自己的生命周期
+  // 执行入口
   // ════════════════════════════════════════
 
-  async *execute(): AsyncGenerator<
-    EnrichedEvent | AgentEvent | StreamChunk,
-    void,
-    void
-  > {
+  async execute(): Promise<void> {
+    this.enrichAndEmit({ type: 'start' });
     try {
-      yield this.start();
-      yield* this.agent.call(this);
-      if (!this.isTerminated) {
-        yield this.complete();
+      for await (const _ of this.agent.call(this)) {
+        if (this.signal.aborted) break;
+      }
+      if (!this._terminated) {
+        this.doComplete();
       }
     } catch (err) {
       if (this.signal.aborted) return;
-      yield this.fail((err as Error)?.message || String(err));
+      this.doFail((err as Error)?.message || String(err));
     }
-  }
-
-  // ════════════════════════════════════════
-  // 事件缓冲（用于断线重连 replay）
-  // ════════════════════════════════════════
-
-  get bufferedEvents(): EnrichedEvent[] {
-    return this.domainEvents as unknown as EnrichedEvent[];
   }
 
   // ════════════════════════════════════════
@@ -144,7 +124,8 @@ export class AgentRun extends AggregateRoot<string> {
 
   /**
    * 创建 ToolCall 并委托执行。
-   * 直接通过 container.resolve(toolName) 解析工具实例。
+   * 保持 AsyncGenerator 签名以兼容 Agent 的 yield* 语法。
+   * ToolCall 实例仅在方法作用域内存在，不累积。
    */
   async *executeTool(
     toolName: string,
@@ -164,7 +145,6 @@ export class AgentRun extends AggregateRoot<string> {
       messageId: this.messageId,
       runId: this.runId,
     });
-    this._toolCalls.set(callId, toolCall);
 
     yield* toolCall.execute(this);
 
@@ -172,22 +152,15 @@ export class AgentRun extends AggregateRoot<string> {
   }
 
   // ════════════════════════════════════════
-  // 生命周期方法
+  // 生命周期方法 — emit 并返回（兼容 Agent yield）
   // ════════════════════════════════════════
 
-  start(): EnrichedEvent {
-    this._status = 'running';
-    return this.emit({ type: 'start' });
-  }
-
   appendContent(chunk: string): EnrichedEvent {
-    this._content += chunk;
-    return this.emit({ type: 'text_chunk', content: chunk });
+    return this.enrichAndEmit({ type: 'text_chunk', content: chunk });
   }
 
   recordThought(content: string): EnrichedEvent {
-    this._thoughts.push(content);
-    return this.emit({ type: 'thought', content });
+    return this.enrichAndEmit({ type: 'thought', content });
   }
 
   /** 供 ToolCall 内部调用 */
@@ -196,11 +169,16 @@ export class AgentRun extends AggregateRoot<string> {
     toolName: string,
     toolArgs: Record<string, unknown>,
   ): EnrichedEvent {
-    return this.emit({ type: 'tool_call', callId, toolName, toolArgs });
+    return this.enrichAndEmit({
+      type: 'tool_call',
+      callId,
+      toolName,
+      toolArgs,
+    });
   }
 
   emitToolProgress(callId: string, data: unknown): EnrichedEvent {
-    return this.emit({ type: 'tool_progress', callId, data });
+    return this.enrichAndEmit({ type: 'tool_progress', callId, data });
   }
 
   emitToolResult(
@@ -208,7 +186,12 @@ export class AgentRun extends AggregateRoot<string> {
     toolName: string,
     output: unknown,
   ): EnrichedEvent {
-    return this.emit({ type: 'tool_result', callId, toolName, output });
+    return this.enrichAndEmit({
+      type: 'tool_result',
+      callId,
+      toolName,
+      output,
+    });
   }
 
   emitToolError(
@@ -216,28 +199,24 @@ export class AgentRun extends AggregateRoot<string> {
     toolName: string,
     error: string,
   ): EnrichedEvent {
-    return this.emit({ type: 'tool_error', callId, toolName, error });
+    return this.enrichAndEmit({ type: 'tool_error', callId, toolName, error });
   }
 
   complete(): EnrichedEvent {
-    if (this._status !== 'running')
-      throw new RunAlreadyCompletedError(this.runId);
-    this._status = 'completed';
-    return this.emit({ type: 'final' });
+    if (this._terminated) throw new RunAlreadyCompletedError(this.runId);
+    return this.doComplete();
   }
 
-  cancel(reason: string): EnrichedEvent {
-    if (this._status === 'completed' || this._status === 'cancelled') {
-      throw new RunAlreadyCompletedError(this.runId);
-    }
+  cancel(reason: string): void {
+    if (this._terminated) return;
+    this._terminated = true;
     this.abortController.abort(reason);
-    this._status = 'cancelled';
-    return this.emit({ type: 'cancelled', reason });
+    this.enrichAndEmit({ type: 'cancelled', reason });
   }
 
   fail(error: string): EnrichedEvent {
-    this._status = 'failed';
-    return this.emit({ type: 'error', error });
+    if (this._terminated) throw new RunAlreadyCompletedError(this.runId);
+    return this.doFail(error);
   }
 
   /** 供应用层 emit context_usage 时使用 */
@@ -245,47 +224,30 @@ export class AgentRun extends AggregateRoot<string> {
     return ++this.seq;
   }
 
-  // ════════════════════════════════════════
-  // 查询
-  // ════════════════════════════════════════
-
-  getToolCallRecords(): ToolCallRecord[] {
-    return [...this._toolCalls.values()].map(tc => tc.toRecord());
-  }
-
-  getToolCall(callId: string): ToolCall | undefined {
-    return this._toolCalls.get(callId);
-  }
-
-  toSnapshot(): RunSnapshot {
-    return {
-      runId: this.runId,
-      messageId: this.messageId,
-      status: this._status,
-      content: this._content,
-      toolCallRecords: this.getToolCallRecords(),
-      thoughts: [...this._thoughts],
-    };
-  }
-
   get isTerminated(): boolean {
-    return (
-      this._status === 'completed' ||
-      this._status === 'failed' ||
-      this._status === 'cancelled'
-    );
+    return this._terminated;
   }
 
   // ── 内部 ──
 
-  private emit(event: any): EnrichedEvent {
+  private doComplete(): EnrichedEvent {
+    this._terminated = true;
+    return this.enrichAndEmit({ type: 'final' });
+  }
+
+  private doFail(error: string): EnrichedEvent {
+    this._terminated = true;
+    return this.enrichAndEmit({ type: 'error', error });
+  }
+
+  private enrichAndEmit(event: any): EnrichedEvent {
     const enriched: EnrichedEvent = {
       ...event,
       runId: this.runId,
       seq: ++this.seq,
       at: Date.now(),
     };
-    this.addEvent(enriched as unknown as DomainEvent);
+    this.emit('run:event', enriched);
     return enriched;
   }
 }
