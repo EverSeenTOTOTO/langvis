@@ -81,6 +81,7 @@ export class AgentRun extends EventEmitter {
         if (this.signal.aborted) break;
       }
       if (!this._terminated) {
+        this.emitContextUsage();
         this.doComplete();
       }
     } catch (err) {
@@ -219,16 +220,21 @@ export class AgentRun extends EventEmitter {
     return this.doFail(error);
   }
 
-  /** 供应用层 emit context_usage 时使用 */
-  nextSeq(): number {
-    return ++this.seq;
-  }
-
   get isTerminated(): boolean {
     return this._terminated;
   }
 
   // ── 内部 ──
+
+  private emitContextUsage(): void {
+    const { used, total } = this.getContextUsage();
+    this.enrichAndEmit({
+      type: 'context_usage',
+      used,
+      total,
+      reason: 'turn_completed',
+    });
+  }
 
   private doComplete(): EnrichedEvent {
     this._terminated = true;

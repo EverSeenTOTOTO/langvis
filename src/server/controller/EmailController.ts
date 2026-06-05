@@ -110,11 +110,11 @@ export default class EmailController {
     const userId = await this.authService.getUserId(req);
 
     try {
-      const { conversationId } = await this.commandBus.execute(
+      const { emailId } = await this.commandBus.execute(
         new ArchiveEmailCommand(id, userId),
       );
 
-      return res.status(200).json({ conversationId });
+      return res.status(200).json({ emailId, status: 'archived' });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.logger.error(`Failed to archive email: ${errorMsg}`);

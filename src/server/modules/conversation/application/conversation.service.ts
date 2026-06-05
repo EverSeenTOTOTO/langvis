@@ -5,7 +5,6 @@ import { Role } from '@/shared/entities/Message';
 import { RedisKeys } from '@/shared/constants';
 import type { ChatPhase } from '@/shared/types';
 import type { Transport } from '@/shared/transport';
-import { generateId } from '@/shared/utils';
 import { inject, singleton } from 'tsyringe';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
@@ -42,7 +41,25 @@ export class ConversationService {
   ) {}
 
   // ════════════════════════════════════════
-  // 消息构建（原有）
+  // 聚合根生命周期
+  // ════════════════════════════════════════
+
+  getOrCreateChat(conversationId: string): Chat {
+    let chat = this.chats.get(conversationId);
+    if (!chat) {
+      chat = new Chat(conversationId);
+      this.chats.set(conversationId, chat);
+      this.logger.info(`Chat created`, { chatId: conversationId });
+    }
+    return chat;
+  }
+
+  getChat(conversationId: string): Chat | undefined {
+    return this.chats.get(conversationId);
+  }
+
+  // ════════════════════════════════════════
+  // 消息构建（通过 Chat 聚合根）
   // ════════════════════════════════════════
 
   async activate(params: {
@@ -56,11 +73,11 @@ export class ConversationService {
     );
     if (existing.length > 0) return;
 
+    const chat = this.getOrCreateChat(params.conversationId);
     const workDir = await this.workspaceService.getWorkDir(
       params.conversationId,
     );
-    const messages = this.buildSystemMessages({ ...params, workDir });
-    for (const msg of messages) msg.conversationId = params.conversationId;
+    const messages = chat.createActivationMessages({ ...params, workDir });
     await this.messageRepo.batchCreate(params.conversationId, messages);
   }
 
@@ -82,47 +99,21 @@ export class ConversationService {
       params.conversationId,
     );
 
-    const assistantId = params.assistantId ?? generateId('msg');
-    const now = Date.now();
-    const newMessages: Message[] = [
-      {
-        id: generateId('msg'),
-        role: params.userMessage.role,
-        content: params.userMessage.content,
-        attachments: params.userMessage.attachments ?? null,
-        meta: params.userMessage.meta ?? null,
-        createdAt: new Date(now),
-        conversationId: params.conversationId,
-      },
-      {
-        id: assistantId,
-        role: Role.ASSIST,
-        content: '',
-        attachments: null,
-        status: 'initialized',
-        meta: null,
-        createdAt: new Date(now + 1),
-        conversationId: params.conversationId,
-      },
-    ];
-    await this.messageRepo.batchCreate(params.conversationId, newMessages);
+    const chat = this.getOrCreateChat(params.conversationId);
+    const { userMessage, assistantMessage } = chat.createTurnMessages(params);
+    await this.messageRepo.batchCreate(params.conversationId, [
+      userMessage,
+      assistantMessage,
+    ]);
 
     return {
       existingMessages,
-      assistantId,
-      assistantMessage: newMessages[1],
+      assistantId: assistantMessage.id,
+      assistantMessage,
     };
   }
 
-  // ════════════════════════════════════════
-  // 会话生命周期（从 SessionManager 搬入）
-  // ════════════════════════════════════════
-
-  getChat(conversationId: string): Chat | undefined {
-    return this.chats.get(conversationId);
-  }
-
-  async acquireChat(conversationId: string): Promise<Chat | null> {
+  async acquireChat(conversationId: string): Promise<Chat> {
     const existing = this.chats.get(conversationId);
     if (existing) {
       this.logger.info(`Chat reconnected`, {
@@ -133,11 +124,7 @@ export class ConversationService {
     }
 
     await this.cleanupStaleState(conversationId);
-
-    this.logger.info(`Chat created`, { chatId: conversationId });
-
-    const conversation = new Chat(conversationId);
-    this.chats.set(conversationId, conversation);
+    const chat = this.getOrCreateChat(conversationId);
 
     await this.redisService.set(
       RedisKeys.CHAT_SESSION(conversationId),
@@ -151,7 +138,7 @@ export class ConversationService {
       3600,
     );
 
-    return conversation;
+    return chat;
   }
 
   disposeChat(conversationId: string): void {
@@ -171,24 +158,17 @@ export class ConversationService {
     this.logger.info(`Closed ${count} SSE connections`);
   }
 
-  // ════════════════════════════════════════
-  // Run 事件协调（核心：领域累积 + SSE 投递）
-  // ════════════════════════════════════════
+  /** 领域：Chat → PendingMessage 累积 */
+  applyRunEvent(conversationId: string, event: RunEvent): void {
+    this.chats.get(conversationId)?.handleRunEvent(event);
+  }
 
-  handleRunEvent(conversationId: string, event: RunEvent): void {
-    // 1. 领域：Conversation → PendingMessage 累积
-    const conv = this.chats.get(conversationId);
-    conv?.handleRunEvent(event);
-
-    // 2. 传输：转发给 SSE
-    const snapshot = conv?.getPendingSnapshot();
+  /** 基础设施：SSE 帧投递 */
+  sendRunFrame(conversationId: string, event: RunEvent): void {
+    const snapshot = this.chats.get(conversationId)?.getPendingSnapshot();
     const frame = { ...event, messageId: snapshot?.messageId } as SSEFrame;
     this.connections.get(conversationId)?.send(frame);
   }
-
-  // ════════════════════════════════════════
-  // Transport 管理（从 SessionManager 搬入）
-  // ════════════════════════════════════════
 
   attachTransport(
     conversationId: string,
@@ -247,7 +227,17 @@ export class ConversationService {
     runs.delete(messageId);
     if (runs.size === 0) {
       this.activeRuns.delete(conversationId);
-      this.connections.get(conversationId)?.markIdle();
+      const conn = this.connections.get(conversationId);
+      if (conn) {
+        conn.markIdle();
+      } else {
+        // Headless run (no SSE connection) — dispose Chat immediately
+        const conv = this.chats.get(conversationId);
+        if (conv) {
+          conv.dispose();
+          this.handleDomainEvents(conv);
+        }
+      }
     }
   }
 
@@ -368,55 +358,5 @@ export class ConversationService {
     }
 
     await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
-  }
-
-  private buildSystemMessages(params: {
-    userId: string;
-    workDir: string;
-    systemPrompt: string;
-    context?: string;
-  }): Message[] {
-    const baseTime = Date.now();
-    let index = 0;
-    const messages: Message[] = [];
-
-    messages.push({
-      id: generateId('msg'),
-      role: Role.SYSTEM,
-      content: params.systemPrompt,
-      attachments: null,
-      meta: null,
-      createdAt: new Date(baseTime + index++),
-      conversationId: '',
-    });
-
-    const sessionContext = `<session-context>
-User ID: ${params.userId}
-Workspace Directory: ${params.workDir}
-</session-context>`;
-
-    messages.push({
-      id: generateId('msg'),
-      role: Role.USER,
-      content: sessionContext,
-      attachments: null,
-      meta: { hidden: true },
-      createdAt: new Date(baseTime + index++),
-      conversationId: '',
-    });
-
-    if (params.context) {
-      messages.push({
-        id: generateId('msg'),
-        role: Role.USER,
-        content: params.context,
-        attachments: null,
-        meta: { hidden: true },
-        createdAt: new Date(baseTime + index++),
-        conversationId: '',
-      });
-    }
-
-    return messages;
   }
 }

@@ -1,5 +1,8 @@
 import type { ChatPhase } from '@/shared/types';
 import type { PendingMessageSnapshot } from '@/shared/types/render';
+import type { Message, MessageAttachment } from '@/shared/types/entities';
+import { Role } from '@/shared/types/entities';
+import { generateId } from '@/shared/utils';
 import { DuplicateRunError } from './conversation.errors';
 import { AggregateRoot, createDomainEvent } from '@/server/libs/ddd';
 import logger from '@/server/utils/logger';
@@ -109,6 +112,91 @@ export class Chat extends AggregateRoot<string> {
 
   hasActiveMessage(messageId: string): boolean {
     return this.activeMessageIds.has(messageId);
+  }
+
+  // ════════════════════════════════════════
+  // 消息构建（纯领域逻辑，无 repo 依赖）
+  // ════════════════════════════════════════
+
+  createActivationMessages(params: {
+    userId: string;
+    workDir: string;
+    systemPrompt: string;
+    context?: string;
+  }): Message[] {
+    const baseTime = Date.now();
+    let index = 0;
+    const messages: Message[] = [];
+
+    messages.push({
+      id: generateId('msg'),
+      role: Role.SYSTEM,
+      content: params.systemPrompt,
+      attachments: null,
+      meta: null,
+      createdAt: new Date(baseTime + index++),
+      conversationId: this.id,
+    });
+
+    messages.push({
+      id: generateId('msg'),
+      role: Role.USER,
+      content: `<session-context>\nUser ID: ${params.userId}\nWorkspace Directory: ${params.workDir}\n</session-context>`,
+      attachments: null,
+      meta: { hidden: true },
+      createdAt: new Date(baseTime + index++),
+      conversationId: this.id,
+    });
+
+    if (params.context) {
+      messages.push({
+        id: generateId('msg'),
+        role: Role.USER,
+        content: params.context,
+        attachments: null,
+        meta: { hidden: true },
+        createdAt: new Date(baseTime + index++),
+        conversationId: this.id,
+      });
+    }
+
+    return messages;
+  }
+
+  createTurnMessages(params: {
+    userMessage: {
+      role: Role;
+      content: string;
+      attachments?: MessageAttachment[] | null;
+      meta?: Record<string, any> | null;
+    };
+    assistantId?: string;
+  }): { userMessage: Message; assistantMessage: Message } {
+    const assistantId = params.assistantId ?? generateId('msg');
+    const now = Date.now();
+
+    const userMessage: Message = {
+      id: generateId('msg'),
+      role: params.userMessage.role,
+      content: params.userMessage.content,
+      attachments: params.userMessage.attachments ?? null,
+      meta: params.userMessage.meta ?? null,
+      createdAt: new Date(now),
+      conversationId: this.id,
+    };
+
+    const assistantMessage: Message = {
+      id: assistantId,
+      role: Role.ASSIST,
+      content: '',
+      attachments: null,
+      status: 'initialized',
+      meta: null,
+      createdAt: new Date(now + 1),
+      conversationId: this.id,
+    };
+
+    return { userMessage, assistantMessage };
   }
 
   // ── 内部 ──

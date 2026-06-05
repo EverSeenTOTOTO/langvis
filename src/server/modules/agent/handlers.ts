@@ -1,7 +1,6 @@
 import { inject } from 'tsyringe';
 import { generateId } from '@/shared/utils';
 import type { DomainEvent } from '@/server/libs/ddd';
-import type { SSEFrame } from '@/shared/types/events';
 import { TurnInitiated } from '@/server/modules/conversation/contracts';
 import type { TurnInitiatedPayload } from '@/server/modules/conversation/contracts';
 import { AgentRun } from './domain/agent-run.entity';
@@ -61,9 +60,10 @@ export class AgentRunHandler {
       run,
     );
 
-    // 桥接：run 事件 → ConversationService（领域累积 + SSE 投递）
+    // 桥接：run 事件 → ConversationService
     run.on('run:event', evt => {
-      this.conversationService.handleRunEvent(conversationId, evt);
+      this.conversationService.applyRunEvent(conversationId, evt);
+      this.conversationService.sendRunFrame(conversationId, evt);
     });
 
     // 持久化 agentRunId
@@ -91,19 +91,6 @@ export class AgentRunHandler {
     try {
       await run.execute();
     } finally {
-      // Emit context_usage
-      const usage = run.getContextUsage();
-      const usageFrame: SSEFrame = {
-        type: 'context_usage',
-        messageId: run.messageId,
-        seq: run.nextSeq(),
-        at: Date.now(),
-        used: usage.used,
-        total: usage.total,
-        reason: 'turn_completed',
-      };
-      this.conversationService.handleRunEvent(conversationId, usageFrame);
-
       // 最终持久化（从 PendingMessage snapshot 拿数据）
       const snapshot = conv?.getPendingSnapshot();
       if (snapshot) {

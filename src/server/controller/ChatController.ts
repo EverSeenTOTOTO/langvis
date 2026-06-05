@@ -68,11 +68,7 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const conversation =
-      await this.conversationService.acquireChat(conversationId);
-    if (!conversation) {
-      return res.sendStatus(204);
-    }
+    await this.conversationService.acquireChat(conversationId);
 
     const transport = new SSEServerTransport(req, res);
 

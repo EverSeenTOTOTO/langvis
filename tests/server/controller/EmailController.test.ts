@@ -339,10 +339,10 @@ Test content.`;
   });
 
   describe('archive', () => {
-    it('should delegate to ArchiveEmailHandler and return conversationId', async () => {
+    it('should delegate to ArchiveEmailHandler and return result', async () => {
       mockAuthService.getUserId.mockResolvedValue('user_1');
       mockArchiveHandler.execute.mockResolvedValue({
-        conversationId: 'conv_1',
+        emailId: 'mail_1',
       });
 
       const emailController = await createController();
@@ -361,7 +361,10 @@ Test content.`;
         }),
       );
       expect(mockRes.status).toHaveBeenCalledWith(200);
-      expect(mockRes.json).toHaveBeenCalledWith({ conversationId: 'conv_1' });
+      expect(mockRes.json).toHaveBeenCalledWith({
+        emailId: 'mail_1',
+        status: 'archived',
+      });
     });
 
     it('should return 404 when email not found', async () => {
