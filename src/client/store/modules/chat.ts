@@ -269,12 +269,6 @@ export class ChatStore {
         if (assistantMessage) {
           this.getOrCreateMessageNode(conversationId, assistantMessage);
         }
-
-        try {
-          await this.connectTransport(conversationId);
-        } catch {
-          this.refreshMessages(conversationId);
-        }
       }
     } catch {
       this.refreshMessages(conversationId);

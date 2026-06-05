@@ -11,14 +11,18 @@ export class ArchiveEmailCommand extends Command {
 }
 
 export interface ArchiveEmailResult {
-  conversationId: string;
+  emailId: string;
 }
 
 export const EmailArchived = 'email_archived';
 
 export interface EmailArchivedPayload {
-  conversationId: string;
   userId: string;
-  userContent: string;
+  emailId: string;
+  emailSubject: string;
+  emailContent: string;
+  emailFrom: string;
+  emailFromName: string | null;
+  emailSentAt: string;
   agentBinding: AgentBinding;
 }
