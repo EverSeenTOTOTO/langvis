@@ -11,9 +11,11 @@ import { RedisKeys } from '@/shared/constants';
 import type { ChatState } from './application/conversation.service';
 import {
   ConversationActivateCommand,
+  CancelChatCommand,
   StartChatCommand,
   GetSessionStateQuery,
   TurnInitiated,
+  TurnCancellationRequested,
   ConversationActivated,
   extractBinding,
 } from './contracts';
@@ -57,6 +59,37 @@ export class ConversationActivateHandler {
         agentBinding: binding,
       }),
     );
+  }
+}
+
+// ── CancelChat ─────────────────────────────────────────────
+
+@commandHandler(CancelChatCommand)
+export class CancelChatHandler {
+  constructor(
+    @inject(ConversationService)
+    private service: ConversationService,
+    @inject(EventBus)
+    private eventBus: EventBus,
+  ) {}
+
+  async execute(command: CancelChatCommand): Promise<void> {
+    const chat = this.service.getChat(command.conversationId);
+    if (!chat) {
+      throw new Error(`Chat not found: ${command.conversationId}`);
+    }
+
+    chat.requestCancellation(command.messageId, command.reason);
+
+    // Bridge turn_cancellation_requested domain events → EventBus
+    for (const event of chat.domainEvents) {
+      if (event.type === 'turn_cancellation_requested') {
+        this.eventBus.emit(TurnCancellationRequested, event);
+      }
+    }
+
+    // Infrastructure side effects (phase_changed → Redis, conversation_disposed → cleanup)
+    this.service.handleDomainEvents(chat);
   }
 }
 

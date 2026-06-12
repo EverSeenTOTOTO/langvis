@@ -1,8 +1,14 @@
 import { inject } from 'tsyringe';
 import { generateId } from '@/shared/utils';
 import type { DomainEvent } from '@/server/libs/ddd';
-import { TurnInitiated } from '@/server/modules/conversation/contracts';
-import type { TurnInitiatedPayload } from '@/server/modules/conversation/contracts';
+import {
+  TurnInitiated,
+  TurnCancellationRequested,
+} from '@/server/modules/conversation/contracts';
+import type {
+  TurnInitiatedPayload,
+  TurnCancellationRequestedPayload,
+} from '@/server/modules/conversation/contracts';
 import { AgentRun } from './domain/agent-run.entity';
 import { AgentService } from './application/agent.service';
 import { eventHandler } from '@/server/decorator/handler';
@@ -115,5 +121,27 @@ export class AgentRunHandler {
         `Agent completed: totalTime=${totalTime}ms content=${contentLength} session=${conversationId}`,
       );
     }
+  }
+}
+
+// ── TurnCancellationRequested ──────────────────────────────
+// Consumes domain event from Chat aggregate, cancels the corresponding AgentRun.
+
+@eventHandler(TurnCancellationRequested)
+export class TurnCancellationRequestedHandler {
+  constructor(
+    @inject(ConversationService)
+    private conversationService: ConversationService,
+  ) {}
+
+  async handle(event: {
+    aggregateId: string;
+    payload: TurnCancellationRequestedPayload;
+  }): Promise<void> {
+    this.conversationService.cancelActiveRun(
+      event.aggregateId,
+      event.payload.messageId,
+      event.payload.reason,
+    );
   }
 }
