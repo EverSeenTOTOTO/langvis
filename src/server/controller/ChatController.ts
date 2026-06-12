@@ -16,6 +16,7 @@ import { ConversationService } from '../modules/conversation/application/convers
 import { CommandBus, QueryBus } from '@/server/libs/ddd';
 import {
   ConversationActivateCommand,
+  CancelChatCommand,
   StartChatCommand,
   GetSessionStateQuery,
 } from '../modules/conversation/contracts';
@@ -109,14 +110,15 @@ export default class ChatController {
       });
     }
 
-    this.conversationService.cancelAll(
-      conversationId,
-      dto.reason ?? 'Cancelled by user',
+    await this.commandBus.execute(
+      new CancelChatCommand(
+        conversationId,
+        undefined,
+        dto.reason ?? 'Cancelled by user',
+      ),
     );
 
-    req.log.info(
-      `Cancelled streaming for conversation ${conversationId}, message ${dto.messageId}`,
-    );
+    req.log.info(`Cancelled streaming for conversation ${conversationId}`);
 
     return res.status(200).json({ success: true });
   }
@@ -143,10 +145,12 @@ export default class ChatController {
       });
     }
 
-    this.conversationService.cancelRun(
-      conversationId,
-      messageId,
-      dto.reason ?? 'Cancelled by user',
+    await this.commandBus.execute(
+      new CancelChatCommand(
+        conversationId,
+        messageId,
+        dto.reason ?? 'Cancelled by user',
+      ),
     );
 
     req.log.info(

@@ -241,34 +241,11 @@ export class ConversationService {
     }
   }
 
-  cancelAll(conversationId: string, reason: string): void {
-    const conv = this.chats.get(conversationId);
-    if (conv) {
-      conv.requestCancellation(undefined, reason);
-      this.handleDomainEvents(conv);
-    }
-
-    const runs = this.activeRuns.get(conversationId);
-    if (runs) {
-      for (const run of runs.values()) {
-        if (!run.isTerminated) {
-          try {
-            run.cancel(reason);
-          } catch {
-            // Already terminated
-          }
-        }
-      }
-    }
-  }
-
-  cancelRun(conversationId: string, messageId: string, reason: string): void {
-    const conv = this.chats.get(conversationId);
-    if (conv) {
-      conv.requestCancellation(messageId, reason);
-      this.handleDomainEvents(conv);
-    }
-
+  cancelActiveRun(
+    conversationId: string,
+    messageId: string,
+    reason: string,
+  ): void {
     const run = this.activeRuns.get(conversationId)?.get(messageId);
     if (run && !run.isTerminated) {
       try {

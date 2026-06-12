@@ -14,6 +14,16 @@ export class ConversationActivateCommand extends Command {
   }
 }
 
+export class CancelChatCommand extends Command {
+  constructor(
+    readonly conversationId: string,
+    readonly messageId?: string,
+    readonly reason: string = 'Cancelled by user',
+  ) {
+    super();
+  }
+}
+
 export class StartChatCommand extends Command {
   constructor(
     readonly conversationId: string,
@@ -43,6 +53,7 @@ import type { Message } from '@/shared/types/entities';
 
 export const ConversationActivated = 'conversation_activated';
 export const TurnInitiated = 'turn_initiated';
+export const TurnCancellationRequested = 'turn_cancellation_requested';
 
 export interface ConversationActivatedPayload {
   conversationId: string;
@@ -54,6 +65,11 @@ export interface TurnInitiatedPayload {
   assistantMessage: Message;
   agentBinding: AgentBinding;
   systemPrompt: string;
+}
+
+export interface TurnCancellationRequestedPayload {
+  messageId: string;
+  reason: string;
 }
 
 // ── Utils ─────────────────────────────────────────────────
