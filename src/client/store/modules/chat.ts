@@ -41,7 +41,6 @@ export class ChatStore {
         if (!newId) return;
 
         await this.conversationStore.getMessagesByConversationId({ id: newId });
-        await this.activateChat({ conversationId: newId }).catch(() => {});
         await this.activateConversation(newId);
       },
     );
@@ -113,10 +112,6 @@ export class ChatStore {
       this.getOrCreateMessageNode(conversationId, msg);
     }
 
-    const state = await this.getSessionState({ conversationId });
-
-    if (!state || state.phase === 'done') return;
-
     try {
       await this.connectTransport(conversationId);
     } catch {
@@ -132,7 +127,7 @@ export class ChatStore {
     let transport = this.transports.get(conversationId);
     if (transport?.isConnected) return;
 
-    transport = new SSEClientTransport(`/api/chat/sse/${conversationId}`);
+    transport = new SSEClientTransport(`/api/chat/activate/${conversationId}`);
     this.transports.set(conversationId, transport);
 
     this.setupTransportListeners(conversationId, transport);
@@ -194,14 +189,6 @@ export class ChatStore {
   // ════════════════════════════════════════
   // API methods
   // ════════════════════════════════════════
-
-  @api('/api/chat/activate/:conversationId', { method: 'post' })
-  async activateChat(
-    _params: { conversationId: string },
-    req?: ApiRequest<{ conversationId: string }>,
-  ): Promise<void> {
-    await req!.send();
-  }
 
   @api('/api/chat/session/:conversationId')
   async getSessionState(

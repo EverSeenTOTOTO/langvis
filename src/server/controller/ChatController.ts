@@ -36,8 +36,8 @@ export default class ChatController {
     private authService: AuthService,
   ) {}
 
-  @api('/activate/:conversationId', { method: 'post' })
-  async activate(
+  @api('/activate/:conversationId', { method: 'get' })
+  async initSSE(
     @param('conversationId') conversationId: string,
     @request() req: Request,
     @response() res: Response,
@@ -56,37 +56,20 @@ export default class ChatController {
       });
     }
 
+    // Activate (idempotent — creates system messages if none exist)
     await this.commandBus.execute(
       new ConversationActivateCommand(conversationId, userId),
     );
 
-    return res.status(200).json({ success: true });
-  }
-
-  @api('/sse/:conversationId', { method: 'get' })
-  async initSSE(
-    @param('conversationId') conversationId: string,
-    @request() req: Request,
-    @response() res: Response,
-  ) {
-    await this.conversationService.acquireChat(conversationId);
-
-    const transport = new SSEServerTransport(req, res);
-
-    transport.addEventListener('disconnect', () => {
-      req.log.info('SSE connection closed:', conversationId);
-    });
-
-    transport.addEventListener('error', (e: CustomEvent<string>) => {
-      req.log.error('SSE connection error:', e.detail);
-    });
-
-    this.conversationService.attachTransport(conversationId, transport, () =>
-      this.conversationService.disposeChat(conversationId),
+    // SSE setup — single method, no manual orchestration
+    this.conversationService.initSession(
+      conversationId,
+      new SSEServerTransport(req, res),
     );
 
-    req.log.info('SSE connection established', {
+    req.log.info('SSE session established', {
       sessionId: conversationId,
+      userId,
     });
 
     return;

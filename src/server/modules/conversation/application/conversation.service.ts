@@ -148,6 +148,14 @@ export class ConversationService {
     this.handleDomainEvents(conv);
   }
 
+  /** 初始化会话：acquireChat + attachTransport + dispose 回调 */
+  initSession(conversationId: string, transport: Transport<SSEFrame>): void {
+    this.acquireChat(conversationId);
+    this.attachTransport(conversationId, transport, () =>
+      this.disposeChat(conversationId),
+    );
+  }
+
   async disposeAll(): Promise<void> {
     const count = this.chats.size;
     for (const [id, conversation] of this.chats) {
