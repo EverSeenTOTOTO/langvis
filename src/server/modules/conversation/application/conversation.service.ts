@@ -66,7 +66,6 @@ export class ConversationService {
     conversationId: string;
     userId: string;
     systemPrompt: string;
-    context?: string;
   }): Promise<void> {
     const existing = await this.messageRepo.findByConversationId(
       params.conversationId,

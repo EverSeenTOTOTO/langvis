@@ -1,5 +1,4 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
 import { ToolIds } from '@/shared/constants';
 import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
 import { DocumentEntity } from '@/shared/entities/Document';
@@ -7,15 +6,13 @@ import type { Logger } from '@/server/utils/logger';
 import type { ToolConfig } from '@/shared/types';
 import { inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
+import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import type { DocumentStoreInput, DocumentStoreOutput } from './config';
 import { config } from './config';
 
 @tool(ToolIds.DOCUMENT_STORE)
-export default class DocumentStoreTool extends Tool<
-  DocumentStoreInput,
-  DocumentStoreOutput
-> {
+export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
@@ -25,13 +22,13 @@ export default class DocumentStoreTool extends Tool<
   }
 
   async *call(
-    @input() data: DocumentStoreInput,
-    _ctx: { signal: AbortSignal },
+    toolCall: ToolCall,
   ): AsyncGenerator<
     { type: 'tool_progress'; data: unknown },
     DocumentStoreOutput,
     void
   > {
+    const data = toolCall.input as unknown as DocumentStoreInput;
     const { document, chunks } = data;
 
     // Coerce keywords: LLM may pass comma-separated string(s).

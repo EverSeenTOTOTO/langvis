@@ -1,5 +1,4 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
@@ -7,6 +6,7 @@ import dayjs from 'dayjs';
 import tz from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
+import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
 
 dayjs.extend(utc);
 dayjs.extend(tz);
@@ -21,18 +21,15 @@ export type DateTimeGetOutput = {
 };
 
 @tool(ToolIds.DATETIME_GET)
-export default class DateTimeGetTool extends Tool<
-  DateTimeGetInput,
-  DateTimeGetOutput
-> {
+export default class DateTimeGetTool extends Tool<DateTimeGetOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
   async *call(
-    @input() data: DateTimeGetInput,
-    _ctx: { signal: AbortSignal },
+    toolCall: ToolCall,
   ): AsyncGenerator<never, DateTimeGetOutput, void> {
+    const data = toolCall.input as DateTimeGetInput;
     const timezone = data?.timezone;
     const format = data?.format;
 

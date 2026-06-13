@@ -1,5 +1,4 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
 import { inject } from 'tsyringe';
 import { CacheService } from '@/server/modules/memory/services/cache.service';
 import type { Logger } from '@/server/utils/logger';
@@ -18,10 +17,7 @@ export interface CachedReadInput {
 export type CachedReadOutput = string | Record<string, unknown>;
 
 @tool(ToolIds.CACHED_READ)
-export default class CachedReadTool extends Tool<
-  CachedReadInput,
-  CachedReadOutput
-> {
+export default class CachedReadTool extends Tool<CachedReadOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
@@ -33,9 +29,10 @@ export default class CachedReadTool extends Tool<
   }
 
   async *call(
-    @input() readCacheInput: CachedReadInput,
     toolCall: ToolCall,
   ): AsyncGenerator<ToolProgress, CachedReadOutput, void> {
+    const readCacheInput = toolCall.input as unknown as CachedReadInput;
+
     const result = await this.cacheService.readFile(
       toolCall.workDir,
       readCacheInput.key,

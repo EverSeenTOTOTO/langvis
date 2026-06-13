@@ -1,50 +1,35 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
-import { container, inject } from 'tsyringe';
+import { container } from 'tsyringe';
 import { wrapUntrusted } from '@/shared/utils';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
 import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
-import { LlmService } from '@/server/modules/memory/services/llm.service';
 import { Prompt } from '@/server/modules/agent/domain/Prompt';
 import AskUserTool from '../AskUser';
-import type {
-  PositionAdjustmentAdviceInput,
-  PositionAdjustmentAdviceOutput,
-} from './config';
+import type { PositionAdjustmentAdviceOutput } from './config';
 
 @tool(ToolIds.POSITION_ADJUSTMENT_ADVICE)
-export default class PositionAdjustmentAdviceTool extends Tool<
-  PositionAdjustmentAdviceInput,
-  PositionAdjustmentAdviceOutput
-> {
+export default class PositionAdjustmentAdviceTool extends Tool<PositionAdjustmentAdviceOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  constructor(@inject(LlmService) private readonly llmService: LlmService) {
-    super();
-  }
-
-  async *call(
-    @input() _params: PositionAdjustmentAdviceInput,
-    toolCall: ToolCall,
-  ) {
+  async *call(toolCall: ToolCall) {
     toolCall.signal.throwIfAborted();
 
     const humanInputTool = container.resolve<AskUserTool>(ToolIds.ASK_USER);
 
     const { formSchema } = await import('./config');
 
-    const humanInput = yield* humanInputTool.call(
-      {
-        message: '请填写以下仓位调整信息：',
-        formSchema: formSchema as any,
-      },
-      toolCall,
-    );
+    const originalInput = toolCall.input;
+    toolCall.input = {
+      message: '请填写以下仓位调整信息：',
+      formSchema: formSchema as any,
+    };
+    const humanInput = yield* humanInputTool.call(toolCall);
+    toolCall.input = originalInput;
 
     if (!humanInput.submitted || !humanInput.data) {
       return {
@@ -99,8 +84,7 @@ export default class PositionAdjustmentAdviceTool extends Tool<
       { role: 'user' as const, content: userPrompt },
     ];
 
-    return await this.llmService.chatContent(
-      undefined,
+    return await toolCall.llm.chatContent(
       { messages },
       toolCall.signal,
       this.logger,

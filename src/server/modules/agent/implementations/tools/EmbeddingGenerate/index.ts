@@ -1,37 +1,28 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
-import { LlmService } from '@/server/modules/memory/services/llm.service';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
-import { inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
+import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
 import type { EmbeddingGenerateInput, EmbeddingGenerateOutput } from './config';
 import { config } from './config';
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 @tool(ToolIds.EMBEDDING_GENERATE)
-export default class EmbeddingGenerateTool extends Tool<
-  EmbeddingGenerateInput,
-  EmbeddingGenerateOutput
-> {
+export default class EmbeddingGenerateTool extends Tool<EmbeddingGenerateOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  constructor(@inject(LlmService) private readonly llmService: LlmService) {
-    super();
-  }
-
   async *call(
-    @input() data: EmbeddingGenerateInput,
-    _ctx: { signal: AbortSignal },
+    toolCall: ToolCall,
   ): AsyncGenerator<
     { type: 'tool_progress'; data: unknown },
     EmbeddingGenerateOutput,
     void
   > {
+    const data = toolCall.input as unknown as EmbeddingGenerateInput;
     const { chunks, model, timeout = DEFAULT_TIMEOUT_MS } = data;
 
     const texts = chunks.map(c => c.content);
@@ -51,7 +42,7 @@ export default class EmbeddingGenerateTool extends Tool<
 
     const signal = AbortSignal.timeout(timeout);
 
-    const sortedData = await this.llmService.embed(model, texts, signal);
+    const sortedData = await toolCall.llm.embed(model, texts, signal);
 
     const output: EmbeddingGenerateOutput = {
       chunks: chunks.map((chunk, i) => ({

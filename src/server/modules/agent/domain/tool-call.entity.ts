@@ -1,6 +1,7 @@
 import type { ToolCallRecord } from '@/shared/types/render';
 import type { CacheService } from '@/server/modules/memory/services/cache.service';
 import type { EnrichedEvent } from './agent.types';
+import type { Llm } from './llm';
 import { Entity } from '@/server/libs/ddd';
 import type { Tool } from './tool.base';
 
@@ -11,6 +12,7 @@ export interface ToolCallContext {
   workDir: string;
   messageId: string;
   runId: string;
+  llm: Llm;
 }
 
 export type ToolCallEmitter = {
@@ -36,8 +38,8 @@ export type ToolCallEmitter = {
  * ToolCall — 聚合内实体。
  * 封装一次工具调用的完整业务流程：输入解析 → 执行 → 输出压缩 → 格式化。
  *
- * 持有完整执行上下文（signal, workDir, messageId, runId），
- * 通过 tool.call(input, this) 传给 Tool — 对称 agent.call(run)。
+ * 持有完整执行上下文（signal, llm, input, workDir, messageId, runId），
+ * 通过 tool.call(this) 传给 Tool — 对称 agent.call(run)。
  */
 export class ToolCall extends Entity<string> {
   readonly toolName: string;
@@ -48,6 +50,9 @@ export class ToolCall extends Entity<string> {
   readonly workDir: string;
   readonly messageId: string;
   readonly runId: string;
+  readonly llm: Llm;
+
+  input: Record<string, unknown> = {};
 
   private tool: Tool;
   private cache: CacheService;
@@ -75,6 +80,7 @@ export class ToolCall extends Entity<string> {
     this.workDir = context.workDir;
     this.messageId = context.messageId;
     this.runId = context.runId;
+    this.llm = context.llm;
   }
 
   /**
@@ -84,15 +90,15 @@ export class ToolCall extends Entity<string> {
   async *execute(
     emitter: ToolCallEmitter,
   ): AsyncGenerator<EnrichedEvent, void, void> {
-    const resolvedInput = (await this.cache.resolve(
+    this.input = (await this.cache.resolve(
       this.runId,
       this.toolArgs,
     )) as Record<string, unknown>;
 
-    yield emitter.emitToolCall(this.id, this.toolName, resolvedInput);
+    yield emitter.emitToolCall(this.id, this.toolName, this.input);
 
     try {
-      const gen = this.tool.call(resolvedInput, this);
+      const gen = this.tool.call(this);
       let result = await gen.next();
 
       while (!result.done) {

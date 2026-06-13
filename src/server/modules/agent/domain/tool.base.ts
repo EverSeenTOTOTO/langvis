@@ -3,16 +3,13 @@ import type { ToolConfig, ToolCallTimeline } from '@/shared/types';
 import type { ToolProgress } from './tool-call.entity';
 import type { ToolCall } from './tool-call.entity';
 
-export abstract class Tool<I = unknown, O = unknown> {
+export abstract class Tool<O = unknown> {
   abstract readonly id: string;
   abstract readonly config: ToolConfig;
 
   protected abstract readonly logger: Logger;
 
-  abstract call(
-    input: I,
-    toolCall: ToolCall,
-  ): AsyncGenerator<ToolProgress, O, void>;
+  abstract call(toolCall: ToolCall): AsyncGenerator<ToolProgress, O, void>;
 
   summarize(timeline: ToolCallTimeline): string {
     const argsHint = this.summarizeArgs(timeline.toolArgs);

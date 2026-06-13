@@ -8,7 +8,7 @@ import type { Agent } from './agent.base';
 import { ToolCall } from './tool-call.entity';
 import type { MemoryService } from '@/server/modules/memory/domain/memory-service';
 import type { ContextUsage } from '@/server/modules/memory/domain/memory.types';
-import type { ChatLlm } from './chat-llm';
+import type { Llm } from './llm';
 import { CacheService } from '@/server/modules/memory/services/cache.service';
 import { EventEmitter } from 'events';
 
@@ -44,7 +44,7 @@ export class AgentRun extends EventEmitter {
   readonly workDir: string;
   private memory: MemoryService;
   private cache: CacheService;
-  readonly llm: ChatLlm;
+  readonly llm: Llm;
   private historyMessages: Message[];
 
   constructor(
@@ -55,7 +55,7 @@ export class AgentRun extends EventEmitter {
     agent: Agent,
     memory: MemoryService,
     cache: CacheService,
-    llm: ChatLlm,
+    llm: Llm,
     historyMessages: Message[],
   ) {
     super();
@@ -145,6 +145,7 @@ export class AgentRun extends EventEmitter {
       workDir: this.workDir,
       messageId: this.messageId,
       runId: this.runId,
+      llm: this.llm,
     });
 
     yield* toolCall.execute(this);

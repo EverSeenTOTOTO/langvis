@@ -1,5 +1,4 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
@@ -10,6 +9,7 @@ import TurndownService from 'turndown';
 import type { Browser } from 'playwright';
 import { chromium } from 'playwright';
 import type { ToolProgress } from '@/server/modules/agent/domain/tool-call.entity';
+import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
 import { sanitizeHtml } from '@/server/utils/sanitizeHtml';
 import type { RenderMode, WebFetchInput, WebFetchOutput } from './config';
@@ -25,7 +25,7 @@ const CONTENT_RATIO_THRESHOLD = 0.1;
 const SPA_ROOT_SELECTORS = ['#root', '#app', '#__next', '#__nuxt'];
 
 @tool(ToolIds.WEB_FETCH)
-export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
+export default class WebFetchTool extends Tool<WebFetchOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
@@ -145,11 +145,11 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
   }
 
   async *call(
-    @input() data: WebFetchInput,
-    ctx: { signal: AbortSignal },
+    toolCall: ToolCall,
   ): AsyncGenerator<ToolProgress, WebFetchOutput, void> {
-    ctx.signal.throwIfAborted();
+    toolCall.signal.throwIfAborted();
 
+    const data = toolCall.input as unknown as WebFetchInput;
     const {
       url,
       timeout = 30000,
@@ -162,7 +162,11 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
 
     // Direct browser mode: skip fetch entirely
     if (renderMode === 'browser') {
-      const html = await this.fetchWithPlaywright(url, timeout, ctx.signal);
+      const html = await this.fetchWithPlaywright(
+        url,
+        timeout,
+        toolCall.signal,
+      );
       const { article, markdown } = this.extractContent(html, url);
 
       if (!article) {
@@ -186,11 +190,11 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= retry; attempt++) {
-      ctx.signal.throwIfAborted();
+      toolCall.signal.throwIfAborted();
 
       const [controller, cleanup] = createTimeoutController(
         timeout,
-        ctx.signal,
+        toolCall.signal,
       );
 
       try {
@@ -217,7 +221,7 @@ export default class WebFetchTool extends Tool<WebFetchInput, WebFetchOutput> {
           const browserHtml = await this.fetchWithPlaywright(
             url,
             timeout,
-            ctx.signal,
+            toolCall.signal,
           );
           const { article: browserArticle, markdown: browserMarkdown } =
             this.extractContent(browserHtml, url);

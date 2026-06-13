@@ -1,20 +1,17 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
 import { ToolIds } from '@/shared/constants';
 import type { Logger } from '@/server/utils/logger';
 import type { ToolConfig } from '@/shared/types';
 import { container, inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
+import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import type EmbeddingGenerateTool from '../EmbeddingGenerate';
 import type { DocumentSearchInput, DocumentSearchOutput } from './config';
 import { config } from './config';
 
 @tool(ToolIds.DOCUMENT_SEARCH)
-export default class DocumentSearchTool extends Tool<
-  DocumentSearchInput,
-  DocumentSearchOutput
-> {
+export default class DocumentSearchTool extends Tool<DocumentSearchOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
@@ -24,13 +21,13 @@ export default class DocumentSearchTool extends Tool<
   }
 
   async *call(
-    @input() data: DocumentSearchInput,
-    ctx: { signal: AbortSignal },
+    toolCall: ToolCall,
   ): AsyncGenerator<
     { type: 'tool_progress'; data: unknown },
     DocumentSearchOutput,
     void
   > {
+    const data = toolCall.input as unknown as DocumentSearchInput;
     const { query, limit = 10, threshold } = data;
 
     // 1. Generate embedding for query
@@ -45,10 +42,10 @@ export default class DocumentSearchTool extends Tool<
     const embedTool = container.resolve<EmbeddingGenerateTool>(
       ToolIds.EMBEDDING_GENERATE,
     );
-    const embedResult = yield* embedTool.call(
-      { chunks: [{ content: query, index: 0 }] },
-      ctx,
-    );
+    const originalInput = toolCall.input;
+    toolCall.input = { chunks: [{ content: query, index: 0 }] };
+    const embedResult = yield* embedTool.call(toolCall);
+    toolCall.input = originalInput;
 
     const queryVector = embedResult.chunks[0].embedding;
 

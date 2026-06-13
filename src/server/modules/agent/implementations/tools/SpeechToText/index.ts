@@ -1,11 +1,9 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
-import { LlmService } from '@/server/modules/memory/services/llm.service';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
-import { inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
+import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
 
 export interface SpeechToTextInput {
   modelId?: string;
@@ -24,32 +22,26 @@ export interface SpeechToTextOutput {
 }
 
 @tool(ToolIds.SPEECH_TO_TEXT)
-export default class SpeechToTextTool extends Tool<
-  SpeechToTextInput,
-  SpeechToTextOutput
-> {
+export default class SpeechToTextTool extends Tool<SpeechToTextOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  constructor(@inject(LlmService) private readonly llmService: LlmService) {
-    super();
-  }
-
   async *call(
-    @input() params: SpeechToTextInput,
-    ctx: { signal: AbortSignal },
+    toolCall: ToolCall,
   ): AsyncGenerator<never, SpeechToTextOutput, void> {
-    ctx.signal.throwIfAborted();
+    toolCall.signal.throwIfAborted();
+
+    const params = toolCall.input as unknown as SpeechToTextInput;
 
     this.logger.info(
       `Processing STT request: ${params.filePath}, language: ${params.language || 'auto'}`,
     );
 
-    const result = await this.llmService.stt(
+    const result = await toolCall.llm.stt(
       params.modelId,
       params,
-      ctx.signal,
+      toolCall.signal,
     );
 
     this.logger.info(
