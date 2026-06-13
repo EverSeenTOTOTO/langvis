@@ -2,6 +2,10 @@ import { container } from 'tsyringe';
 import { AgentService } from '@/server/modules/agent/application/agent.service';
 import { SkillService } from '@/server/modules/agent/application/skill.service';
 import { ToolService } from '@/server/modules/agent/application/tool.service';
+import { CACHE_SERVICE } from '@/server/modules/agent/agent.di-tokens';
+import { MEMORY_SERVICE } from '@/server/modules/memory/memory.di-tokens';
+import { LlmService } from '@/server/modules/memory/services/llm.service';
+import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { globby } from 'globby';
 import * as configModule from '@/server/decorator/core';
@@ -35,6 +39,24 @@ describe('AgentService', () => {
     };
     container.register(ToolService, { useValue: mockToolService });
     container.register(SkillService, { useValue: mockSkillService });
+
+    // Register port dependencies
+    container.register(MEMORY_SERVICE, {
+      useValue: { summarize: vi.fn(), estimateUsage: vi.fn() },
+    });
+    container.register(CACHE_SERVICE, {
+      useValue: { resolve: vi.fn(), compress: vi.fn(), readFile: vi.fn() },
+    });
+
+    container.registerInstance(LlmService as any, {} as any);
+
+    container.registerInstance(
+      ProviderService as any,
+      {
+        getDefaultModel: vi.fn(),
+        getModel: vi.fn(),
+      } as any,
+    );
   });
 
   afterEach(() => {

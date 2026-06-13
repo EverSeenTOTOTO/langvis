@@ -1,10 +1,13 @@
+import { singleton } from 'tsyringe';
 import type { Message, LlmMessage } from '@/shared/types/entities';
 import { Role } from '@/shared/entities/Message';
 import type { ReActStep } from '@/shared/types/render';
-import { ContextWindow } from './context-window';
-import type { ContextUsage } from './memory.types';
+import { ContextWindow } from '../domain/context-window';
+import type { ContextUsage } from '../domain/memory.types';
+import type { MemoryPort } from '../domain/memory.port';
 
-export class MemoryService {
+@singleton()
+export class MemoryService implements MemoryPort {
   async summarize(
     history: Message[],
     options: {

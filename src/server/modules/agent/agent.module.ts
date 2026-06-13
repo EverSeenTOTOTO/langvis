@@ -1,9 +1,10 @@
 import { container, Lifecycle } from 'tsyringe';
-import { MEMORY_SERVICE } from './agent.di-tokens';
-import { MemoryService } from '@/server/modules/memory/domain/memory-service';
+import { CACHE_SERVICE } from './agent.di-tokens';
+import { CacheService } from '@/server/modules/memory/services/cache.service';
 
-container.register(MEMORY_SERVICE, MemoryService, {
+container.register(CACHE_SERVICE, CacheService, {
   lifecycle: Lifecycle.Singleton,
 });
 
+import '@/server/modules/memory/memory.module';
 import './handlers';

@@ -54,6 +54,7 @@ import type { Message } from '@/shared/types/entities';
 export const ConversationActivated = 'conversation_activated';
 export const TurnInitiated = 'turn_initiated';
 export const TurnCancellationRequested = 'turn_cancellation_requested';
+export const RunCompleted = 'run_completed';
 
 export interface ConversationActivatedPayload {
   conversationId: string;
@@ -70,6 +71,12 @@ export interface TurnInitiatedPayload {
 export interface TurnCancellationRequestedPayload {
   messageId: string;
   reason: string;
+}
+
+export interface RunCompletedPayload {
+  conversationId: string;
+  messageId: string;
+  agentRunId: string;
 }
 
 // ── Utils ─────────────────────────────────────────────────

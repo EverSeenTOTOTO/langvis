@@ -13,6 +13,8 @@ import type { MessageRepositoryPort } from '../database/message.repository.port'
 import { Chat } from '../domain/chat';
 import { SseConnection } from './sse-connection';
 import type { AgentRun } from '@/server/modules/agent/domain/agent-run.entity';
+import { EventBus } from '@/server/libs/ddd';
+import { TurnCancellationRequested } from '../contracts';
 import Logger from '@/server/utils/logger';
 
 export interface ChatState {
@@ -38,6 +40,8 @@ export class ConversationService {
     private workspaceService: WorkspaceService,
     @inject(RedisService)
     private redisService: RedisService,
+    @inject(EventBus)
+    private eventBus: EventBus,
   ) {}
 
   // ════════════════════════════════════════
@@ -56,6 +60,84 @@ export class ConversationService {
 
   getChat(conversationId: string): Chat | undefined {
     return this.chats.get(conversationId);
+  }
+
+  // ════════════════════════════════════════
+  // Turn 生命周期（BC 边界内的聚合操作）
+  // ════════════════════════════════════════
+
+  startTurn(conversationId: string, messageId: string): void {
+    const chat = this.getOrCreateChat(conversationId);
+    chat.startTurn(messageId);
+    this.handleDomainEvents(chat);
+  }
+
+  completeTurn(conversationId: string, messageId: string): void {
+    const chat = this.chats.get(conversationId);
+    if (!chat) return;
+    chat.completeTurn(messageId);
+    this.handleDomainEvents(chat);
+  }
+
+  /** 持久化 PendingMessage snapshot */
+  async persistPendingMessage(
+    conversationId: string,
+    messageId: string,
+    agentRunId: string,
+  ): Promise<void> {
+    const chat = this.chats.get(conversationId);
+    if (!chat) return;
+    const snapshot = chat.getPendingSnapshot();
+    if (snapshot) {
+      await this.messageRepo.update(messageId, {
+        content: snapshot.content,
+        steps: snapshot.steps,
+        agentRunId,
+        status: snapshot.status,
+      });
+    }
+  }
+
+  /** 跨 BC 数据查询：Agent 需要消息历史 */
+  async getHistoryMessages(
+    conversationId: string,
+    excludeMessageId?: string,
+  ): Promise<Message[]> {
+    const all = await this.messageRepo.findByConversationId(conversationId);
+    return excludeMessageId ? all.filter(m => m.id !== excludeMessageId) : all;
+  }
+
+  /** 持久化 agentRunId（fire-and-forget） */
+  persistAgentRunId(messageId: string, agentRunId: string): void {
+    this.messageRepo.update(messageId, { agentRunId }).catch(err => {
+      this.logger.warn('Failed to persist agentRunId', err);
+    });
+  }
+
+  /** 取消 Turn，桥接 turn_cancellation_requested → EventBus */
+  requestCancellation(
+    conversationId: string,
+    messageId?: string,
+    reason?: string,
+  ): void {
+    const chat = this.chats.get(conversationId);
+    if (!chat) return;
+    chat.requestCancellation(messageId, reason);
+    for (const event of chat.domainEvents) {
+      if (event.type === 'turn_cancellation_requested') {
+        this.eventBus.emit(TurnCancellationRequested, event);
+      }
+    }
+    this.handleDomainEvents(chat);
+  }
+
+  /** 聚合状态查询 */
+  getPhase(conversationId: string): ChatPhase | undefined {
+    return this.chats.get(conversationId)?.phase;
+  }
+
+  hasActiveMessage(conversationId: string, messageId: string): boolean {
+    return this.chats.get(conversationId)?.hasActiveMessage(messageId) ?? false;
   }
 
   // ════════════════════════════════════════

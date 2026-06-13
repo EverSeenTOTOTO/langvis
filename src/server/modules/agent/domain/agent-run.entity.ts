@@ -6,10 +6,10 @@ import type { EnrichedEvent } from './agent.types';
 import { RunAlreadyCompletedError, ToolNotFoundError } from './agent.errors';
 import type { Agent } from './agent.base';
 import { ToolCall } from './tool-call.entity';
-import type { MemoryService } from '@/server/modules/memory/domain/memory-service';
+import type { MemoryPort } from '@/server/modules/memory/domain/memory.port';
 import type { ContextUsage } from '@/server/modules/memory/domain/memory.types';
 import type { Llm } from './llm';
-import { CacheService } from '@/server/modules/memory/services/cache.service';
+import type { CachePort } from './cache.port';
 import { EventEmitter } from 'events';
 
 /**
@@ -42,8 +42,8 @@ export class AgentRun extends EventEmitter {
   // ── 依赖 ──
   readonly agent: Agent;
   readonly workDir: string;
-  private memory: MemoryService;
-  private cache: CacheService;
+  private memory: MemoryPort;
+  private cache: CachePort;
   readonly llm: Llm;
   private historyMessages: Message[];
 
@@ -53,8 +53,8 @@ export class AgentRun extends EventEmitter {
     workDir: string,
     config: EffectiveConfig,
     agent: Agent,
-    memory: MemoryService,
-    cache: CacheService,
+    memory: MemoryPort,
+    cache: CachePort,
     llm: Llm,
     historyMessages: Message[],
   ) {

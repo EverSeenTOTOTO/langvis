@@ -81,12 +81,9 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const conversation = this.conversationService.getChat(conversationId);
+    const phase = this.conversationService.getPhase(conversationId);
 
-    if (
-      !conversation ||
-      (conversation.phase !== 'active' && conversation.phase !== 'waiting')
-    ) {
+    if (!phase || (phase !== 'active' && phase !== 'waiting')) {
       return res.status(404).json({
         error: `No active session for conversation ${conversationId}`,
       });
@@ -113,15 +110,7 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const conversation = this.conversationService.getChat(conversationId);
-
-    if (!conversation) {
-      return res.status(404).json({
-        error: `No session for conversation ${conversationId}`,
-      });
-    }
-
-    if (!conversation.hasActiveMessage(messageId)) {
+    if (!this.conversationService.hasActiveMessage(conversationId, messageId)) {
       return res.status(404).json({
         error: `No active message ${messageId}`,
       });

@@ -1,6 +1,7 @@
 import { tool } from '@/server/decorator/core';
 import { inject } from 'tsyringe';
-import { CacheService } from '@/server/modules/memory/services/cache.service';
+import { CACHE_SERVICE } from '@/server/modules/agent/agent.di-tokens';
+import type { CachePort } from '@/server/modules/agent/domain/cache.port';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
@@ -22,9 +23,7 @@ export default class CachedReadTool extends Tool<CachedReadOutput> {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  constructor(
-    @inject(CacheService) private readonly cacheService: CacheService,
-  ) {
+  constructor(@inject(CACHE_SERVICE) private readonly cacheService: CachePort) {
     super();
   }
 
