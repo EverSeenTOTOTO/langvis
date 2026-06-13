@@ -1,6 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
@@ -56,7 +55,7 @@ function killProcessTree(child: ChildProcess): void {
 }
 
 @tool(ToolIds.BASH)
-export default class BashTool extends Tool<BashInput, BashOutput> {
+export default class BashTool extends Tool<BashOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
@@ -75,12 +74,12 @@ export default class BashTool extends Tool<BashInput, BashOutput> {
   }
 
   async *call(
-    @input() { command, timeout }: BashInput,
     toolCall: ToolCall,
   ): AsyncGenerator<ToolProgress, BashOutput, void> {
     toolCall.signal.throwIfAborted();
     this.ensureCleanupRegistered();
 
+    const { command, timeout } = toolCall.input as unknown as BashInput;
     const workDir = toolCall.workDir;
     const suggestedTimeout = Math.min(
       Math.max(timeout ?? DEFAULT_TIMEOUT, 1),
@@ -118,10 +117,10 @@ export default class BashTool extends Tool<BashInput, BashOutput> {
       required: ['timeout', 'confirmed'],
     };
 
-    const { submitted, data } = yield* hitl.call(
-      { message, formSchema: formSchema as any },
-      toolCall,
-    );
+    const originalInput = toolCall.input;
+    toolCall.input = { message, formSchema: formSchema as any };
+    const { submitted, data } = yield* hitl.call(toolCall);
+    toolCall.input = originalInput;
 
     if (!submitted || !(data as Record<string, unknown>)?.confirmed) {
       const remark = (data as Record<string, unknown>).remark;

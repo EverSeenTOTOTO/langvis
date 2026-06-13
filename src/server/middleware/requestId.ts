@@ -35,7 +35,7 @@ export default async (app: Express) => {
 
     // Initialize TraceContext for this request
     // Must use async/await pattern to keep context across async boundaries
-    TraceContext.run({ requestId }, () => next());
+    TraceContext.run({ requestId }, next);
   });
 
   app.use('/api/*', (req, res, next) => {

@@ -1,5 +1,4 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
@@ -12,7 +11,7 @@ import type { FileEditInput, FileEditOutput } from './config';
 import AskUserTool from '../AskUser';
 
 @tool(ToolIds.FILE_EDIT)
-export default class FileEditTool extends Tool<FileEditInput, FileEditOutput> {
+export default class FileEditTool extends Tool<FileEditOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
@@ -24,10 +23,12 @@ export default class FileEditTool extends Tool<FileEditInput, FileEditOutput> {
   }
 
   async *call(
-    @input() { path, old_string, new_string }: FileEditInput,
     toolCall: ToolCall,
   ): AsyncGenerator<ToolProgress, FileEditOutput, void> {
     toolCall.signal.throwIfAborted();
+
+    const { path, old_string, new_string } =
+      toolCall.input as unknown as FileEditInput;
 
     const workDir = toolCall.workDir;
 
@@ -52,10 +53,11 @@ export default class FileEditTool extends Tool<FileEditInput, FileEditOutput> {
     };
 
     const hitl = container.resolve<AskUserTool>(ToolIds.ASK_USER);
-    const { submitted, data } = yield* hitl.call(
-      { message, formSchema: formSchema as any },
-      toolCall,
-    );
+
+    const originalInput = toolCall.input;
+    toolCall.input = { message, formSchema: formSchema as any };
+    const { submitted, data } = yield* hitl.call(toolCall);
+    toolCall.input = originalInput;
 
     if (!submitted || !(data as Record<string, unknown>)?.confirmed) {
       throw new Error('操作已取消');

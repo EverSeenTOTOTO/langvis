@@ -11,7 +11,7 @@ import { registerAgent } from '@/server/decorator/core';
 import { service } from '@/server/decorator/service';
 import { ToolService } from './tool.service';
 import { SkillService } from './skill.service';
-import { ChatLlmAdapter } from './chat-llm.adapter';
+import { LlmAdapter } from './llm.adapter';
 import { LlmService } from '@/server/modules/memory/services/llm.service';
 import { MemoryService } from '@/server/modules/memory/domain/memory-service';
 import { CacheService } from '@/server/modules/memory/services/cache.service';
@@ -151,7 +151,7 @@ export class AgentService {
     const cfg = effectiveConfig.runtimeConfig as {
       model?: { modelId?: string };
     };
-    const chatLlm = new ChatLlmAdapter(this.llmService, cfg.model?.modelId);
+    const llm = new LlmAdapter(this.llmService, cfg.model?.modelId);
 
     return new AgentRun(
       params.runId,
@@ -161,7 +161,7 @@ export class AgentService {
       agent,
       this.memoryService,
       this.cacheService,
-      chatLlm,
+      llm,
       params.historyMessages,
     );
   }

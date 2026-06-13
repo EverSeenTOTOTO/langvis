@@ -1,9 +1,9 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
+import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
 import type {
   ContentChunkInput,
   ContentChunkOutput,
@@ -155,10 +155,7 @@ class FixedStrategy implements ContentChunkStrategyHandler {
 }
 
 @tool(ToolIds.CONTENT_CHUNK)
-export default class ContentChunkTool extends Tool<
-  ContentChunkInput,
-  ContentChunkOutput
-> {
+export default class ContentChunkTool extends Tool<ContentChunkOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
@@ -169,13 +166,13 @@ export default class ContentChunkTool extends Tool<
   ]);
 
   async *call(
-    @input() data: ContentChunkInput,
-    _ctx: { signal: AbortSignal },
+    toolCall: ToolCall,
   ): AsyncGenerator<
     { type: 'tool_progress'; data: unknown },
     ContentChunkOutput,
     void
   > {
+    const data = toolCall.input as unknown as ContentChunkInput;
     const { content, strategy = 'paragraph', options = {} } = data;
 
     const handler = this.strategies.get(strategy);

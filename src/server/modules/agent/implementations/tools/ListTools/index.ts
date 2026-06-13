@@ -1,9 +1,9 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
+import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
 import { ToolService } from '@/server/modules/agent/application/tool.service';
 import { SkillService } from '@/server/modules/agent/application/skill.service';
 import { inject, container } from 'tsyringe';
@@ -14,10 +14,7 @@ import {
 import type { ListToolsInput, ListToolsOutput } from './config';
 
 @tool(ToolIds.LIST_TOOLS)
-export default class ListToolsTool extends Tool<
-  ListToolsInput,
-  ListToolsOutput
-> {
+export default class ListToolsTool extends Tool<ListToolsOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
@@ -30,10 +27,11 @@ export default class ListToolsTool extends Tool<
   }
 
   async *call(
-    @input() { query }: ListToolsInput,
-    ctx: { signal: AbortSignal },
+    toolCall: ToolCall,
   ): AsyncGenerator<never, ListToolsOutput, void> {
-    ctx.signal.throwIfAborted();
+    toolCall.signal.throwIfAborted();
+
+    const { query } = toolCall.input as ListToolsInput;
 
     const keywords = query?.toLowerCase().split(/\s+/);
 

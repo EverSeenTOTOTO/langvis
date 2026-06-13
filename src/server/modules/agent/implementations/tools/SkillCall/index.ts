@@ -1,18 +1,15 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
+import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
 import { SkillService } from '@/server/modules/agent/application/skill.service';
 import { inject } from 'tsyringe';
 import type { SkillCallInput, SkillCallOutput } from './config';
 
 @tool(ToolIds.SKILL_CALL)
-export default class SkillCallTool extends Tool<
-  SkillCallInput,
-  SkillCallOutput
-> {
+export default class SkillCallTool extends Tool<SkillCallOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
@@ -22,10 +19,11 @@ export default class SkillCallTool extends Tool<
   }
 
   async *call(
-    @input() { skillId }: SkillCallInput,
-    ctx: { signal: AbortSignal },
+    toolCall: ToolCall,
   ): AsyncGenerator<never, SkillCallOutput, void> {
-    ctx.signal.throwIfAborted();
+    toolCall.signal.throwIfAborted();
+
+    const { skillId } = toolCall.input as unknown as SkillCallInput;
 
     const content = await this.skillService.getSkillContent(skillId);
 

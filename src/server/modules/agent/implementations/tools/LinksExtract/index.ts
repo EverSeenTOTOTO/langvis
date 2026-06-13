@@ -1,27 +1,24 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { JSDOM } from 'jsdom';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
+import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
 import type { LinksExtractInput, LinksExtractOutput, LinkInfo } from './config';
 
 @tool(ToolIds.LINKS_EXTRACT)
-export default class LinksExtractTool extends Tool<
-  LinksExtractInput,
-  LinksExtractOutput
-> {
+export default class LinksExtractTool extends Tool<LinksExtractOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
   async *call(
-    @input() data: LinksExtractInput,
-    ctx: { signal: AbortSignal },
+    toolCall: ToolCall,
   ): AsyncGenerator<never, LinksExtractOutput, void> {
-    ctx.signal.throwIfAborted();
+    toolCall.signal.throwIfAborted();
 
+    const data = toolCall.input as unknown as LinksExtractInput;
     const { content } = data;
     const links: LinkInfo[] = [];
 

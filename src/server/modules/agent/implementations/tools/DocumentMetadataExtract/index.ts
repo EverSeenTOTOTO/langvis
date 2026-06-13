@@ -1,12 +1,10 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { wrapUntrusted } from '@/shared/utils';
-import { inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/tool.base';
-import { LlmService } from '@/server/modules/memory/services/llm.service';
+import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
 import { Prompt } from '@/server/modules/agent/domain/Prompt';
 import type {
   DocumentMetadataExtractInput,
@@ -44,26 +42,19 @@ const systemPrompt = Prompt.empty()
   );
 
 @tool(ToolIds.DOCUMENT_METADATA_EXTRACT)
-export default class DocumentMetadataExtractTool extends Tool<
-  DocumentMetadataExtractInput,
-  DocumentMetadataExtractOutput
-> {
+export default class DocumentMetadataExtractTool extends Tool<DocumentMetadataExtractOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  constructor(@inject(LlmService) private readonly llmService: LlmService) {
-    super();
-  }
-
   async *call(
-    @input() data: DocumentMetadataExtractInput,
-    ctx: { signal: AbortSignal },
+    toolCall: ToolCall,
   ): AsyncGenerator<
     { type: 'tool_progress'; data: unknown },
     DocumentMetadataExtractOutput,
     void
   > {
+    const data = toolCall.input as unknown as DocumentMetadataExtractInput;
     const { content, sourceUrl, sourceType } = data;
 
     // Truncate content if too long (keep first 8000 chars)
@@ -84,8 +75,7 @@ ${wrapUntrusted(truncatedContent)}`;
       },
     };
 
-    const responseContent = await this.llmService.chatContent(
-      undefined,
+    const responseContent = await toolCall.llm.chatContent(
       {
         messages: [
           { role: 'system', content: systemPrompt.build() },
@@ -94,7 +84,7 @@ ${wrapUntrusted(truncatedContent)}`;
         response_format: { type: 'json_object' },
         temperature: 0.3,
       },
-      ctx.signal,
+      toolCall.signal,
       this.logger,
     );
 

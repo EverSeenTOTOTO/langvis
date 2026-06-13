@@ -5,7 +5,6 @@ import {
 import type { Request, Response } from 'express';
 import { inject } from 'tsyringe';
 import { SSEServerTransport } from '@/server/libs/infrastructure/transport';
-import { TraceContext } from '@/server/middleware/trace-context';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
@@ -37,7 +36,7 @@ export default class ChatController {
   ) {}
 
   @api('/activate/:conversationId', { method: 'get' })
-  async initSSE(
+  async activate(
     @param('conversationId') conversationId: string,
     @request() req: Request,
     @response() res: Response,
@@ -147,12 +146,8 @@ export default class ChatController {
   async chat(
     @param('conversationId') conversationId: string,
     @body() dto: StartChatRequestDto,
-    @request() req: Request,
     @response() res: Response,
   ) {
-    const userId = await this.authService.getUserId(req);
-    TraceContext.update({ userId });
-
     const { assistantId } = await this.commandBus.execute(
       new StartChatCommand(conversationId, {
         role: dto.role,

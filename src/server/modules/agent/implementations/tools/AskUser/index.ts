@@ -1,5 +1,4 @@
 import { tool } from '@/server/decorator/core';
-import { input } from '@/server/decorator/param';
 import type { Logger } from '@/server/utils/logger';
 import { RedisKeys, ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
@@ -49,22 +48,19 @@ function waitForNotification(
   });
 }
 
-export interface AskUserInput<I = Record<string, any>> {
+export interface AskUserInput {
   message: string;
-  formSchema: JSONSchemaType<I>;
+  formSchema: JSONSchemaType<Record<string, any>>;
   timeout?: number;
 }
 
-export interface AskUserOutput<O = Record<string, any>> {
+export interface AskUserOutput {
   submitted: boolean;
-  data?: O;
+  data?: Record<string, any>;
 }
 
 @tool(ToolIds.ASK_USER)
-export default class AskUserTool<
-  I = Record<string, any>,
-  O = Record<string, any>,
-> extends Tool<AskUserInput<I>, AskUserOutput<O>> {
+export default class AskUserTool extends Tool<AskUserOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
@@ -74,13 +70,13 @@ export default class AskUserTool<
   }
 
   async *call(
-    @input() params: AskUserInput<I>,
     toolCall: ToolCall,
-  ): AsyncGenerator<ToolProgress, AskUserOutput<O>, void> {
+  ): AsyncGenerator<ToolProgress, AskUserOutput, void> {
     toolCall.signal.throwIfAborted();
 
     const messageId = toolCall.messageId;
 
+    const params = toolCall.input as unknown as AskUserInput;
     const { message, formSchema, timeout = 300_000 } = params;
     const key = RedisKeys.HUMAN_INPUT(messageId);
     const POLL_INTERVAL = 30_000; // 30s fallback check when Pub/Sub fails
@@ -133,13 +129,13 @@ export default class AskUserTool<
       // Check Redis (works for both submitted and timeout cases)
       const pending = await this.redisService.get<{
         submitted: boolean;
-        result?: O;
+        result?: Record<string, any>;
       }>(key);
       if (pending?.submitted) {
         await this.redisService.del(key);
         this.logger.info(`AskUser request submitted: ${messageId}`);
 
-        const output: AskUserOutput<O> = {
+        const output: AskUserOutput = {
           submitted: true,
           data: pending.result,
         };
@@ -151,7 +147,7 @@ export default class AskUserTool<
     await this.redisService.del(key);
     this.logger.info(`AskUser request timeout: ${messageId}`);
 
-    const output: AskUserOutput<O> = {
+    const output: AskUserOutput = {
       submitted: false,
     };
 
