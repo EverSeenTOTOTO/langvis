@@ -13,8 +13,10 @@ import { ToolService } from './tool.service';
 import { SkillService } from './skill.service';
 import { LlmAdapter } from './llm.adapter';
 import { LlmService } from '@/server/modules/memory/services/llm.service';
-import { MemoryService } from '@/server/modules/memory/domain/memory-service';
-import { CacheService } from '@/server/modules/memory/services/cache.service';
+import { MEMORY_SERVICE } from '@/server/modules/memory/memory.di-tokens';
+import type { MemoryPort } from '@/server/modules/memory/domain/memory.port';
+import { CACHE_SERVICE } from '../agent.di-tokens';
+import type { CachePort } from '../domain/cache.port';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { isProd } from '@/server/utils';
 import Logger from '@/server/utils/logger';
@@ -33,10 +35,10 @@ export class AgentService {
     private skillService: SkillService,
     @inject(LlmService)
     private llmService: LlmService,
-    @inject(MemoryService)
-    private memoryService: MemoryService,
-    @inject(CacheService)
-    private cacheService: CacheService,
+    @inject(MEMORY_SERVICE)
+    private memoryService: MemoryPort,
+    @inject(CACHE_SERVICE)
+    private cacheService: CachePort,
     @inject(ProviderService)
     private providerService: ProviderService,
   ) {

@@ -1,1 +1,1 @@
-export { MEMORY_SERVICE } from '@/server/modules/agent/agent.di-tokens';
+export const MEMORY_SERVICE = Symbol('MEMORY_SERVICE');

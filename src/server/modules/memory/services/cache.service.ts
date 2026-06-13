@@ -3,6 +3,7 @@ import path from 'path';
 import { singleton, inject } from 'tsyringe';
 import { generateId } from '@/shared/utils';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
+import type { CachePort } from '@/server/modules/agent/domain/cache.port';
 
 export type CompressionStrategy = 'skip' | 'file';
 
@@ -88,7 +89,7 @@ export function isCachedReference(value: unknown): value is CachedReference {
 }
 
 @singleton()
-export class CacheService {
+export class CacheService implements CachePort {
   constructor(
     @inject(WorkspaceService)
     private readonly workspaceService: WorkspaceService,

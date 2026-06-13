@@ -1,5 +1,5 @@
 import type { ToolCallRecord } from '@/shared/types/render';
-import type { CacheService } from '@/server/modules/memory/services/cache.service';
+import type { CachePort } from './cache.port';
 import type { EnrichedEvent } from './agent.types';
 import type { Llm } from './llm';
 import { Entity } from '@/server/libs/ddd';
@@ -47,7 +47,7 @@ export class ToolCall extends Entity<string> {
   input: Record<string, unknown> = {};
 
   private tool: Tool;
-  private cache: CacheService;
+  private cache: CachePort;
 
   private _status: 'pending' | 'completed' | 'failed' = 'pending';
   private _output?: unknown;
@@ -58,7 +58,7 @@ export class ToolCall extends Entity<string> {
     callId: string,
     tool: Tool,
     toolArgs: Record<string, unknown>,
-    cache: CacheService,
+    cache: CachePort,
     signal: AbortSignal,
     workDir: string,
     messageId: string,

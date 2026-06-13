@@ -1,7 +1,12 @@
 import { inject } from 'tsyringe';
 import { Role } from '@/shared/entities/Message';
-import { commandHandler, queryHandler } from '@/server/decorator/handler';
+import {
+  commandHandler,
+  eventHandler,
+  queryHandler,
+} from '@/server/decorator/handler';
 import { EventBus, createDomainEvent } from '@/server/libs/ddd';
+import type { DomainEvent } from '@/server/libs/ddd';
 import { ConversationService } from './application/conversation.service';
 import { CONVERSATION_REPOSITORY } from './conversation.di-tokens';
 import type { ConversationRepositoryPort } from './database/conversation.repository.port';
@@ -15,10 +20,11 @@ import {
   StartChatCommand,
   GetSessionStateQuery,
   TurnInitiated,
-  TurnCancellationRequested,
+  RunCompleted,
   ConversationActivated,
   extractBinding,
 } from './contracts';
+import type { RunCompletedPayload } from './contracts';
 import { ConversationNotFoundError } from './domain/conversation.errors';
 
 // ── ConversationActivate ──────────────────────────────────
@@ -69,27 +75,14 @@ export class CancelChatHandler {
   constructor(
     @inject(ConversationService)
     private service: ConversationService,
-    @inject(EventBus)
-    private eventBus: EventBus,
   ) {}
 
   async execute(command: CancelChatCommand): Promise<void> {
-    const chat = this.service.getChat(command.conversationId);
-    if (!chat) {
-      throw new Error(`Chat not found: ${command.conversationId}`);
-    }
-
-    chat.requestCancellation(command.messageId, command.reason);
-
-    // Bridge turn_cancellation_requested domain events → EventBus
-    for (const event of chat.domainEvents) {
-      if (event.type === 'turn_cancellation_requested') {
-        this.eventBus.emit(TurnCancellationRequested, event);
-      }
-    }
-
-    // Infrastructure side effects (phase_changed → Redis, conversation_disposed → cleanup)
-    this.service.handleDomainEvents(chat);
+    this.service.requestCancellation(
+      command.conversationId,
+      command.messageId,
+      command.reason,
+    );
   }
 }
 
@@ -131,6 +124,8 @@ export class StartChatHandler {
       assistantId,
     });
 
+    this.convService.startTurn(conversationId, setup.assistantMessage.id);
+
     const systemMessage = setup.existingMessages.find(
       m => m.role === Role.SYSTEM,
     );
@@ -160,5 +155,26 @@ export class GetSessionStateHandler {
     return this.redisService.get<ChatState>(
       RedisKeys.CHAT_SESSION(query.conversationId),
     );
+  }
+}
+
+// ── CompleteTurn ───────────────────────────────────────────
+
+@eventHandler(RunCompleted)
+export class CompleteTurnHandler {
+  constructor(
+    @inject(ConversationService)
+    private convService: ConversationService,
+  ) {}
+
+  async handle(event: DomainEvent<string, RunCompletedPayload>): Promise<void> {
+    const { conversationId, messageId, agentRunId } = event.payload;
+    await this.convService.persistPendingMessage(
+      conversationId,
+      messageId,
+      agentRunId,
+    );
+    this.convService.completeTurn(conversationId, messageId);
+    this.convService.finalizeRun(conversationId, messageId);
   }
 }
