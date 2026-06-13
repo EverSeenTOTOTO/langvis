@@ -7,14 +7,6 @@ import type { Tool } from './tool.base';
 
 export type ToolProgress = { type: 'tool_progress'; data: unknown };
 
-export interface ToolCallContext {
-  signal: AbortSignal;
-  workDir: string;
-  messageId: string;
-  runId: string;
-  llm: Llm;
-}
-
 export type ToolCallEmitter = {
   emitToolCall: (
     callId: string,
@@ -67,7 +59,11 @@ export class ToolCall extends Entity<string> {
     tool: Tool,
     toolArgs: Record<string, unknown>,
     cache: CacheService,
-    context: ToolCallContext,
+    signal: AbortSignal,
+    workDir: string,
+    messageId: string,
+    runId: string,
+    llm: Llm,
   ) {
     super(callId);
     this.toolName = tool.id;
@@ -76,11 +72,11 @@ export class ToolCall extends Entity<string> {
     this.cache = cache;
     this.startedAt = Date.now();
 
-    this.signal = context.signal;
-    this.workDir = context.workDir;
-    this.messageId = context.messageId;
-    this.runId = context.runId;
-    this.llm = context.llm;
+    this.signal = signal;
+    this.workDir = workDir;
+    this.messageId = messageId;
+    this.runId = runId;
+    this.llm = llm;
   }
 
   /**

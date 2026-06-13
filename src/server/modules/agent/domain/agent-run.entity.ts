@@ -140,13 +140,17 @@ export class AgentRun extends EventEmitter {
     }
 
     const callId = generateId('tc');
-    const toolCall = new ToolCall(callId, tool, toolArgs, this.cache, {
-      signal: this.signal,
-      workDir: this.workDir,
-      messageId: this.messageId,
-      runId: this.runId,
-      llm: this.llm,
-    });
+    const toolCall = new ToolCall(
+      callId,
+      tool,
+      toolArgs,
+      this.cache,
+      this.signal,
+      this.workDir,
+      this.messageId,
+      this.runId,
+      this.llm,
+    );
 
     yield* toolCall.execute(this);
 
