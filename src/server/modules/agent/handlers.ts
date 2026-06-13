@@ -68,8 +68,7 @@ export class AgentRunHandler {
 
     // 桥接：run 事件 → ConversationService
     run.on('run:event', evt => {
-      this.conversationService.applyRunEvent(conversationId, evt);
-      this.conversationService.sendRunFrame(conversationId, evt);
+      this.conversationService.processRunEvent(conversationId, evt);
     });
 
     // 持久化 agentRunId

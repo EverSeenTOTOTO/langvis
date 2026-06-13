@@ -165,14 +165,12 @@ export class ConversationService {
     this.logger.info(`Closed ${count} SSE connections`);
   }
 
-  /** 领域：Chat → PendingMessage 累积 */
-  applyRunEvent(conversationId: string, event: RunEvent): void {
-    this.chats.get(conversationId)?.handleRunEvent(event);
-  }
-
-  /** 基础设施：SSE 帧投递 */
-  sendRunFrame(conversationId: string, event: RunEvent): void {
-    const snapshot = this.chats.get(conversationId)?.getPendingSnapshot();
+  /** 处理 AgentRun 事件：累积 PendingMessage + 投递 SSE 帧 */
+  processRunEvent(conversationId: string, event: RunEvent): void {
+    const chat = this.chats.get(conversationId);
+    if (!chat) return;
+    chat.handleRunEvent(event);
+    const snapshot = chat.getPendingSnapshot();
     const frame = { ...event, messageId: snapshot?.messageId } as SSEFrame;
     this.connections.get(conversationId)?.send(frame);
   }
