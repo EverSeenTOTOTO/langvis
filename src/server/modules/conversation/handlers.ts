@@ -102,12 +102,28 @@ export class StartChatHandler {
     private convService: ConversationService,
     @inject(CONVERSATION_REPOSITORY)
     private convRepo: ConversationRepositoryPort,
+    @inject(AgentService)
+    private agentService: AgentService,
     @inject(EventBus)
     private eventBus: EventBus,
   ) {}
 
   async execute(command: StartChatCommand): Promise<{ assistantId: string }> {
     const { conversationId, userMessage, assistantId } = command;
+
+    // 确保激活（幂等 — 消息已存在则跳过）
+    const dbConversation = await this.convRepo.findById(conversationId);
+    if (!dbConversation) {
+      throw new ConversationNotFoundError(conversationId);
+    }
+    const binding = extractBinding(dbConversation);
+    const systemPrompt = this.agentService.buildSystemPrompt(binding.agentId);
+
+    await this.convService.activate({
+      conversationId,
+      userId: dbConversation.userId,
+      systemPrompt,
+    });
 
     const setup = await this.convService.appendMessage({
       conversationId,
@@ -118,10 +134,7 @@ export class StartChatHandler {
     const systemMessage = setup.existingMessages.find(
       m => m.role === Role.SYSTEM,
     );
-    const systemPrompt = systemMessage?.content ?? '';
-
-    const dbConversation = await this.convRepo.findById(conversationId);
-    const binding = extractBinding(dbConversation!);
+    const resolvedSystemPrompt = systemMessage?.content ?? systemPrompt;
 
     this.eventBus.emit(
       TurnInitiated,
@@ -129,7 +142,7 @@ export class StartChatHandler {
         conversationId,
         assistantMessage: setup.assistantMessage,
         agentBinding: binding,
-        systemPrompt,
+        systemPrompt: resolvedSystemPrompt,
       }),
     );
 
