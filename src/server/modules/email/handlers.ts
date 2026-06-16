@@ -5,13 +5,13 @@ import { commandHandler, eventHandler } from '@/server/decorator/handler';
 import { CommandBus, EventBus, createDomainEvent } from '@/server/libs/ddd';
 import { CACHE_SERVICE } from '@/server/modules/agent/agent.di-tokens';
 import type { CachePort } from '@/server/modules/agent/domain/cache.port';
-import type { CachedReference } from '@/server/modules/memory/services/cache.service';
+import type { CachedReference } from '@/server/modules/memory/application/cache.service';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { CONVERSATION_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
 import type { ConversationRepositoryPort } from '@/server/modules/conversation/database/conversation.repository.port';
 import { ConversationActivateCommand } from '@/server/modules/conversation/contracts';
 import { StartChatCommand } from '@/server/modules/conversation/contracts';
-import { EmailService } from './domain/email.service';
+import { EmailService } from './application/email.service';
 import {
   ArchiveEmailCommand,
   type ArchiveEmailResult,

@@ -1,4 +1,4 @@
-import type { CompressionStrategy } from '@/server/modules/memory/services/cache.service';
+import type { CompressionStrategy } from '@/server/modules/memory/application/cache.service';
 
 export interface CachePort {
   resolve(conversationId: string, value: unknown): Promise<unknown>;

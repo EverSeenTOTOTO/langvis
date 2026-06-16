@@ -11,7 +11,7 @@ import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { MESSAGE_REPOSITORY } from '../conversation.di-tokens';
 import type { MessageRepositoryPort } from '../database/message.repository.port';
 import { Chat } from '../domain/chat';
-import { SseConnection } from './sse-connection';
+import { Connection } from './connection';
 import type { AgentRun } from '@/server/modules/agent/domain/agent-run.entity';
 import { EventBus } from '@/server/libs/ddd';
 import { TurnCancellationRequested } from '../contracts';
@@ -30,7 +30,7 @@ export class ConversationService {
   private readonly logger = Logger.child({ source: 'ConversationService' });
 
   private chats = new Map<string, Chat>();
-  private connections = new Map<string, SseConnection>();
+  private connections = new Map<string, Connection>();
   private activeRuns = new Map<string, Map<string, AgentRun>>();
 
   constructor(
@@ -264,7 +264,7 @@ export class ConversationService {
   ): void {
     let conn = this.connections.get(conversationId);
     if (!conn) {
-      conn = new SseConnection(conversationId, 30_000, () => {
+      conn = new Connection(conversationId, 30_000, () => {
         this.connections.delete(conversationId);
         onIdle?.();
       });
@@ -399,7 +399,7 @@ export class ConversationService {
     const state = await this.getChatState(conversationId);
     if (!state) return;
 
-    if (state.phase !== 'done' && state.phase !== 'waiting') {
+    if (Chat.isStalePhase(state.phase)) {
       this.logger.warn(`Stale session detected`, {
         chatId: conversationId,
         phase: state.phase,

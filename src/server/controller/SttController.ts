@@ -3,7 +3,7 @@ import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, response } from '../decorator/param';
-import { LlmService } from '@/server/modules/memory/services/llm.service';
+import { LlmService } from '@/server/modules/memory/application/llm.service';
 import type {
   SpeechToTextRequestDto,
   SpeechToTextResponse,

@@ -4,7 +4,7 @@ import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { param, query, request, response } from '../decorator/param';
-import { DocumentService } from '@/server/modules/document/domain/document.service';
+import { DocumentService } from '@/server/modules/document/application/document.service';
 
 @controller('/api/documents')
 export default class DocumentController {

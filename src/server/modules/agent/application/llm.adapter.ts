@@ -9,7 +9,7 @@ import type {
   SpeechToTextInput,
   SpeechToTextOutput,
 } from '@/server/modules/agent/implementations/tools/SpeechToText';
-import type { LlmService } from '@/server/modules/memory/services/llm.service';
+import type { LlmService } from '@/server/modules/memory/application/llm.service';
 
 export class LlmAdapter implements Llm {
   constructor(

@@ -4,7 +4,7 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, query, request, response } from '../decorator/param';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
-import { EmailService } from '@/server/modules/email/domain/email.service';
+import { EmailService } from '@/server/modules/email/application/email.service';
 import { CommandBus } from '@/server/libs/ddd';
 import { ArchiveEmailCommand } from '@/server/modules/email/contracts';
 import { ListEmailsRequestDto } from '@/shared/dto/controller';

@@ -3,13 +3,12 @@ import type { Transport } from '@/shared/transport';
 import logger from '@/server/utils/logger';
 
 /**
- * SseConnection — SSE connection manager (application layer).
+ * Connection — 传输层连接管理器（应用层）。
  *
- * Supports multiple concurrent SSE connections (multi-tab),
- * broadcasting events to all. Not a domain entity — it's an
- * infrastructure component managed by ConversationService.
+ * 管理多个 Transport 实例，支持多标签页并发连接，
+ * 向所有活跃连接广播事件。空闲超时后自动回收。
  */
-export class SseConnection {
+export class Connection {
   private transports = new Set<Transport<SSEFrame>>();
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly idleTimeout: number;
@@ -73,7 +72,7 @@ export class SseConnection {
   private resetIdleTimer(): void {
     this.clearIdleTimer();
     this.idleTimer = setTimeout(() => {
-      logger.info(`SseConnection idle timeout after ${this.idleTimeout}ms`, {
+      logger.info(`Connection idle timeout after ${this.idleTimeout}ms`, {
         sessionId: this.conversationId,
       });
       this.dispose();
