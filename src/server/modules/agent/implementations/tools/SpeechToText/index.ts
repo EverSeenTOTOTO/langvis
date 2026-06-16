@@ -2,8 +2,8 @@ import { tool } from '@/server/decorator/core';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
-import { Tool } from '@/server/modules/agent/domain/tool.base';
-import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
+import { Tool } from '@/server/modules/agent/domain/model/tool.base';
+import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
 
 export interface SpeechToTextInput {
   modelId?: string;

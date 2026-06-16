@@ -1,6 +1,6 @@
 import { agent } from '@/server/decorator/core';
-import { SkillService } from '@/server/modules/agent/application/skill.service';
-import { ToolService } from '@/server/modules/agent/application/tool.service';
+import { SkillService } from '@/server/modules/agent/application/service/skill.service';
+import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
@@ -8,10 +8,10 @@ import type { AgentConfig } from '@/shared/types';
 import type { AgentEvent, StreamChunk } from '@/shared/types/events';
 import { isEmpty } from 'lodash-es';
 import { inject } from 'tsyringe';
-import { Agent } from '@/server/modules/agent/domain/agent.base';
-import type { AgentRun } from '@/server/modules/agent/domain/agent-run.entity';
-import type { Tool } from '@/server/modules/agent/domain/tool.base';
-import { Prompt } from '@/server/modules/agent/domain/Prompt';
+import { Agent } from '@/server/modules/agent/domain/model/agent.base';
+import type { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
+import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
+import { Prompt } from '@/server/modules/agent/domain/model/prompt';
 import { createPrompt } from './prompt';
 
 type ReActAction = {

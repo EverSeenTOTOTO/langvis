@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import mime from 'mime-types';
 import path from 'path';
 import { container, inject } from 'tsyringe';
-import { Agent } from '../modules/agent/domain/agent.base';
+import { Agent } from '../modules/agent/domain/model/agent.base';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import {

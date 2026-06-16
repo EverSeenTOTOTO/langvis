@@ -8,9 +8,9 @@ import { JSDOM } from 'jsdom';
 import TurndownService from 'turndown';
 import type { Browser } from 'playwright';
 import { chromium } from 'playwright';
-import type { ToolProgress } from '@/server/modules/agent/domain/tool-call.entity';
-import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
-import { Tool } from '@/server/modules/agent/domain/tool.base';
+import type { ToolProgress } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { sanitizeHtml } from '@/server/utils/sanitizeHtml';
 import type { RenderMode, WebFetchInput, WebFetchOutput } from './config';
 

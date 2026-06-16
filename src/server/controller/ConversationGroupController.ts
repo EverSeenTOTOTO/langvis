@@ -10,7 +10,7 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
 import { CONVERSATION_REPOSITORY } from '../modules/conversation/conversation.di-tokens';
-import type { ConversationRepositoryPort } from '../modules/conversation/database/conversation.repository.port';
+import type { ConversationRepositoryPort } from '../modules/conversation/domain/port/conversation.repository.port';
 
 @controller('/api/conversation-group')
 export default class ConversationGroupController {

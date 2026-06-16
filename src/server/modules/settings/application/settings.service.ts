@@ -3,7 +3,7 @@ import { inject } from 'tsyringe';
 import { service } from '@/server/decorator/service';
 import { LocaleService } from '@/server/libs/infrastructure/locale.service';
 import { SETTINGS_REPOSITORY } from '../settings.di-tokens';
-import type { SettingsRepositoryPort } from '../database/settings.repository.port';
+import type { SettingsRepositoryPort } from '../domain/port/settings.repository.port';
 
 @service()
 export class SettingsService {

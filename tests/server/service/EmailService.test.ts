@@ -1,5 +1,5 @@
 import { EmailService } from '@/server/modules/email/application/email.service';
-import type { EmailRepositoryPort } from '@/server/modules/email/database/email.repository.port';
+import type { EmailRepositoryPort } from '@/server/modules/email/domain/port/email.repository.port';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/shared/utils', () => ({

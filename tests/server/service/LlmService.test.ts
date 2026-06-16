@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LlmService } from '@/server/modules/memory/application/llm.service';
+import { LlmProvider } from '@/server/modules/memory/infrastructure/llm.provider';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import type { ProviderDefinition } from '@/shared/types/provider';
 
@@ -52,14 +52,14 @@ const sampleApiResponse = {
   request_id: 'req-123',
 };
 
-describe('LlmService.stt', () => {
-  let llmService: LlmService;
+describe('LlmProvider.stt', () => {
+  let llmService: LlmProvider;
   let providerService: ProviderService;
 
   beforeEach(() => {
     vi.restoreAllMocks();
     providerService = mockProviderService();
-    llmService = new LlmService(providerService);
+    llmService = new LlmProvider(providerService);
   });
 
   it('should send multipart/form-data with correct fields', async () => {
@@ -171,7 +171,7 @@ describe('LlmService.stt', () => {
         .mockReturnValue({ id: '302:whisper-v3-turbo', type: 'stt' }),
     } as unknown as ProviderService;
 
-    const service = new LlmService(badProviderService);
+    const service = new LlmProvider(badProviderService);
 
     await expect(
       service.stt(
@@ -187,7 +187,7 @@ describe('LlmService.stt', () => {
 
   it('should use model endpoint override when defined', async () => {
     providerService = mockProviderService({}, '/custom/stt');
-    llmService = new LlmService(providerService);
+    llmService = new LlmProvider(providerService);
 
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,

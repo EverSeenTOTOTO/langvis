@@ -4,9 +4,9 @@ import { RedisKeys, ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { JSONSchemaType } from 'ajv';
 import type { RedisClientType } from 'redis';
-import type { ToolProgress } from '@/server/modules/agent/domain/tool-call.entity';
-import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
-import { Tool } from '@/server/modules/agent/domain/tool.base';
+import type { ToolProgress } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { inject } from 'tsyringe';
 

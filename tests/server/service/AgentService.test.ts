@@ -1,18 +1,18 @@
 import { container } from 'tsyringe';
-import { AgentService } from '@/server/modules/agent/application/agent.service';
-import { SkillService } from '@/server/modules/agent/application/skill.service';
-import { ToolService } from '@/server/modules/agent/application/tool.service';
+import { AgentService } from '@/server/modules/agent/application/service/agent.service';
+import { SkillService } from '@/server/modules/agent/application/service/skill.service';
+import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import { CACHE_SERVICE } from '@/server/modules/agent/agent.di-tokens';
 import { MEMORY_SERVICE } from '@/server/modules/memory/memory.di-tokens';
-import { LlmService } from '@/server/modules/memory/application/llm.service';
+import { LlmProvider } from '@/server/modules/memory/infrastructure/llm.provider';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { globby } from 'globby';
 import * as configModule from '@/server/decorator/core';
 
 vi.mock('globby');
-vi.mock('@/server/modules/agent/application/tool.service');
-vi.mock('@/server/modules/agent/application/skill.service');
+vi.mock('@/server/modules/agent/application/service/tool.service');
+vi.mock('@/server/modules/agent/application/service/skill.service');
 vi.mock('@/server/decorator/core', async importOriginal => {
   const actual = await importOriginal<typeof configModule>();
   return {
@@ -48,7 +48,7 @@ describe('AgentService', () => {
       useValue: { resolve: vi.fn(), compress: vi.fn(), readFile: vi.fn() },
     });
 
-    container.registerInstance(LlmService as any, {} as any);
+    container.registerInstance(LlmProvider as any, {} as any);
 
     container.registerInstance(
       ProviderService as any,

@@ -5,8 +5,8 @@ import type { ToolConfig } from '@/shared/types';
 import dayjs from 'dayjs';
 import tz from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
-import { Tool } from '@/server/modules/agent/domain/tool.base';
-import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
+import { Tool } from '@/server/modules/agent/domain/model/tool.base';
+import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
 
 dayjs.extend(utc);
 dayjs.extend(tz);

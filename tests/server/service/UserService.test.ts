@@ -1,6 +1,6 @@
 import { UserService } from '@/server/modules/user/application/user.service';
 import { beforeEach, afterEach, vi, describe, it, expect } from 'vitest';
-import type { UserRepositoryPort } from '@/server/modules/user/database/user.repository.port';
+import type { UserRepositoryPort } from '@/server/modules/user/domain/port/user.repository.port';
 
 const mockRepo = {
   findAll: vi.fn(),

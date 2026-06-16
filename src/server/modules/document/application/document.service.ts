@@ -6,7 +6,7 @@ import { DocumentCategory } from '@/shared/entities/Document';
 import { inject } from 'tsyringe';
 import { service } from '@/server/decorator/service';
 import { DOCUMENT_REPOSITORY } from '../document.di-tokens';
-import type { DocumentRepositoryPort } from '../database/document.repository.port';
+import type { DocumentRepositoryPort } from '../domain/port/document.repository.port';
 
 @service()
 export class DocumentService {

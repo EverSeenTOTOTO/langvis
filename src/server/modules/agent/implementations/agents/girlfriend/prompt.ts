@@ -1,4 +1,4 @@
-import { Prompt } from '@/server/modules/agent/domain/Prompt';
+import { Prompt } from '@/server/modules/agent/domain/model/prompt';
 
 export const createPrompt = (_agent: unknown, parentPrompt: Prompt) =>
   parentPrompt.with(
