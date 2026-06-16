@@ -1,1 +1,1 @@
-export const MEMORY_SERVICE = Symbol('MEMORY_SERVICE');
+export const MEMORY_FACTORY = Symbol('MEMORY_FACTORY');

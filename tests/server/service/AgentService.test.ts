@@ -3,7 +3,8 @@ import { AgentService } from '@/server/modules/agent/application/service/agent.s
 import { SkillService } from '@/server/modules/agent/application/service/skill.service';
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import { CACHE_SERVICE } from '@/server/modules/agent/agent.di-tokens';
-import { MEMORY_SERVICE } from '@/server/modules/memory/memory.di-tokens';
+import { MEMORY_FACTORY } from '@/server/modules/memory/memory.di-tokens';
+import { MemoryFactory } from '@/server/modules/memory/application/service/memory-factory';
 import { LlmProvider } from '@/server/modules/memory/infrastructure/llm.provider';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -41,8 +42,8 @@ describe('AgentService', () => {
     container.register(SkillService, { useValue: mockSkillService });
 
     // Register port dependencies
-    container.register(MEMORY_SERVICE, {
-      useValue: { summarize: vi.fn(), estimateUsage: vi.fn() },
+    container.register(MEMORY_FACTORY, {
+      useValue: new MemoryFactory(),
     });
     container.register(CACHE_SERVICE, {
       useValue: { resolve: vi.fn(), compress: vi.fn(), readFile: vi.fn() },
