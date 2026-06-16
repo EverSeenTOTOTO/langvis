@@ -5,7 +5,9 @@
       "Bash(make lint:*)",
       "Bash(timeout 10 make dev)",
       "Bash(bunx tsc *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(node *)",
+      "Bash(python3 *)"
     ]
   }
 }

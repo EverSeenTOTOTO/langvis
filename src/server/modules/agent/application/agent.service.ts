@@ -12,7 +12,7 @@ import { service } from '@/server/decorator/service';
 import { ToolService } from './tool.service';
 import { SkillService } from './skill.service';
 import { LlmAdapter } from './llm.adapter';
-import { LlmService } from '@/server/modules/memory/services/llm.service';
+import { LlmService } from '@/server/modules/memory/application/llm.service';
 import { MEMORY_SERVICE } from '@/server/modules/memory/memory.di-tokens';
 import type { MemoryPort } from '@/server/modules/memory/domain/memory.port';
 import { CACHE_SERVICE } from '../agent.di-tokens';

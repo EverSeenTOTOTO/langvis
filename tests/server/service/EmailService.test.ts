@@ -1,4 +1,4 @@
-import { EmailService } from '@/server/modules/email/domain/email.service';
+import { EmailService } from '@/server/modules/email/application/email.service';
 import type { EmailRepositoryPort } from '@/server/modules/email/database/email.repository.port';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

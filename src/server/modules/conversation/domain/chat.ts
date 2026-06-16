@@ -31,6 +31,15 @@ export class Chat extends AggregateRoot<string> {
   }
 
   // ════════════════════════════════════════
+  // 领域规则
+  // ════════════════════════════════════════
+
+  /** 判断 session phase 是否表示过期（服务器重启导致的中断） */
+  static isStalePhase(phase: ChatPhase): boolean {
+    return phase !== 'done' && phase !== 'waiting';
+  }
+
+  // ════════════════════════════════════════
   // 状态查询
   // ════════════════════════════════════════
 
@@ -122,7 +131,6 @@ export class Chat extends AggregateRoot<string> {
     userId: string;
     workDir: string;
     systemPrompt: string;
-    context?: string;
   }): Message[] {
     const baseTime = Date.now();
     let index = 0;
@@ -147,18 +155,6 @@ export class Chat extends AggregateRoot<string> {
       createdAt: new Date(baseTime + index++),
       conversationId: this.id,
     });
-
-    if (params.context) {
-      messages.push({
-        id: generateId('msg'),
-        role: Role.USER,
-        content: params.context,
-        attachments: null,
-        meta: { hidden: true },
-        createdAt: new Date(baseTime + index++),
-        conversationId: this.id,
-      });
-    }
 
     return messages;
   }

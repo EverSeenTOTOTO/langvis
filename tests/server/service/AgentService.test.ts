@@ -4,7 +4,7 @@ import { SkillService } from '@/server/modules/agent/application/skill.service';
 import { ToolService } from '@/server/modules/agent/application/tool.service';
 import { CACHE_SERVICE } from '@/server/modules/agent/agent.di-tokens';
 import { MEMORY_SERVICE } from '@/server/modules/memory/memory.di-tokens';
-import { LlmService } from '@/server/modules/memory/services/llm.service';
+import { LlmService } from '@/server/modules/memory/application/llm.service';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { globby } from 'globby';

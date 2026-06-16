@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SseConnection } from '@/server/modules/conversation/application/sse-connection';
+import { Connection } from '@/server/modules/conversation/application/connection';
 import type { SSEFrame } from '@/shared/types/events';
 import { Transport } from '@/shared/transport';
 
@@ -29,7 +29,7 @@ class MockTransport extends Transport<SSEFrame> {
   }
 }
 
-describe('SseConnection', () => {
+describe('Connection', () => {
   let onDispose: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -41,7 +41,7 @@ describe('SseConnection', () => {
   // but vitest afterEach runs after all tests in this block
 
   function createConnection(id = 'conv_1', timeout: number = 5000) {
-    return new SseConnection(id, timeout, onDispose);
+    return new Connection(id, timeout, onDispose);
   }
 
   it('should attach transport and clear idle timer', () => {
