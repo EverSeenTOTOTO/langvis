@@ -1,7 +1,7 @@
 import { inject } from 'tsyringe';
 import { commandHandler } from '@/server/decorator/handler';
 import { EventBus, createDomainEvent } from '@/server/libs/ddd';
-import { ConversationService } from '../service/conversation.service';
+import { ChatService } from '../service/chat.service';
 import { CONVERSATION_REPOSITORY } from '../../conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
@@ -15,8 +15,8 @@ import { ConversationNotFoundError } from '../../domain/errors';
 @commandHandler(ConversationActivateCommand)
 export class ConversationActivateHandler {
   constructor(
-    @inject(ConversationService)
-    private convService: ConversationService,
+    @inject(ChatService)
+    private convService: ChatService,
     @inject(CONVERSATION_REPOSITORY)
     private convRepo: ConversationRepositoryPort,
     @inject(AgentService)
@@ -41,7 +41,7 @@ export class ConversationActivateHandler {
       systemPrompt,
     });
 
-    this.eventBus.emit(
+    this.eventBus.dispatch(
       ConversationActivated,
       createDomainEvent(ConversationActivated, conversationId, {
         conversationId,

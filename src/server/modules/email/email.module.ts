@@ -6,4 +6,6 @@ container.register(EMAIL_REPOSITORY, EmailRepository, {
   lifecycle: Lifecycle.Singleton,
 });
 
-import './handlers';
+import './application/command/process-inbound.handler';
+import './application/command/archive-email.handler';
+import './application/event/email-archived.handler';

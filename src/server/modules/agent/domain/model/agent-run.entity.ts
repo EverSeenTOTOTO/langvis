@@ -1,4 +1,4 @@
-import type { EffectiveConfig } from '@/shared/types/agent';
+import { EffectiveConfig } from './effective-config';
 import type { LlmMessage, Message } from '@/shared/types/entities';
 import { generateId } from '@/shared/utils';
 import { container } from 'tsyringe';

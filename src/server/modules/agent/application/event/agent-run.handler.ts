@@ -11,7 +11,8 @@ import { AgentRun } from '../../domain/model/agent-run.entity';
 import { AgentService } from '../service/agent.service';
 import { eventHandler } from '@/server/decorator/handler';
 import Logger from '@/server/utils/logger';
-import { ConversationService } from '@/server/modules/conversation/application/service/conversation.service';
+import { ChatService } from '@/server/modules/conversation/application/service/chat.service';
+import { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 
 @eventHandler(TurnInitiated)
@@ -19,8 +20,10 @@ export class AgentRunHandler {
   private readonly logger = Logger.child({ source: 'AgentRunHandler' });
 
   constructor(
-    @inject(ConversationService)
-    private conversationService: ConversationService,
+    @inject(ChatService)
+    private conversationService: ChatService,
+    @inject(SessionManager)
+    private sessionManager: SessionManager,
     @inject(AgentService)
     private agentService: AgentService,
     @inject(WorkspaceService)
@@ -50,14 +53,14 @@ export class AgentRunHandler {
       historyMessages: history,
     });
 
-    this.conversationService.registerRun(
-      conversationId,
-      assistantMessage.id,
-      run,
-    );
+    this.sessionManager.registerRun(conversationId, assistantMessage.id, run);
 
     run.on('run:event', evt => {
-      this.conversationService.processRunEvent(conversationId, evt);
+      this.sessionManager.processRunEvent(
+        conversationId,
+        assistantMessage.id,
+        evt,
+      );
     });
 
     this.conversationService.persistAgentRunId(assistantMessage.id, run.runId);
@@ -79,7 +82,7 @@ export class AgentRunHandler {
     try {
       await run.execute();
     } finally {
-      this.eventBus.emit(
+      this.eventBus.dispatch(
         RunCompleted,
         createDomainEvent(RunCompleted, conversationId, {
           conversationId,

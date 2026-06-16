@@ -12,8 +12,11 @@ import type { RunEvent } from './pending-message';
 /**
  * Conversation — 会话聚合根。
  *
- * 只管理会话生命周期状态（phase + activeMessageIds），
+ * 管理会话生命周期状态（phase + activeTurns），
  * 通过领域事件通知外部。不持有 AgentRun、Transport 等引用。
+ *
+ * activeTurns: Map<messageId, PendingMessage> — 一对多关系。
+ * 每个 active message 对应一个 PendingMessage，承载该轮的内容累积。
  *
  * 领域事件：turn_started, turn_completed, turn_cancellation_requested,
  *           conversation_disposed, phase_changed
@@ -23,8 +26,8 @@ export class Chat extends AggregateRoot<string> {
 
   private _phase: ChatPhase = 'waiting';
   private _disposed = false;
-  private activeMessageIds = new Set<string>();
-  private pendingMessage?: PendingMessage;
+  /** 一对多：每个 active message 对应一个 PendingMessage */
+  private activeTurns = new Map<string, PendingMessage>();
 
   constructor(id: string) {
     super(id);
@@ -49,7 +52,7 @@ export class Chat extends AggregateRoot<string> {
   }
 
   get isActive(): boolean {
-    return !this._disposed && this.activeMessageIds.size > 0;
+    return !this._disposed && this.activeTurns.size > 0;
   }
 
   get isDisposed(): boolean {
@@ -61,30 +64,38 @@ export class Chat extends AggregateRoot<string> {
   // ════════════════════════════════════════
 
   startTurn(messageId: string): void {
-    if (this.activeMessageIds.has(messageId)) {
+    if (this.activeTurns.has(messageId)) {
       throw new DuplicateRunError(messageId);
     }
-    this.activeMessageIds.add(messageId);
-    this.pendingMessage = new PendingMessage(messageId);
+    this.activeTurns.set(messageId, new PendingMessage(messageId));
     this.transitionPhase('active');
     this.addEvent(createDomainEvent('turn_started', this.id, { messageId }));
   }
 
   completeTurn(messageId: string): void {
-    this.activeMessageIds.delete(messageId);
-    this.pendingMessage = undefined;
+    this.activeTurns.delete(messageId);
     this.addEvent(createDomainEvent('turn_completed', this.id, { messageId }));
-    if (this.activeMessageIds.size === 0) {
+    if (this.activeTurns.size === 0) {
       this.transitionPhase('waiting');
     }
   }
 
-  handleRunEvent(event: RunEvent): void {
-    this.pendingMessage?.handleEvent(event);
+  handleRunEvent(messageId: string, event: RunEvent): void {
+    this.activeTurns.get(messageId)?.handleEvent(event);
   }
 
-  getPendingSnapshot(): PendingMessageSnapshot | undefined {
-    return this.pendingMessage?.toSnapshot();
+  getSnapshot(messageId: string): PendingMessageSnapshot | undefined {
+    return this.activeTurns.get(messageId)?.toSnapshot();
+  }
+
+  /** 获取所有 running 的 snapshot（用于 SSE replay） */
+  getRunningSnapshots(): PendingMessageSnapshot[] {
+    const result: PendingMessageSnapshot[] = [];
+    for (const pending of this.activeTurns.values()) {
+      const snapshot = pending.toSnapshot();
+      if (snapshot.status === 'running') result.push(snapshot);
+    }
+    return result;
   }
 
   requestCancellation(messageId?: string, reason?: string): void {
@@ -99,7 +110,7 @@ export class Chat extends AggregateRoot<string> {
       );
     } else {
       this.transitionPhase('canceling');
-      for (const id of this.activeMessageIds) {
+      for (const id of this.activeTurns.keys()) {
         this.addEvent(
           createDomainEvent('turn_cancellation_requested', this.id, {
             messageId: id,
@@ -114,13 +125,13 @@ export class Chat extends AggregateRoot<string> {
     if (this._disposed) return;
 
     this._disposed = true;
-    this.activeMessageIds.clear();
+    this.activeTurns.clear();
     this.transitionPhase('done');
     this.addEvent(createDomainEvent('conversation_disposed', this.id, {}));
   }
 
   hasActiveMessage(messageId: string): boolean {
-    return this.activeMessageIds.has(messageId);
+    return this.activeTurns.has(messageId);
   }
 
   // ════════════════════════════════════════

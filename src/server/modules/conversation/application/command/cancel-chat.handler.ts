@@ -1,20 +1,27 @@
 import { inject } from 'tsyringe';
 import { commandHandler } from '@/server/decorator/handler';
-import { ConversationService } from '../service/conversation.service';
+import { ChatService } from '../service/chat.service';
+import { SessionManager } from '../service/session-manager';
 import { CancelChatCommand } from '../../contracts';
 
 @commandHandler(CancelChatCommand)
 export class CancelChatHandler {
   constructor(
-    @inject(ConversationService)
-    private service: ConversationService,
+    @inject(ChatService)
+    private convService: ChatService,
+    @inject(SessionManager)
+    private sessionManager: SessionManager,
   ) {}
 
   async execute(command: CancelChatCommand): Promise<void> {
-    this.service.requestCancellation(
+    const chat = this.convService.requestCancellation(
       command.conversationId,
       command.messageId,
       command.reason,
     );
+    if (chat) {
+      this.sessionManager.syncInfrastructure(chat);
+      chat.clearEvents();
+    }
   }
 }

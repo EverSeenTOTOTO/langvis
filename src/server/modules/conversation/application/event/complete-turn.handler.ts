@@ -1,15 +1,18 @@
 import { inject } from 'tsyringe';
 import { eventHandler } from '@/server/decorator/handler';
 import type { DomainEvent } from '@/server/libs/ddd';
-import { ConversationService } from '../service/conversation.service';
+import { ChatService } from '../service/chat.service';
+import { SessionManager } from '../service/session-manager';
 import { RunCompleted } from '../../contracts';
 import type { RunCompletedPayload } from '../../contracts';
 
 @eventHandler(RunCompleted)
 export class CompleteTurnHandler {
   constructor(
-    @inject(ConversationService)
-    private convService: ConversationService,
+    @inject(ChatService)
+    private convService: ChatService,
+    @inject(SessionManager)
+    private sessionManager: SessionManager,
   ) {}
 
   async handle(event: DomainEvent<string, RunCompletedPayload>): Promise<void> {
@@ -19,7 +22,11 @@ export class CompleteTurnHandler {
       messageId,
       agentRunId,
     );
-    this.convService.completeTurn(conversationId, messageId);
-    this.convService.finalizeRun(conversationId, messageId);
+    const chat = this.convService.completeTurn(conversationId, messageId);
+    if (chat) {
+      this.sessionManager.syncInfrastructure(chat);
+      chat.clearEvents();
+    }
+    this.sessionManager.finalizeRun(conversationId, messageId);
   }
 }

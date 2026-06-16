@@ -6,7 +6,7 @@ import type { Message } from '@/shared/types/entities';
 import type { AgentConstructor } from '../../domain/model/agent.base';
 import type { Agent } from '../../domain/model/agent.base';
 import { AgentRun } from '../../domain/model/agent-run.entity';
-import { resolveEffectiveConfig } from '../../application/service/effective-config';
+import { EffectiveConfig } from '../../domain/model/effective-config';
 import { registerAgent } from '@/server/decorator/core';
 import { service } from '@/server/decorator/service';
 import { ToolService } from './tool.service';
@@ -143,17 +143,22 @@ export class AgentService {
   }): AgentRun {
     const agent = container.resolve<Agent>(params.agentBinding.agentId);
 
-    const effectiveConfig = resolveEffectiveConfig(
-      agent.config,
-      params.agentBinding,
-      this.providerService,
-      params.systemPrompt,
-    );
-
-    const cfg = effectiveConfig.runtimeConfig as {
+    const cfg = params.agentBinding.config as {
       model?: { modelId?: string };
     };
-    const llm = new LlmAdapter(this.llmService, cfg.model?.modelId);
+    const modelId = cfg.model?.modelId;
+    const contextSize = modelId
+      ? (this.providerService.getModel(modelId)?.contextSize ?? 128_000)
+      : 128_000;
+
+    const effectiveConfig = EffectiveConfig.create(
+      agent.config,
+      params.agentBinding,
+      params.systemPrompt,
+      contextSize,
+    );
+
+    const llm = new LlmAdapter(this.llmService, modelId);
 
     return new AgentRun(
       params.runId,

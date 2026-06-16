@@ -11,7 +11,8 @@ import { body, param, request, response } from '../decorator/param';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import { CONVERSATION_REPOSITORY } from '../modules/conversation/conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../modules/conversation/domain/port/conversation.repository.port';
-import { ConversationService } from '../modules/conversation/application/service/conversation.service';
+import { ChatService } from '../modules/conversation/application/service/chat.service';
+import { SessionManager } from '../modules/conversation/application/service/session-manager';
 import { CommandBus, QueryBus } from '@/server/libs/ddd';
 import {
   ConversationActivateCommand,
@@ -27,8 +28,10 @@ export default class ChatController {
     private commandBus: CommandBus,
     @inject(QueryBus)
     private queryBus: QueryBus,
-    @inject(ConversationService)
-    private conversationService: ConversationService,
+    @inject(ChatService)
+    private conversationService: ChatService,
+    @inject(SessionManager)
+    private sessionManager: SessionManager,
     @inject(CONVERSATION_REPOSITORY)
     private convRepo: ConversationRepositoryPort,
     @inject(AuthService)
@@ -60,8 +63,8 @@ export default class ChatController {
       new ConversationActivateCommand(conversationId, userId),
     );
 
-    // SSE setup — single method, no manual orchestration
-    this.conversationService.initSession(
+    // SSE setup
+    await this.sessionManager.initSession(
       conversationId,
       new SSEServerTransport(req, res),
     );

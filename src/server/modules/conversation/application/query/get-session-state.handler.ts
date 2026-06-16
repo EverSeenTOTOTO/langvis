@@ -2,7 +2,7 @@ import { inject } from 'tsyringe';
 import { queryHandler } from '@/server/decorator/handler';
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { RedisKeys } from '@/shared/constants';
-import type { ChatState } from '../service/conversation.service';
+import type { ChatState } from '../service/session-manager';
 import { GetSessionStateQuery } from '../../contracts';
 
 @queryHandler(GetSessionStateQuery)
