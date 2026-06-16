@@ -1,5 +1,5 @@
 import { EffectiveConfig } from './effective-config';
-import type { LlmMessage, Message } from '@/shared/types/entities';
+import type { LlmMessage } from '@/shared/types/entities';
 import { generateId } from '@/shared/utils';
 import { container } from 'tsyringe';
 import type { EnrichedEvent } from './agent.types';
@@ -45,7 +45,6 @@ export class AgentRun extends EventEmitter {
   private memory: MemoryPort;
   private cache: CachePort;
   readonly llm: LlmPort;
-  private historyMessages: Message[];
 
   constructor(
     runId: string,
@@ -56,7 +55,6 @@ export class AgentRun extends EventEmitter {
     memory: MemoryPort,
     cache: CachePort,
     llm: LlmPort,
-    historyMessages: Message[],
   ) {
     super();
     this.runId = runId;
@@ -67,7 +65,6 @@ export class AgentRun extends EventEmitter {
     this.memory = memory;
     this.cache = cache;
     this.llm = llm;
-    this.historyMessages = historyMessages;
   }
 
   // ════════════════════════════════════════
@@ -94,29 +91,12 @@ export class AgentRun extends EventEmitter {
   // Memory 代理
   // ════════════════════════════════════════
 
-  async summarize(): Promise<LlmMessage[]> {
-    const cfg = this.config.runtimeConfig as {
-      model?: { modelId?: string };
-      memory?: { type?: string; windowSize?: number };
-    };
-    return this.memory.summarize(this.historyMessages, {
-      windowSize: cfg.memory?.windowSize,
-      systemPrompt: this.config.systemPrompt,
-      memoryType: cfg.memory?.type as 'slide_window' | 'react' | undefined,
-      modelId: cfg.model?.modelId,
-    });
+  async buildContext(): Promise<LlmMessage[]> {
+    return this.memory.buildContext();
   }
 
   getContextUsage(): ContextUsage {
-    const cfg = this.config.runtimeConfig as {
-      model?: { modelId?: string };
-    };
-    const modelId = cfg.model?.modelId ?? '';
-    return this.memory.estimateUsage(
-      this.historyMessages as unknown as LlmMessage[],
-      this.config.contextSize,
-      modelId,
-    );
+    return this.memory.getContextUsage();
   }
 
   // ════════════════════════════════════════

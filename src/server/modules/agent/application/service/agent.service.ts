@@ -13,8 +13,11 @@ import { ToolService } from './tool.service';
 import { SkillService } from './skill.service';
 import { LlmAdapter } from '../../infrastructure/llm.adapter';
 import { LlmProvider } from '@/server/modules/memory/infrastructure/llm.provider';
-import { MEMORY_SERVICE } from '@/server/modules/memory/memory.di-tokens';
-import type { MemoryPort } from '@/server/modules/memory/domain/port/memory.port';
+import { MEMORY_FACTORY } from '@/server/modules/memory/memory.di-tokens';
+import {
+  MemoryFactory,
+  type MemoryType,
+} from '@/server/modules/memory/application/service/memory-factory';
 import { CACHE_SERVICE } from '../../agent.di-tokens';
 import type { CachePort } from '../../domain/port/cache.port';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
@@ -35,8 +38,8 @@ export class AgentService {
     private skillService: SkillService,
     @inject(LlmProvider)
     private llmService: LlmProvider,
-    @inject(MEMORY_SERVICE)
-    private memoryService: MemoryPort,
+    @inject(MEMORY_FACTORY)
+    private memoryFactory: MemoryFactory,
     @inject(CACHE_SERVICE)
     private cacheService: CachePort,
     @inject(ProviderService)
@@ -145,6 +148,7 @@ export class AgentService {
 
     const cfg = params.agentBinding.config as {
       model?: { modelId?: string };
+      memory?: { type?: string; windowSize?: number };
     };
     const modelId = cfg.model?.modelId;
     const contextSize = modelId
@@ -158,6 +162,15 @@ export class AgentService {
       contextSize,
     );
 
+    const memory = this.memoryFactory.create({
+      history: params.historyMessages,
+      systemPrompt: effectiveConfig.systemPrompt,
+      contextSize: effectiveConfig.contextSize,
+      modelId: cfg.model?.modelId ?? '',
+      memoryType: (cfg.memory?.type ?? 'slide_window_memory') as MemoryType,
+      windowSize: cfg.memory?.windowSize,
+    });
+
     const llm = new LlmAdapter(this.llmService, modelId);
 
     return new AgentRun(
@@ -166,10 +179,9 @@ export class AgentService {
       params.workDir,
       effectiveConfig,
       agent,
-      this.memoryService,
+      memory,
       this.cacheService,
       llm,
-      params.historyMessages,
     );
   }
 }

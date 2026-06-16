@@ -78,7 +78,7 @@ export default class ReActAgent extends Agent {
     run: AgentRun,
   ): AsyncGenerator<AgentEvent | StreamChunk, void, void> {
     const cfg = run.config.runtimeConfig as ReActAgentConfig;
-    const messages = await run.summarize();
+    const messages = await run.buildContext();
     const iterMessages = this.buildIterMessages(messages);
 
     for (let i = 0; i < this.maxIterations; i++) {

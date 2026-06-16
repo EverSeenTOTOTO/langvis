@@ -1,7 +1,5 @@
-import { container, Lifecycle } from 'tsyringe';
-import { MEMORY_SERVICE } from './memory.di-tokens';
-import { MemoryService } from './application/service/memory.service';
+import { container } from 'tsyringe';
+import { MEMORY_FACTORY } from './memory.di-tokens';
+import { MemoryFactory } from './application/service/memory-factory';
 
-container.register(MEMORY_SERVICE, MemoryService, {
-  lifecycle: Lifecycle.Singleton,
-});
+container.register(MEMORY_FACTORY, MemoryFactory);

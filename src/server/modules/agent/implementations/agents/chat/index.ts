@@ -36,7 +36,7 @@ export default class ChatAgent extends Agent {
     run: AgentRun,
   ): AsyncGenerator<AgentEvent | StreamChunk, void, void> {
     const cfg = run.config.runtimeConfig as ChatAgentConfig;
-    const messages = await run.summarize();
+    const messages = await run.buildContext();
 
     this.logger.debug(
       `Chat with ${chalk.bgRed(cfg.model?.modelId)}, messages: `,

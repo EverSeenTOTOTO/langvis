@@ -37,7 +37,7 @@ export default class GirlFriendAgent extends Agent {
     run: AgentRun,
   ): AsyncGenerator<AgentEvent | StreamChunk, void, void> {
     const cfg = run.config.runtimeConfig as GirlFriendConfig;
-    const messages = await run.summarize();
+    const messages = await run.buildContext();
 
     const generator = run.llm.chat(
       {
