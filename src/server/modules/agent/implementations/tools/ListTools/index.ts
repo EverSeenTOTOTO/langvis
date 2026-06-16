@@ -2,10 +2,10 @@ import { tool } from '@/server/decorator/core';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
-import { Tool } from '@/server/modules/agent/domain/tool.base';
-import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
-import { ToolService } from '@/server/modules/agent/application/tool.service';
-import { SkillService } from '@/server/modules/agent/application/skill.service';
+import { Tool } from '@/server/modules/agent/domain/model/tool.base';
+import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import { ToolService } from '@/server/modules/agent/application/service/tool.service';
+import { SkillService } from '@/server/modules/agent/application/service/skill.service';
 import { inject, container } from 'tsyringe';
 import {
   formatToolsToMarkdown,

@@ -3,7 +3,7 @@ import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, response } from '../decorator/param';
-import { LlmService } from '@/server/modules/memory/application/llm.service';
+import { LlmProvider } from '@/server/modules/memory/infrastructure/llm.provider';
 import type {
   SpeechToTextRequestDto,
   SpeechToTextResponse,
@@ -11,7 +11,7 @@ import type {
 
 @controller('/api/stt')
 export default class SttController {
-  constructor(@inject(LlmService) private llmService: LlmService) {}
+  constructor(@inject(LlmProvider) private llmService: LlmProvider) {}
 
   @api('/transcribe', { method: 'post' })
   async transcribe(

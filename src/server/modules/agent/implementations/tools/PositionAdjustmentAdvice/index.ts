@@ -4,9 +4,9 @@ import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { container } from 'tsyringe';
 import { wrapUntrusted } from '@/shared/utils';
-import { Tool } from '@/server/modules/agent/domain/tool.base';
-import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
-import { Prompt } from '@/server/modules/agent/domain/Prompt';
+import { Tool } from '@/server/modules/agent/domain/model/tool.base';
+import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import { Prompt } from '@/server/modules/agent/domain/model/prompt';
 import AskUserTool from '../AskUser';
 import type { PositionAdjustmentAdviceOutput } from './config';
 

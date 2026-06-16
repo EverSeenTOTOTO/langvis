@@ -1,6 +1,6 @@
 import { DocumentService } from '@/server/modules/document/application/document.service';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DocumentRepositoryPort } from '@/server/modules/document/database/document.repository.port';
+import type { DocumentRepositoryPort } from '@/server/modules/document/domain/port/document.repository.port';
 
 const mockRepo = {
   listDocuments: vi.fn(),

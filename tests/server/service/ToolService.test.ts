@@ -1,5 +1,5 @@
 import * as configModule from '@/server/decorator/core';
-import { ToolService } from '@/server/modules/agent/application/tool.service';
+import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import { globby } from 'globby';
 import { container } from 'tsyringe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

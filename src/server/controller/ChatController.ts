@@ -10,8 +10,8 @@ import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import { CONVERSATION_REPOSITORY } from '../modules/conversation/conversation.di-tokens';
-import type { ConversationRepositoryPort } from '../modules/conversation/database/conversation.repository.port';
-import { ConversationService } from '../modules/conversation/application/conversation.service';
+import type { ConversationRepositoryPort } from '../modules/conversation/domain/port/conversation.repository.port';
+import { ConversationService } from '../modules/conversation/application/service/conversation.service';
 import { CommandBus, QueryBus } from '@/server/libs/ddd';
 import {
   ConversationActivateCommand,

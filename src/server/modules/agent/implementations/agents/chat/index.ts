@@ -4,10 +4,10 @@ import { AgentIds } from '@/shared/constants';
 import type { AgentConfig } from '@/shared/types';
 import type { AgentEvent, StreamChunk } from '@/shared/types/events';
 import chalk from 'chalk';
-import { Agent } from '@/server/modules/agent/domain/agent.base';
-import type { AgentRun } from '@/server/modules/agent/domain/agent-run.entity';
-import type { Tool } from '@/server/modules/agent/domain/tool.base';
-import { Prompt } from '@/server/modules/agent/domain/Prompt';
+import { Agent } from '@/server/modules/agent/domain/model/agent.base';
+import type { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
+import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
+import { Prompt } from '@/server/modules/agent/domain/model/prompt';
 import { createPrompt } from './prompt';
 
 interface ChatAgentConfig {

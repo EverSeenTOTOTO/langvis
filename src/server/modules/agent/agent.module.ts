@@ -1,10 +1,11 @@
 import { container, Lifecycle } from 'tsyringe';
 import { CACHE_SERVICE } from './agent.di-tokens';
-import { CacheService } from '@/server/modules/memory/application/cache.service';
+import { CacheProvider } from '@/server/modules/memory/infrastructure/cache.provider';
 
-container.register(CACHE_SERVICE, CacheService, {
+container.register(CACHE_SERVICE, CacheProvider, {
   lifecycle: Lifecycle.Singleton,
 });
 
 import '@/server/modules/memory/memory.module';
-import './handlers';
+import './application/event/agent-run.handler';
+import './application/event/turn-cancellation.handler';

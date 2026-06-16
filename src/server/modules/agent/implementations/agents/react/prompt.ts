@@ -1,6 +1,6 @@
 import { formatToolsToMarkdown } from '@/server/utils/formatTools';
-import type { Tool } from '@/server/modules/agent/domain/tool.base';
-import { Prompt } from '@/server/modules/agent/domain/Prompt';
+import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
+import { Prompt } from '@/server/modules/agent/domain/model/prompt';
 
 export const createPrompt = (
   agent: { tools?: Tool[] },

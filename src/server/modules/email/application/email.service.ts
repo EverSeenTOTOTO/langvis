@@ -12,7 +12,7 @@ import type {
   EmailListResponse,
   EmailRepositoryPort,
   InboundEmailResult,
-} from '../database/email.repository.port';
+} from '../domain/port/email.repository.port';
 
 export type {
   EmailListParams,

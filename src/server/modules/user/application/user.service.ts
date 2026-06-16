@@ -2,7 +2,7 @@ import type { User } from '@/shared/entities/User';
 import { inject } from 'tsyringe';
 import { service } from '@/server/decorator/service';
 import { USER_REPOSITORY } from '../user.di-tokens';
-import type { UserRepositoryPort } from '../database/user.repository.port';
+import type { UserRepositoryPort } from '../domain/port/user.repository.port';
 
 @service()
 export class UserService {

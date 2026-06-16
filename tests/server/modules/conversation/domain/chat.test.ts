@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { Chat } from '@/server/modules/conversation/domain/chat';
-import { DuplicateRunError } from '@/server/modules/conversation/domain/conversation.errors';
+import { Chat } from '@/server/modules/conversation/domain/model/chat';
+import { DuplicateRunError } from '@/server/modules/conversation/domain/errors';
 import type { ChatPhase } from '@/shared/types';
 
 describe('Chat', () => {

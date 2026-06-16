@@ -1,13 +1,13 @@
 import { tool } from '@/server/decorator/core';
 import { inject } from 'tsyringe';
 import { CACHE_SERVICE } from '@/server/modules/agent/agent.di-tokens';
-import type { CachePort } from '@/server/modules/agent/domain/cache.port';
+import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
-import type { ToolProgress } from '@/server/modules/agent/domain/tool-call.entity';
-import type { ToolCall } from '@/server/modules/agent/domain/tool-call.entity';
-import { Tool } from '@/server/modules/agent/domain/tool.base';
+import type { ToolProgress } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 
 export interface CachedReadInput {
   key: string;

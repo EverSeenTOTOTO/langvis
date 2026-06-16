@@ -13,8 +13,8 @@ import {
   MESSAGE_REPOSITORY,
   CONVERSATION_REPOSITORY,
 } from '../modules/conversation/conversation.di-tokens';
-import type { MessageRepositoryPort } from '../modules/conversation/database/message.repository.port';
-import type { ConversationRepositoryPort } from '../modules/conversation/database/conversation.repository.port';
+import type { MessageRepositoryPort } from '../modules/conversation/domain/port/message.repository.port';
+import type { ConversationRepositoryPort } from '../modules/conversation/domain/port/conversation.repository.port';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { estimateTokens } from '../utils/estimateTokens';
 

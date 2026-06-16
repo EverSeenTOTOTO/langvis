@@ -4,12 +4,12 @@ import os from 'os';
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { container } from 'tsyringe';
 import {
-  CacheService,
+  CacheProvider,
   STRING_THRESHOLD,
   PREVIEW_LENGTH,
   isCachedReference,
   type CachedReference,
-} from '@/server/modules/memory/application/cache.service';
+} from '@/server/modules/memory/infrastructure/cache.provider';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 
 let testDir: string;
@@ -32,8 +32,8 @@ const mockWorkspaceService = {
     }),
 };
 
-describe('CacheService', () => {
-  let cacheService: CacheService;
+describe('CacheProvider', () => {
+  let cacheService: CacheProvider;
   const conversationId = 'conv-test-123';
 
   afterAll(async () => {
@@ -47,7 +47,7 @@ describe('CacheService', () => {
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     container.register(WorkspaceService, { useValue: mockWorkspaceService });
-    cacheService = container.resolve(CacheService);
+    cacheService = container.resolve(CacheProvider);
   });
 
   describe('compress', () => {
