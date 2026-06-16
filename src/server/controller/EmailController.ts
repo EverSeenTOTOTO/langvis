@@ -4,9 +4,12 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, query, request, response } from '../decorator/param';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
-import { EmailService } from '@/server/modules/email/application/email.service';
+import { EmailService } from '@/server/modules/email/application/service/email.service';
 import { CommandBus } from '@/server/libs/ddd';
-import { ArchiveEmailCommand } from '@/server/modules/email/contracts';
+import {
+  ArchiveEmailCommand,
+  ProcessInboundCommand,
+} from '@/server/modules/email/contracts';
 import { ListEmailsRequestDto } from '@/shared/dto/controller';
 import Logger from '../utils/logger';
 
@@ -85,7 +88,9 @@ export default class EmailController {
     }
 
     try {
-      const result = await this.emailService.processInbound(emailBody.raw);
+      const result = await this.commandBus.execute(
+        new ProcessInboundCommand(emailBody.raw),
+      );
 
       if (!result.success) {
         this.logger.error(`Archive failed: ${result.error}`);

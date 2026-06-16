@@ -47,10 +47,5 @@ export * from './tool';
 
 // ─── DDD 类型 ───
 export type { StreamChunk, ContextUsageMeta, SSEFrame } from './events';
-export type {
-  RunStatus,
-  AgentBinding,
-  EffectiveConfig,
-  ConversationConfig,
-} from './agent';
+export type { RunStatus, AgentBinding, ConversationConfig } from './agent';
 export type { ToolCallRecord, RunSnapshot } from './render';

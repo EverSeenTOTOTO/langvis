@@ -1,6 +1,12 @@
 import { Command } from '@/server/libs/ddd';
 import type { AgentBinding } from '@/shared/types/agent';
 
+export class ProcessInboundCommand extends Command {
+  constructor(readonly rawEmail: string) {
+    super();
+  }
+}
+
 export class ArchiveEmailCommand extends Command {
   constructor(
     readonly emailId: string,

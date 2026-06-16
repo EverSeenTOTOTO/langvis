@@ -5,14 +5,14 @@ import { service } from '@/server/decorator/service';
 import Logger from '@/server/utils/logger';
 import { sanitizeHtml } from '@/server/utils/sanitizeHtml';
 import type { simpleParser as SimpleParserFn } from 'mailparser';
-import { EMAIL_REPOSITORY } from '../email.di-tokens';
+import { EMAIL_REPOSITORY } from '../../email.di-tokens';
 import type {
   CreateEmailData,
   EmailListParams,
   EmailListResponse,
   EmailRepositoryPort,
   InboundEmailResult,
-} from '../domain/port/email.repository.port';
+} from '../../domain/port/email.repository.port';
 
 export type {
   EmailListParams,

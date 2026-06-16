@@ -5,11 +5,9 @@ const mockEmailService = {
   list: vi.fn(),
   getById: vi.fn(),
   delete: vi.fn(),
-  updateStatus: vi.fn(),
-  processInbound: vi.fn(),
 };
 
-const mockArchiveHandler = {
+const mockCommandBus = {
   execute: vi.fn(),
 };
 
@@ -27,21 +25,23 @@ vi.mock('@/server/utils/logger', () => ({
   },
 }));
 
-vi.mock('@/server/modules/email/application/email.service', () => ({
+vi.mock('@/server/modules/email/application/service/email.service', () => ({
   EmailService: class {
     list = mockEmailService.list;
     getById = mockEmailService.getById;
     delete = mockEmailService.delete;
-    updateStatus = mockEmailService.updateStatus;
-    processInbound = mockEmailService.processInbound;
   },
 }));
 
-vi.mock('@/server/modules/email/commands/archive-email.handler', () => ({
-  ArchiveEmailHandler: class {
-    execute = mockArchiveHandler.execute;
-  },
-}));
+vi.mock('@/server/libs/ddd', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/server/libs/ddd')>();
+  return {
+    ...actual,
+    CommandBus: class {
+      execute = mockCommandBus.execute;
+    },
+  };
+});
 
 vi.mock('@/server/libs/infrastructure/auth.service', () => ({
   AuthService: class {
@@ -55,7 +55,7 @@ async function createController() {
   );
   return new EmailController(
     mockEmailService as any,
-    mockArchiveHandler as any,
+    mockCommandBus as any,
     mockAuthService as any,
   );
 }
@@ -272,12 +272,12 @@ describe('EmailController', () => {
       vi.unstubAllEnvs();
     });
 
-    it('should archive email successfully', async () => {
+    it('should delegate to CommandBus for inbound processing', async () => {
       vi.stubEnv('VITE_INBOUND_SECRET', 'test-secret');
       vi.resetModules();
       mockReq.headers = { 'x-inbound-secret': 'test-secret' };
 
-      mockEmailService.processInbound.mockResolvedValue({
+      mockCommandBus.execute.mockResolvedValue({
         success: true,
         id: 'mail_new',
       });
@@ -298,7 +298,11 @@ This is the email body content.`;
         mockRes as Response,
       );
 
-      expect(mockEmailService.processInbound).toHaveBeenCalledWith(rawEmail);
+      expect(mockCommandBus.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rawEmail: rawEmail,
+        }),
+      );
       expect(mockRes.status).toHaveBeenCalledWith(200);
       expect(mockRes.json).toHaveBeenCalledWith({
         success: true,
@@ -312,7 +316,7 @@ This is the email body content.`;
       vi.resetModules();
       mockReq.headers = { 'x-inbound-secret': 'test-secret' };
 
-      mockEmailService.processInbound.mockResolvedValue({
+      mockCommandBus.execute.mockResolvedValue({
         success: false,
         error: 'Database error',
       });
@@ -339,9 +343,9 @@ Test content.`;
   });
 
   describe('archive', () => {
-    it('should delegate to ArchiveEmailHandler and return result', async () => {
+    it('should delegate to CommandBus and return result', async () => {
       mockAuthService.getUserId.mockResolvedValue('user_1');
-      mockArchiveHandler.execute.mockResolvedValue({
+      mockCommandBus.execute.mockResolvedValue({
         emailId: 'mail_1',
       });
 
@@ -354,7 +358,7 @@ Test content.`;
       );
 
       expect(mockAuthService.getUserId).toHaveBeenCalledWith(mockReq);
-      expect(mockArchiveHandler.execute).toHaveBeenCalledWith(
+      expect(mockCommandBus.execute).toHaveBeenCalledWith(
         expect.objectContaining({
           emailId: 'mail_1',
           userId: 'user_1',
@@ -369,7 +373,7 @@ Test content.`;
 
     it('should return 404 when email not found', async () => {
       mockAuthService.getUserId.mockResolvedValue('user_1');
-      mockArchiveHandler.execute.mockRejectedValue(
+      mockCommandBus.execute.mockRejectedValue(
         new Error('Email not found: mail_1'),
       );
 
@@ -389,7 +393,7 @@ Test content.`;
 
     it('should return 500 on unexpected error', async () => {
       mockAuthService.getUserId.mockResolvedValue('user_1');
-      mockArchiveHandler.execute.mockRejectedValue(
+      mockCommandBus.execute.mockRejectedValue(
         new Error('Database connection failed'),
       );
 
