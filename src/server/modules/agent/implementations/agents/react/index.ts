@@ -76,7 +76,7 @@ export default class ReActAgent extends Agent {
 
   async *call(ctx: AgentRunContext): AsyncGenerator<RunEvent, void, void> {
     const cfg = ctx.config.runtimeConfig as ReActAgentConfig;
-    const messages = await ctx.buildContext();
+    const messages = await ctx.memory.buildContext();
     const iterMessages = this.buildIterMessages(messages);
 
     for (let i = 0; i < this.maxIterations; i++) {

@@ -32,8 +32,9 @@ export enum AgentIds {
 export const UNGROUPED_GROUP_NAME = 'Ungrouped';
 
 export const RedisKeys = {
-  // Message level
-  HUMAN_INPUT: (messageId: string) => `human_input:${messageId}`,
+  // Per-run level (HITL 关联键：AskUser 写、HumanInputPort 读，均以 runId 为准；
+  // HTTP 端点 :messageId 在 HumanInputRedisProvider 边界翻译成 runId)
+  HUMAN_INPUT: (runId: string) => `human_input:${runId}`,
   // Session level
   CHAT_SESSION: (conversationId: string) => `chat_session:${conversationId}`,
   CHAT_SESSION_LOCK: (conversationId: string) =>

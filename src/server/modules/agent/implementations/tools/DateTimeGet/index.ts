@@ -6,7 +6,7 @@ import dayjs from 'dayjs';
 import tz from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 
 dayjs.extend(utc);
 dayjs.extend(tz);
@@ -27,9 +27,9 @@ export default class DateTimeGetTool extends Tool<DateTimeGetOutput> {
   protected readonly logger!: Logger;
 
   async *call(
-    toolCall: ToolCall,
+    ctx: ToolCallContext,
   ): AsyncGenerator<never, DateTimeGetOutput, void> {
-    const data = toolCall.input as DateTimeGetInput;
+    const data = ctx.input as DateTimeGetInput;
     const timezone = data?.timezone;
     const format = data?.format;
 

@@ -3,7 +3,7 @@ import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import type { EmbeddingGenerateInput, EmbeddingGenerateOutput } from './config';
 import { config } from './config';
@@ -17,9 +17,9 @@ export default class EmbeddingGenerateTool extends Tool<EmbeddingGenerateOutput>
   protected readonly logger!: Logger;
 
   async *call(
-    toolCall: ToolCall,
+    ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, EmbeddingGenerateOutput, void> {
-    const data = toolCall.input as unknown as EmbeddingGenerateInput;
+    const data = ctx.input as unknown as EmbeddingGenerateInput;
     const { chunks, model, timeout = DEFAULT_TIMEOUT_MS } = data;
 
     const texts = chunks.map(c => c.content);
@@ -28,15 +28,19 @@ export default class EmbeddingGenerateTool extends Tool<EmbeddingGenerateOutput>
       `Generating embeddings for ${chunks.length} chunks using ${model}`,
     );
 
-    yield toolCall.emitProgress({
-      message: `Calling embedding API (${model}) for ${chunks.length} texts...`,
-      model,
-      textCount: chunks.length,
-    });
+    yield {
+      type: 'tool_progress',
+      callId: ctx.callId,
+      data: {
+        message: `Calling embedding API (${model}) for ${chunks.length} texts...`,
+        model,
+        textCount: chunks.length,
+      },
+    };
 
     const signal = AbortSignal.timeout(timeout);
 
-    const sortedData = await toolCall.llm.embed(model, texts, signal);
+    const sortedData = await ctx.llm.embed(model, texts, signal);
 
     const output: EmbeddingGenerateOutput = {
       chunks: chunks.map((chunk, i) => ({
@@ -48,18 +52,6 @@ export default class EmbeddingGenerateTool extends Tool<EmbeddingGenerateOutput>
     };
 
     return output;
-  }
-
-  override summarizeArgs(args: Record<string, unknown>): string {
-    const chunks = args.chunks as EmbeddingGenerateInput['chunks'] | undefined;
-    if (!chunks) return '';
-    return `(${chunks.length} 条文本)`;
-  }
-
-  override summarizeOutput(output: unknown): string {
-    const result = output as EmbeddingGenerateOutput | undefined;
-    if (!result) return '完成';
-    return `生成 ${result.chunks.length} 个向量 (dim=${result.dimension})`;
   }
 }
 

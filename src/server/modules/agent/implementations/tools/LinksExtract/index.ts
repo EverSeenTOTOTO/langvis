@@ -4,7 +4,7 @@ import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { JSDOM } from 'jsdom';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { LinksExtractInput, LinksExtractOutput, LinkInfo } from './config';
 
 @tool(ToolIds.LINKS_EXTRACT)
@@ -14,11 +14,11 @@ export default class LinksExtractTool extends Tool<LinksExtractOutput> {
   protected readonly logger!: Logger;
 
   async *call(
-    toolCall: ToolCall,
+    ctx: ToolCallContext,
   ): AsyncGenerator<never, LinksExtractOutput, void> {
-    toolCall.signal.throwIfAborted();
+    ctx.signal.throwIfAborted();
 
-    const data = toolCall.input as unknown as LinksExtractInput;
+    const data = ctx.input as unknown as LinksExtractInput;
     const { content } = data;
     const links: LinkInfo[] = [];
 

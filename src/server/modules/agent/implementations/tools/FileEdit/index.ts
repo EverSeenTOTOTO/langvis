@@ -2,7 +2,7 @@ import { tool } from '@/server/decorator/core';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
-import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
@@ -23,14 +23,14 @@ export default class FileEditTool extends Tool<FileEditOutput> {
   }
 
   async *call(
-    toolCall: ToolCall,
+    ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, FileEditOutput, void> {
-    toolCall.signal.throwIfAborted();
+    ctx.signal.throwIfAborted();
 
     const { path, old_string, new_string } =
-      toolCall.input as unknown as FileEditInput;
+      ctx.input as unknown as FileEditInput;
 
-    const workDir = toolCall.workDir;
+    const workDir = ctx.workDir;
 
     const removed = old_string
       .split('\n')
@@ -54,16 +54,16 @@ export default class FileEditTool extends Tool<FileEditOutput> {
 
     const hitl = container.resolve<AskUserTool>(ToolIds.ASK_USER);
 
-    const originalInput = toolCall.input;
-    toolCall.input = { message, formSchema: formSchema as any };
-    const { submitted, data } = yield* hitl.call(toolCall);
-    toolCall.input = originalInput;
+    const { submitted, data } = yield* hitl.call({
+      ...ctx,
+      input: { message, formSchema: formSchema as any },
+    });
 
     if (!submitted || !(data as Record<string, unknown>)?.confirmed) {
       throw new Error('操作已取消');
     }
 
-    toolCall.signal.throwIfAborted();
+    ctx.signal.throwIfAborted();
     const result = await this.workspaceService.editFile(
       path,
       old_string,
@@ -71,16 +71,5 @@ export default class FileEditTool extends Tool<FileEditOutput> {
       workDir,
     );
     return { path, changes: result.changes };
-  }
-
-  override summarizeArgs(args: Record<string, unknown>): string {
-    const path = typeof args.path === 'string' ? args.path : '';
-    return `(${path})`;
-  }
-
-  override summarizeOutput(output: unknown): string {
-    const result = output as FileEditOutput | undefined;
-    if (!result) return '完成';
-    return `${result.changes} 处修改`;
   }
 }

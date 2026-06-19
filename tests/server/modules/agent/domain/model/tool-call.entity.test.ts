@@ -44,7 +44,6 @@ function makeDeps(): ToolCallDeps {
     runId: 'run_1',
     llm: makeMockLlm(),
     cache: makeMockCache(),
-    messageId: 'msg_1',
   };
 }
 
@@ -120,24 +119,13 @@ describe('ToolCall', () => {
     });
   });
 
-  describe('emitProgress', () => {
-    it('returns a raw tool_progress RunEvent', () => {
-      const toolCall = createToolCall();
-      const event = toolCall.emitProgress({ status: 'working' }) as any;
-      expect(event.type).toBe('tool_progress');
-      expect(event.callId).toBe('tc_1');
-      expect(event.data).toEqual({ status: 'working' });
-    });
-  });
-
   describe('deps getters', () => {
-    it('exposes signal/workDir/runId/messageId/llm from deps', () => {
+    it('exposes signal/workDir/runId/llm from deps', () => {
       const deps = makeDeps();
       const toolCall = createToolCall(makeMockTool(), deps);
       expect(toolCall.signal).toBe(deps.signal);
       expect(toolCall.workDir).toBe('/tmp/workdir');
       expect(toolCall.runId).toBe('run_1');
-      expect(toolCall.messageId).toBe('msg_1');
       expect(toolCall.llm).toBe(deps.llm);
     });
   });
@@ -145,27 +133,27 @@ describe('ToolCall', () => {
   describe('observation', () => {
     it('returns raw output for trusted tools', () => {
       const toolCall = createToolCall(makeMockTool({ untrustedOutput: false }));
-      (toolCall as any).doComplete('raw output');
+      (toolCall as any).complete('raw output');
       expect(toolCall.observation).toBe('raw output');
     });
 
     it('wraps output for untrusted tools', () => {
       const toolCall = createToolCall(makeMockTool({ untrustedOutput: true }));
-      (toolCall as any).doComplete('external content');
+      (toolCall as any).complete('external content');
       expect(toolCall.observation).toContain('<untrusted_content>');
       expect(toolCall.observation).toContain('external content');
     });
 
     it('returns error message for failed status', () => {
       const toolCall = createToolCall();
-      (toolCall as any).doFail('something went wrong');
+      (toolCall as any).fail('something went wrong');
       expect(toolCall.observation).toContain('Error executing tool');
       expect(toolCall.observation).toContain('something went wrong');
     });
 
     it('stringifies non-string output', () => {
       const toolCall = createToolCall();
-      (toolCall as any).doComplete({ key: 'value' });
+      (toolCall as any).complete({ key: 'value' });
       expect(toolCall.observation).toBe(JSON.stringify({ key: 'value' }));
     });
   });
@@ -176,12 +164,12 @@ describe('ToolCall', () => {
     });
     it('transitions to completed', () => {
       const tc = createToolCall();
-      (tc as any).doComplete('output');
+      (tc as any).complete('output');
       expect(tc.status).toBe('completed');
     });
     it('transitions to failed', () => {
       const tc = createToolCall();
-      (tc as any).doFail('error');
+      (tc as any).fail('error');
       expect(tc.status).toBe('failed');
     });
   });

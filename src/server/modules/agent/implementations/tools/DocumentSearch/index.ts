@@ -4,7 +4,7 @@ import type { Logger } from '@/server/utils/logger';
 import type { ToolConfig } from '@/shared/types';
 import { container, inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import type EmbeddingGenerateTool from '../EmbeddingGenerate';
@@ -22,34 +22,42 @@ export default class DocumentSearchTool extends Tool<DocumentSearchOutput> {
   }
 
   async *call(
-    toolCall: ToolCall,
+    ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, DocumentSearchOutput, void> {
-    const data = toolCall.input as unknown as DocumentSearchInput;
+    const data = ctx.input as unknown as DocumentSearchInput;
     const { query, limit = 10, threshold } = data;
 
     // 1. Generate embedding for query
-    yield toolCall.emitProgress({
-      message: `Generating embedding for query: "${query.slice(0, 50)}${query.length > 50 ? '...' : ''}"`,
-      data: { queryLength: query.length },
-    });
+    yield {
+      type: 'tool_progress',
+      callId: ctx.callId,
+      data: {
+        message: `Generating embedding for query: "${query.slice(0, 50)}${query.length > 50 ? '...' : ''}"`,
+        data: { queryLength: query.length },
+      },
+    };
 
     const embedTool = container.resolve<EmbeddingGenerateTool>(
       ToolIds.EMBEDDING_GENERATE,
     );
-    const originalInput = toolCall.input;
-    toolCall.input = { chunks: [{ content: query, index: 0 }] };
-    const embedResult = yield* embedTool.call(toolCall);
-    toolCall.input = originalInput;
+    const embedResult = yield* embedTool.call({
+      ...ctx,
+      input: { chunks: [{ content: query, index: 0 }] },
+    });
 
     const queryVector = embedResult.chunks[0].embedding;
 
     // 2. Vector similarity search using pgvector
     const vectorStr = `[${queryVector.join(',')}]`;
 
-    yield toolCall.emitProgress({
-      message: `Searching vector database for top ${limit} similar chunks...`,
-      data: { limit, threshold },
-    });
+    yield {
+      type: 'tool_progress',
+      callId: ctx.callId,
+      data: {
+        message: `Searching vector database for top ${limit} similar chunks...`,
+        data: { limit, threshold },
+      },
+    };
 
     const rawQuery = `
       SELECT
@@ -87,27 +95,19 @@ export default class DocumentSearchTool extends Tool<DocumentSearchOutput> {
       `Found ${results.length} results for query: "${query.slice(0, 50)}..."`,
     );
 
-    yield toolCall.emitProgress({
-      message: `Found ${results.length} relevant chunks from ${new Set(results.map((r: (typeof results)[0]) => r.document.id)).size} documents`,
+    yield {
+      type: 'tool_progress',
+      callId: ctx.callId,
       data: {
-        resultCount: results.length,
-        topSimilarity: results[0]?.similarity?.toFixed(3),
+        message: `Found ${results.length} relevant chunks from ${new Set(results.map((r: (typeof results)[0]) => r.document.id)).size} documents`,
+        data: {
+          resultCount: results.length,
+          topSimilarity: results[0]?.similarity?.toFixed(3),
+        },
       },
-    });
+    };
 
     return { results };
-  }
-
-  override summarizeArgs(args: Record<string, unknown>): string {
-    const query = typeof args.query === 'string' ? args.query : '';
-    const preview = query.length > 30 ? `${query.slice(0, 30)}...` : query;
-    return `(${preview})`;
-  }
-
-  override summarizeOutput(output: unknown): string {
-    const result = output as DocumentSearchOutput | undefined;
-    if (!result) return '完成';
-    return `检索到 ${result.results.length} 条`;
   }
 }
 

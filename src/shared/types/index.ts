@@ -41,8 +41,6 @@ export interface ToolConfig<
   untrustedOutput?: boolean;
 }
 
-export * from './tool';
-
 // ─── DDD 类型 ───
 export type {
   RunEvent,

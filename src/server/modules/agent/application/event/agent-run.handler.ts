@@ -15,6 +15,8 @@ import { SessionManager } from '@/server/modules/conversation/application/servic
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import { AGENT_RUN_REPOSITORY } from '../../agent.di-tokens';
 import type { AgentRunRepositoryPort } from '../../domain/port/agent-run.repository.port';
+import { AgentRun } from '../../domain/model/agent-run.entity';
+import { AgentRunContext } from '../../domain/port/agent-run-context.port';
 
 @eventHandler(TurnInitiated)
 export class AgentRunHandler {
@@ -50,7 +52,6 @@ export class AgentRunHandler {
 
     const { run, ctx } = this.executor.createRun({
       runId: generateId('run'),
-      messageId: assistantMessage.id,
       workDir,
       agentBinding,
       systemPrompt,
@@ -85,8 +86,8 @@ export class AgentRunHandler {
   private async executeRun(
     conversationId: string,
     messageId: string,
-    run: ReturnType<AgentRunExecutor['createRun']>['run'],
-    ctx: ReturnType<AgentRunExecutor['createRun']>['ctx'],
+    run: AgentRun,
+    ctx: AgentRunContext,
   ): Promise<void> {
     this.logger.info(`Starting agent=${run.agentId}`, {
       sessionId: conversationId,

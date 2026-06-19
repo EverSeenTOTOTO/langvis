@@ -1,6 +1,6 @@
 import type { Logger } from '@/server/utils/logger';
-import type { ToolConfig, ToolCallTimeline } from '@/shared/types';
-import type { ToolCall } from './tool-call.entity';
+import type { ToolConfig } from '@/shared/types';
+import type { ToolCallContext } from '../port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 
 export abstract class Tool<O = unknown> {
@@ -9,24 +9,7 @@ export abstract class Tool<O = unknown> {
 
   protected abstract readonly logger: Logger;
 
-  abstract call(toolCall: ToolCall): AsyncGenerator<RunEvent, O, void>;
-
-  summarize(timeline: ToolCallTimeline): string {
-    const argsHint = this.summarizeArgs(timeline.toolArgs);
-    if (timeline.status === 'error') {
-      return `调用${timeline.toolName}${argsHint}: 失败 - ${timeline.error}`;
-    }
-    const outputHint = this.summarizeOutput(timeline.output);
-    return `调用${timeline.toolName}${argsHint}: ${outputHint}`;
-  }
-
-  summarizeArgs(_args: Record<string, unknown>): string {
-    return '';
-  }
-
-  summarizeOutput(_output: unknown): string {
-    return '完成';
-  }
+  abstract call(ctx: ToolCallContext): AsyncGenerator<RunEvent, O, void>;
 
   async dispose(): Promise<void> {}
 }

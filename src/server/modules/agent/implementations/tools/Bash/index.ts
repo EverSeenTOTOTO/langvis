@@ -3,7 +3,7 @@ import { tool } from '@/server/decorator/core';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
-import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { createTimeoutController } from '@/server/utils/abort';
@@ -73,12 +73,14 @@ export default class BashTool extends Tool<BashOutput> {
     }
   }
 
-  async *call(toolCall: ToolCall): AsyncGenerator<RunEvent, BashOutput, void> {
-    toolCall.signal.throwIfAborted();
+  async *call(
+    ctx: ToolCallContext,
+  ): AsyncGenerator<RunEvent, BashOutput, void> {
+    ctx.signal.throwIfAborted();
     this.ensureCleanupRegistered();
 
-    const { command, timeout } = toolCall.input as unknown as BashInput;
-    const workDir = toolCall.workDir;
+    const { command, timeout } = ctx.input as unknown as BashInput;
+    const workDir = ctx.workDir;
     const suggestedTimeout = Math.min(
       Math.max(timeout ?? DEFAULT_TIMEOUT, 1),
       MAX_TIMEOUT,
@@ -115,10 +117,10 @@ export default class BashTool extends Tool<BashOutput> {
       required: ['timeout', 'confirmed'],
     };
 
-    const originalInput = toolCall.input;
-    toolCall.input = { message, formSchema: formSchema as any };
-    const { submitted, data } = yield* hitl.call(toolCall);
-    toolCall.input = originalInput;
+    const { submitted, data } = yield* hitl.call({
+      ...ctx,
+      input: { message, formSchema: formSchema as any },
+    });
 
     if (!submitted || !(data as Record<string, unknown>)?.confirmed) {
       const remark = (data as Record<string, unknown>).remark;
@@ -135,7 +137,7 @@ export default class BashTool extends Tool<BashOutput> {
       MAX_TIMEOUT,
     );
 
-    toolCall.signal.throwIfAborted();
+    ctx.signal.throwIfAborted();
 
     const child = spawn(command, {
       shell: true,
@@ -171,11 +173,11 @@ export default class BashTool extends Tool<BashOutput> {
 
     const [timeoutController, timeoutCleanup] = createTimeoutController(
       userTimeout * 1000,
-      toolCall.signal,
+      ctx.signal,
     );
 
     const onAbort = () => killProcessTree(child);
-    toolCall.signal.addEventListener('abort', onAbort, { once: true });
+    ctx.signal.addEventListener('abort', onAbort, { once: true });
 
     timeoutController.signal.addEventListener('abort', () => {
       timedOut = true;
@@ -222,10 +224,11 @@ export default class BashTool extends Tool<BashOutput> {
         if ('exit' in result) break;
 
         const event = flushOutput('stdout') ?? flushOutput('stderr');
-        if (event) yield toolCall.emitProgress(event);
+        if (event)
+          yield { type: 'tool_progress', callId: ctx.callId, data: event };
       }
     } finally {
-      toolCall.signal.removeEventListener('abort', onAbort);
+      ctx.signal.removeEventListener('abort', onAbort);
       timeoutCleanup();
       activeProcesses.delete(child);
       killProcessTree(child);
@@ -235,26 +238,12 @@ export default class BashTool extends Tool<BashOutput> {
 
     // Flush remaining
     const event = flushOutput('stdout') ?? flushOutput('stderr');
-    if (event) yield toolCall.emitProgress(event);
+    if (event) yield { type: 'tool_progress', callId: ctx.callId, data: event };
 
     if (timedOut) {
       stderr += `\nProcess timed out after ${userTimeout}s and was killed.`;
     }
 
     return { exitCode, stdout, stderr, timedOut };
-  }
-
-  override summarizeArgs(args: Record<string, unknown>): string {
-    const command = typeof args.command === 'string' ? args.command : '';
-    const preview =
-      command.length > 40 ? `${command.slice(0, 40)}...` : command;
-    return `(${preview})`;
-  }
-
-  override summarizeOutput(output: unknown): string {
-    const result = output as BashOutput | undefined;
-    if (!result) return '完成';
-    if (result.timedOut) return `超时 (exitCode=${result.exitCode})`;
-    return `exitCode=${result.exitCode}`;
   }
 }

@@ -115,6 +115,13 @@ describe('AgentRun', () => {
       expect(second).toBeNull();
       expect(run.eventStream).toHaveLength(1);
     });
+
+    it('aborts the signal atomically with the cancelled event', () => {
+      const run = createRun();
+      expect(run.signal.aborted).toBe(false);
+      run.cancel('user abort');
+      expect(run.signal.aborted).toBe(true);
+    });
   });
 
   describe('eventStream immutability', () => {

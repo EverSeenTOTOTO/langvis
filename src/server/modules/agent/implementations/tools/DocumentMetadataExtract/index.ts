@@ -4,7 +4,7 @@ import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { wrapUntrusted } from '@/shared/utils';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { Prompt } from '@/server/modules/agent/domain/model/prompt';
 import type {
@@ -49,9 +49,9 @@ export default class DocumentMetadataExtractTool extends Tool<DocumentMetadataEx
   protected readonly logger!: Logger;
 
   async *call(
-    toolCall: ToolCall,
+    ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, DocumentMetadataExtractOutput, void> {
-    const data = toolCall.input as unknown as DocumentMetadataExtractInput;
+    const data = ctx.input as unknown as DocumentMetadataExtractInput;
     const { content, sourceUrl, sourceType } = data;
 
     // Truncate content if too long (keep first 8000 chars)
@@ -64,12 +64,16 @@ ${sourceUrl ? `Source URL: ${sourceUrl}\n` : ''}${sourceType ? `Source Type: ${s
 Document Content:
 ${wrapUntrusted(truncatedContent)}`;
 
-    yield toolCall.emitProgress({
-      message: `Analyzing document content (${Math.round(truncatedContent.length / 1024)}KB) via LLM...`,
-      data: { sourceUrl, sourceType },
-    });
+    yield {
+      type: 'tool_progress',
+      callId: ctx.callId,
+      data: {
+        message: `Analyzing document content (${Math.round(truncatedContent.length / 1024)}KB) via LLM...`,
+        data: { sourceUrl, sourceType },
+      },
+    };
 
-    const responseContent = await toolCall.llm.chatContent(
+    const responseContent = await ctx.llm.chatContent(
       {
         messages: [
           { role: 'system', content: systemPrompt.build() },
@@ -78,7 +82,7 @@ ${wrapUntrusted(truncatedContent)}`;
         response_format: { type: 'json_object' },
         temperature: 0.3,
       },
-      toolCall.signal,
+      ctx.signal,
       this.logger,
     );
 
@@ -114,14 +118,18 @@ ${wrapUntrusted(truncatedContent)}`;
       metadata: parsed.metadata || {},
     };
 
-    yield toolCall.emitProgress({
-      message: `Extracted: "${output.title}" (${output.category})`,
+    yield {
+      type: 'tool_progress',
+      callId: ctx.callId,
       data: {
-        title: output.title,
-        category: output.category,
-        keywordCount: output.keywords.length,
+        message: `Extracted: "${output.title}" (${output.category})`,
+        data: {
+          title: output.title,
+          category: output.category,
+          keywordCount: output.keywords.length,
+        },
       },
-    });
+    };
 
     return output;
   }

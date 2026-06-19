@@ -6,7 +6,7 @@ import type { Logger } from '@/server/utils/logger';
 import type { ToolConfig } from '@/shared/types';
 import { inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import type { DocumentStoreInput, DocumentStoreOutput } from './config';
@@ -23,9 +23,9 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
   }
 
   async *call(
-    toolCall: ToolCall,
+    ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, DocumentStoreOutput, void> {
-    const data = toolCall.input as unknown as DocumentStoreInput;
+    const data = ctx.input as unknown as DocumentStoreInput;
     const { document, chunks } = data;
 
     // Coerce keywords: LLM may pass comma-separated string(s).
@@ -38,10 +38,14 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
         .filter(s => s),
     );
 
-    yield toolCall.emitProgress({
-      message: `Saving document "${document.title}" to database...`,
-      data: { title: document.title, chunkCount: chunks.length },
-    });
+    yield {
+      type: 'tool_progress',
+      callId: ctx.callId,
+      data: {
+        message: `Saving document "${document.title}" to database...`,
+        data: { title: document.title, chunkCount: chunks.length },
+      },
+    };
 
     const result = await this.db.dataSource.transaction(async manager => {
       // Create document
@@ -78,26 +82,18 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
       return { documentId: doc.id, chunkCount: chunks.length };
     });
 
-    yield toolCall.emitProgress({
-      message: `Document saved with ${result.chunkCount} chunks`,
-      data: { documentId: result.documentId },
-    });
+    yield {
+      type: 'tool_progress',
+      callId: ctx.callId,
+      data: {
+        message: `Document saved with ${result.chunkCount} chunks`,
+        data: { documentId: result.documentId },
+      },
+    };
 
     const output: DocumentStoreOutput = result;
 
     return output;
-  }
-
-  override summarizeArgs(args: Record<string, unknown>): string {
-    const doc = args.document as DocumentStoreInput['document'] | undefined;
-    if (!doc) return '';
-    return `("${doc.title}")`;
-  }
-
-  override summarizeOutput(output: unknown): string {
-    const result = output as DocumentStoreOutput | undefined;
-    if (!result) return '完成';
-    return `存储 ${result.chunkCount} 个分片`;
   }
 }
 

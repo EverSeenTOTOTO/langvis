@@ -3,6 +3,8 @@ import { singleton } from 'tsyringe';
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { RedisKeys } from '@/shared/constants';
 import type { HumanInputPort } from '../domain/port/human-input.port';
+import type { MessageRepositoryPort } from '../domain/port/message.repository.port';
+import { MESSAGE_REPOSITORY } from '../conversation.di-tokens';
 
 // Lua script for atomic check-and-set
 // Returns: 1 if success, 0 if already submitted, -1 if not found
@@ -25,13 +27,25 @@ return {1, cjson.encode(pending)}
 
 @singleton()
 export class HumanInputRedisProvider implements HumanInputPort {
-  constructor(@inject(RedisService) private redisService: RedisService) {}
+  constructor(
+    @inject(RedisService) private redisService: RedisService,
+    @inject(MESSAGE_REPOSITORY) private messageRepo: MessageRepositoryPort,
+  ) {}
+
+  /** HTTP 端点以 :messageId 寻址；AskUser 写 pending 时用 runId 做 key —— 边界翻译在此。 */
+  private async resolveKey(messageId: string): Promise<string | null> {
+    const message = await this.messageRepo.findById(messageId);
+    return message?.agentRunId
+      ? RedisKeys.HUMAN_INPUT(message.agentRunId)
+      : null;
+  }
 
   async submit(
     messageId: string,
     data: Record<string, unknown>,
   ): Promise<'not_found' | 'already_submitted' | 'success'> {
-    const key = RedisKeys.HUMAN_INPUT(messageId);
+    const key = await this.resolveKey(messageId);
+    if (!key) return 'not_found';
 
     const result = (await this.redisService.client.eval(SUBMIT_LUA_SCRIPT, {
       keys: [key],
@@ -51,7 +65,8 @@ export class HumanInputRedisProvider implements HumanInputPort {
     message: string;
     schema: unknown;
   } | null> {
-    const key = RedisKeys.HUMAN_INPUT(messageId);
+    const key = await this.resolveKey(messageId);
+    if (!key) return null;
     const pending = await this.redisService.get<{
       submitted: boolean;
       message: string;

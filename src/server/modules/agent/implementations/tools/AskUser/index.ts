@@ -4,7 +4,7 @@ import { RedisKeys, ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { JSONSchemaType } from 'ajv';
 import type { RedisClientType } from 'redis';
-import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
@@ -70,33 +70,33 @@ export default class AskUserTool extends Tool<AskUserOutput> {
   }
 
   async *call(
-    toolCall: ToolCall,
+    ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, AskUserOutput, void> {
-    toolCall.signal.throwIfAborted();
+    ctx.signal.throwIfAborted();
 
-    const messageId = toolCall.messageId;
-
-    const params = toolCall.input as unknown as AskUserInput;
+    const params = ctx.input as unknown as AskUserInput;
     const { message, formSchema, timeout = 300_000 } = params;
-    const key = RedisKeys.HUMAN_INPUT(messageId);
+    const key = RedisKeys.HUMAN_INPUT(ctx.runId);
     const POLL_INTERVAL = 30_000; // 30s fallback check when Pub/Sub fails
 
     await this.redisService.set(key, {
-      messageId,
       formSchema,
       message,
       submitted: false,
       createdAt: Date.now(),
     });
 
-    this.logger.info(`AskUser request created: ${messageId}`);
+    this.logger.info(`AskUser request created for run ${ctx.runId}`);
 
-    yield toolCall.emitProgress({
-      status: 'awaiting_input',
-      messageId,
-      message,
-      schema: formSchema,
-    });
+    yield {
+      type: 'tool_progress',
+      callId: ctx.callId,
+      data: {
+        status: 'awaiting_input',
+        message,
+        schema: formSchema,
+      },
+    };
 
     const startTime = Date.now();
 
@@ -114,10 +114,10 @@ export default class AskUserTool extends Tool<AskUserOutput> {
           this.redisService.subscriber,
           key,
           waitTime,
-          toolCall.signal,
+          ctx.signal,
         );
       } catch (e) {
-        if (toolCall.signal.aborted) {
+        if (ctx.signal.aborted) {
           await this.redisService.del(key);
           throw e;
         }
@@ -130,7 +130,7 @@ export default class AskUserTool extends Tool<AskUserOutput> {
       }>(key);
       if (pending?.submitted) {
         await this.redisService.del(key);
-        this.logger.info(`AskUser request submitted: ${messageId}`);
+        this.logger.info(`AskUser request submitted for run ${ctx.runId}`);
 
         const output: AskUserOutput = {
           submitted: true,
@@ -142,7 +142,7 @@ export default class AskUserTool extends Tool<AskUserOutput> {
     }
 
     await this.redisService.del(key);
-    this.logger.info(`AskUser request timeout: ${messageId}`);
+    this.logger.info(`AskUser request timeout for run ${ctx.runId}`);
 
     const output: AskUserOutput = {
       submitted: false,
