@@ -11,17 +11,6 @@ import { projectRun } from '@/server/modules/agent/domain/projection/run-project
 import { ChatService } from './chat.service';
 import Logger from '@/server/utils/logger';
 
-/**
- * SessionManager — session 生命周期 + SSE 桥 + active run 跟踪。
- *
- * Chat 聚合根删除后，吸收其 session 职责：
- *  - activeRuns 是"哪些 message 正在运行"的唯一来源（取代 Chat.activeTurns）
- *  - SSE replay 用 projectRun(run.eventStream) 现算（取代 PendingMessage fold）
- *  - processRunEvent 只送 SSE 帧（不再做实时 fold）
- *
- * 无 ChatPhase —— 会话是否 active 由 activeRuns 是否非空推导；
- * stale 检测基于 Redis session 记录的存在性 + agent_runs.status。
- */
 @singleton()
 export class SessionManager {
   private readonly logger = Logger.child({ source: 'SessionManager' });

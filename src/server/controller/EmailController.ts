@@ -82,28 +82,18 @@ export default class EmailController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    if (!emailBody.raw) {
-      this.logger.warn('Missing raw email content');
-      return res.status(400).json({ error: 'Missing raw email content' });
+    // raw 缺失校验在 ProcessInboundHandler（→ 400）；解析错误由 api 装饰器映射（→ 500）。
+    const result = await this.commandBus.execute(
+      new ProcessInboundCommand(emailBody.raw),
+    );
+
+    if (!result.success) {
+      this.logger.error(`Archive failed: ${result.error}`);
+      return res.status(500).json({ error: result.error });
     }
 
-    try {
-      const result = await this.commandBus.execute(
-        new ProcessInboundCommand(emailBody.raw),
-      );
-
-      if (!result.success) {
-        this.logger.error(`Archive failed: ${result.error}`);
-        return res.status(500).json({ error: result.error });
-      }
-
-      this.logger.info(`Email archived successfully: id=${result.id}`);
-      return res.status(200).json({ success: true, id: result.id });
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Failed to process inbound email: ${errorMsg}`);
-      return res.status(500).json({ error: errorMsg });
-    }
+    this.logger.info(`Email archived successfully: id=${result.id}`);
+    return res.status(200).json({ success: true, id: result.id });
   }
 
   @api('/archive/:id', { method: 'post' })
@@ -114,21 +104,11 @@ export default class EmailController {
   ) {
     const userId = await this.authService.getUserId(req);
 
-    try {
-      const { emailId } = await this.commandBus.execute(
-        new ArchiveEmailCommand(id, userId),
-      );
+    // EmailNotFoundError→404、其余→500 由 api 装饰器映射。
+    const { emailId } = await this.commandBus.execute(
+      new ArchiveEmailCommand(id, userId),
+    );
 
-      return res.status(200).json({ emailId, status: 'archived' });
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Failed to archive email: ${errorMsg}`);
-
-      if (errorMsg.includes('not found')) {
-        return res.status(404).json({ error: errorMsg });
-      }
-
-      return res.status(500).json({ error: errorMsg });
-    }
+    return res.status(200).json({ emailId, status: 'archived' });
   }
 }

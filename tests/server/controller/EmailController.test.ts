@@ -252,26 +252,6 @@ describe('EmailController', () => {
       vi.unstubAllEnvs();
     });
 
-    it('should return 400 if raw content is missing', async () => {
-      vi.stubEnv('VITE_INBOUND_SECRET', 'test-secret');
-      vi.resetModules();
-      mockReq.headers = { 'x-inbound-secret': 'test-secret' };
-
-      const emailController = await createController();
-
-      await emailController.handleInbound(
-        {} as any,
-        mockReq as Request,
-        mockRes as Response,
-      );
-
-      expect(mockRes.status).toHaveBeenCalledWith(400);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'Missing raw email content',
-      });
-      vi.unstubAllEnvs();
-    });
-
     it('should delegate to CommandBus for inbound processing', async () => {
       vi.stubEnv('VITE_INBOUND_SECRET', 'test-secret');
       vi.resetModules();
@@ -368,46 +348,6 @@ Test content.`;
       expect(mockRes.json).toHaveBeenCalledWith({
         emailId: 'mail_1',
         status: 'archived',
-      });
-    });
-
-    it('should return 404 when email not found', async () => {
-      mockAuthService.getUserId.mockResolvedValue('user_1');
-      mockCommandBus.execute.mockRejectedValue(
-        new Error('Email not found: mail_1'),
-      );
-
-      const emailController = await createController();
-
-      await emailController.archive(
-        'mail_1',
-        mockReq as Request,
-        mockRes as Response,
-      );
-
-      expect(mockRes.status).toHaveBeenCalledWith(404);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'Email not found: mail_1',
-      });
-    });
-
-    it('should return 500 on unexpected error', async () => {
-      mockAuthService.getUserId.mockResolvedValue('user_1');
-      mockCommandBus.execute.mockRejectedValue(
-        new Error('Database connection failed'),
-      );
-
-      const emailController = await createController();
-
-      await emailController.archive(
-        'mail_1',
-        mockReq as Request,
-        mockRes as Response,
-      );
-
-      expect(mockRes.status).toHaveBeenCalledWith(500);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'Database connection failed',
       });
     });
   });

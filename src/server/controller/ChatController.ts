@@ -9,8 +9,6 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
-import { CONVERSATION_REPOSITORY } from '../modules/conversation/conversation.di-tokens';
-import type { ConversationRepositoryPort } from '../modules/conversation/domain/port/conversation.repository.port';
 import { SessionManager } from '../modules/conversation/application/service/session-manager';
 import { CommandBus, QueryBus } from '@/server/libs/ddd';
 import {
@@ -29,8 +27,6 @@ export default class ChatController {
     private queryBus: QueryBus,
     @inject(SessionManager)
     private sessionManager: SessionManager,
-    @inject(CONVERSATION_REPOSITORY)
-    private convRepo: ConversationRepositoryPort,
     @inject(AuthService)
     private authService: AuthService,
   ) {}
@@ -42,20 +38,9 @@ export default class ChatController {
     @response() res: Response,
   ) {
     const userId = await this.authService.getUserId(req);
-    const dbConv = await this.convRepo.findById(conversationId);
-    if (!dbConv) {
-      return res
-        .status(404)
-        .json({ error: `Conversation ${conversationId} not found` });
-    }
 
-    if (userId !== dbConv.userId) {
-      return res.status(401).json({
-        error: `Mismatched conversation user: ${userId}`,
-      });
-    }
-
-    // Activate (idempotent — creates system messages if none exist)
+    // Activate (idempotent — creates system messages if none exist).
+    // Existence + ownership validated in handler (→ 404 / 403).
     await this.commandBus.execute(
       new ConversationActivateCommand(conversationId, userId),
     );
@@ -81,12 +66,7 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    if (!this.sessionManager.hasSession(conversationId)) {
-      return res.status(404).json({
-        error: `No active session for conversation ${conversationId}`,
-      });
-    }
-
+    // Session existence validated in handler (→ 404).
     await this.commandBus.execute(
       new CancelChatCommand(
         conversationId,
@@ -108,12 +88,7 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    if (!this.sessionManager.hasActiveRun(conversationId, messageId)) {
-      return res.status(404).json({
-        error: `No active message ${messageId}`,
-      });
-    }
-
+    // Active-run existence validated in handler (→ 404).
     await this.commandBus.execute(
       new CancelChatCommand(
         conversationId,

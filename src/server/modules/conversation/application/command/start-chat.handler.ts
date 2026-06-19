@@ -36,11 +36,8 @@ export class StartChatHandler {
     const binding = extractBinding(dbConversation);
     const systemPrompt = this.agentService.buildSystemPrompt(binding.agentId);
 
-    await this.convService.activate({
-      conversationId,
-      userId: dbConversation.userId,
-      systemPrompt,
-    });
+    // 前置条件：会话必须已激活（调用方需先 activate）。不再静默激活。
+    await this.convService.assertActivated(conversationId);
 
     const setup = await this.convService.appendMessage({
       conversationId,

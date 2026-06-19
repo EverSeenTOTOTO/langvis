@@ -9,6 +9,7 @@ import {
   EmailArchived,
   type EmailArchivedPayload,
 } from '../../contracts';
+import { EmailNotFoundError } from '../../domain/errors';
 
 @commandHandler(ArchiveEmailCommand)
 export class ArchiveEmailHandler {
@@ -24,7 +25,7 @@ export class ArchiveEmailHandler {
 
     const email = await this.emailService.getById(emailId);
     if (!email) {
-      throw new Error(`Email not found: ${emailId}`);
+      throw new EmailNotFoundError(emailId);
     }
 
     await this.emailService.updateStatus(emailId, 'archived');
