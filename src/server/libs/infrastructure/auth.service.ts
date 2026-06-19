@@ -5,9 +5,10 @@ import { inject } from 'tsyringe';
 import { service } from '@/server/decorator/service';
 import { getSessionHeaders } from '@/server/utils';
 import { DatabaseService } from './database.service';
+import type { AuthPort } from '@/server/modules/user/domain/port/auth.port';
 
 @service()
-export class AuthService {
+export class AuthService implements AuthPort {
   private auth: ReturnType<typeof betterAuth> | null = null;
 
   constructor(@inject(DatabaseService) private readonly db: DatabaseService) {

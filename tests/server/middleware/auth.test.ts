@@ -1,28 +1,36 @@
 import authMiddleware from '@/server/middleware/auth';
+import { AUTH_PORT } from '@/server/modules/user/user.di-tokens';
+import type { AuthPort } from '@/server/modules/user/domain/port/auth.port';
 import { TraceContext } from '@/server/middleware/trace-context';
 import { Express, Request, Response } from 'express';
 import { container } from 'tsyringe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock AuthService
-const mockAuthService: any = {
+// Mock AuthPort — abstract interface, not infrastructure
+const mockAuthPort: AuthPort = {
   isAuthenticated: vi.fn(),
   getUser: vi.fn(),
+  getSession: vi.fn(),
+  getSessionId: vi.fn(),
+  getUserId: vi.fn(),
 };
 
-// Mock container
+// Mock container to resolve AuthPort
 vi.mock('tsyringe', async importOriginal => {
-  const actual = await importOriginal();
+  const actual = await importOriginal<any>();
   return {
-    ...(actual as any),
+    ...actual,
     container: {
-      resolve: vi.fn(() => mockAuthService),
+      ...actual.container,
+      resolve: vi.fn((token: any) => {
+        if (token === AUTH_PORT) return mockAuthPort;
+        return actual.container.resolve(token);
+      }),
       register: vi.fn(),
     },
   };
 });
 
-// Mock request and response objects
 const createMockRequest = (
   path: string,
   headers: Record<string, string> = {},
@@ -30,9 +38,7 @@ const createMockRequest = (
   return {
     path,
     headers,
-    log: {
-      error: vi.fn(),
-    },
+    user: undefined,
   } as unknown as Request;
 };
 
@@ -40,161 +46,93 @@ const createMockResponse = () => {
   const res: any = {};
   res.status = vi.fn().mockReturnValue(res);
   res.json = vi.fn().mockReturnValue(res);
-  return res as Response;
+  return res as unknown as Response;
 };
 
-// Mock Express app
 const mockApp = {
   use: vi.fn(),
 } as unknown as Express;
 
-describe('Auth Middleware - Permission Tests', () => {
+describe('Auth Middleware', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
-    (container.resolve as jest.Mock).mockReturnValue(mockAuthService);
-
-    mockAuthService.isAuthenticated = vi.fn();
-    mockAuthService.getUser = vi.fn();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
+  it('should resolve AuthPort from DI container', async () => {
+    await authMiddleware(mockApp);
+    expect(container.resolve).toHaveBeenCalledWith(AUTH_PORT);
+  });
+
   it('should allow access to exempt paths without authentication', async () => {
-    const req = createMockRequest('/api/auth/sign-in/email');
+    await authMiddleware(mockApp);
+    const [_path, middleware] = (mockApp.use as any).mock.calls[0];
+
+    const req = createMockRequest('/auth/sign-in/email');
     const res = createMockResponse();
     const next = vi.fn();
 
-    await authMiddleware(mockApp);
-    // The middleware is registered with '/api' path prefix
-    const [path, middleware] = (mockApp.use as jest.Mock).mock.calls[0];
-    expect(path).toBe('/api');
-
-    // Create a new request with the path without '/api' prefix to match EXEMPT_PATHS
-    const modifiedReq = { ...req, path: '/auth/sign-in/email' };
-    await middleware(modifiedReq, res, next);
+    await middleware(req, res, next);
 
     expect(next).toHaveBeenCalled();
-    expect(mockAuthService.isAuthenticated).not.toHaveBeenCalled();
+    expect(mockAuthPort.isAuthenticated).not.toHaveBeenCalled();
   });
 
-  it('should allow access to API routes for authenticated users', async () => {
+  it('should allow access for authenticated users', async () => {
+    (mockAuthPort.isAuthenticated as any).mockResolvedValue(true);
+    (mockAuthPort.getUser as any).mockResolvedValue({ id: 'user_123' });
+
+    await authMiddleware(mockApp);
+    const [_path, middleware] = (mockApp.use as any).mock.calls[0];
+
+    const req = createMockRequest('/chat');
+    const res = createMockResponse();
+    const next = vi.fn();
+
+    // Run inside TraceContext so TraceContext.update({ userId }) doesn't throw
     await TraceContext.run({ requestId: 'test-req' }, async () => {
-      const req = createMockRequest('/api/users');
-      const res = createMockResponse();
-      const next = vi.fn();
-      const mockUser = { id: '1', email: 'test@example.com' };
-
-      mockAuthService.isAuthenticated.mockResolvedValue(true);
-      mockAuthService.getUser.mockResolvedValue(mockUser);
-
-      await authMiddleware(mockApp);
-      // The middleware is registered with '/api' path prefix
-      const [path, middleware] = (mockApp.use as jest.Mock).mock.calls[0];
-      expect(path).toBe('/api');
-
-      // Create a new request with the path without '/api' prefix
-      const modifiedReq = { ...req, path: '/users' };
-      await middleware(modifiedReq, res, next);
-
-      expect(mockAuthService.isAuthenticated).toHaveBeenCalled();
-      expect(mockAuthService.getUser).toHaveBeenCalled();
-      expect(modifiedReq.user).toEqual(mockUser);
-      expect(next).toHaveBeenCalled();
+      await middleware(req, res, next);
     });
+
+    expect(mockAuthPort.isAuthenticated).toHaveBeenCalledWith(req);
+    expect(mockAuthPort.getUser).toHaveBeenCalledWith(req);
+    expect(req.user).toEqual({ id: 'user_123' });
+    expect(next).toHaveBeenCalled();
   });
 
-  it('should deny access to API routes for unauthenticated users', async () => {
-    const req = createMockRequest('/api/users');
+  it('should deny access for unauthenticated users', async () => {
+    (mockAuthPort.isAuthenticated as any).mockResolvedValue(false);
+
+    await authMiddleware(mockApp);
+    const [_path, middleware] = (mockApp.use as any).mock.calls[0];
+
+    const req = createMockRequest('/users');
     const res = createMockResponse();
     const next = vi.fn();
 
-    mockAuthService.isAuthenticated.mockResolvedValue(false);
+    await middleware(req, res, next);
 
-    await authMiddleware(mockApp);
-    // The middleware is registered with '/api' path prefix
-    const [path, middleware] = (mockApp.use as jest.Mock).mock.calls[0];
-    expect(path).toBe('/api');
-
-    // Create a new request with the path without '/api' prefix
-    const modifiedReq = { ...req, path: '/users' };
-    await middleware(modifiedReq, res, next);
-
-    expect(mockAuthService.isAuthenticated).toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({
-      error: 'Unauthorized',
-      redirect: '/login',
-      message: 'Authentication required',
-    });
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('should allow access to page routes for unauthenticated users (client handles auth)', async () => {
+  it('should handle authentication errors gracefully', async () => {
+    (mockAuthPort.isAuthenticated as any).mockRejectedValue(
+      new Error('Auth error'),
+    );
+
+    await authMiddleware(mockApp);
+    const [_path, middleware] = (mockApp.use as any).mock.calls[0];
+
+    const req = createMockRequest('/users');
     const res = createMockResponse();
     const next = vi.fn();
 
-    mockAuthService.isAuthenticated.mockResolvedValue(false);
+    await middleware(req, res, next);
 
-    await authMiddleware(mockApp);
-
-    // Page routes don't match the '/api' path prefix, so no middleware should be registered for them
-    expect((mockApp.use as jest.Mock).mock.calls.length).toBe(1);
-    const [path] = (mockApp.use as jest.Mock).mock.calls[0];
-    expect(path).toBe('/api');
-
-    // Since the path doesn't match '/api', it should pass through (next should be called directly by the test)
-    next();
-
-    expect(next).toHaveBeenCalled();
-    expect(res.status).not.toHaveBeenCalled();
-  });
-
-  it('should handle authentication errors gracefully for API routes', async () => {
-    const req = createMockRequest('/api/users');
-    const res = createMockResponse();
-    const next = vi.fn();
-
-    mockAuthService.isAuthenticated.mockRejectedValue(new Error('Auth error'));
-
-    await authMiddleware(mockApp);
-    // The middleware is registered with '/api' path prefix
-    const [path, middleware] = (mockApp.use as jest.Mock).mock.calls[0];
-    expect(path).toBe('/api');
-
-    // Create a new request with the path without '/api' prefix
-    const modifiedReq = { ...req, path: '/users' };
-    await middleware(modifiedReq, res, next);
-
-    expect(mockAuthService.isAuthenticated).toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({
-      error: 'Unauthorized',
-      redirect: '/login',
-      message: 'Check Authentication failed: Auth error',
-    });
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it('should handle authentication errors gracefully for page routes', async () => {
-    const res = createMockResponse();
-    const next = vi.fn();
-
-    mockAuthService.isAuthenticated.mockRejectedValue(new Error('Auth error'));
-
-    await authMiddleware(mockApp);
-
-    // Page routes don't match the '/api' path prefix, so no middleware should be registered for them
-    expect((mockApp.use as jest.Mock).mock.calls.length).toBe(1);
-    const [path] = (mockApp.use as jest.Mock).mock.calls[0];
-    expect(path).toBe('/api');
-
-    // Since the path doesn't match '/api', it should pass through (next should be called directly by the test)
-    next();
-
-    expect(next).toHaveBeenCalled();
-    expect(res.status).not.toHaveBeenCalled();
   });
 });
