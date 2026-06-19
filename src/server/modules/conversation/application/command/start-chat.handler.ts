@@ -3,7 +3,6 @@ import { Role } from '@/shared/entities/Message';
 import { commandHandler } from '@/server/decorator/handler';
 import { createDomainEvent, EventBus } from '@/server/libs/ddd';
 import { ChatService } from '../service/chat.service';
-import { SessionManager } from '../service/session-manager';
 import { CONVERSATION_REPOSITORY } from '../../conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
@@ -19,8 +18,6 @@ export class StartChatHandler {
   constructor(
     @inject(ChatService)
     private convService: ChatService,
-    @inject(SessionManager)
-    private sessionManager: SessionManager,
     @inject(CONVERSATION_REPOSITORY)
     private convRepo: ConversationRepositoryPort,
     @inject(AgentService)
@@ -50,13 +47,6 @@ export class StartChatHandler {
       userMessage,
       assistantId,
     });
-
-    const chat = this.convService.startTurn(
-      conversationId,
-      setup.assistantMessage.id,
-    );
-    this.sessionManager.syncInfrastructure(chat);
-    chat.clearEvents();
 
     const systemMessage = setup.existingMessages.find(
       m => m.role === Role.SYSTEM,

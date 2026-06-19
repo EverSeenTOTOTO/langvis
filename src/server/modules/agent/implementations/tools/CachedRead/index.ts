@@ -7,7 +7,7 @@ import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import type { EnrichedEvent } from '@/shared/types/events';
+import type { RunEvent } from '@/shared/types/events';
 
 export interface CachedReadInput {
   key: string;
@@ -29,7 +29,7 @@ export default class CachedReadTool extends Tool<CachedReadOutput> {
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<EnrichedEvent, CachedReadOutput, void> {
+  ): AsyncGenerator<RunEvent, CachedReadOutput, void> {
     const readCacheInput = toolCall.input as unknown as CachedReadInput;
 
     const result = await this.cacheService.readFile(

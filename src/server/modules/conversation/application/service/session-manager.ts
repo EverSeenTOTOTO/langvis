@@ -1,16 +1,27 @@
 import type { SSEFrame } from '@/shared/types/events';
 import type { EnrichedEvent } from '@/shared/types/events';
-import type { ChatPhase } from '@/shared/types';
 import type { Transport } from '@/shared/transport';
 import { inject, singleton } from 'tsyringe';
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { RedisKeys } from '@/shared/constants';
-import { Chat } from '../../domain/model/chat';
 import { Connection } from './connection';
 import type { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
+import { AgentRunExecutor } from '@/server/modules/agent/application/service/agent-run-executor';
+import { projectRun } from '@/server/modules/agent/domain/projection/run-projection';
 import { ChatService } from './chat.service';
 import Logger from '@/server/utils/logger';
 
+/**
+ * SessionManager — session 生命周期 + SSE 桥 + active run 跟踪。
+ *
+ * Chat 聚合根删除后，吸收其 session 职责：
+ *  - activeRuns 是"哪些 message 正在运行"的唯一来源（取代 Chat.activeTurns）
+ *  - SSE replay 用 projectRun(run.eventStream) 现算（取代 PendingMessage fold）
+ *  - processRunEvent 只送 SSE 帧（不再做实时 fold）
+ *
+ * 无 ChatPhase —— 会话是否 active 由 activeRuns 是否非空推导；
+ * stale 检测基于 Redis session 记录的存在性 + agent_runs.status。
+ */
 @singleton()
 export class SessionManager {
   private readonly logger = Logger.child({ source: 'SessionManager' });
@@ -23,38 +34,28 @@ export class SessionManager {
     private redisService: RedisService,
     @inject(ChatService)
     private convService: ChatService,
+    @inject(AgentRunExecutor)
+    private executor: AgentRunExecutor,
   ) {}
 
   // ════════════════════════════════════════
   // Session 生命周期
   // ════════════════════════════════════════
 
-  async acquireChat(conversationId: string): Promise<Chat> {
-    const existing = this.convService.getChat(conversationId);
-    if (existing) {
-      this.logger.info(`Chat reconnected`, {
-        chatId: conversationId,
-        phase: existing.phase,
-      });
-      return existing;
+  async acquireChat(conversationId: string): Promise<void> {
+    // 内存中已有活跃 connection —— 重连
+    if (this.connections.has(conversationId)) {
+      this.logger.info(`Chat reconnected`, { chatId: conversationId });
+      return;
     }
 
     await this.cleanupStaleState(conversationId);
-    const chat = this.convService.getOrCreateChat(conversationId);
 
     await this.redisService.set(
       RedisKeys.CHAT_SESSION(conversationId),
-      {
-        conversationId,
-        phase: 'waiting',
-        messages: [],
-        startedAt: Date.now(),
-        agentId: null,
-      },
+      { conversationId, startedAt: Date.now(), agentId: null },
       3600,
     );
-
-    return chat;
   }
 
   disposeChat(conversationId: string): void {
@@ -64,14 +65,8 @@ export class SessionManager {
       this.connections.delete(conversationId);
     }
 
-    const chat = this.convService.getChat(conversationId);
-    if (chat && !chat.isDisposed) {
-      chat.dispose();
-      this.syncInfrastructure(chat);
-      chat.clearEvents();
-    }
-
     this.activeRuns.delete(conversationId);
+    this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
     this.logger.info(`Chat disposed`, { chatId: conversationId });
   }
 
@@ -79,14 +74,9 @@ export class SessionManager {
     for (const conn of this.connections.values()) {
       conn.dispose();
     }
-    for (const [, chat] of this.convService.allChats()) {
-      if (!chat.isDisposed) {
-        chat.dispose();
-        this.syncInfrastructure(chat);
-        chat.clearEvents();
-      }
-    }
-    this.logger.info(`Closed ${this.connections.size} SSE connections`);
+    this.connections.clear();
+    this.activeRuns.clear();
+    this.logger.info(`Closed all SSE connections`);
   }
 
   /** 初始化会话：acquireChat + attachTransport + dispose 回调 */
@@ -98,6 +88,10 @@ export class SessionManager {
     this.attachTransport(conversationId, transport, () =>
       this.disposeChat(conversationId),
     );
+  }
+
+  hasSession(conversationId: string): boolean {
+    return this.connections.has(conversationId);
   }
 
   // ════════════════════════════════════════
@@ -119,18 +113,18 @@ export class SessionManager {
     }
     conn.attach(transport);
 
-    // replay: 从 PendingMessage snapshots 恢复所有 running turn
-    const conv = this.convService.getChat(conversationId);
-    for (const snapshot of conv?.getRunningSnapshots() ?? []) {
+    // replay: 从活跃 run 的事件流现算 snapshot
+    for (const [messageId, run] of this.activeRuns.get(conversationId) ?? []) {
+      const view = projectRun(run.eventStream);
       conn.send({
         type: 'state_snapshot',
-        messageId: snapshot.messageId,
-        content: snapshot.content,
-        steps: snapshot.steps,
+        messageId,
+        content: view.content,
+        steps: view.steps,
       } as SSEFrame);
       this.logger.info(
-        `Replayed snapshot: ${snapshot.content.length} chars, ${snapshot.steps.length} steps`,
-        { chatId: conversationId, messageId: snapshot.messageId },
+        `Replayed snapshot: ${view.content.length} chars, ${view.steps.length} steps`,
+        { chatId: conversationId, messageId },
       );
     }
 
@@ -152,6 +146,17 @@ export class SessionManager {
     this.activeRuns.get(conversationId)!.set(messageId, run);
   }
 
+  getActiveRun(
+    conversationId: string,
+    messageId: string,
+  ): AgentRun | undefined {
+    return this.activeRuns.get(conversationId)?.get(messageId);
+  }
+
+  hasActiveRun(conversationId: string, messageId: string): boolean {
+    return this.activeRuns.get(conversationId)?.has(messageId) ?? false;
+  }
+
   finalizeRun(conversationId: string, messageId: string): void {
     const runs = this.activeRuns.get(conversationId);
     if (!runs) return;
@@ -162,7 +167,7 @@ export class SessionManager {
       if (conn) {
         conn.markIdle();
       } else {
-        // Headless run (no SSE connection) — dispose Chat immediately
+        // Headless run (no SSE connection) — dispose session immediately
         this.disposeChat(conversationId);
       }
     }
@@ -175,11 +180,19 @@ export class SessionManager {
   ): void {
     const run = this.activeRuns.get(conversationId)?.get(messageId);
     if (run && !run.isTerminated) {
-      try {
-        run.cancel(reason);
-      } catch {
-        // Already terminated
+      // executor.cancel: abort + 记录 cancelled 事件；返回富化事件直接推送 SSE
+      const cancelled = this.executor.cancel(run, reason);
+      if (cancelled) {
+        this.processRunEvent(conversationId, messageId, cancelled);
       }
+    }
+  }
+
+  cancelAllActiveRuns(conversationId: string, reason: string): void {
+    const runs = this.activeRuns.get(conversationId);
+    if (!runs) return;
+    for (const messageId of runs.keys()) {
+      this.cancelActiveRun(conversationId, messageId, reason);
     }
   }
 
@@ -192,9 +205,6 @@ export class SessionManager {
     messageId: string,
     event: EnrichedEvent,
   ): void {
-    const chat = this.convService.getChat(conversationId);
-    if (!chat) return;
-    chat.handleRunEvent(messageId, event);
     const frame = { ...event, messageId } as SSEFrame;
     this.connections.get(conversationId)?.send(frame);
   }
@@ -209,60 +219,27 @@ export class SessionManager {
     );
   }
 
-  /** 处理 Chat 聚合根领域事件的 infra 侧反应（Redis 更新、map 清理） */
-  syncInfrastructure(chat: Chat): void {
-    for (const event of chat.domainEvents) {
-      switch (event.type) {
-        case 'phase_changed': {
-          const { to } = event.payload as { from: ChatPhase; to: ChatPhase };
-          this.updateChatPhase(event.aggregateId, to);
-          break;
-        }
-        case 'conversation_disposed': {
-          this.connections.delete(event.aggregateId);
-          this.activeRuns.delete(event.aggregateId);
-          this.redisService.del(RedisKeys.CHAT_SESSION(event.aggregateId));
-          break;
-        }
-      }
-    }
-  }
-
   // ── 内部 ──
 
-  private async updateChatPhase(
-    conversationId: string,
-    phase: ChatPhase,
-    agentId?: string,
-  ): Promise<void> {
-    const state = await this.getChatState(conversationId);
-    if (!state) return;
-    await this.redisService.set(
-      RedisKeys.CHAT_SESSION(conversationId),
-      { ...state, phase, agentId: agentId ?? state.agentId },
-      3600,
-    );
-  }
-
+  /**
+   * Stale 检测：基于 Redis session 记录的存在性 + agent_runs.status。
+   * 正常 dispose 会删 Redis 记录 —— 残留记录意味着上次会话未清理（多为服务重启）。
+   * 扫描 status 仍为 initialized/running 的 run，标记为 failed。
+   */
   private async cleanupStaleState(conversationId: string): Promise<void> {
     const state = await this.getChatState(conversationId);
     if (!state) return;
 
-    if (Chat.isStalePhase(state.phase)) {
-      this.logger.warn(`Stale session detected`, {
-        chatId: conversationId,
-        phase: state.phase,
-      });
+    this.logger.warn(`Stale session detected`, { chatId: conversationId });
 
-      const staleMessages =
-        await this.convService.findActiveAssistantMessages(conversationId);
+    const staleMessages =
+      await this.convService.findActiveAssistantMessages(conversationId);
 
-      if (staleMessages.length > 0) {
-        await this.convService.markMessagesFailed(
-          staleMessages.map(msg => msg.id),
-          'Generation interrupted (server restarted)',
-        );
-      }
+    if (staleMessages.length > 0) {
+      await this.convService.markMessagesFailed(
+        staleMessages,
+        'Generation interrupted (server restarted)',
+      );
     }
 
     await this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
@@ -271,8 +248,6 @@ export class SessionManager {
 
 export interface ChatState {
   conversationId: string;
-  phase: ChatPhase;
-  messages: Array<{ messageId: string; phase: string }>;
   startedAt: number;
   agentId: string | null;
 }

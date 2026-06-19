@@ -9,7 +9,7 @@ import TurndownService from 'turndown';
 import type { Browser } from 'playwright';
 import { chromium } from 'playwright';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
-import type { EnrichedEvent } from '@/shared/types/events';
+import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { sanitizeHtml } from '@/server/utils/sanitizeHtml';
 import type { RenderMode, WebFetchInput, WebFetchOutput } from './config';
@@ -146,7 +146,7 @@ export default class WebFetchTool extends Tool<WebFetchOutput> {
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<EnrichedEvent, WebFetchOutput, void> {
+  ): AsyncGenerator<RunEvent, WebFetchOutput, void> {
     toolCall.signal.throwIfAborted();
 
     const data = toolCall.input as unknown as WebFetchInput;

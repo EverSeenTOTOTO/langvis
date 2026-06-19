@@ -2,7 +2,7 @@ import type { Logger } from '@/server/utils/logger';
 import type { AgentConfig } from '@/shared/types';
 import { Prompt } from '@/server/modules/agent/domain/model/prompt';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import type { AgentRun } from './agent-run.entity';
+import type { AgentRunContext } from '../port/agent-run-context.port';
 import type { RunEvent } from '@/shared/types/events';
 
 export abstract class Agent {
@@ -17,7 +17,8 @@ export abstract class Agent {
     return Prompt.empty();
   }
 
-  abstract call(run: AgentRun): AsyncGenerator<RunEvent, void, void>;
+  /** yield 原始 RunEvent —— 事实由 AgentRunExecutor append 进 AgentRun */
+  abstract call(ctx: AgentRunContext): AsyncGenerator<RunEvent, void, void>;
 }
 
 export type AgentConstructor = new (...args: any[]) => Agent;

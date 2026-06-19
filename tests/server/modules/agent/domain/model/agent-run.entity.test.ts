@@ -1,242 +1,128 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
 import { RunAlreadyCompletedError } from '@/server/modules/agent/domain/errors';
-import type { Agent } from '@/server/modules/agent/domain/model/agent.base';
-import type { MemoryPort } from '@/server/modules/memory/domain/port/memory.port';
-import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
-import type { LlmPort } from '@/server/modules/agent/domain/port/llm.port';
-import type { ContextUsage } from '@/server/modules/memory/domain/model/memory.types';
 import type { AgentConfig, AgentBinding } from '@/shared/types';
 
-function makeRuntimeConfigVO(): RuntimeConfigVO {
+function makeConfig(): RuntimeConfigVO {
   const agentConfig: AgentConfig = {
     name: 'Test Agent',
     description: 'test',
     tools: [],
   };
-  const binding: AgentBinding = {
-    agentId: 'test-agent',
-    config: {},
-  };
+  const binding: AgentBinding = { agentId: 'test-agent', config: {} };
   return RuntimeConfigVO.create(agentConfig, binding, 'You are helpful', 8000);
 }
 
-function makeMockMemory(): MemoryPort {
-  return {
-    buildContext: vi.fn().mockResolvedValue([
-      { role: 'system', content: 'You are helpful' },
-      { role: 'user', content: 'Hello' },
-    ]),
-    getContextUsage: vi
-      .fn()
-      .mockReturnValue({ used: 100, total: 8000 } as ContextUsage),
-  };
-}
-
-function makeMockCache(): CachePort {
-  return {
-    resolve: vi.fn().mockResolvedValue({}),
-    compress: vi.fn().mockResolvedValue('compressed'),
-    readFile: vi.fn().mockResolvedValue('data'),
-  };
-}
-
-function makeMockLlm(): LlmPort {
-  return {
-    chat: vi.fn(),
-    chatContent: vi.fn(),
-    embed: vi.fn(),
-    tts: vi.fn(),
-    stt: vi.fn(),
-  } as unknown as LlmPort;
-}
-
-function makeMockAgent(): Agent {
-  return {
-    id: 'test-agent',
-    config: { name: 'Test Agent', description: 'test', tools: [] },
-    call: vi.fn().mockImplementation(function* () {
-      // yields nothing, just completes
-    }),
-    systemPrompt: { build: vi.fn().mockReturnValue('') } as any,
-    logger: {} as any,
-    tools: [],
-  } as unknown as Agent;
-}
-
 function createRun(): AgentRun {
-  return new AgentRun(
-    'run_1',
-    'msg_1',
-    '/tmp/workdir',
-    makeRuntimeConfigVO(),
-    makeMockAgent(),
-    makeMockMemory(),
-    makeMockCache(),
-    makeMockLlm(),
-  );
+  return new AgentRun('run_1', 'test-agent', makeConfig());
 }
 
 describe('AgentRun', () => {
   describe('aggregate root', () => {
-    it('should use id as canonical identity with runId getter', () => {
+    it('uses id as canonical identity with runId getter', () => {
       const run = createRun();
       expect(run.id).toBe('run_1');
       expect(run.runId).toBe('run_1');
+      expect(run.agentId).toBe('test-agent');
     });
 
-    it('should support EventEmitter via on()', () => {
+    it('starts as initialized, not terminated', () => {
       const run = createRun();
-      const handler = vi.fn();
-      run.on('run:event', handler);
-      run.emitTextChunk('test');
-      expect(handler).toHaveBeenCalled();
+      expect(run.currentStatus).toBe('initialized');
+      expect(run.isTerminated).toBe(false);
+      expect(run.eventStream).toHaveLength(0);
     });
   });
 
-  describe('execute', () => {
-    it('should emit start event and final event on success', async () => {
-      const mockAgent = makeMockAgent();
-      mockAgent.call = vi.fn().mockImplementation(function* (run: AgentRun) {
-        run.emitTextChunk('chunk');
-      });
+  describe('append (事实追加)', () => {
+    it('appends events and enriches with runId/seq/at', () => {
+      const run = createRun();
+      const e1 = run.append({ type: 'text_chunk', content: 'a' })!;
+      const e2 = run.append({ type: 'text_chunk', content: 'b' })!;
 
-      const run = new AgentRun(
-        'run_ok',
-        'msg_ok',
-        '/tmp',
-        makeRuntimeConfigVO(),
-        mockAgent,
-        makeMockMemory(),
-        makeMockCache(),
-        makeMockLlm(),
-      );
+      expect(run.eventStream).toHaveLength(2);
+      expect(e1.seq).toBe(1);
+      expect(e2.seq).toBe(2);
+      expect(e1.runId).toBe('run_1');
+      expect(e1.at).toBeGreaterThan(0);
+    });
 
-      const events: any[] = [];
-      run.on('run:event', (e: any) => events.push(e));
-
-      await run.execute();
-
-      expect(events[0].type).toBe('start');
-      const finalEvents = events.filter(e => e.type === 'final');
-      expect(finalEvents).toHaveLength(1);
+    it('returns null and drops events after termination', () => {
+      const run = createRun();
+      run.cancel('abort');
+      const dropped = run.append({ type: 'text_chunk', content: 'late' });
+      expect(dropped).toBeNull();
+      expect(run.eventStream).toHaveLength(1);
     });
   });
 
-  describe('cancel', () => {
-    it('should emit cancelled event and abort', () => {
+  describe('start', () => {
+    it('sets status running and records a start event', () => {
       const run = createRun();
-      const events: any[] = [];
-      run.on('run:event', (e: any) => events.push(e));
-
-      run.cancel('user abort');
-
-      expect(run.signal.aborted).toBe(true);
-      expect(events[0].type).toBe('cancelled');
-      expect(events[0].reason).toBe('user abort');
-    });
-
-    it('should not double-cancel', () => {
-      const run = createRun();
-      run.cancel('first');
-
-      const events: any[] = [];
-      run.on('run:event', (e: any) => events.push(e));
-      run.cancel('second');
-
-      expect(events).toHaveLength(0);
+      const e = run.start();
+      expect(run.currentStatus).toBe('running');
+      expect(e.type).toBe('start');
+      expect(run.eventStream).toHaveLength(1);
     });
   });
 
   describe('complete / fail', () => {
-    it('should emit final event on complete', () => {
+    it('records final event and terminates on complete', () => {
       const run = createRun();
-      const events: any[] = [];
-      run.on('run:event', (e: any) => events.push(e));
-
-      const event = run.complete();
-
-      expect(event.type).toBe('final');
+      const e = run.complete();
+      expect(e.type).toBe('final');
+      expect(run.currentStatus).toBe('completed');
       expect(run.isTerminated).toBe(true);
     });
 
-    it('should throw RunAlreadyCompletedError on second complete', () => {
+    it('throws RunAlreadyCompletedError on second complete', () => {
       const run = createRun();
       run.complete();
-
       expect(() => run.complete()).toThrow(RunAlreadyCompletedError);
     });
 
-    it('should emit error event on fail', () => {
+    it('records error event and terminates on fail', () => {
       const run = createRun();
-      const events: any[] = [];
-      run.on('run:event', (e: any) => events.push(e));
-
-      const event = run.fail('something went wrong');
-
-      expect(event.type).toBe('error');
-      expect((event as any).error).toBe('something went wrong');
+      const e = run.fail('something went wrong');
+      expect(e.type).toBe('error');
+      expect((e as any).error).toBe('something went wrong');
+      expect(run.currentStatus).toBe('failed');
       expect(run.isTerminated).toBe(true);
     });
 
-    it('should throw RunAlreadyCompletedError on fail after complete', () => {
+    it('throws RunAlreadyCompletedError on fail after complete', () => {
       const run = createRun();
       run.complete();
-
       expect(() => run.fail('error')).toThrow(RunAlreadyCompletedError);
     });
   });
 
-  describe('enrichAndEmit — seq numbering', () => {
-    it('should increment seq counter for each event', () => {
+  describe('cancel', () => {
+    it('records cancelled event and terminates', () => {
       const run = createRun();
-      const events: any[] = [];
-      run.on('run:event', (e: any) => events.push(e));
-
-      run.emitTextChunk('a');
-      run.emitTextChunk('b');
-      run.emitThought('thinking');
-
-      expect(events[0].seq).toBe(1);
-      expect(events[1].seq).toBe(2);
-      expect(events[2].seq).toBe(3);
+      const e = run.cancel('user abort')!;
+      expect(e.type).toBe('cancelled');
+      expect((e as any).reason).toBe('user abort');
+      expect(run.currentStatus).toBe('cancelled');
+      expect(run.isTerminated).toBe(true);
     });
 
-    it('should include runId and timestamp in each event', () => {
+    it('is idempotent — returns null on double cancel', () => {
       const run = createRun();
-      const events: any[] = [];
-      run.on('run:event', (e: any) => events.push(e));
-
-      run.emitTextChunk('test');
-
-      expect(events[0].runId).toBe('run_1');
-      expect(events[0].at).toBeGreaterThan(0);
+      run.cancel('first');
+      const second = run.cancel('second');
+      expect(second).toBeNull();
+      expect(run.eventStream).toHaveLength(1);
     });
   });
 
-  describe('isTerminated', () => {
-    it('should be false initially', () => {
+  describe('eventStream immutability', () => {
+    it('returns a readonly view', () => {
       const run = createRun();
-      expect(run.isTerminated).toBe(false);
-    });
-
-    it('should be true after complete', () => {
-      const run = createRun();
-      run.complete();
-      expect(run.isTerminated).toBe(true);
-    });
-
-    it('should be true after cancel', () => {
-      const run = createRun();
-      run.cancel('abort');
-      expect(run.isTerminated).toBe(true);
-    });
-
-    it('should be true after fail', () => {
-      const run = createRun();
-      run.fail('error');
-      expect(run.isTerminated).toBe(true);
+      run.append({ type: 'text_chunk', content: 'x' });
+      // readonly typing prevents push at compile time; runtime array is shared but append is the only writer
+      expect(run.eventStream).toHaveLength(1);
     });
   });
 });

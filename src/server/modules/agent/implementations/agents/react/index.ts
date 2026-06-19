@@ -9,7 +9,7 @@ import type { RunEvent } from '@/shared/types/events';
 import { isEmpty } from 'lodash-es';
 import { inject } from 'tsyringe';
 import { Agent } from '@/server/modules/agent/domain/model/agent.base';
-import type { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
+import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { Prompt } from '@/server/modules/agent/domain/model/prompt';
 import { createPrompt } from './prompt';
@@ -74,27 +74,26 @@ export default class ReActAgent extends Agent {
     return prompt;
   }
 
-  async *call(run: AgentRun): AsyncGenerator<RunEvent, void, void> {
-    const cfg = run.config.runtimeConfig as ReActAgentConfig;
-    const messages = await run.buildContext();
+  async *call(ctx: AgentRunContext): AsyncGenerator<RunEvent, void, void> {
+    const cfg = ctx.config.runtimeConfig as ReActAgentConfig;
+    const messages = await ctx.buildContext();
     const iterMessages = this.buildIterMessages(messages);
 
     for (let i = 0; i < this.maxIterations; i++) {
-      run.signal.throwIfAborted();
+      ctx.signal.throwIfAborted();
 
-      const content = await run.llm.chatContent(
+      const content = await ctx.llm.chatContent(
         {
           messages: iterMessages,
           temperature: cfg.model?.temperature,
           stop: ['Observation:', 'Observation：'],
         },
-        run.signal,
+        ctx.signal,
         this.logger,
       );
 
       if (!content) {
-        yield run.fail('No response from model');
-        return;
+        throw new Error('No response from model');
       }
 
       iterMessages.push({
@@ -124,9 +123,9 @@ export default class ReActAgent extends Agent {
 
       if ('final_answer' in parsed) {
         if (parsed.thought) {
-          yield run.emitThought(parsed.thought);
+          yield { type: 'thought', content: parsed.thought };
         }
-        yield run.emitTextChunk(parsed.final_answer!);
+        yield { type: 'text_chunk', content: parsed.final_answer! };
         return;
       }
 
@@ -134,10 +133,10 @@ export default class ReActAgent extends Agent {
         const { tool, input } = parsed.action!;
 
         if (parsed.thought) {
-          yield run.emitThought(parsed.thought);
+          yield { type: 'thought', content: parsed.thought };
         }
 
-        const observation = yield* run.executeTool(tool, input);
+        const observation = yield* ctx.executeTool(tool, input);
 
         iterMessages.push({
           role: Role.USER,
@@ -154,7 +153,7 @@ export default class ReActAgent extends Agent {
       });
     }
 
-    yield run.fail('Max iterations reached');
+    throw new Error('Max iterations reached');
   }
 
   private buildIterMessages(

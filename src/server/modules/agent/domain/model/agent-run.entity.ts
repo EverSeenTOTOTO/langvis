@@ -1,238 +1,92 @@
 import { RuntimeConfigVO } from './runtime-config.vo';
-import type { LlmMessage } from '@/shared/types/entities';
-import { generateId } from '@/shared/utils';
-import { container } from 'tsyringe';
-import type { EnrichedEvent } from '@/shared/types/events';
-import { RunAlreadyCompletedError, ToolNotFoundError } from '../errors';
-import type { Agent } from './agent.base';
-import { ToolCall } from './tool-call.entity';
-import type { MemoryPort } from '@/server/modules/memory/domain/port/memory.port';
-import type { LlmPort } from '../port/llm.port';
-import type { CachePort } from '../port/cache.port';
+import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
+import { RunAlreadyCompletedError } from '../errors';
 import { AggregateRoot } from '@/server/libs/ddd';
-import { EventEmitter } from 'events';
+import type { RunStatus } from '@/shared/types/agent';
 
 /**
- * AgentRun — 聚合根。
+ * AgentRun — 纯聚合根。
  *
- * 驱动 agent.call(this) 循环，通过 EventEmitter 组合发布流式事件。
- * 继承 AggregateRoot 以确立聚合边界（ToolCall 是其内部实体）。
- * 领域事件机制 (addEvent) 留给生命周期状态变更，
- * 流式推送 (emitter.emit) 用于实时 SSE。
+ * 只做一件事：追加事实 (RunEvent) 并维护生命周期 status。
+ * 不持有 agent / memory / cache / llm / emitter —— 执行编排归 AgentRunExecutor，
+ * 传输归 SSE 桥，投影归 projectRun。聚合根只记录"发生了什么"。
+ *
+ * 事件以 EnrichedEvent 形式存储（seq/at 在 append 时注入），
+ * 保证事件流有序、可溯源，投影可随时重算。
  */
 export class AgentRun extends AggregateRoot<string> {
-  // ── 身份别名 ──
-  readonly messageId: string;
+  readonly agentId: string;
+  readonly config: RuntimeConfigVO;
+
+  private status: RunStatus = 'initialized';
+  private events: EnrichedEvent[] = [];
+  #terminated = false;
+  private seq = 0;
+
   get runId(): string {
     return this.id;
   }
-
-  // ── 配置快照 ──
-  readonly config: RuntimeConfigVO;
-
-  // ── 取消控制 ──
-  private abortController = new AbortController();
-  get signal(): AbortSignal {
-    return this.abortController.signal;
+  get currentStatus(): RunStatus {
+    return this.status;
+  }
+  get isTerminated(): boolean {
+    return this.#terminated;
+  }
+  /** 唯一暴露事件流的方式 —— 给投影/持久化用 */
+  get eventStream(): readonly EnrichedEvent[] {
+    return this.events;
   }
 
-  // ── 内部执行控制 ──
-  private seq = 0;
-  #terminated = false;
-
-  // ── 流式推送 ──
-  private emitter = new EventEmitter();
-
-  // ── 依赖 ──
-  readonly agent: Agent;
-  readonly workDir: string;
-  private memory: MemoryPort;
-  readonly cache: CachePort;
-  readonly llm: LlmPort;
-
-  constructor(
-    runId: string,
-    messageId: string,
-    workDir: string,
-    config: RuntimeConfigVO,
-    agent: Agent,
-    memory: MemoryPort,
-    cache: CachePort,
-    llm: LlmPort,
-  ) {
+  constructor(runId: string, agentId: string, config: RuntimeConfigVO) {
     super(runId);
-    this.messageId = messageId;
-    this.workDir = workDir;
+    this.agentId = agentId;
     this.config = config;
-    this.agent = agent;
-    this.memory = memory;
-    this.cache = cache;
-    this.llm = llm;
   }
 
-  // ════════════════════════════════════════
-  // EventEmitter 代理 — 流式推送
-  // ════════════════════════════════════════
-
-  on(event: string, handler: (...args: any[]) => void): this {
-    this.emitter.on(event, handler);
-    return this;
+  /**
+   * 记录 agent yield 的事实 —— 唯一带终止守卫的入口。
+   * 注入 seq/at 元数据后追加，返回富化事件供传输层推送。
+   * 已终止则返回 null（静默丢弃，不抛异常以兼容外部 cancel 与执行循环的竞态）。
+   */
+  append(event: RunEvent): EnrichedEvent | null {
+    if (this.#terminated) return null;
+    return this.record(event);
   }
 
-  off(event: string, handler: (...args: any[]) => void): this {
-    this.emitter.off(event, handler);
-    return this;
-  }
-
-  // ════════════════════════════════════════
-  // 执行入口
-  // ════════════════════════════════════════
-
-  async execute(): Promise<void> {
-    this.enrichAndEmit({ type: 'start' });
-    try {
-      for await (const _ of this.agent.call(this)) {
-        if (this.signal.aborted) break;
-      }
-      if (!this.#terminated) {
-        this.emitContextUsage();
-        this.complete();
-      }
-    } catch (err) {
-      if (this.signal.aborted) return;
-      this.fail((err as Error)?.message || String(err));
-    }
-  }
-
-  // ════════════════════════════════════════
-  // Memory 代理
-  // ════════════════════════════════════════
-
-  async buildContext(): Promise<LlmMessage[]> {
-    return this.memory.buildContext();
-  }
-
-  // ════════════════════════════════════════
-  // 工具执行
-  // ════════════════════════════════════════
-
-  async *executeTool(
-    toolName: string,
-    toolArgs: Record<string, unknown>,
-  ): AsyncGenerator<EnrichedEvent, string, void> {
-    let tool;
-    try {
-      tool = container.resolve(toolName) as ToolCall['tool'];
-    } catch {
-      throw new ToolNotFoundError(toolName);
-    }
-
-    const toolCall = new ToolCall(
-      generateId('tc'),
-      tool,
-      toolArgs,
-      this.cache,
-      this,
-    );
-
-    yield* toolCall.execute();
-
-    return toolCall.observation;
-  }
-
-  // ════════════════════════════════════════
-  // 生命周期方法 — emit 并返回（兼容 Agent yield）
-  // ════════════════════════════════════════
-
-  emitTextChunk(chunk: string): EnrichedEvent {
-    return this.enrichAndEmit({ type: 'text_chunk', content: chunk });
-  }
-
-  emitThought(content: string): EnrichedEvent {
-    return this.enrichAndEmit({ type: 'thought', content });
-  }
-
-  emitToolCall(
-    callId: string,
-    toolName: string,
-    toolArgs: Record<string, unknown>,
-  ): EnrichedEvent {
-    return this.enrichAndEmit({
-      type: 'tool_call',
-      callId,
-      toolName,
-      toolArgs,
-    });
-  }
-
-  emitToolProgress(callId: string, data: unknown): EnrichedEvent {
-    return this.enrichAndEmit({ type: 'tool_progress', callId, data });
-  }
-
-  emitToolResult(
-    callId: string,
-    toolName: string,
-    output: unknown,
-  ): EnrichedEvent {
-    return this.enrichAndEmit({
-      type: 'tool_result',
-      callId,
-      toolName,
-      output,
-    });
-  }
-
-  emitToolError(
-    callId: string,
-    toolName: string,
-    error: string,
-  ): EnrichedEvent {
-    return this.enrichAndEmit({ type: 'tool_error', callId, toolName, error });
+  start(): EnrichedEvent {
+    this.status = 'running';
+    return this.record({ type: 'start' });
   }
 
   complete(): EnrichedEvent {
     if (this.#terminated) throw new RunAlreadyCompletedError(this.id);
     this.#terminated = true;
-    return this.enrichAndEmit({ type: 'final' });
-  }
-
-  cancel(reason: string): void {
-    if (this.#terminated) return;
-    this.#terminated = true;
-    this.abortController.abort(reason);
-    this.enrichAndEmit({ type: 'cancelled', reason });
+    this.status = 'completed';
+    return this.record({ type: 'final' });
   }
 
   fail(error: string): EnrichedEvent {
     if (this.#terminated) throw new RunAlreadyCompletedError(this.id);
     this.#terminated = true;
-    return this.enrichAndEmit({ type: 'error', error });
+    this.status = 'failed';
+    return this.record({ type: 'error', error });
   }
 
-  get isTerminated(): boolean {
-    return this.#terminated;
+  cancel(reason: string): EnrichedEvent | null {
+    if (this.#terminated) return null;
+    this.#terminated = true;
+    this.status = 'cancelled';
+    return this.record({ type: 'cancelled', reason });
   }
 
-  // ── 内部 ──
-
-  private emitContextUsage(): void {
-    const { used, total } = this.memory.getContextUsage();
-    this.enrichAndEmit({
-      type: 'context_usage',
-      used,
-      total,
-      reason: 'turn_completed',
-    });
-  }
-
-  private enrichAndEmit(event: any): EnrichedEvent {
+  private record(event: RunEvent): EnrichedEvent {
     const enriched: EnrichedEvent = {
       ...event,
       runId: this.id,
       seq: ++this.seq,
       at: Date.now(),
     };
-    this.emitter.emit('run:event', enriched);
+    this.events.push(enriched);
     return enriched;
   }
 }

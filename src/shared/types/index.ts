@@ -41,8 +41,6 @@ export interface ToolConfig<
   untrustedOutput?: boolean;
 }
 
-export type ChatPhase = 'waiting' | 'active' | 'canceling' | 'error' | 'done';
-
 export * from './tool';
 
 // ─── DDD 类型 ───

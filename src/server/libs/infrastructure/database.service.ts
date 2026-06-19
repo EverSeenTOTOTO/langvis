@@ -1,3 +1,4 @@
+import { AgentRunEntity } from '@/shared/entities/AgentRun';
 import { ConversationEntity } from '@/shared/entities/Conversation';
 import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
 import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
@@ -25,6 +26,7 @@ export class DatabaseService {
     logging: false,
     entities: [
       ...entities,
+      AgentRunEntity,
       ConversationEntity,
       MessageEntity,
       ConversationGroupEntity,
