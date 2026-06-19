@@ -4,7 +4,7 @@ import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
-import type { EnrichedEvent } from '@/shared/types/events';
+import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { createTimeoutController } from '@/server/utils/abort';
 import { container } from 'tsyringe';
@@ -73,9 +73,7 @@ export default class BashTool extends Tool<BashOutput> {
     }
   }
 
-  async *call(
-    toolCall: ToolCall,
-  ): AsyncGenerator<EnrichedEvent, BashOutput, void> {
+  async *call(toolCall: ToolCall): AsyncGenerator<RunEvent, BashOutput, void> {
     toolCall.signal.throwIfAborted();
     this.ensureCleanupRegistered();
 

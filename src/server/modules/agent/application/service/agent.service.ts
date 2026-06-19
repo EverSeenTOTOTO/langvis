@@ -1,26 +1,13 @@
 import { globby } from 'globby';
 import path from 'path';
 import { container, inject } from 'tsyringe';
-import type { AgentBinding, AgentConfig } from '@/shared/types';
-import type { Message } from '@/shared/types/entities';
+import type { AgentConfig } from '@/shared/types';
 import type { AgentConstructor } from '../../domain/model/agent.base';
 import type { Agent } from '../../domain/model/agent.base';
-import { AgentRun } from '../../domain/model/agent-run.entity';
-import { RuntimeConfigVO } from '../../domain/model/runtime-config.vo';
 import { registerAgent } from '@/server/decorator/core';
 import { service } from '@/server/decorator/service';
 import { ToolService } from './tool.service';
 import { SkillService } from './skill.service';
-import { LlmAdapter } from '../../infrastructure/llm.adapter';
-import { LlmProvider } from '@/server/modules/memory/infrastructure/llm.provider';
-import { MEMORY_FACTORY } from '@/server/modules/memory/memory.di-tokens';
-import {
-  MemoryFactory,
-  type MemoryType,
-} from '@/server/modules/memory/application/service/memory-factory';
-import { CACHE_SERVICE } from '../../agent.di-tokens';
-import type { CachePort } from '../../domain/port/cache.port';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { isProd } from '@/server/utils';
 import Logger from '@/server/utils/logger';
 
@@ -36,14 +23,6 @@ export class AgentService {
     private toolService: ToolService,
     @inject(SkillService)
     private skillService: SkillService,
-    @inject(LlmProvider)
-    private llmService: LlmProvider,
-    @inject(MEMORY_FACTORY)
-    private memoryFactory: MemoryFactory,
-    @inject(CACHE_SERVICE)
-    private cacheService: CachePort,
-    @inject(ProviderService)
-    private providerService: ProviderService,
   ) {
     Promise.all([
       this.toolService.initialize(),
@@ -134,54 +113,5 @@ export class AgentService {
   buildSystemPrompt(agentId: string): string {
     const agent = container.resolve<Agent>(agentId);
     return agent.systemPrompt.build();
-  }
-
-  createRun(params: {
-    runId: string;
-    messageId: string;
-    workDir: string;
-    agentBinding: AgentBinding;
-    systemPrompt: string;
-    historyMessages: Message[];
-  }): AgentRun {
-    const agent = container.resolve<Agent>(params.agentBinding.agentId);
-
-    const cfg = params.agentBinding.config as {
-      model?: { modelId?: string };
-      memory?: { type?: string; windowSize?: number };
-    };
-    const modelId = cfg.model?.modelId;
-    const contextSize = modelId
-      ? (this.providerService.getModel(modelId)?.contextSize ?? 128_000)
-      : 128_000;
-
-    const effectiveConfig = RuntimeConfigVO.create(
-      agent.config,
-      params.agentBinding,
-      params.systemPrompt,
-      contextSize,
-    );
-
-    const memory = this.memoryFactory.create({
-      history: params.historyMessages,
-      systemPrompt: effectiveConfig.systemPrompt,
-      contextSize: effectiveConfig.contextSize,
-      modelId: cfg.model?.modelId ?? '',
-      memoryType: (cfg.memory?.type ?? 'slide_window_memory') as MemoryType,
-      windowSize: cfg.memory?.windowSize,
-    });
-
-    const llm = new LlmAdapter(this.llmService, modelId);
-
-    return new AgentRun(
-      params.runId,
-      params.messageId,
-      params.workDir,
-      effectiveConfig,
-      agent,
-      memory,
-      this.cacheService,
-      llm,
-    );
   }
 }

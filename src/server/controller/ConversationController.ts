@@ -15,8 +15,12 @@ import {
 } from '../modules/conversation/conversation.di-tokens';
 import type { MessageRepositoryPort } from '../modules/conversation/domain/port/message.repository.port';
 import type { ConversationRepositoryPort } from '../modules/conversation/domain/port/conversation.repository.port';
+import { AGENT_RUN_REPOSITORY } from '../modules/agent/agent.di-tokens';
+import type { AgentRunRepositoryPort } from '../modules/agent/domain/port/agent-run.repository.port';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import { Role } from '@/shared/entities/Message';
 import { estimateTokens } from '../utils/estimateTokens';
+import { projectRun } from '../modules/agent/domain/projection/run-projection';
 
 @controller('/api/conversation')
 export default class ConversationController {
@@ -25,6 +29,8 @@ export default class ConversationController {
     private convRepo: ConversationRepositoryPort,
     @inject(MESSAGE_REPOSITORY)
     private messageRepo: MessageRepositoryPort,
+    @inject(AGENT_RUN_REPOSITORY)
+    private agentRunRepo: AgentRunRepositoryPort,
     @inject(ProviderService)
     private providerService: ProviderService,
   ) {}
@@ -146,6 +152,35 @@ export default class ConversationController {
   ) {
     const messages = await this.messageRepo.findByConversationId(id);
 
+    // Merge agent_runs data for assistant messages (BC composition):
+    // 事件流是事实源，projectRun 派生出 steps/status（+ content fallback）
+    const agentRunIds = messages
+      .filter(m => m.role === Role.ASSIST && m.agentRunId)
+      .map(m => m.agentRunId!);
+
+    const agentRuns =
+      agentRunIds.length > 0
+        ? await this.agentRunRepo.findByIds(agentRunIds)
+        : [];
+    const runMap = new Map(agentRuns.map(r => [r.id, r]));
+
+    const enriched = messages.map(msg => {
+      if (msg.role === Role.ASSIST && msg.agentRunId) {
+        const run = runMap.get(msg.agentRunId);
+        if (run) {
+          const view = projectRun(run.events ?? []);
+          return {
+            ...msg,
+            content: msg.content || view.content,
+            steps: view.steps,
+            status: run.status,
+          };
+        }
+        return { ...msg, steps: null, status: null };
+      }
+      return msg;
+    });
+
     // Calculate context usage for historical conversations
     let contextUsage: { used: number; total: number } | null = null;
     const conversation = await this.convRepo.findById(id);
@@ -157,7 +192,7 @@ export default class ConversationController {
       contextUsage = { used, total: model.contextSize };
     }
 
-    return res.json({ messages, contextUsage });
+    return res.json({ messages: enriched, contextUsage });
   }
 
   @api('/:id/messages', { method: 'delete' })

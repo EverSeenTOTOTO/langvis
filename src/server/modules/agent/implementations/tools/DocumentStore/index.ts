@@ -7,7 +7,7 @@ import type { ToolConfig } from '@/shared/types';
 import { inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
-import type { EnrichedEvent } from '@/shared/types/events';
+import type { RunEvent } from '@/shared/types/events';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import type { DocumentStoreInput, DocumentStoreOutput } from './config';
 import { config } from './config';
@@ -24,7 +24,7 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<EnrichedEvent, DocumentStoreOutput, void> {
+  ): AsyncGenerator<RunEvent, DocumentStoreOutput, void> {
     const data = toolCall.input as unknown as DocumentStoreInput;
     const { document, chunks } = data;
 

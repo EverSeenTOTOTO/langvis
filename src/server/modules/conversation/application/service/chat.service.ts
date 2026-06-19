@@ -1,101 +1,38 @@
 import type { Message, MessageAttachment } from '@/shared/types/entities';
-import type { ChatPhase } from '@/shared/types';
 import { Role } from '@/shared/entities/Message';
 import { inject, singleton } from 'tsyringe';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import { MESSAGE_REPOSITORY } from '../../conversation.di-tokens';
 import type { MessageRepositoryPort } from '../../domain/port/message.repository.port';
-import { Chat } from '../../domain/model/chat';
-import { EventBus } from '@/server/libs/ddd';
-import { TurnCancellationRequested } from '../../contracts';
+import { AGENT_RUN_REPOSITORY } from '@/server/modules/agent/agent.di-tokens';
+import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
+import {
+  createActivationMessages,
+  createTurnMessages,
+} from '../../domain/service/message-factory';
 import Logger from '@/server/utils/logger';
 
+/**
+ * ChatService — Conversation BC 应用服务。
+ *
+ * 聚合根删除后只剩 Message CRUD + 跨 BC 组合查询。
+ * session 生命周期 / SSE 桥 / run 跟踪归 SessionManager。
+ */
 @singleton()
 export class ChatService {
   private readonly logger = Logger.child({ source: 'ChatService' });
 
-  private chats = new Map<string, Chat>();
-
   constructor(
     @inject(MESSAGE_REPOSITORY)
     private messageRepo: MessageRepositoryPort,
+    @inject(AGENT_RUN_REPOSITORY)
+    private agentRunRepo: AgentRunRepositoryPort,
     @inject(WorkspaceService)
     private workspaceService: WorkspaceService,
-    @inject(EventBus)
-    private eventBus: EventBus,
   ) {}
 
   // ════════════════════════════════════════
-  // 聚合根生命周期
-  // ════════════════════════════════════════
-
-  getOrCreateChat(conversationId: string): Chat {
-    let chat = this.chats.get(conversationId);
-    if (!chat) {
-      chat = new Chat(conversationId);
-      this.chats.set(conversationId, chat);
-      this.logger.info(`Chat created`, { chatId: conversationId });
-    }
-    return chat;
-  }
-
-  getChat(conversationId: string): Chat | undefined {
-    return this.chats.get(conversationId);
-  }
-
-  *allChats(): IterableIterator<[string, Chat]> {
-    for (const entry of this.chats) {
-      yield entry;
-    }
-  }
-
-  // ════════════════════════════════════════
-  // Turn 生命周期
-  // ════════════════════════════════════════
-
-  /**
-   * 启动 turn — 调用方负责：
-   * 1. sessionManager.syncInfrastructure(chat)（infra 反应）
-   * 2. chat.clearEvents()
-   */
-  startTurn(conversationId: string, messageId: string): Chat {
-    const chat = this.getOrCreateChat(conversationId);
-    chat.startTurn(messageId);
-    return chat;
-  }
-
-  /**
-   * 完成 turn — 调用方负责 syncInfrastructure + clearEvents
-   */
-  completeTurn(conversationId: string, messageId: string): Chat | undefined {
-    const chat = this.chats.get(conversationId);
-    if (!chat) return undefined;
-    chat.completeTurn(messageId);
-    return chat;
-  }
-
-  /**
-   * 取消 turn — dispatch TurnCancellationRequested 到 EventBus。
-   * 调用方额外负责 syncInfrastructure + clearEvents
-   */
-  requestCancellation(
-    conversationId: string,
-    messageId?: string,
-    reason?: string,
-  ): Chat | undefined {
-    const chat = this.chats.get(conversationId);
-    if (!chat) return undefined;
-    chat.requestCancellation(messageId, reason);
-    for (const event of chat.domainEvents) {
-      if (event.type === 'turn_cancellation_requested') {
-        this.eventBus.dispatch(TurnCancellationRequested, event);
-      }
-    }
-    return chat;
-  }
-
-  // ════════════════════════════════════════
-  // 消息构建（通过 Chat 聚合根）
+  // 消息构建
   // ════════════════════════════════════════
 
   async activate(params: {
@@ -108,11 +45,10 @@ export class ChatService {
     );
     if (existing.length > 0) return;
 
-    const chat = this.getOrCreateChat(params.conversationId);
     const workDir = await this.workspaceService.getWorkDir(
       params.conversationId,
     );
-    const messages = chat.createActivationMessages({ ...params, workDir });
+    const messages = createActivationMessages({ ...params, workDir });
     await this.messageRepo.batchCreate(params.conversationId, messages);
   }
 
@@ -122,7 +58,7 @@ export class ChatService {
       role: Role;
       content: string;
       attachments?: MessageAttachment[] | null;
-      meta?: Record<string, any> | null;
+      meta?: Record<string, unknown> | null;
     };
     assistantId?: string;
   }): Promise<{
@@ -134,8 +70,12 @@ export class ChatService {
       params.conversationId,
     );
 
-    const chat = this.getOrCreateChat(params.conversationId);
-    const { userMessage, assistantMessage } = chat.createTurnMessages(params);
+    const { userMessage, assistantMessage } = createTurnMessages({
+      conversationId: params.conversationId,
+      userMessage: params.userMessage,
+      assistantId: params.assistantId,
+    });
+
     await this.messageRepo.batchCreate(params.conversationId, [
       userMessage,
       assistantMessage,
@@ -152,24 +92,6 @@ export class ChatService {
   // 持久化辅助
   // ════════════════════════════════════════
 
-  async persistPendingMessage(
-    conversationId: string,
-    messageId: string,
-    agentRunId: string,
-  ): Promise<void> {
-    const chat = this.chats.get(conversationId);
-    if (!chat) return;
-    const snapshot = chat.getSnapshot(messageId);
-    if (snapshot) {
-      await this.messageRepo.update(messageId, {
-        content: snapshot.content,
-        steps: snapshot.steps,
-        agentRunId,
-        status: snapshot.status,
-      });
-    }
-  }
-
   persistAgentRunId(messageId: string, agentRunId: string): void {
     this.messageRepo.update(messageId, { agentRunId }).catch(err => {
       this.logger.warn('Failed to persist agentRunId', err);
@@ -184,35 +106,53 @@ export class ChatService {
     return excludeMessageId ? all.filter(m => m.id !== excludeMessageId) : all;
   }
 
+  /**
+   * Application-layer composition: find assistant messages with active agent runs.
+   * Uses both repos (Message + AgentRun) — not a domain query crossing BC boundaries.
+   */
   async findActiveAssistantMessages(
     conversationId: string,
   ): Promise<Message[]> {
-    return this.messageRepo.findActiveAssistantMessages(conversationId);
+    const messages =
+      await this.messageRepo.findByConversationId(conversationId);
+    const assistantMsgs = messages.filter(
+      m => m.role === Role.ASSIST && m.agentRunId,
+    );
+    const agentRunIds = assistantMsgs.map(m => m.agentRunId!);
+    const agentRuns = await this.agentRunRepo.findByIds(agentRunIds);
+    const activeIds = agentRuns
+      .filter(r => r.status === 'initialized' || r.status === 'running')
+      .map(r => r.id);
+    return assistantMsgs.filter(m => activeIds.includes(m.agentRunId!));
   }
 
+  /**
+   * Mark active assistant messages as failed — updates AgentRun status only.
+   * events 事实流不动（保留原貌），Message content 由调用方决定。
+   */
   async markMessagesFailed(
-    ids: string[],
+    messages: Message[],
     fallbackContent: string,
   ): Promise<void> {
     await Promise.all(
-      ids.map(id =>
-        this.messageRepo.update(id, {
-          content: fallbackContent,
-          status: 'failed',
-        }),
+      messages.map(msg =>
+        this.messageRepo.update(msg.id, { content: fallbackContent }),
       ),
     );
-  }
 
-  // ════════════════════════════════════════
-  // 聚合状态查询
-  // ════════════════════════════════════════
+    const agentRunIds = messages
+      .map(m => m.agentRunId)
+      .filter((id): id is string => !!id);
 
-  getPhase(conversationId: string): ChatPhase | undefined {
-    return this.chats.get(conversationId)?.phase;
-  }
-
-  hasActiveMessage(conversationId: string, messageId: string): boolean {
-    return this.chats.get(conversationId)?.hasActiveMessage(messageId) ?? false;
+    if (agentRunIds.length > 0) {
+      await Promise.all(
+        agentRunIds.map(runId =>
+          this.agentRunRepo.update(runId, {
+            status: 'failed',
+            completedAt: new Date(),
+          }),
+        ),
+      );
+    }
   }
 }

@@ -5,7 +5,7 @@ import type { ToolConfig } from '@/shared/types';
 import { container, inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
-import type { EnrichedEvent } from '@/shared/types/events';
+import type { RunEvent } from '@/shared/types/events';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import type EmbeddingGenerateTool from '../EmbeddingGenerate';
 import type { DocumentSearchInput, DocumentSearchOutput } from './config';
@@ -23,7 +23,7 @@ export default class DocumentSearchTool extends Tool<DocumentSearchOutput> {
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<EnrichedEvent, DocumentSearchOutput, void> {
+  ): AsyncGenerator<RunEvent, DocumentSearchOutput, void> {
     const data = toolCall.input as unknown as DocumentSearchInput;
     const { query, limit = 10, threshold } = data;
 

@@ -6,8 +6,6 @@ import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import { inject, singleton } from 'tsyringe';
 import { In } from 'typeorm';
 
-const NON_TERMINAL_STATUSES = new Set(['initialized', 'running']);
-
 @singleton()
 export class MessageRepository implements MessageRepositoryPort {
   constructor(@inject(DatabaseService) private readonly db: DatabaseService) {}
@@ -46,19 +44,6 @@ export class MessageRepository implements MessageRepositoryPort {
       where: { conversationId, role: Role.ASSIST },
       order: { createdAt: 'DESC' },
     });
-  }
-
-  async findActiveAssistantMessages(
-    conversationId: string,
-  ): Promise<Message[]> {
-    const repo = this.db.getRepository(MessageEntity);
-    const messages = await repo.find({
-      where: { conversationId, role: Role.ASSIST },
-      order: { createdAt: 'ASC' },
-    });
-    return messages.filter(
-      msg => !msg.status || NON_TERMINAL_STATUSES.has(msg.status),
-    );
   }
 
   async findByConversationId(conversationId: string): Promise<Message[]> {

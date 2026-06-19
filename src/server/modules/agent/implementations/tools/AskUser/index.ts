@@ -5,7 +5,7 @@ import type { ToolConfig } from '@/shared/types';
 import { JSONSchemaType } from 'ajv';
 import type { RedisClientType } from 'redis';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
-import type { EnrichedEvent } from '@/shared/types/events';
+import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { inject } from 'tsyringe';
@@ -71,7 +71,7 @@ export default class AskUserTool extends Tool<AskUserOutput> {
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<EnrichedEvent, AskUserOutput, void> {
+  ): AsyncGenerator<RunEvent, AskUserOutput, void> {
     toolCall.signal.throwIfAborted();
 
     const messageId = toolCall.messageId;

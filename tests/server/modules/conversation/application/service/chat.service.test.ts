@@ -1,23 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
+import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import type { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
-import { EventBus } from '@/server/libs/ddd';
-import { Chat } from '@/server/modules/conversation/domain/model/chat';
 import { Role } from '@/shared/entities/Message';
-import { DuplicateRunError } from '@/server/modules/conversation/domain/errors';
-import { TurnCancellationRequested } from '@/server/modules/conversation/contracts';
 
 function makeMockMessageRepo(): MessageRepositoryPort {
   return {
     batchCreate: vi.fn().mockResolvedValue([]),
     findByConversationId: vi.fn().mockResolvedValue([]),
     findLastAssistantMessage: vi.fn().mockResolvedValue(null),
-    findActiveAssistantMessages: vi.fn().mockResolvedValue([]),
     save: vi.fn().mockResolvedValue({} as any),
     batchDeleteInConversation: vi.fn().mockResolvedValue(undefined),
     update: vi.fn().mockResolvedValue(null),
     deleteAfter: vi.fn().mockResolvedValue(false),
+  };
+}
+
+function makeMockAgentRunRepo(): AgentRunRepositoryPort {
+  return {
+    save: vi.fn().mockResolvedValue({} as any),
+    findById: vi.fn().mockResolvedValue(null),
+    findByIds: vi.fn().mockResolvedValue([]),
+    update: vi.fn().mockResolvedValue(null),
   };
 }
 
@@ -27,106 +32,17 @@ function makeMockWorkspace(): WorkspaceService {
   } as unknown as WorkspaceService;
 }
 
-function makeMockEventBus(): EventBus {
-  return {
-    dispatch: vi.fn(),
-  } as unknown as EventBus;
-}
-
 describe('ChatService', () => {
   let service: ChatService;
   let messageRepo: MessageRepositoryPort;
+  let agentRunRepo: AgentRunRepositoryPort;
   let workspace: WorkspaceService;
-  let eventBus: EventBus;
 
   beforeEach(() => {
     messageRepo = makeMockMessageRepo();
+    agentRunRepo = makeMockAgentRunRepo();
     workspace = makeMockWorkspace();
-    eventBus = makeMockEventBus();
-    service = new ChatService(messageRepo, workspace, eventBus);
-  });
-
-  // ════════════════════════════════════════
-  // 聚合根生命周期
-  // ════════════════════════════════════════
-
-  describe('getOrCreateChat', () => {
-    it('should create a new Chat if none exists', () => {
-      const chat = service.getOrCreateChat('conv_1');
-
-      expect(chat).toBeInstanceOf(Chat);
-      expect(chat.phase).toBe('waiting');
-    });
-
-    it('should return existing Chat on second call', () => {
-      const first = service.getOrCreateChat('conv_1');
-      const second = service.getOrCreateChat('conv_1');
-
-      expect(first).toBe(second);
-    });
-  });
-
-  describe('getChat', () => {
-    it('should return undefined for unknown chat', () => {
-      expect(service.getChat('unknown')).toBeUndefined();
-    });
-
-    it('should return chat after creation', () => {
-      service.getOrCreateChat('conv_1');
-      expect(service.getChat('conv_1')).toBeInstanceOf(Chat);
-    });
-  });
-
-  // ════════════════════════════════════════
-  // Turn 生命周期
-  // ════════════════════════════════════════
-
-  describe('startTurn', () => {
-    it('should start a turn on the Chat aggregate', () => {
-      const chat = service.startTurn('conv_1', 'msg_1');
-
-      expect(chat.hasActiveMessage('msg_1')).toBe(true);
-      expect(chat.phase).toBe('active');
-    });
-
-    it('should throw DuplicateRunError for same messageId', () => {
-      service.startTurn('conv_1', 'msg_1');
-
-      expect(() => service.startTurn('conv_1', 'msg_1')).toThrow(
-        DuplicateRunError,
-      );
-    });
-  });
-
-  describe('completeTurn', () => {
-    it('should complete a turn and return to waiting', () => {
-      service.startTurn('conv_1', 'msg_1');
-      const chat = service.completeTurn('conv_1', 'msg_1');
-
-      expect(chat!.phase).toBe('waiting');
-      expect(chat!.hasActiveMessage('msg_1')).toBe(false);
-    });
-
-    it('should return undefined for unknown chat', () => {
-      expect(service.completeTurn('unknown', 'msg_1')).toBeUndefined();
-    });
-  });
-
-  describe('requestCancellation', () => {
-    it('should request cancellation and dispatch TurnCancellationRequested', () => {
-      service.startTurn('conv_1', 'msg_1');
-      const chat = service.requestCancellation('conv_1', 'msg_1', 'user abort');
-
-      expect(chat).toBeDefined();
-      expect(eventBus.dispatch).toHaveBeenCalledWith(
-        TurnCancellationRequested,
-        expect.anything(),
-      );
-    });
-
-    it('should return undefined for unknown chat', () => {
-      expect(service.requestCancellation('unknown')).toBeUndefined();
-    });
+    service = new ChatService(messageRepo, agentRunRepo, workspace);
   });
 
   // ════════════════════════════════════════
@@ -134,7 +50,7 @@ describe('ChatService', () => {
   // ════════════════════════════════════════
 
   describe('activate', () => {
-    it('should create activation messages when no existing messages', async () => {
+    it('creates activation messages when no existing messages', async () => {
       (messageRepo.findByConversationId as any).mockResolvedValue([]);
 
       await service.activate({
@@ -152,7 +68,7 @@ describe('ChatService', () => {
       );
     });
 
-    it('should skip if messages already exist', async () => {
+    it('skips if messages already exist', async () => {
       (messageRepo.findByConversationId as any).mockResolvedValue([
         { id: 'msg_existing', role: Role.SYSTEM, content: 'old prompt' },
       ]);
@@ -168,7 +84,7 @@ describe('ChatService', () => {
   });
 
   describe('appendMessage', () => {
-    it('should create user + assistant message pair', async () => {
+    it('creates user + assistant message pair', async () => {
       (messageRepo.findByConversationId as any).mockResolvedValue([]);
 
       const result = await service.appendMessage({
@@ -187,7 +103,7 @@ describe('ChatService', () => {
       );
     });
 
-    it('should return existing messages from repo', async () => {
+    it('returns existing messages from repo', async () => {
       const existingMessages = [
         { id: 'msg_1', role: Role.SYSTEM, content: 'prompt' },
       ];
@@ -205,39 +121,134 @@ describe('ChatService', () => {
   });
 
   // ════════════════════════════════════════
-  // 持久化辅助
+  // BC 跨边界组合查询
   // ════════════════════════════════════════
 
-  describe('persistPendingMessage', () => {
-    it('should update message with snapshot data', async () => {
-      const chat = service.startTurn('conv_1', 'msg_1');
-      // Simulate content accumulation
-      chat.handleRunEvent('msg_1', {
-        type: 'text_chunk',
-        content: 'answer text',
-        runId: 'run_1',
-        seq: 1,
-        at: Date.now(),
-      } as any);
+  describe('findActiveAssistantMessages', () => {
+    it('composes query across Message + AgentRun repos', async () => {
+      const messages = [
+        {
+          id: 'msg_1',
+          role: Role.ASSIST,
+          agentRunId: 'run_1',
+          content: '',
+          createdAt: new Date(),
+          conversationId: 'conv_1',
+        },
+        {
+          id: 'msg_2',
+          role: Role.ASSIST,
+          agentRunId: 'run_2',
+          content: '',
+          createdAt: new Date(),
+          conversationId: 'conv_1',
+        },
+        {
+          id: 'msg_3',
+          role: Role.USER,
+          content: '',
+          createdAt: new Date(),
+          conversationId: 'conv_1',
+        },
+      ];
+      (messageRepo.findByConversationId as any).mockResolvedValue(messages);
+      (agentRunRepo.findByIds as any).mockResolvedValue([
+        { id: 'run_1', status: 'running' },
+        { id: 'run_2', status: 'completed' },
+      ]);
 
-      await service.persistPendingMessage('conv_1', 'msg_1', 'run_1');
+      const result = await service.findActiveAssistantMessages('conv_1');
 
-      expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
-        content: 'answer text',
-        steps: [],
-        agentRunId: 'run_1',
-        status: 'running',
-      });
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('msg_1');
     });
 
-    it('should do nothing for unknown chat', async () => {
-      await service.persistPendingMessage('unknown', 'msg_1', 'run_1');
-      expect(messageRepo.update).not.toHaveBeenCalled();
+    it('returns empty when no active runs', async () => {
+      const messages = [
+        {
+          id: 'msg_1',
+          role: Role.ASSIST,
+          agentRunId: 'run_1',
+          content: '',
+          createdAt: new Date(),
+          conversationId: 'conv_1',
+        },
+      ];
+      (messageRepo.findByConversationId as any).mockResolvedValue(messages);
+      (agentRunRepo.findByIds as any).mockResolvedValue([
+        { id: 'run_1', status: 'completed' },
+      ]);
+
+      const result = await service.findActiveAssistantMessages('conv_1');
+
+      expect(result).toHaveLength(0);
     });
   });
 
+  describe('markMessagesFailed', () => {
+    it('updates Message content + AgentRun status', async () => {
+      const messages = [
+        {
+          id: 'msg_1',
+          role: Role.ASSIST,
+          agentRunId: 'run_1',
+          content: '',
+          createdAt: new Date(),
+          conversationId: 'conv_1',
+        },
+        {
+          id: 'msg_2',
+          role: Role.ASSIST,
+          agentRunId: 'run_2',
+          content: '',
+          createdAt: new Date(),
+          conversationId: 'conv_1',
+        },
+      ];
+
+      await service.markMessagesFailed(messages, 'Generation interrupted');
+
+      expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
+        content: 'Generation interrupted',
+      });
+      expect(messageRepo.update).toHaveBeenCalledWith('msg_2', {
+        content: 'Generation interrupted',
+      });
+      expect(agentRunRepo.update).toHaveBeenCalledWith('run_1', {
+        status: 'failed',
+        completedAt: expect.any(Date),
+      });
+      expect(agentRunRepo.update).toHaveBeenCalledWith('run_2', {
+        status: 'failed',
+        completedAt: expect.any(Date),
+      });
+    });
+
+    it('skips AgentRun update when no agentRunId', async () => {
+      const messages = [
+        {
+          id: 'msg_1',
+          role: Role.USER,
+          agentRunId: null,
+          content: '',
+          createdAt: new Date(),
+          conversationId: 'conv_1',
+        },
+      ];
+
+      await service.markMessagesFailed(messages, 'Error');
+
+      expect(messageRepo.update).toHaveBeenCalledTimes(1);
+      expect(agentRunRepo.update).not.toHaveBeenCalled();
+    });
+  });
+
+  // ════════════════════════════════════════
+  // 其他
+  // ════════════════════════════════════════
+
   describe('getHistoryMessages', () => {
-    it('should return all messages for conversation', async () => {
+    it('returns all messages for conversation', async () => {
       const messages = [
         { id: 'msg_1', role: Role.SYSTEM, content: 'prompt' },
         { id: 'msg_2', role: Role.USER, content: 'question' },
@@ -249,7 +260,7 @@ describe('ChatService', () => {
       expect(result).toBe(messages);
     });
 
-    it('should exclude a specific message when provided', async () => {
+    it('excludes a specific message when provided', async () => {
       const messages = [
         { id: 'msg_1', role: Role.SYSTEM, content: 'prompt' },
         { id: 'msg_2', role: Role.USER, content: 'question' },
@@ -263,25 +274,12 @@ describe('ChatService', () => {
     });
   });
 
-  describe('getPhase', () => {
-    it('should return phase for existing chat', () => {
-      service.getOrCreateChat('conv_1');
-      expect(service.getPhase('conv_1')).toBe('waiting');
-    });
-
-    it('should return undefined for unknown chat', () => {
-      expect(service.getPhase('unknown')).toBeUndefined();
-    });
-  });
-
-  describe('hasActiveMessage', () => {
-    it('should return true for active message', () => {
-      service.startTurn('conv_1', 'msg_1');
-      expect(service.hasActiveMessage('conv_1', 'msg_1')).toBe(true);
-    });
-
-    it('should return false for unknown chat', () => {
-      expect(service.hasActiveMessage('unknown', 'msg_1')).toBe(false);
+  describe('persistAgentRunId', () => {
+    it('writes agentRunId to Message (fire-and-forget)', () => {
+      service.persistAgentRunId('msg_1', 'run_1');
+      expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
+        agentRunId: 'run_1',
+      });
     });
   });
 });

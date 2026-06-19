@@ -11,7 +11,6 @@ import { body, param, request, response } from '../decorator/param';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import { CONVERSATION_REPOSITORY } from '../modules/conversation/conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../modules/conversation/domain/port/conversation.repository.port';
-import { ChatService } from '../modules/conversation/application/service/chat.service';
 import { SessionManager } from '../modules/conversation/application/service/session-manager';
 import { CommandBus, QueryBus } from '@/server/libs/ddd';
 import {
@@ -28,8 +27,6 @@ export default class ChatController {
     private commandBus: CommandBus,
     @inject(QueryBus)
     private queryBus: QueryBus,
-    @inject(ChatService)
-    private conversationService: ChatService,
     @inject(SessionManager)
     private sessionManager: SessionManager,
     @inject(CONVERSATION_REPOSITORY)
@@ -84,9 +81,7 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const phase = this.conversationService.getPhase(conversationId);
-
-    if (!phase || (phase !== 'active' && phase !== 'waiting')) {
+    if (!this.sessionManager.hasSession(conversationId)) {
       return res.status(404).json({
         error: `No active session for conversation ${conversationId}`,
       });
@@ -113,7 +108,7 @@ export default class ChatController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    if (!this.conversationService.hasActiveMessage(conversationId, messageId)) {
+    if (!this.sessionManager.hasActiveRun(conversationId, messageId)) {
       return res.status(404).json({
         error: `No active message ${messageId}`,
       });
@@ -160,6 +155,7 @@ export default class ChatController {
       new GetSessionStateQuery(conversationId),
     );
 
-    return res.status(200).json(state ? { phase: state.phase } : null);
+    // 客户端只关心 null/非 null（会话是否存活）
+    return res.status(200).json(state ? { active: true } : null);
   }
 }

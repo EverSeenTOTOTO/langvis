@@ -1,6 +1,4 @@
 import type { Message, MessageAttachment } from '@/shared/types/entities';
-import type { RunStatus } from '@/shared/types/agent';
-import type { ReActStep } from '@/shared/types/render';
 import {
   BeforeInsert,
   Column,
@@ -44,16 +42,6 @@ export class MessageEntity implements Message {
 
   @Column({ type: 'varchar', length: 16, nullable: true })
   agentRunId!: string | null;
-
-  @Column({ type: 'jsonb', nullable: true })
-  steps!: ReActStep[] | null;
-
-  @Column({
-    type: 'varchar',
-    length: 32,
-    nullable: true,
-  })
-  status!: RunStatus | null;
 
   @Column({ type: 'jsonb', nullable: true })
   meta!: Record<string, any> | null;

@@ -4,7 +4,7 @@ import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
-import type { EnrichedEvent } from '@/shared/types/events';
+import type { RunEvent } from '@/shared/types/events';
 import type { EmbeddingGenerateInput, EmbeddingGenerateOutput } from './config';
 import { config } from './config';
 
@@ -18,7 +18,7 @@ export default class EmbeddingGenerateTool extends Tool<EmbeddingGenerateOutput>
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<EnrichedEvent, EmbeddingGenerateOutput, void> {
+  ): AsyncGenerator<RunEvent, EmbeddingGenerateOutput, void> {
     const data = toolCall.input as unknown as EmbeddingGenerateInput;
     const { chunks, model, timeout = DEFAULT_TIMEOUT_MS } = data;
 

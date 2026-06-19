@@ -7,13 +7,14 @@ import {
   RunCompleted,
 } from '@/server/modules/conversation/contracts';
 import type { TurnInitiatedPayload } from '@/server/modules/conversation/contracts';
-import { AgentRun } from '../../domain/model/agent-run.entity';
-import { AgentService } from '../service/agent.service';
+import { AgentRunExecutor } from '../service/agent-run-executor';
 import { eventHandler } from '@/server/decorator/handler';
 import Logger from '@/server/utils/logger';
 import { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
+import { AGENT_RUN_REPOSITORY } from '../../agent.di-tokens';
+import type { AgentRunRepositoryPort } from '../../domain/port/agent-run.repository.port';
 
 @eventHandler(TurnInitiated)
 export class AgentRunHandler {
@@ -24,12 +25,14 @@ export class AgentRunHandler {
     private conversationService: ChatService,
     @inject(SessionManager)
     private sessionManager: SessionManager,
-    @inject(AgentService)
-    private agentService: AgentService,
+    @inject(AgentRunExecutor)
+    private executor: AgentRunExecutor,
     @inject(WorkspaceService)
     private workspaceService: WorkspaceService,
     @inject(EventBus)
     private eventBus: EventBus,
+    @inject(AGENT_RUN_REPOSITORY)
+    private agentRunRepo: AgentRunRepositoryPort,
   ) {}
 
   async handle(
@@ -44,7 +47,8 @@ export class AgentRunHandler {
     );
 
     const workDir = await this.workspaceService.getWorkDir(conversationId);
-    const run = this.agentService.createRun({
+
+    const { run, ctx } = this.executor.createRun({
       runId: generateId('run'),
       messageId: assistantMessage.id,
       workDir,
@@ -55,38 +59,56 @@ export class AgentRunHandler {
 
     this.sessionManager.registerRun(conversationId, assistantMessage.id, run);
 
-    run.on('run:event', evt => {
-      this.sessionManager.processRunEvent(
-        conversationId,
-        assistantMessage.id,
-        evt,
-      );
-    });
-
     this.conversationService.persistAgentRunId(assistantMessage.id, run.runId);
 
-    await this.executeRun(conversationId, run);
+    // Create initial agent_runs row (Agent BC persistence)
+    await this.agentRunRepo.save({
+      id: run.runId,
+      agentId: run.config.agentId,
+      status: 'running',
+      events: [],
+      config: {
+        agentId: run.config.agentId,
+        agentName: run.config.agentName,
+        systemPrompt: run.config.systemPrompt,
+        tools: run.config.tools,
+        contextSize: run.config.contextSize,
+        runtimeConfig: run.config.runtimeConfig,
+      },
+      startedAt: new Date(),
+      completedAt: null,
+    });
+
+    await this.executeRun(conversationId, assistantMessage.id, run, ctx);
   }
 
   private async executeRun(
     conversationId: string,
-    run: AgentRun,
+    messageId: string,
+    run: ReturnType<AgentRunExecutor['createRun']>['run'],
+    ctx: ReturnType<AgentRunExecutor['createRun']>['ctx'],
   ): Promise<void> {
-    this.logger.info(`Starting agent=${run.agent.id}`, {
+    this.logger.info(`Starting agent=${run.agentId}`, {
       sessionId: conversationId,
-      messageId: run.messageId,
+      messageId,
     });
 
     const startTime = Date.now();
 
     try {
-      await run.execute();
+      for await (const enriched of this.executor.execute(run, ctx)) {
+        this.sessionManager.processRunEvent(
+          conversationId,
+          messageId,
+          enriched,
+        );
+      }
     } finally {
       this.eventBus.dispatch(
         RunCompleted,
         createDomainEvent(RunCompleted, conversationId, {
           conversationId,
-          messageId: run.messageId,
+          messageId,
           agentRunId: run.runId,
         }),
       );

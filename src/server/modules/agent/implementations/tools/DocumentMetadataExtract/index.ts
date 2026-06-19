@@ -5,7 +5,7 @@ import type { ToolConfig } from '@/shared/types';
 import { wrapUntrusted } from '@/shared/utils';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
-import type { EnrichedEvent } from '@/shared/types/events';
+import type { RunEvent } from '@/shared/types/events';
 import { Prompt } from '@/server/modules/agent/domain/model/prompt';
 import type {
   DocumentMetadataExtractInput,
@@ -50,7 +50,7 @@ export default class DocumentMetadataExtractTool extends Tool<DocumentMetadataEx
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<EnrichedEvent, DocumentMetadataExtractOutput, void> {
+  ): AsyncGenerator<RunEvent, DocumentMetadataExtractOutput, void> {
     const data = toolCall.input as unknown as DocumentMetadataExtractInput;
     const { content, sourceUrl, sourceType } = data;
 

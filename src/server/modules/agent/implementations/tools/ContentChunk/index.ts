@@ -4,7 +4,7 @@ import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
-import type { EnrichedEvent } from '@/shared/types/events';
+import type { RunEvent } from '@/shared/types/events';
 import type {
   ContentChunkInput,
   ContentChunkOutput,
@@ -168,7 +168,7 @@ export default class ContentChunkTool extends Tool<ContentChunkOutput> {
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<EnrichedEvent, ContentChunkOutput, void> {
+  ): AsyncGenerator<RunEvent, ContentChunkOutput, void> {
     const data = toolCall.input as unknown as ContentChunkInput;
     const { content, strategy = 'paragraph', options = {} } = data;
 

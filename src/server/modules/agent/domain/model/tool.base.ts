@@ -1,7 +1,7 @@
 import type { Logger } from '@/server/utils/logger';
 import type { ToolConfig, ToolCallTimeline } from '@/shared/types';
 import type { ToolCall } from './tool-call.entity';
-import type { EnrichedEvent } from '@/shared/types/events';
+import type { RunEvent } from '@/shared/types/events';
 
 export abstract class Tool<O = unknown> {
   abstract readonly id: string;
@@ -9,7 +9,7 @@ export abstract class Tool<O = unknown> {
 
   protected abstract readonly logger: Logger;
 
-  abstract call(toolCall: ToolCall): AsyncGenerator<EnrichedEvent, O, void>;
+  abstract call(toolCall: ToolCall): AsyncGenerator<RunEvent, O, void>;
 
   summarize(timeline: ToolCallTimeline): string {
     const argsHint = this.summarizeArgs(timeline.toolArgs);
