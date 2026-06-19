@@ -7,6 +7,7 @@ import type { ToolConfig } from '@/shared/types';
 import { inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { EnrichedEvent } from '@/shared/types/events';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import type { DocumentStoreInput, DocumentStoreOutput } from './config';
 import { config } from './config';
@@ -23,11 +24,7 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<
-    { type: 'tool_progress'; data: unknown },
-    DocumentStoreOutput,
-    void
-  > {
+  ): AsyncGenerator<EnrichedEvent, DocumentStoreOutput, void> {
     const data = toolCall.input as unknown as DocumentStoreInput;
     const { document, chunks } = data;
 
@@ -41,13 +38,10 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
         .filter(s => s),
     );
 
-    yield {
-      type: 'tool_progress' as const,
-      data: {
-        message: `Saving document "${document.title}" to database...`,
-        data: { title: document.title, chunkCount: chunks.length },
-      },
-    };
+    yield toolCall.emitProgress({
+      message: `Saving document "${document.title}" to database...`,
+      data: { title: document.title, chunkCount: chunks.length },
+    });
 
     const result = await this.db.dataSource.transaction(async manager => {
       // Create document
@@ -84,13 +78,10 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
       return { documentId: doc.id, chunkCount: chunks.length };
     });
 
-    yield {
-      type: 'tool_progress' as const,
-      data: {
-        message: `Document saved with ${result.chunkCount} chunks`,
-        data: { documentId: result.documentId },
-      },
-    };
+    yield toolCall.emitProgress({
+      message: `Document saved with ${result.chunkCount} chunks`,
+      data: { documentId: result.documentId },
+    });
 
     const output: DocumentStoreOutput = result;
 

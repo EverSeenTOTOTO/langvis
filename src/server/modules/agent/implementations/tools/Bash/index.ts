@@ -3,8 +3,8 @@ import { tool } from '@/server/decorator/core';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
-import type { ToolProgress } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { EnrichedEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { createTimeoutController } from '@/server/utils/abort';
 import { container } from 'tsyringe';
@@ -75,7 +75,7 @@ export default class BashTool extends Tool<BashOutput> {
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<ToolProgress, BashOutput, void> {
+  ): AsyncGenerator<EnrichedEvent, BashOutput, void> {
     toolCall.signal.throwIfAborted();
     this.ensureCleanupRegistered();
 
@@ -184,7 +184,9 @@ export default class BashTool extends Tool<BashOutput> {
       killProcessTree(child);
     });
 
-    const flushOutput = (source: 'stdout' | 'stderr'): ToolProgress | null => {
+    const flushOutput = (
+      source: 'stdout' | 'stderr',
+    ): { type: 'stdout' | 'stderr'; text: string } | null => {
       if (progressSent >= PROGRESS_LIMIT) return null;
 
       const output = source === 'stdout' ? stdout : stderr;
@@ -207,7 +209,7 @@ export default class BashTool extends Tool<BashOutput> {
       if (source === 'stdout') lastFlushedStdout = flushed + text.length;
       else lastFlushedStderr = flushed + text.length;
 
-      return { type: 'tool_progress' as const, data: { type: source, text } };
+      return { type: source, text };
     };
 
     try {
@@ -222,7 +224,7 @@ export default class BashTool extends Tool<BashOutput> {
         if ('exit' in result) break;
 
         const event = flushOutput('stdout') ?? flushOutput('stderr');
-        if (event) yield event;
+        if (event) yield toolCall.emitProgress(event);
       }
     } finally {
       toolCall.signal.removeEventListener('abort', onAbort);
@@ -235,7 +237,7 @@ export default class BashTool extends Tool<BashOutput> {
 
     // Flush remaining
     const event = flushOutput('stdout') ?? flushOutput('stderr');
-    if (event) yield event;
+    if (event) yield toolCall.emitProgress(event);
 
     if (timedOut) {
       stderr += `\nProcess timed out after ${userTimeout}s and was killed.`;

@@ -4,6 +4,7 @@ import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { EnrichedEvent } from '@/shared/types/events';
 import type { EmbeddingGenerateInput, EmbeddingGenerateOutput } from './config';
 import { config } from './config';
 
@@ -17,11 +18,7 @@ export default class EmbeddingGenerateTool extends Tool<EmbeddingGenerateOutput>
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<
-    { type: 'tool_progress'; data: unknown },
-    EmbeddingGenerateOutput,
-    void
-  > {
+  ): AsyncGenerator<EnrichedEvent, EmbeddingGenerateOutput, void> {
     const data = toolCall.input as unknown as EmbeddingGenerateInput;
     const { chunks, model, timeout = DEFAULT_TIMEOUT_MS } = data;
 
@@ -31,14 +28,11 @@ export default class EmbeddingGenerateTool extends Tool<EmbeddingGenerateOutput>
       `Generating embeddings for ${chunks.length} chunks using ${model}`,
     );
 
-    yield {
-      type: 'tool_progress' as const,
-      data: {
-        message: `Calling embedding API (${model}) for ${chunks.length} texts...`,
-        model,
-        textCount: chunks.length,
-      },
-    };
+    yield toolCall.emitProgress({
+      message: `Calling embedding API (${model}) for ${chunks.length} texts...`,
+      model,
+      textCount: chunks.length,
+    });
 
     const signal = AbortSignal.timeout(timeout);
 

@@ -215,8 +215,10 @@ describe('ChatService', () => {
       chat.handleRunEvent('msg_1', {
         type: 'text_chunk',
         content: 'answer text',
+        runId: 'run_1',
+        seq: 1,
         at: Date.now(),
-      });
+      } as any);
 
       await service.persistPendingMessage('conv_1', 'msg_1', 'run_1');
 

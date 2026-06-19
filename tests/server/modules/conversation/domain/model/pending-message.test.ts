@@ -1,13 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { PendingMessage } from '@/server/modules/conversation/domain/model/pending-message';
-import type { RunEvent } from '@/server/modules/conversation/domain/model/pending-message';
+import type { EnrichedEvent } from '@/shared/types/events';
 
-function makeEvent(type: string, overrides: Partial<RunEvent> = {}): RunEvent {
+function makeEvent(
+  type: string,
+  overrides: Partial<EnrichedEvent> = {},
+): EnrichedEvent {
   return {
     type,
     at: Date.now(),
+    runId: 'run_1',
+    seq: 1,
     ...overrides,
-  };
+  } as EnrichedEvent;
 }
 
 describe('PendingMessage', () => {

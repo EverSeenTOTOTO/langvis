@@ -2,8 +2,8 @@ import { tool } from '@/server/decorator/core';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
-import type { ToolProgress } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { EnrichedEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import { inject, container } from 'tsyringe';
@@ -24,7 +24,7 @@ export default class FileEditTool extends Tool<FileEditOutput> {
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<ToolProgress, FileEditOutput, void> {
+  ): AsyncGenerator<EnrichedEvent, FileEditOutput, void> {
     toolCall.signal.throwIfAborted();
 
     const { path, old_string, new_string } =

@@ -1,71 +1,70 @@
 /**
- * Agent 领域事件、流式数据、传输帧。
+ * Agent 运行事件 + 传输帧。
  *
- * AgentEvent — 领域事件，表达业务状态变更。
- * StreamChunk — 流式数据通道（token 级别）。
- * SSEFrame — SSE 传输帧，由应用层 enrich seq/at/messageId。
+ * RunEvent — 领域层：表达 agent 执行过程中的一切事实。
+ * 不区分 "领域事件" vs "流式数据" — 都是 agent 执行过程的消息，
+ * 是否持久化是外部（应用层）的选择，不是内部标记。
  *
- * @see docs/plans/2026-05-30-ddd-refactor/04-event-system.md
+ * EnrichedEvent — 应用层：RunEvent + 执行元数据 (runId, seq, at)。
+ * 由 AgentRun.enrichAndEmit() 在推送时注入。
+ *
+ * SSEFrame — 传输层：EnrichedEvent + 关联标识 (messageId)，
+ * 以及 SSE 通道自身的控制帧。
  */
 
 // ─── 领域事件 ───
 
 /**
- * Agent 运行过程中的业务状态变更。
- *
- * 与旧版 AgentEvent 的区别：
- * - runId 替代 messageId（领域标识 vs 关联标识）
- * - 不含 seq/at（传输层概念，由 AgentRun.emit() 注入）
- * - 移除 stream（独立为 StreamChunk）
- * - 移除 context_usage（独立为 ContextUsageMeta）
- * - 9 变体（旧版 11 变体）
+ * Agent 运行过程中的全部事实。
+ * 纯业务语义，不含传输/执行元数据。
  */
-export type AgentEvent =
-  | { type: 'start'; runId: string }
-  | { type: 'thought'; runId: string; content: string }
+export type RunEvent =
+  | { type: 'start' }
+  | { type: 'text_chunk'; content: string }
+  | { type: 'thought'; content: string }
   | {
       type: 'tool_call';
-      runId: string;
       callId: string;
       toolName: string;
       toolArgs: Record<string, unknown>;
     }
-  | { type: 'tool_progress'; runId: string; callId: string; data: unknown }
+  | { type: 'tool_progress'; callId: string; data: unknown }
   | {
       type: 'tool_result';
-      runId: string;
       callId: string;
       toolName: string;
       output: unknown;
     }
   | {
       type: 'tool_error';
-      runId: string;
       callId: string;
       toolName: string;
       error: string;
     }
-  | { type: 'final'; runId: string }
-  | { type: 'cancelled'; runId: string; reason: string }
-  | { type: 'error'; runId: string; error: string };
+  | { type: 'final' }
+  | { type: 'cancelled'; reason: string }
+  | { type: 'error'; error: string }
+  | { type: 'context_usage'; used: number; total: number; reason: string };
 
-// ─── 流式数据 ───
+// ─── 应用层富化 ───
 
 /**
- * 独立的流式通道。
- * 与 AgentEvent 分离，因为 token 流式输出不是业务状态变更。
+ * RunEvent + 执行元数据。
+ * AgentRun 在推送时注入 runId / seq / at，
+ * 保证每个事件有序、可溯源。
  */
-export type StreamChunk = {
-  type: 'text_chunk';
+export type EnrichedEvent = RunEvent & {
   runId: string;
-  content: string;
+  seq: number;
+  at: number;
 };
 
-// ─── 上下文用量 ───
+// ─── 上下文用量元信息 ───
 
 /**
  * 上下文窗口用量元信息。
- * 不是独立领域事件，作为轻量 SSE 帧发送。
+ * 现已纳入 RunEvent (type: 'context_usage'),
+ * 此类型保留用于需要独立引用的场景。
  */
 export type ContextUsageMeta = {
   used: number;
@@ -82,23 +81,11 @@ export type ContextUsageMeta = {
 /**
  * SSE 通道传输的完整帧。
  *
- * 应用层在推送时 enrich：
- * - seq：序列号，由 AgentRun.emit() 分配
- * - at：时间戳，由 AgentRun.emit() 分配
- * - messageId：关联标识，从 run.messageId 获取
+ * 业务帧 = EnrichedEvent + messageId (关联标识)
+ * 控制帧 = SSE 通道自身的状态事件
  */
 export type SSEFrame =
-  | (AgentEvent & { seq: number; at: number; messageId: string })
-  | (StreamChunk & { seq: number; at: number; messageId: string })
-  | {
-      type: 'context_usage';
-      messageId: string;
-      seq: number;
-      at: number;
-      used: number;
-      total: number;
-      reason: ContextUsageMeta['reason'];
-    }
+  | (EnrichedEvent & { messageId: string })
   | { type: 'connected' }
   | { type: 'session_replaced' }
   | { type: 'session_error'; error: string }

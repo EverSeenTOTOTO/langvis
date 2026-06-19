@@ -2,8 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
+import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
+import type { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
+import type { MemoryPort } from '@/server/modules/memory/domain/port/memory.port';
 import type { LlmPort } from '@/server/modules/agent/domain/port/llm.port';
-import type { ToolCallEmitter } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ContextUsage } from '@/server/modules/memory/domain/model/memory.types';
 
 function makeMockTool(config?: {
   untrustedOutput?: boolean;
@@ -36,44 +39,42 @@ function makeMockLlm(): LlmPort {
   } as unknown as LlmPort;
 }
 
-function makeMockEmitter(): ToolCallEmitter {
+function makeMockMemory(): MemoryPort {
   return {
-    emitToolCall: vi.fn((callId, toolName, toolArgs) => ({
-      type: 'tool_call' as const,
-      callId,
-      toolName,
-      toolArgs,
-      runId: 'run_1',
-      seq: 1,
-      at: Date.now(),
-    })),
-    emitToolProgress: vi.fn((callId, data) => ({
-      type: 'tool_progress' as const,
-      callId,
-      data,
-      runId: 'run_1',
-      seq: 2,
-      at: Date.now(),
-    })),
-    emitToolResult: vi.fn((callId, toolName, output) => ({
-      type: 'tool_result' as const,
-      callId,
-      toolName,
-      output,
-      runId: 'run_1',
-      seq: 3,
-      at: Date.now(),
-    })),
-    emitToolError: vi.fn((callId, toolName, error) => ({
-      type: 'tool_error' as const,
-      callId,
-      toolName,
-      error,
-      runId: 'run_1',
-      seq: 3,
-      at: Date.now(),
-    })),
+    buildContext: vi.fn().mockResolvedValue([]),
+    getContextUsage: vi
+      .fn()
+      .mockReturnValue({ used: 0, total: 8000 } as ContextUsage),
   };
+}
+
+function makeMockRun(): AgentRun {
+  const RuntimeConfigVOMock = {
+    agentId: 'test',
+    agentName: 'test',
+    systemPrompt: '',
+    tools: [],
+    contextSize: 8000,
+    runtimeConfig: {},
+  } as unknown as RuntimeConfigVO;
+
+  const run = new AgentRun(
+    'run_1',
+    'msg_1',
+    '/tmp/workdir',
+    RuntimeConfigVOMock,
+    {
+      id: 'test-agent',
+      call: vi.fn(),
+      config: {},
+      tools: [],
+      logger: {} as any,
+    } as unknown as any,
+    makeMockMemory(),
+    makeMockCache(),
+    makeMockLlm(),
+  );
+  return run;
 }
 
 function createToolCall(tool?: Tool): ToolCall {
@@ -82,11 +83,7 @@ function createToolCall(tool?: Tool): ToolCall {
     tool ?? makeMockTool(),
     { input: 'test' },
     makeMockCache(),
-    new AbortController().signal,
-    '/tmp/work',
-    'msg_1',
-    'run_1',
-    makeMockLlm(),
+    makeMockRun(),
   );
 }
 
@@ -94,20 +91,16 @@ describe('ToolCall', () => {
   describe('execute', () => {
     it('should resolve input args from cache first', async () => {
       const cache = makeMockCache();
+      const run = makeMockRun();
       const toolCall = new ToolCall(
         'tc_1',
         makeMockTool(),
         { input: 'test' },
         cache,
-        new AbortController().signal,
-        '/tmp',
-        'msg_1',
-        'run_1',
-        makeMockLlm(),
+        run,
       );
 
-      const emitter = makeMockEmitter();
-      const gen = toolCall.execute(emitter);
+      const gen = toolCall.execute();
       for await (const _ of gen) {
         /* consume generator */
       }
@@ -115,48 +108,50 @@ describe('ToolCall', () => {
       expect(cache.resolve).toHaveBeenCalledWith('run_1', { input: 'test' });
     });
 
-    it('should emit tool_call event with resolved input', async () => {
-      const toolCall = createToolCall();
-      const emitter = makeMockEmitter();
-
-      const gen = toolCall.execute(emitter);
+    it('should emit tool_call event via run delegation', async () => {
+      const run = makeMockRun();
       const events: any[] = [];
-      for await (const event of gen) {
-        events.push(event);
-      }
+      run.on('run:event', (e: any) => events.push(e));
 
-      expect(emitter.emitToolCall).toHaveBeenCalledWith(
-        'tc_1',
-        'mock-tool',
-        expect.anything(),
-      );
-    });
-
-    it('should emit tool_result on successful execution', async () => {
-      const cache = makeMockCache();
       const toolCall = new ToolCall(
         'tc_1',
         makeMockTool(),
         { input: 'test' },
-        cache,
-        new AbortController().signal,
-        '/tmp',
-        'msg_1',
-        'run_1',
-        makeMockLlm(),
+        makeMockCache(),
+        run,
       );
-      const emitter = makeMockEmitter();
 
-      const gen = toolCall.execute(emitter);
+      const gen = toolCall.execute();
       for await (const _ of gen) {
-        /* consume generator */
+        /* consume */
       }
 
-      expect(emitter.emitToolResult).toHaveBeenCalledWith(
+      const callEvent = events.find(e => e.type === 'tool_call');
+      expect(callEvent).toBeDefined();
+      expect(callEvent.callId).toBe('tc_1');
+      expect(callEvent.toolName).toBe('mock-tool');
+    });
+
+    it('should emit tool_result on successful execution', async () => {
+      const run = makeMockRun();
+      const events: any[] = [];
+      run.on('run:event', (e: any) => events.push(e));
+
+      const toolCall = new ToolCall(
         'tc_1',
-        'mock-tool',
-        expect.anything(),
+        makeMockTool(),
+        { input: 'test' },
+        makeMockCache(),
+        run,
       );
+
+      const gen = toolCall.execute();
+      for await (const _ of gen) {
+        /* consume */
+      }
+
+      const resultEvent = events.find(e => e.type === 'tool_result');
+      expect(resultEvent).toBeDefined();
       expect(toolCall.status).toBe('completed');
     });
 
@@ -169,45 +164,82 @@ describe('ToolCall', () => {
         }),
       } as unknown as Tool;
 
+      const run = makeMockRun();
+      const events: any[] = [];
+      run.on('run:event', (e: any) => events.push(e));
+
       const toolCall = new ToolCall(
         'tc_fail',
         failingTool,
         {},
         makeMockCache(),
-        new AbortController().signal,
-        '/tmp',
-        'msg_1',
-        'run_1',
-        makeMockLlm(),
+        run,
       );
-      const emitter = makeMockEmitter();
 
-      const gen = toolCall.execute(emitter);
+      const gen = toolCall.execute();
       for await (const _ of gen) {
-        /* consume generator */
+        /* consume */
       }
 
-      expect(emitter.emitToolError).toHaveBeenCalledWith(
-        'tc_fail',
-        'fail-tool',
-        'Tool crashed',
-      );
+      const errorEvent = events.find(e => e.type === 'tool_error');
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent.error).toBe('Tool crashed');
       expect(toolCall.status).toBe('failed');
+    });
+  });
+
+  describe('emitProgress delegation', () => {
+    it('should delegate emitProgress to run.emitToolProgress', () => {
+      const run = makeMockRun();
+      const events: any[] = [];
+      run.on('run:event', (e: any) => events.push(e));
+
+      const toolCall = new ToolCall(
+        'tc_prog',
+        makeMockTool(),
+        {},
+        makeMockCache(),
+        run,
+      );
+
+      toolCall.emitProgress({ status: 'working' });
+
+      expect(events[0].type).toBe('tool_progress');
+      expect(events[0].callId).toBe('tc_prog');
+      expect(events[0].data).toEqual({ status: 'working' });
+    });
+  });
+
+  describe('convenience getters from run', () => {
+    it('should delegate signal, workDir, messageId, runId, llm to run', () => {
+      const run = makeMockRun();
+      const toolCall = new ToolCall(
+        'tc_1',
+        makeMockTool(),
+        {},
+        makeMockCache(),
+        run,
+      );
+
+      expect(toolCall.signal).toBe(run.signal);
+      expect(toolCall.workDir).toBe(run.workDir);
+      expect(toolCall.messageId).toBe(run.messageId);
+      expect(toolCall.runId).toBe(run.runId);
+      expect(toolCall.llm).toBe(run.llm);
     });
   });
 
   describe('observation', () => {
     it('should return raw output for trusted tools', () => {
       const toolCall = createToolCall(makeMockTool({ untrustedOutput: false }));
-      // Manually complete to test observation
-      (toolCall as any).complete('raw output');
+      (toolCall as any).doComplete('raw output');
 
       expect(toolCall.observation).toBe('raw output');
     });
 
     it('should wrap output in untrusted_content tags for untrusted tools', () => {
       const toolCall = createToolCall(makeMockTool({ untrustedOutput: true }));
-      (toolCall as any).complete('external content');
+      (toolCall as any).doComplete('external content');
 
       expect(toolCall.observation).toContain('<untrusted_content>');
       expect(toolCall.observation).toContain('external content');
@@ -216,7 +248,7 @@ describe('ToolCall', () => {
 
     it('should return error message for failed status', () => {
       const toolCall = createToolCall();
-      (toolCall as any).fail('something went wrong');
+      (toolCall as any).doFail('something went wrong');
 
       expect(toolCall.observation).toContain('Error executing tool');
       expect(toolCall.observation).toContain('something went wrong');
@@ -224,7 +256,7 @@ describe('ToolCall', () => {
 
     it('should stringify non-string output', () => {
       const toolCall = createToolCall();
-      (toolCall as any).complete({ key: 'value' });
+      (toolCall as any).doComplete({ key: 'value' });
 
       expect(toolCall.observation).toBe(JSON.stringify({ key: 'value' }));
     });
@@ -238,13 +270,13 @@ describe('ToolCall', () => {
 
     it('should transition to completed', () => {
       const toolCall = createToolCall();
-      (toolCall as any).complete('output');
+      (toolCall as any).doComplete('output');
       expect(toolCall.status).toBe('completed');
     });
 
     it('should transition to failed', () => {
       const toolCall = createToolCall();
-      (toolCall as any).fail('error');
+      (toolCall as any).doFail('error');
       expect(toolCall.status).toBe('failed');
     });
   });
@@ -252,7 +284,7 @@ describe('ToolCall', () => {
   describe('toRecord', () => {
     it('should produce a ToolCallRecord snapshot', () => {
       const toolCall = createToolCall();
-      (toolCall as any).complete('output');
+      (toolCall as any).doComplete('output');
 
       const record = toolCall.toRecord();
       expect(record.callId).toBe('tc_1');

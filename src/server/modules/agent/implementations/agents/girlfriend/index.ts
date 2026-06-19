@@ -2,7 +2,7 @@ import { agent } from '@/server/decorator/core';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds, ToolIds } from '@/shared/constants';
 import type { AgentConfig } from '@/shared/types';
-import type { AgentEvent, StreamChunk } from '@/shared/types/events';
+import type { RunEvent } from '@/shared/types/events';
 import { Agent } from '@/server/modules/agent/domain/model/agent.base';
 import type { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
@@ -33,9 +33,7 @@ export default class GirlFriendAgent extends Agent {
     return createPrompt(this, super.systemPrompt);
   }
 
-  async *call(
-    run: AgentRun,
-  ): AsyncGenerator<AgentEvent | StreamChunk, void, void> {
+  async *call(run: AgentRun): AsyncGenerator<RunEvent, void, void> {
     const cfg = run.config.runtimeConfig as GirlFriendConfig;
     const messages = await run.buildContext();
 
@@ -50,7 +48,7 @@ export default class GirlFriendAgent extends Agent {
 
     let accumulatedContent = '';
     for await (const chunk of generator) {
-      yield run.appendContent(chunk);
+      yield run.emitTextChunk(chunk);
       accumulatedContent += chunk;
     }
 

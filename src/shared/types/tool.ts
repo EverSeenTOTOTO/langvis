@@ -1,4 +1,4 @@
-import type { AgentEvent } from './events';
+import type { RunEvent } from './events';
 
 /**
  * ToolCallTimeline - structured view of a single tool invocation
@@ -19,7 +19,7 @@ export type ToolCallTimeline = {
  * Build a tool call timeline from a list of agent events.
  * Pairs tool_call with tool_result/tool_error/tool_progress by callId.
  */
-export function buildToolTimeline(events: AgentEvent[]): ToolCallTimeline[] {
+export function buildToolTimeline(events: RunEvent[]): ToolCallTimeline[] {
   const toolCallsMap = new Map<string, ToolCallTimeline>();
   let pendingThought: string | undefined;
 

@@ -46,6 +46,11 @@ export type ChatPhase = 'waiting' | 'active' | 'canceling' | 'error' | 'done';
 export * from './tool';
 
 // ─── DDD 类型 ───
-export type { StreamChunk, ContextUsageMeta, SSEFrame } from './events';
+export type {
+  RunEvent,
+  EnrichedEvent,
+  ContextUsageMeta,
+  SSEFrame,
+} from './events';
 export type { RunStatus, AgentBinding, ConversationConfig } from './agent';
 export type { ToolCallRecord, RunSnapshot } from './render';

@@ -8,8 +8,8 @@ import { JSDOM } from 'jsdom';
 import TurndownService from 'turndown';
 import type { Browser } from 'playwright';
 import { chromium } from 'playwright';
-import type { ToolProgress } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { EnrichedEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { sanitizeHtml } from '@/server/utils/sanitizeHtml';
 import type { RenderMode, WebFetchInput, WebFetchOutput } from './config';
@@ -146,7 +146,7 @@ export default class WebFetchTool extends Tool<WebFetchOutput> {
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<ToolProgress, WebFetchOutput, void> {
+  ): AsyncGenerator<EnrichedEvent, WebFetchOutput, void> {
     toolCall.signal.throwIfAborted();
 
     const data = toolCall.input as unknown as WebFetchInput;
@@ -175,13 +175,10 @@ export default class WebFetchTool extends Tool<WebFetchOutput> {
         );
       }
 
-      yield {
-        type: 'tool_progress' as const,
-        data: {
-          message: `Rendered with headless browser`,
-          data: { render: 'browser', contentLength: markdown.length },
-        },
-      };
+      yield toolCall.emitProgress({
+        message: `Rendered with headless browser`,
+        data: { render: 'browser', contentLength: markdown.length },
+      });
 
       return this.formatOutput(article!, markdown, url, response_format);
     }
@@ -227,17 +224,14 @@ export default class WebFetchTool extends Tool<WebFetchOutput> {
             this.extractContent(browserHtml, url);
 
           if (browserArticle && browserMarkdown.length > markdown.length) {
-            yield {
-              type: 'tool_progress' as const,
+            yield toolCall.emitProgress({
+              message: `Content was sparse, re-rendered with headless browser`,
               data: {
-                message: `Content was sparse, re-rendered with headless browser`,
-                data: {
-                  render: 'auto → browser',
-                  fetchLength: markdown.length,
-                  browserLength: browserMarkdown.length,
-                },
+                render: 'auto → browser',
+                fetchLength: markdown.length,
+                browserLength: browserMarkdown.length,
               },
-            };
+            });
             return this.formatOutput(
               browserArticle,
               browserMarkdown,
