@@ -8,6 +8,8 @@
 export abstract class ExceptionBase extends Error {
   abstract readonly code: string;
   readonly correlationId?: string;
+  /** HTTP 状态码，由 api 装饰器读取。默认 500，子类按语义覆盖。 */
+  readonly statusCode: number = 500;
 
   constructor(message: string, correlationId?: string) {
     super(message);

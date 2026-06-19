@@ -10,7 +10,10 @@ import {
   ConversationActivated,
   extractBinding,
 } from '../../contracts';
-import { ConversationNotFoundError } from '../../domain/errors';
+import {
+  ConversationForbiddenError,
+  ConversationNotFoundError,
+} from '../../domain/errors';
 
 @commandHandler(ConversationActivateCommand)
 export class ConversationActivateHandler {
@@ -30,6 +33,9 @@ export class ConversationActivateHandler {
     const dbConversation = await this.convRepo.findById(conversationId);
     if (!dbConversation) {
       throw new ConversationNotFoundError(conversationId);
+    }
+    if (dbConversation.userId !== userId) {
+      throw new ConversationForbiddenError(conversationId, userId);
     }
 
     const binding = extractBinding(dbConversation);

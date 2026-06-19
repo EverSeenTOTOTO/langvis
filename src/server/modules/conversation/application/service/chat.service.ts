@@ -10,14 +10,9 @@ import {
   createActivationMessages,
   createTurnMessages,
 } from '../../domain/service/message-factory';
+import { ConversationNotActivatedError } from '../../domain/errors';
 import Logger from '@/server/utils/logger';
 
-/**
- * ChatService — Conversation BC 应用服务。
- *
- * 聚合根删除后只剩 Message CRUD + 跨 BC 组合查询。
- * session 生命周期 / SSE 桥 / run 跟踪归 SessionManager。
- */
 @singleton()
 export class ChatService {
   private readonly logger = Logger.child({ source: 'ChatService' });
@@ -50,6 +45,18 @@ export class ChatService {
     );
     const messages = createActivationMessages({ ...params, workDir });
     await this.messageRepo.batchCreate(params.conversationId, messages);
+  }
+
+  /**
+   * 前置条件：会话必须已激活（存在 SYSTEM 消息）。
+   * start 前调用 —— 不再静默激活，让调用方显式先 activate。
+   */
+  async assertActivated(conversationId: string): Promise<void> {
+    const messages =
+      await this.messageRepo.findByConversationId(conversationId);
+    if (!messages.some(m => m.role === Role.SYSTEM)) {
+      throw new ConversationNotActivatedError(conversationId);
+    }
   }
 
   async appendMessage(params: {

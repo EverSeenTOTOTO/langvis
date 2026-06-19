@@ -48,7 +48,8 @@ export const config: ToolConfig<
       model: {
         type: 'string',
         nullable: true,
-        description: 'Embedding model to use. Defaults to bge-m3',
+        description:
+          'Embedding model to use. Omit to fall back to the provider default embedding model.',
       },
       timeout: {
         type: 'number',

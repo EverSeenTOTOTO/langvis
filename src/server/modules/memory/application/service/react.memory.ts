@@ -1,4 +1,4 @@
-import type { LlmMessage } from '@/shared/types/entities';
+import type { LlmMessage, Message } from '@/shared/types/entities';
 import { Role } from '@/shared/entities/Message';
 import type { ReActStep } from '@/shared/types/render';
 import { BaseMemory } from '../../domain/model/base-memory';
@@ -14,7 +14,7 @@ export class ReActMemory extends BaseMemory {
   readonly windowSize: number;
 
   constructor(params: {
-    history: import('@/shared/types/entities').Message[];
+    history: Message[];
     systemPrompt?: string;
     contextSize: number;
     modelId: string;

@@ -1,4 +1,5 @@
 import { ValidationException } from '@/shared/dto/base';
+import { ExceptionBase } from '@/server/libs/exceptions/exception.base';
 import { getOwnPropertyNames } from '@/shared/utils';
 import { Express, NextFunction, Request, Response } from 'express';
 import multer from 'multer';
@@ -123,6 +124,13 @@ export default function <T extends Record<string, any>>(
               error: 'Validation failed',
               details: e.toJSON().errors,
             });
+          }
+
+          if (e instanceof ExceptionBase) {
+            req.log?.warn(`${e.code}: ${e.message}`);
+            return res
+              .status(e.statusCode)
+              .json({ error: e.message, code: e.code });
           }
 
           req.log?.error(e.stack || e.message);

@@ -4,8 +4,6 @@ import { generateId } from '@/shared/utils';
 
 /**
  * MessageFactory — 纯消息构建（无 repo 依赖）。
- *
- * 从 Chat 聚合根抽取的消息生命周期逻辑。聚合根删除后由 ChatService 调用。
  */
 
 export function createActivationMessages(params: {
