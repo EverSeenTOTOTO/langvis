@@ -1,26 +1,11 @@
 import type { ReActStep, PendingMessageSnapshot } from '@/shared/types/render';
-
-/**
- * AgentRun 运行事件的统一视图。
- * 省略 enrich 字段 (runId/seq/at)，只保留 PendingMessage 关心的字段。
- */
-export interface RunEvent {
-  type: string;
-  content?: string;
-  callId?: string;
-  toolName?: string;
-  toolArgs?: Record<string, unknown>;
-  output?: unknown;
-  error?: string;
-  reason?: string;
-  at: number;
-}
+import type { EnrichedEvent } from '@/shared/types/events';
 
 /**
  * PendingMessage — Conversation 聚合根内部实体。
  *
  * 职责：累积一条待定消息的 content 和 steps (ReActStep[])。
- * 通过 handleEvent() 消费 AgentRun 发布的事件来构建自身状态。
+ * 通过 handleEvent() 消费 AgentRun 发布的 RunEvent 来构建自身状态。
  *
  * - ChatAgent 场景：steps 为空，只累积 content
  * - ReActAgent 场景：逐步构建 ReActStep (thought + action + observation)
@@ -37,7 +22,7 @@ export class PendingMessage {
     this.messageId = messageId;
   }
 
-  handleEvent(event: RunEvent): void {
+  handleEvent(event: EnrichedEvent): void {
     if (this.terminated) return;
 
     switch (event.type) {
@@ -83,6 +68,11 @@ export class PendingMessage {
         this.content += event.content ?? '';
         break;
 
+      case 'tool_progress':
+        // Ephemeral — not persisted in steps.
+        // Will be stored in agent_runs table after BC separation.
+        break;
+
       case 'final':
         if (this.currentStep) this.finalizeCurrentStep(event.at);
         this.terminated = true;
@@ -99,6 +89,14 @@ export class PendingMessage {
         if (this.currentStep) this.finalizeCurrentStep(event.at);
         this.terminated = true;
         this.terminalStatus = 'cancelled';
+        break;
+
+      case 'start':
+        // Lifecycle marker — no content accumulation
+        break;
+
+      case 'context_usage':
+        // Usage report — not persisted in message
         break;
     }
   }

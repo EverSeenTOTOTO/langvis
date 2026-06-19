@@ -4,6 +4,7 @@ import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { EnrichedEvent } from '@/shared/types/events';
 
 export interface TextToSpeechInput {
   modelId?: string;
@@ -27,11 +28,7 @@ export default class TextToSpeechTool extends Tool<TextToSpeechOutput> {
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<
-    { type: 'tool_progress'; data: unknown },
-    TextToSpeechOutput,
-    void
-  > {
+  ): AsyncGenerator<EnrichedEvent, TextToSpeechOutput, void> {
     toolCall.signal.throwIfAborted();
 
     const params = toolCall.input as unknown as TextToSpeechInput;

@@ -1,14 +1,10 @@
-import type { AgentEvent } from '@/shared/types/events';
-import type { StreamChunk } from '@/shared/types/events';
-
 export type { RunStatus } from '@/shared/types/agent';
 
 /**
- * AgentRun.emit() 产出的 enriched event。
- * 在 AgentEvent / StreamChunk 基础上注入 seq + at。
- * 应用层再添加 messageId 构成 SSEFrame。
+ * EnrichedEvent — AgentRun 推送的富化事件。
+ *
+ * 继承自 shared/types/events.ts 中的 EnrichedEvent 定义，
+ * 此处仅 re-export，避免重复定义。
  */
-export type EnrichedEvent = (AgentEvent | StreamChunk) & {
-  seq: number;
-  at: number;
-};
+export type { EnrichedEvent } from '@/shared/types/events';
+export type { RunEvent } from '@/shared/types/events';

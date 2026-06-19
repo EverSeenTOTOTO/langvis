@@ -5,6 +5,7 @@ import type { ToolConfig } from '@/shared/types';
 import { wrapUntrusted } from '@/shared/utils';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { EnrichedEvent } from '@/shared/types/events';
 import { Prompt } from '@/server/modules/agent/domain/model/prompt';
 import type {
   DocumentMetadataExtractInput,
@@ -49,11 +50,7 @@ export default class DocumentMetadataExtractTool extends Tool<DocumentMetadataEx
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<
-    { type: 'tool_progress'; data: unknown },
-    DocumentMetadataExtractOutput,
-    void
-  > {
+  ): AsyncGenerator<EnrichedEvent, DocumentMetadataExtractOutput, void> {
     const data = toolCall.input as unknown as DocumentMetadataExtractInput;
     const { content, sourceUrl, sourceType } = data;
 
@@ -67,13 +64,10 @@ ${sourceUrl ? `Source URL: ${sourceUrl}\n` : ''}${sourceType ? `Source Type: ${s
 Document Content:
 ${wrapUntrusted(truncatedContent)}`;
 
-    yield {
-      type: 'tool_progress' as const,
-      data: {
-        message: `Analyzing document content (${Math.round(truncatedContent.length / 1024)}KB) via LLM...`,
-        data: { sourceUrl, sourceType },
-      },
-    };
+    yield toolCall.emitProgress({
+      message: `Analyzing document content (${Math.round(truncatedContent.length / 1024)}KB) via LLM...`,
+      data: { sourceUrl, sourceType },
+    });
 
     const responseContent = await toolCall.llm.chatContent(
       {
@@ -120,17 +114,14 @@ ${wrapUntrusted(truncatedContent)}`;
       metadata: parsed.metadata || {},
     };
 
-    yield {
-      type: 'tool_progress' as const,
+    yield toolCall.emitProgress({
+      message: `Extracted: "${output.title}" (${output.category})`,
       data: {
-        message: `Extracted: "${output.title}" (${output.category})`,
-        data: {
-          title: output.title,
-          category: output.category,
-          keywordCount: output.keywords.length,
-        },
+        title: output.title,
+        category: output.category,
+        keywordCount: output.keywords.length,
       },
-    };
+    });
 
     return output;
   }

@@ -6,7 +6,7 @@ import type { Message } from '@/shared/types/entities';
 import type { AgentConstructor } from '../../domain/model/agent.base';
 import type { Agent } from '../../domain/model/agent.base';
 import { AgentRun } from '../../domain/model/agent-run.entity';
-import { EffectiveConfig } from '../../domain/model/effective-config';
+import { RuntimeConfigVO } from '../../domain/model/runtime-config.vo';
 import { registerAgent } from '@/server/decorator/core';
 import { service } from '@/server/decorator/service';
 import { ToolService } from './tool.service';
@@ -155,7 +155,7 @@ export class AgentService {
       ? (this.providerService.getModel(modelId)?.contextSize ?? 128_000)
       : 128_000;
 
-    const effectiveConfig = EffectiveConfig.create(
+    const effectiveConfig = RuntimeConfigVO.create(
       agent.config,
       params.agentBinding,
       params.systemPrompt,

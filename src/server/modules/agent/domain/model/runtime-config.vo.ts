@@ -3,13 +3,13 @@ import { parse } from '@/server/utils/schemaValidator';
 import { ConfigValidationError } from '../errors';
 
 /**
- * EffectiveConfig — 运行时配置值对象。
+ * RuntimeConfigVO — 运行时配置值对象。
  *
  * AgentRun 创建时合并 AgentConfig + AgentBinding 的不可变快照。
  * 通过 create() 工厂方法封装验证规则，保证非法配置无法构造。
  */
 
-export interface EffectiveConfigProps {
+export interface RuntimeConfigVOProps {
   agentId: string;
   agentName: string;
   systemPrompt: string;
@@ -18,7 +18,7 @@ export interface EffectiveConfigProps {
   runtimeConfig: Record<string, unknown>;
 }
 
-export class EffectiveConfig {
+export class RuntimeConfigVO {
   readonly agentId: string;
   readonly agentName: string;
   readonly systemPrompt: string;
@@ -26,7 +26,7 @@ export class EffectiveConfig {
   readonly contextSize: number;
   readonly runtimeConfig: Record<string, unknown>;
 
-  private constructor(props: EffectiveConfigProps) {
+  private constructor(props: RuntimeConfigVOProps) {
     this.agentId = props.agentId;
     this.agentName = props.agentName;
     this.systemPrompt = props.systemPrompt;
@@ -42,7 +42,7 @@ export class EffectiveConfig {
     binding: AgentBinding,
     systemPrompt: string,
     contextSize: number,
-  ): EffectiveConfig {
+  ): RuntimeConfigVO {
     let runtimeConfig: Record<string, unknown>;
 
     try {
@@ -56,7 +56,7 @@ export class EffectiveConfig {
       );
     }
 
-    return new EffectiveConfig({
+    return new RuntimeConfigVO({
       agentId: binding.agentId,
       agentName: agentConfig.name,
       systemPrompt,

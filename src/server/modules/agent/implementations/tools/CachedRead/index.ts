@@ -5,9 +5,9 @@ import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
-import type { ToolProgress } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
+import type { EnrichedEvent } from '@/shared/types/events';
 
 export interface CachedReadInput {
   key: string;
@@ -29,7 +29,7 @@ export default class CachedReadTool extends Tool<CachedReadOutput> {
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<ToolProgress, CachedReadOutput, void> {
+  ): AsyncGenerator<EnrichedEvent, CachedReadOutput, void> {
     const readCacheInput = toolCall.input as unknown as CachedReadInput;
 
     const result = await this.cacheService.readFile(
@@ -40,9 +40,9 @@ export default class CachedReadTool extends Tool<CachedReadOutput> {
     );
 
     if (typeof result === 'string') {
-      yield { type: 'tool_progress' as const, data: { size: result.length } };
+      yield toolCall.emitProgress({ size: result.length });
     } else {
-      yield { type: 'tool_progress' as const, data: { type: 'object' } };
+      yield toolCall.emitProgress({ type: 'object' });
     }
 
     return result;

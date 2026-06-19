@@ -1,5 +1,5 @@
 import type { SSEFrame } from '@/shared/types/events';
-import type { RunEvent } from '../../domain/model/pending-message';
+import type { EnrichedEvent } from '@/shared/types/events';
 import type { ChatPhase } from '@/shared/types';
 import type { Transport } from '@/shared/transport';
 import { inject, singleton } from 'tsyringe';
@@ -190,7 +190,7 @@ export class SessionManager {
   processRunEvent(
     conversationId: string,
     messageId: string,
-    event: RunEvent,
+    event: EnrichedEvent,
   ): void {
     const chat = this.convService.getChat(conversationId);
     if (!chat) return;

@@ -5,7 +5,7 @@ import type { Logger } from '@/server/utils/logger';
 import { AgentIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { AgentConfig } from '@/shared/types';
-import type { AgentEvent, StreamChunk } from '@/shared/types/events';
+import type { RunEvent } from '@/shared/types/events';
 import { isEmpty } from 'lodash-es';
 import { inject } from 'tsyringe';
 import { Agent } from '@/server/modules/agent/domain/model/agent.base';
@@ -74,9 +74,7 @@ export default class ReActAgent extends Agent {
     return prompt;
   }
 
-  async *call(
-    run: AgentRun,
-  ): AsyncGenerator<AgentEvent | StreamChunk, void, void> {
+  async *call(run: AgentRun): AsyncGenerator<RunEvent, void, void> {
     const cfg = run.config.runtimeConfig as ReActAgentConfig;
     const messages = await run.buildContext();
     const iterMessages = this.buildIterMessages(messages);
@@ -126,9 +124,9 @@ export default class ReActAgent extends Agent {
 
       if ('final_answer' in parsed) {
         if (parsed.thought) {
-          yield run.recordThought(parsed.thought);
+          yield run.emitThought(parsed.thought);
         }
-        yield run.appendContent(parsed.final_answer!);
+        yield run.emitTextChunk(parsed.final_answer!);
         return;
       }
 
@@ -136,7 +134,7 @@ export default class ReActAgent extends Agent {
         const { tool, input } = parsed.action!;
 
         if (parsed.thought) {
-          yield run.recordThought(parsed.thought);
+          yield run.emitThought(parsed.thought);
         }
 
         const observation = yield* run.executeTool(tool, input);

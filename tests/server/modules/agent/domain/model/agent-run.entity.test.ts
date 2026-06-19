@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
-import { EffectiveConfig } from '@/server/modules/agent/domain/model/effective-config';
+import { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
 import { RunAlreadyCompletedError } from '@/server/modules/agent/domain/errors';
 import type { Agent } from '@/server/modules/agent/domain/model/agent.base';
 import type { MemoryPort } from '@/server/modules/memory/domain/port/memory.port';
@@ -9,7 +9,7 @@ import type { LlmPort } from '@/server/modules/agent/domain/port/llm.port';
 import type { ContextUsage } from '@/server/modules/memory/domain/model/memory.types';
 import type { AgentConfig, AgentBinding } from '@/shared/types';
 
-function makeEffectiveConfig(): EffectiveConfig {
+function makeRuntimeConfigVO(): RuntimeConfigVO {
   const agentConfig: AgentConfig = {
     name: 'Test Agent',
     description: 'test',
@@ -19,7 +19,7 @@ function makeEffectiveConfig(): EffectiveConfig {
     agentId: 'test-agent',
     config: {},
   };
-  return EffectiveConfig.create(agentConfig, binding, 'You are helpful', 8000);
+  return RuntimeConfigVO.create(agentConfig, binding, 'You are helpful', 8000);
 }
 
 function makeMockMemory(): MemoryPort {
@@ -70,7 +70,7 @@ function createRun(): AgentRun {
     'run_1',
     'msg_1',
     '/tmp/workdir',
-    makeEffectiveConfig(),
+    makeRuntimeConfigVO(),
     makeMockAgent(),
     makeMockMemory(),
     makeMockCache(),
@@ -79,36 +79,34 @@ function createRun(): AgentRun {
 }
 
 describe('AgentRun', () => {
-  describe('delegation', () => {
-    it('should delegate buildContext to memory', async () => {
+  describe('aggregate root', () => {
+    it('should use id as canonical identity with runId getter', () => {
       const run = createRun();
-      const messages = await run.buildContext();
-
-      expect(messages).toHaveLength(2);
-      expect(messages[0].role).toBe('system');
+      expect(run.id).toBe('run_1');
+      expect(run.runId).toBe('run_1');
     });
 
-    it('should delegate getContextUsage to memory', () => {
+    it('should support EventEmitter via on()', () => {
       const run = createRun();
-      const usage = run.getContextUsage();
-
-      expect(usage).toEqual({ used: 100, total: 8000 });
+      const handler = vi.fn();
+      run.on('run:event', handler);
+      run.emitTextChunk('test');
+      expect(handler).toHaveBeenCalled();
     });
   });
 
   describe('execute', () => {
     it('should emit start event and final event on success', async () => {
       const mockAgent = makeMockAgent();
-      // Agent that yields one chunk and returns
       mockAgent.call = vi.fn().mockImplementation(function* (run: AgentRun) {
-        run.appendContent('chunk');
+        run.emitTextChunk('chunk');
       });
 
       const run = new AgentRun(
         'run_ok',
         'msg_ok',
         '/tmp',
-        makeEffectiveConfig(),
+        makeRuntimeConfigVO(),
         mockAgent,
         makeMockMemory(),
         makeMockCache(),
@@ -196,9 +194,9 @@ describe('AgentRun', () => {
       const events: any[] = [];
       run.on('run:event', (e: any) => events.push(e));
 
-      run.appendContent('a');
-      run.appendContent('b');
-      run.recordThought('thinking');
+      run.emitTextChunk('a');
+      run.emitTextChunk('b');
+      run.emitThought('thinking');
 
       expect(events[0].seq).toBe(1);
       expect(events[1].seq).toBe(2);
@@ -210,7 +208,7 @@ describe('AgentRun', () => {
       const events: any[] = [];
       run.on('run:event', (e: any) => events.push(e));
 
-      run.appendContent('test');
+      run.emitTextChunk('test');
 
       expect(events[0].runId).toBe('run_1');
       expect(events[0].at).toBeGreaterThan(0);

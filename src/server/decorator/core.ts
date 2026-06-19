@@ -112,7 +112,7 @@ export const registerAgent = async <T>(
         );
       }
 
-      // Config validation happens at EffectiveConfig.create() time, not here
+      // Config validation happens at RuntimeConfigVO.create() time, not here
     },
     { frequency: 'Once' },
   );

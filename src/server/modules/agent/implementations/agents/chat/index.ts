@@ -2,7 +2,7 @@ import { agent } from '@/server/decorator/core';
 import type { Logger } from '@/server/utils/logger';
 import { AgentIds } from '@/shared/constants';
 import type { AgentConfig } from '@/shared/types';
-import type { AgentEvent, StreamChunk } from '@/shared/types/events';
+import type { RunEvent } from '@/shared/types/events';
 import chalk from 'chalk';
 import { Agent } from '@/server/modules/agent/domain/model/agent.base';
 import type { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
@@ -32,9 +32,7 @@ export default class ChatAgent extends Agent {
     );
   }
 
-  async *call(
-    run: AgentRun,
-  ): AsyncGenerator<AgentEvent | StreamChunk, void, void> {
+  async *call(run: AgentRun): AsyncGenerator<RunEvent, void, void> {
     const cfg = run.config.runtimeConfig as ChatAgentConfig;
     const messages = await run.buildContext();
 
@@ -54,7 +52,7 @@ export default class ChatAgent extends Agent {
     );
 
     for await (const chunk of generator) {
-      yield run.appendContent(chunk);
+      yield run.emitTextChunk(chunk);
     }
   }
 }

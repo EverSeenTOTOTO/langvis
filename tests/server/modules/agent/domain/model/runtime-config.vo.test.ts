@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { EffectiveConfig } from '@/server/modules/agent/domain/model/effective-config';
+import { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
 import { ConfigValidationError } from '@/server/modules/agent/domain/errors';
 import type { AgentConfig, AgentBinding } from '@/shared/types';
 
-describe('EffectiveConfig', () => {
+describe('RuntimeConfigVO', () => {
   const simpleAgentConfig: AgentConfig = {
     name: 'Test Agent',
     description: 'A test agent',
@@ -17,7 +17,7 @@ describe('EffectiveConfig', () => {
 
   describe('create', () => {
     it('should merge agentConfig + binding into immutable snapshot', () => {
-      const config = EffectiveConfig.create(
+      const config = RuntimeConfigVO.create(
         simpleAgentConfig,
         binding,
         'You are helpful',
@@ -54,7 +54,7 @@ describe('EffectiveConfig', () => {
         config: { temperature: 0.5 },
       };
 
-      const config = EffectiveConfig.create(
+      const config = RuntimeConfigVO.create(
         agentConfigWithSchema,
         validBinding,
         'prompt',
@@ -80,11 +80,11 @@ describe('EffectiveConfig', () => {
 
       const invalidBinding: AgentBinding = {
         agentId: 'schema-agent',
-        config: { temperature: 5 }, // exceeds maximum
+        config: { temperature: 5 },
       };
 
       expect(() =>
-        EffectiveConfig.create(
+        RuntimeConfigVO.create(
           agentConfigWithSchema,
           invalidBinding,
           'prompt',
@@ -94,20 +94,19 @@ describe('EffectiveConfig', () => {
     });
 
     it('should shallow-copy config when no configSchema present', () => {
-      const config = EffectiveConfig.create(
+      const config = RuntimeConfigVO.create(
         simpleAgentConfig,
         binding,
         'prompt',
         4000,
       );
 
-      // runtimeConfig is a copy, not the original binding.config
       expect(config.runtimeConfig).not.toBe(binding.config);
       expect(config.runtimeConfig).toEqual(binding.config);
     });
 
     it('should produce frozen object', () => {
-      const config = EffectiveConfig.create(
+      const config = RuntimeConfigVO.create(
         simpleAgentConfig,
         binding,
         'prompt',
@@ -124,7 +123,7 @@ describe('EffectiveConfig', () => {
         description: 'No tools',
       };
 
-      const config = EffectiveConfig.create(
+      const config = RuntimeConfigVO.create(
         noToolsConfig,
         binding,
         'prompt',

@@ -7,7 +7,7 @@ import { DuplicateRunError } from '../errors';
 import { AggregateRoot, createDomainEvent } from '@/server/libs/ddd';
 import logger from '@/server/utils/logger';
 import { PendingMessage } from './pending-message';
-import type { RunEvent } from './pending-message';
+import type { EnrichedEvent } from '@/shared/types/events';
 
 /**
  * Conversation — 会话聚合根。
@@ -80,7 +80,7 @@ export class Chat extends AggregateRoot<string> {
     }
   }
 
-  handleRunEvent(messageId: string, event: RunEvent): void {
+  handleRunEvent(messageId: string, event: EnrichedEvent): void {
     this.activeTurns.get(messageId)?.handleEvent(event);
   }
 

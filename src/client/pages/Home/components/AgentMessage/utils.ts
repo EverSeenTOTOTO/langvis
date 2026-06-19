@@ -4,7 +4,7 @@
  * Pure functions for event processing, tool block building, etc.
  */
 
-import type { AgentEvent } from '@/shared/types/events';
+import type { RunEvent } from '@/shared/types/events';
 import type { UIToolCall } from '@/client/store/modules/message-node';
 
 // === Types ===
@@ -13,7 +13,7 @@ export interface ProgressData {
   status?: string;
   message?: string;
   schema?: Record<string, unknown>;
-  event?: AgentEvent;
+  event?: RunEvent;
   [key: string]: unknown;
 }
 

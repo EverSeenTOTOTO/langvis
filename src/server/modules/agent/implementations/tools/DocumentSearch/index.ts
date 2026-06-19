@@ -5,6 +5,7 @@ import type { ToolConfig } from '@/shared/types';
 import { container, inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { EnrichedEvent } from '@/shared/types/events';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import type EmbeddingGenerateTool from '../EmbeddingGenerate';
 import type { DocumentSearchInput, DocumentSearchOutput } from './config';
@@ -22,22 +23,15 @@ export default class DocumentSearchTool extends Tool<DocumentSearchOutput> {
 
   async *call(
     toolCall: ToolCall,
-  ): AsyncGenerator<
-    { type: 'tool_progress'; data: unknown },
-    DocumentSearchOutput,
-    void
-  > {
+  ): AsyncGenerator<EnrichedEvent, DocumentSearchOutput, void> {
     const data = toolCall.input as unknown as DocumentSearchInput;
     const { query, limit = 10, threshold } = data;
 
     // 1. Generate embedding for query
-    yield {
-      type: 'tool_progress' as const,
-      data: {
-        message: `Generating embedding for query: "${query.slice(0, 50)}${query.length > 50 ? '...' : ''}"`,
-        data: { queryLength: query.length },
-      },
-    };
+    yield toolCall.emitProgress({
+      message: `Generating embedding for query: "${query.slice(0, 50)}${query.length > 50 ? '...' : ''}"`,
+      data: { queryLength: query.length },
+    });
 
     const embedTool = container.resolve<EmbeddingGenerateTool>(
       ToolIds.EMBEDDING_GENERATE,
@@ -52,13 +46,10 @@ export default class DocumentSearchTool extends Tool<DocumentSearchOutput> {
     // 2. Vector similarity search using pgvector
     const vectorStr = `[${queryVector.join(',')}]`;
 
-    yield {
-      type: 'tool_progress' as const,
-      data: {
-        message: `Searching vector database for top ${limit} similar chunks...`,
-        data: { limit, threshold },
-      },
-    };
+    yield toolCall.emitProgress({
+      message: `Searching vector database for top ${limit} similar chunks...`,
+      data: { limit, threshold },
+    });
 
     const rawQuery = `
       SELECT
@@ -96,16 +87,13 @@ export default class DocumentSearchTool extends Tool<DocumentSearchOutput> {
       `Found ${results.length} results for query: "${query.slice(0, 50)}..."`,
     );
 
-    yield {
-      type: 'tool_progress' as const,
+    yield toolCall.emitProgress({
+      message: `Found ${results.length} relevant chunks from ${new Set(results.map((r: (typeof results)[0]) => r.document.id)).size} documents`,
       data: {
-        message: `Found ${results.length} relevant chunks from ${new Set(results.map((r: (typeof results)[0]) => r.document.id)).size} documents`,
-        data: {
-          resultCount: results.length,
-          topSimilarity: results[0]?.similarity?.toFixed(3),
-        },
+        resultCount: results.length,
+        topSimilarity: results[0]?.similarity?.toFixed(3),
       },
-    };
+    });
 
     return { results };
   }
