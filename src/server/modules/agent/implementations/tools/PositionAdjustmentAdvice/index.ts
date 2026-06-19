@@ -5,7 +5,7 @@ import type { ToolConfig } from '@/shared/types';
 import { container } from 'tsyringe';
 import { wrapUntrusted } from '@/shared/utils';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import { Prompt } from '@/server/modules/agent/domain/model/prompt';
 import AskUserTool from '../AskUser';
 import type { PositionAdjustmentAdviceOutput } from './config';
@@ -16,20 +16,20 @@ export default class PositionAdjustmentAdviceTool extends Tool<PositionAdjustmen
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  async *call(toolCall: ToolCall) {
-    toolCall.signal.throwIfAborted();
+  async *call(ctx: ToolCallContext) {
+    ctx.signal.throwIfAborted();
 
     const humanInputTool = container.resolve<AskUserTool>(ToolIds.ASK_USER);
 
     const { formSchema } = await import('./config');
 
-    const originalInput = toolCall.input;
-    toolCall.input = {
-      message: '请填写以下仓位调整信息：',
-      formSchema: formSchema as any,
-    };
-    const humanInput = yield* humanInputTool.call(toolCall);
-    toolCall.input = originalInput;
+    const humanInput = yield* humanInputTool.call({
+      ...ctx,
+      input: {
+        message: '请填写以下仓位调整信息：',
+        formSchema: formSchema as any,
+      },
+    });
 
     if (!humanInput.submitted || !humanInput.data) {
       return {
@@ -42,7 +42,7 @@ export default class PositionAdjustmentAdviceTool extends Tool<PositionAdjustmen
 
     this.logger.info('持仓信息已收集，提交模型分析中：', formData);
 
-    const advice = yield* this.generateAdvice(formData, toolCall);
+    const advice = yield* this.generateAdvice(formData, ctx);
 
     return {
       submitted: true,
@@ -52,7 +52,7 @@ export default class PositionAdjustmentAdviceTool extends Tool<PositionAdjustmen
 
   private async *generateAdvice(
     formData: Record<string, any>,
-    toolCall: ToolCall,
+    ctx: ToolCallContext,
   ) {
     const systemPrompt = Prompt.empty()
       .with(
@@ -84,11 +84,7 @@ export default class PositionAdjustmentAdviceTool extends Tool<PositionAdjustmen
       { role: 'user' as const, content: userPrompt },
     ];
 
-    return await toolCall.llm.chatContent(
-      { messages },
-      toolCall.signal,
-      this.logger,
-    );
+    return await ctx.llm.chatContent({ messages }, ctx.signal, this.logger);
   }
 
   private buildAdvicePrompt(formData: Record<string, any>): string {

@@ -1,6 +1,7 @@
 import type { RunEvent } from '@/shared/types/events';
 import type { CachePort } from '../port/cache.port';
 import type { LlmPort } from '../port/llm.port';
+import type { ToolCallContext } from '../port/tool-call-context.port';
 import { Entity } from '@/server/libs/ddd';
 import type { Tool } from './tool.base';
 
@@ -17,9 +18,6 @@ export interface ToolCallDeps {
   runId: string;
   llm: LlmPort;
   cache: CachePort;
-  /** 工具执行元数据：极少数工具（AskUser）用它做 Redis key 关联。
-   *  不进入 AgentRunContext / AgentRun，仅由 executeTool 闭包注入。 */
-  messageId: string;
 }
 
 export class ToolCall extends Entity<string> {
@@ -37,9 +35,6 @@ export class ToolCall extends Entity<string> {
   }
   get runId(): string {
     return this.deps.runId;
-  }
-  get messageId(): string {
-    return this.deps.messageId;
   }
   get llm(): LlmPort {
     return this.deps.llm;
@@ -70,11 +65,6 @@ export class ToolCall extends Entity<string> {
     this.startedAt = Date.now();
   }
 
-  /** 进度事件（瞬时）—— yield 原始 RunEvent */
-  emitProgress(data: unknown): RunEvent {
-    return { type: 'tool_progress', callId: this.id, data };
-  }
-
   async *execute(): AsyncGenerator<RunEvent, string, void> {
     this.input = (await this.cache.resolve(
       this.runId,
@@ -89,7 +79,15 @@ export class ToolCall extends Entity<string> {
     };
 
     try {
-      const output = yield* this.tool.call(this);
+      const ctx: ToolCallContext = {
+        callId: this.id,
+        input: this.input,
+        signal: this.deps.signal,
+        workDir: this.deps.workDir,
+        llm: this.deps.llm,
+        runId: this.deps.runId,
+      };
+      const output = yield* this.tool.call(ctx);
 
       const compressed = await this.cache.compress(
         this.runId,
@@ -97,7 +95,7 @@ export class ToolCall extends Entity<string> {
         this.tool.config?.compression as 'skip' | 'file' | undefined,
       );
 
-      this.doComplete(compressed);
+      this.complete(compressed);
       yield {
         type: 'tool_result',
         callId: this.id,
@@ -106,7 +104,7 @@ export class ToolCall extends Entity<string> {
       };
     } catch (error) {
       const errMsg = (error as Error)?.message ?? String(error);
-      this.doFail(errMsg);
+      this.fail(errMsg);
       yield {
         type: 'tool_error',
         callId: this.id,
@@ -140,13 +138,13 @@ export class ToolCall extends Entity<string> {
     return this.#status;
   }
 
-  private doComplete(output: unknown): void {
+  private complete(output: unknown): void {
     this.#status = 'completed';
     this.#output = output;
     this.#completedAt = Date.now();
   }
 
-  private doFail(error: string): void {
+  private fail(error: string): void {
     this.#status = 'failed';
     this.#error = error;
     this.#completedAt = Date.now();

@@ -8,7 +8,7 @@ import { JSDOM } from 'jsdom';
 import TurndownService from 'turndown';
 import type { Browser } from 'playwright';
 import { chromium } from 'playwright';
-import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { sanitizeHtml } from '@/server/utils/sanitizeHtml';
@@ -145,11 +145,11 @@ export default class WebFetchTool extends Tool<WebFetchOutput> {
   }
 
   async *call(
-    toolCall: ToolCall,
+    ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, WebFetchOutput, void> {
-    toolCall.signal.throwIfAborted();
+    ctx.signal.throwIfAborted();
 
-    const data = toolCall.input as unknown as WebFetchInput;
+    const data = ctx.input as unknown as WebFetchInput;
     const {
       url,
       timeout = 30000,
@@ -162,11 +162,7 @@ export default class WebFetchTool extends Tool<WebFetchOutput> {
 
     // Direct browser mode: skip fetch entirely
     if (renderMode === 'browser') {
-      const html = await this.fetchWithPlaywright(
-        url,
-        timeout,
-        toolCall.signal,
-      );
+      const html = await this.fetchWithPlaywright(url, timeout, ctx.signal);
       const { article, markdown } = this.extractContent(html, url);
 
       if (!article) {
@@ -175,10 +171,14 @@ export default class WebFetchTool extends Tool<WebFetchOutput> {
         );
       }
 
-      yield toolCall.emitProgress({
-        message: `Rendered with headless browser`,
-        data: { render: 'browser', contentLength: markdown.length },
-      });
+      yield {
+        type: 'tool_progress',
+        callId: ctx.callId,
+        data: {
+          message: `Rendered with headless browser`,
+          data: { render: 'browser', contentLength: markdown.length },
+        },
+      };
 
       return this.formatOutput(article!, markdown, url, response_format);
     }
@@ -187,11 +187,11 @@ export default class WebFetchTool extends Tool<WebFetchOutput> {
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= retry; attempt++) {
-      toolCall.signal.throwIfAborted();
+      ctx.signal.throwIfAborted();
 
       const [controller, cleanup] = createTimeoutController(
         timeout,
-        toolCall.signal,
+        ctx.signal,
       );
 
       try {
@@ -218,20 +218,24 @@ export default class WebFetchTool extends Tool<WebFetchOutput> {
           const browserHtml = await this.fetchWithPlaywright(
             url,
             timeout,
-            toolCall.signal,
+            ctx.signal,
           );
           const { article: browserArticle, markdown: browserMarkdown } =
             this.extractContent(browserHtml, url);
 
           if (browserArticle && browserMarkdown.length > markdown.length) {
-            yield toolCall.emitProgress({
-              message: `Content was sparse, re-rendered with headless browser`,
+            yield {
+              type: 'tool_progress',
+              callId: ctx.callId,
               data: {
-                render: 'auto → browser',
-                fetchLength: markdown.length,
-                browserLength: browserMarkdown.length,
+                message: `Content was sparse, re-rendered with headless browser`,
+                data: {
+                  render: 'auto → browser',
+                  fetchLength: markdown.length,
+                  browserLength: browserMarkdown.length,
+                },
               },
-            });
+            };
             return this.formatOutput(
               browserArticle,
               browserMarkdown,
@@ -294,17 +298,5 @@ export default class WebFetchTool extends Tool<WebFetchOutput> {
       this.browser = null;
       this.logger.info('Playwright browser closed');
     }
-  }
-
-  override summarizeArgs(args: Record<string, unknown>): string {
-    const url = typeof args.url === 'string' ? args.url : '';
-    return `(${url})`;
-  }
-
-  override summarizeOutput(output: unknown): string {
-    const result = output as WebFetchOutput | undefined;
-    if (!result) return '完成';
-    const length = result.content?.length ?? 0;
-    return `获取 ${length} 字符`;
   }
 }

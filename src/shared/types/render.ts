@@ -8,10 +8,7 @@ import type { RunStatus } from './agent';
 
 /**
  * 工具调用记录 — 从 tool_result / tool_error 事件投影而来。
- *
- * 与 ToolCallTimeline 的区别：
- * - 无 pending 状态（记录只在工具完成时追加）
- * - 实时投影写入，不需要 buildToolTimeline() 重建
+ * 仅在工具完成时追加（无 pending 状态）。
  */
 export type ToolCallRecord = {
   callId: string;

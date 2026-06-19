@@ -4,16 +4,6 @@ import { RunAlreadyCompletedError } from '../errors';
 import { AggregateRoot } from '@/server/libs/ddd';
 import type { RunStatus } from '@/shared/types/agent';
 
-/**
- * AgentRun — 纯聚合根。
- *
- * 只做一件事：追加事实 (RunEvent) 并维护生命周期 status。
- * 不持有 agent / memory / cache / llm / emitter —— 执行编排归 AgentRunExecutor，
- * 传输归 SSE 桥，投影归 projectRun。聚合根只记录"发生了什么"。
- *
- * 事件以 EnrichedEvent 形式存储（seq/at 在 append 时注入），
- * 保证事件流有序、可溯源，投影可随时重算。
- */
 export class AgentRun extends AggregateRoot<string> {
   readonly agentId: string;
   readonly config: RuntimeConfigVO;
@@ -22,6 +12,7 @@ export class AgentRun extends AggregateRoot<string> {
   private events: EnrichedEvent[] = [];
   #terminated = false;
   private seq = 0;
+  private readonly abortController = new AbortController();
 
   get runId(): string {
     return this.id;
@@ -35,6 +26,10 @@ export class AgentRun extends AggregateRoot<string> {
   /** 唯一暴露事件流的方式 —— 给投影/持久化用 */
   get eventStream(): readonly EnrichedEvent[] {
     return this.events;
+  }
+  /** 取消句柄 —— agent/tool 经 AgentRunContext.signal 读取 */
+  get signal(): AbortSignal {
+    return this.abortController.signal;
   }
 
   constructor(runId: string, agentId: string, config: RuntimeConfigVO) {
@@ -74,6 +69,7 @@ export class AgentRun extends AggregateRoot<string> {
 
   cancel(reason: string): EnrichedEvent | null {
     if (this.#terminated) return null;
+    this.abortController.abort(reason);
     this.#terminated = true;
     this.status = 'cancelled';
     return this.record({ type: 'cancelled', reason });

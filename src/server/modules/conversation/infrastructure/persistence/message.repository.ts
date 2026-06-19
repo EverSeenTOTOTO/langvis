@@ -46,6 +46,11 @@ export class MessageRepository implements MessageRepositoryPort {
     });
   }
 
+  async findById(messageId: string): Promise<Message | null> {
+    const repo = this.db.getRepository(MessageEntity);
+    return await repo.findOneBy({ id: messageId });
+  }
+
   async findByConversationId(conversationId: string): Promise<Message[]> {
     const repo = this.db.getRepository(MessageEntity);
     return await repo.find({

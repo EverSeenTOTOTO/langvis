@@ -5,7 +5,7 @@ import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
-import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { RunEvent } from '@/shared/types/events';
 
@@ -28,28 +28,31 @@ export default class CachedReadTool extends Tool<CachedReadOutput> {
   }
 
   async *call(
-    toolCall: ToolCall,
+    ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, CachedReadOutput, void> {
-    const readCacheInput = toolCall.input as unknown as CachedReadInput;
+    const readCacheInput = ctx.input as unknown as CachedReadInput;
 
     const result = await this.cacheService.readFile(
-      toolCall.workDir,
+      ctx.workDir,
       readCacheInput.key,
       readCacheInput.offset,
       readCacheInput.limit,
     );
 
     if (typeof result === 'string') {
-      yield toolCall.emitProgress({ size: result.length });
+      yield {
+        type: 'tool_progress',
+        callId: ctx.callId,
+        data: { size: result.length },
+      };
     } else {
-      yield toolCall.emitProgress({ type: 'object' });
+      yield {
+        type: 'tool_progress',
+        callId: ctx.callId,
+        data: { type: 'object' },
+      };
     }
 
     return result;
-  }
-
-  override summarizeArgs(args: Record<string, unknown>): string {
-    const key = typeof args.key === 'string' ? args.key : '';
-    return `(${key})`;
   }
 }

@@ -17,7 +17,6 @@ export abstract class Agent {
     return Prompt.empty();
   }
 
-  /** yield 原始 RunEvent —— 事实由 AgentRunExecutor append 进 AgentRun */
   abstract call(ctx: AgentRunContext): AsyncGenerator<RunEvent, void, void>;
 }
 

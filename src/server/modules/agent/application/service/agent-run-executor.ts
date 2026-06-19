@@ -21,21 +21,8 @@ import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { CACHE_SERVICE } from '@/server/modules/agent/agent.di-tokens';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 
-/**
- * AgentRunExecutor — 执行编排（application service）。
- *
- * 吸收旧 AgentRun 聚合根上的全部 god 职责：
- *  - 解析依赖（agent / memory / llm / cache）
- *  - 拥有 AbortController（取消控制）
- *  - 富化事件（注入 runId/seq/at）
- *  - 驱动 agent.call(ctx)，把 yield 的事实 append 进 run + yield 给传输
- *
- * 聚合根（AgentRun）只记录事实，投影（projectRun）只读，传输（SSE 桥）只推。
- */
 @singleton()
 export class AgentRunExecutor {
-  private readonly abortControllers = new Map<string, AbortController>();
-
   constructor(
     @inject(LlmProvider) private readonly llmProvider: LlmProvider,
     @inject(MemoryFactory) private readonly memoryFactory: MemoryFactory,
@@ -45,7 +32,6 @@ export class AgentRunExecutor {
 
   createRun(params: {
     runId: string;
-    messageId: string;
     workDir: string;
     agentBinding: AgentBinding;
     systemPrompt: string;
@@ -81,8 +67,6 @@ export class AgentRunExecutor {
     });
 
     const llm = new LlmAdapter(this.llmProvider, modelId);
-    const signal = this.acquireSignal(run.runId);
-    const messageId = params.messageId;
 
     const ctx: AgentRunContext = {
       run,
@@ -90,26 +74,23 @@ export class AgentRunExecutor {
       agentId: params.agentBinding.agentId,
       runId: run.runId,
       workDir: params.workDir,
-      signal,
+      signal: run.signal,
       llm,
       cache: this.cacheService,
-      buildContext: () => memory.buildContext(),
-      contextUsage: () => memory.getContextUsage(),
+      memory,
       executeTool: (toolName, args) =>
         this.executeTool(toolName, args, {
-          signal,
+          signal: run.signal,
           workDir: params.workDir,
           runId: run.runId,
           llm,
           cache: this.cacheService,
-          messageId,
         }),
     };
 
     return { run, ctx };
   }
 
-  /** 驱动 agent.call，append 事实 + yield 富化事件给传输 */
   async *execute(
     run: AgentRun,
     ctx: AgentRunContext,
@@ -124,7 +105,7 @@ export class AgentRunExecutor {
       }
 
       if (!run.isTerminated) {
-        const { used, total } = ctx.contextUsage();
+        const { used, total } = ctx.memory.getContextUsage();
         const usage = run.append({
           type: 'context_usage',
           used,
@@ -137,14 +118,11 @@ export class AgentRunExecutor {
     } catch (err) {
       if (ctx.signal.aborted || run.isTerminated) return;
       yield run.fail((err as Error)?.message ?? String(err));
-    } finally {
-      this.releaseSignal(run.runId);
     }
   }
 
-  /** 取消：abort + 记录 cancelled 事件，返回富化事件供调用方推送 SSE */
+  /** 取消：run.cancel 原子地 abort + 记录 cancelled 事件，返回富化事件供调用方推送 SSE */
   cancel(run: AgentRun, reason: string): EnrichedEvent | null {
-    this.abortControllers.get(run.runId)?.abort(reason);
     return run.cancel(reason);
   }
 
@@ -169,15 +147,5 @@ export class AgentRunExecutor {
     );
 
     return toolCall.execute();
-  }
-
-  private acquireSignal(runId: string): AbortSignal {
-    const controller = new AbortController();
-    this.abortControllers.set(runId, controller);
-    return controller.signal;
-  }
-
-  private releaseSignal(runId: string): void {
-    this.abortControllers.delete(runId);
   }
 }

@@ -17,6 +17,8 @@ export interface MessageRepositoryPort {
 
   findLastAssistantMessage(conversationId: string): Promise<Message | null>;
 
+  findById(messageId: string): Promise<Message | null>;
+
   findByConversationId(conversationId: string): Promise<Message[]>;
 
   save(message: Message): Promise<Message>;

@@ -3,7 +3,7 @@ import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 
 export interface TextToSpeechInput {
@@ -27,21 +27,17 @@ export default class TextToSpeechTool extends Tool<TextToSpeechOutput> {
   protected readonly logger!: Logger;
 
   async *call(
-    toolCall: ToolCall,
+    ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, TextToSpeechOutput, void> {
-    toolCall.signal.throwIfAborted();
+    ctx.signal.throwIfAborted();
 
-    const params = toolCall.input as unknown as TextToSpeechInput;
+    const params = ctx.input as unknown as TextToSpeechInput;
 
     this.logger.info(
       `Processing TTS request: ${params.reqId}, voice: ${params.voice}, text_length: ${params.text.length}`,
     );
 
-    const result = await toolCall.llm.tts(
-      params.modelId,
-      params,
-      toolCall.signal,
-    );
+    const result = await ctx.llm.tts(params.modelId, params, ctx.signal);
 
     this.logger.info(
       `TTS completed successfully: ${params.reqId}, file: ${result.filePath}`,

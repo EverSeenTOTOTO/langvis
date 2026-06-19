@@ -3,7 +3,7 @@ import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import type { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 
 export interface SpeechToTextInput {
   modelId?: string;
@@ -28,21 +28,17 @@ export default class SpeechToTextTool extends Tool<SpeechToTextOutput> {
   protected readonly logger!: Logger;
 
   async *call(
-    toolCall: ToolCall,
+    ctx: ToolCallContext,
   ): AsyncGenerator<never, SpeechToTextOutput, void> {
-    toolCall.signal.throwIfAborted();
+    ctx.signal.throwIfAborted();
 
-    const params = toolCall.input as unknown as SpeechToTextInput;
+    const params = ctx.input as unknown as SpeechToTextInput;
 
     this.logger.info(
       `Processing STT request: ${params.filePath}, language: ${params.language || 'auto'}`,
     );
 
-    const result = await toolCall.llm.stt(
-      params.modelId,
-      params,
-      toolCall.signal,
-    );
+    const result = await ctx.llm.stt(params.modelId, params, ctx.signal);
 
     this.logger.info(
       `STT completed: language=${result.language}, text_length=${result.text.length}`,

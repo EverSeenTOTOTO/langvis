@@ -35,7 +35,7 @@ export default class GirlFriendAgent extends Agent {
 
   async *call(ctx: AgentRunContext): AsyncGenerator<RunEvent, void, void> {
     const cfg = ctx.config.runtimeConfig as GirlFriendConfig;
-    const messages = await ctx.buildContext();
+    const messages = await ctx.memory.buildContext();
 
     const generator = ctx.llm.chat(
       {

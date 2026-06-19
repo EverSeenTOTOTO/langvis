@@ -10,6 +10,7 @@ function makeMockMessageRepo(): MessageRepositoryPort {
     batchCreate: vi.fn().mockResolvedValue([]),
     findByConversationId: vi.fn().mockResolvedValue([]),
     findLastAssistantMessage: vi.fn().mockResolvedValue(null),
+    findById: vi.fn().mockResolvedValue(null),
     save: vi.fn().mockResolvedValue({} as any),
     batchDeleteInConversation: vi.fn().mockResolvedValue(undefined),
     update: vi.fn().mockResolvedValue(null),
