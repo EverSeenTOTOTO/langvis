@@ -1,6 +1,7 @@
 import { Express, Request, Response, NextFunction } from 'express';
 import { container } from 'tsyringe';
-import { AuthService } from '@/server/libs/infrastructure/auth.service';
+import { AUTH_PORT } from '@/server/modules/user/user.di-tokens';
+import type { AuthPort } from '@/server/modules/user/domain/port/auth.port';
 import { TraceContext } from '@/server/middleware/trace-context';
 
 declare global {
@@ -22,7 +23,7 @@ const EXEMPT_PATH_PREFIXES = [
 ];
 
 export default async (app: Express) => {
-  const authService = container.resolve<AuthService>(AuthService);
+  const authPort = container.resolve<AuthPort>(AUTH_PORT);
 
   app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
     if (EXEMPT_PATH_PREFIXES.some(prefix => req.path.startsWith(prefix))) {
@@ -30,10 +31,10 @@ export default async (app: Express) => {
     }
 
     try {
-      const isAuthenticated = await authService.isAuthenticated(req);
+      const isAuthenticated = await authPort.isAuthenticated(req);
 
       if (isAuthenticated) {
-        const user = await authService.getUser(req);
+        const user = await authPort.getUser(req);
         req.user = user;
 
         // Update TraceContext with userId

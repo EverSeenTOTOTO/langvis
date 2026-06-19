@@ -1,34 +1,15 @@
 import { SubmitHumanInputRequestDto } from '@/shared/dto/controller';
-import { RedisKeys } from '@/shared/constants';
 import { api } from '@/server/decorator/api';
 import { controller } from '@/server/decorator/controller';
 import { body, param, response } from '@/server/decorator/param';
 import type { Response } from 'express';
 import { inject } from 'tsyringe';
-import { RedisService } from '@/server/libs/infrastructure/redis.service';
-
-// Lua script for atomic check-and-set
-// Returns: 1 if success, 0 if already submitted, -1 if not found
-const SUBMIT_LUA_SCRIPT = `
-local key = KEYS[1]
-local data = redis.call('GET', key)
-if not data then
-  return {-1, ''}
-end
-local pending = cjson.decode(data)
-if pending.submitted then
-  return {0, ''}
-end
-pending.submitted = true
-pending.result = cjson.decode(ARGV[1])
-redis.call('SET', key, cjson.encode(pending))
-redis.call('PUBLISH', key, 'submitted')
-return {1, cjson.encode(pending)}
-`;
+import { HUMAN_INPUT_PORT } from '@/server/modules/conversation/conversation.di-tokens';
+import type { HumanInputPort } from '@/server/modules/conversation/domain/port/human-input.port';
 
 @controller('/api/human-input')
 export default class HumanInputController {
-  constructor(@inject(RedisService) private redisService: RedisService) {}
+  constructor(@inject(HUMAN_INPUT_PORT) private humanInput: HumanInputPort) {}
 
   @api('/:messageId', { method: 'post' })
   async submitInput(
@@ -36,24 +17,16 @@ export default class HumanInputController {
     @body() dto: SubmitHumanInputRequestDto,
     @response() res: Response,
   ) {
-    const key = RedisKeys.HUMAN_INPUT(messageId);
+    const result = await this.humanInput.submit(messageId, dto.data);
 
-    // Use Lua script for atomic check-and-set
-    const result = (await this.redisService.client.eval(SUBMIT_LUA_SCRIPT, {
-      keys: [key],
-      arguments: [JSON.stringify(dto.data)],
-    })) as [number, string];
-
-    const [code] = result;
-
-    if (code === -1) {
+    if (result === 'not_found') {
       return res.status(404).json({
         success: false,
         error: 'Request not found or expired',
       });
     }
 
-    if (code === 0) {
+    if (result === 'already_submitted') {
       return res.status(400).json({
         success: false,
         error: 'Request already submitted',
@@ -68,22 +41,17 @@ export default class HumanInputController {
     @param('messageId') messageId: string,
     @response() res: Response,
   ) {
-    const key = RedisKeys.HUMAN_INPUT(messageId);
-    const pending = await this.redisService.get<{
-      submitted: boolean;
-      message: string;
-      formSchema: unknown;
-    }>(key);
+    const status = await this.humanInput.getStatus(messageId);
 
-    if (!pending) {
+    if (!status) {
       return res.json({ exists: false });
     }
 
     return res.json({
-      exists: true,
-      submitted: pending.submitted,
-      message: pending.message,
-      schema: pending.formSchema,
+      exists: status.exists,
+      submitted: status.submitted,
+      message: status.message,
+      schema: status.schema,
     });
   }
 }
