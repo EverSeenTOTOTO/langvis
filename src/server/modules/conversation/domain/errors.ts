@@ -55,3 +55,13 @@ export class SessionNotFoundError extends ExceptionBase {
     super(`No active session for conversation ${conversationId}`);
   }
 }
+
+export class AgentImmutableError extends ExceptionBase {
+  readonly code = 'AGENT_IMMUTABLE';
+  readonly statusCode = 409;
+  constructor(conversationId: string) {
+    super(
+      `Agent of conversation ${conversationId} is immutable after creation`,
+    );
+  }
+}

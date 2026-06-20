@@ -6,6 +6,7 @@ export enum ToolIds {
   SPEECH_TO_TEXT = 'speech_to_text',
   WEB_FETCH = 'web_fetch',
   ASK_USER = 'ask_user',
+  RESPONSE_USER = 'response_user',
   DOCUMENT_SEARCH = 'document_search',
   LINKS_EXTRACT = 'links_extract',
   CACHED_READ = 'cached_read',

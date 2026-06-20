@@ -24,6 +24,19 @@ export class CancelChatCommand extends Command {
   }
 }
 
+export class ConversationUpdateCommand extends Command {
+  constructor(
+    readonly conversationId: string,
+    readonly userId: string,
+    readonly name: string,
+    readonly config?: Record<string, any> | null,
+    readonly groupId?: string | null,
+    readonly groupName?: string | null,
+  ) {
+    super();
+  }
+}
+
 export class StartChatCommand extends Command {
   constructor(
     readonly conversationId: string,

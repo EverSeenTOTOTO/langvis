@@ -2,11 +2,10 @@ import { agent } from '@/server/decorator/core';
 import { SkillService } from '@/server/modules/agent/application/service/skill.service';
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import type { Logger } from '@/server/utils/logger';
-import { AgentIds } from '@/shared/constants';
+import { AgentIds, ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { AgentConfig } from '@/shared/types';
 import type { RunEvent } from '@/shared/types/events';
-import { isEmpty } from 'lodash-es';
 import { inject } from 'tsyringe';
 import { Agent } from '@/server/modules/agent/domain/model/agent.base';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
@@ -16,20 +15,9 @@ import { createPrompt } from './prompt';
 
 type ReActAction = {
   thought?: string;
-  action: {
-    tool: string;
-    input: Record<string, unknown>;
-  };
+  tool: string;
+  input: Record<string, unknown>;
 };
-
-type ReActObservation = {
-  observation: string;
-};
-
-type ReActStep =
-  | ReActAction
-  | ReActObservation
-  | { thought?: string; final_answer: string };
 
 interface ReActAgentConfig {
   model?: {
@@ -101,13 +89,9 @@ export default class ReActAgent extends Agent {
         content,
       });
 
-      let parsed: Partial<ReActStep> = {};
+      let parsed: ReActAction;
       try {
         parsed = this.parseResponse(content);
-
-        if (isEmpty(parsed)) {
-          throw new Error('Parsed response is empty');
-        }
       } catch (error) {
         const observation = `Error parsing response: ${(error as Error)?.message ?? String(error)}`;
 
@@ -121,35 +105,22 @@ export default class ReActAgent extends Agent {
 
       this.logger.info('ReAct parsed response: ', parsed);
 
-      if ('final_answer' in parsed) {
-        if (parsed.thought) {
-          yield { type: 'thought', content: parsed.thought };
-        }
-        yield { type: 'text_chunk', content: parsed.final_answer! };
+      const { tool, input } = parsed;
+
+      if (parsed.thought) {
+        yield { type: 'thought', content: parsed.thought };
+      }
+
+      const observation = yield* ctx.executeTool(tool, input);
+
+      // response_user 是终态工具（交付最终结果后结束本轮）。
+      if (tool === ToolIds.RESPONSE_USER) {
         return;
       }
 
-      if ('action' in parsed) {
-        const { tool, input } = parsed.action!;
-
-        if (parsed.thought) {
-          yield { type: 'thought', content: parsed.thought };
-        }
-
-        const observation = yield* ctx.executeTool(tool, input);
-
-        iterMessages.push({
-          role: Role.USER,
-          content: `Observation: ${observation}\n`,
-        });
-
-        continue;
-      }
-
-      const observation = `Unable to parse response: ${content}. Retrying (${i}/${this.maxIterations})...\n`;
       iterMessages.push({
         role: Role.USER,
-        content: `Observation: ${observation}`,
+        content: `Observation: ${observation}\n`,
       });
     }
 
@@ -164,14 +135,18 @@ export default class ReActAgent extends Agent {
         return { role: msg.role as 'user' | 'system', content: msg.content };
       }
 
+      // 历史回复重建为扁平的 response_user 调用，保持与当前输出格式一致。
       return {
         role: 'assistant' as const,
-        content: JSON.stringify({ final_answer: msg.content }),
+        content: JSON.stringify({
+          tool: ToolIds.RESPONSE_USER,
+          input: { message: msg.content },
+        }),
       };
     });
   }
 
-  private parseResponse(content: string): ReActStep {
+  private parseResponse(content: string): ReActAction {
     const cleanedContent = content
       .trim()
       .replace(/^```json\s*/, '')
@@ -179,32 +154,21 @@ export default class ReActAgent extends Agent {
 
     const parsed = JSON.parse(cleanedContent);
 
-    if (parsed.action) {
-      if (
-        typeof parsed.action === 'object' &&
-        parsed.action !== null &&
-        typeof parsed.action.tool === 'string' &&
-        parsed.action.tool.length > 0 &&
-        parsed.action.input
-      ) {
-        return {
-          thought: parsed.thought ? String(parsed.thought) : undefined,
-          action: parsed.action,
-        };
-      }
-
-      throw new Error('Invalid action format: missing or invalid tool/input');
-    }
-
-    if (parsed.final_answer) {
+    if (
+      typeof parsed.tool === 'string' &&
+      parsed.tool.length > 0 &&
+      parsed.input &&
+      typeof parsed.input === 'object'
+    ) {
       return {
         thought: parsed.thought ? String(parsed.thought) : undefined,
-        final_answer: String(parsed.final_answer),
+        tool: parsed.tool,
+        input: parsed.input,
       };
     }
 
     throw new Error(
-      'Unrecognized JSON structure: missing `action` or `final_answer`',
+      'Invalid response: missing or invalid top-level `tool`/`input`',
     );
   }
 }
