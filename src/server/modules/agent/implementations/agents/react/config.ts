@@ -8,6 +8,7 @@ export const config: AgentConfig = {
     'An agent that uses the ReAct strategy to interact with tools and provide answers based on reasoning and actions.',
   tools: [
     ToolIds.ASK_USER,
+    ToolIds.RESPONSE_USER,
     ToolIds.CACHED_READ,
     ToolIds.SKILL_CALL,
     ToolIds.LIST_TOOLS,
