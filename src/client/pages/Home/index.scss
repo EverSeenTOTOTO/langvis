@@ -115,7 +115,7 @@
       flex: 1;
       padding-block-end: 12px;
       padding-inline: 16px;
-      overflow-y: auto;
+      overflow: hidden auto;
       scroll-padding-bottom: calc(var(--chat-input-height, 60px) + 12px);
 
       .ant-bubble {
