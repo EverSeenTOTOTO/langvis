@@ -161,10 +161,13 @@ export class MessageNode {
    */
   applySnapshot(snapshot: PendingMessageSnapshot): void {
     this.content = snapshot.content;
-    this.status = snapshot.status as RunStatus;
+    this.status = (snapshot.status as RunStatus) ?? 'running';
     this.steps = snapshot.steps;
     this.toolCalls = this.stepsToToolCalls(this.steps);
     this.thoughts = this.stepsToThoughts(this.steps);
+    // Restore an in-flight ask_user prompt so the confirmation form survives
+    // a reconnect while the run is blocked awaiting input.
+    this._awaitingInputData = snapshot.awaitingInput ?? null;
   }
 
   // ════════════════════════════════════════
@@ -223,7 +226,9 @@ export class MessageNode {
         callId: s.action!.callId,
         toolName: s.action!.toolName,
         toolArgs: s.action!.toolArgs,
-        status: 'completed' as const,
+        // A step without completedAt is still in flight (e.g. a tool awaiting
+        // input) — show it as pending so the reconnect view matches the live one.
+        status: s.completedAt ? 'completed' : 'pending',
         progress: [],
         output: s.observation,
         startedAt: s.startedAt,
@@ -232,7 +237,10 @@ export class MessageNode {
   }
 
   private stepsToThoughts(steps: ReActStep[]): string[] {
-    return steps.map(s => s.thought);
+    // Drop empty thoughts — a thoughtless step (tool_call with no preceding
+    // thought) contributes no thought; matches the live path, which only
+    // pushes a thought when a thought event actually arrives.
+    return steps.map(s => s.thought).filter(t => t.length > 0);
   }
 
   private extractAwaitingInput(frame: SSEFrame): void {

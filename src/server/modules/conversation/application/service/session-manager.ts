@@ -110,6 +110,8 @@ export class SessionManager {
         messageId,
         content: view.content,
         steps: view.steps,
+        status: view.status,
+        awaitingInput: view.awaitingInput,
       } as SSEFrame);
       this.logger.info(
         `Replayed snapshot: ${view.content.length} chars, ${view.steps.length} steps`,

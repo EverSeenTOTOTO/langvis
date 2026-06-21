@@ -40,6 +40,77 @@ describe('projectRun', () => {
     expect(view.steps[0].observation).toBe('Page content');
   });
 
+  it('folds a tool_call with no preceding thought into its own step', () => {
+    const view = projectRun([
+      ev({
+        type: 'tool_call',
+        callId: 'tc_1',
+        toolName: 'Bash',
+        toolArgs: { command: 'ls' },
+      }),
+      ev({
+        type: 'tool_result',
+        callId: 'tc_1',
+        toolName: 'Bash',
+        output: 'file1.txt',
+      }),
+    ]);
+    expect(view.steps).toHaveLength(1);
+    expect(view.steps[0].thought).toBe('');
+    expect(view.steps[0].action?.toolName).toBe('Bash');
+    expect(view.steps[0].observation).toBe('file1.txt');
+  });
+
+  it('reports awaitingInput while a tool is blocked on awaiting_input', () => {
+    const view = projectRun([
+      ev({
+        type: 'tool_call',
+        callId: 'tc_1',
+        toolName: 'Bash',
+        toolArgs: { command: 'date' },
+      }),
+      ev({
+        type: 'tool_progress',
+        callId: 'tc_1',
+        data: {
+          status: 'awaiting_input',
+          message: 'confirm?',
+          schema: { type: 'object' },
+        },
+      }),
+    ]);
+    expect(view.awaitingInput).not.toBeNull();
+    expect(view.awaitingInput?.callId).toBe('tc_1');
+    expect(view.awaitingInput?.message).toBe('confirm?');
+    // The open (un-finalized) tool_call is still in-flight — it must appear as
+    // a pending step so the reconnect snapshot renders it.
+    expect(view.steps).toHaveLength(1);
+    expect(view.steps[0].action?.toolName).toBe('Bash');
+    expect(view.steps[0].completedAt).toBeUndefined();
+  });
+
+  it('clears awaitingInput once the awaiting tool resolves', () => {
+    const view = projectRun([
+      ev({ type: 'tool_call', callId: 'tc_1', toolName: 'Bash', toolArgs: {} }),
+      ev({
+        type: 'tool_progress',
+        callId: 'tc_1',
+        data: {
+          status: 'awaiting_input',
+          message: 'confirm?',
+          schema: { type: 'object' },
+        },
+      }),
+      ev({
+        type: 'tool_result',
+        callId: 'tc_1',
+        toolName: 'Bash',
+        output: 'done',
+      }),
+    ]);
+    expect(view.awaitingInput).toBeNull();
+  });
+
   it('folds multiple ReAct steps', () => {
     const view = projectRun([
       ev({ type: 'thought', content: 'Step 1' }),
