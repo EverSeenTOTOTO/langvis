@@ -77,11 +77,14 @@ export class ChatStore {
     conversationId: string,
     msg: Message,
   ): MessageNode {
-    let nodes = this.messageNodes.get(conversationId);
-    if (!nodes) {
-      nodes = new Map();
-      this.messageNodes.set(conversationId, nodes);
+    if (!this.messageNodes.has(conversationId)) {
+      this.messageNodes.set(conversationId, new Map());
     }
+    // Re-read from the observable map: makeAutoObservable deep-converts the
+    // nested Map on insert, so the stored value is a proxy distinct from the
+    // `new Map()` we just created. All reads/writes must target that proxy,
+    // or getMessageNode (which reads via this.messageNodes.get) won't see them.
+    const nodes = this.messageNodes.get(conversationId)!;
 
     let node = nodes.get(msg.id);
     if (!node) {
