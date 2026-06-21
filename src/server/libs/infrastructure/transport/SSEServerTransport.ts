@@ -5,6 +5,7 @@ import logger from '@/server/utils/logger';
 
 export class SSEServerTransport extends Transport<SSEFrame> {
   private closed = false;
+  private disconnected = false;
 
   constructor(
     req: Request,
@@ -22,18 +23,24 @@ export class SSEServerTransport extends Transport<SSEFrame> {
     this.send({ type: 'connected' });
 
     req.on('close', () => {
-      this.emit('disconnect');
+      this.markDisconnect();
     });
 
     req.on('error', err => {
       const isNormalClose =
         err.message === 'aborted' || (err as any).code === 'ECONNRESET';
       if (isNormalClose) {
-        this.emit('disconnect');
+        this.markDisconnect();
       } else {
         this.emit('error', err.message);
       }
     });
+  }
+
+  private markDisconnect(): void {
+    if (this.disconnected) return;
+    this.disconnected = true;
+    this.emit('disconnect');
   }
 
   connect(): Promise<void> {
