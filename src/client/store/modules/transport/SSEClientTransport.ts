@@ -2,17 +2,26 @@ import { Transport } from '@/shared/transport';
 import type { SSEFrame } from '@/shared/types/events';
 import { isClient } from '@/shared/utils';
 import { getPrefetchPath } from '../../../decorator/api';
+import { makeObservable, observable, computed } from 'mobx';
 
 const CONNECTION_TIMEOUT_MS = 30_000;
 
+type ConnectionState = 'connecting' | 'connected' | 'closed';
+
 export class SSEClientTransport extends Transport<SSEFrame> {
   private eventSource: EventSource | null = null;
+  connectionState: ConnectionState = 'connecting';
 
   constructor(
     private url: string,
     private options?: { withCredentials?: boolean },
   ) {
     super();
+    makeObservable(this, {
+      connectionState: observable,
+      isConnecting: computed,
+      isConnected: computed,
+    });
   }
 
   connect(): Promise<void> {
@@ -27,10 +36,12 @@ export class SSEClientTransport extends Transport<SSEFrame> {
       });
 
       this.eventSource = eventSource;
+      this.connectionState = 'connecting';
 
       const timeout = setTimeout(() => {
         eventSource.close();
         this.eventSource = null;
+        this.connectionState = 'closed';
         reject(new Error('SSE connection timeout'));
       }, CONNECTION_TIMEOUT_MS);
 
@@ -38,6 +49,7 @@ export class SSEClientTransport extends Transport<SSEFrame> {
         clearTimeout(timeout);
         eventSource.close();
         this.eventSource = null;
+        this.connectionState = 'closed';
         this.emit('disconnect');
       });
 
@@ -48,6 +60,7 @@ export class SSEClientTransport extends Transport<SSEFrame> {
           const frame: SSEFrame = JSON.parse(event.data);
 
           if (frame.type === 'connected') {
+            this.connectionState = 'connected';
             resolve();
             return;
           }
@@ -55,6 +68,7 @@ export class SSEClientTransport extends Transport<SSEFrame> {
           if (frame.type === 'session_replaced') {
             eventSource.close();
             this.eventSource = null;
+            this.connectionState = 'closed';
             this.emit('disconnect');
             return;
           }
@@ -62,6 +76,7 @@ export class SSEClientTransport extends Transport<SSEFrame> {
           if (frame.type === 'session_error') {
             eventSource.close();
             this.eventSource = null;
+            this.connectionState = 'closed';
             this.emit('error', frame.error);
             return;
           }
@@ -82,6 +97,7 @@ export class SSEClientTransport extends Transport<SSEFrame> {
   disconnect(): void {
     this.eventSource?.close();
     this.eventSource = null;
+    this.connectionState = 'closed';
   }
 
   close(): void {
@@ -89,10 +105,10 @@ export class SSEClientTransport extends Transport<SSEFrame> {
   }
 
   get isConnecting(): boolean {
-    return this.eventSource?.readyState === EventSource.CONNECTING;
+    return this.connectionState === 'connecting';
   }
 
   get isConnected(): boolean {
-    return this.eventSource?.readyState === EventSource.OPEN;
+    return this.connectionState === 'connected';
   }
 }
