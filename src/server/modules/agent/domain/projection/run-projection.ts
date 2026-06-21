@@ -1,4 +1,4 @@
-import type { ReActStep } from '@/shared/types/render';
+import type { ReActStep, AwaitingInputProjection } from '@/shared/types/render';
 import type { EnrichedEvent } from '@/shared/types/events';
 
 /**
@@ -14,12 +14,16 @@ export interface RunView {
   content: string;
   steps: ReActStep[];
   status: 'running' | 'completed' | 'failed' | 'cancelled';
+  /** Non-null while the run is blocked on an ask_user / awaiting_input prompt
+   * (the last awaiting tool_progress not yet resolved by a tool_result). */
+  awaitingInput: AwaitingInputProjection | null;
 }
 
 export function projectRun(events: readonly EnrichedEvent[]): RunView {
   let content = '';
   const steps: ReActStep[] = [];
   let currentStep: ReActStep | null = null;
+  let awaitingInput: AwaitingInputProjection | null = null;
 
   let status: RunView['status'] = 'running';
 
@@ -42,16 +46,22 @@ export function projectRun(events: readonly EnrichedEvent[]): RunView {
         break;
 
       case 'tool_call':
-        if (currentStep) {
-          currentStep.action = {
-            callId: event.callId!,
-            toolName: event.toolName!,
-            toolArgs: event.toolArgs ?? {},
-          };
+        // thought is optional in the flat ReAct format ({ thought?, tool, input }),
+        // so a tool_call may arrive without a preceding thought — start a step
+        // here so the action/observation isn't dropped from the projection.
+        if (!currentStep) {
+          currentStep = { thought: '', startedAt: event.at };
         }
+        currentStep.action = {
+          callId: event.callId!,
+          toolName: event.toolName!,
+          toolArgs: event.toolArgs ?? {},
+        };
         break;
 
       case 'tool_result':
+        // A result resolves any pending awaiting_input prompt.
+        awaitingInput = null;
         if (currentStep) {
           currentStep.observation =
             typeof event.output === 'string'
@@ -62,6 +72,7 @@ export function projectRun(events: readonly EnrichedEvent[]): RunView {
         break;
 
       case 'tool_error':
+        awaitingInput = null;
         if (currentStep) {
           currentStep.observation = `Error: ${event.error}`;
           finalizeCurrentStep(event.at);
@@ -72,9 +83,26 @@ export function projectRun(events: readonly EnrichedEvent[]): RunView {
         content += event.content ?? '';
         break;
 
-      case 'tool_progress':
-        // Ephemeral — not part of the steps projection.
+      case 'tool_progress': {
+        // Ephemeral — not part of the steps projection, but an awaiting_input
+        // prompt marks the run as blocked until the user submits (used to
+        // restore the confirmation form on reconnect).
+        const data = event.data as
+          | {
+              status?: string;
+              message?: string;
+              schema?: Record<string, unknown>;
+            }
+          | undefined;
+        if (data?.status === 'awaiting_input' && data.schema) {
+          awaitingInput = {
+            callId: event.callId!,
+            message: data.message ?? 'Please provide input',
+            schema: data.schema,
+          };
+        }
         break;
+      }
 
       case 'final':
         finalizeCurrentStep(event.at);
@@ -98,5 +126,12 @@ export function projectRun(events: readonly EnrichedEvent[]): RunView {
     }
   }
 
-  return { content, steps, status };
+  // An open step (e.g. a tool_call whose result hasn't arrived — including one
+  // blocked on awaiting_input) is in-flight; include it so a running run
+  // exposes its pending tool call in the projection (snapshot / historical read).
+  if (currentStep) {
+    steps.push(currentStep);
+  }
+
+  return { content, steps, status, awaitingInput };
 }

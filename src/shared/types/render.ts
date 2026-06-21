@@ -23,6 +23,16 @@ export type ToolCallRecord = {
 };
 
 /**
+ * ask_user / awaiting_input 提示的投影 —— run 阻塞等待用户输入时非空。
+ * 断线重连时随 state_snapshot 下发，前端据以恢复确认表单。
+ */
+export interface AwaitingInputProjection {
+  callId: string;
+  message: string;
+  schema: Record<string, unknown>;
+}
+
+/**
  * ReAct 推理步骤 — 将 thought + action + observation 绑定为一个原子单元。
  * ChatAgent 场景下 steps 为空，仅累积 content。
  */
@@ -47,6 +57,8 @@ export interface PendingMessageSnapshot {
   content: string;
   steps: ReActStep[];
   status: 'running' | 'completed' | 'failed' | 'cancelled';
+  /** Restored on reconnect when the run is blocked on an ask_user prompt. */
+  awaitingInput?: AwaitingInputProjection | null;
 }
 
 /**

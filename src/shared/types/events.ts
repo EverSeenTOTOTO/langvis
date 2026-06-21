@@ -12,6 +12,9 @@
  * 以及 SSE 通道自身的控制帧。
  */
 
+import { RunStatus } from './agent';
+import { AwaitingInputProjection, ReActStep } from './render';
+
 // ─── 领域事件 ───
 
 /**
@@ -93,5 +96,7 @@ export type SSEFrame =
       type: 'state_snapshot';
       messageId: string;
       content: string;
-      steps: import('./render').ReActStep[];
+      steps: ReActStep[];
+      status: RunStatus;
+      awaitingInput: AwaitingInputProjection | null;
     };
