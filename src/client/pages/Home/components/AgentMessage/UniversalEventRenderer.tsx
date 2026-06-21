@@ -3,6 +3,7 @@ import type { MessageNode } from '@/client/store/modules/message-node';
 import type { UIToolCall } from '@/client/store/modules/message-node';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Collapse, Typography } from 'antd';
+import { observer } from 'mobx-react-lite';
 import { useEffect, useState } from 'react';
 import { SkillCallBlock } from './SkillCallBlock';
 import { StandaloneThoughtBlock, ToolBlockItem } from './ToolBlockItem';
@@ -17,7 +18,11 @@ export interface UniversalEventRendererProps {
  * Universal event renderer that supports recursive rendering of nested agent calls.
  * Can be used by any Agent renderer that needs event timeline visualization.
  */
-export function UniversalEventRenderer({
+// observer(): this component reads node observables (toolCalls, thoughts,
+// shouldExpandDetails, and crucially `awaitingInput`) that AssistantMessage
+// does NOT read — so it must subscribe independently, or changes to
+// `_awaitingInputData` (set on a tool_progress frame) won't re-render it.
+export const UniversalEventRenderer = observer(function UniversalEventRenderer({
   node,
   customToolRender,
 }: UniversalEventRendererProps): React.ReactElement | null {
@@ -93,6 +98,7 @@ export function UniversalEventRenderer({
       />
       {node.awaitingInput && (
         <HumanInputForm
+          key={node.awaitingInput.callId}
           messageId={node.id}
           conversationId={node.conversationId}
           message={node.awaitingInput.message}
@@ -101,4 +107,4 @@ export function UniversalEventRenderer({
       )}
     </>
   );
-}
+});

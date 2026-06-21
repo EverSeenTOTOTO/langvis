@@ -18,6 +18,10 @@ export type UIToolCall = {
 };
 
 export type AwaitingInputData = {
+  /** callId of the tool_progress frame — used as React key so a new ask_user
+   * in the same turn remounts HumanInputForm (re-running its status check),
+   * instead of reusing the stale submitted=true state of the prior prompt. */
+  callId: string;
   message: string;
   schema: Record<string, unknown>;
 };
@@ -246,20 +250,23 @@ export class MessageNode {
     if (data?.status === 'agent_event' && data.event) {
       const nested = this.doExtractAwaitingInput(data.event);
       if (nested) {
-        this._awaitingInputData = nested;
+        this._awaitingInputData = { ...nested, callId: frame.callId };
         return;
       }
     }
 
     if (data?.status === 'awaiting_input' && data.schema) {
       this._awaitingInputData = {
+        callId: frame.callId,
         message: data.message ?? 'Please provide input',
         schema: data.schema,
       };
     }
   }
 
-  private doExtractAwaitingInput(event: unknown): AwaitingInputData | null {
+  private doExtractAwaitingInput(
+    event: unknown,
+  ): Omit<AwaitingInputData, 'callId'> | null {
     const e = event as {
       type: string;
       data?: {
