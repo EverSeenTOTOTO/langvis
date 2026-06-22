@@ -1,6 +1,8 @@
+import { Prompt } from '../../../domain/model/prompt';
+
 export const createPrompt = (
   _agent: Record<string, unknown>,
-  parentPrompt: import('@/server/modules/agent/domain/model/prompt').Prompt,
+  parentPrompt: Prompt,
 ) =>
   parentPrompt.with(
     'Role',

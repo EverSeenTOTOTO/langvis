@@ -372,4 +372,45 @@ describe('SchemaField', () => {
       );
     },
   );
+
+  it(
+    'hides an object field when a peer boolean is false (model.multimodal → upload)',
+    { timeout },
+    async () => {
+      const user = userEvent.setup();
+      render(
+        <Form>
+          {/* driver: model.multimodal as a toggle (default false) */}
+          <SchemaField
+            name={['model', 'multimodal']}
+            prop={{ type: 'boolean', default: false }}
+          />
+          {/* upload object hidden unless model.multimodal is true */}
+          <SchemaField
+            name="upload"
+            prop={{
+              type: 'object',
+              title: 'Upload',
+              properties: { maxSize: { type: 'number' } },
+              reactions: [
+                {
+                  when: { field: 'model.multimodal', op: 'eq', value: false },
+                  set: { visible: false },
+                },
+              ],
+            }}
+          />
+        </Form>,
+      );
+
+      // model.multimodal=false → upload hidden
+      expect(screen.queryByText('Upload')).toBeNull();
+
+      // flip multimodal on → upload renders
+      await user.click(screen.getByRole('switch'));
+      await waitFor(() =>
+        expect(screen.getByText('Upload')).toBeInTheDocument(),
+      );
+    },
+  );
 });

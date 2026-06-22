@@ -75,6 +75,16 @@ function normalizeEnumItems(items: readonly EnumItem[]): {
   });
 }
 
+/** Read a nested value out of a plain form-values object by NamePath. Used by the
+ * reactive branch's `shouldUpdate` to diff prev/next snapshots at each peer path. */
+function getAtPath(obj: unknown, path: NamePath): unknown {
+  const keys = Array.isArray(path) ? path : [path];
+  return keys.reduce<unknown>((acc, key) => {
+    if (acc == null) return acc;
+    return (acc as Record<string, unknown>)[key as string];
+  }, obj);
+}
+
 interface SchemaFieldProps {
   name: NamePath;
   prop: SchemaProperty;
@@ -121,6 +131,7 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
   grid = false,
 }) => {
   const settingStore = useStore('setting');
+  const form = Form.useFormInstance();
 
   // peer 字段路径相对 schema 根（顶层 properties），由 namePrefix 锚定 →
   // 会话表单(prefix=['config']) 与 HumanInputForm(扁平) 共用同一套路径写法。
@@ -264,11 +275,24 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
       );
     }
 
-    // Custom format: model-select renders TreeSelect
+    // Custom format: model-select renders TreeSelect.
+    // 选中模型时把 multimodal 写到与 modelId 同级的兄弟字段（parent 下的 'multimodal'），
+    // 供其它字段的 reaction 读取（如 upload 在 model.multimodal=false 时隐藏）。
+    // ModelSelect 只报选中模型对象，写哪个路径由这里（知道 name）决定。
     if (effective.format === 'model-select') {
+      const parent = (Array.isArray(fullName) ? fullName : [fullName]).slice(
+        0,
+        -1,
+      );
       return (
         <Form.Item key={fieldKey} {...commonProps}>
-          <ModelSelect modelType={effective.modelType} disabled={disabled} />
+          <ModelSelect
+            modelType={effective.modelType}
+            disabled={disabled}
+            onModelSelect={m =>
+              form.setFieldValue([...parent, 'multimodal'], m?.multimodal)
+            }
+          />
         </Form.Item>
       );
     }
@@ -339,16 +363,25 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
     );
   };
 
-  // 有 reactions：套响应式 Form.Item。`dependencies` 从 `when` 自动收集（杜绝漏配依赖）；
+  // 有 reactions：套响应式 Form.Item。用 `shouldUpdate`（而非 `dependencies`）触发重渲染：
+  // dependencies 只在「已注册字段」变化时重渲染——而 model.multimodal 这类「衍生元信息」
+  // 没有归属的 Form.Item，仅靠 setFieldValue 写入，对 dependencies 的路径匹配不可见，
+  // 不会触发联动。shouldUpdate 对比整份 values 快照（prev vs next），能捕捉到这种 ghost peer。
   // `preserve={false}` 让被 visible:false 卸载的字段其值自动从 form store 丢弃，
   // 避免隐藏值被提交。无 reactions 时走原路径，行为零变化。
   if (prop.reactions?.length) {
-    const deps = collectFields(prop.reactions).map(peerPath);
+    const depPaths = collectFields(prop.reactions).map(peerPath);
     const fullName: NamePath = namePrefix ? [...namePrefix, name].flat() : name;
     const fieldKey = JSON.stringify(name);
     return (
-      <Form.Item noStyle dependencies={deps} preserve={false}>
-        {form => {
+      <Form.Item
+        noStyle
+        preserve={false}
+        shouldUpdate={(prev, next) =>
+          depPaths.some(p => getAtPath(prev, p) !== getAtPath(next, p))
+        }
+      >
+        {() => {
           const effective = applyReactions(prop, prop.reactions, f =>
             form.getFieldValue(peerPath(f)),
           );
