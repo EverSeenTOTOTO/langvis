@@ -106,6 +106,16 @@ export const config: AgentConfig<{
           },
         },
         nullable: true,
+        // 仅多模态模型支持上传 → 选中的模型非多模态时隐藏整个 upload。
+        // peer 'model.multimodal' 由 ModelSelect 选中模型时写入（与 modelId 同级），
+        // 见 SchemaField 的 model-select 分支；未选模型时该值为 undefined（不等于
+        // false）→ upload 仍显示，避免用户尚未选模型时误隐藏。
+        reactions: [
+          {
+            when: { field: 'model.multimodal', op: 'eq', value: false },
+            set: { visible: false },
+          },
+        ],
       },
     },
   },
