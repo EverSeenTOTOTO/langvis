@@ -160,7 +160,9 @@ const HumanInputForm: React.FC<HumanInputFormProps> = ({
               key={key}
               name={key}
               prop={prop as SchemaProperty}
-              required={schema.required?.includes(key)}
+              required={
+                Array.isArray(schema.required) && schema.required.includes(key)
+              }
             />
           ))
         ) : (

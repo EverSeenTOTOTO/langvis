@@ -9,6 +9,7 @@ interface ModelSelectProps {
   onChange?: (value: string) => void;
   modelType?: string;
   placeholder?: string;
+  disabled?: boolean;
 }
 
 function groupToTreeData(groups: GroupedModels[]) {
@@ -33,6 +34,7 @@ const ModelSelect: React.FC<ModelSelectProps> = ({
   onChange,
   modelType = 'chat',
   placeholder,
+  disabled,
 }) => {
   const modelStore = useStore('model');
   const [state, fetch] = useAsyncFn(modelStore.getModels.bind(modelStore));
@@ -56,6 +58,7 @@ const ModelSelect: React.FC<ModelSelectProps> = ({
       onChange={onChange}
       placeholder={placeholder || 'Select a model'}
       loading={state.loading}
+      disabled={disabled}
       allowClear
       treeDefaultExpandAll
       style={{ width: '100%' }}

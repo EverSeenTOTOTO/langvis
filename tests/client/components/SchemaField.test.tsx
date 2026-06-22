@@ -4,7 +4,7 @@
 import '@testing-library/jest-dom/vitest';
 import SchemaField, { SchemaProperty } from '@/client/components/SchemaField';
 import { Form } from 'antd';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -282,6 +282,94 @@ describe('SchemaField', () => {
       expect(formValues).toEqual({
         selectedLinks: ['url-a', 'url-c'],
       });
+    },
+  );
+
+  it(
+    'hides/shows a field via reactions driven by a peer value',
+    { timeout },
+    async () => {
+      const user = userEvent.setup();
+      const { container } = render(
+        <Form>
+          <SchemaField
+            name="toggle"
+            prop={{ type: 'string', title: 'Toggle' }}
+          />
+          <SchemaField
+            name="dependent"
+            prop={{
+              type: 'string',
+              title: 'Dependent',
+              reactions: [
+                {
+                  when: { field: 'toggle', op: 'ne', value: 'on' },
+                  set: { visible: false },
+                },
+              ],
+            }}
+          />
+        </Form>,
+      );
+
+      // toggle unset → undefined !== 'on' → dependent hidden
+      expect(container.querySelector('#dependent')).toBeNull();
+
+      const toggleInput = container.querySelector(
+        '#toggle',
+      ) as HTMLTextAreaElement;
+      await user.clear(toggleInput);
+      await user.type(toggleInput, 'on');
+
+      // typing 'on' flips the reaction → dependent renders
+      await waitFor(() =>
+        expect(container.querySelector('#dependent')).not.toBeNull(),
+      );
+    },
+  );
+
+  it(
+    'clears a stale value when a reaction narrows the enum',
+    { timeout },
+    async () => {
+      const user = userEvent.setup();
+      const formRef: { current: any } = { current: null };
+      const { container } = render(
+        <Form
+          ref={formRef as any}
+          initialValues={{ agent: 'chat_agent', mem: 'slide_window_memory' }}
+        >
+          <SchemaField name="agent" prop={{ type: 'string' }} />
+          <SchemaField
+            name="mem"
+            prop={{
+              type: 'string',
+              enum: ['slide_window_memory', 'react_memory'],
+              reactions: [
+                {
+                  when: { field: 'agent', op: 'eq', value: 'react_agent' },
+                  set: { enum: ['react_memory'] },
+                },
+              ],
+            }}
+          />
+        </Form>,
+      );
+
+      // agent=chat → enum unchanged → slide_window_memory still valid
+      expect(formRef.current.getFieldValue('mem')).toBe('slide_window_memory');
+
+      // change agent (user-driven, like the real Select) → enum narrows to
+      // [react_memory] → stale slide_window_memory cleared
+      const agentInput = container.querySelector(
+        '#agent',
+      ) as HTMLTextAreaElement;
+      await user.clear(agentInput);
+      await user.type(agentInput, 'react_agent');
+
+      await waitFor(() =>
+        expect(formRef.current.getFieldValue('mem')).toBeUndefined(),
+      );
     },
   );
 });
