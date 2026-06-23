@@ -116,7 +116,16 @@
       padding-block-end: 12px;
       padding-inline: 16px;
       overflow: hidden auto;
-      scroll-padding-bottom: calc(var(--chat-input-height, 60px) + 12px);
+
+      // Inner content wrapper — its height is the ResizeObserver target for
+      // stick-to-bottom. `.chat-messages` itself is the scroll container and
+      // already ends above the absolutely-positioned input (space reserved by
+      // `.chat-placeholder`), so no scroll-padding is needed here.
+      .chat-messages-content {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
 
       .ant-bubble {
         .ant-bubble-content {
