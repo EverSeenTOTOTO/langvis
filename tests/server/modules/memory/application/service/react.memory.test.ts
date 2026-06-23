@@ -46,7 +46,6 @@ function createMemory(
   history: Message[],
   opts: {
     systemPrompt?: string;
-    windowSize?: number;
   } = {},
 ) {
   return new ReActMemory({
@@ -54,7 +53,6 @@ function createMemory(
     systemPrompt: opts.systemPrompt,
     contextSize: 8000,
     modelId: 'openai:gpt-4',
-    windowSize: opts.windowSize ?? 10,
   });
 }
 
@@ -99,18 +97,22 @@ describe('ReActMemory', () => {
       expect(assistantMsg!.content).toBe('Hi there');
     });
 
-    it('should truncate old turns like SlidingWindowMemory', async () => {
+    it('should include all turns without truncation (no sliding window)', async () => {
       const history: Message[] = [];
       for (let i = 0; i < 15; i++) {
         history.push(makeMessage(Role.USER, `q${i}`));
         history.push(makeMessage(Role.ASSIST, `a${i}`));
       }
 
-      const memory = createMemory(history, { windowSize: 5 });
+      const memory = createMemory(history);
       const messages = await memory.buildContext();
 
-      const truncatedMsg = messages.find(m => m.content.includes('truncated'));
-      expect(truncatedMsg).toBeDefined();
+      // No truncation notice — full history retained until compression lands
+      expect(
+        messages.find(m => m.content.includes('truncated')),
+      ).toBeUndefined();
+      // All 15 assistant turns present (a sliding window would have dropped 10)
+      expect(messages.filter(m => m.role === 'assistant')).toHaveLength(15);
     });
 
     it('should include system prompt and hidden messages', async () => {

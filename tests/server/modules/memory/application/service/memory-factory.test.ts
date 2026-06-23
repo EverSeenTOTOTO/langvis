@@ -70,11 +70,9 @@ describe('MemoryFactory', () => {
         contextSize: 4096,
         modelId: 'model-x',
         memoryType: 'react_memory',
-        windowSize: 5,
       }) as ReActMemory;
 
-      expect(memory.windowSize).toBe(5);
-      // Memory has history internally — verify through buildContext
+      // Memory has history internally — verify through getContextUsage
       const usage = memory.getContextUsage();
       expect(usage.total).toBe(4096);
     });

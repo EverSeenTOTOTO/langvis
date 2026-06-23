@@ -44,7 +44,7 @@ export class ArchiveEmailHandler {
           agentId: AgentIds.REACT,
           config: {
             model: {},
-            memory: { type: 'react_memory', windowSize: 10 },
+            memory: { type: 'react_memory' },
           },
         },
       } satisfies EmailArchivedPayload),
