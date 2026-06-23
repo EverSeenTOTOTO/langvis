@@ -27,6 +27,20 @@ export type AwaitingInputData = {
 };
 
 /**
+ * Ordered item in the agent's process timeline — the single source of truth
+ * for how thoughts and tool actions are displayed.
+ *
+ * Arrival order is recorded here (not in separate `thoughts`/`toolCalls`
+ * arrays) so a thought renders next to the tool action that followed it,
+ * instead of all thoughts being dumped after all tools. Tool items reference
+ * the live `UIToolCall` by callId; the underlying entry is updated in place
+ * as progress/result/error frames arrive, without appending a new item.
+ */
+export type TimelineItem =
+  | { kind: 'thought'; key: string; content: string }
+  | { kind: 'tool'; key: string; callId: string };
+
+/**
  * MessageNode — 客户端消息节点。
  *
  * 替换 MessageFSM + PendingMessage。
@@ -43,7 +57,7 @@ export class MessageNode {
   error?: string;
   cancelReason?: string;
   toolCalls: UIToolCall[] = [];
-  thoughts: string[] = [];
+  timeline: TimelineItem[] = [];
   steps: ReActStep[] = [];
   contextUsage?: { used: number; total: number };
   private _awaitingInputData: AwaitingInputData | null = null;
@@ -67,9 +81,9 @@ export class MessageNode {
       this.content = data.content ?? '';
       this.status = data.status;
       this.steps = data.steps ?? [];
-      // Derive toolCalls and thoughts from steps for UI compatibility
+      // Derive toolCalls + ordered timeline from steps
       this.toolCalls = this.stepsToToolCalls(this.steps);
-      this.thoughts = this.stepsToThoughts(this.steps);
+      this.timeline = this.stepsToTimeline(this.steps);
     }
 
     makeAutoObservable(this);
@@ -93,7 +107,11 @@ export class MessageNode {
         break;
 
       case 'thought':
-        this.thoughts.push(frame.content);
+        this.timeline.push({
+          kind: 'thought',
+          key: `th_${frame.seq}`,
+          content: frame.content,
+        });
         if (this.status === 'initialized') this.status = 'running';
         break;
 
@@ -104,6 +122,11 @@ export class MessageNode {
           toolArgs: frame.toolArgs,
           status: 'pending',
           progress: [],
+        });
+        this.timeline.push({
+          kind: 'tool',
+          key: frame.callId,
+          callId: frame.callId,
         });
         if (this.status === 'initialized') this.status = 'running';
         break;
@@ -164,7 +187,7 @@ export class MessageNode {
     this.status = (snapshot.status as RunStatus) ?? 'running';
     this.steps = snapshot.steps;
     this.toolCalls = this.stepsToToolCalls(this.steps);
-    this.thoughts = this.stepsToThoughts(this.steps);
+    this.timeline = this.stepsToTimeline(this.steps);
     // Restore an in-flight ask_user prompt so the confirmation form survives
     // a reconnect while the run is blocked awaiting input.
     this._awaitingInputData = snapshot.awaitingInput ?? null;
@@ -199,10 +222,7 @@ export class MessageNode {
   }
 
   get shouldExpandDetails(): boolean {
-    return (
-      !this.isTerminal &&
-      (this.toolCalls.length > 0 || this.thoughts.length > 0)
-    );
+    return !this.isTerminal && this.timeline.length > 0;
   }
 
   get isAwaitingInput(): boolean {
@@ -236,11 +256,29 @@ export class MessageNode {
       }));
   }
 
-  private stepsToThoughts(steps: ReActStep[]): string[] {
-    // Drop empty thoughts — a thoughtless step (tool_call with no preceding
-    // thought) contributes no thought; matches the live path, which only
-    // pushes a thought when a thought event actually arrives.
-    return steps.map(s => s.thought).filter(t => t.length > 0);
+  private stepsToTimeline(steps: ReActStep[]): TimelineItem[] {
+    // Each step is (thought?) → (action?). Drop empty thoughts so a
+    // thoughtless step (tool_call with no preceding thought) contributes only
+    // its tool — matches the live path, which appends a thought item only when
+    // a thought frame actually arrives.
+    const items: TimelineItem[] = [];
+    steps.forEach((s, index) => {
+      if (s.thought.length > 0) {
+        items.push({
+          kind: 'thought',
+          key: `th_${index}`,
+          content: s.thought,
+        });
+      }
+      if (s.action) {
+        items.push({
+          kind: 'tool',
+          key: s.action.callId,
+          callId: s.action.callId,
+        });
+      }
+    });
+    return items;
   }
 
   private extractAwaitingInput(frame: SSEFrame): void {

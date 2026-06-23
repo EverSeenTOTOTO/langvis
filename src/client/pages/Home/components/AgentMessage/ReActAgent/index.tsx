@@ -17,9 +17,7 @@ const createReActRenderer = (agentId: string) => {
   const renderer = (node: MessageNode): AgentRenderResult => ({
     content: (
       <>
-        {(node.toolCalls.length > 0 || node.thoughts.length > 0) && (
-          <UniversalEventRenderer node={node} />
-        )}
+        {node.timeline.length > 0 && <UniversalEventRenderer node={node} />}
 
         {node.isThinking && (
           <Typography.Text type="secondary" italic>
