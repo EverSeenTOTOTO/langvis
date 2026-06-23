@@ -1,4 +1,4 @@
-import type { LlmMessage, Message } from '@/shared/types/entities';
+import type { LlmMessage } from '@/shared/types/entities';
 import { Role } from '@/shared/entities/Message';
 import type { ReActStep } from '@/shared/types/render';
 import { BaseMemory } from '../../domain/model/base-memory';
@@ -6,24 +6,10 @@ import { BaseMemory } from '../../domain/model/base-memory';
 /**
  * ReActMemory — 带 step 摘要的上下文策略。
  *
- * 基于 SlidingWindowMemory 的滑动窗口，但 assistant 消息
- * 如果包含 steps 则自动附加摘要（thought + action → observation）。
- * 适用于 ReAct agent 的多轮推理场景。
+ * 遍历全部历史 turn，对包含 steps 的 assistant 消息前置摘要
+ * （thought + action → observation）。不做截断
  */
 export class ReActMemory extends BaseMemory {
-  readonly windowSize: number;
-
-  constructor(params: {
-    history: Message[];
-    systemPrompt?: string;
-    contextSize: number;
-    modelId: string;
-    windowSize: number;
-  }) {
-    super(params);
-    this.windowSize = params.windowSize;
-  }
-
   async buildContext(): Promise<LlmMessage[]> {
     const messages: LlmMessage[] = [];
 
@@ -37,18 +23,11 @@ export class ReActMemory extends BaseMemory {
       }
     }
 
+    // TODO(compression): 引入按 token 预算压缩历史 turn 的策略，取代原先的
+    // 简单滑动窗口截断。当前先全量纳入，超长上下文由后续策略处理。
     const turns = this.groupIntoTurns(this.history);
-    const recentTurns = turns.slice(-this.windowSize);
-    const truncatedCount = turns.length - recentTurns.length;
 
-    if (truncatedCount > 0) {
-      messages.push({
-        role: 'user',
-        content: `[Earlier conversation history (${truncatedCount} turns) has been truncated to fit context window]`,
-      });
-    }
-
-    for (const turn of recentTurns) {
+    for (const turn of turns) {
       for (const msg of turn) {
         let content = msg.content;
 

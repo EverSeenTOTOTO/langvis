@@ -25,7 +25,7 @@ export class MemoryFactory {
 
     switch (params.memoryType) {
       case 'react_memory':
-        return new ReActMemory({ ...params, windowSize });
+        return new ReActMemory(params);
       case 'slide_window_memory':
         return new SlidingWindowMemory({ ...params, windowSize });
       default:

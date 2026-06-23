@@ -45,7 +45,6 @@ export class EmailArchivedHandler {
         model: { modelId: defaultModel?.id },
         memory: agentBinding.config?.memory ?? {
           type: 'react_memory',
-          windowSize: 10,
         },
       },
       null,

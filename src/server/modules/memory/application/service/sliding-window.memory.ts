@@ -6,7 +6,6 @@ import { BaseMemory } from '../../domain/model/base-memory';
  * SlidingWindowMemory — 最简单的上下文策略。
  *
  * 取最近 N 个 turn，超出的部分用截断提示替代。
- * 不做 step 摘要，适用于简单对话。
  */
 export class SlidingWindowMemory extends BaseMemory {
   readonly windowSize: number;
