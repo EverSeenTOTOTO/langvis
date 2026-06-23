@@ -105,10 +105,10 @@ export default class EmailController {
     const userId = await this.authService.getUserId(req);
 
     // EmailNotFoundError→404、其余→500 由 api 装饰器映射。
-    const { emailId } = await this.commandBus.execute(
+    const { conversationId } = await this.commandBus.execute(
       new ArchiveEmailCommand(id, userId),
     );
 
-    return res.status(200).json({ emailId, status: 'archived' });
+    return res.status(200).json({ conversationId });
   }
 }

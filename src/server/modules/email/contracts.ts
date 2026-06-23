@@ -1,5 +1,4 @@
 import { Command } from '@/server/libs/ddd';
-import type { AgentBinding } from '@/shared/types/agent';
 
 export class ProcessInboundCommand extends Command {
   constructor(readonly rawEmail: string) {
@@ -18,6 +17,7 @@ export class ArchiveEmailCommand extends Command {
 
 export interface ArchiveEmailResult {
   emailId: string;
+  conversationId: string;
 }
 
 export const EmailArchived = 'email_archived';
@@ -25,10 +25,10 @@ export const EmailArchived = 'email_archived';
 export interface EmailArchivedPayload {
   userId: string;
   emailId: string;
+  conversationId: string;
   emailSubject: string;
   emailContent: string;
   emailFrom: string;
   emailFromName: string | null;
   emailSentAt: string;
-  agentBinding: AgentBinding;
 }
