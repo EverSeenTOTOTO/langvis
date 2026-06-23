@@ -4,9 +4,7 @@ import { CommandBus } from '@/server/libs/ddd';
 import { CACHE_SERVICE } from '@/server/modules/agent/agent.di-tokens';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { CachedReference } from '@/server/modules/memory/infrastructure/cache.provider';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
-import { CONVERSATION_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
-import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
+import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import { ConversationActivateCommand } from '@/server/modules/conversation/contracts';
 import { StartChatCommand } from '@/server/modules/conversation/contracts';
 import { Role } from '@/shared/entities/Message';
@@ -15,12 +13,10 @@ import { EmailArchived, type EmailArchivedPayload } from '../../contracts';
 @eventHandler(EmailArchived)
 export class EmailArchivedHandler {
   constructor(
-    @inject(CONVERSATION_REPOSITORY)
-    private readonly convRepo: ConversationRepositoryPort,
-    @inject(ProviderService)
-    private readonly providerService: ProviderService,
     @inject(CACHE_SERVICE)
     private readonly cacheService: CachePort,
+    @inject(WorkspaceService)
+    private readonly workspaceService: WorkspaceService,
     @inject(CommandBus)
     private readonly commandBus: CommandBus,
   ) {}
@@ -28,31 +24,17 @@ export class EmailArchivedHandler {
   async handle(event: { payload: EmailArchivedPayload }): Promise<void> {
     const {
       userId,
+      conversationId,
       emailSubject,
       emailContent,
       emailFrom,
       emailFromName,
       emailSentAt,
-      agentBinding,
     } = event.payload;
 
-    const defaultModel = this.providerService.getDefaultModel('chat');
-    const conversation = await this.convRepo.create(
-      `归档邮件: ${emailSubject}`,
-      userId,
-      {
-        agent: agentBinding.agentId,
-        model: { modelId: defaultModel?.id },
-        memory: agentBinding.config?.memory ?? {
-          type: 'react_memory',
-        },
-      },
-      null,
-      'Email Archive',
-    );
-
+    const workDir = await this.workspaceService.getWorkDir(conversationId);
     const contentOrCached = (await this.cacheService.compress(
-      conversation.id,
+      workDir,
       emailContent,
     )) as string | CachedReference;
     const userContent = this.buildArchivePrompt(
@@ -64,11 +46,11 @@ export class EmailArchivedHandler {
     );
 
     await this.commandBus.execute(
-      new ConversationActivateCommand(conversation.id, userId),
+      new ConversationActivateCommand(conversationId, userId),
     );
 
     await this.commandBus.execute(
-      new StartChatCommand(conversation.id, {
+      new StartChatCommand(conversationId, {
         role: Role.USER,
         content: userContent,
       }),

@@ -327,6 +327,7 @@ Test content.`;
       mockAuthService.getUserId.mockResolvedValue('user_1');
       mockCommandBus.execute.mockResolvedValue({
         emailId: 'mail_1',
+        conversationId: 'conv_1',
       });
 
       const emailController = await createController();
@@ -346,8 +347,7 @@ Test content.`;
       );
       expect(mockRes.status).toHaveBeenCalledWith(200);
       expect(mockRes.json).toHaveBeenCalledWith({
-        emailId: 'mail_1',
-        status: 'archived',
+        conversationId: 'conv_1',
       });
     });
   });
