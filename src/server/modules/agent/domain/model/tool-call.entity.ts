@@ -67,7 +67,7 @@ export class ToolCall extends Entity<string> {
 
   async *execute(): AsyncGenerator<RunEvent, string, void> {
     this.input = (await this.cache.resolve(
-      this.runId,
+      this.workDir,
       this.toolArgs,
     )) as Record<string, unknown>;
 
@@ -90,7 +90,7 @@ export class ToolCall extends Entity<string> {
       const output = yield* this.tool.call(ctx);
 
       const compressed = await this.cache.compress(
-        this.runId,
+        this.workDir,
         output,
         this.tool.config?.compression as 'skip' | 'file' | undefined,
       );

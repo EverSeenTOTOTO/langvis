@@ -34,7 +34,7 @@ const mockWorkspaceService = {
 
 describe('CacheProvider', () => {
   let cacheService: CacheProvider;
-  const conversationId = 'conv-test-123';
+  let workDir: string;
 
   afterAll(async () => {
     if (testDir) {
@@ -42,12 +42,13 @@ describe('CacheProvider', () => {
     }
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     container.register(WorkspaceService, { useValue: mockWorkspaceService });
     cacheService = container.resolve(CacheProvider);
+    workDir = await mockWorkspaceService.getWorkDir();
   });
 
   describe('compress', () => {
@@ -56,7 +57,7 @@ describe('CacheProvider', () => {
         const longString = 'a'.repeat(STRING_THRESHOLD + 1);
 
         const result = (await cacheService.compress(
-          conversationId,
+          workDir,
           longString,
         )) as CachedReference;
 
@@ -69,7 +70,7 @@ describe('CacheProvider', () => {
       it(`should not compress string shorter than STRING_THRESHOLD chars`, async () => {
         const shortString = 'a'.repeat(100);
 
-        const result = await cacheService.compress(conversationId, shortString);
+        const result = await cacheService.compress(workDir, shortString);
 
         expect(result).toBe(shortString);
       });
@@ -83,7 +84,7 @@ describe('CacheProvider', () => {
         }));
 
         const result = (await cacheService.compress(
-          conversationId,
+          workDir,
           chunks,
         )) as unknown[];
 
@@ -100,7 +101,7 @@ describe('CacheProvider', () => {
         }));
 
         const result = (await cacheService.compress(
-          conversationId,
+          workDir,
           items,
         )) as unknown[];
 
@@ -115,7 +116,7 @@ describe('CacheProvider', () => {
         );
 
         const result = (await cacheService.compress(
-          conversationId,
+          workDir,
           items,
         )) as unknown[];
 
@@ -130,7 +131,7 @@ describe('CacheProvider', () => {
           index: i,
         }));
 
-        const result = await cacheService.compress(conversationId, items);
+        const result = await cacheService.compress(workDir, items);
 
         expect(isCachedReference(result)).toBe(true);
       });
@@ -142,7 +143,7 @@ describe('CacheProvider', () => {
         }));
 
         const result = (await cacheService.compress(
-          conversationId,
+          workDir,
           items,
         )) as unknown[];
 
@@ -153,7 +154,7 @@ describe('CacheProvider', () => {
       it('should not compress small array', async () => {
         const arr = ['short1', 'short2', 'short3'];
 
-        const result = await cacheService.compress(conversationId, arr);
+        const result = await cacheService.compress(workDir, arr);
 
         expect(result).toEqual(arr);
       });
@@ -166,10 +167,10 @@ describe('CacheProvider', () => {
           long: 'a'.repeat(STRING_THRESHOLD + 1),
         };
 
-        const result = (await cacheService.compress(
-          conversationId,
-          obj,
-        )) as Record<string, unknown>;
+        const result = (await cacheService.compress(workDir, obj)) as Record<
+          string,
+          unknown
+        >;
 
         expect(result.short).toBe('hi');
         expect(isCachedReference(result.long)).toBe(true);
@@ -181,10 +182,10 @@ describe('CacheProvider', () => {
           obj[`field${i}`] = 'x'.repeat(5000);
         }
 
-        const result = (await cacheService.compress(
-          conversationId,
-          obj,
-        )) as Record<string, unknown>;
+        const result = (await cacheService.compress(workDir, obj)) as Record<
+          string,
+          unknown
+        >;
 
         for (let i = 0; i < 10; i++) {
           expect(isCachedReference(result[`field${i}`])).toBe(true);
@@ -197,10 +198,10 @@ describe('CacheProvider', () => {
           summary: 'y'.repeat(2000),
         };
 
-        const result = (await cacheService.compress(
-          conversationId,
-          obj,
-        )) as Record<string, unknown>;
+        const result = (await cacheService.compress(workDir, obj)) as Record<
+          string,
+          unknown
+        >;
 
         // 2 fields → threshold = STRING_THRESHOLD / 2 = 10000 → 2000 < 10000 inline
         expect(result.title).toBe(obj.title);
@@ -210,7 +211,7 @@ describe('CacheProvider', () => {
       it('should not compress small object', async () => {
         const obj = { name: 'test', count: 42 };
 
-        const result = await cacheService.compress(conversationId, obj);
+        const result = await cacheService.compress(workDir, obj);
 
         expect(result).toEqual(obj);
       });
@@ -226,10 +227,10 @@ describe('CacheProvider', () => {
           })),
         };
 
-        const result = (await cacheService.compress(
-          conversationId,
-          obj,
-        )) as Record<string, unknown>;
+        const result = (await cacheService.compress(workDir, obj)) as Record<
+          string,
+          unknown
+        >;
 
         expect(result.title).toBe('Test Doc');
         expect(Array.isArray(result.chunks)).toBe(true);
@@ -251,7 +252,7 @@ describe('CacheProvider', () => {
         }));
 
         const result = (await cacheService.compress(
-          conversationId,
+          workDir,
           items,
         )) as unknown[];
 
@@ -266,11 +267,7 @@ describe('CacheProvider', () => {
     describe('skip strategy', () => {
       it('should skip compression when strategy is "skip"', async () => {
         const longString = 'a'.repeat(STRING_THRESHOLD + 1);
-        const result = await cacheService.compress(
-          conversationId,
-          longString,
-          'skip',
-        );
+        const result = await cacheService.compress(workDir, longString, 'skip');
         expect(result).toBe(longString);
       });
 
@@ -279,27 +276,21 @@ describe('CacheProvider', () => {
           long: 'a'.repeat(STRING_THRESHOLD + 1),
           items: ['b'.repeat(5001)],
         };
-        const result = await cacheService.compress(
-          conversationId,
-          nested,
-          'skip',
-        );
+        const result = await cacheService.compress(workDir, nested, 'skip');
         expect(result).toEqual(nested);
       });
     });
   });
 
   describe('resolve', () => {
-    const resolveId = 'conv-test-456';
-
     it('should resolve CachedReference by reading file', async () => {
       const longString = 'a'.repeat(STRING_THRESHOLD + 1);
 
       const compressed = (await cacheService.compress(
-        resolveId,
+        workDir,
         longString,
       )) as CachedReference;
-      const result = await cacheService.resolve(resolveId, compressed);
+      const result = await cacheService.resolve(workDir, compressed);
 
       expect(result).toBe(longString);
     });
@@ -307,7 +298,6 @@ describe('CacheProvider', () => {
     it('should resolve CachedReference containing JSON object', async () => {
       const jsonObject = { key: 'value', count: 42 };
 
-      const workDir = await mockWorkspaceService.getWorkDir();
       const filename = 'fc_testjson';
       await fs.writeFile(
         path.join(workDir, filename),
@@ -315,7 +305,7 @@ describe('CacheProvider', () => {
         'utf-8',
       );
 
-      const result = await cacheService.resolve(resolveId, {
+      const result = await cacheService.resolve(workDir, {
         $cached: filename,
       });
 
@@ -324,12 +314,12 @@ describe('CacheProvider', () => {
 
     it('should resolve CachedReference in array context', async () => {
       const content = 'a'.repeat(STRING_THRESHOLD + 1);
-      const ref = (await cacheService.compress(resolveId, content)) as {
+      const ref = (await cacheService.compress(workDir, content)) as {
         $cached: string;
       };
 
       const input = { items: [ref] };
-      const result = (await cacheService.resolve(resolveId, input)) as Record<
+      const result = (await cacheService.resolve(workDir, input)) as Record<
         string,
         unknown
       >;
@@ -344,12 +334,12 @@ describe('CacheProvider', () => {
         status: 200,
       };
 
-      const compressed = (await cacheService.compress(
-        resolveId,
-        obj,
-      )) as Record<string, unknown>;
+      const compressed = (await cacheService.compress(workDir, obj)) as Record<
+        string,
+        unknown
+      >;
       const resolved = (await cacheService.resolve(
-        resolveId,
+        workDir,
         compressed,
       )) as Record<string, unknown>;
 
@@ -362,14 +352,14 @@ describe('CacheProvider', () => {
     it('should not modify non-CachedReference objects', async () => {
       const input = { name: 'test', count: 42, flag: true };
 
-      const result = await cacheService.resolve(resolveId, input);
+      const result = await cacheService.resolve(workDir, input);
 
       expect(result).toEqual(input);
     });
 
     it('should throw error when cache miss', async () => {
       await expect(
-        cacheService.resolve(resolveId, {
+        cacheService.resolve(workDir, {
           $cached: 'fc_nonexistent',
           $size: 100,
         }),
@@ -378,8 +368,8 @@ describe('CacheProvider', () => {
 
     it('should roundtrip compress-resolve for string', async () => {
       const value = 'x'.repeat(STRING_THRESHOLD + 500);
-      const compressed = await cacheService.compress(resolveId, value);
-      const resolved = await cacheService.resolve(resolveId, compressed);
+      const compressed = await cacheService.compress(workDir, value);
+      const resolved = await cacheService.resolve(workDir, compressed);
       expect(resolved).toBe(value);
     });
 
@@ -391,8 +381,8 @@ describe('CacheProvider', () => {
           index: i,
         })),
       };
-      const compressed = await cacheService.compress(resolveId, value);
-      const resolved = await cacheService.resolve(resolveId, compressed);
+      const compressed = await cacheService.compress(workDir, value);
+      const resolved = await cacheService.resolve(workDir, compressed);
       expect(resolved).toEqual(value);
     });
 
@@ -400,8 +390,8 @@ describe('CacheProvider', () => {
       const value = Array.from({ length: 30 }, (_, i) =>
         `item-${i}-`.repeat(200),
       );
-      const compressed = await cacheService.compress(resolveId, value);
-      const resolved = await cacheService.resolve(resolveId, compressed);
+      const compressed = await cacheService.compress(workDir, value);
+      const resolved = await cacheService.resolve(workDir, compressed);
       expect(resolved).toEqual(value);
     });
 
@@ -410,31 +400,27 @@ describe('CacheProvider', () => {
         content: 'x'.repeat(500),
         index: i,
       }));
-      const compressed = await cacheService.compress(resolveId, value);
-      const resolved = await cacheService.resolve(resolveId, compressed);
+      const compressed = await cacheService.compress(workDir, value);
+      const resolved = await cacheService.resolve(workDir, compressed);
       expect(resolved).toEqual(value);
     });
   });
 
   describe('readFile', () => {
-    const readId = 'conv-test-789';
-
     it('should read file with offset and limit', async () => {
       const content = '0123456789abcdef';
-      const workDir = await mockWorkspaceService.getWorkDir();
       await fs.writeFile(path.join(workDir, 'fc_test'), content, 'utf-8');
 
-      const result = await cacheService.readFile(readId, 'fc_test', 4, 8);
+      const result = await cacheService.readFile(workDir, 'fc_test', 4, 8);
       expect(result).toBe('456789ab');
     });
 
     it('should read file from beginning when offset is omitted', async () => {
       const content = 'hello world';
-      const workDir = await mockWorkspaceService.getWorkDir();
       await fs.writeFile(path.join(workDir, 'fc_test2'), content, 'utf-8');
 
       const result = await cacheService.readFile(
-        readId,
+        workDir,
         'fc_test2',
         undefined,
         5,
@@ -443,9 +429,9 @@ describe('CacheProvider', () => {
     });
 
     it('should throw error when file not found', async () => {
-      await expect(cacheService.readFile(readId, 'fc_missing')).rejects.toThrow(
-        'Cache miss: fc_missing',
-      );
+      await expect(
+        cacheService.readFile(workDir, 'fc_missing'),
+      ).rejects.toThrow('Cache miss: fc_missing');
     });
   });
 });

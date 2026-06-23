@@ -96,7 +96,7 @@ export class CacheProvider implements CachePort {
   ) {}
 
   async compress(
-    conversationId: string,
+    workDir: string,
     value: unknown,
     strategy: CompressionStrategy = 'file',
     parentThreshold = STRING_THRESHOLD,
@@ -109,7 +109,7 @@ export class CacheProvider implements CachePort {
 
     // String: compress if exceeds current threshold
     if (typeof value === 'string' && value.length > threshold) {
-      return this.storeSerialized(conversationId, value);
+      return this.storeSerialized(workDir, value);
     }
 
     // Array: recursive compression with dynamic threshold + whole-compress fallback
@@ -120,13 +120,13 @@ export class CacheProvider implements CachePort {
       );
       const result = await Promise.all(
         value.map(item =>
-          this.compress(conversationId, item, strategy, childThreshold),
+          this.compress(workDir, item, strategy, childThreshold),
         ),
       );
       // Fallback: if visible structure still exceeds STRING_THRESHOLD, whole-compress
       const serialized = JSON.stringify(result);
       if (serialized.length > STRING_THRESHOLD) {
-        return this.storeSerialized(conversationId, serialized);
+        return this.storeSerialized(workDir, serialized);
       }
       return result;
     }
@@ -141,7 +141,7 @@ export class CacheProvider implements CachePort {
       const result: Record<string, unknown> = {};
       for (const [key, val] of entries) {
         result[key] = await this.compress(
-          conversationId,
+          workDir,
           val,
           strategy,
           childThreshold,
@@ -153,16 +153,16 @@ export class CacheProvider implements CachePort {
     return value;
   }
 
-  async resolve(conversationId: string, value: unknown): Promise<unknown> {
+  async resolve(workDir: string, value: unknown): Promise<unknown> {
     if (isCachedReference(value)) {
-      const expanded = await this.expandCached(conversationId, value.$cached);
+      const expanded = await this.expandCached(workDir, value.$cached);
       // Expanded result may contain nested CachedReferences (e.g. whole-compressed
       // array whose items still have $cached fields) — resolve recursively
-      return this.resolve(conversationId, expanded);
+      return this.resolve(workDir, expanded);
     }
 
     if (Array.isArray(value)) {
-      return Promise.all(value.map(item => this.resolve(conversationId, item)));
+      return Promise.all(value.map(item => this.resolve(workDir, item)));
     }
 
     if (value && typeof value === 'object') {
@@ -170,7 +170,7 @@ export class CacheProvider implements CachePort {
       for (const [key, val] of Object.entries(
         value as Record<string, unknown>,
       )) {
-        result[key] = await this.resolve(conversationId, val);
+        result[key] = await this.resolve(workDir, val);
       }
       return result;
     }
@@ -179,12 +179,11 @@ export class CacheProvider implements CachePort {
   }
 
   async readFile(
-    conversationId: string,
+    workDir: string,
     filename: string,
     offset?: number,
     limit?: number,
   ): Promise<string | Record<string, unknown>> {
-    const workDir = await this.workspaceService.getWorkDir(conversationId);
     const fileResult = await this.workspaceService.readFile(filename, workDir);
     if (!fileResult) {
       throw new Error(`Cache miss: ${filename}`);
@@ -213,10 +212,9 @@ export class CacheProvider implements CachePort {
   }
 
   private async storeSerialized(
-    conversationId: string,
+    workDir: string,
     serialized: string,
   ): Promise<CachedReference> {
-    const workDir = await this.workspaceService.getWorkDir(conversationId);
     const filename = `fc_${generateId('')}`;
     const filePath = path.join(workDir, filename);
     await fs.writeFile(filePath, serialized, 'utf-8');
@@ -229,10 +227,9 @@ export class CacheProvider implements CachePort {
   }
 
   private async expandCached(
-    conversationId: string,
+    workDir: string,
     filename: string,
   ): Promise<unknown> {
-    const workDir = await this.workspaceService.getWorkDir(conversationId);
     const fileResult = await this.workspaceService.readFile(filename, workDir);
     if (!fileResult) {
       throw new Error(`Cache miss: ${filename}`);
