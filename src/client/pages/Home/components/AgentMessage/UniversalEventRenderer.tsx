@@ -4,10 +4,9 @@ import type { UIToolCall } from '@/client/store/modules/message-node';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Collapse, Typography } from 'antd';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { SkillCallBlock } from './SkillCallBlock';
 import { StandaloneThoughtBlock, ToolBlockItem } from './ToolBlockItem';
-import { buildToolBlocks } from './utils';
 
 export interface UniversalEventRendererProps {
   node: MessageNode;
@@ -18,7 +17,7 @@ export interface UniversalEventRendererProps {
  * Universal event renderer that supports recursive rendering of nested agent calls.
  * Can be used by any Agent renderer that needs event timeline visualization.
  */
-// observer(): this component reads node observables (toolCalls, thoughts,
+// observer(): this component reads node observables (toolCalls, timeline,
 // shouldExpandDetails, and crucially `awaitingInput`) that AssistantMessage
 // does NOT read — so it must subscribe independently, or changes to
 // `_awaitingInputData` (set on a tool_progress frame) won't re-render it.
@@ -26,85 +25,94 @@ export const UniversalEventRenderer = observer(function UniversalEventRenderer({
   node,
   customToolRender,
 }: UniversalEventRendererProps): React.ReactElement | null {
-  const toolBlocks = buildToolBlocks(node.toolCalls);
-  const thoughts = node.thoughts;
+  const timeline = node.timeline;
+  // Resolve each timeline tool item to its live UIToolCall. Built per render
+  // (cheap) so it never goes stale as new tool_calls are appended — mobx
+  // observable arrays mutate in place, so a useMemo keyed on the array ref
+  // would miss pushes.
+  const toolByCallId = new Map(node.toolCalls.map(tc => [tc.callId, tc]));
+  const awaiting = node.awaitingInput;
   const [activeKey, setActiveKey] = useState<string[]>([]);
 
   useEffect(() => {
     setActiveKey(node.shouldExpandDetails ? ['1'] : []);
   }, [node.shouldExpandDetails]);
 
-  if (toolBlocks.length === 0 && thoughts.length === 0) {
+  if (timeline.length === 0) {
     return null;
   }
 
-  const totalItems = toolBlocks.length + thoughts.length;
-
   return (
-    <>
-      <Collapse
-        size="small"
-        activeKey={activeKey}
-        onChange={keys => setActiveKey(keys as string[])}
-        items={[
-          {
-            key: '1',
-            label: (
-              <Typography.Text type="secondary">
-                Process Details ({totalItems} steps)
-              </Typography.Text>
-            ),
-            children: (
-              <div className="react-tool-list">
-                {toolBlocks.map(block => {
-                  // Use SkillCallBlock for skill_call tools
-                  if (block.toolCall.toolName === 'skill_call') {
-                    return (
-                      <SkillCallBlock
-                        key={block.toolCall.callId}
-                        toolCall={block.toolCall}
-                        depth={0}
-                      />
-                    );
-                  }
+    <Collapse
+      size="small"
+      activeKey={activeKey}
+      onChange={keys => setActiveKey(keys as string[])}
+      items={[
+        {
+          key: '1',
+          label: (
+            <Typography.Text type="secondary">
+              Process Details ({timeline.length} steps)
+            </Typography.Text>
+          ),
+          children: (
+            <div className="react-tool-list">
+              {timeline.map(item => {
+                if (item.kind === 'thought') {
                   return (
+                    <StandaloneThoughtBlock
+                      key={item.key}
+                      thought={item.content}
+                    />
+                  );
+                }
+
+                const tc = toolByCallId.get(item.callId);
+                if (!tc) return null;
+
+                const toolEl =
+                  tc.toolName === 'skill_call' ? (
+                    <SkillCallBlock toolCall={tc} depth={0} />
+                  ) : (
                     <ToolBlockItem
-                      key={block.toolCall.callId}
-                      toolCall={block.toolCall}
+                      toolCall={tc}
                       depth={0}
                       customRender={customToolRender}
                     />
                   );
-                })}
-                {thoughts.map((thought, index) => (
-                  <StandaloneThoughtBlock
-                    key={`thought-${index}`}
-                    thought={thought}
-                  />
-                ))}
-                {node.isThinking && (
-                  <div className="react-tool-processing">
-                    <LoadingOutlined style={{ marginInlineEnd: 8 }} />
-                    <Typography.Text type="secondary" italic>
-                      Processing...
-                    </Typography.Text>
-                  </div>
-                )}
-              </div>
-            ),
-          },
-        ]}
-        style={{ width: '100%', marginBlock: 8 }}
-      />
-      {node.awaitingInput && (
-        <HumanInputForm
-          key={node.awaitingInput.callId}
-          messageId={node.id}
-          conversationId={node.conversationId}
-          message={node.awaitingInput.message}
-          schema={node.awaitingInput.schema}
-        />
-      )}
-    </>
+
+                // Render the ask_user form inline right after the tool that
+                // requested it — in arrival order, not pinned to the bottom.
+                const showForm = awaiting?.callId === tc.callId;
+
+                return (
+                  <Fragment key={tc.callId}>
+                    {toolEl}
+                    {showForm && awaiting && (
+                      <HumanInputForm
+                        key={awaiting.callId}
+                        messageId={node.id}
+                        conversationId={node.conversationId}
+                        message={awaiting.message}
+                        schema={awaiting.schema}
+                      />
+                    )}
+                  </Fragment>
+                );
+              })}
+              {node.isThinking && (
+                <div className="react-tool-processing">
+                  <LoadingOutlined style={{ marginInlineEnd: 8 }} />
+                  <Typography.Text type="secondary" italic>
+                    Processing...
+                  </Typography.Text>
+                </div>
+              )}
+            </div>
+          ),
+        },
+      ]}
+      style={{ width: '100%', marginBlock: 8 }}
+    />
   );
 });
