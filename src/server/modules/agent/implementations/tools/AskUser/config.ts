@@ -47,14 +47,6 @@ formSchema MUST be an object with fields defined in \`properties\`. Examples:
 // Multiple fields
 {"type": "object", "properties": {"name": {"type": "string"}, "age": {"type": "number"}}}
 \`\`\`
-
-**Enum format:**
-- Simple values: \`"enum": ["a", "b", "c"]\` - label equals value
-- With labels: \`"enum": [{"label": "选项A", "value": "a"}, ...]\` - for i18n or friendly names
-
-**Select vs Multi-select:**
-- \`type: "string" + enum\` → single select dropdown
-- \`type: "array" + enum\` → multi-select checkboxes
 `,
   inputSchema: {
     type: 'object',
