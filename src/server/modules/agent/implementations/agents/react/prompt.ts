@@ -52,7 +52,7 @@ There is no separate "final answer" shape — to answer the user you call the \`
 { "$cached": "fc_abc123", "$size": 45000, "$preview": "Lorem ipsum..." }
 \`\`\`
 - \`$cached\` is the filename of the cached content
-- To read the full content, use \`read_cache\` with the \`$cached\` value (supports \`offset\` and \`limit\` for pagination)
+- To read the full content, use \`cached_read\` with the \`$cached\` value (supports \`offset\` and \`limit\` for pagination)
 - To pass cached content to another tool, copy the entire \`{ "$cached": ... }\` object as-is — it will be automatically resolved`,
     )
     .with(
