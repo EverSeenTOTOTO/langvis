@@ -1,14 +1,14 @@
 import type { CompressionStrategy } from '@/server/modules/memory/infrastructure/cache.provider';
 
 export interface CachePort {
-  resolve(conversationId: string, value: unknown): Promise<unknown>;
+  resolve(workDir: string, value: unknown): Promise<unknown>;
   compress(
-    conversationId: string,
+    workDir: string,
     value: unknown,
     strategy?: CompressionStrategy,
   ): Promise<unknown>;
   readFile(
-    conversationId: string,
+    workDir: string,
     filename: string,
     offset?: number,
     limit?: number,

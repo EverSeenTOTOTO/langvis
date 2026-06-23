@@ -67,13 +67,18 @@ async function collect(
 
 describe('ToolCall', () => {
   describe('execute', () => {
-    it('resolves input args from cache first (keyed by runId)', async () => {
+    it('resolves input args and compresses output keyed by workDir', async () => {
       const deps = makeDeps();
       const toolCall = createToolCall(makeMockTool(), deps);
       await collect(toolCall.execute());
-      expect(deps.cache.resolve).toHaveBeenCalledWith('run_1', {
+      expect(deps.cache.resolve).toHaveBeenCalledWith('/tmp/workdir', {
         input: 'test',
       });
+      expect(deps.cache.compress).toHaveBeenCalledWith(
+        '/tmp/workdir',
+        'tool output',
+        undefined,
+      );
     });
 
     it('yields tool_call then tool_result on success', async () => {
