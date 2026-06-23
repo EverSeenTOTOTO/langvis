@@ -63,6 +63,7 @@ createServer()
 
       disposeAll()
         .then(() => {
+          server.closeAllConnections();
           server.close(() => {
             logger.info('Server shut down');
             process.exit(0);
@@ -70,6 +71,7 @@ createServer()
         })
         .catch(err => {
           logger.error('Error during shutdown:', err);
+          server.closeAllConnections();
           server.close(() => process.exit(1));
         });
 
