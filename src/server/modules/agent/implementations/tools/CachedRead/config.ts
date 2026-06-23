@@ -9,7 +9,7 @@ export const config: ToolConfig<
   },
   string
 > = {
-  name: 'read_cache',
+  name: 'cached_read',
   untrustedOutput: true,
   description:
     'Read cached content. Use when a tool returns an object with $cached field.',
