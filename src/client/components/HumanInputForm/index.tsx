@@ -1,5 +1,6 @@
 import SchemaField, { SchemaProperty } from '@/client/components/SchemaField';
 import { useStore } from '@/client/store';
+import { CheckCircleOutlined } from '@ant-design/icons';
 import { Alert, Button, Form, Spin, Typography } from 'antd';
 import React, { lazy, Suspense, useEffect } from 'react';
 import { useAsyncFn } from 'react-use';
@@ -139,9 +140,15 @@ const HumanInputForm: React.FC<HumanInputFormProps> = ({
   }
 
   if (state.type === 'processing') {
+    // The agent message already shows a live "Processing…" indicator while the
+    // run resumes, so don't add a competing spinner here — just ack the
+    // submission with a static line.
     return (
-      <div className="human-input-form">
-        <Spin tip={settingStore.tr('Processing...')} />
+      <div className="human-input-form human-input-form--submitted">
+        <Typography.Text type="secondary">
+          <CheckCircleOutlined style={{ marginInlineEnd: 8 }} />
+          {settingStore.tr('Submitted, waiting for processing')}
+        </Typography.Text>
       </div>
     );
   }

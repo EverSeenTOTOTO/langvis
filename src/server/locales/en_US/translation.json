@@ -99,5 +99,6 @@
   "Copied": "Copied",
   "Error parsing SSE message": "Error parsing SSE message",
   "Failed to connect to SSE": "Failed to connect to SSE",
-  "Are you sure you want to delete? This action cannot be undone.": "Are you sure you want to delete? This action cannot be undone."
+  "Are you sure you want to delete? This action cannot be undone.": "Are you sure you want to delete? This action cannot be undone.",
+  "Submitted, waiting for processing": "Submitted, waiting for processing"
 }
