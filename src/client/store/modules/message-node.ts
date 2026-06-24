@@ -166,11 +166,15 @@ export class MessageNode {
       case 'cancelled':
         this.status = 'cancelled';
         this.cancelReason = frame.reason;
+        // 终态原因写入 content，使其在气泡中渲染（cancelReason 字段本身无渲染消费），
+        // 与服务端 CompleteTurnHandler 落库的 content 保持一致，避免取消后空气泡。
+        this.content = frame.reason;
         break;
 
       case 'error':
         this.status = 'failed';
         this.error = frame.error;
+        this.content = frame.error;
         break;
 
       case 'context_usage':
