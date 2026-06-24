@@ -22,14 +22,12 @@ function makeMessage(
 function createMemory(
   history: Message[],
   opts: {
-    systemPrompt?: string;
     windowSize?: number;
     contextSize?: number;
   } = {},
 ) {
   return new SlidingWindowMemory({
     history,
-    systemPrompt: opts.systemPrompt,
     contextSize: opts.contextSize ?? 8000,
     modelId: 'openai:gpt-4',
     windowSize: opts.windowSize ?? 10,
@@ -39,12 +37,31 @@ function createMemory(
 describe('SlidingWindowMemory', () => {
   describe('buildContext', () => {
     it('should include system prompt first', async () => {
-      const memory = createMemory([], { systemPrompt: 'You are helpful' });
+      const memory = createMemory([
+        makeMessage(Role.SYSTEM, 'You are helpful'),
+      ]);
       const messages = await memory.buildContext();
 
       expect(messages[0]).toEqual({
         role: 'system',
         content: 'You are helpful',
+      });
+    });
+
+    it('should pin system messages regardless of position', async () => {
+      const history = [
+        makeMessage(Role.USER, 'q1'),
+        makeMessage(Role.ASSIST, 'a1'),
+        makeMessage(Role.SYSTEM, 'injected later'),
+      ];
+
+      const memory = createMemory(history);
+      const messages = await memory.buildContext();
+
+      // system message pulled to the front even though it's not leading
+      expect(messages[0]).toEqual({
+        role: 'system',
+        content: 'injected later',
       });
     });
 
@@ -58,15 +75,15 @@ describe('SlidingWindowMemory', () => {
 
     it('should include hidden user messages after system prompt', async () => {
       const history = [
+        makeMessage(Role.SYSTEM, 'system'),
         makeMessage(Role.USER, 'session context', { hidden: true }),
         makeMessage(Role.USER, 'visible question'),
         makeMessage(Role.ASSIST, 'answer'),
       ];
 
-      const memory = createMemory(history, { systemPrompt: 'system' });
+      const memory = createMemory(history);
       const messages = await memory.buildContext();
 
-      // system → hidden user (injected early) → truncated notice? → visible turn
       const hiddenMsg = messages.find(m => m.content === 'session context');
       expect(hiddenMsg).toBeDefined();
       expect(hiddenMsg!.role).toBe('user');
@@ -112,13 +129,14 @@ describe('SlidingWindowMemory', () => {
 
     it('should return all messages from recent turns in order', async () => {
       const history = [
+        makeMessage(Role.SYSTEM, 'sys'),
         makeMessage(Role.USER, 'q1'),
         makeMessage(Role.ASSIST, 'a1'),
         makeMessage(Role.USER, 'q2'),
         makeMessage(Role.ASSIST, 'a2'),
       ];
 
-      const memory = createMemory(history, { systemPrompt: 'sys' });
+      const memory = createMemory(history);
       const messages = await memory.buildContext();
 
       // system, q1, a1, q2, a2
@@ -130,8 +148,8 @@ describe('SlidingWindowMemory', () => {
       expect(messages[4].content).toBe('a2');
     });
 
-    it('should handle empty history', async () => {
-      const memory = createMemory([], { systemPrompt: 'sys' });
+    it('should handle history with only a system message', async () => {
+      const memory = createMemory([makeMessage(Role.SYSTEM, 'sys')]);
       const messages = await memory.buildContext();
 
       expect(messages).toEqual([{ role: 'system', content: 'sys' }]);

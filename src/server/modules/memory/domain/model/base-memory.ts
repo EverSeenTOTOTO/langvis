@@ -7,24 +7,21 @@ import { ContextWindow } from './context-window';
 /**
  * BaseMemory — 所有 Memory 策略的抽象基类。
  *
- * 持有 history / systemPrompt / contextSize / modelId，
+ * 持有 history / contextSize / modelId，
  * 提供 getContextUsage() 默认实现和 groupIntoTurns() 共享方法。
  * 每个策略只需实现 buildContext()。
  */
 export abstract class BaseMemory implements MemoryPort {
   protected readonly history: Message[];
-  protected readonly systemPrompt: string | undefined;
   protected readonly contextSize: number;
   protected readonly modelId: string;
 
   constructor(params: {
     history: Message[];
-    systemPrompt?: string;
     contextSize: number;
     modelId: string;
   }) {
     this.history = params.history;
-    this.systemPrompt = params.systemPrompt;
     this.contextSize = params.contextSize;
     this.modelId = params.modelId;
   }

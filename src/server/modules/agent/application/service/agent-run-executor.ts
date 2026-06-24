@@ -18,11 +18,15 @@ import {
   type MemoryType,
 } from '@/server/modules/memory/application/service/memory-factory';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import Logger from '@/server/utils/logger';
+import chalk from 'chalk';
 import { CACHE_SERVICE } from '@/server/modules/agent/agent.di-tokens';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 
 @singleton()
 export class AgentRunExecutor {
+  private readonly logger = Logger.child({ source: 'AgentRunExecutor' });
+
   constructor(
     @inject(LlmProvider) private readonly llmProvider: LlmProvider,
     @inject(MemoryFactory) private readonly memoryFactory: MemoryFactory,
@@ -44,9 +48,15 @@ export class AgentRunExecutor {
       memory?: { type?: string; windowSize?: number };
     };
     const modelId = cfg.model?.modelId;
+    const memoryType = (cfg.memory?.type ??
+      'slide_window_memory') as MemoryType;
     const contextSize = modelId
       ? (this.providerService.getModel(modelId)?.contextSize ?? 128_000)
       : 128_000;
+
+    this.logger.info(
+      `Create run ${chalk.cyan(params.runId)} — agent: ${chalk.cyan(params.agentBinding.agentId)}, model: ${chalk.red(modelId ?? '(default)')}, memory: ${chalk.red(memoryType)} (${contextSize} ctx)`,
+    );
 
     const config = RuntimeConfigVO.create(
       agent.config,
@@ -59,10 +69,9 @@ export class AgentRunExecutor {
 
     const memory = this.memoryFactory.create({
       history: params.historyMessages,
-      systemPrompt: config.systemPrompt,
       contextSize: config.contextSize,
       modelId: cfg.model?.modelId ?? '',
-      memoryType: (cfg.memory?.type ?? 'slide_window_memory') as MemoryType,
+      memoryType,
       windowSize: cfg.memory?.windowSize,
     });
 
@@ -96,6 +105,9 @@ export class AgentRunExecutor {
     ctx: AgentRunContext,
   ): AsyncGenerator<EnrichedEvent> {
     const agent = container.resolve<Agent>(run.agentId);
+    this.logger.debug(
+      `Execute run ${chalk.cyan(run.runId)} for agent ${chalk.cyan(run.agentId)}`,
+    );
     yield run.start();
 
     try {
@@ -117,6 +129,9 @@ export class AgentRunExecutor {
       }
     } catch (err) {
       if (ctx.signal.aborted || run.isTerminated) return;
+      this.logger.error(
+        `Run ${chalk.cyan(run.runId)} (${run.agentId}) failed: ${err}`,
+      );
       yield run.fail((err as Error)?.message ?? String(err));
     }
   }

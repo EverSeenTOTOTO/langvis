@@ -13,12 +13,10 @@ export class ReActMemory extends BaseMemory {
   async buildContext(): Promise<LlmMessage[]> {
     const messages: LlmMessage[] = [];
 
-    if (this.systemPrompt) {
-      messages.push({ role: 'system', content: this.systemPrompt });
-    }
-
     for (const msg of this.history) {
-      if (msg.role === Role.USER && msg.meta?.hidden) {
+      if (msg.role === Role.SYSTEM) {
+        messages.push({ role: 'system', content: msg.content });
+      } else if (msg.role === Role.USER && msg.meta?.hidden) {
         messages.push({ role: 'user', content: msg.content });
       }
     }

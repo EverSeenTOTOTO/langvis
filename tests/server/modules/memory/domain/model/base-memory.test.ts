@@ -35,7 +35,6 @@ describe('BaseMemory', () => {
       const history = [makeMessage(Role.USER, 'hello')];
       const memory = new TestMemory({
         history,
-        systemPrompt: 'You are helpful',
         contextSize: 8000,
         modelId: 'openai:gpt-4',
       });
@@ -43,7 +42,7 @@ describe('BaseMemory', () => {
       expect(memory.getContextUsage().total).toBe(8000);
     });
 
-    it('should work without systemPrompt', () => {
+    it('should work with empty history', () => {
       const memory = new TestMemory({
         history: [],
         contextSize: 4000,
