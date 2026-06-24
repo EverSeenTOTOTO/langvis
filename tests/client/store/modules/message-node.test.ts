@@ -173,3 +173,37 @@ describe('MessageNode — process timeline', () => {
     });
   });
 });
+
+describe('MessageNode — 终态文案', () => {
+  it('cancelled 帧将取消原因写入 content（供气泡渲染）', () => {
+    const node = liveNode();
+    node.handleFrame(
+      frame({ seq: 1, type: 'cancelled', reason: 'Cancelled by user' }),
+    );
+
+    expect(node.status).toBe('cancelled');
+    expect(node.cancelReason).toBe('Cancelled by user');
+    expect(node.content).toBe('Cancelled by user');
+  });
+
+  it('cancelled 帧覆盖已流式的部分文本', () => {
+    const node = liveNode();
+    node.handleFrame(frame({ seq: 1, type: 'text_chunk', content: '部分…' }));
+    node.handleFrame(
+      frame({ seq: 2, type: 'cancelled', reason: 'Cancelled by user' }),
+    );
+
+    expect(node.content).toBe('Cancelled by user');
+  });
+
+  it('error 帧将错误信息写入 content', () => {
+    const node = liveNode();
+    node.handleFrame(
+      frame({ seq: 1, type: 'error', error: 'upstream blew up' }),
+    );
+
+    expect(node.status).toBe('failed');
+    expect(node.error).toBe('upstream blew up');
+    expect(node.content).toBe('upstream blew up');
+  });
+});

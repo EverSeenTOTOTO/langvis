@@ -186,8 +186,8 @@ describe('ChatService', () => {
     });
   });
 
-  describe('markMessagesFailed', () => {
-    it('updates Message content + AgentRun status', async () => {
+  describe('markMessagesTerminated', () => {
+    it('updates Message content + AgentRun status (failed)', async () => {
       const messages = [
         {
           id: 'msg_1',
@@ -207,7 +207,11 @@ describe('ChatService', () => {
         },
       ];
 
-      await service.markMessagesFailed(messages, 'Generation interrupted');
+      await service.markMessagesTerminated(
+        messages,
+        'failed',
+        'Generation interrupted',
+      );
 
       expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
         content: 'Generation interrupted',
@@ -225,6 +229,29 @@ describe('ChatService', () => {
       });
     });
 
+    it('propagates cancelled status + reason as content', async () => {
+      const messages = [
+        {
+          id: 'msg_1',
+          role: Role.ASSIST,
+          agentRunId: 'run_1',
+          content: '',
+          createdAt: new Date(),
+          conversationId: 'conv_1',
+        },
+      ];
+
+      await service.markMessagesTerminated(messages, 'cancelled', 'Cancelled');
+
+      expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
+        content: 'Cancelled',
+      });
+      expect(agentRunRepo.update).toHaveBeenCalledWith('run_1', {
+        status: 'cancelled',
+        completedAt: expect.any(Date),
+      });
+    });
+
     it('skips AgentRun update when no agentRunId', async () => {
       const messages = [
         {
@@ -237,7 +264,7 @@ describe('ChatService', () => {
         },
       ];
 
-      await service.markMessagesFailed(messages, 'Error');
+      await service.markMessagesTerminated(messages, 'failed', 'Error');
 
       expect(messageRepo.update).toHaveBeenCalledTimes(1);
       expect(agentRunRepo.update).not.toHaveBeenCalled();

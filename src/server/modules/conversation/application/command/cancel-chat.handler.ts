@@ -30,7 +30,7 @@ export class CancelChatHandler {
       if (!this.sessionManager.hasSession(command.conversationId)) {
         throw new SessionNotFoundError(command.conversationId);
       }
-      this.sessionManager.cancelAllActiveRuns(
+      await this.sessionManager.cancelAllActiveRuns(
         command.conversationId,
         command.reason,
       );

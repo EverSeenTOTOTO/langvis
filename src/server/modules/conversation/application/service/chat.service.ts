@@ -1,4 +1,5 @@
 import type { Message, MessageAttachment } from '@/shared/types/entities';
+import type { RunStatus } from '@/shared/types/agent';
 import { Role } from '@/shared/entities/Message';
 import { inject, singleton } from 'tsyringe';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
@@ -134,17 +135,17 @@ export class ChatService {
   }
 
   /**
-   * Mark active assistant messages as failed — updates AgentRun status only.
-   * events 事实流不动（保留原貌），Message content 由调用方决定。
+   * 终止活跃的 assistant 消息——更新 Message content 与 AgentRun status。
+   * events 事实流不动（保留原貌），终态与文案由调用方决定：
+   * 服务重启残留 → failed + 'Generation interrupted'；用户取消孤儿 → cancelled + reason。
    */
-  async markMessagesFailed(
+  async markMessagesTerminated(
     messages: Message[],
-    fallbackContent: string,
+    status: RunStatus,
+    content: string,
   ): Promise<void> {
     await Promise.all(
-      messages.map(msg =>
-        this.messageRepo.update(msg.id, { content: fallbackContent }),
-      ),
+      messages.map(msg => this.messageRepo.update(msg.id, { content })),
     );
 
     const agentRunIds = messages
@@ -155,7 +156,7 @@ export class ChatService {
       await Promise.all(
         agentRunIds.map(runId =>
           this.agentRunRepo.update(runId, {
-            status: 'failed',
+            status,
             completedAt: new Date(),
           }),
         ),
