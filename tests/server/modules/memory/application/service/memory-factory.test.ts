@@ -66,7 +66,6 @@ describe('MemoryFactory', () => {
       const history = [{ id: 'msg_1', role: 'user', content: 'hi' }] as any[];
       const memory = factory.create({
         history,
-        systemPrompt: 'You are helpful',
         contextSize: 4096,
         modelId: 'model-x',
         memoryType: 'react_memory',

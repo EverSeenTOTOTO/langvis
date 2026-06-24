@@ -42,15 +42,9 @@ function makeStep(
   };
 }
 
-function createMemory(
-  history: Message[],
-  opts: {
-    systemPrompt?: string;
-  } = {},
-) {
+function createMemory(history: Message[]) {
   return new ReActMemory({
     history,
-    systemPrompt: opts.systemPrompt,
     contextSize: 8000,
     modelId: 'openai:gpt-4',
   });
@@ -117,12 +111,13 @@ describe('ReActMemory', () => {
 
     it('should include system prompt and hidden messages', async () => {
       const history = [
+        makeMessage(Role.SYSTEM, 'You are helpful'),
         makeMessage(Role.USER, 'session context', { meta: { hidden: true } }),
         makeMessage(Role.USER, 'visible question'),
         makeMessage(Role.ASSIST, 'answer'),
       ];
 
-      const memory = createMemory(history, { systemPrompt: 'You are helpful' });
+      const memory = createMemory(history);
       const messages = await memory.buildContext();
 
       expect(messages[0].role).toBe('system');

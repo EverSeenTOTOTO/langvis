@@ -15,7 +15,6 @@ export type MemoryType = 'slide_window_memory' | 'react_memory';
 export class MemoryFactory {
   create(params: {
     history: Message[];
-    systemPrompt?: string;
     contextSize: number;
     modelId: string;
     memoryType: MemoryType;
