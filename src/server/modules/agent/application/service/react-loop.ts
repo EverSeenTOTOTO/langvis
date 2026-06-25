@@ -44,7 +44,6 @@ export async function* runReactLoop(
     modelId,
     llm: ctx.llm,
     compaction: cc,
-    logger,
   });
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {

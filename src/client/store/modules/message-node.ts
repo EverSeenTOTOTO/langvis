@@ -60,6 +60,7 @@ export class MessageNode {
   timeline: TimelineItem[] = [];
   steps: ReActStep[] = [];
   contextUsage?: { used: number; total: number };
+  audio: { filePath: string; voice?: string } | null = null;
   private _awaitingInputData: AwaitingInputData | null = null;
 
   constructor(data: {
@@ -70,6 +71,7 @@ export class MessageNode {
     content?: string;
     status?: RunStatus;
     steps?: ReActStep[] | null;
+    audio?: { filePath: string; voice?: string } | null;
   }) {
     this.id = data.id;
     this.conversationId = data.conversationId;
@@ -81,6 +83,7 @@ export class MessageNode {
       this.content = data.content ?? '';
       this.status = data.status;
       this.steps = data.steps ?? [];
+      this.audio = data.audio ?? null;
       // Derive toolCalls + ordered timeline from steps
       this.toolCalls = this.stepsToToolCalls(this.steps);
       this.timeline = this.stepsToTimeline(this.steps);
@@ -179,6 +182,10 @@ export class MessageNode {
 
       case 'context_usage':
         this.contextUsage = { used: frame.used, total: frame.total };
+        break;
+
+      case 'audio':
+        this.audio = { filePath: frame.filePath, voice: frame.voice };
         break;
     }
   }

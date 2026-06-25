@@ -53,7 +53,8 @@ export type RunEvent =
       total: number;
       reason: ContextUsageMeta['reason'];
     }
-  | { type: 'process_summary'; summary: string };
+  | { type: 'process_summary'; summary: string }
+  | { type: 'audio'; filePath: string; voice?: string };
 
 // ─── 应用层富化 ───
 

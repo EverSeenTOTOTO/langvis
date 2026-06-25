@@ -65,9 +65,22 @@ export class CompleteTurnHandler {
       const processSummary =
         psEvent?.type === 'process_summary' ? psEvent.summary : null;
 
+      // 语音回复（response_user 的 tts 产物）：附到 meta.audio，前端在回复底部渲染音频，重载后仍在。
+      const audioEvent = [...run.eventStream]
+        .reverse()
+        .find(e => e.type === 'audio');
+      const audio =
+        audioEvent?.type === 'audio'
+          ? { filePath: audioEvent.filePath, voice: audioEvent.voice }
+          : null;
+
+      const meta: Record<string, unknown> = {};
+      if (processSummary) meta.processSummary = processSummary;
+      if (audio) meta.audio = audio;
+
       await this.messageRepo.update(
         messageId,
-        processSummary ? { content, meta: { processSummary } } : { content },
+        Object.keys(meta).length > 0 ? { content, meta } : { content },
       );
 
       // 历史层压缩：有效历史超阈时，折叠成新的压缩摘要 C（hidden Message），供后续 turn 复用。

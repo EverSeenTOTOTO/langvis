@@ -2,7 +2,7 @@ import type { LlmMessage } from '@/shared/types/entities';
 import type { ContextUsage } from './memory.types';
 import type { ContextPort } from '../port/context.port';
 import type { LlmPort } from '@/server/modules/agent/domain/port/llm.port';
-import type { Logger } from '@/server/utils/logger';
+import { winstonLogger } from '@/server/utils/logger';
 import type { CompactionConfig } from '../service/compaction-config';
 import { measureUsage } from '../service/measure-usage';
 import { Summarizer } from '../service/summarizer';
@@ -20,7 +20,6 @@ export interface WorkingMemoryParams {
   /** per-run 的 LlmPort（即 ctx.llm），折叠时复用（同模型、同取消域）。 */
   llm: LlmPort;
   compaction: CompactionConfig;
-  logger: Logger;
 }
 
 /**
@@ -42,7 +41,7 @@ export class WorkingMemory implements ContextPort {
   private readonly modelId: string;
   private readonly compaction: CompactionConfig;
   private readonly summarizer: Summarizer;
-  private readonly logger: Logger;
+  private readonly logger = winstonLogger.child({ source: 'WorkingMemory' });
 
   constructor(params: WorkingMemoryParams) {
     this.iterMessages = [...params.seed];
@@ -50,10 +49,9 @@ export class WorkingMemory implements ContextPort {
     this.contextSize = params.contextSize;
     this.modelId = params.modelId;
     this.compaction = params.compaction;
-    this.logger = params.logger;
     this.summarizer = new Summarizer(
       params.llm,
-      params.logger,
+      this.logger,
       params.compaction.windowSize,
     );
   }
