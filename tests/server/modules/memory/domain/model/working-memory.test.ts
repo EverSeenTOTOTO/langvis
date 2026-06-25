@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { WorkingMemory } from '@/server/modules/memory/domain/model/working-memory';
-import { COMPACTION_DEFAULTS } from '@/server/modules/memory/domain/service/compaction-config';
+import type { CompactionConfig } from '@/server/modules/memory/domain/service/compaction-config';
+
+const COMPACTION_DEFAULTS: CompactionConfig = {
+  enabled: true,
+  threshold: 0.8,
+  windowSize: 10,
+  keepRecent: 4,
+};
 import type { LlmPort } from '@/server/modules/agent/domain/port/llm.port';
 import type { LlmMessage } from '@/shared/types/entities';
 

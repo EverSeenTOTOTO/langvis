@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import '@/server/libs/config/config.module';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { ConfigValidationError } from '@/server/modules/agent/domain/errors';
 
-// createRunConfig / getDescriptor / getUploadLimits 不依赖 ToolService/SkillService
+// createRunConfig / getDescriptor 不依赖 ToolService/SkillService
 // （仅 getSystemPrompt 需要工具发现）。此处用 stub 构造，避开 DI。
 const stubToolService = {
   initialize: () => Promise.resolve(),
@@ -25,12 +26,6 @@ describe('AgentService', () => {
       expect.arrayContaining(['response_user', 'cached_read']),
     );
     expect(d.configSchema).toBeDefined();
-  });
-
-  it('getUploadLimits 返回全局限额', () => {
-    const u = makeService().getUploadLimits();
-    expect(u.maxSize).toBe(10485760);
-    expect(u.maxCount).toBe(5);
   });
 
   describe('createRunConfig', () => {
