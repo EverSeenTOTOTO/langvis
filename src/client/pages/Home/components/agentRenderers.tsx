@@ -3,6 +3,7 @@ import type { MessageNode } from '@/client/store/modules/message-node';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Typography } from 'antd';
 import type React from 'react';
+import AudioPlayer from '@/client/components/AudioPlayer';
 import { UniversalEventRenderer } from './AgentMessage/UniversalEventRenderer';
 
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
@@ -35,6 +36,8 @@ export const renderAgentMessage: AgentRenderer = node => ({
       >
         <MarkdownRender>{node.content}</MarkdownRender>
       </Suspense>
+
+      {node.audio && <AudioPlayer src={`/upload/${node.audio.filePath}`} />}
     </>
   ),
 });

@@ -7,19 +7,18 @@ import { winstonLogger } from '@/server/utils/logger';
 // @tool 装饰器经 DI 才注入 logger；直接 new 时手动补上。
 function makeTool(): TextToSpeechTool {
   const tool = new TextToSpeechTool();
-
   (tool as any).logger = winstonLogger;
   return tool;
 }
 
-function makeCtx(
-  input: Record<string, unknown>,
-  runtimeConfig: Record<string, unknown> = {},
-): { ctx: ToolCallContext; tts: ReturnType<typeof vi.fn> } {
+function makeCtx(input: Record<string, unknown>): {
+  ctx: ToolCallContext;
+  tts: ReturnType<typeof vi.fn>;
+} {
   const tts = vi.fn(
     async (_modelId: string, params: { reqId: string; voice: string }) => ({
       voice: params.voice,
-      filePath: `/tmp/${params.reqId}.mp3`,
+      filePath: `tts/${params.reqId}.mp3`,
     }),
   );
   const ctx = {
@@ -29,7 +28,7 @@ function makeCtx(
     workDir: '/tmp',
     llm: { tts } as unknown as LlmPort,
     runId: 'run_42',
-    runtimeConfig,
+    runtimeConfig: {},
   } as unknown as ToolCallContext;
   return { ctx, tts };
 }
@@ -40,43 +39,27 @@ async function run(ctx: ToolCallContext) {
   return value!;
 }
 
-describe('TextToSpeechTool 配置兜底', () => {
-  it('input 的 voice 优先于 config', async () => {
-    const { ctx, tts } = makeCtx(
-      { text: 'hi', voice: 'V_INPUT' },
-      { tts: { voice: 'V_CFG', modelId: 'M_CFG' } },
-    );
-    await run(ctx);
+describe('TextToSpeechTool', () => {
+  it('用 input 的 voice 合成；reqId 缺省回退 runId；modelId 由 input 决定', async () => {
+    const { ctx, tts } = makeCtx({ text: 'hi', voice: 'V1', modelId: 'M1' });
+    const out = await run(ctx);
+
     expect(tts).toHaveBeenCalledTimes(1);
-    const [, params] = tts.mock.calls[0]!;
-    expect(params.voice).toBe('V_INPUT');
-    expect(params.modelId).toBe('M_CFG'); // modelId 仍取 config
-    expect(params.reqId).toBe('run_42'); // reqId 兜底 runId
-  });
-
-  it('voice/modelId 缺省时回退 config.tts', async () => {
-    const { ctx, tts } = makeCtx(
-      { text: 'hi' },
-      { tts: { voice: 'V_CFG', modelId: 'M_CFG' } },
-    );
-    await run(ctx);
     const [modelId, params] = tts.mock.calls[0]!;
-    expect(modelId).toBe('M_CFG');
-    expect(params.voice).toBe('V_CFG');
+    expect(modelId).toBe('M1');
+    expect(params).toMatchObject({ text: 'hi', voice: 'V1', reqId: 'run_42' });
+    expect(out).toEqual({ voice: 'V1', filePath: 'tts/run_42.mp3' });
   });
 
-  it('reqId 缺省时回退 runId', async () => {
-    const { ctx, tts } = makeCtx(
-      { text: 'hi', voice: 'V1' },
-      { tts: { modelId: 'M1' } },
-    );
+  it('reqId 显式传入时优先使用', async () => {
+    const { ctx, tts } = makeCtx({ text: 'hi', voice: 'V1', reqId: 'custom' });
     await run(ctx);
     const [, params] = tts.mock.calls[0]!;
-    expect(params.reqId).toBe('run_42');
+    expect(params.reqId).toBe('custom');
   });
 
-  it('voice 既无 input 又无 config 时抛错', async () => {
-    const { ctx } = makeCtx({ text: 'hi' }, {});
+  it('缺少 voice 时抛错（不再回退任何配置）', async () => {
+    const { ctx } = makeCtx({ text: 'hi' });
     await expect(makeTool().call(ctx).next()).rejects.toThrow(/voice/i);
   });
 });

@@ -3,7 +3,6 @@ import { WorkingMemory } from '@/server/modules/memory/domain/model/working-memo
 import { COMPACTION_DEFAULTS } from '@/server/modules/memory/domain/service/compaction-config';
 import type { LlmPort } from '@/server/modules/agent/domain/port/llm.port';
 import type { LlmMessage } from '@/shared/types/entities';
-import { winstonLogger } from '@/server/utils/logger';
 
 function mockLlm(content = 'RECAP'): LlmPort {
   return { chatContent: vi.fn(async () => content) } as unknown as LlmPort;
@@ -20,7 +19,6 @@ function makeWorking(
     modelId: 'openai:gpt-4',
     llm,
     compaction: COMPACTION_DEFAULTS,
-    logger: winstonLogger,
   });
 }
 

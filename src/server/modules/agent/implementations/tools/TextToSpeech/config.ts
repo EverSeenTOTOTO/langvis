@@ -1,46 +1,17 @@
 import { ToolConfig } from '@/shared/types';
+import {
+  TTS_VOICES,
+  TTS_EMOTIONS,
+  type TtsVoice,
+  type TtsEmotion,
+} from '../tts-options';
 
 export const config: ToolConfig<
   {
     text: string;
     reqId?: string;
-    voice?: [
-      'zh_female_roumeinvyou_emo_v2_mars_bigtts',
-      'zh_female_meilinvyou_emo_v2_mars_bigtts',
-      'zh_female_gaolengyujie_emo_v2_mars_bigtts',
-      'zh_female_qingxinnvsheng_mars_bigtts',
-      'zh_female_zhixingnvsheng_mars_bigtts',
-      'zh_female_linjianvhai_moon_bigtts',
-      'ICL_zh_female_zhixingwenwan_tob',
-      'ICL_zh_female_wenrouwenya_tob',
-      'ICL_zh_female_wenyinvsheng_v1_tob',
-      'ICL_zh_female_feicui_v1_tob',
-      'ICL_zh_female_yuxin_v1_tob',
-      'ICL_zh_female_yry_tob',
-      'zh_female_gaolengyujie_moon_bigtts',
-      'zh_female_sajiaonvyou_moon_bigtts',
-      'ICL_zh_female_huopodiaoman_tob',
-      'ICL_zh_female_aomanjiaosheng_tob',
-      'ICL_zh_female_nuanxinxuejie_tob',
-      'ICL_zh_female_chengshujiejie_tob',
-      'ICL_zh_female_wumeiyujie_tob',
-      'ICL_zh_female_aojiaonvyou_tob',
-      'ICL_zh_female_ganli_v1_tob',
-      'ICL_zh_female_xiangliangya_v1_tob',
-      'ICL_zh_female_xingganyujie_tob',
-      'ICL_zh_female_luoqing_v1_tob',
-      'ICL_zh_female_jiaxiaozi_tob',
-    ][number];
-    emotion?: [
-      'happy',
-      'hate',
-      'sad',
-      'angry',
-      'surprised',
-      'fear',
-      'lovey-dovey',
-      'shy',
-    ][number];
+    voice: TtsVoice;
+    emotion?: TtsEmotion;
     speedRatio?: number;
   },
   {
@@ -67,49 +38,12 @@ export const config: ToolConfig<
       },
       voice: {
         type: 'string',
-        enum: [
-          'zh_female_roumeinvyou_emo_v2_mars_bigtts',
-          'zh_female_meilinvyou_emo_v2_mars_bigtts',
-          'zh_female_gaolengyujie_emo_v2_mars_bigtts',
-          'zh_female_qingxinnvsheng_mars_bigtts',
-          'zh_female_zhixingnvsheng_mars_bigtts',
-          'zh_female_linjianvhai_moon_bigtts',
-          'ICL_zh_female_zhixingwenwan_tob',
-          'ICL_zh_female_wenrouwenya_tob',
-          'ICL_zh_female_wenyinvsheng_v1_tob',
-          'ICL_zh_female_feicui_v1_tob',
-          'ICL_zh_female_yuxin_v1_tob',
-          'ICL_zh_female_yry_tob',
-          'zh_female_gaolengyujie_moon_bigtts',
-          'zh_female_sajiaonvyou_moon_bigtts',
-          'ICL_zh_female_huopodiaoman_tob',
-          'ICL_zh_female_aomanjiaosheng_tob',
-          'ICL_zh_female_nuanxinxuejie_tob',
-          'ICL_zh_female_chengshujiejie_tob',
-          'ICL_zh_female_wumeiyujie_tob',
-          'ICL_zh_female_aojiaonvyou_tob',
-          'ICL_zh_female_ganli_v1_tob',
-          'ICL_zh_female_xiangliangya_v1_tob',
-          'ICL_zh_female_xingganyujie_tob',
-          'ICL_zh_female_luoqing_v1_tob',
-          'ICL_zh_female_jiaxiaozi_tob',
-        ],
-        description:
-          'Voice type to use for synthesis. Omit to default to the user-configured voice.',
-        nullable: true,
+        enum: [...TTS_VOICES],
+        description: 'Voice type to use for synthesis.',
       },
       emotion: {
         type: 'string',
-        enum: [
-          'happy',
-          'hate',
-          'sad',
-          'angry',
-          'surprised',
-          'fear',
-          'lovey-dovey',
-          'shy',
-        ],
+        enum: [...TTS_EMOTIONS],
         default: 'hate',
         description: 'Emotional tone for the speech synthesis.',
         nullable: true,
@@ -123,7 +57,7 @@ export const config: ToolConfig<
         nullable: true,
       },
     },
-    required: ['text'],
+    required: ['text', 'voice'],
   },
   outputSchema: {
     type: 'object',

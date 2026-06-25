@@ -207,3 +207,36 @@ describe('MessageNode — 终态文案', () => {
     expect(node.content).toBe('upstream blew up');
   });
 });
+
+describe('MessageNode — audio', () => {
+  it('audio 帧写入 node.audio（供内容底部渲染播放器）', () => {
+    const node = liveNode();
+    node.handleFrame(
+      frame({
+        seq: 1,
+        type: 'audio',
+        filePath: 'tts/run_1.mp3',
+        voice: 'zh_female_x',
+      }),
+    );
+
+    expect(node.audio).toEqual({
+      filePath: 'tts/run_1.mp3',
+      voice: 'zh_female_x',
+    });
+  });
+
+  it('历史消息从 data.audio 水合（重载后仍有音频）', () => {
+    const node = new MessageNode({
+      id: 'm1',
+      conversationId: 'c1',
+      role: Role.ASSIST,
+      createdAt: new Date(),
+      status: 'completed',
+      content: 'hi',
+      audio: { filePath: 'tts/old.mp3' },
+    });
+
+    expect(node.audio).toEqual({ filePath: 'tts/old.mp3' });
+  });
+});
