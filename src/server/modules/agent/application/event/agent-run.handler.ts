@@ -40,7 +40,7 @@ export class AgentRunHandler {
   async handle(
     event: DomainEvent<string, TurnInitiatedPayload>,
   ): Promise<void> {
-    const { conversationId, assistantMessage, agentBinding, systemPrompt } =
+    const { conversationId, assistantMessage, userConfig, systemPrompt } =
       event.payload;
 
     const history = await this.conversationService.getHistoryMessages(
@@ -53,7 +53,7 @@ export class AgentRunHandler {
     const { run, ctx } = this.executor.createRun({
       runId: generateId('run'),
       workDir,
-      agentBinding,
+      userConfig,
       systemPrompt,
       historyMessages: history,
     });
@@ -65,12 +65,9 @@ export class AgentRunHandler {
     // Create initial agent_runs row (Agent BC persistence)
     await this.agentRunRepo.save({
       id: run.runId,
-      agentId: run.config.agentId,
       status: 'running',
       events: [],
       config: {
-        agentId: run.config.agentId,
-        agentName: run.config.agentName,
         systemPrompt: run.config.systemPrompt,
         tools: run.config.tools,
         contextSize: run.config.contextSize,
@@ -89,7 +86,7 @@ export class AgentRunHandler {
     run: AgentRun,
     ctx: AgentRunContext,
   ): Promise<void> {
-    this.logger.info(`Starting agent=${run.agentId}`, {
+    this.logger.info(`Starting agent run`, {
       sessionId: conversationId,
       messageId,
     });

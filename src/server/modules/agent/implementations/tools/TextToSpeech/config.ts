@@ -3,8 +3,8 @@ import { ToolConfig } from '@/shared/types';
 export const config: ToolConfig<
   {
     text: string;
-    reqId: string;
-    voice: [
+    reqId?: string;
+    voice?: [
       'zh_female_roumeinvyou_emo_v2_mars_bigtts',
       'zh_female_meilinvyou_emo_v2_mars_bigtts',
       'zh_female_gaolengyujie_emo_v2_mars_bigtts',
@@ -62,7 +62,8 @@ export const config: ToolConfig<
       reqId: {
         type: 'string',
         description:
-          'Unique request identifier used for tracking. Also used as output filename.',
+          'Unique request identifier used for tracking. Also used as output filename. Omit to default to the run id.',
+        nullable: true,
       },
       voice: {
         type: 'string',
@@ -93,7 +94,9 @@ export const config: ToolConfig<
           'ICL_zh_female_luoqing_v1_tob',
           'ICL_zh_female_jiaxiaozi_tob',
         ],
-        description: 'Voice type to use for synthesis.',
+        description:
+          'Voice type to use for synthesis. Omit to default to the user-configured voice.',
+        nullable: true,
       },
       emotion: {
         type: 'string',
@@ -120,7 +123,7 @@ export const config: ToolConfig<
         nullable: true,
       },
     },
-    required: ['text', 'reqId', 'voice'],
+    required: ['text'],
   },
   outputSchema: {
     type: 'object',

@@ -1,9 +1,6 @@
 import { container, inject, singleton } from 'tsyringe';
-import type { AgentBinding } from '@/shared/types';
 import type { Message } from '@/shared/types/entities';
-import type { Agent } from '@/server/modules/agent/domain/model/agent.base';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
-import { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
 import { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type { ToolCallDeps } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
@@ -13,11 +10,11 @@ import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { LlmAdapter } from '@/server/modules/agent/infrastructure/llm.adapter';
 import { generateId } from '@/shared/utils';
 import { LlmProvider } from '@/server/modules/memory/infrastructure/llm.provider';
-import {
-  MemoryFactory,
-  type MemoryType,
-} from '@/server/modules/memory/application/service/memory-factory';
+import { ConversationMemory } from '@/server/modules/memory/domain/model/conversation-memory';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import { ToolService } from './tool.service';
+import { AgentService } from './agent.service';
+import { runReactLoop } from './react-loop';
 import Logger from '@/server/utils/logger';
 import chalk from 'chalk';
 import { CACHE_SERVICE } from '@/server/modules/agent/agent.di-tokens';
@@ -29,50 +26,43 @@ export class AgentRunExecutor {
 
   constructor(
     @inject(LlmProvider) private readonly llmProvider: LlmProvider,
-    @inject(MemoryFactory) private readonly memoryFactory: MemoryFactory,
     @inject(CACHE_SERVICE) private readonly cacheService: CachePort,
     @inject(ProviderService) private readonly providerService: ProviderService,
+    @inject(ToolService) private readonly toolService: ToolService,
+    @inject(AgentService) private readonly agentService: AgentService,
   ) {}
 
   createRun(params: {
     runId: string;
     workDir: string;
-    agentBinding: AgentBinding;
+    userConfig: Record<string, unknown>;
     systemPrompt: string;
     historyMessages: Message[];
   }): { run: AgentRun; ctx: AgentRunContext } {
-    const agent = container.resolve<Agent>(params.agentBinding.agentId);
-
-    const cfg = params.agentBinding.config as {
+    const cfg = params.userConfig as {
       model?: { modelId?: string };
-      memory?: { type?: string; windowSize?: number };
     };
     const modelId = cfg.model?.modelId;
-    const memoryType = (cfg.memory?.type ??
-      'slide_window_memory') as MemoryType;
     const contextSize = modelId
       ? (this.providerService.getModel(modelId)?.contextSize ?? 128_000)
       : 128_000;
 
     this.logger.info(
-      `Create run ${chalk.cyan(params.runId)} — agent: ${chalk.cyan(params.agentBinding.agentId)}, model: ${chalk.red(modelId ?? '(default)')}, memory: ${chalk.red(memoryType)} (${contextSize} ctx)`,
+      `Create run ${chalk.cyan(params.runId)} — model: ${chalk.red(modelId ?? '(default)')} (${contextSize} ctx)`,
     );
 
-    const config = RuntimeConfigVO.create(
-      agent.config,
-      params.agentBinding,
+    const config = this.agentService.createRunConfig(
+      params.userConfig,
       params.systemPrompt,
       contextSize,
     );
 
-    const run = new AgentRun(params.runId, params.agentBinding.agentId, config);
+    const run = new AgentRun(params.runId, config);
 
-    const memory = this.memoryFactory.create({
+    const memory = new ConversationMemory({
       history: params.historyMessages,
       contextSize: config.contextSize,
       modelId: cfg.model?.modelId ?? '',
-      memoryType,
-      windowSize: cfg.memory?.windowSize,
     });
 
     const llm = new LlmAdapter(this.llmProvider, modelId);
@@ -80,7 +70,6 @@ export class AgentRunExecutor {
     const ctx: AgentRunContext = {
       run,
       config,
-      agentId: params.agentBinding.agentId,
       runId: run.runId,
       workDir: params.workDir,
       signal: run.signal,
@@ -94,6 +83,7 @@ export class AgentRunExecutor {
           runId: run.runId,
           llm,
           cache: this.cacheService,
+          runtimeConfig: config.runtimeConfig,
         }),
     };
 
@@ -104,14 +94,14 @@ export class AgentRunExecutor {
     run: AgentRun,
     ctx: AgentRunContext,
   ): AsyncGenerator<EnrichedEvent> {
-    const agent = container.resolve<Agent>(run.agentId);
-    this.logger.debug(
-      `Execute run ${chalk.cyan(run.runId)} for agent ${chalk.cyan(run.agentId)}`,
-    );
+    // 确保工具已注册（原 AgentService 构造时触发的初始化，现由执行器保证）。
+    await this.toolService.initialize();
+
+    this.logger.debug(`Execute run ${chalk.cyan(run.runId)}`);
     yield run.start();
 
     try {
-      for await (const event of agent.call(ctx)) {
+      for await (const event of runReactLoop(ctx)) {
         const enriched = run.append(event);
         if (enriched) yield enriched;
       }
@@ -129,9 +119,7 @@ export class AgentRunExecutor {
       }
     } catch (err) {
       if (ctx.signal.aborted || run.isTerminated) return;
-      this.logger.error(
-        `Run ${chalk.cyan(run.runId)} (${run.agentId}) failed: ${err}`,
-      );
+      this.logger.error(`Run ${chalk.cyan(run.runId)} failed: ${err}`);
       yield run.fail((err as Error)?.message ?? String(err));
     }
   }

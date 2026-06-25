@@ -306,7 +306,7 @@ describe('FileController - Upload', () => {
       fieldname: 'file',
       originalname: 'large.txt',
       buffer: Buffer.from('x'.repeat(2000)),
-      size: 2000,
+      size: 10485761, // > 全局限额 10MB
       mimetype: 'text/plain',
     } as Express.Multer.File;
 

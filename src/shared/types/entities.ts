@@ -35,7 +35,6 @@ export type Message = {
 
 export type AgentRun = {
   id: string;
-  agentId: string;
   status: RunStatus;
   /** 事实源 —— content/steps 由 projectRun 派生 */
   events: EnrichedEvent[] | null;

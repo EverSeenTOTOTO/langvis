@@ -4,7 +4,6 @@ import type { EmailService } from '@/server/modules/email/application/service/em
 import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
 import type { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import type { EventBus } from '@/server/libs/ddd';
-import { AgentIds } from '@/shared/constants';
 import {
   ArchiveEmailCommand,
   EmailArchived,
@@ -86,8 +85,7 @@ describe('ArchiveEmailHandler', () => {
       '归档邮件: Hello',
       'user_1',
       expect.objectContaining({
-        agent: AgentIds.REACT,
-        memory: { type: 'react_memory' },
+        model: expect.any(Object),
       }),
       null,
       'Email Archive',

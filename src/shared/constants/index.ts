@@ -23,13 +23,6 @@ export enum ToolIds {
   DOCUMENT_STORE = 'document_store',
 }
 
-export enum AgentIds {
-  DOCUMENT_CONCLUDE = 'document_conclude_agent',
-  CHAT = 'chat_agent',
-  REACT = 'react_agent',
-  GIRLFRIEND = 'girlfriend_agent',
-}
-
 export const UNGROUPED_GROUP_NAME = 'Ungrouped';
 
 export const RedisKeys = {

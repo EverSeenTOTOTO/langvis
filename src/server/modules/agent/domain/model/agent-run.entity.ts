@@ -5,7 +5,6 @@ import { AggregateRoot } from '@/server/libs/ddd';
 import type { RunStatus } from '@/shared/types/agent';
 
 export class AgentRun extends AggregateRoot<string> {
-  readonly agentId: string;
   readonly config: RuntimeConfigVO;
 
   private status: RunStatus = 'initialized';
@@ -32,9 +31,8 @@ export class AgentRun extends AggregateRoot<string> {
     return this.abortController.signal;
   }
 
-  constructor(runId: string, agentId: string, config: RuntimeConfigVO) {
+  constructor(runId: string, config: RuntimeConfigVO) {
     super(runId);
-    this.agentId = agentId;
     this.config = config;
   }
 

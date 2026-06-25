@@ -1,4 +1,3 @@
-import { AgentIds } from '@/shared/constants';
 import { inject } from 'tsyringe';
 import { commandHandler } from '@/server/decorator/handler';
 import { EventBus, createDomainEvent } from '@/server/libs/ddd';
@@ -46,9 +45,7 @@ export class ArchiveEmailHandler {
       `归档邮件: ${email.subject}`,
       userId,
       {
-        agent: AgentIds.REACT,
         model: { modelId: defaultModel?.id },
-        memory: { type: 'react_memory' },
       },
       null,
       'Email Archive',

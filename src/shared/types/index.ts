@@ -48,5 +48,5 @@ export type {
   ContextUsageMeta,
   SSEFrame,
 } from './events';
-export type { RunStatus, AgentBinding, ConversationConfig } from './agent';
+export type { RunStatus } from './agent';
 export type { ToolCallRecord, RunSnapshot } from './render';

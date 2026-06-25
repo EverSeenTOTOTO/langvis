@@ -82,7 +82,7 @@ export class SessionManager {
     );
     await this.redisService.set(
       RedisKeys.CHAT_SESSION(conversationId),
-      { conversationId, startedAt: Date.now(), agentId: null },
+      { conversationId, startedAt: Date.now() },
       3600,
     );
   }
@@ -271,5 +271,4 @@ export class SessionManager {
 export interface ChatState {
   conversationId: string;
   startedAt: number;
-  agentId: string | null;
 }

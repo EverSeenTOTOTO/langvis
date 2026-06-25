@@ -18,6 +18,7 @@ export interface ToolCallDeps {
   runId: string;
   llm: LlmPort;
   cache: CachePort;
+  runtimeConfig: Record<string, unknown>;
 }
 
 export class ToolCall extends Entity<string> {
@@ -86,6 +87,7 @@ export class ToolCall extends Entity<string> {
         workDir: this.deps.workDir,
         llm: this.deps.llm,
         runId: this.deps.runId,
+        runtimeConfig: this.deps.runtimeConfig,
       };
       const output = yield* this.tool.call(ctx);
 

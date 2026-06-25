@@ -3,7 +3,7 @@ import {
   ConversationEntity,
 } from '@/shared/entities/Conversation';
 import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
-import { AgentIds, UNGROUPED_GROUP_NAME } from '@/shared/constants';
+import { UNGROUPED_GROUP_NAME } from '@/shared/constants';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import { inject, singleton } from 'tsyringe';
@@ -24,9 +24,6 @@ export class ConversationRepository implements ConversationRepositoryPort {
     groupName?: string,
   ): Promise<Conversation> {
     const finalConfig = config ?? {};
-    if (!finalConfig.agent) {
-      finalConfig.agent = AgentIds.CHAT;
-    }
 
     const conversationRepository = this.db.getRepository(ConversationEntity);
 

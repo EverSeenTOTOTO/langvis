@@ -2,20 +2,18 @@ import { describe, it, expect } from 'vitest';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
 import { RunAlreadyCompletedError } from '@/server/modules/agent/domain/errors';
-import type { AgentConfig, AgentBinding } from '@/shared/types';
 
 function makeConfig(): RuntimeConfigVO {
-  const agentConfig: AgentConfig = {
-    name: 'Test Agent',
-    description: 'test',
+  return RuntimeConfigVO.of({
+    systemPrompt: 'You are helpful',
     tools: [],
-  };
-  const binding: AgentBinding = { agentId: 'test-agent', config: {} };
-  return RuntimeConfigVO.create(agentConfig, binding, 'You are helpful', 8000);
+    contextSize: 8000,
+    runtimeConfig: {},
+  });
 }
 
 function createRun(): AgentRun {
-  return new AgentRun('run_1', 'test-agent', makeConfig());
+  return new AgentRun('run_1', makeConfig());
 }
 
 describe('AgentRun', () => {
@@ -24,7 +22,6 @@ describe('AgentRun', () => {
       const run = createRun();
       expect(run.id).toBe('run_1');
       expect(run.runId).toBe('run_1');
-      expect(run.agentId).toBe('test-agent');
     });
 
     it('starts as initialized, not terminated', () => {

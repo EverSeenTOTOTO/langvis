@@ -2,7 +2,6 @@ import InlineItem from '@/client/components/InlineItem';
 import Modal, { ModalProps } from '@/client/components/Modal';
 import SchemaField, { SchemaProperty } from '@/client/components/SchemaField';
 import { useStore } from '@/client/store';
-import { AgentIds } from '@/shared/constants';
 import { AgentConfig } from '@/shared/types';
 import { JSONSchemaType } from 'ajv';
 import {
@@ -41,7 +40,7 @@ const ConversationModal = ({
   const groupStore = useStore('conversationGroup');
   const isMobile = useMedia('(max-width: 768px)', false);
 
-  const fetchAgentApi = useAsyncFn(agentStore.getAllAgent.bind(agentStore));
+  const fetchAgentApi = useAsyncFn(agentStore.getConfig.bind(agentStore));
   const fetchGroupsApi = useAsyncFn(groupStore.getAllGroups.bind(groupStore));
 
   const renderConfigSchema = <T,>(schema?: JSONSchemaType<T>) => {
@@ -133,41 +132,9 @@ const ConversationModal = ({
               )}
             </InlineItem>
 
-            <Form.Item
-              name={['config', 'agent']}
-              label={settingStore.tr('Agent')}
-              initialValue={AgentIds.CHAT}
-            >
-              <Select
-                disabled={mode === 'edit'}
-                loading={fetchAgentApi[0].loading}
-                placeholder={settingStore.tr('Select an agent')}
-                options={
-                  fetchAgentApi[0]?.value?.map(
-                    (config: AgentConfig & { id: string }) => ({
-                      label: settingStore.tr(config.name),
-                      value: config.id,
-                    }),
-                  ) || []
-                }
-              />
-            </Form.Item>
-            <Form.Item noStyle dependencies={[['config', 'agent']]}>
-              {({ getFieldValue }) => {
-                const agent = getFieldValue(['config', 'agent']);
-                if (!agent) return null;
-
-                const agentInfo: AgentConfig = fetchAgentApi[0]?.value?.find(
-                  (a: AgentConfig & { id: string }) => a.id === agent,
-                );
-
-                return (
-                  <Typography.Paragraph type="secondary">
-                    {settingStore.tr(agentInfo?.description || '')}
-                  </Typography.Paragraph>
-                );
-              }}
-            </Form.Item>
+            <Typography.Paragraph type="secondary">
+              {settingStore.tr(fetchAgentApi[0]?.value?.description || '')}
+            </Typography.Paragraph>
 
             {mode === 'create' && (
               <Form.Item
@@ -181,24 +148,11 @@ const ConversationModal = ({
             )}
           </div>
           <div className="config-right">
-            <Skeleton
-              loading={fetchGroupsApi[0].loading || fetchAgentApi[0].loading}
-              active
-            >
-              <Form.Item noStyle dependencies={[['config', 'agent']]}>
-                {({ getFieldValue }) => {
-                  const agent = getFieldValue(['config', 'agent']);
-                  if (!agent) {
-                    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
-                  }
-
-                  const agentInfo: AgentConfig = fetchAgentApi[0]?.value?.find(
-                    (a: AgentConfig & { id: string }) => a.id === agent,
-                  );
-
-                  return renderConfigSchema(agentInfo?.configSchema);
-                }}
-              </Form.Item>
+            <Skeleton loading={fetchAgentApi[0].loading} active>
+              {renderConfigSchema(
+                (fetchAgentApi[0]?.value as AgentConfig | undefined)
+                  ?.configSchema,
+              )}
             </Skeleton>
           </div>
         </Flex>

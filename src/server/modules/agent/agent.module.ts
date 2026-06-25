@@ -10,5 +10,4 @@ container.register(AGENT_RUN_REPOSITORY, AgentRunRepository, {
   lifecycle: Lifecycle.Singleton,
 });
 
-import '@/server/modules/memory/memory.module';
 import './application/event/agent-run.handler';

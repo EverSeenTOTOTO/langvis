@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
+
 import { ConversationActivateHandler } from '@/server/modules/conversation/application/command/conversation-activate.handler';
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
-import type { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import type { EventBus } from '@/server/libs/ddd';
 import { ConversationActivateCommand } from '@/server/modules/conversation/contracts';
 import {
@@ -19,15 +19,17 @@ function makeConvRepo(
 }
 
 const stubChatService = { activate: vi.fn().mockResolvedValue(undefined) };
-const stubAgentService = { buildSystemPrompt: vi.fn().mockReturnValue('') };
 const stubEventBus = { dispatch: vi.fn() };
+const stubAgentService = {
+  getSystemPrompt: vi.fn(() => Promise.resolve('')),
+};
 
 function makeHandler(conv: any) {
   return new ConversationActivateHandler(
     stubChatService as unknown as ChatService,
     makeConvRepo(conv),
-    stubAgentService as unknown as AgentService,
     stubEventBus as unknown as EventBus,
+    stubAgentService as any,
   );
 }
 

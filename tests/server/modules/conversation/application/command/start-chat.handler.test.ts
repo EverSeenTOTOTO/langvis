@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
+
 import { StartChatHandler } from '@/server/modules/conversation/application/command/start-chat.handler';
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
-import type { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import type { EventBus } from '@/server/libs/ddd';
 import { StartChatCommand } from '@/server/modules/conversation/contracts';
 import { ConversationNotFoundError } from '@/server/modules/conversation/domain/errors';
@@ -13,15 +13,17 @@ function makeConvRepo(conv: any) {
   } as unknown as ConversationRepositoryPort;
 }
 
-const stubAgentService = { buildSystemPrompt: vi.fn().mockReturnValue('') };
 const stubEventBus = { dispatch: vi.fn() };
+const stubAgentService = {
+  getSystemPrompt: vi.fn(() => Promise.resolve('')),
+};
 
 function makeHandler(conv: any, chatService: Partial<ChatService>) {
   return new StartChatHandler(
     chatService as unknown as ChatService,
     makeConvRepo(conv),
-    stubAgentService as unknown as AgentService,
     stubEventBus as unknown as EventBus,
+    stubAgentService as any,
   );
 }
 

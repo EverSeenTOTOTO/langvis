@@ -1,4 +1,3 @@
-import type { AgentBinding } from '@/shared/types/agent';
 import type { MessageAttachment } from '@/shared/types/entities';
 import { Role } from '@/shared/entities/Message';
 import { Command, Query } from '@/server/libs/ddd';
@@ -70,13 +69,12 @@ export const RunCompleted = 'run_completed';
 
 export interface ConversationActivatedPayload {
   conversationId: string;
-  agentBinding: AgentBinding;
 }
 
 export interface TurnInitiatedPayload {
   conversationId: string;
   assistantMessage: Message;
-  agentBinding: AgentBinding;
+  userConfig: Record<string, unknown>;
   systemPrompt: string;
 }
 
@@ -88,10 +86,13 @@ export interface RunCompletedPayload {
 
 // ── Utils ─────────────────────────────────────────────────
 
-export function extractBinding(conv: {
+/**
+ * 从会话配置中取出用户配置（剥离遗留的 agent 键——收敛单一 agent 后不再使用，
+ * 但既有会话行里可能仍存有该键，此处静默丢弃）。
+ */
+export function extractUserConfig(conv: {
   config?: Record<string, any> | null;
-}): AgentBinding {
-  const config = conv.config ?? {};
-  const { agent: agentId, ...restConfig } = config as any;
-  return { agentId: agentId ?? 'chat_agent', config: restConfig };
+}): Record<string, unknown> {
+  const { agent: _agent, ...rest } = conv.config ?? {};
+  return rest;
 }
