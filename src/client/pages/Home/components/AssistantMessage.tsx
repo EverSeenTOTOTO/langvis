@@ -1,31 +1,22 @@
 import Bubble from '@/client/components/Bubble';
 import { useStore } from '@/client/store';
-import { AgentIds } from '@/shared/constants';
 import { Message } from '@/shared/types/entities';
 import { LoadingOutlined, RobotOutlined } from '@ant-design/icons';
 import { Avatar, Typography } from 'antd';
 import { observer } from 'mobx-react-lite';
 import { lazy, Suspense } from 'react';
-import { getAgentRenderer } from './agentRenderers';
+import { renderAgentMessage } from './agentRenderers';
 import MessageFooter from './MessageFooter';
 
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
-// Dynamically load all agent renderers (side effect: auto-registration)
-import.meta.glob('./AgentMessage/*/index.tsx', { eager: true });
-
 const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
   const chatStore = useStore('chat');
   const node = chatStore.getMessageNode(msg.conversationId, msg.id);
-  const conversationStore = useStore('conversation');
-  const conversation = conversationStore.findConversationById(
-    msg.conversationId,
-  );
-  const agent = (conversation?.config?.agent as string) || AgentIds.CHAT;
 
   // MessageNode-driven rendering (both active and historical messages)
   if (node) {
-    const { content } = getAgentRenderer(agent)(node);
+    const { content } = renderAgentMessage(node);
     const hasError = node.status === 'failed' || node.status === 'cancelled';
 
     return (

@@ -11,13 +11,13 @@ describe('AgentStore', () => {
     agentStore = container.resolve(AgentStore);
   });
 
-  describe('getAllAgent', () => {
+  describe('getConfig', () => {
     it('should send API request', () => {
       const mockReq = {
-        send: vi.fn().mockResolvedValue({ data: [] }),
+        send: vi.fn().mockResolvedValue({ data: {} }),
       };
 
-      const result = agentStore.getAllAgent(undefined, mockReq as any);
+      const result = agentStore.getConfig(undefined, mockReq as any);
 
       expect(mockReq.send).toHaveBeenCalled();
       expect(result).toBeDefined();
@@ -25,11 +25,11 @@ describe('AgentStore', () => {
 
     it('should handle params', () => {
       const mockReq = {
-        send: vi.fn().mockResolvedValue({ data: [] }),
+        send: vi.fn().mockResolvedValue({ data: {} }),
       };
 
       const params = { filter: 'active' };
-      agentStore.getAllAgent(params, mockReq as any);
+      agentStore.getConfig(params, mockReq as any);
 
       expect(mockReq.send).toHaveBeenCalled();
     });

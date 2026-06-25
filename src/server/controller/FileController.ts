@@ -1,8 +1,7 @@
 import type { Request, Response } from 'express';
 import mime from 'mime-types';
 import path from 'path';
-import { container, inject } from 'tsyringe';
-import { Agent } from '../modules/agent/domain/model/agent.base';
+import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import {
@@ -14,6 +13,7 @@ import {
   response,
 } from '../decorator/param';
 import { FileService } from '@/server/libs/infrastructure/file.service';
+import { AgentService } from '../modules/agent/application/service/agent.service';
 import type { UploadConfig } from '@/shared/types';
 import Logger from '../utils/logger';
 
@@ -21,7 +21,10 @@ import Logger from '../utils/logger';
 export default class FileController {
   private readonly logger = Logger.child({ source: 'FileController' });
 
-  constructor(@inject(FileService) private fileService: FileService) {}
+  constructor(
+    @inject(FileService) private fileService: FileService,
+    @inject(AgentService) private readonly agentService: AgentService,
+  ) {}
 
   private getInlineExtensions(): string[] {
     const extensions = process.env.FILE_INLINE_EXTENSIONS || '';
@@ -241,31 +244,8 @@ export default class FileController {
     }
   }
 
-  private getUploadConfig(agentToken?: string): UploadConfig {
-    if (!agentToken) {
-      return {
-        maxSize: 10 * 1024 * 1024, // 10MB default
-        allowedTypes: ['*'],
-        maxCount: 1,
-      };
-    }
-
-    try {
-      const agent = container.resolve(agentToken) as Agent;
-      return (
-        (agent.config as any)?.upload || {
-          maxSize: 10 * 1024 * 1024,
-          allowedTypes: ['*'],
-          maxCount: 1,
-        }
-      );
-    } catch {
-      return {
-        maxSize: 10 * 1024 * 1024,
-        allowedTypes: ['*'],
-        maxCount: 1,
-      };
-    }
+  private getUploadConfig(): UploadConfig {
+    return this.agentService.getUploadLimits();
   }
 
   private validateFile(
@@ -303,7 +283,7 @@ export default class FileController {
     }
 
     const dir = formBody?.dir;
-    const uploadConfig = this.getUploadConfig(formBody?.agent);
+    const uploadConfig = this.getUploadConfig();
     const validationError = this.validateFile(file, uploadConfig);
 
     if (validationError) {

@@ -17,4 +17,8 @@ export interface ToolCallContext {
   readonly llm: LlmPort;
   /** HITL 关联键（AskUser 写 human_input:<runId>）。不进入 AgentRunContext */
   readonly runId: string;
+  /** 本次会话的运行时配置（RuntimeConfigVO.runtimeConfig 的解析快照）。
+   *  供工具读取用户配置的默认值（如 TTS 的 voice/modelId），避免把这些内部参数
+   *  暴露给模型（模型看不到 config）。 */
+  readonly runtimeConfig: Record<string, unknown>;
 }

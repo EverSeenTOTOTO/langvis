@@ -1,134 +1,41 @@
 import { describe, it, expect } from 'vitest';
 import { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
-import { ConfigValidationError } from '@/server/modules/agent/domain/errors';
-import type { AgentConfig, AgentBinding } from '@/shared/types';
 
 describe('RuntimeConfigVO', () => {
-  const simpleAgentConfig: AgentConfig = {
-    name: 'Test Agent',
-    description: 'A test agent',
-    tools: ['tool_a', 'tool_b'],
-  };
+  describe('of', () => {
+    it('存储字段为不可变快照', () => {
+      const config = RuntimeConfigVO.of({
+        systemPrompt: 'You are helpful',
+        tools: ['tool_a', 'tool_b'],
+        contextSize: 8192,
+        runtimeConfig: { model: { modelId: 'gpt-4' } },
+      });
 
-  const binding: AgentBinding = {
-    agentId: 'test-agent',
-    config: { model: { modelId: 'gpt-4' }, temperature: 0.7 },
-  };
-
-  describe('create', () => {
-    it('should merge agentConfig + binding into immutable snapshot', () => {
-      const config = RuntimeConfigVO.create(
-        simpleAgentConfig,
-        binding,
-        'You are helpful',
-        8192,
-      );
-
-      expect(config.agentId).toBe('test-agent');
-      expect(config.agentName).toBe('Test Agent');
       expect(config.systemPrompt).toBe('You are helpful');
       expect(config.tools).toEqual(['tool_a', 'tool_b']);
       expect(config.contextSize).toBe(8192);
-      expect(config.runtimeConfig).toEqual({
-        model: { modelId: 'gpt-4' },
-        temperature: 0.7,
+      expect(config.runtimeConfig).toEqual({ model: { modelId: 'gpt-4' } });
+    });
+
+    it('产出 frozen 对象', () => {
+      const config = RuntimeConfigVO.of({
+        systemPrompt: 'p',
+        tools: [],
+        contextSize: 4000,
+        runtimeConfig: {},
       });
-    });
-
-    it('should validate config through configSchema when present', () => {
-      const agentConfigWithSchema: AgentConfig = {
-        name: 'Schema Agent',
-        description: 'Has config schema',
-        configSchema: {
-          type: 'object',
-          properties: {
-            temperature: { type: 'number', minimum: 0, maximum: 2 },
-          },
-          required: ['temperature'],
-          additionalProperties: false,
-        } as any,
-      };
-
-      const validBinding: AgentBinding = {
-        agentId: 'schema-agent',
-        config: { temperature: 0.5 },
-      };
-
-      const config = RuntimeConfigVO.create(
-        agentConfigWithSchema,
-        validBinding,
-        'prompt',
-        4000,
-      );
-
-      expect(config.runtimeConfig.temperature).toBe(0.5);
-    });
-
-    it('should throw ConfigValidationError on invalid config', () => {
-      const agentConfigWithSchema: AgentConfig = {
-        name: 'Schema Agent',
-        description: 'Has config schema',
-        configSchema: {
-          type: 'object',
-          properties: {
-            temperature: { type: 'number', minimum: 0, maximum: 2 },
-          },
-          required: ['temperature'],
-          additionalProperties: false,
-        } as any,
-      };
-
-      const invalidBinding: AgentBinding = {
-        agentId: 'schema-agent',
-        config: { temperature: 5 },
-      };
-
-      expect(() =>
-        RuntimeConfigVO.create(
-          agentConfigWithSchema,
-          invalidBinding,
-          'prompt',
-          4000,
-        ),
-      ).toThrow(ConfigValidationError);
-    });
-
-    it('should shallow-copy config when no configSchema present', () => {
-      const config = RuntimeConfigVO.create(
-        simpleAgentConfig,
-        binding,
-        'prompt',
-        4000,
-      );
-
-      expect(config.runtimeConfig).not.toBe(binding.config);
-      expect(config.runtimeConfig).toEqual(binding.config);
-    });
-
-    it('should produce frozen object', () => {
-      const config = RuntimeConfigVO.create(
-        simpleAgentConfig,
-        binding,
-        'prompt',
-        4000,
-      );
 
       expect(Object.isFrozen(config)).toBe(true);
-      expect(() => ((config as any).agentId = 'mutated')).toThrow();
+      expect(() => ((config as any).contextSize = 999)).toThrow();
     });
 
-    it('should default tools to empty array when not provided', () => {
-      const noToolsConfig: AgentConfig = {
-        name: 'No Tools Agent',
-        description: 'No tools',
-      };
-
-      const config = RuntimeConfigVO.create(
-        noToolsConfig,
-        binding,
-        'prompt',
-        4000,
-      );
+    it('tools 默认透传（空数组即空数组）', () => {
+      const config = RuntimeConfigVO.of({
+        systemPrompt: 'p',
+        tools: [],
+        contextSize: 4000,
+        runtimeConfig: {},
+      });
 
       expect(config.tools).toEqual([]);
     });

@@ -188,3 +188,10 @@ const createSafeLogger = (winstonLogger: winston.Logger) => {
 };
 
 export default createSafeLogger(logger);
+
+/**
+ * 原始 winston logger（未经 safe-wrapper 包装）。
+ * 仅供需要 winston.Logger 类型签名的场景（如传给 LlmPort.chatContent）；
+ * 自身日志请用 default export 的 safe logger。
+ */
+export const winstonLogger: Logger = logger;

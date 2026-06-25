@@ -34,9 +34,7 @@ export class ToolExecutionError extends ExceptionBase {
 export class ConfigValidationError extends ExceptionBase {
   readonly code = 'CONFIG_VALIDATION_ERROR';
   readonly statusCode = 400;
-  readonly agentId: string;
-  constructor(agentId: string, details: string) {
-    super(`Config validation failed for agent "${agentId}": ${details}`);
-    this.agentId = agentId;
+  constructor(details: string) {
+    super(`Config validation failed: ${details}`);
   }
 }

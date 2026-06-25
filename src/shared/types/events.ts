@@ -47,7 +47,13 @@ export type RunEvent =
   | { type: 'final' }
   | { type: 'cancelled'; reason: string }
   | { type: 'error'; error: string }
-  | { type: 'context_usage'; used: number; total: number; reason: string };
+  | {
+      type: 'context_usage';
+      used: number;
+      total: number;
+      reason: ContextUsageMeta['reason'];
+    }
+  | { type: 'process_summary'; summary: string };
 
 // ─── 应用层富化 ───
 

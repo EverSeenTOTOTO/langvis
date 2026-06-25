@@ -5,7 +5,6 @@ import { BaseDto, dto } from '../base';
 export interface CreateConversationRequest {
   name: string;
   config: {
-    agent: string;
     [key: string]: any;
   };
   groupId?: string | null;
@@ -21,10 +20,6 @@ export type ConversationConfig = CreateConversationRequest['config'];
     name: { type: 'string', minLength: 1, maxLength: 100 },
     config: {
       type: 'object',
-      properties: {
-        agent: { type: 'string' },
-      },
-      required: ['agent'],
       additionalProperties: true,
     },
     groupId: { type: 'string', nullable: true },
@@ -80,7 +75,6 @@ export interface UpdateConversationRequest {
   id: string;
   name: string;
   config: {
-    agent: string;
     [key: string]: any;
   };
   groupId?: string | null;
@@ -96,10 +90,6 @@ export interface UpdateConversationRequest {
     config: {
       type: 'object',
       nullable: true,
-      properties: {
-        agent: { type: 'string' },
-      },
-      required: ['agent'],
       additionalProperties: true,
     },
     groupId: { type: 'string', nullable: true },

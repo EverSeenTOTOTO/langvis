@@ -4,7 +4,6 @@ import { lazy, Suspense } from 'react';
 
 const ChatInput = lazy(() => import('@/client/components/ChatInput'));
 import { getStore, useStore } from '@/client/store';
-import { AgentIds } from '@/shared/constants';
 import type { MessageAttachment } from '@/shared/types/entities';
 import { Role } from '@/shared/types/entities';
 import { MenuOutlined } from '@ant-design/icons';
@@ -77,9 +76,7 @@ const Chat: React.FC = () => {
     if (!conversationStore.currentConversationId) {
       await createConversationApi[1]({
         name: settingStore.tr('New Conversation'),
-        config: {
-          agent: AgentIds.CHAT,
-        },
+        config: {},
       });
     }
 

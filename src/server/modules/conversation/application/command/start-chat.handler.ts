@@ -3,13 +3,13 @@ import { Role } from '@/shared/entities/Message';
 import { commandHandler } from '@/server/decorator/handler';
 import { createDomainEvent, EventBus } from '@/server/libs/ddd';
 import { ChatService } from '../service/chat.service';
+import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { CONVERSATION_REPOSITORY } from '../../conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
-import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import {
   StartChatCommand,
   TurnInitiated,
-  extractBinding,
+  extractUserConfig,
 } from '../../contracts';
 import { ConversationNotFoundError } from '../../domain/errors';
 
@@ -20,10 +20,10 @@ export class StartChatHandler {
     private convService: ChatService,
     @inject(CONVERSATION_REPOSITORY)
     private convRepo: ConversationRepositoryPort,
-    @inject(AgentService)
-    private agentService: AgentService,
     @inject(EventBus)
     private eventBus: EventBus,
+    @inject(AgentService)
+    private readonly agentService: AgentService,
   ) {}
 
   async execute(command: StartChatCommand): Promise<{ assistantId: string }> {
@@ -33,8 +33,8 @@ export class StartChatHandler {
     if (!dbConversation) {
       throw new ConversationNotFoundError(conversationId);
     }
-    const binding = extractBinding(dbConversation);
-    const systemPrompt = this.agentService.buildSystemPrompt(binding.agentId);
+    const userConfig = extractUserConfig(dbConversation);
+    const systemPrompt = await this.agentService.getSystemPrompt();
 
     // 前置条件：会话必须已激活（调用方需先 activate）。不再静默激活。
     await this.convService.assertActivated(conversationId);
@@ -55,7 +55,7 @@ export class StartChatHandler {
       createDomainEvent(TurnInitiated, conversationId, {
         conversationId,
         assistantMessage: setup.assistantMessage,
-        agentBinding: binding,
+        userConfig,
         systemPrompt: resolvedSystemPrompt,
       }),
     );

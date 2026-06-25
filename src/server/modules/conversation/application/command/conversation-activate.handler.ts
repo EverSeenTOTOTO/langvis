@@ -2,13 +2,12 @@ import { inject } from 'tsyringe';
 import { commandHandler } from '@/server/decorator/handler';
 import { EventBus, createDomainEvent } from '@/server/libs/ddd';
 import { ChatService } from '../service/chat.service';
+import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { CONVERSATION_REPOSITORY } from '../../conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
-import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import {
   ConversationActivateCommand,
   ConversationActivated,
-  extractBinding,
 } from '../../contracts';
 import {
   ConversationForbiddenError,
@@ -22,10 +21,10 @@ export class ConversationActivateHandler {
     private convService: ChatService,
     @inject(CONVERSATION_REPOSITORY)
     private convRepo: ConversationRepositoryPort,
-    @inject(AgentService)
-    private agentService: AgentService,
     @inject(EventBus)
     private eventBus: EventBus,
+    @inject(AgentService)
+    private readonly agentService: AgentService,
   ) {}
 
   async execute(command: ConversationActivateCommand): Promise<void> {
@@ -38,8 +37,7 @@ export class ConversationActivateHandler {
       throw new ConversationForbiddenError(conversationId, userId);
     }
 
-    const binding = extractBinding(dbConversation);
-    const systemPrompt = this.agentService.buildSystemPrompt(binding.agentId);
+    const systemPrompt = await this.agentService.getSystemPrompt();
 
     await this.convService.activate({
       conversationId,
@@ -51,7 +49,6 @@ export class ConversationActivateHandler {
       ConversationActivated,
       createDomainEvent(ConversationActivated, conversationId, {
         conversationId,
-        agentBinding: binding,
       }),
     );
   }

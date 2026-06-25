@@ -2,10 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { ConversationUpdateHandler } from '@/server/modules/conversation/application/command/conversation-update.handler';
 import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
 import { ConversationUpdateCommand } from '@/server/modules/conversation/contracts';
-import {
-  AgentImmutableError,
-  ConversationNotFoundError,
-} from '@/server/modules/conversation/domain/errors';
+import { ConversationNotFoundError } from '@/server/modules/conversation/domain/errors';
 
 function makeRepo(conv: any, updated: any = conv) {
   return {
@@ -17,7 +14,7 @@ function makeRepo(conv: any, updated: any = conv) {
 const existing = {
   id: 'conv_1',
   userId: 'user_1',
-  config: { agent: 'chat_agent', model: { modelId: 'm1' } },
+  config: { model: { modelId: 'm1' } },
 };
 
 describe('ConversationUpdateHandler', () => {
@@ -28,7 +25,7 @@ describe('ConversationUpdateHandler', () => {
     await expect(
       handler.execute(
         new ConversationUpdateCommand('conv_1', 'user_1', 'new name', {
-          agent: 'chat_agent',
+          model: { modelId: 'm1' },
         }),
       ),
     ).rejects.toBeInstanceOf(ConversationNotFoundError);
@@ -36,35 +33,7 @@ describe('ConversationUpdateHandler', () => {
     expect(repo.update).not.toHaveBeenCalled();
   });
 
-  it('throws AgentImmutableError when agent is changed', async () => {
-    const repo = makeRepo(existing);
-    const handler = new ConversationUpdateHandler(repo);
-
-    await expect(
-      handler.execute(
-        new ConversationUpdateCommand('conv_1', 'user_1', 'new name', {
-          agent: 'other_agent',
-        }),
-      ),
-    ).rejects.toBeInstanceOf(AgentImmutableError);
-
-    expect(repo.update).not.toHaveBeenCalled();
-  });
-
-  it('throws AgentImmutableError when config is nulled (agent removed)', async () => {
-    const repo = makeRepo(existing);
-    const handler = new ConversationUpdateHandler(repo);
-
-    await expect(
-      handler.execute(
-        new ConversationUpdateCommand('conv_1', 'user_1', 'new name', null),
-      ),
-    ).rejects.toBeInstanceOf(AgentImmutableError);
-
-    expect(repo.update).not.toHaveBeenCalled();
-  });
-
-  it('allows update when agent is unchanged', async () => {
+  it('allows update with new config', async () => {
     const repo = makeRepo(existing);
     const handler = new ConversationUpdateHandler(repo);
 
@@ -73,7 +42,7 @@ describe('ConversationUpdateHandler', () => {
         'conv_1',
         'user_1',
         'new name',
-        { agent: 'chat_agent', model: { modelId: 'm2' } },
+        { model: { modelId: 'm2' } },
         'grp_1',
       ),
     );
@@ -82,7 +51,7 @@ describe('ConversationUpdateHandler', () => {
       'conv_1',
       'new name',
       'user_1',
-      { agent: 'chat_agent', model: { modelId: 'm2' } },
+      { model: { modelId: 'm2' } },
       'grp_1',
       undefined,
     );

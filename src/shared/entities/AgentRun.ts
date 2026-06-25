@@ -19,9 +19,6 @@ export class AgentRunEntity implements AgentRunType {
     }
   }
 
-  @Column({ type: 'varchar', length: 64 })
-  agentId!: string;
-
   @Column({ type: 'varchar', length: 32 })
   status!: RunStatus;
 

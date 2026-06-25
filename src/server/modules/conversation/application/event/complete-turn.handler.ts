@@ -6,12 +6,20 @@ import { MESSAGE_REPOSITORY } from '../../conversation.di-tokens';
 import type { MessageRepositoryPort } from '../../domain/port/message.repository.port';
 import { AGENT_RUN_REPOSITORY } from '@/server/modules/agent/agent.di-tokens';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
+import type { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { projectRun } from '@/server/modules/agent/domain/projection/run-projection';
+import { HistoryCompactionService } from '@/server/modules/memory/application/service/history-compaction.service';
+import { COMPACTION_SUMMARY_KIND } from '@/server/modules/memory/domain/service/compaction-summary.util';
+import { readCompactionConfig } from '@/server/modules/memory/domain/service/compaction-config';
+import { Role } from '@/shared/entities/Message';
+import Logger from '@/server/utils/logger';
 import { RunCompleted } from '../../contracts';
 import type { RunCompletedPayload } from '../../contracts';
 
 @eventHandler(RunCompleted)
 export class CompleteTurnHandler {
+  private readonly logger = Logger.child({ source: 'CompleteTurnHandler' });
+
   constructor(
     @inject(SessionManager)
     private sessionManager: SessionManager,
@@ -19,6 +27,8 @@ export class CompleteTurnHandler {
     private messageRepo: MessageRepositoryPort,
     @inject(AGENT_RUN_REPOSITORY)
     private agentRunRepo: AgentRunRepositoryPort,
+    @inject(HistoryCompactionService)
+    private historyCompaction: HistoryCompactionService,
   ) {}
 
   async handle(event: DomainEvent<string, RunCompletedPayload>): Promise<void> {
@@ -47,9 +57,71 @@ export class CompleteTurnHandler {
         if (terminal?.type === 'cancelled') content = terminal.reason;
         else if (terminal?.type === 'error') content = terminal.error;
       }
-      await this.messageRepo.update(messageId, { content });
+
+      // 过程摘要（loop-exit fold 产物）：附到 agent message 的 meta（用户不可见，下轮 LLM 可见）。
+      const psEvent = [...run.eventStream]
+        .reverse()
+        .find(e => e.type === 'process_summary');
+      const processSummary =
+        psEvent?.type === 'process_summary' ? psEvent.summary : null;
+
+      await this.messageRepo.update(
+        messageId,
+        processSummary ? { content, meta: { processSummary } } : { content },
+      );
+
+      // 历史层压缩：有效历史超阈时，折叠成新的压缩摘要 C（hidden Message），供后续 turn 复用。
+      await this.compactHistory(conversationId, run);
     }
 
     this.sessionManager.finalizeRun(conversationId, messageId);
+  }
+
+  private async compactHistory(
+    conversationId: string,
+    run: AgentRun,
+  ): Promise<void> {
+    const runtimeConfig = run.config.runtimeConfig as {
+      model?: { modelId?: string };
+    };
+    const modelId = runtimeConfig.model?.modelId;
+    if (!modelId) return;
+
+    const cc = readCompactionConfig(run.config.runtimeConfig);
+    // 收敛单一 ReAct agent 后，历史压缩仅由 compaction.enabled 开关控制。
+    if (!cc.enabled) return;
+
+    const controller = new AbortController();
+    try {
+      const history =
+        await this.messageRepo.findByConversationId(conversationId);
+      const result = await this.historyCompaction.compact({
+        messages: history,
+        modelId,
+        contextSize: run.config.contextSize,
+        threshold: cc.threshold,
+        windowSize: cc.windowSize,
+        signal: controller.signal,
+      });
+      if (!result) return;
+
+      await this.messageRepo.batchCreate(conversationId, [
+        {
+          role: Role.USER,
+          content: result.content,
+          meta: {
+            hidden: true,
+            kind: COMPACTION_SUMMARY_KIND,
+            startRef: result.startRef,
+          },
+          createdAt: new Date(),
+        },
+      ]);
+    } catch (err) {
+      // 压缩失败不影响 turn 完成流程。
+      this.logger.warn(
+        `History compaction failed: ${(err as Error)?.message ?? err}`,
+      );
+    }
   }
 }

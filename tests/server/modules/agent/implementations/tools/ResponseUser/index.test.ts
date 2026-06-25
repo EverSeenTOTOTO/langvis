@@ -11,6 +11,7 @@ function makeCtx(input: Record<string, unknown>): ToolCallContext {
     workDir: '/tmp',
     llm: {} as any,
     runId: 'run_1',
+    runtimeConfig: {},
   };
 }
 

@@ -3,18 +3,17 @@ import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { request, response } from '../decorator/param';
-import { AgentService } from '@/server/modules/agent/application/service/agent.service';
+import { AgentService } from '../modules/agent/application/service/agent.service';
 
 @controller('/api/agent')
 export default class AgentController {
   constructor(
-    @inject(AgentService)
-    private agentService: AgentService,
+    @inject(AgentService) private readonly agentService: AgentService,
   ) {}
 
   @api('/', { method: 'get' })
-  async getAllAgents(@request() _req: Request, @response() res: Response) {
-    const agents = await this.agentService.getAllAgentInfo();
-    return res.json(agents);
+  async getConfig(@request() _req: Request, @response() res: Response) {
+    // 收敛单一 agent 后返回全局配置（由 AgentService 提供，不再 import 松散常量）。
+    return res.json(this.agentService.getDescriptor());
   }
 }

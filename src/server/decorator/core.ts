@@ -1,10 +1,8 @@
-import { AgentIds, ToolIds } from '@/shared/constants';
-import { AgentConfig, ToolConfig } from '@/shared/types';
+import { ToolIds } from '@/shared/constants';
+import { ToolConfig } from '@/shared/types';
 import { JSONSchemaType } from 'ajv';
 import chalk from 'chalk';
-import { merge } from 'lodash-es';
 import { container, injectable, Lifecycle } from 'tsyringe';
-import { Agent } from '../modules/agent/domain/model/agent.base';
 import { Tool } from '../modules/agent/domain/model/tool.base';
 import logger from '../utils/logger';
 import { parse } from '../utils/schemaValidator';
@@ -13,28 +11,12 @@ import { PARAM_METADATA_KEY, ParamMetadata, ParamType } from './param';
 
 const metaDataKey = Symbol.for('config');
 
-function createConfigDecorator(type: 'agent' | 'tool') {
-  return (token?: ToolIds | AgentIds) =>
-    function configDecorator(target: any) {
-      injectable()(target);
-      Reflect.defineMetadata(metaDataKey, { type, token }, target);
-      registerDisposableToken(target);
-    };
-}
-
-export const agent = createConfigDecorator('agent');
-export const tool = createConfigDecorator('tool');
-
-const resolveConfig = <T extends AgentConfig | ToolConfig>(config: T): T => {
-  if (!config.extends) return config;
-
-  const target = container.resolve<Agent | Tool>(config.extends);
-
-  return {
-    ...merge({}, target.config, config),
-    tools: (config as AgentConfig).tools,
+export const tool = (token?: ToolIds) =>
+  function configDecorator(target: any) {
+    injectable()(target);
+    Reflect.defineMetadata(metaDataKey, { type: 'tool', token }, target);
+    registerDisposableToken(target);
   };
-};
 
 const proxyValidation = <T>(
   instance: any,
@@ -76,50 +58,6 @@ const proxyValidation = <T>(
   }
 };
 
-export const registerAgent = async <T>(
-  Clz: new (...params: any[]) => Agent,
-  config: AgentConfig<T>,
-) => {
-  const { token } = Reflect.getMetadata(metaDataKey, Clz);
-
-  container.register<Agent>(token, Clz, {
-    lifecycle: Lifecycle.Singleton,
-  });
-
-  logger.info(
-    `Register agent ${chalk.cyan(config.name)} with token ${chalk.yellow(token)}`,
-  );
-
-  container.afterResolution(
-    token,
-    async (_token, instance: any) => {
-      const merged = resolveConfig(config);
-
-      Reflect.set(instance, 'config', merged);
-      Reflect.set(instance, 'id', token);
-      Reflect.set(instance, 'logger', logger.child({ source: token }));
-
-      // Inject tools
-      if (instance && 'tools' in instance) {
-        const toolTokens = config.tools || [];
-
-        const tools = toolTokens.map(t => container.resolve<Tool>(t));
-
-        Reflect.set(instance, 'tools', tools);
-
-        logger.info(
-          `Injected ${tools.length} tools into agent: ${chalk.cyan(config.name)}`,
-        );
-      }
-
-      // Config validation happens at RuntimeConfigVO.create() time, not here
-    },
-    { frequency: 'Once' },
-  );
-
-  return token;
-};
-
 export const registerTool = async <I, O>(
   Clz: new (...params: any[]) => Tool,
   config: ToolConfig<I, O>,
@@ -137,9 +75,7 @@ export const registerTool = async <I, O>(
   container.afterResolution(
     token,
     async (_token, instance: any) => {
-      const merged = resolveConfig(config as ToolConfig);
-
-      Reflect.set(instance, 'config', merged);
+      Reflect.set(instance, 'config', config);
       Reflect.set(instance, 'id', token);
       Reflect.set(instance, 'logger', logger.child({ source: token }));
 
@@ -147,7 +83,7 @@ export const registerTool = async <I, O>(
         instance,
         'call',
         ParamType.INPUT,
-        (merged as ToolConfig<I, O>).inputSchema,
+        config.inputSchema,
         token,
       );
     },

@@ -3,12 +3,19 @@ import { CompleteTurnHandler } from '@/server/modules/conversation/application/e
 import type { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
+import type { HistoryCompactionService } from '@/server/modules/memory/application/service/history-compaction.service';
 import type { EnrichedEvent } from '@/shared/types/events';
 import type { DomainEvent } from '@/server/libs/ddd';
 import type { RunCompletedPayload } from '@/server/modules/conversation/contracts';
 
 function ev(p: { type: string } & Record<string, unknown>): EnrichedEvent {
   return { runId: 'run_1', seq: 0, at: 0, ...p } as EnrichedEvent;
+}
+
+function mockHistoryCompaction(): HistoryCompactionService {
+  return {
+    compact: vi.fn().mockResolvedValue(null),
+  } as unknown as HistoryCompactionService;
 }
 
 describe('CompleteTurnHandler — 终态文案持久化', () => {
@@ -22,11 +29,15 @@ describe('CompleteTurnHandler — 终态文案持久化', () => {
 
   function setup(eventStream: EnrichedEvent[]) {
     const sessionManager = {
-      getActiveRun: vi.fn().mockReturnValue({ eventStream }),
+      getActiveRun: vi.fn().mockReturnValue({
+        eventStream,
+        config: { contextSize: 8000, runtimeConfig: {} },
+      }),
       finalizeRun: vi.fn(),
     } as unknown as SessionManager;
     const messageRepo = {
       update: vi.fn().mockResolvedValue(undefined),
+      findByConversationId: vi.fn().mockResolvedValue([]),
     } as unknown as MessageRepositoryPort;
     const agentRunRepo = {
       update: vi.fn().mockResolvedValue(undefined),
@@ -35,6 +46,7 @@ describe('CompleteTurnHandler — 终态文案持久化', () => {
       sessionManager,
       messageRepo,
       agentRunRepo,
+      mockHistoryCompaction(),
     );
     return { handler, messageRepo, agentRunRepo, sessionManager };
   }
@@ -93,6 +105,22 @@ describe('CompleteTurnHandler — 终态文案持久化', () => {
     });
   });
 
+  it('有 process_summary 事件时，meta.processSummary 随内容一起持久化', async () => {
+    const { handler, messageRepo } = setup([
+      ev({ type: 'start' }),
+      ev({ type: 'text_chunk', content: 'final answer' }),
+      ev({ type: 'process_summary', summary: 'loop 做了 X 和 Y' }),
+      ev({ type: 'final' }),
+    ]);
+
+    await handler.handle(event);
+
+    expect(messageRepo.update).toHaveBeenCalledWith(messageId, {
+      content: 'final answer',
+      meta: { processSummary: 'loop 做了 X 和 Y' },
+    });
+  });
+
   it('run 已不在内存时只 finalize，不写库', async () => {
     const sessionManager = {
       getActiveRun: vi.fn().mockReturnValue(undefined),
@@ -106,6 +134,7 @@ describe('CompleteTurnHandler — 终态文案持久化', () => {
       sessionManager,
       messageRepo,
       agentRunRepo,
+      mockHistoryCompaction(),
     );
 
     await handler.handle(event);

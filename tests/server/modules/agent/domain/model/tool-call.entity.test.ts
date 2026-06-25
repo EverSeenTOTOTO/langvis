@@ -44,6 +44,7 @@ function makeDeps(): ToolCallDeps {
     runId: 'run_1',
     llm: makeMockLlm(),
     cache: makeMockCache(),
+    runtimeConfig: {},
   };
 }
 

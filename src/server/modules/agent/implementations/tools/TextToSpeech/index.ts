@@ -31,7 +31,28 @@ export default class TextToSpeechTool extends Tool<TextToSpeechOutput> {
   ): AsyncGenerator<RunEvent, TextToSpeechOutput, void> {
     ctx.signal.throwIfAborted();
 
-    const params = ctx.input as unknown as TextToSpeechInput;
+    const input = ctx.input as unknown as TextToSpeechInput;
+
+    // voice/reqId/modelId 模型看不到（不在 prompt 里、reqId 是内部 runId），
+    // 故缺省时从会话配置 / runId 兜底；仅 text 与 emotion 由模型决定。
+    const ttsConfig = (ctx.runtimeConfig?.tts ?? {}) as {
+      modelId?: string;
+      voice?: string;
+    };
+    const params: TextToSpeechInput = {
+      text: input.text,
+      reqId: input.reqId ?? ctx.runId,
+      voice: input.voice ?? ttsConfig.voice ?? '',
+      modelId: input.modelId ?? ttsConfig.modelId,
+      emotion: input.emotion,
+      speedRatio: input.speedRatio,
+    };
+
+    if (!params.voice) {
+      throw new Error(
+        'TTS voice unavailable: pass `voice` or configure config.tts.voice',
+      );
+    }
 
     this.logger.info(
       `Processing TTS request: ${params.reqId}, voice: ${params.voice}, text_length: ${params.text.length}`,
