@@ -1,5 +1,5 @@
 import { container, inject, singleton } from 'tsyringe';
-import type { AgentConfig, UploadConfig } from '@/shared/types';
+import type { AgentConfig } from '@/shared/types';
 import type { JSONSchemaType } from 'ajv';
 import { ToolIds } from '@/shared/constants';
 import { parse } from '@/server/utils/schemaValidator';
@@ -8,6 +8,7 @@ import { Prompt } from '../../domain/model/prompt';
 import type { Tool } from '../../domain/model/tool.base';
 import { RuntimeConfigVO } from '../../domain/model/runtime-config.vo';
 import { ConfigValidationError } from '../../domain/errors';
+import { getConfigFragments } from '@/server/libs/config/config-fragment';
 import { ToolService } from './tool.service';
 import { SkillService } from './skill.service';
 
@@ -24,118 +25,9 @@ export class AgentService {
       ToolIds.SKILL_CALL,
       ToolIds.LIST_TOOLS,
     ],
-    configSchema: {
-      type: 'object',
-      properties: {
-        model: {
-          type: 'object',
-          properties: {
-            modelId: {
-              type: 'string',
-              format: 'model-select',
-              modelType: 'chat',
-            },
-            temperature: {
-              type: 'number',
-              default: 0.7,
-              minimum: 0,
-              maximum: 1,
-              nullable: true,
-            },
-            topP: {
-              type: 'number',
-              default: 0.7,
-              minimum: 0,
-              maximum: 1,
-              nullable: true,
-            },
-          },
-          required: ['modelId'],
-          nullable: true,
-        },
-        memory: {
-          type: 'object',
-          properties: {
-            compaction: {
-              type: 'object',
-              description: '记忆压缩（历史层 + loop 内迭代层）',
-              properties: {
-                enabled: {
-                  type: 'boolean',
-                  default: true,
-                  description: '启用记忆压缩',
-                  nullable: true,
-                },
-                threshold: {
-                  type: 'number',
-                  default: 0.8,
-                  minimum: 0.1,
-                  maximum: 0.95,
-                  description: '触发压缩的上下文用量比例',
-                  nullable: true,
-                },
-                windowSize: {
-                  type: 'integer',
-                  default: 10,
-                  minimum: 1,
-                  description: '折叠滑动窗口大小',
-                  nullable: true,
-                },
-                keepRecent: {
-                  type: 'integer',
-                  default: 4,
-                  minimum: 0,
-                  description: 'loop 内压缩时保留的近期消息数',
-                  nullable: true,
-                },
-              },
-              nullable: true,
-            },
-          },
-          nullable: true,
-        },
-        upload: {
-          type: 'object',
-          properties: {
-            maxSize: {
-              type: 'number',
-              description: 'Maximum file size in bytes (e.g. 10485760 = 10MB)',
-              default: 10485760,
-              nullable: true,
-            },
-            allowedTypes: {
-              type: 'array',
-              items: { type: 'string' },
-              description: 'Allowed MIME types (e.g. image/*, application/pdf)',
-              default: ['image/*', 'application/pdf', 'text/*'],
-              nullable: true,
-            },
-            maxCount: {
-              type: 'number',
-              description: 'Maximum number of files per upload',
-              default: 5,
-              nullable: true,
-            },
-          },
-          nullable: true,
-          // 仅多模态模型支持上传 → 选中模型非多模态时隐藏。
-          reactions: [
-            {
-              when: { field: 'model.multimodal', op: 'eq', value: false },
-              set: { visible: false },
-            },
-          ],
-        },
-      },
-    } as unknown as JSONSchemaType<Record<string, unknown>>,
   };
 
-  private readonly uploadLimits: UploadConfig = {
-    maxSize: 10485760,
-    allowedTypes: ['image/*', 'application/pdf', 'text/*'],
-    maxCount: 5,
-  };
-
+  private cachedSchema: JSONSchemaType<Record<string, unknown>> | null = null;
   private cachedPrompt: Promise<string> | null = null;
 
   constructor(
@@ -143,14 +35,27 @@ export class AgentService {
     @inject(SkillService) private readonly skillService: SkillService,
   ) {}
 
-  /** AgentController 读取——返回前端可渲染的配置描述（AgentConfig 兼容形状）。 */
-  getDescriptor(): AgentConfig {
-    return this.descriptor;
+  /**
+   * 聚合所有 ConfigFragment（按 key 平铺）为对话配置 schema。
+   * 各域自描述其片段（memory/upload/model/…），本服务不认识任何域细节——纯组合器。
+   * 懒构建：首次调用时 fragments 已在 config.module 装配阶段注册完毕。
+   */
+  private getConfigSchema(): JSONSchemaType<Record<string, unknown>> {
+    if (!this.cachedSchema) {
+      const properties = Object.fromEntries(
+        getConfigFragments().map(f => [f.key, f.schema]),
+      ) as Record<string, JSONSchemaType<unknown>>;
+      this.cachedSchema = {
+        type: 'object',
+        properties,
+      } as unknown as JSONSchemaType<Record<string, unknown>>;
+    }
+    return this.cachedSchema;
   }
 
-  /** FileController 读取——全局上传限额。 */
-  getUploadLimits(): UploadConfig {
-    return this.uploadLimits;
+  /** AgentController 读取——返回前端可渲染的配置描述（含聚合后的 configSchema）。 */
+  getDescriptor(): AgentConfig {
+    return { ...this.descriptor, configSchema: this.getConfigSchema() };
   }
 
   /**
@@ -174,9 +79,7 @@ export class AgentService {
     let runtimeConfig: Record<string, unknown>;
 
     try {
-      runtimeConfig = this.descriptor.configSchema
-        ? parse(this.descriptor.configSchema, userConfig)
-        : { ...userConfig };
+      runtimeConfig = parse(this.getConfigSchema(), userConfig);
     } catch (e) {
       throw new ConfigValidationError((e as Error)?.message ?? String(e));
     }

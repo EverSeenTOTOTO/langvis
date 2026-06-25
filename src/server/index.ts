@@ -7,6 +7,7 @@ import express, { Express } from 'express';
 import path from 'node:path';
 import 'reflect-metadata';
 import bindControllers from './controller';
+import './libs/config/config.module';
 import './modules/agent/agent.module';
 import './modules/conversation/conversation.module';
 import './modules/document/document.module';

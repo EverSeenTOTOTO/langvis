@@ -13,7 +13,7 @@ import {
   response,
 } from '../decorator/param';
 import { FileService } from '@/server/libs/infrastructure/file.service';
-import { AgentService } from '../modules/agent/application/service/agent.service';
+import { UPLOAD_LIMITS } from '../libs/config/upload-config';
 import type { UploadConfig } from '@/shared/types';
 import Logger from '../utils/logger';
 
@@ -21,10 +21,7 @@ import Logger from '../utils/logger';
 export default class FileController {
   private readonly logger = Logger.child({ source: 'FileController' });
 
-  constructor(
-    @inject(FileService) private fileService: FileService,
-    @inject(AgentService) private readonly agentService: AgentService,
-  ) {}
+  constructor(@inject(FileService) private fileService: FileService) {}
 
   private getInlineExtensions(): string[] {
     const extensions = process.env.FILE_INLINE_EXTENSIONS || '';
@@ -245,7 +242,7 @@ export default class FileController {
   }
 
   private getUploadConfig(): UploadConfig {
-    return this.agentService.getUploadLimits();
+    return UPLOAD_LIMITS;
   }
 
   private validateFile(
