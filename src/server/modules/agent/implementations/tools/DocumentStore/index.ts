@@ -31,12 +31,13 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
     // Coerce keywords: LLM may pass comma-separated string(s).
     // Ajv coerceTypes wraps a bare string as single-element array,
     // so flatMap splits any comma-separated elements.
-    const keywords = (document.keywords as string[]).flatMap(k =>
-      k
-        .split(/[,，;；\s]+/)
-        .map(s => s.trim())
-        .filter(s => s),
-    );
+    const keywords =
+      typeof document.keywords === 'string'
+        ? document.keywords
+            .split(/[,，;；\s]+/)
+            .map(s => s.trim())
+            .filter(s => s)
+        : document.keywords;
 
     yield {
       type: 'tool_progress',
