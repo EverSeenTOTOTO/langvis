@@ -27,7 +27,7 @@
       },
       {
         "id": "bge-m3",
-        "name": "BEG M3",
+        "name": "BGE M3",
         "type": "embedding",
         "primary": true,
         "endpoint": "/embeddings"
@@ -41,8 +41,8 @@
     "apiKey": "${OPENROUTER_API_KEY}",
     "models": [
       {
-        "id": "z-ai/glm-5.1",
-        "name": "Glm-5.1",
+        "id": "z-ai/glm-5.2",
+        "name": "Glm-5.2",
         "type": "chat",
         "contextSize": 80000,
         "multimodal": false,
@@ -65,10 +65,10 @@
         "defaults": { "temperature": 0.7 }
       },
       {
-        "id": "qwen/qwen3.5-27b",
-        "name": "Qwen 3.5 27B",
+        "id": "qwen/qwen3.6-flash",
+        "name": "Qwen 3.6 Flash",
         "type": "chat",
-        "contextSize": 262000,
+        "contextSize": 1000000,
         "multimodal": true,
         "primary": true,
         "defaults": { "temperature": 0.7, "topP": 0.7 }
@@ -82,8 +82,8 @@
     "apiKey": "${PROXY302_API_KEY}",
     "models": [
       {
-        "id": "qwen3.5-27b",
-        "name": "Qwen 3.5 27B",
+        "id": "qwen3.6-flash",
+        "name": "Qwen 3.6 Flash",
         "type": "chat",
         "contextSize": 262000,
         "multimodal": true,
