@@ -16,6 +16,14 @@ export interface MessageAttachment {
   size?: number;
 }
 
+/**
+ * 消息子类别判别键（meta.kind）。带 kind 的消息是脚手架（非对话 turn、前端时间线隐藏）：
+ * - 'context' —— 会话上下文注入（system 之外的固定脚手架）。
+ * - 'compact' —— 历史压缩摘要 C（位置即覆盖终点）。
+ * 无 kind 即普通对话消息。
+ */
+export type MessageKind = 'context' | 'compact';
+
 export type Message = {
   id: string;
   role: Role;

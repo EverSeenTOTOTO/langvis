@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   findLatestCompactionSummary,
   isCompactionSummary,
-  COMPACTION_SUMMARY_KIND,
 } from '@/server/modules/memory/domain/service/compaction-summary.util';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
@@ -20,7 +19,7 @@ function msg(id: string, meta?: Record<string, unknown>): Message {
 }
 
 function compaction(id: string): Message {
-  return msg(id, { hidden: true, kind: COMPACTION_SUMMARY_KIND });
+  return msg(id, { kind: 'compact' });
 }
 
 describe('compaction-summary util', () => {
@@ -62,8 +61,8 @@ describe('compaction-summary util', () => {
       expect(isCompactionSummary(compaction('c1'))).toBe(true);
     });
 
-    it('普通 hidden 消息不算', () => {
-      expect(isCompactionSummary(msg('m1', { hidden: true }))).toBe(false);
+    it('context 消息不算', () => {
+      expect(isCompactionSummary(msg('m1', { kind: 'context' }))).toBe(false);
     });
 
     it('普通消息不算', () => {

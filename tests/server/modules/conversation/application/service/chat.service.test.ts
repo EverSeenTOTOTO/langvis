@@ -64,7 +64,10 @@ describe('ChatService', () => {
         'conv_1',
         expect.arrayContaining([
           expect.objectContaining({ role: Role.SYSTEM }),
-          expect.objectContaining({ role: Role.USER, meta: { hidden: true } }),
+          expect.objectContaining({
+            role: Role.USER,
+            meta: { kind: 'context' },
+          }),
         ]),
       );
     });

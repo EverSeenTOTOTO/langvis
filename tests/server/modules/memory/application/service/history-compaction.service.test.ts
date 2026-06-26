@@ -79,9 +79,7 @@ describe('HistoryCompactionService.compact', () => {
     const svc = makeService();
 
     const r = await svc.compact({
-      messages: [
-        msg('only-a-summary', { hidden: true, kind: 'compaction_summary' }),
-      ],
+      messages: [msg('only-a-summary', { kind: 'compact' })],
       modelId: 'openai:gpt-4',
       contextSize: 100,
       signal,

@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { ConversationMemory } from '@/server/modules/memory/domain/model/conversation-memory';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
-import { COMPACTION_SUMMARY_KIND } from '@/server/modules/memory/domain/service/compaction-summary.util';
 
 function makeMessage(
   role: Role,
@@ -82,9 +81,9 @@ describe('ConversationMemory', () => {
       expect(turns[0][0].role).toBe(Role.USER);
     });
 
-    it('跳过 hidden user 消息', () => {
+    it('跳过 context user 消息', () => {
       const history = [
-        makeMessage(Role.USER, 'hidden context', { hidden: true }),
+        makeMessage(Role.USER, 'hidden context', { kind: 'context' }),
         makeMessage(Role.USER, 'visible question'),
         makeMessage(Role.ASSIST, 'answer'),
       ];
@@ -158,10 +157,10 @@ describe('ConversationMemory', () => {
       expect(messages.filter(m => m.role === 'assistant')).toHaveLength(15);
     });
 
-    it('包含 system prompt 与 hidden 消息', async () => {
+    it('包含 system prompt 与 context 消息', async () => {
       const history = [
         makeMessage(Role.SYSTEM, 'You are helpful'),
-        makeMessage(Role.USER, 'session context', { hidden: true }),
+        makeMessage(Role.USER, 'session context', { kind: 'context' }),
         makeMessage(Role.USER, 'visible question'),
         makeMessage(Role.ASSIST, 'answer'),
       ];
@@ -179,8 +178,7 @@ describe('ConversationMemory', () => {
         makeMessage(Role.USER, 'old q'),
         makeMessage(Role.ASSIST, 'old a'),
         makeMessage(Role.USER, 'C summary', {
-          hidden: true,
-          kind: COMPACTION_SUMMARY_KIND,
+          kind: 'compact',
         }),
         makeMessage(Role.USER, 'new q'),
         makeMessage(Role.ASSIST, 'new a'),

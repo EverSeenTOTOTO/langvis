@@ -9,7 +9,6 @@ import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/
 import type { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { projectRun } from '@/server/modules/agent/domain/projection/run-projection';
 import { HistoryCompactionService } from '@/server/modules/memory/application/service/history-compaction.service';
-import { COMPACTION_SUMMARY_KIND } from '@/server/modules/memory/domain/service/compaction-summary.util';
 import { readCompactionConfig } from '@/server/modules/memory/domain/service/compaction-config';
 import { Role } from '@/shared/entities/Message';
 import Logger from '@/server/utils/logger';
@@ -123,8 +122,7 @@ export class CompleteTurnHandler {
           role: Role.USER,
           content: result.content,
           meta: {
-            hidden: true,
-            kind: COMPACTION_SUMMARY_KIND,
+            kind: 'compact',
             startRef: result.startRef,
           },
           createdAt: new Date(),
