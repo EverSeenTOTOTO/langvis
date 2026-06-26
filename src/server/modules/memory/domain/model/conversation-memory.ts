@@ -1,10 +1,9 @@
-import type { LlmMessage, Message } from '@/shared/types/entities';
+import type { LlmMessage, Message, MessageKind } from '@/shared/types/entities';
 import { Role } from '@/shared/entities/Message';
 import type { ContextUsage } from './memory.types';
 import type { ContextPort } from '../port/context.port';
 import { measureUsage } from '../service/measure-usage';
 import { findLatestCompactionSummary } from '../service/compaction-summary.util';
-import { COMPACTION_SUMMARY_KIND } from '../service/compaction-summary.util';
 
 /**
  * ConversationMemory — 持久历史层（与瞬态的 WorkingMemory 共享 ContextPort、地位对等）。
@@ -33,14 +32,13 @@ export class ConversationMemory implements ContextPort {
   async buildContext(): Promise<LlmMessage[]> {
     const messages: LlmMessage[] = [];
 
-    // 脚手架：system + hidden 非压缩摘要（session-context 等），始终发出。
+    // 脚手架：system + 会话上下文（meta.kind === 'context'），始终发出。
     for (const msg of this.history) {
       if (msg.role === Role.SYSTEM) {
         messages.push({ role: 'system', content: msg.content });
       } else if (
         msg.role === Role.USER &&
-        msg.meta?.hidden &&
-        msg.meta?.kind !== COMPACTION_SUMMARY_KIND
+        (msg.meta?.kind as MessageKind | undefined) === 'context'
       ) {
         messages.push({ role: 'user', content: msg.content });
       }
@@ -97,7 +95,8 @@ export class ConversationMemory implements ContextPort {
 
     for (const msg of messages) {
       if (msg.role === Role.SYSTEM) continue;
-      if (msg.role === Role.USER && msg.meta?.hidden) continue;
+      // 任何带 meta.kind 的都是脚手架（context/compact），非对话 turn。
+      if (msg.meta?.kind) continue;
 
       current.push(msg);
 

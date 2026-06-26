@@ -26,7 +26,7 @@ export interface MessagesRef {
 const Messages = forwardRef<MessagesRef>((_props, ref) => {
   const conversationStore = useStore('conversation');
   const currentMessages = conversationStore.currentMessages.filter(
-    msg => !msg.meta?.hidden,
+    msg => !msg.meta?.kind,
   );
 
   const containerRef = useRef<HTMLDivElement>(null);

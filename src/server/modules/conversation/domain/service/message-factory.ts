@@ -31,7 +31,7 @@ export function createActivationMessages(params: {
     role: Role.USER,
     content: `<session-context>\nUser ID: ${params.userId}\nWorkspace Directory: ${params.workDir}\n</session-context>`,
     attachments: null,
-    meta: { hidden: true },
+    meta: { kind: 'context' },
     createdAt: new Date(baseTime + index++),
     conversationId: params.conversationId,
   });

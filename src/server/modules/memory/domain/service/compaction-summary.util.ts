@@ -1,16 +1,14 @@
-import type { Message } from '@/shared/types/entities';
+import type { Message, MessageKind } from '@/shared/types/entities';
 
 /**
- * 历史压缩摘要 C 在 Message.meta 上的判别键。
+ * 历史压缩摘要 C：role=USER, meta={kind:'compact', startRef?}。
  *
- * C 复用既有 hidden-Message 模式：role=USER, meta={hidden:true, kind:'compaction_summary', startRef?}。
- * 位置即覆盖终点（C 排在被它总结的消息之后），前端已过滤 hidden（Messages.tsx），
- * buildContext 原样发出，groupIntoTurns 跳过。零 schema 变更。
+ * kind 是消息子类别的统一判别键（与 'context' 并列，meta.hidden 已废弃）。
+ * 位置即覆盖终点（C 排在被它总结的消息之后）；前端按 meta.kind 过滤（Messages.tsx），
+ * buildContext 原样发出，groupIntoTurns 跳过任何 meta.kind。
  */
-export const COMPACTION_SUMMARY_KIND = 'compaction_summary';
-
 export function isCompactionSummary(message: Message): boolean {
-  return message.meta?.kind === COMPACTION_SUMMARY_KIND;
+  return (message.meta?.kind as MessageKind | undefined) === 'compact';
 }
 
 /**
