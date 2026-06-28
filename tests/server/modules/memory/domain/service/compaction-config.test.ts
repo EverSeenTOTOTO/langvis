@@ -1,16 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '@/server/utils/schemaValidator';
-import {
-  readCompactionConfig,
-  MEMORY_FRAGMENT,
-} from '@/server/modules/memory/domain/service/compaction-config';
+import { MEMORY_FRAGMENT } from '@/server/modules/memory/domain/service/compaction-config';
 
-describe('readCompactionConfig', () => {
-  it('读取 memory.compaction（parse 已回填默认值后的运行时配置）', () => {
-    const cc = readCompactionConfig({
+describe('MEMORY_FRAGMENT.read', () => {
+  it('从 runtimeConfig 读取 memory.compaction', () => {
+    const cc = MEMORY_FRAGMENT.read({
       memory: {
         compaction: {
-          enabled: false,
           threshold: 0.5,
           windowSize: 20,
           keepRecent: 2,
@@ -18,26 +14,10 @@ describe('readCompactionConfig', () => {
       },
     });
     expect(cc).toEqual({
-      enabled: false,
       threshold: 0.5,
       windowSize: 20,
       keepRecent: 2,
     });
-  });
-
-  it('enabled:false 被尊重', () => {
-    expect(
-      readCompactionConfig({
-        memory: {
-          compaction: {
-            enabled: false,
-            threshold: 0.8,
-            windowSize: 10,
-            keepRecent: 4,
-          },
-        },
-      }).enabled,
-    ).toBe(false);
   });
 });
 
@@ -46,7 +26,6 @@ describe('MEMORY_FRAGMENT schema 默认值', () => {
     const parsed = parse(MEMORY_FRAGMENT.schema, {});
     expect(parsed).toEqual({
       compaction: {
-        enabled: true,
         threshold: 0.8,
         windowSize: 10,
         keepRecent: 4,

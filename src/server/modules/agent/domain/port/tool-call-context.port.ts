@@ -1,4 +1,4 @@
-import type { LlmPort } from './llm.port';
+import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 
 /**
  * ToolCallContext — 工具执行所需的上下文契约。
@@ -15,6 +15,8 @@ export interface ToolCallContext {
   readonly signal: AbortSignal;
   readonly workDir: string;
   readonly llm: LlmPort;
+  /** 本轮 chat 模型 id——chat/chatContent 类工具调用 LLM 时传入（无绑定层后由调用方提供）。 */
+  readonly chatModelId: string | undefined;
   /** HITL 关联键（AskUser 写 human_input:<runId>）。不进入 AgentRunContext */
   readonly runId: string;
   /** 本次会话的运行时配置（RuntimeConfigVO.runtimeConfig 的解析快照）。

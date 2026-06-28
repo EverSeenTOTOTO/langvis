@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { FileService } from '@/server/libs/infrastructure/file.service';
+import { FileService, FileValidationError } from '@/server/modules/file';
 
 describe('FileService', () => {
   let fileService: FileService;
@@ -120,6 +120,32 @@ describe('FileService - Extended', () => {
       testFiles.push(result1.filename, result2.filename);
 
       expect(result1.filename).not.toBe(result2.filename);
+    });
+
+    it('超 maxSize 抛 FileValidationError（不落盘）', async () => {
+      const mockFile = {
+        originalname: 'large.txt',
+        buffer: Buffer.alloc(0),
+        size: 10485761, // > 全局限额 10MB
+        mimetype: 'text/plain',
+      } as Express.Multer.File;
+
+      const err = await fileService.saveFile(mockFile).catch(e => e);
+      expect(err).toBeInstanceOf(FileValidationError);
+      expect((err as Error).message).toContain('exceeds limit');
+    });
+
+    it('非许可类型抛 FileValidationError（不落盘）', async () => {
+      const mockFile = {
+        originalname: 'video.mp4',
+        buffer: Buffer.from('test'),
+        size: 4,
+        mimetype: 'video/mp4',
+      } as Express.Multer.File;
+
+      const err = await fileService.saveFile(mockFile).catch(e => e);
+      expect(err).toBeInstanceOf(FileValidationError);
+      expect((err as Error).message).toContain('not allowed');
     });
   });
 

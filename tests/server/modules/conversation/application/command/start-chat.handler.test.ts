@@ -14,16 +14,12 @@ function makeConvRepo(conv: any) {
 }
 
 const stubEventBus = { dispatch: vi.fn() };
-const stubAgentService = {
-  getSystemPrompt: vi.fn(() => Promise.resolve('')),
-};
 
 function makeHandler(conv: any, chatService: Partial<ChatService>) {
   return new StartChatHandler(
     chatService as unknown as ChatService,
     makeConvRepo(conv),
     stubEventBus as unknown as EventBus,
-    stubAgentService as any,
   );
 }
 

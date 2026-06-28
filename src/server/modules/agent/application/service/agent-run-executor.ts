@@ -4,29 +4,37 @@ import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type { ToolCallDeps } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
+import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import { LlmAdapter } from '@/server/modules/agent/infrastructure/llm.adapter';
+import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
+import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { generateId } from '@/shared/utils';
-import { LlmProvider } from '@/server/modules/memory/infrastructure/llm.provider';
-import { ConversationMemory } from '@/server/modules/memory/domain/model/conversation-memory';
+import { ConversationMemory } from '@/server/modules/memory';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { ToolService } from './tool.service';
 import { AgentService } from './agent.service';
 import { runReactLoop } from './react-loop';
 import Logger from '@/server/utils/logger';
 import chalk from 'chalk';
-import { CACHE_SERVICE } from '@/server/modules/agent/agent.di-tokens';
+import {
+  AGENT_RUN_REPOSITORY,
+  CACHE_PORT,
+} from '@/server/modules/agent/agent.di-tokens';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 
 @singleton()
 export class AgentRunExecutor {
   private readonly logger = Logger.child({ source: 'AgentRunExecutor' });
+  /** 活跃 run 注册表——cancel(runId) 据此找到内存中的 AgentRun。 */
+  private readonly activeRuns = new Map<string, AgentRun>();
 
   constructor(
-    @inject(LlmProvider) private readonly llmProvider: LlmProvider,
-    @inject(CACHE_SERVICE) private readonly cacheService: CachePort,
+    @inject(LLM_PORT) private readonly llm: LlmPort,
+    @inject(CACHE_PORT) private readonly cacheService: CachePort,
+    @inject(AGENT_RUN_REPOSITORY)
+    private readonly agentRunRepo: AgentRunRepositoryPort,
     @inject(ProviderService) private readonly providerService: ProviderService,
     @inject(ToolService) private readonly toolService: ToolService,
     @inject(AgentService) private readonly agentService: AgentService,
@@ -65,15 +73,13 @@ export class AgentRunExecutor {
       modelId: cfg.model?.modelId ?? '',
     });
 
-    const llm = new LlmAdapter(this.llmProvider, modelId);
-
     const ctx: AgentRunContext = {
       run,
       config,
       runId: run.runId,
       workDir: params.workDir,
       signal: run.signal,
-      llm,
+      llm: this.llm,
       cache: this.cacheService,
       memory,
       executeTool: (toolName, args) =>
@@ -81,13 +87,54 @@ export class AgentRunExecutor {
           signal: run.signal,
           workDir: params.workDir,
           runId: run.runId,
-          llm,
+          llm: this.llm,
           cache: this.cacheService,
+          chatModelId: modelId,
           runtimeConfig: config.runtimeConfig,
         }),
     };
 
     return { run, ctx };
+  }
+
+  /**
+   * run —— 完整生命周期：建 run → 初始持久化 → 登记 → 执行（流事件）→ 终态持久化。
+   * agent 拥有自身 run 持久化（初始 save + 终态 update）；调用方只消费事件流。
+   */
+  async *run(params: {
+    runId: string;
+    workDir: string;
+    userConfig: Record<string, unknown>;
+    systemPrompt: string;
+    historyMessages: Message[];
+  }): AsyncGenerator<EnrichedEvent> {
+    const { run, ctx } = this.createRun(params);
+
+    await this.agentRunRepo.save({
+      id: run.runId,
+      status: 'running',
+      events: [],
+      config: {
+        systemPrompt: run.config.systemPrompt,
+        tools: run.config.tools,
+        contextSize: run.config.contextSize,
+        runtimeConfig: run.config.runtimeConfig,
+      },
+      startedAt: new Date(),
+      completedAt: null,
+    });
+    this.activeRuns.set(run.runId, run);
+
+    try {
+      yield* this.execute(run, ctx);
+    } finally {
+      this.activeRuns.delete(run.runId);
+      await this.agentRunRepo.update(run.runId, {
+        events: [...run.eventStream],
+        status: run.currentStatus,
+        completedAt: new Date(),
+      });
+    }
   }
 
   async *execute(
@@ -124,9 +171,10 @@ export class AgentRunExecutor {
     }
   }
 
-  /** 取消：run.cancel 原子地 abort + 记录 cancelled 事件，返回富化事件供调用方推送 SSE */
-  cancel(run: AgentRun, reason: string): EnrichedEvent | null {
-    return run.cancel(reason);
+  /** 取消：按 runId 查活跃 run，run.cancel 原子地 abort + 记录 cancelled 事件，返回富化事件供推送 SSE。 */
+  cancel(runId: string, reason: string): EnrichedEvent | null {
+    const run = this.activeRuns.get(runId);
+    return run ? run.cancel(reason) : null;
   }
 
   private executeTool(

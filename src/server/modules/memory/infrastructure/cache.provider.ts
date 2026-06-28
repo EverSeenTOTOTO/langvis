@@ -3,15 +3,12 @@ import path from 'path';
 import { singleton, inject } from 'tsyringe';
 import { generateId } from '@/shared/utils';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
-import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
-
-export type CompressionStrategy = 'skip' | 'file';
-
-export interface CachedReference {
-  $cached: string;
-  $size: number;
-  $preview?: string;
-}
+import {
+  isCachedReference,
+  type CachePort,
+  type CachedReference,
+  type CompressionStrategy,
+} from '@/server/modules/agent/domain/port/cache.port';
 
 /*
  * Compression Strategy Overview
@@ -77,16 +74,6 @@ export const CACHED_REF_STANDARD_SIZE =
 // Only compress strings significantly larger than the reference itself,
 // so compression always yields meaningful context savings.
 export const MIN_ITEM_THRESHOLD = CACHED_REF_STANDARD_SIZE * 2;
-
-export function isCachedReference(value: unknown): value is CachedReference {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    '$cached' in value &&
-    typeof (value as CachedReference).$cached === 'string'
-  );
-}
 
 @singleton()
 export class CacheProvider implements CachePort {

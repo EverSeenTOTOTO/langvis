@@ -277,7 +277,7 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
 
     // Custom format: model-select renders TreeSelect.
     // 选中模型时把 multimodal 写到与 modelId 同级的兄弟字段（parent 下的 'multimodal'），
-    // 供其它字段的 reaction 读取（如 upload 在 model.multimodal=false 时隐藏）。
+    // 供声明了 reactions 的兄弟字段联动读取（当前无消费方，保留以备后续片段）。
     // ModelSelect 只报选中模型对象，写哪个路径由这里（知道 name）决定。
     if (effective.format === 'model-select') {
       const parent = (Array.isArray(fullName) ? fullName : [fullName]).slice(

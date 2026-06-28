@@ -3,7 +3,7 @@ import { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type { ToolCallDeps } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
-import type { LlmPort } from '@/server/modules/agent/domain/port/llm.port';
+import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type { RunEvent } from '@/shared/types/events';
 
 function makeMockTool(config?: {
@@ -44,6 +44,7 @@ function makeDeps(): ToolCallDeps {
     runId: 'run_1',
     llm: makeMockLlm(),
     cache: makeMockCache(),
+    chatModelId: undefined,
     runtimeConfig: {},
   };
 }

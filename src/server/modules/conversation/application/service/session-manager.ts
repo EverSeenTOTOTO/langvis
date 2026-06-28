@@ -4,27 +4,33 @@ import type { Transport } from '@/shared/transport';
 import { inject, singleton } from 'tsyringe';
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { RedisKeys } from '@/shared/constants';
+import { EventBus, createDomainEvent } from '@/server/libs/ddd';
+import { CancelRun } from '@/server/modules/conversation/contracts';
 import { Connection } from './connection';
-import type { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
-import { AgentRunExecutor } from '@/server/modules/agent/application/service/agent-run-executor';
-import { projectRun } from '@/server/modules/agent/domain/projection/run-projection';
 import { ChatService } from './chat.service';
+import { projectRun } from './run-projection';
 import Logger from '@/server/utils/logger';
+
+/** 活跃 run 的会话内追踪——只持 runId + 事件缓冲，不持 agent 的 AgentRun 聚合。 */
+interface ActiveRun {
+  runId: string;
+  events: EnrichedEvent[];
+}
 
 @singleton()
 export class SessionManager {
   private readonly logger = Logger.child({ source: 'SessionManager' });
 
   private connections = new Map<string, Connection>();
-  private activeRuns = new Map<string, Map<string, AgentRun>>();
+  private activeRuns = new Map<string, Map<string, ActiveRun>>();
 
   constructor(
     @inject(RedisService)
     private redisService: RedisService,
     @inject(ChatService)
     private convService: ChatService,
-    @inject(AgentRunExecutor)
-    private executor: AgentRunExecutor,
+    @inject(EventBus)
+    private eventBus: EventBus,
   ) {}
 
   // ════════════════════════════════════════
@@ -110,9 +116,9 @@ export class SessionManager {
     }
     conn.attach(transport);
 
-    // replay: 从活跃 run 的事件流现算 snapshot
+    // replay: 从本进程缓冲的事件现算 snapshot（重连同一进程的活跃 run）。
     for (const [messageId, run] of this.activeRuns.get(conversationId) ?? []) {
-      const view = projectRun(run.eventStream);
+      const view = projectRun(run.events);
       conn.send({
         type: 'state_snapshot',
         messageId,
@@ -135,21 +141,36 @@ export class SessionManager {
   }
 
   // ════════════════════════════════════════
-  // Run 管理
+  // Run 管理（会话簿记——agent 经事件驱动，会话自行维护）
   // ════════════════════════════════════════
 
-  registerRun(conversationId: string, messageId: string, run: AgentRun): void {
+  /** RunStarted：登记活跃 run（创建事件缓冲）。须在首条 RunEvent 前同步完成。 */
+  registerRun(conversationId: string, messageId: string, runId: string): void {
     if (!this.activeRuns.has(conversationId)) {
       this.activeRuns.set(conversationId, new Map());
     }
-    this.activeRuns.get(conversationId)!.set(messageId, run);
+    this.activeRuns.get(conversationId)!.set(messageId, { runId, events: [] });
   }
 
-  getActiveRun(
+  /** 取某活跃 run 的累积事件流（CompleteTurn 投影用）。 */
+  getRunEvents(
     conversationId: string,
     messageId: string,
-  ): AgentRun | undefined {
-    return this.activeRuns.get(conversationId)?.get(messageId);
+  ): readonly EnrichedEvent[] | undefined {
+    return this.activeRuns.get(conversationId)?.get(messageId)?.events;
+  }
+
+  /** RunEvent：缓冲事件 + 桥接 SSE。 */
+  handleRunEvent(
+    conversationId: string,
+    messageId: string,
+    event: EnrichedEvent,
+  ): void {
+    const run = this.activeRuns.get(conversationId)?.get(messageId);
+    if (run) {
+      run.events.push(event);
+    }
+    this.processRunEvent(conversationId, messageId, event);
   }
 
   hasActiveRun(conversationId: string, messageId: string): boolean {
@@ -178,13 +199,17 @@ export class SessionManager {
     reason: string,
   ): void {
     const run = this.activeRuns.get(conversationId)?.get(messageId);
-    if (run && !run.isTerminated) {
-      // executor.cancel: abort + 记录 cancelled 事件；返回富化事件直接推送 SSE
-      const cancelled = this.executor.cancel(run, reason);
-      if (cancelled) {
-        this.processRunEvent(conversationId, messageId, cancelled);
-      }
-    }
+    if (!run) return;
+    // 事件驱动取消：会话不再直接调 agent 的 executor；agent 取消后 cancelled 事件经 RunEvent 回流。
+    this.eventBus.dispatch(
+      CancelRun,
+      createDomainEvent(CancelRun, run.runId, {
+        runId: run.runId,
+        conversationId,
+        messageId,
+        reason,
+      }),
+    );
   }
 
   async cancelAllActiveRuns(

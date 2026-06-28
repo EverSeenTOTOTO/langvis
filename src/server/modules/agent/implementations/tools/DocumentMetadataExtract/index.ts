@@ -74,6 +74,7 @@ ${wrapUntrusted(truncatedContent)}`;
     };
 
     const responseContent = await ctx.llm.chatContent(
+      ctx.chatModelId,
       {
         messages: [
           { role: 'system', content: systemPrompt.build() },

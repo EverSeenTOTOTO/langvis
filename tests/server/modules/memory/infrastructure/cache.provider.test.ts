@@ -7,9 +7,11 @@ import {
   CacheProvider,
   STRING_THRESHOLD,
   PREVIEW_LENGTH,
+} from '@/server/modules/memory/infrastructure/cache.provider';
+import {
   isCachedReference,
   type CachedReference,
-} from '@/server/modules/memory/infrastructure/cache.provider';
+} from '@/server/modules/agent/domain/port/cache.port';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 
 let testDir: string;

@@ -1,5 +1,5 @@
 import FileController from '@/server/controller/FileController';
-import { FileService } from '@/server/libs/infrastructure/file.service';
+import { FileService } from '@/server/modules/file';
 import type { Request, Response } from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import ResponseUserTool from '@/server/modules/agent/implementations/tools/ResponseUser';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
-import type { LlmPort } from '@/server/modules/agent/domain/port/llm.port';
+import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type { RunEvent } from '@/shared/types/events';
 
 function makeCtx(
@@ -16,6 +16,7 @@ function makeCtx(
     signal: new AbortController().signal,
     workDir: '/tmp',
     llm: { tts } as unknown as LlmPort,
+    chatModelId: undefined,
     runId: 'run_1',
     runtimeConfig: {},
   } as unknown as ToolCallContext;

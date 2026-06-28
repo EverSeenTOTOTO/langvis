@@ -1,8 +1,9 @@
-import { WorkingMemory } from '@/server/modules/memory/domain/model/working-memory';
-import { readCompactionConfig } from '@/server/modules/memory/domain/service/compaction-config';
+import { WorkingMemory } from '@/server/modules/memory';
+import { readConfigFragment } from '@/server/libs/config/config-fragment';
 import { ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { LlmMessage } from '@/shared/types/entities';
+import type { ModelConfig } from '@/shared/types';
 import type { RunEvent } from '@/shared/types/events';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import { winstonLogger } from '@/server/utils/logger';
@@ -17,13 +18,6 @@ type ReActAction = {
   input: Record<string, unknown>;
 };
 
-interface ReActRuntimeConfig {
-  model?: {
-    modelId?: string;
-    temperature?: number;
-  };
-}
-
 /**
  * runReactLoop —— 内联的 ReAct 推理-行动-观察循环（原 ReActAgent.call 的体）。
  *
@@ -34,31 +28,31 @@ interface ReActRuntimeConfig {
 export async function* runReactLoop(
   ctx: AgentRunContext,
 ): AsyncGenerator<RunEvent, void, void> {
-  const cfg = ctx.config.runtimeConfig as ReActRuntimeConfig;
-  const cc = readCompactionConfig(ctx.config.runtimeConfig);
-  const modelId = cfg.model?.modelId ?? '';
+  const model = readConfigFragment<ModelConfig>(
+    'model',
+    ctx.config.runtimeConfig,
+  );
+  const modelId = model.modelId ?? '';
 
   const working = new WorkingMemory({
     seed: buildIterMessages(await ctx.memory.buildContext()),
     contextSize: ctx.config.contextSize,
     modelId,
     llm: ctx.llm,
-    compaction: cc,
+    runtimeConfig: ctx.config.runtimeConfig,
   });
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     ctx.signal.throwIfAborted();
 
-    if (cc.enabled) {
-      const result = await working.compact(ctx.signal);
-      if (result.compacted) {
-        yield {
-          type: 'context_usage',
-          used: result.usage.used,
-          total: result.usage.total,
-          reason: 'context_compressed',
-        };
-      }
+    const result = await working.compact(ctx.signal);
+    if (result.compacted) {
+      yield {
+        type: 'context_usage',
+        used: result.usage.used,
+        total: result.usage.total,
+        reason: 'context_compressed',
+      };
     }
 
     const iterMessages = await working.buildContext();
@@ -69,9 +63,10 @@ export async function* runReactLoop(
     });
 
     const content = await ctx.llm.chatContent(
+      model.modelId,
       {
         messages: iterMessages,
-        temperature: cfg.model?.temperature,
+        temperature: model.temperature,
         stop: ['Observation:', 'Observation：'],
       },
       ctx.signal,

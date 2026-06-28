@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { projectRun } from '@/server/modules/agent/domain/projection/run-projection';
+import { projectRun } from '@/server/modules/conversation/application/service/run-projection';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 
 let seq = 0;

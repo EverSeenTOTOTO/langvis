@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import type { RedisService } from '@/server/libs/infrastructure/redis.service';
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
-import type { AgentRunExecutor } from '@/server/modules/agent/application/service/agent-run-executor';
+import type { EventBus } from '@/server/libs/ddd';
 import { Transport } from '@/shared/transport';
 import type { SSEFrame } from '@/shared/types/events';
 
@@ -50,7 +50,9 @@ function makeManager(activeMessages: unknown[] = []): {
 } {
   const redis = makeMockRedis();
   const chat = makeMockChat(activeMessages);
-  const manager = new SessionManager(redis, chat, {} as AgentRunExecutor);
+  const manager = new SessionManager(redis, chat, {
+    dispatch: vi.fn(),
+  } as unknown as EventBus);
   return { manager, chat, redis };
 }
 
@@ -112,9 +114,7 @@ describe('SessionManager — 孤儿 run 对账', () => {
       const { manager, chat } = makeManager([
         { id: 'msg_live', agentRunId: 'run_live' },
       ]);
-      manager.registerRun(conversationId, 'msg_live', {
-        eventStream: [],
-      } as never);
+      manager.registerRun(conversationId, 'msg_live', 'run_live');
 
       await manager.initSession(conversationId, new FakeTransport());
 

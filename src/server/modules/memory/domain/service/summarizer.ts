@@ -1,6 +1,6 @@
 import type { LlmMessage } from '@/shared/types/entities';
 import type { Logger } from '@/server/utils/logger';
-import type { LlmPort } from '@/server/modules/agent/domain/port/llm.port';
+import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { buildSummarizerPrompt } from './summarizer.prompt';
 
 /**
@@ -17,6 +17,7 @@ export class Summarizer {
     private readonly llm: LlmPort,
     private readonly logger: Logger,
     private readonly windowSize = 10,
+    private readonly modelId: string | undefined,
   ) {}
 
   async fold(
@@ -41,6 +42,7 @@ export class Summarizer {
     signal: AbortSignal,
   ): Promise<string> {
     const content = await this.llm.chatContent(
+      this.modelId,
       {
         messages: [
           { role: 'user', content: buildSummarizerPrompt(prev, chunk) },

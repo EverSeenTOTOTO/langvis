@@ -8,16 +8,15 @@ import type {
 import { inject, singleton } from 'tsyringe';
 import type { Logger } from '@/server/utils/logger';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
-import { TraceContext } from '@/server/middleware/trace-context';
-import { Role, type LlmMessage, type Message } from '@/shared/types/entities';
+import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type {
   TextToSpeechInput,
   TextToSpeechOutput,
-} from '@/server/modules/agent/implementations/tools/TextToSpeech';
-import type {
   SpeechToTextInput,
   SpeechToTextOutput,
-} from '@/server/modules/agent/implementations/tools/SpeechToText';
+} from '@/server/libs/ports/llm/llm.types';
+import { TraceContext } from '@/server/middleware/trace-context';
+import { Role, type LlmMessage, type Message } from '@/shared/types/entities';
 
 function toMultimodalContent(
   content: string,
@@ -74,7 +73,7 @@ function toOpenAIMessages(
 }
 
 @singleton()
-export class LlmProvider {
+export class LlmProvider implements LlmPort {
   private clientCache = new Map<string, OpenAI>();
 
   constructor(

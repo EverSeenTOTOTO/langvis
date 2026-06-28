@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { FileService } from '@/server/libs/infrastructure/file.service';
+import { FileService } from '@/server/modules/file';
 
 describe('FileService - Streaming', () => {
   let fileService: FileService;

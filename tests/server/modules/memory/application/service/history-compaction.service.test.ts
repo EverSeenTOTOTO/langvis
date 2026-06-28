@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import '@/server/modules/memory/domain/service/compaction-config';
+import '@/server/modules/agent/application/service/model-config.fragment';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
 
@@ -23,14 +25,19 @@ function msg(content: string, meta?: Record<string, unknown>): Message {
   };
 }
 
-// compact() 内部 `new LlmAdapter(llmProvider, modelId)`；Summarizer 已 mock，
-// LlmAdapter 仅被构造不被调用，故 stub 即可。
-const stubLlmProvider = {} as any;
+// compact() 内部 new Summarizer(llm, …)；Summarizer 已 mock，llm 仅注入不被调用，故 stub 即可。
+const stubLlm = {} as any;
 
 const signal = new AbortController().signal;
 
+// compact() 经 readConfigFragment 自取 modelId 与压缩参数——需 model + memory 片段就位。
+const RUNTIME_CONFIG = {
+  model: { modelId: 'openai:gpt-4' },
+  memory: { compaction: { threshold: 0.8, windowSize: 10, keepRecent: 4 } },
+};
+
 function makeService() {
-  return new HistoryCompactionService(stubLlmProvider);
+  return new HistoryCompactionService(stubLlm);
 }
 
 describe('HistoryCompactionService.compact', () => {
@@ -44,7 +51,7 @@ describe('HistoryCompactionService.compact', () => {
 
     const r = await svc.compact({
       messages: [msg('hi')],
-      modelId: 'openai:gpt-4',
+      runtimeConfig: RUNTIME_CONFIG,
       contextSize: 100_000,
       signal,
     });
@@ -62,7 +69,7 @@ describe('HistoryCompactionService.compact', () => {
 
     const r = await svc.compact({
       messages,
-      modelId: 'openai:gpt-4',
+      runtimeConfig: RUNTIME_CONFIG,
       contextSize: 100,
       signal,
     });
@@ -80,7 +87,7 @@ describe('HistoryCompactionService.compact', () => {
 
     const r = await svc.compact({
       messages: [msg('only-a-summary', { kind: 'compact' })],
-      modelId: 'openai:gpt-4',
+      runtimeConfig: RUNTIME_CONFIG,
       contextSize: 100,
       signal,
     });

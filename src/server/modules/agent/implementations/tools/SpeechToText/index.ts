@@ -4,22 +4,13 @@ import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
+import type {
+  SpeechToTextInput,
+  SpeechToTextOutput,
+} from '@/server/libs/ports/llm/llm.types';
 
-export interface SpeechToTextInput {
-  modelId?: string;
-  filePath: string;
-  mimeType: string;
-  language?: string;
-  temperature?: number;
-  diarize?: boolean;
-}
-
-export interface SpeechToTextOutput {
-  task: string;
-  language: string;
-  text: string;
-  requestId: string;
-}
+// 向后兼容：历史代码自本工具导入这两个类型，re-export 内核定义。
+export type { SpeechToTextInput, SpeechToTextOutput };
 
 @tool(ToolIds.SPEECH_TO_TEXT)
 export default class SpeechToTextTool extends Tool<SpeechToTextOutput> {

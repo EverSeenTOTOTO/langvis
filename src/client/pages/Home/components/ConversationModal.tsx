@@ -2,7 +2,6 @@ import InlineItem from '@/client/components/InlineItem';
 import Modal, { ModalProps } from '@/client/components/Modal';
 import SchemaField, { SchemaProperty } from '@/client/components/SchemaField';
 import { useStore } from '@/client/store';
-import { AgentConfig } from '@/shared/types';
 import { JSONSchemaType } from 'ajv';
 import {
   Empty,
@@ -132,10 +131,6 @@ const ConversationModal = ({
               )}
             </InlineItem>
 
-            <Typography.Paragraph type="secondary">
-              {settingStore.tr(fetchAgentApi[0]?.value?.description || '')}
-            </Typography.Paragraph>
-
             {mode === 'create' && (
               <Form.Item
                 name="switchToNew"
@@ -149,10 +144,7 @@ const ConversationModal = ({
           </div>
           <div className="config-right">
             <Skeleton loading={fetchAgentApi[0].loading} active>
-              {renderConfigSchema(
-                (fetchAgentApi[0]?.value as AgentConfig | undefined)
-                  ?.configSchema,
-              )}
+              {renderConfigSchema(fetchAgentApi[0]?.value)}
             </Skeleton>
           </div>
         </Flex>

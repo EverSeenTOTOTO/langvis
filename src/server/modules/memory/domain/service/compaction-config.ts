@@ -2,7 +2,6 @@ import type { JSONSchemaType } from 'ajv';
 import { defineConfigFragment } from '@/server/libs/config/config-fragment';
 
 export interface CompactionConfig {
-  enabled: boolean;
   threshold: number;
   windowSize: number;
   /** loop 内压缩时保留的近期消息数（含成对的 action/observation）。 */
@@ -10,10 +9,10 @@ export interface CompactionConfig {
 }
 
 /**
- * memory 域的配置片段——记忆压缩（历史层 + loop 内迭代层）。
+ * memory 域的配置片段——记忆压缩（历史层 + loop 内迭代层）。schema + read 双向闭环：
+ * schema 供前端渲染、ajv `useDefaults` 回填；read 供消费方经 readConfigFragment 强类型取回。
  *
- * 默认值全在 schema 里：对象级 `default` 让 ajv `useDefaults` 在 parse 时建出
- * memory.compaction 嵌套结构，叶子级 `default` 回填具体值。前端 SchemaField 同源读 initialValue。
+ * 无 `enabled` 硬开关——是否压缩由 threshold 兜底判定（用量超阈才折叠）。
  */
 export const MEMORY_FRAGMENT = defineConfigFragment({
   key: 'memory',
@@ -28,12 +27,6 @@ export const MEMORY_FRAGMENT = defineConfigFragment({
         default: {},
         description: '记忆压缩（历史层 + loop 内迭代层）',
         properties: {
-          enabled: {
-            type: 'boolean',
-            default: true,
-            nullable: true,
-            description: '启用记忆压缩',
-          },
           threshold: {
             type: 'number',
             default: 0.8,
@@ -60,15 +53,10 @@ export const MEMORY_FRAGMENT = defineConfigFragment({
       },
     },
   } as unknown as JSONSchemaType<unknown>,
+  read: (cfg): CompactionConfig => {
+    // parse() 已依 schema 的对象级 default 建出 memory.compaction 并回填默认值；
+    // 此处直接强类型读取，缺失即 invariant 违例、应 fail loud。
+    return (cfg as { memory: { compaction: CompactionConfig } }).memory
+      .compaction;
+  },
 });
-
-/**
- * 从 runtimeConfig 读取压缩配置。parse() 已依 schema 的对象级 default 建出
- * memory.compaction 并回填默认值，故此处直接强类型读取；缺失即 invariant 违例、应 fail loud。
- */
-export function readCompactionConfig(
-  runtimeConfig: Record<string, unknown>,
-): CompactionConfig {
-  return (runtimeConfig as { memory: { compaction: CompactionConfig } }).memory
-    .compaction;
-}

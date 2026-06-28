@@ -3,7 +3,6 @@ import { Role } from '@/shared/entities/Message';
 import { commandHandler } from '@/server/decorator/handler';
 import { createDomainEvent, EventBus } from '@/server/libs/ddd';
 import { ChatService } from '../service/chat.service';
-import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { CONVERSATION_REPOSITORY } from '../../conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
 import {
@@ -22,8 +21,6 @@ export class StartChatHandler {
     private convRepo: ConversationRepositoryPort,
     @inject(EventBus)
     private eventBus: EventBus,
-    @inject(AgentService)
-    private readonly agentService: AgentService,
   ) {}
 
   async execute(command: StartChatCommand): Promise<{ assistantId: string }> {
@@ -34,7 +31,6 @@ export class StartChatHandler {
       throw new ConversationNotFoundError(conversationId);
     }
     const userConfig = extractUserConfig(dbConversation);
-    const systemPrompt = await this.agentService.getSystemPrompt();
 
     // 前置条件：会话必须已激活（调用方需先 activate）。不再静默激活。
     await this.convService.assertActivated(conversationId);
@@ -45,10 +41,17 @@ export class StartChatHandler {
       assistantId,
     });
 
+    // systemPrompt 取自激活时烘焙的 system 消息（会话自有数据）；agent 不再被回调取 prompt。
     const systemMessage = setup.existingMessages.find(
       m => m.role === Role.SYSTEM,
     );
-    const resolvedSystemPrompt = systemMessage?.content ?? systemPrompt;
+    const systemPrompt = systemMessage?.content ?? '';
+
+    // 历史由会话自带（agent 不再回调 conversation 取历史）。
+    const historyMessages = await this.convService.getHistoryMessages(
+      conversationId,
+      setup.assistantMessage.id,
+    );
 
     this.eventBus.dispatch(
       TurnInitiated,
@@ -56,7 +59,8 @@ export class StartChatHandler {
         conversationId,
         assistantMessage: setup.assistantMessage,
         userConfig,
-        systemPrompt: resolvedSystemPrompt,
+        systemPrompt,
+        historyMessages,
       }),
     );
 

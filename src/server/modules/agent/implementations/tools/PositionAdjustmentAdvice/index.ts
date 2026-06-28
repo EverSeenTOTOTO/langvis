@@ -84,7 +84,12 @@ export default class PositionAdjustmentAdviceTool extends Tool<PositionAdjustmen
       { role: 'user' as const, content: userPrompt },
     ];
 
-    return await ctx.llm.chatContent({ messages }, ctx.signal, this.logger);
+    return await ctx.llm.chatContent(
+      ctx.chatModelId,
+      { messages },
+      ctx.signal,
+      this.logger,
+    );
   }
 
   private buildAdvicePrompt(formData: Record<string, any>): string {
