@@ -1,28 +1,10 @@
 import { JSONSchemaType } from 'ajv';
 
-export interface UploadConfig {
-  /** Maximum file size in bytes */
-  maxSize?: number;
-  /** Allowed MIME types, e.g. ['image/*', 'application/pdf'] */
-  allowedTypes?: string[];
-  /** Maximum number of files per upload */
-  maxCount?: number;
-}
-
-export interface AgentConfig<
-  Config = Record<string, unknown>,
-  Input = Record<string, unknown>,
-> {
-  extends?: string;
-  name: string;
-  description: string;
-  tools?: string[];
-  /** Runtime configuration schema (e.g., model, temperature) */
-  configSchema?: JSONSchemaType<Config>;
-  /** Input schema for child agent invocation (context, query, etc.) */
-  inputSchema?: JSONSchemaType<Input>;
-  enabled?: boolean;
-  upload?: UploadConfig;
+/** model 域配置（chat 模型选择）——由 MODEL_FRAGMENT 发布、readConfigFragment 读取。 */
+export interface ModelConfig {
+  modelId?: string;
+  temperature?: number;
+  topP?: number;
 }
 
 export interface ToolConfig<

@@ -2,13 +2,13 @@ import type { ReActStep, AwaitingInputProjection } from '@/shared/types/render';
 import type { EnrichedEvent } from '@/shared/types/events';
 
 /**
- * projectRun — 纯投影函数。
+ * projectRun — 纯投影函数（读侧业务，属 conversation：SSE 回放 / 回合完成 / 历史读回共用）。
  *
  * 把 AgentRun 的事实流 (EnrichedEvent[]) fold 成读模型 RunView。
- * 这是 PendingMessage 的归宿：读侧（API 响应、持久化、SSE 断线重连）
- * 统一调用它，单一投影来源，保证实时流与历史读回一致。
+ * 读侧统一调用它，单一投影来源，保证实时流与历史读回一致。
  *
  * 无状态、无副作用、可在任何时候对完整或部分事件流重算。
+ * （由 agent/domain/projection 迁入——agent 是写侧（产事件），投影是会话读侧职责。）
  */
 export interface RunView {
   content: string;

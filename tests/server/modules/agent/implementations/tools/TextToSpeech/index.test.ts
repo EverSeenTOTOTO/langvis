@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import TextToSpeechTool from '@/server/modules/agent/implementations/tools/TextToSpeech';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
-import type { LlmPort } from '@/server/modules/agent/domain/port/llm.port';
+import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { winstonLogger } from '@/server/utils/logger';
 
 // @tool 装饰器经 DI 才注入 logger；直接 new 时手动补上。
@@ -27,6 +27,7 @@ function makeCtx(input: Record<string, unknown>): {
     signal: new AbortController().signal,
     workDir: '/tmp',
     llm: { tts } as unknown as LlmPort,
+    chatModelId: undefined,
     runId: 'run_42',
     runtimeConfig: {},
   } as unknown as ToolCallContext;

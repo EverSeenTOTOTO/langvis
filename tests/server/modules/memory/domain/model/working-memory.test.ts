@@ -1,14 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
+import '@/server/modules/memory/domain/service/compaction-config';
+import '@/server/modules/agent/application/service/model-config.fragment';
 import { WorkingMemory } from '@/server/modules/memory/domain/model/working-memory';
 import type { CompactionConfig } from '@/server/modules/memory/domain/service/compaction-config';
 
 const COMPACTION_DEFAULTS: CompactionConfig = {
-  enabled: true,
   threshold: 0.8,
   windowSize: 10,
   keepRecent: 4,
 };
-import type { LlmPort } from '@/server/modules/agent/domain/port/llm.port';
+const RUNTIME_CONFIG = { memory: { compaction: COMPACTION_DEFAULTS } };
+import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type { LlmMessage } from '@/shared/types/entities';
 
 function mockLlm(content = 'RECAP'): LlmPort {
@@ -25,7 +27,7 @@ function makeWorking(
     contextSize,
     modelId: 'openai:gpt-4',
     llm,
-    compaction: COMPACTION_DEFAULTS,
+    runtimeConfig: RUNTIME_CONFIG,
   });
 }
 

@@ -4,6 +4,21 @@ import path from 'path';
 import { service } from '@/server/decorator/service';
 import { resolveSafePath } from '@/server/utils/pathSafety';
 
+/** 上传限额——服务端全局策略（不按会话调；上传端点无 conversation 上下文）。 */
+const UPLOAD_LIMITS = {
+  maxSize: 10485760,
+  allowedTypes: ['image/*', 'application/pdf', 'text/*'],
+  maxCount: 5,
+};
+
+/** saveFile 校验失败时抛出；FileController 据此映射 400。 */
+export class FileValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FileValidationError';
+  }
+}
+
 @service()
 export class FileService {
   private readonly uploadDir: string;
@@ -83,6 +98,27 @@ export class FileService {
     return this.validatePath(filename);
   }
 
+  private validateUpload(file: Express.Multer.File): void {
+    if (UPLOAD_LIMITS.maxSize && file.size > UPLOAD_LIMITS.maxSize) {
+      throw new FileValidationError(
+        `File size ${file.size} exceeds limit: ${UPLOAD_LIMITS.maxSize} bytes`,
+      );
+    }
+    if (!UPLOAD_LIMITS.allowedTypes.includes('*')) {
+      const allowed = UPLOAD_LIMITS.allowedTypes.some((type: string) => {
+        if (type.endsWith('/*')) {
+          return file.mimetype.startsWith(type.slice(0, -1));
+        }
+        return file.mimetype === type;
+      });
+      if (!allowed) {
+        throw new FileValidationError(
+          `File type ${file.mimetype} not allowed. Allowed types: ${UPLOAD_LIMITS.allowedTypes.join(', ')}`,
+        );
+      }
+    }
+  }
+
   async saveFile(
     file: Express.Multer.File,
     dir?: string,
@@ -92,6 +128,7 @@ export class FileService {
     size: number;
     mimeType: string;
   }> {
+    this.validateUpload(file);
     const ext = path.extname(file.originalname) || '';
     const timestamp = Date.now();
     const random = Math.random().toString(36).slice(2, 8);

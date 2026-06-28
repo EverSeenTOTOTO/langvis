@@ -13,7 +13,7 @@ export default class AgentController {
 
   @api('/', { method: 'get' })
   async getConfig(@request() _req: Request, @response() res: Response) {
-    // 收敛单一 agent 后返回全局配置（由 AgentService 提供，不再 import 松散常量）。
-    return res.json(this.agentService.getDescriptor());
+    // 收敛单一 agent 后返回聚合后的对话配置 schema（各域 ConfigFragment 平铺）。
+    return res.json(this.agentService.getConfigSchema());
   }
 }

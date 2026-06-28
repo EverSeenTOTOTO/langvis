@@ -22,7 +22,7 @@ import type { AgentRunRepositoryPort } from '../modules/agent/domain/port/agent-
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { Role } from '@/shared/entities/Message';
 import { estimateTokens } from '../utils/estimateTokens';
-import { projectRun } from '../modules/agent/domain/projection/run-projection';
+import { projectRun } from '../modules/conversation/application/service/run-projection';
 
 @controller('/api/conversation')
 export default class ConversationController {

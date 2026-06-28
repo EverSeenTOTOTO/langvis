@@ -1,5 +1,4 @@
 import { container, inject, singleton } from 'tsyringe';
-import type { AgentConfig } from '@/shared/types';
 import type { JSONSchemaType } from 'ajv';
 import { ToolIds } from '@/shared/constants';
 import { parse } from '@/server/utils/schemaValidator';
@@ -14,18 +13,13 @@ import { SkillService } from './skill.service';
 
 @singleton()
 export class AgentService {
-  private readonly descriptor: AgentConfig = {
-    name: 'ReAct Agent',
-    description:
-      'An agent that uses the ReAct strategy to interact with tools and provide answers based on reasoning and actions.',
-    tools: [
-      ToolIds.ASK_USER,
-      ToolIds.RESPONSE_USER,
-      ToolIds.CACHED_READ,
-      ToolIds.SKILL_CALL,
-      ToolIds.LIST_TOOLS,
-    ],
-  };
+  private readonly inlineTools = [
+    ToolIds.ASK_USER,
+    ToolIds.RESPONSE_USER,
+    ToolIds.CACHED_READ,
+    ToolIds.SKILL_CALL,
+    ToolIds.LIST_TOOLS,
+  ];
 
   private cachedSchema: JSONSchemaType<Record<string, unknown>> | null = null;
   private cachedPrompt: Promise<string> | null = null;
@@ -36,11 +30,11 @@ export class AgentService {
   ) {}
 
   /**
-   * 聚合所有 ConfigFragment（按 key 平铺）为对话配置 schema。
+   * 聚合所有 ConfigFragment（按 key 平铺）为对话配置 schema——前端配置弹窗据此渲染。
    * 各域自描述其片段（memory/upload/model/…），本服务不认识任何域细节——纯组合器。
-   * 懒构建：首次调用时 fragments 已在 config.module 装配阶段注册完毕。
+   * 懒构建：首次调用时 fragments 已在各域 .module 装配阶段注册完毕。
    */
-  private getConfigSchema(): JSONSchemaType<Record<string, unknown>> {
+  getConfigSchema(): JSONSchemaType<Record<string, unknown>> {
     if (!this.cachedSchema) {
       const properties = Object.fromEntries(
         getConfigFragments().map(f => [f.key, f.schema]),
@@ -51,11 +45,6 @@ export class AgentService {
       } as unknown as JSONSchemaType<Record<string, unknown>>;
     }
     return this.cachedSchema;
-  }
-
-  /** AgentController 读取——返回前端可渲染的配置描述（含聚合后的 configSchema）。 */
-  getDescriptor(): AgentConfig {
-    return { ...this.descriptor, configSchema: this.getConfigSchema() };
   }
 
   /**
@@ -86,7 +75,7 @@ export class AgentService {
 
     return RuntimeConfigVO.of({
       systemPrompt,
-      tools: this.descriptor.tools ?? [],
+      tools: this.inlineTools,
       contextSize,
       runtimeConfig,
     });
@@ -98,9 +87,7 @@ export class AgentService {
       this.skillService.initialize(),
     ]);
 
-    const tools = (this.descriptor.tools ?? []).map(t =>
-      container.resolve<Tool>(t),
-    );
+    const tools = this.inlineTools.map(t => container.resolve<Tool>(t));
     const inlineIds = new Set(tools.map(t => t.id));
     const otherToolIds = this.toolService
       .getCachedToolIds()

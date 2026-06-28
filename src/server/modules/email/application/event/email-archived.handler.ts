@@ -1,9 +1,11 @@
 import { inject } from 'tsyringe';
 import { eventHandler } from '@/server/decorator/handler';
 import { CommandBus } from '@/server/libs/ddd';
-import { CACHE_SERVICE } from '@/server/modules/agent/agent.di-tokens';
-import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
-import type { CachedReference } from '@/server/modules/memory/infrastructure/cache.provider';
+import { CACHE_PORT } from '@/server/modules/agent/agent.di-tokens';
+import type {
+  CachePort,
+  CachedReference,
+} from '@/server/modules/agent/domain/port/cache.port';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import { ConversationActivateCommand } from '@/server/modules/conversation/contracts';
 import { StartChatCommand } from '@/server/modules/conversation/contracts';
@@ -13,7 +15,7 @@ import { EmailArchived, type EmailArchivedPayload } from '../../contracts';
 @eventHandler(EmailArchived)
 export class EmailArchivedHandler {
   constructor(
-    @inject(CACHE_SERVICE)
+    @inject(CACHE_PORT)
     private readonly cacheService: CachePort,
     @inject(WorkspaceService)
     private readonly workspaceService: WorkspaceService,

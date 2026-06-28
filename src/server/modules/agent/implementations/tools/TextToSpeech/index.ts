@@ -5,20 +5,13 @@ import { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
+import type {
+  TextToSpeechInput,
+  TextToSpeechOutput,
+} from '@/server/libs/ports/llm/llm.types';
 
-export interface TextToSpeechInput {
-  modelId?: string;
-  text: string;
-  reqId: string;
-  voice: string;
-  emotion?: string;
-  speedRatio?: number;
-}
-
-export interface TextToSpeechOutput {
-  voice: string;
-  filePath: string;
-}
+// 向后兼容：历史代码自本工具导入这两个类型，re-export 内核定义。
+export type { TextToSpeechInput, TextToSpeechOutput };
 
 @tool(ToolIds.TEXT_TO_SPEECH)
 export default class TextToSpeechTool extends Tool<TextToSpeechOutput> {

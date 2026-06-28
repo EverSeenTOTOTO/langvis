@@ -1,9 +1,9 @@
 import type { RuntimeConfigVO } from '../model/runtime-config.vo';
 import type { AgentRun } from '../model/agent-run.entity';
 import type { RunEvent } from '@/shared/types/events';
-import type { LlmPort } from './llm.port';
+import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type { CachePort } from './cache.port';
-import type { ContextPort } from '@/server/modules/memory/domain/port/context.port';
+import type { ContextPort } from '@/server/modules/memory';
 
 export interface AgentRunContext {
   readonly run: AgentRun;

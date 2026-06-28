@@ -1,6 +1,6 @@
 import type { RunEvent } from '@/shared/types/events';
 import type { CachePort } from '../port/cache.port';
-import type { LlmPort } from '../port/llm.port';
+import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type { ToolCallContext } from '../port/tool-call-context.port';
 import { Entity } from '@/server/libs/ddd';
 import type { Tool } from './tool.base';
@@ -18,6 +18,7 @@ export interface ToolCallDeps {
   runId: string;
   llm: LlmPort;
   cache: CachePort;
+  chatModelId: string | undefined;
   runtimeConfig: Record<string, unknown>;
 }
 
@@ -86,6 +87,7 @@ export class ToolCall extends Entity<string> {
         signal: this.deps.signal,
         workDir: this.deps.workDir,
         llm: this.deps.llm,
+        chatModelId: this.deps.chatModelId,
         runId: this.deps.runId,
         runtimeConfig: this.deps.runtimeConfig,
       };

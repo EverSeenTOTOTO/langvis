@@ -1,5 +1,5 @@
 import FileController from '@/server/controller/FileController';
-import { FileService } from '@/server/libs/infrastructure/file.service';
+import { FileService, FileValidationError } from '@/server/modules/file';
 import type { Request, Response } from 'express';
 import { Readable } from 'stream';
 import { container } from 'tsyringe';
@@ -301,12 +301,12 @@ describe('FileController - Upload', () => {
     expect(mockRes.json).toHaveBeenCalledWith({ error: 'No file uploaded' });
   });
 
-  it('should reject file exceeding maxSize', async () => {
+  it('should map FileValidationError to 400', async () => {
     const mockFile = {
       fieldname: 'file',
       originalname: 'large.txt',
-      buffer: Buffer.from('x'.repeat(2000)),
-      size: 10485761, // > 全局限额 10MB
+      buffer: Buffer.alloc(0),
+      size: 4,
       mimetype: 'text/plain',
     } as Express.Multer.File;
 
@@ -315,33 +315,15 @@ describe('FileController - Upload', () => {
       status: vi.fn().mockReturnThis(),
     } as any;
 
+    (mockFileService.saveFile as any).mockRejectedValue(
+      new FileValidationError('File size 999 exceeds limit: 10485760 bytes'),
+    );
+
     await controller.uploadFile(mockFile, { agent: 'MockAgent' }, mockRes);
 
     expect(mockRes.status).toHaveBeenCalledWith(400);
     expect(mockRes.json).toHaveBeenCalledWith({
       error: expect.stringContaining('exceeds limit'),
-    });
-  });
-
-  it('should reject file with disallowed type', async () => {
-    const mockFile = {
-      fieldname: 'file',
-      originalname: 'video.mp4',
-      buffer: Buffer.from('test'),
-      size: 4,
-      mimetype: 'video/mp4',
-    } as Express.Multer.File;
-
-    const mockRes = {
-      json: vi.fn(),
-      status: vi.fn().mockReturnThis(),
-    } as any;
-
-    await controller.uploadFile(mockFile, { agent: 'MockAgent' }, mockRes);
-
-    expect(mockRes.status).toHaveBeenCalledWith(400);
-    expect(mockRes.json).toHaveBeenCalledWith({
-      error: expect.stringContaining('not allowed'),
     });
   });
 

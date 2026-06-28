@@ -12,9 +12,7 @@ import {
   request,
   response,
 } from '../decorator/param';
-import { FileService } from '@/server/libs/infrastructure/file.service';
-import { UPLOAD_LIMITS } from '../libs/config/upload-config';
-import type { UploadConfig } from '@/shared/types';
+import { FileService, FileValidationError } from '@/server/modules/file';
 import Logger from '../utils/logger';
 
 @controller('/api/files')
@@ -241,33 +239,6 @@ export default class FileController {
     }
   }
 
-  private getUploadConfig(): UploadConfig {
-    return UPLOAD_LIMITS;
-  }
-
-  private validateFile(
-    file: Express.Multer.File,
-    config: UploadConfig,
-  ): string | null {
-    if (config.maxSize && file.size > config.maxSize) {
-      return `File size ${file.size} exceeds limit: ${config.maxSize} bytes`;
-    }
-
-    if (config.allowedTypes && !config.allowedTypes.includes('*')) {
-      const allowed = config.allowedTypes.some((type: string) => {
-        if (type.endsWith('/*')) {
-          return file.mimetype.startsWith(type.slice(0, -1));
-        }
-        return file.mimetype === type;
-      });
-      if (!allowed) {
-        return `File type ${file.mimetype} not allowed. Allowed types: ${config.allowedTypes.join(', ')}`;
-      }
-    }
-
-    return null;
-  }
-
   @api('/upload', { method: 'post' })
   async uploadFile(
     @fileParam('file') file: Express.Multer.File,
@@ -280,18 +251,14 @@ export default class FileController {
     }
 
     const dir = formBody?.dir;
-    const uploadConfig = this.getUploadConfig();
-    const validationError = this.validateFile(file, uploadConfig);
-
-    if (validationError) {
-      res.status(400).json({ error: validationError });
-      return;
-    }
-
     try {
       const result = await this.fileService.saveFile(file, dir);
       res.json(result);
     } catch (error) {
+      if (error instanceof FileValidationError) {
+        res.status(400).json({ error: error.message });
+        return;
+      }
       this.logger.error('Error in uploadFile:', error);
       res.status(500).json({ error: 'Failed to save file' });
     }

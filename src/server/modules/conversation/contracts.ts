@@ -62,9 +62,16 @@ export class GetSessionStateQuery extends Query {
 // ── Events ────────────────────────────────────────────────
 
 import type { Message } from '@/shared/types/entities';
+import type { EnrichedEvent } from '@/shared/types/events';
 
 export const ConversationActivated = 'conversation_activated';
 export const TurnInitiated = 'turn_initiated';
+/** agent→conv：run 开始（conv 据此 registerRun + persistAgentRunId）。 */
+export const RunStarted = 'run_started';
+/** agent→conv：run 的每条富化事件（conv 据此 SSE 桥接 + 缓冲）。 */
+export const RunEvent = 'run_event';
+/** conv→agent：请求取消某 run（agent 据此 executor.cancel，取消事件经 RunEvent 回流）。 */
+export const CancelRun = 'cancel_run';
 export const RunCompleted = 'run_completed';
 
 export interface ConversationActivatedPayload {
@@ -76,6 +83,27 @@ export interface TurnInitiatedPayload {
   assistantMessage: Message;
   userConfig: Record<string, unknown>;
   systemPrompt: string;
+  /** conv 自带历史（agent 不再回调 conv 取历史）。 */
+  historyMessages: Message[];
+}
+
+export interface RunStartedPayload {
+  conversationId: string;
+  messageId: string;
+  runId: string;
+}
+
+export interface RunEventPayload {
+  conversationId: string;
+  messageId: string;
+  event: EnrichedEvent;
+}
+
+export interface CancelRunPayload {
+  runId: string;
+  conversationId: string;
+  messageId: string;
+  reason: string;
 }
 
 export interface RunCompletedPayload {
