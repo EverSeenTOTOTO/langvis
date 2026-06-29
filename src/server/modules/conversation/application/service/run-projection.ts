@@ -120,10 +120,9 @@ export function projectRun(events: readonly EnrichedEvent[]): RunView {
         break;
 
       case 'start':
-      case 'context_usage':
       case 'process_summary':
       case 'audio':
-        // Lifecycle / usage / compaction markers — no content accumulation.
+        // Lifecycle / compaction markers — no content accumulation.
         break;
     }
   }

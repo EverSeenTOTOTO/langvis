@@ -19,7 +19,9 @@ export class ConversationStore {
   @hydrate()
   messages: Record<string, Message[]> = {};
 
-  contextUsage: { used: number; total: number } | null = null;
+  conversationUsage: { used: number; total: number } | null = null;
+  /** per-run loop 用量（runId→值）；活跃 run 实时自增，终态后清除。 */
+  loopUsage: Map<string, { used: number; total: number }> = new Map();
 
   constructor(
     @inject(ConversationGroupStore)
@@ -119,13 +121,8 @@ export class ConversationStore {
     params: { id: string },
     req?: ApiRequest<{ id: string }>,
   ): Promise<Message[] | undefined> {
-    const response = await req!.send();
-    const { messages, contextUsage } = response as {
-      messages: Message[];
-      contextUsage: { used: number; total: number } | null;
-    };
+    const messages = (await req!.send()) as Message[];
     this.messages[params.id] = messages;
-    this.contextUsage = contextUsage;
     return messages;
   }
 

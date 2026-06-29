@@ -61,7 +61,7 @@ export class GetSessionStateQuery extends Query {
 
 // ── Events ────────────────────────────────────────────────
 
-import type { Message } from '@/shared/types/entities';
+import type { LlmMessage, Message } from '@/shared/types/entities';
 import type { EnrichedEvent } from '@/shared/types/events';
 
 export const ConversationActivated = 'conversation_activated';
@@ -83,8 +83,8 @@ export interface TurnInitiatedPayload {
   assistantMessage: Message;
   userConfig: Record<string, unknown>;
   systemPrompt: string;
-  /** conv 自带历史（agent 不再回调 conv 取历史）。 */
-  historyMessages: Message[];
+  /** 会话有效历史（LLM-ready，conv 的 ConversationMemory 产物）—— agent 直接作种子，不再回调 conv。 */
+  effectiveHistory: LlmMessage[];
 }
 
 export interface RunStartedPayload {

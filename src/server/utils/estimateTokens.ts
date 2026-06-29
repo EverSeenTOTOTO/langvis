@@ -1,6 +1,12 @@
 import type { LlmMessage } from '@/shared/types/entities';
 import { getEncoding, TiktokenEncoding } from 'js-tiktoken';
 
+/** 上下文用量：已用 token / 总额。被 conv（会话层）与 memory（loop 层）共用。 */
+export type ContextUsage = {
+  used: number;
+  total: number;
+};
+
 // Encoding mapping based on modelId patterns
 // cl100k_base: GPT-4, GPT-3.5-turbo, text-embedding-ada-002, etc.
 // o200k_base: GPT-4o, GPT-4o-mini, etc.

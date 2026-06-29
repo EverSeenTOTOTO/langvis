@@ -23,6 +23,11 @@ export class SessionManager {
 
   private connections = new Map<string, Connection>();
   private activeRuns = new Map<string, Map<string, ActiveRun>>();
+  /** runId → {conversationId, messageId} 反查：loop 用量事件（仅 runId）据此路由到会话。 */
+  private runIndex = new Map<
+    string,
+    { conversationId: string; messageId: string }
+  >();
 
   constructor(
     @inject(RedisService)
@@ -44,6 +49,9 @@ export class SessionManager {
       this.connections.delete(conversationId);
     }
 
+    for (const run of this.activeRuns.get(conversationId)?.values() ?? []) {
+      this.runIndex.delete(run.runId);
+    }
     this.activeRuns.delete(conversationId);
     this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
     this.logger.info(`Chat disposed`, { chatId: conversationId });
@@ -55,6 +63,7 @@ export class SessionManager {
     }
     this.connections.clear();
     this.activeRuns.clear();
+    this.runIndex.clear();
     this.logger.info(`Closed all SSE connections`);
   }
 
@@ -150,6 +159,14 @@ export class SessionManager {
       this.activeRuns.set(conversationId, new Map());
     }
     this.activeRuns.get(conversationId)!.set(messageId, { runId, events: [] });
+    this.runIndex.set(runId, { conversationId, messageId });
+  }
+
+  /** runId → {conversationId, messageId} 反查（loop 用量事件按 runId 路由用）。 */
+  findByRunId(
+    runId: string,
+  ): { conversationId: string; messageId: string } | null {
+    return this.runIndex.get(runId) ?? null;
   }
 
   /** 取某活跃 run 的累积事件流（CompleteTurn 投影用）。 */
@@ -180,6 +197,8 @@ export class SessionManager {
   finalizeRun(conversationId: string, messageId: string): void {
     const runs = this.activeRuns.get(conversationId);
     if (!runs) return;
+    const run = runs.get(messageId);
+    if (run) this.runIndex.delete(run.runId);
     runs.delete(messageId);
     if (runs.size === 0) {
       this.activeRuns.delete(conversationId);

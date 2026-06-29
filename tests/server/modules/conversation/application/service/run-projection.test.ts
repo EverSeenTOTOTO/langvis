@@ -205,17 +205,11 @@ describe('projectRun', () => {
     expect(projectRun(events).steps).not.toBe(projectRun(events).steps);
   });
 
-  it('ignores tool_progress / start / context_usage', () => {
+  it('ignores tool_progress / start', () => {
     const view = projectRun([
       ev({ type: 'start' }),
       ev({ type: 'text_chunk', content: 'hi' }),
       ev({ type: 'tool_progress', callId: 'tc_1', data: { pct: 50 } }),
-      ev({
-        type: 'context_usage',
-        used: 10,
-        total: 100,
-        reason: 'turn_completed',
-      }),
     ]);
     expect(view.content).toBe('hi');
     expect(view.steps).toHaveLength(0);

@@ -16,8 +16,9 @@ export type AgentRenderer = (node: MessageNode) => AgentRenderResult;
 
 /**
  * 单一 agent 渲染器——收敛多 agent 后不再有 renderer 注册表。
- * 富事件（thought / tool_call / tool_result / context_usage 等）由 UniversalEventRenderer
+ * 富事件（thought / tool_call / tool_result 等）由 UniversalEventRenderer
  * 渲染，文本回复走 Markdown；TTS 等工具产物的音频路径也经工具结果事件呈现。
+ * （上下文用量不再是 run 富事件——经独立会话级控制帧 conversation_usage / loop_usage 下发。）
  */
 export const renderAgentMessage: AgentRenderer = node => ({
   content: (

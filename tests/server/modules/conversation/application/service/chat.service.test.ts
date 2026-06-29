@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
+import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import type { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
+import type { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { Role } from '@/shared/entities/Message';
 
 function makeMockMessageRepo(): MessageRepositoryPort {
@@ -33,6 +35,18 @@ function makeMockWorkspace(): WorkspaceService {
   } as unknown as WorkspaceService;
 }
 
+function makeMockConvRepo(): ConversationRepositoryPort {
+  return {
+    findById: vi.fn().mockResolvedValue(null),
+  } as unknown as ConversationRepositoryPort;
+}
+
+function makeMockProviderService(): ProviderService {
+  return {
+    getModel: vi.fn().mockReturnValue({ contextSize: 8000 }),
+  } as unknown as ProviderService;
+}
+
 describe('ChatService', () => {
   let service: ChatService;
   let messageRepo: MessageRepositoryPort;
@@ -43,7 +57,13 @@ describe('ChatService', () => {
     messageRepo = makeMockMessageRepo();
     agentRunRepo = makeMockAgentRunRepo();
     workspace = makeMockWorkspace();
-    service = new ChatService(messageRepo, agentRunRepo, workspace);
+    service = new ChatService(
+      messageRepo,
+      makeMockConvRepo(),
+      agentRunRepo,
+      workspace,
+      makeMockProviderService(),
+    );
   });
 
   // ════════════════════════════════════════
@@ -277,33 +297,6 @@ describe('ChatService', () => {
   // ════════════════════════════════════════
   // 其他
   // ════════════════════════════════════════
-
-  describe('getHistoryMessages', () => {
-    it('returns all messages for conversation', async () => {
-      const messages = [
-        { id: 'msg_1', role: Role.SYSTEM, content: 'prompt' },
-        { id: 'msg_2', role: Role.USER, content: 'question' },
-      ];
-      (messageRepo.findByConversationId as any).mockResolvedValue(messages);
-
-      const result = await service.getHistoryMessages('conv_1');
-
-      expect(result).toBe(messages);
-    });
-
-    it('excludes a specific message when provided', async () => {
-      const messages = [
-        { id: 'msg_1', role: Role.SYSTEM, content: 'prompt' },
-        { id: 'msg_2', role: Role.USER, content: 'question' },
-      ];
-      (messageRepo.findByConversationId as any).mockResolvedValue(messages);
-
-      const result = await service.getHistoryMessages('conv_1', 'msg_2');
-
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('msg_1');
-    });
-  });
 
   describe('persistAgentRunId', () => {
     it('writes agentRunId to Message (fire-and-forget)', () => {

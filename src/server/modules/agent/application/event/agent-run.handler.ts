@@ -38,7 +38,7 @@ export class AgentRunHandler {
       assistantMessage,
       userConfig,
       systemPrompt,
-      historyMessages,
+      effectiveHistory,
     } = event.payload;
     const runId = generateId('run');
     const workDir = await this.workspaceService.getWorkDir(conversationId);
@@ -59,7 +59,7 @@ export class AgentRunHandler {
         workDir,
         userConfig,
         systemPrompt,
-        historyMessages,
+        effectiveHistory,
       })) {
         this.eventBus.dispatch(
           RunEvent,

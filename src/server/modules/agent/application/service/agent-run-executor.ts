@@ -1,5 +1,4 @@
 import { container, inject, singleton } from 'tsyringe';
-import type { Message } from '@/shared/types/entities';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type { ToolCallDeps } from '@/server/modules/agent/domain/model/tool-call.entity';
@@ -11,7 +10,10 @@ import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { generateId } from '@/shared/utils';
-import { ConversationMemory } from '@/server/modules/memory';
+import { ToolIds } from '@/shared/constants';
+import type { LlmMessage } from '@/shared/types/entities';
+import { LOOP_MEMORY_PORT } from '@/server/modules/memory';
+import type { LoopMemoryPort } from '@/server/modules/memory';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { ToolService } from './tool.service';
 import { AgentService } from './agent.service';
@@ -32,12 +34,14 @@ export class AgentRunExecutor {
 
   constructor(
     @inject(LLM_PORT) private readonly llm: LlmPort,
-    @inject(CACHE_PORT) private readonly cacheService: CachePort,
+    @inject(CACHE_PORT) private readonly cache: CachePort,
     @inject(AGENT_RUN_REPOSITORY)
     private readonly agentRunRepo: AgentRunRepositoryPort,
     @inject(ProviderService) private readonly providerService: ProviderService,
     @inject(ToolService) private readonly toolService: ToolService,
     @inject(AgentService) private readonly agentService: AgentService,
+    @inject(LOOP_MEMORY_PORT)
+    private readonly loopMemory: LoopMemoryPort,
   ) {}
 
   createRun(params: {
@@ -45,7 +49,8 @@ export class AgentRunExecutor {
     workDir: string;
     userConfig: Record<string, unknown>;
     systemPrompt: string;
-    historyMessages: Message[];
+    /** conv 提供的有效历史（LLM-ready）；agent 据此格式化 WorkingMemory 种子。 */
+    effectiveHistory: LlmMessage[];
   }): { run: AgentRun; ctx: AgentRunContext } {
     const cfg = params.userConfig as {
       model?: { modelId?: string };
@@ -67,10 +72,11 @@ export class AgentRunExecutor {
 
     const run = new AgentRun(params.runId, config);
 
-    const memory = new ConversationMemory({
-      history: params.historyMessages,
+    const seed = buildIterMessages(params.effectiveHistory);
+    this.loopMemory.beginRun(run.runId, seed, {
       contextSize: config.contextSize,
-      modelId: cfg.model?.modelId ?? '',
+      modelId: modelId ?? '',
+      runtimeConfig: config.runtimeConfig,
     });
 
     const ctx: AgentRunContext = {
@@ -80,15 +86,15 @@ export class AgentRunExecutor {
       workDir: params.workDir,
       signal: run.signal,
       llm: this.llm,
-      cache: this.cacheService,
-      memory,
+      cache: this.cache,
+      loopMemory: this.loopMemory,
       executeTool: (toolName, args) =>
         this.executeTool(toolName, args, {
           signal: run.signal,
           workDir: params.workDir,
           runId: run.runId,
           llm: this.llm,
-          cache: this.cacheService,
+          cache: this.cache,
           chatModelId: modelId,
           runtimeConfig: config.runtimeConfig,
         }),
@@ -106,7 +112,7 @@ export class AgentRunExecutor {
     workDir: string;
     userConfig: Record<string, unknown>;
     systemPrompt: string;
-    historyMessages: Message[];
+    effectiveHistory: LlmMessage[];
   }): AsyncGenerator<EnrichedEvent> {
     const { run, ctx } = this.createRun(params);
 
@@ -129,6 +135,7 @@ export class AgentRunExecutor {
       yield* this.execute(run, ctx);
     } finally {
       this.activeRuns.delete(run.runId);
+      this.loopMemory.endRun(run.runId);
       await this.agentRunRepo.update(run.runId, {
         events: [...run.eventStream],
         status: run.currentStatus,
@@ -154,14 +161,6 @@ export class AgentRunExecutor {
       }
 
       if (!run.isTerminated) {
-        const { used, total } = ctx.memory.getContextUsage();
-        const usage = run.append({
-          type: 'context_usage',
-          used,
-          total,
-          reason: 'turn_completed',
-        });
-        if (usage) yield usage;
         yield run.complete();
       }
     } catch (err) {
@@ -199,4 +198,22 @@ export class AgentRunExecutor {
 
     return toolCall.execute();
   }
+}
+
+/**
+ * 历史回复重建为扁平的 response_user 调用，保持与当前输出格式一致（agent 拥有的种子格式）。
+ * 把 conv 的有效历史转为 loop 初始上下文。
+ */
+function buildIterMessages(messages: LlmMessage[]): LlmMessage[] {
+  return messages.map(msg =>
+    msg.role === 'assistant'
+      ? {
+          role: 'assistant' as const,
+          content: JSON.stringify({
+            tool: ToolIds.RESPONSE_USER,
+            input: { message: msg.content },
+          }),
+        }
+      : { role: msg.role, content: msg.content },
+  );
 }
