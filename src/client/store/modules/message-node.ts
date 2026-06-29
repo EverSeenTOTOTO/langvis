@@ -59,7 +59,6 @@ export class MessageNode {
   toolCalls: UIToolCall[] = [];
   timeline: TimelineItem[] = [];
   steps: ReActStep[] = [];
-  contextUsage?: { used: number; total: number };
   audio: { filePath: string; voice?: string } | null = null;
   private _awaitingInputData: AwaitingInputData | null = null;
 
@@ -178,10 +177,6 @@ export class MessageNode {
         this.status = 'failed';
         this.error = frame.error;
         this.content = frame.error;
-        break;
-
-      case 'context_usage':
-        this.contextUsage = { used: frame.used, total: frame.total };
         break;
 
       case 'audio':

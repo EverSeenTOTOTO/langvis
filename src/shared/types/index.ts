@@ -24,11 +24,6 @@ export interface ToolConfig<
 }
 
 // ─── DDD 类型 ───
-export type {
-  RunEvent,
-  EnrichedEvent,
-  ContextUsageMeta,
-  SSEFrame,
-} from './events';
+export type { RunEvent, EnrichedEvent, SSEFrame } from './events';
 export type { RunStatus } from './agent';
 export type { ToolCallRecord, RunSnapshot } from './render';

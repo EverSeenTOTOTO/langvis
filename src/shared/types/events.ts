@@ -47,12 +47,6 @@ export type RunEvent =
   | { type: 'final' }
   | { type: 'cancelled'; reason: string }
   | { type: 'error'; error: string }
-  | {
-      type: 'context_usage';
-      used: number;
-      total: number;
-      reason: ContextUsageMeta['reason'];
-    }
   | { type: 'process_summary'; summary: string }
   | { type: 'audio'; filePath: string; voice?: string };
 
@@ -67,23 +61,6 @@ export type EnrichedEvent = RunEvent & {
   runId: string;
   seq: number;
   at: number;
-};
-
-// ─── 上下文用量元信息 ───
-
-/**
- * 上下文窗口用量元信息。
- * 现已纳入 RunEvent (type: 'context_usage'),
- * 此类型保留用于需要独立引用的场景。
- */
-export type ContextUsageMeta = {
-  used: number;
-  total: number;
-  reason:
-    | 'llm_generation_completed'
-    | 'tool_result_appended'
-    | 'context_compressed'
-    | 'turn_completed';
 };
 
 // ─── 传输帧 ───
@@ -106,4 +83,8 @@ export type SSEFrame =
       steps: ReActStep[];
       status: RunStatus;
       awaitingInput: AwaitingInputProjection | null;
-    };
+    }
+  // 上下文用量（memory 端到端拥有、经会话级控制帧下发，非 run 级 RunEvent）：
+  // 会话层基线（全员可见）+ loop 层（per-run、runId 关联消息）。
+  | { type: 'conversation_usage'; used: number; total: number }
+  | { type: 'loop_usage'; runId: string; used: number; total: number };

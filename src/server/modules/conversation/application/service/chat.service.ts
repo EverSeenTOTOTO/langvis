@@ -3,14 +3,20 @@ import type { RunStatus } from '@/shared/types/agent';
 import { Role } from '@/shared/entities/Message';
 import { inject, singleton } from 'tsyringe';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
-import { MESSAGE_REPOSITORY } from '../../conversation.di-tokens';
+import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import {
+  MESSAGE_REPOSITORY,
+  CONVERSATION_REPOSITORY,
+} from '../../conversation.di-tokens';
 import type { MessageRepositoryPort } from '../../domain/port/message.repository.port';
+import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
 import { AGENT_RUN_REPOSITORY } from '@/server/modules/agent/agent.di-tokens';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import {
   createActivationMessages,
   createTurnMessages,
 } from '../../domain/service/message-factory';
+import { extractUserConfig } from '../../contracts';
 import { ConversationNotActivatedError } from '../../domain/errors';
 import Logger from '@/server/utils/logger';
 
@@ -21,10 +27,14 @@ export class ChatService {
   constructor(
     @inject(MESSAGE_REPOSITORY)
     private messageRepo: MessageRepositoryPort,
+    @inject(CONVERSATION_REPOSITORY)
+    private convRepo: ConversationRepositoryPort,
     @inject(AGENT_RUN_REPOSITORY)
     private agentRunRepo: AgentRunRepositoryPort,
     @inject(WorkspaceService)
     private workspaceService: WorkspaceService,
+    @inject(ProviderService)
+    private providerService: ProviderService,
   ) {}
 
   // ════════════════════════════════════════
@@ -71,6 +81,7 @@ export class ChatService {
     assistantId?: string;
   }): Promise<{
     existingMessages: Message[];
+    userMessage: Message;
     assistantId: string;
     assistantMessage: Message;
   }> {
@@ -91,6 +102,7 @@ export class ChatService {
 
     return {
       existingMessages,
+      userMessage,
       assistantId: assistantMessage.id,
       assistantMessage,
     };
@@ -100,18 +112,36 @@ export class ChatService {
   // 持久化辅助
   // ════════════════════════════════════════
 
+  /** 会话全部消息（供 ConversationMemoryPort.activate 一次性灌入）。 */
+  getConversationMessages(conversationId: string): Promise<Message[]> {
+    return this.messageRepo.findByConversationId(conversationId);
+  }
+
+  /** 会话配置（contextSize / modelId / runtimeConfig；供 ConversationMemoryPort.activate）。 */
+  async resolveConversationConfig(conversationId: string): Promise<{
+    contextSize: number;
+    modelId: string;
+    runtimeConfig: Record<string, unknown>;
+  } | null> {
+    const conv = await this.convRepo.findById(conversationId);
+    if (!conv) return null;
+    const modelId =
+      (extractUserConfig(conv).model as { modelId?: string } | undefined)
+        ?.modelId ?? '';
+    const contextSize = modelId
+      ? (this.providerService.getModel(modelId)?.contextSize ?? 0)
+      : 0;
+    return {
+      contextSize,
+      modelId,
+      runtimeConfig: (conv.config ?? {}) as Record<string, unknown>,
+    };
+  }
+
   persistAgentRunId(messageId: string, agentRunId: string): void {
     this.messageRepo.update(messageId, { agentRunId }).catch(err => {
       this.logger.warn('Failed to persist agentRunId', err);
     });
-  }
-
-  async getHistoryMessages(
-    conversationId: string,
-    excludeMessageId?: string,
-  ): Promise<Message[]> {
-    const all = await this.messageRepo.findByConversationId(conversationId);
-    return excludeMessageId ? all.filter(m => m.id !== excludeMessageId) : all;
   }
 
   /**

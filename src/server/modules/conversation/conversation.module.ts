@@ -24,4 +24,5 @@ import './application/query/get-session-state.handler';
 import './application/event/run-started.handler';
 import './application/event/run-event.handler';
 import './application/event/complete-turn.handler';
-import './application/event/history-compacted.handler';
+import './application/event/context-usage-sse.handler';
+import './application/event/conversation-activated-usage.handler';

@@ -1,20 +1,22 @@
 import type { LlmMessage, Message, MessageKind } from '@/shared/types/entities';
 import { Role } from '@/shared/entities/Message';
-import type { ContextUsage } from './memory.types';
-import type { ContextPort } from '../port/context.port';
-import { measureUsage } from '../service/measure-usage';
-import { findLatestCompactionSummary } from '../service/compaction-summary.util';
+import { estimateTokens } from '@/server/utils/estimateTokens';
+import type { ContextUsage } from '@/server/utils/estimateTokens';
+import { findLatestCompactionSummary } from '@/server/utils/compaction-summary';
 
 /**
- * ConversationMemory — 持久历史层（与瞬态的 WorkingMemory 共享 ContextPort、地位对等）。
+ * ConversationMemory —— 会话的持久消息模型（memory 域，与 WorkingMemory 地位对等）。
  *
- * ConversationMemory 维护 historyMessages（持久、运行期只读）；
- * WorkingMemory 维护 iterMessages（瞬态、loop 内增长并自压缩）。
+ * 持有整个会话的消息（群聊即所有参与人的消息），由 ConversationMemoryService（memory）以
+ * conversationId 索引、在会话激活时播种；turn 追加消息时增量 append。提供「有效历史」视图与用量：
+ *  - 有效历史 = [最新压缩摘要 C, 其后 turn]（无 C 时为全部）；每条 assistant 消息前置其
+ *    meta.processSummary（loop-exit 折叠产物，用户不可见、LLM 可见）。不做硬截断。
+ *  - 用量与 buildContext 同口径（都是有效历史）。
  *
- * 有效历史 = [最新压缩摘要 C, 其后 turn]（无 C 时为全部）；每条 assistant 消息前置其
- * meta.processSummary（loop-exit 折叠产物，用户不可见、LLM 可见）。不做硬截断。
+ * conv 经 ConversationMemoryPort（同步 Customer-Supplier，类似 LoopMemoryPort）使用——本类不跨模块
+ * 暴露。fold/历史压缩亦在 memory（HistoryCompactionService），由 service 在本类历史上执行。
  */
-export class ConversationMemory implements ContextPort {
+export class ConversationMemory {
   protected readonly history: Message[];
   protected readonly contextSize: number;
   protected readonly modelId: string;
@@ -24,9 +26,19 @@ export class ConversationMemory implements ContextPort {
     contextSize: number;
     modelId: string;
   }) {
-    this.history = params.history;
+    this.history = [...params.history];
     this.contextSize = params.contextSize;
     this.modelId = params.modelId;
+  }
+
+  /** 增量追加一条消息（turn 的 user/assistant/compact 落盘后由 conv 经端口调用）。 */
+  append(message: Message): void {
+    this.history.push(message);
+  }
+
+  /** 原始消息（供历史压缩 fold）。 */
+  getMessages(): Message[] {
+    return this.history;
   }
 
   async buildContext(): Promise<LlmMessage[]> {
@@ -72,11 +84,10 @@ export class ConversationMemory implements ContextPort {
   getContextUsage(): ContextUsage {
     const { summary, tail } = this.getEffectiveTurns();
     const effective = summary ? [summary, ...tail] : tail;
-    return measureUsage(
-      effective as unknown as LlmMessage[],
-      this.modelId,
-      this.contextSize,
-    );
+    return {
+      used: estimateTokens(effective as unknown as LlmMessage[], this.modelId),
+      total: this.contextSize,
+    };
   }
 
   /**

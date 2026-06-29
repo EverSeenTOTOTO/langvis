@@ -19,9 +19,7 @@ import { AGENT_RUN_REPOSITORY } from '../modules/agent/agent.di-tokens';
 import { CommandBus } from '@/server/libs/ddd';
 import { ConversationUpdateCommand } from '../modules/conversation/contracts';
 import type { AgentRunRepositoryPort } from '../modules/agent/domain/port/agent-run.repository.port';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { Role } from '@/shared/entities/Message';
-import { estimateTokens } from '../utils/estimateTokens';
 import { projectRun } from '../modules/conversation/application/service/run-projection';
 
 @controller('/api/conversation')
@@ -33,8 +31,6 @@ export default class ConversationController {
     private messageRepo: MessageRepositoryPort,
     @inject(AGENT_RUN_REPOSITORY)
     private agentRunRepo: AgentRunRepositoryPort,
-    @inject(ProviderService)
-    private providerService: ProviderService,
     @inject(CommandBus)
     private commandBus: CommandBus,
   ) {}
@@ -184,18 +180,7 @@ export default class ConversationController {
       return msg;
     });
 
-    // Calculate context usage for historical conversations
-    let contextUsage: { used: number; total: number } | null = null;
-    const conversation = await this.convRepo.findById(id);
-    const modelId = conversation?.config?.model?.modelId;
-    const model = modelId ? this.providerService.getModel(modelId) : undefined;
-
-    if (model?.contextSize && messages.length > 0) {
-      const used = estimateTokens(messages, modelId);
-      contextUsage = { used, total: model.contextSize };
-    }
-
-    return res.json({ messages: enriched, contextUsage });
+    return res.json({ messages: enriched });
   }
 
   @api('/:id/messages', { method: 'delete' })

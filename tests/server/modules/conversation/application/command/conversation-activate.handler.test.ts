@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { ConversationActivateHandler } from '@/server/modules/conversation/application/command/conversation-activate.handler';
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
+import type { ConversationMemoryPort } from '@/server/modules/memory';
 import type { EventBus } from '@/server/libs/ddd';
 import { ConversationActivateCommand } from '@/server/modules/conversation/contracts';
 import {
@@ -18,11 +19,18 @@ function makeConvRepo(
   } as unknown as ConversationRepositoryPort;
 }
 
-const stubChatService = { activate: vi.fn().mockResolvedValue(undefined) };
+const stubChatService = {
+  activate: vi.fn().mockResolvedValue(undefined),
+  getConversationMessages: vi.fn().mockResolvedValue([]),
+  resolveConversationConfig: vi.fn().mockResolvedValue(null),
+};
 const stubEventBus = { dispatch: vi.fn() };
 const stubAgentService = {
   getSystemPrompt: vi.fn(() => Promise.resolve('')),
 };
+const stubConvMemory = {
+  activate: vi.fn(),
+} as unknown as ConversationMemoryPort;
 
 function makeHandler(conv: any) {
   return new ConversationActivateHandler(
@@ -30,6 +38,7 @@ function makeHandler(conv: any) {
     makeConvRepo(conv),
     stubEventBus as unknown as EventBus,
     stubAgentService as any,
+    stubConvMemory,
   );
 }
 

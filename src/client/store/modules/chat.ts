@@ -151,11 +151,19 @@ export class ChatStore {
 
       if (frame.type === 'connected') return;
 
-      if (frame.type === 'context_usage') {
-        this.conversationStore.contextUsage = {
+      if (frame.type === 'conversation_usage') {
+        this.conversationStore.conversationUsage = {
           used: frame.used,
           total: frame.total,
         };
+        return;
+      }
+
+      if (frame.type === 'loop_usage') {
+        this.conversationStore.loopUsage.set(frame.runId, {
+          used: frame.used,
+          total: frame.total,
+        });
         return;
       }
 
@@ -177,6 +185,8 @@ export class ChatStore {
         frame.type === 'cancelled' ||
         frame.type === 'error'
       ) {
+        // loop 终结：清掉该 run 的瞬态用量，bar 回落到会话基线。
+        this.conversationStore.loopUsage.delete(frame.runId);
         this.refreshMessages(conversationId);
       }
 

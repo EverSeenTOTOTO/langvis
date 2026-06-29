@@ -1,17 +1,18 @@
 import { inject } from 'tsyringe';
 import { eventHandler } from '@/server/decorator/handler';
-import { createDomainEvent, EventBus } from '@/server/libs/ddd';
 import type { DomainEvent } from '@/server/libs/ddd';
 import { SessionManager } from '../service/session-manager';
 import { MESSAGE_REPOSITORY } from '../../conversation.di-tokens';
 import type { MessageRepositoryPort } from '../../domain/port/message.repository.port';
-import { AGENT_RUN_REPOSITORY } from '@/server/modules/agent/agent.di-tokens';
-import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
+import { CONVERSATION_MEMORY_PORT } from '@/server/modules/memory';
+import type { ConversationMemoryPort } from '@/server/modules/memory';
 import { projectRun } from '../service/run-projection';
-import { HistoryCompactionRequested } from '@/server/modules/memory';
-import Logger from '@/server/utils/logger';
+import { Role } from '@/shared/entities/Message';
+import type { Message } from '@/shared/types/entities';
+import type { SSEFrame } from '@/shared/types/events';
 import { RunCompleted } from '../../contracts';
 import type { RunCompletedPayload } from '../../contracts';
+import Logger from '@/server/utils/logger';
 
 @eventHandler(RunCompleted)
 export class CompleteTurnHandler {
@@ -22,14 +23,12 @@ export class CompleteTurnHandler {
     private sessionManager: SessionManager,
     @inject(MESSAGE_REPOSITORY)
     private messageRepo: MessageRepositoryPort,
-    @inject(AGENT_RUN_REPOSITORY)
-    private agentRunRepo: AgentRunRepositoryPort,
-    @inject(EventBus)
-    private eventBus: EventBus,
+    @inject(CONVERSATION_MEMORY_PORT)
+    private convMemory: ConversationMemoryPort,
   ) {}
 
   async handle(event: DomainEvent<string, RunCompletedPayload>): Promise<void> {
-    const { conversationId, messageId, agentRunId } = event.payload;
+    const { conversationId, messageId } = event.payload;
 
     // 从会话缓冲的事件流投影最终状态（事实源 → 读模型）。run 持久化由 agent 的 executor 拥有。
     const events = this.sessionManager.getRunEvents(conversationId, messageId);
@@ -37,8 +36,7 @@ export class CompleteTurnHandler {
       const view = projectRun(events);
 
       // Conversation BC: Message 存最终文本。
-      // cancelled/failed 时 view.content 可能是空（尚未生成任何 text_chunk），
-      // 用终止原因作内容，避免渲染出空白气泡；completed 用生成的文本。
+      // cancelled/failed 时 view.content 可能是空，用终止原因作内容避免空白气泡；completed 用生成文本。
       let content = view.content;
       if (view.status === 'cancelled' || view.status === 'failed') {
         const terminal = [...events]
@@ -55,7 +53,7 @@ export class CompleteTurnHandler {
       const processSummary =
         psEvent?.type === 'process_summary' ? psEvent.summary : null;
 
-      // 语音回复（response_user 的 tts 产物）：附到 meta.audio，前端在回复底部渲染音频，重载后仍在。
+      // 语音回复（response_user 的 tts 产物）：附到 meta.audio。
       const audioEvent = [...events].reverse().find(e => e.type === 'audio');
       const audio =
         audioEvent?.type === 'audio'
@@ -66,46 +64,61 @@ export class CompleteTurnHandler {
       if (processSummary) meta.processSummary = processSummary;
       if (audio) meta.audio = audio;
 
-      await this.messageRepo.update(
+      const updated = await this.messageRepo.update(
         messageId,
         Object.keys(meta).length > 0 ? { content, meta } : { content },
       );
 
-      // 历史层压缩：有效历史超阈时折叠成新的压缩摘要 C（hidden Message），供后续 turn 复用。
-      // 改事件往返——conv 只 gather 历史+配置发请求，memory 计算、conv 的 HistoryCompactedHandler 持久化。
-      await this.requestCompaction(conversationId, agentRunId);
+      // post-turn 记忆维护：把本轮 assistant 消息追加到会话记忆，再驱动历史压缩（memory 在持有的
+      // 历史上 fold）。压缩产物由 conv 落盘为 compact 消息并 append 回 memory。await 以保序。
+      await this.runPostTurnMemory(conversationId, updated ?? undefined);
     }
 
     this.sessionManager.finalizeRun(conversationId, messageId);
   }
 
-  private async requestCompaction(
+  private async runPostTurnMemory(
     conversationId: string,
-    agentRunId: string,
+    assistantMessage: Message | undefined,
   ): Promise<void> {
-    // gather 历史 + run 配置，发 HistoryCompactionRequested；memory 监听计算（repo-free）后
-    // 发 HistoryCompacted，由 HistoryCompactedHandler 持久化 compact 消息。
-    // run 配置（contextSize/runtimeConfig）读自 agent_runs 行（只读；持久化由 agent 拥有）。
     try {
-      const run = await this.agentRunRepo.findById(agentRunId);
-      if (!run?.config) return;
-
-      const messages =
-        await this.messageRepo.findByConversationId(conversationId);
-      this.eventBus.dispatch(
-        HistoryCompactionRequested,
-        createDomainEvent(HistoryCompactionRequested, conversationId, {
-          conversationId,
-          messages,
-          contextSize: run.config.contextSize,
-          runtimeConfig: run.config.runtimeConfig,
-        }),
+      if (assistantMessage) {
+        this.convMemory.append(conversationId, assistantMessage);
+      }
+      const result = await this.convMemory.compact(
+        conversationId,
+        new AbortController().signal,
       );
+      if (result) {
+        const [compactMessage] = await this.messageRepo.batchCreate(
+          conversationId,
+          [
+            {
+              role: Role.USER,
+              content: result.content,
+              meta: { kind: 'compact', startRef: result.startRef },
+              createdAt: new Date(),
+            },
+          ],
+        );
+        this.convMemory.append(conversationId, compactMessage);
+        this.sendUsage(conversationId, result.usage.used, result.usage.total);
+      } else {
+        const usage = this.convMemory.getUsage(conversationId);
+        this.sendUsage(conversationId, usage.used, usage.total);
+      }
     } catch (err) {
-      // gather/分发失败不影响 turn 完成。
       this.logger.warn(
-        `Requesting history compaction failed: ${(err as Error)?.message ?? err}`,
+        `Post-turn memory maintenance failed: ${(err as Error)?.message ?? err}`,
       );
     }
+  }
+
+  private sendUsage(conversationId: string, used: number, total: number): void {
+    this.sessionManager.sendFrame(conversationId, {
+      type: 'conversation_usage',
+      used,
+      total,
+    } as SSEFrame);
   }
 }

@@ -1,8 +1,6 @@
-import { WorkingMemory } from '@/server/modules/memory';
 import { readConfigFragment } from '@/server/libs/config/config-fragment';
 import { ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
-import type { LlmMessage } from '@/shared/types/entities';
 import type { ModelConfig } from '@/shared/types';
 import type { RunEvent } from '@/shared/types/events';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
@@ -21,9 +19,11 @@ type ReActAction = {
 /**
  * runReactLoop —— 内联的 ReAct 推理-行动-观察循环（原 ReActAgent.call 的体）。
  *
- * 迭代上下文由 WorkingMemory 拥有（瞬态层）：每步 append、超阈自压缩、退出折叠过程摘要；
- * 本函数只做编排：调 LLM → 解析 → 执行工具 → 观察回填。事件（thought / context_usage /
- * process_summary）由此 yield，由 AgentRunExecutor 统一 append + 富化。
+ * loop 对 memory 完全机械：每轮迭代开头「申请」上下文（ctx.loopMemory.requestContext —— memory
+ * 内部按需压缩，loop 不感知压缩时机），结束后「记录」本次结果（record）。过程摘要折叠
+ * （response_user 时）亦经端口。压缩/折叠/记忆维护都是 memory 的事情——本函数只做编排：
+ * 调 LLM → 解析 → 执行工具 → 观察回填。事件（thought / process_summary）由此 yield，由
+ * AgentRunExecutor 统一 append + 富化。loop 不持任何 memory 模型，不知 conversation。
  */
 export async function* runReactLoop(
   ctx: AgentRunContext,
@@ -32,35 +32,16 @@ export async function* runReactLoop(
     'model',
     ctx.config.runtimeConfig,
   );
-  const modelId = model.modelId ?? '';
-
-  const working = new WorkingMemory({
-    seed: buildIterMessages(await ctx.memory.buildContext()),
-    contextSize: ctx.config.contextSize,
-    modelId,
-    llm: ctx.llm,
-    runtimeConfig: ctx.config.runtimeConfig,
-  });
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     ctx.signal.throwIfAborted();
 
-    const result = await working.compact(ctx.signal);
-    if (result.compacted) {
-      yield {
-        type: 'context_usage',
-        used: result.usage.used,
-        total: result.usage.total,
-        reason: 'context_compressed',
-      };
-    }
-
-    const iterMessages = await working.buildContext();
-    logger.debug('ReAct LLM call iterMessages', {
-      total: iterMessages.length,
-      loopActions: iterMessages.length - working.baseLength,
-      iterMessages,
-    });
+    // 申请本迭代上下文（memory 内部按需压缩后返回）。
+    const iterMessages = await ctx.loopMemory.requestContext(
+      ctx.runId,
+      ctx.signal,
+    );
+    logger.debug('ReAct LLM call iterMessages', { total: iterMessages.length });
 
     const content = await ctx.llm.chatContent(
       model.modelId,
@@ -77,14 +58,18 @@ export async function* runReactLoop(
       throw new Error('No response from model');
     }
 
-    working.append(Role.ASSIST, content);
+    ctx.loopMemory.record(ctx.runId, Role.ASSIST, content);
 
     let parsed: ReActAction;
     try {
       parsed = parseResponse(content);
     } catch (error) {
       const observation = `Error parsing response: ${(error as Error)?.message ?? String(error)}`;
-      working.append(Role.USER, `Observation: ${observation}`);
+      ctx.loopMemory.record(
+        ctx.runId,
+        Role.USER,
+        `Observation: ${observation}`,
+      );
       continue;
     }
 
@@ -100,33 +85,22 @@ export async function* runReactLoop(
 
     // response_user 是终态工具（交付最终结果后结束本轮）。
     if (tool === ToolIds.RESPONSE_USER) {
-      const summary = await working.foldProcessSummary(ctx.signal);
+      const summary = await ctx.loopMemory.summarizeProcess(
+        ctx.runId,
+        ctx.signal,
+      );
       if (summary) yield { type: 'process_summary', summary };
       return;
     }
 
-    working.append(Role.USER, `Observation: ${observation}\n`);
+    ctx.loopMemory.record(
+      ctx.runId,
+      Role.USER,
+      `Observation: ${observation}\n`,
+    );
   }
 
   throw new Error('Max iterations reached');
-}
-
-/** 历史回复重建为扁平的 response_user 调用，保持与当前输出格式一致。 */
-function buildIterMessages(
-  messages: Array<{ role: string; content: string }>,
-): LlmMessage[] {
-  return messages.map(msg => {
-    if (msg.role !== 'assistant') {
-      return { role: msg.role as 'user' | 'system', content: msg.content };
-    }
-    return {
-      role: 'assistant' as const,
-      content: JSON.stringify({
-        tool: ToolIds.RESPONSE_USER,
-        input: { message: msg.content },
-      }),
-    };
-  });
 }
 
 function parseResponse(content: string): ReActAction {

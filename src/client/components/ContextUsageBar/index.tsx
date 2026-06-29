@@ -9,11 +9,14 @@ import './ContextUsageBar.scss';
 const ContextUsageBar: React.FC = () => {
   const conversationStore = useStore('conversation');
 
-  const contextUsage = conversationStore.contextUsage;
+  // 两层：活跃 loop（运行中）显示其实时自增量；空闲时回落到会话基线。
+  // 多 run 时取最近一条 loop（per-bubble 展示是后续 UI 事；数据模型已按 runId 容纳）。
+  const activeLoop = Array.from(conversationStore.loopUsage.values()).pop();
+  const usage = activeLoop ?? conversationStore.conversationUsage;
 
-  if (!contextUsage) return null;
+  if (!usage) return null;
 
-  const { used, total } = contextUsage;
+  const { used, total } = usage;
   const percentage = Math.min((used / total) * 100, 100);
 
   const formatNumber = (n: number): string => {

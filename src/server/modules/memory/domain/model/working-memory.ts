@@ -1,11 +1,10 @@
 import type { LlmMessage } from '@/shared/types/entities';
-import type { ContextUsage } from './memory.types';
-import type { ContextPort } from '../port/context.port';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { readConfigFragment } from '@/server/libs/config/config-fragment';
 import { winstonLogger } from '@/server/utils/logger';
 import type { CompactionConfig } from '../service/compaction-config';
-import { measureUsage } from '../service/measure-usage';
+import { estimateTokens } from '@/server/utils/estimateTokens';
+import type { ContextUsage } from '@/server/utils/estimateTokens';
 import { Summarizer } from '../service/summarizer';
 
 export interface CompactResult {
@@ -14,28 +13,27 @@ export interface CompactResult {
 }
 
 export interface WorkingMemoryParams {
-  /** ConversationMemory.buildContext() 的产物（经 buildIterMessages 转换）作为种子。 */
+  /** agent 提供的种子（conv 的有效历史经 buildIterMessages 格式化后的 LlmMessage[]）。 */
   seed: LlmMessage[];
   contextSize: number;
   modelId: string;
-  /** per-run 的 LlmPort（即 ctx.llm），折叠时复用（同模型、同取消域）。 */
+  /** per-run 的 LlmPort，折叠时复用（同模型、同取消域）。 */
   llm: LlmPort;
   /** 已 parse 的 runtimeConfig——压缩配置由本域 fragment 自取（readConfigFragment），不外泄。 */
   runtimeConfig: Record<string, unknown>;
 }
 
 /**
- * WorkingMemory — 瞬态、per-run 的迭代上下文层，与 ConversationMemory 地位对等。
+ * WorkingMemory — memory 域瞬态、per-run 的迭代上下文层（loop 工作记忆），纯数据。
  *
- * ConversationMemory 维护 historyMessages（持久、运行期只读）；WorkingMemory 维护
- * iterMessages（瞬态、loop 内逐条 append 并自压缩）。由会话上下文播种，loop 每步 append；
- * 自身用量超阈时把较早的 loop actions 折叠为一条 Observation 回顾（保留近期 keepRecent），
- * 使 loop 能在自身膨胀时继续；退出时把本 loop 过程折叠为过程摘要。fold 原语与历史层压缩
- * 同一机制。临时产物，loop 内消亡。
- *
- * compact/foldProcessSummary 是纯数据操作，返回结果；事件由编排（loop）yield，保持可单测。
+ * 维护 iterMessages（瞬态、loop 内逐条 append 并自压缩）。由 LoopMemoryService 以种子播种；
+ * loop 每步经端口 record 追加；自身用量超阈时（requestContext 内部）把较早的 loop actions 折叠
+ * 为一条 Observation 回顾（保留近期 keepRecent），使 loop 能在自身膨胀时继续；退出时把本 loop
+ * 过程折叠为过程摘要（summarizeProcess）。fold 原语与历史层压缩（HistoryCompactionService）同一机制。
+ * 临时产物，run 内消亡（endRun 释放）。不感知 conversation（无 conversationId/runId）——用量自报
+ * 与生命周期由 LoopMemoryService（持有 runId）编排，故本类无副作用、可纯单测。
  */
-export class WorkingMemory implements ContextPort {
+export class WorkingMemory {
   private readonly iterMessages: LlmMessage[];
   /** seed 长度：压缩只动此下标之后（query/历史在前，不可变）。 */
   private readonly baseLen: number;
@@ -72,7 +70,10 @@ export class WorkingMemory implements ContextPort {
   }
 
   getContextUsage(): ContextUsage {
-    return measureUsage(this.iterMessages, this.modelId, this.contextSize);
+    return {
+      used: estimateTokens(this.iterMessages, this.modelId),
+      total: this.contextSize,
+    };
   }
 
   append(role: LlmMessage['role'], content: string): void {
