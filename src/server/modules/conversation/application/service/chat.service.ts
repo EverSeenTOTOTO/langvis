@@ -17,6 +17,8 @@ import {
   createTurnMessages,
 } from '../../domain/service/message-factory';
 import { extractUserConfig } from '../../contracts';
+import { composeConfigSchema } from '@/server/libs/config/config-fragment';
+import { parse } from '@/server/utils/schemaValidator';
 import { ConversationNotActivatedError } from '../../domain/errors';
 import Logger from '@/server/utils/logger';
 
@@ -134,7 +136,12 @@ export class ChatService {
     return {
       contextSize,
       modelId,
-      runtimeConfig: (conv.config ?? {}) as Record<string, unknown>,
+      // 经 composeConfigSchema + useDefaults parse 成默认完整的 runtimeConfig（剥离遗留 agent/memory
+      // 键、回填 history/loop 等片段默认值），使下游 readConfigFragment 读到的字段必有值。
+      runtimeConfig: parse(
+        composeConfigSchema(),
+        extractUserConfig(conv),
+      ) as Record<string, unknown>,
     };
   }
 

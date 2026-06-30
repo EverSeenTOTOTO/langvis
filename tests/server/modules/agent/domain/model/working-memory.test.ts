@@ -1,15 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
-import '@/server/libs/compaction';
+import '@/server/modules/agent/domain/model/loop-config.fragment';
 import '@/server/modules/agent/application/service/model-config.fragment';
 import { WorkingMemory } from '@/server/modules/agent/domain/model/working-memory';
-import type { CompactionConfig } from '@/server/libs/compaction';
+import type { LoopCompactionConfig } from '@/server/modules/agent/domain/model/loop-config.fragment';
 
-const COMPACTION_DEFAULTS: CompactionConfig = {
+const COMPACTION_DEFAULTS: LoopCompactionConfig = {
   threshold: 0.8,
   windowSize: 10,
   keepRecent: 4,
 };
-const RUNTIME_CONFIG = { memory: { compaction: COMPACTION_DEFAULTS } };
+const RUNTIME_CONFIG = { loop: COMPACTION_DEFAULTS };
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type { LlmMessage } from '@/shared/types/entities';
 

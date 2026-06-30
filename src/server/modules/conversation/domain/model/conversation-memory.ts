@@ -2,7 +2,7 @@ import type { LlmMessage, Message, MessageKind } from '@/shared/types/entities';
 import { Role } from '@/shared/entities/Message';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import type { ContextUsage } from '@/server/utils/estimateTokens';
-import { findLatestCompactionSummary } from '@/server/utils/compaction-summary';
+import { findLatestCompactionSummary } from './compaction-summary';
 
 /** 会话记忆激活配置（激活时灌入，ConversationSession 持有以驱动历史压缩）。 */
 export interface ConversationMemoryConfig {

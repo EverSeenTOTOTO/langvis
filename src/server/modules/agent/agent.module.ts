@@ -18,3 +18,4 @@ import './application/event/agent-run.handler';
 import './application/event/cancel-run.handler';
 // 本域 config fragment 自注册（defineConfigFragment）——基础库不反向认识任何域。
 import './application/service/model-config.fragment';
+import './domain/model/loop-config.fragment';

@@ -7,7 +7,7 @@ import { Prompt } from '../../domain/model/prompt';
 import type { Tool } from '../../domain/model/tool.base';
 import { RuntimeConfigVO } from '../../domain/model/runtime-config.vo';
 import { ConfigValidationError } from '../../domain/errors';
-import { getConfigFragments } from '@/server/libs/config/config-fragment';
+import { composeConfigSchema } from '@/server/libs/config/config-fragment';
 import { ToolService } from './tool.service';
 import { SkillService } from './skill.service';
 
@@ -30,19 +30,16 @@ export class AgentService {
   ) {}
 
   /**
-   * 聚合所有 ConfigFragment（按 key 平铺）为对话配置 schema——前端配置弹窗据此渲染。
-   * 各域自描述其片段（memory/upload/model/…），本服务不认识任何域细节——纯组合器。
-   * 懒构建：首次调用时 fragments 已在各域 .module 装配阶段注册完毕。
+   * 聚合所有 ConfigFragment（按 key 平铺）为对话配置 schema——前端配置弹窗据此渲染，conv 侧
+   * resolveConversationConfig 亦据此 parse runtimeConfig。各域自描述其片段，本服务不认识任何域
+   * 细节——纯组合器（composeConfigSchema）。懒构建：首次调用时 fragments 已在各域 .module 装配
+   * 阶段注册完毕。
    */
   getConfigSchema(): JSONSchemaType<Record<string, unknown>> {
     if (!this.cachedSchema) {
-      const properties = Object.fromEntries(
-        getConfigFragments().map(f => [f.key, f.schema]),
-      ) as Record<string, JSONSchemaType<unknown>>;
-      this.cachedSchema = {
-        type: 'object',
-        properties,
-      } as unknown as JSONSchemaType<Record<string, unknown>>;
+      this.cachedSchema = composeConfigSchema() as JSONSchemaType<
+        Record<string, unknown>
+      >;
     }
     return this.cachedSchema;
   }

@@ -7,8 +7,8 @@ import type { Message, MessageKind } from '@/shared/types/entities';
  * 消息之后）；前端按 meta.kind 过滤，ConversationMemory.buildContext 原样发出 C 作为有效
  * 历史前缀，HistoryCompaction 折叠时取作 prevSummary 种子。
  *
- * 此分类器被 conv（ConversationMemory 有效历史）与 memory（HistoryCompaction 折叠）共用，
- * 故置于共享 utils。
+ * conv 域内部分类器：ConversationMemory（有效历史投影）与 HistoryCompactionService（折叠）
+ * 共用，故置于 conversation/domain/model。
  */
 
 export function isCompactionSummary(message: Message): boolean {

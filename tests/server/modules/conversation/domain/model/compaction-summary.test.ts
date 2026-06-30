@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   findLatestCompactionSummary,
   isCompactionSummary,
-} from '@/server/utils/compaction-summary';
+} from '@/server/modules/conversation/domain/model/compaction-summary';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
 
