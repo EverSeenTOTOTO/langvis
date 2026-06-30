@@ -4,17 +4,24 @@ import { estimateTokens } from '@/server/utils/estimateTokens';
 import type { ContextUsage } from '@/server/utils/estimateTokens';
 import { findLatestCompactionSummary } from '@/server/utils/compaction-summary';
 
+/** 会话记忆激活配置（激活时灌入，ConversationSession 持有以驱动历史压缩）。 */
+export interface ConversationMemoryConfig {
+  contextSize: number;
+  modelId: string;
+  runtimeConfig: Record<string, unknown>;
+}
+
 /**
- * ConversationMemory —— 会话的持久消息模型（memory 域，与 WorkingMemory 地位对等）。
+ * ConversationMemory —— 会话的持久消息模型（ConversationSession 的成员实体）。
  *
- * 持有整个会话的消息（群聊即所有参与人的消息），由 ConversationMemoryService（memory）以
- * conversationId 索引、在会话激活时播种；turn 追加消息时增量 append。提供「有效历史」视图与用量：
+ * 持有整个会话的消息（群聊即所有参与人的消息），由 ConversationSession 在会话激活时播种；
+ * turn 追加消息时增量 append。提供「有效历史」视图与用量：
  *  - 有效历史 = [最新压缩摘要 C, 其后 turn]（无 C 时为全部）；每条 assistant 消息前置其
  *    meta.processSummary（loop-exit 折叠产物，用户不可见、LLM 可见）。不做硬截断。
  *  - 用量与 buildContext 同口径（都是有效历史）。
  *
- * conv 经 ConversationMemoryPort（同步 Customer-Supplier，类似 LoopMemoryPort）使用——本类不跨模块
- * 暴露。fold/历史压缩亦在 memory（HistoryCompactionService），由 service 在本类历史上执行。
+ * 作为 ConversationSession.memory 成员存在（瞬态、进程内投影，可从 DB 重建）；历史压缩（fold）
+ * 由 HistoryCompactionService 在本类历史上执行（post-turn，由 CompleteTurnHandler 驱动）。
  */
 export class ConversationMemory {
   protected readonly history: Message[];
@@ -31,7 +38,7 @@ export class ConversationMemory {
     this.modelId = params.modelId;
   }
 
-  /** 增量追加一条消息（turn 的 user/assistant/compact 落盘后由 conv 经端口调用）。 */
+  /** 增量追加一条消息（turn 的 user/assistant/compact 落盘后由 conv 经会话成员调用）。 */
   append(message: Message): void {
     this.history.push(message);
   }

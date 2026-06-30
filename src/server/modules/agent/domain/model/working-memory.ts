@@ -2,10 +2,10 @@ import type { LlmMessage } from '@/shared/types/entities';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { readConfigFragment } from '@/server/libs/config/config-fragment';
 import { winstonLogger } from '@/server/utils/logger';
-import type { CompactionConfig } from '../service/compaction-config';
+import type { CompactionConfig } from '@/server/libs/compaction';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import type { ContextUsage } from '@/server/utils/estimateTokens';
-import { Summarizer } from '../service/summarizer';
+import { Summarizer } from '@/server/libs/compaction';
 
 export interface CompactResult {
   compacted: boolean;
@@ -24,14 +24,14 @@ export interface WorkingMemoryParams {
 }
 
 /**
- * WorkingMemory — memory 域瞬态、per-run 的迭代上下文层（loop 工作记忆），纯数据。
+ * WorkingMemory — agent run 的瞬态、per-run 迭代上下文层（loop 工作记忆），纯数据。
  *
- * 维护 iterMessages（瞬态、loop 内逐条 append 并自压缩）。由 LoopMemoryService 以种子播种；
- * loop 每步经端口 record 追加；自身用量超阈时（requestContext 内部）把较早的 loop actions 折叠
- * 为一条 Observation 回顾（保留近期 keepRecent），使 loop 能在自身膨胀时继续；退出时把本 loop
- * 过程折叠为过程摘要（summarizeProcess）。fold 原语与历史层压缩（HistoryCompactionService）同一机制。
- * 临时产物，run 内消亡（endRun 释放）。不感知 conversation（无 conversationId/runId）——用量自报
- * 与生命周期由 LoopMemoryService（持有 runId）编排，故本类无副作用、可纯单测。
+ * 维护 iterMessages（瞬态、loop 内逐条 append 并自压缩）。由 AgentRunExecutor 以种子（conv 有效
+ * 历史经 buildIterMessages 格式化）播种、作为 AgentRunContext 的瞬态成员；loop 每步 append；
+ * 自身用量超阈时（compact）把较早的 loop actions 折叠为一条 Observation 回顾（保留近期 keepRecent），
+ * 使 loop 能在自身膨胀时继续；退出时 foldProcessSummary 把本 loop 过程折叠为过程摘要。fold 原语与
+ * 历史层压缩（HistoryCompactionService）同一机制（libs/compaction）。临时产物，run 内消亡（ctx
+ * 释放即回收）。纯数据、无 EventBus 依赖、可纯单测。
  */
 export class WorkingMemory {
   private readonly iterMessages: LlmMessage[];

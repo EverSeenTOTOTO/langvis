@@ -2,10 +2,9 @@ import { inject } from 'tsyringe';
 import { eventHandler } from '@/server/decorator/handler';
 import type { DomainEvent } from '@/server/libs/ddd';
 import { SessionManager } from '../service/session-manager';
+import { HistoryCompactionService } from '../service/history-compaction.service';
 import { MESSAGE_REPOSITORY } from '../../conversation.di-tokens';
 import type { MessageRepositoryPort } from '../../domain/port/message.repository.port';
-import { CONVERSATION_MEMORY_PORT } from '@/server/modules/memory';
-import type { ConversationMemoryPort } from '@/server/modules/memory';
 import { projectRun } from '../service/run-projection';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
@@ -23,8 +22,8 @@ export class CompleteTurnHandler {
     private sessionManager: SessionManager,
     @inject(MESSAGE_REPOSITORY)
     private messageRepo: MessageRepositoryPort,
-    @inject(CONVERSATION_MEMORY_PORT)
-    private convMemory: ConversationMemoryPort,
+    @inject(HistoryCompactionService)
+    private readonly compaction: HistoryCompactionService,
   ) {}
 
   async handle(event: DomainEvent<string, RunCompletedPayload>): Promise<void> {
@@ -69,8 +68,8 @@ export class CompleteTurnHandler {
         Object.keys(meta).length > 0 ? { content, meta } : { content },
       );
 
-      // post-turn 记忆维护：把本轮 assistant 消息追加到会话记忆，再驱动历史压缩（memory 在持有的
-      // 历史上 fold）。压缩产物由 conv 落盘为 compact 消息并 append 回 memory。await 以保序。
+      // post-turn 记忆维护：把本轮 assistant 消息追加到会话记忆，再驱动历史压缩（在会话成员历史上 fold）。
+      // 压缩产物由 conv 落盘为 compact 消息并 append 回记忆。await 以保序。
       await this.runPostTurnMemory(conversationId, updated ?? undefined);
     }
 
@@ -82,13 +81,17 @@ export class CompleteTurnHandler {
     assistantMessage: Message | undefined,
   ): Promise<void> {
     try {
+      const memory = this.sessionManager.getMemory(conversationId);
       if (assistantMessage) {
-        this.convMemory.append(conversationId, assistantMessage);
+        memory.append(assistantMessage);
       }
-      const result = await this.convMemory.compact(
-        conversationId,
-        new AbortController().signal,
-      );
+      const cfg = this.sessionManager.getMemoryConfig(conversationId);
+      const result = await this.compaction.compact({
+        messages: memory.getMessages(),
+        contextSize: cfg.contextSize,
+        runtimeConfig: cfg.runtimeConfig,
+        signal: new AbortController().signal,
+      });
       if (result) {
         const [compactMessage] = await this.messageRepo.batchCreate(
           conversationId,
@@ -101,10 +104,10 @@ export class CompleteTurnHandler {
             },
           ],
         );
-        this.convMemory.append(conversationId, compactMessage);
+        memory.append(compactMessage);
         this.sendUsage(conversationId, result.usage.used, result.usage.total);
       } else {
-        const usage = this.convMemory.getUsage(conversationId);
+        const usage = memory.getContextUsage();
         this.sendUsage(conversationId, usage.used, usage.total);
       }
     } catch (err) {

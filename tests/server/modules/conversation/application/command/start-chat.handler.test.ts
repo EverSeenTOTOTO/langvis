@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 
 import { StartChatHandler } from '@/server/modules/conversation/application/command/start-chat.handler';
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
+import type { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
-import type { ConversationMemoryPort } from '@/server/modules/memory';
 import type { EventBus } from '@/server/libs/ddd';
 import { StartChatCommand } from '@/server/modules/conversation/contracts';
 import { ConversationNotFoundError } from '@/server/modules/conversation/domain/errors';
@@ -15,15 +15,17 @@ function makeConvRepo(conv: any) {
 }
 
 const stubEventBus = { dispatch: vi.fn() };
-const stubConvMemory = {
-  append: vi.fn(),
-  buildContext: vi.fn().mockResolvedValue([]),
-} as unknown as ConversationMemoryPort;
+const stubSessionManager = {
+  getMemory: vi.fn(() => ({
+    append: vi.fn(),
+    buildContext: vi.fn().mockResolvedValue([]),
+  })),
+} as unknown as SessionManager;
 
 function makeHandler(conv: any, chatService: Partial<ChatService>) {
   return new StartChatHandler(
     chatService as unknown as ChatService,
-    stubConvMemory,
+    stubSessionManager,
     makeConvRepo(conv),
     stubEventBus as unknown as EventBus,
   );

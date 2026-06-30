@@ -5,21 +5,28 @@ import { readConfigFragment } from '@/server/libs/config/config-fragment';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { winstonLogger } from '@/server/utils/logger';
-import type { CompactionConfig } from '../../domain/service/compaction-config';
+import type { CompactionConfig } from '@/server/libs/compaction';
+import type { ContextUsage } from '@/server/utils/estimateTokens';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import { findLatestCompactionSummary } from '@/server/utils/compaction-summary';
-import { Summarizer } from '../../domain/service/summarizer';
-import type { ConversationCompactionResult } from '../../domain/port/conversation-memory.port';
+import { Summarizer } from '@/server/libs/compaction';
+
+/** 历史压缩（fold）产物：新 C 载荷 + 压缩后用量。conv 落盘 C 后 append 回 ConversationMemory。 */
+export interface ConversationCompactionResult {
+  content: string;
+  startRef: string;
+  usage: ContextUsage;
+}
 
 /**
- * HistoryCompactionService —— 历史层压缩（fold）算法（memory 内部，不再是对外端口）。
+ * HistoryCompactionService —— 历史层压缩（fold）算法（conv 内部，无状态 @singleton）。
  *
  * 输入原始历史消息，判定是否需要压缩（有效历史用量超阈），需要则用 fold 把
- * 「上一个 C + tail」滚动折叠成新 C，返回新 C 的载荷（不含持久化）。持久化由 conv 负责
- * （compact 消息存储写是 conv 的职责），避免 memory 域反向依赖 conversation repo。
+ * 「上一个 C + tail」滚动折叠成新 C，返回新 C 的载荷（不含持久化）。持久化由 CompleteTurnHandler
+ * 负责（compact 消息存储写是 conv 的职责），避免反向依赖 message repo。
  *
- * 由 ConversationMemoryService（memory 内部）在持有的 ConversationMemory 历史上调用——conv 不直接
- * 接触本服务，而是经 ConversationMemoryPort.compact 间接触发。
+ * 由 CompleteTurnHandler 在 post-turn 调用，操作 ConversationSession.memory（ConversationMemory）
+ * 持有的历史。fold 原语来自 libs/compaction（与 agent 的 WorkingMemory 同机制）。
  */
 @singleton()
 export class HistoryCompactionService {

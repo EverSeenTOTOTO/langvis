@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import '@/server/modules/memory/domain/service/compaction-config';
+import '@/server/libs/compaction';
 import '@/server/modules/agent/application/service/model-config.fragment';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
@@ -7,11 +7,11 @@ import type { Message } from '@/shared/types/entities';
 // Summarizer 在 compact() 内部 new 出来；mock 掉以控制 fold 返回，避免真实 LLM 调用。
 const { foldMock } = vi.hoisted(() => ({ foldMock: vi.fn() }));
 
-vi.mock('@/server/modules/memory/domain/service/summarizer', () => ({
+vi.mock('@/server/libs/compaction/summarizer', () => ({
   Summarizer: vi.fn(() => ({ fold: foldMock })),
 }));
 
-import { HistoryCompactionService } from '@/server/modules/memory/application/service/history-compaction.service';
+import { HistoryCompactionService } from '@/server/modules/conversation/application/service/history-compaction.service';
 
 function msg(content: string, meta?: Record<string, unknown>): Message {
   return {

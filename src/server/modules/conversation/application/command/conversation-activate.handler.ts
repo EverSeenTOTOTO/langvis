@@ -2,11 +2,10 @@ import { inject } from 'tsyringe';
 import { commandHandler } from '@/server/decorator/handler';
 import { EventBus, createDomainEvent } from '@/server/libs/ddd';
 import { ChatService } from '../service/chat.service';
+import { SessionManager } from '../service/session-manager';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { CONVERSATION_REPOSITORY } from '../../conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
-import { CONVERSATION_MEMORY_PORT } from '@/server/modules/memory';
-import type { ConversationMemoryPort } from '@/server/modules/memory';
 import {
   ConversationActivateCommand,
   ConversationActivated,
@@ -27,8 +26,8 @@ export class ConversationActivateHandler {
     private eventBus: EventBus,
     @inject(AgentService)
     private readonly agentService: AgentService,
-    @inject(CONVERSATION_MEMORY_PORT)
-    private readonly convMemory: ConversationMemoryPort,
+    @inject(SessionManager)
+    private readonly sessionManager: SessionManager,
   ) {}
 
   async execute(command: ConversationActivateCommand): Promise<void> {
@@ -49,14 +48,14 @@ export class ConversationActivateHandler {
       systemPrompt,
     });
 
-    // 激活 ConversationMemory：一次性灌入当前消息 + 配置（含刚烘焙的 system/context）。
-    // 后续 turn 经端口按 conversationId 操作，不再回调 conv 取历史。memory 据此构造会话记忆。
+    // 激活会话记忆（ConversationSession 成员）：一次性灌入当前消息 + 配置（含刚烘焙的 system/context）。
+    // 后续 turn 经会话成员按 conversationId 操作，不再回调 conv 取历史。
     const [messages, config] = await Promise.all([
       this.chatService.getConversationMessages(conversationId),
       this.chatService.resolveConversationConfig(conversationId),
     ]);
     if (config) {
-      this.convMemory.activate(conversationId, messages, config);
+      this.sessionManager.activateMemory(conversationId, messages, config);
     }
 
     this.eventBus.dispatch(

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Summarizer } from '@/server/modules/memory/domain/service/summarizer';
+import { Summarizer } from '@/server/libs/compaction';
 import { winstonLogger } from '@/server/utils/logger';
 import type { LlmMessage } from '@/shared/types/entities';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';

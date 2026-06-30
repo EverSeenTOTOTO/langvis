@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LlmProvider } from '@/server/modules/memory/infrastructure/llm.provider';
+import { LlmProvider } from '@/server/libs/infrastructure/llm.provider';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import type { ProviderDefinition } from '@/shared/types/provider';
 

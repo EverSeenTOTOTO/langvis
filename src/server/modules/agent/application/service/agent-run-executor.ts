@@ -12,8 +12,8 @@ import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { generateId } from '@/shared/utils';
 import { ToolIds } from '@/shared/constants';
 import type { LlmMessage } from '@/shared/types/entities';
-import { LOOP_MEMORY_PORT } from '@/server/modules/memory';
-import type { LoopMemoryPort } from '@/server/modules/memory';
+import { EventBus } from '@/server/libs/ddd';
+import { WorkingMemory } from '@/server/modules/agent/domain/model/working-memory';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { ToolService } from './tool.service';
 import { AgentService } from './agent.service';
@@ -40,8 +40,7 @@ export class AgentRunExecutor {
     @inject(ProviderService) private readonly providerService: ProviderService,
     @inject(ToolService) private readonly toolService: ToolService,
     @inject(AgentService) private readonly agentService: AgentService,
-    @inject(LOOP_MEMORY_PORT)
-    private readonly loopMemory: LoopMemoryPort,
+    @inject(EventBus) private readonly eventBus: EventBus,
   ) {}
 
   createRun(params: {
@@ -73,9 +72,11 @@ export class AgentRunExecutor {
     const run = new AgentRun(params.runId, config);
 
     const seed = buildIterMessages(params.effectiveHistory);
-    this.loopMemory.beginRun(run.runId, seed, {
+    const workingMemory = new WorkingMemory({
+      seed,
       contextSize: config.contextSize,
       modelId: modelId ?? '',
+      llm: this.llm,
       runtimeConfig: config.runtimeConfig,
     });
 
@@ -87,7 +88,8 @@ export class AgentRunExecutor {
       signal: run.signal,
       llm: this.llm,
       cache: this.cache,
-      loopMemory: this.loopMemory,
+      workingMemory,
+      eventBus: this.eventBus,
       executeTool: (toolName, args) =>
         this.executeTool(toolName, args, {
           signal: run.signal,
@@ -135,7 +137,6 @@ export class AgentRunExecutor {
       yield* this.execute(run, ctx);
     } finally {
       this.activeRuns.delete(run.runId);
-      this.loopMemory.endRun(run.runId);
       await this.agentRunRepo.update(run.runId, {
         events: [...run.eventStream],
         status: run.currentStatus,
