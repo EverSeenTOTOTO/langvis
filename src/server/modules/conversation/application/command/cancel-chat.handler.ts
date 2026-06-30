@@ -11,28 +11,25 @@ export class CancelChatHandler {
     private sessionManager: SessionManager,
   ) {}
 
-  async execute(command: CancelChatCommand): Promise<void> {
-    if (command.messageId) {
+  async execute(cmd: CancelChatCommand): Promise<void> {
+    if (cmd.messageId) {
       if (
-        !this.sessionManager.hasActiveRun(
-          command.conversationId,
-          command.messageId,
-        )
+        !this.sessionManager.hasActiveRun(cmd.conversationId, cmd.messageId)
       ) {
-        throw new NoActiveRunError(command.messageId);
+        throw new NoActiveRunError(cmd.messageId);
       }
       this.sessionManager.cancelActiveRun(
-        command.conversationId,
-        command.messageId,
-        command.reason,
+        cmd.conversationId,
+        cmd.messageId,
+        cmd.reason,
       );
     } else {
-      if (!this.sessionManager.hasSession(command.conversationId)) {
-        throw new SessionNotFoundError(command.conversationId);
+      if (!this.sessionManager.hasSession(cmd.conversationId)) {
+        throw new SessionNotFoundError(cmd.conversationId);
       }
       await this.sessionManager.cancelAllActiveRuns(
-        command.conversationId,
-        command.reason,
+        cmd.conversationId,
+        cmd.reason,
       );
     }
   }

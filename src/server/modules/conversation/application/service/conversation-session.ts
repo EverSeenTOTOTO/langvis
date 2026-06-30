@@ -17,11 +17,6 @@ export interface ActiveRun {
 
 const logger = Logger.child({ source: 'ConversationSession' });
 
-/**
- * 单个活跃会话的运行时态（瞬态、进程内）。持有传输层连接（多标签 SSE + idle timer）、
- * 活跃 run 簿记（activeRuns）、会话记忆（ConversationMemory）。对应 agent 侧的 AgentRunContext——
- * per-scope 运行时对象，非持久聚合。conversationId 是隐式 this，方法不带 conversationId 形参。
- */
 export class ConversationSession {
   private connection: Connection | undefined;
   private readonly activeRuns = new Map<string, ActiveRun>();

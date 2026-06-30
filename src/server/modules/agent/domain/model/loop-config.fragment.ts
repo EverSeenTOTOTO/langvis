@@ -10,9 +10,6 @@ export interface LoopCompactionConfig {
 
 /**
  * loop mid-loop 折叠参数（用量超阈时把较早的 loop actions 折叠为一条回顾、保留近期 keepRecent）。
- * 与 conv 的 history 层压缩解耦：两层 threshold/windowSize 独立可调；fold 原语在 libs/compaction。
- * 与 WorkingMemory 同居 domain/model 是为避免域→应用反向依赖（type-only import 无副作用，注册由 module 完成）。
- * 无 enabled 硬开关——是否压缩由 threshold 兜底判定。默认值唯一来源是 schema 的 default 关键字。
  */
 export const LOOP_FRAGMENT = defineConfigFragment({
   key: 'loop',

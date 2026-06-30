@@ -1,8 +1,7 @@
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 
 /**
- * ToolCallContext —— 与 AgentRunContext 对称：Tool 依赖此 port 而非具体 ToolCall 实体，
- * 解耦"单例工具 × 每次 per-call 上下文"。事实/编排归 ToolCall，本 port 只暴露工具实际用到的表面。
+ * ToolCallContext —— 与 AgentRunContext 对称
  */
 export interface ToolCallContext {
   /** 用于 tool_progress 等事件的 callId */

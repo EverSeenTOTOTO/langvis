@@ -12,20 +12,17 @@ export interface CompactResult {
 }
 
 export interface WorkingMemoryParams {
-  /** agent 提供的种子（conv 的有效历史经 buildIterMessages 格式化后的 LlmMessage[]）。 */
+  /** agent 提供的种子（conv 的有效历史 LlmMessage[]）。 */
   seed: LlmMessage[];
   contextSize: number;
   modelId: string;
-  /** per-run 的 LlmPort，折叠时复用（同模型、同取消域）。 */
   llm: LlmPort;
-  /** 已 parse 的 runtimeConfig——压缩配置直取 loop 键（LoopCompactionConfig），不外泄。 */
   runtimeConfig: Record<string, unknown>;
 }
 
 /**
  * WorkingMemory — agent run 的瞬态、per-run loop 工作记忆（纯数据）。
  * 维护 iterMessages（loop 内逐条 append 并自压缩）。退出时本 loop 消亡（ctx 释放即回收）。
- * 压缩/折叠用与 conv 历史层同一 fold 原语（libs/compaction）。无 EventBus 依赖，可纯单测。
  */
 export class WorkingMemory {
   private readonly iterMessages: LlmMessage[];
@@ -115,7 +112,6 @@ export class WorkingMemory {
   /**
    * loop 退出折叠：把本 loop 的 actions 折叠为过程摘要。
    * 仅在至少做过一次实质动作时触发（>1 条，避免对 trivial "直接回答" turn 浪费一次 LLM 调用）。
-   * 异常吞掉返回 null。
    */
   async foldProcessSummary(signal: AbortSignal): Promise<string | null> {
     const loopActions = this.iterMessages.slice(this.baseLen);
