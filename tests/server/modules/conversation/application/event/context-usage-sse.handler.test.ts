@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { LoopUsageSseHandler } from '@/server/modules/conversation/application/event/context-usage-sse.handler';
 import type { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import type { DomainEvent } from '@/server/libs/ddd';
-import type { LoopUsageReportedPayload } from '@/server/modules/memory';
+import type { LoopUsageReportedPayload } from '@/server/modules/agent/contracts';
 
 function mockSessionManager(
   loc: {

@@ -4,6 +4,8 @@ import { Role } from '@/shared/entities/Message';
 import type { ModelConfig } from '@/shared/types';
 import type { RunEvent } from '@/shared/types/events';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
+import { LoopUsageReported } from '@/server/modules/agent/contracts';
+import { createDomainEvent } from '@/server/libs/ddd';
 import { winstonLogger } from '@/server/utils/logger';
 
 const logger = winstonLogger.child({ source: 'ReactLoop' });
@@ -19,10 +21,11 @@ type ReActAction = {
 /**
  * runReactLoop —— 内联的 ReAct 推理-行动-观察循环（原 ReActAgent.call 的体）。
  *
- * loop 对 memory 完全机械：每轮迭代开头「申请」上下文（ctx.loopMemory.requestContext —— memory
- * 内部按需压缩，loop 不感知压缩时机），结束后「记录」本次结果（record）。过程摘要折叠
- * （response_user 时）亦经端口。压缩/折叠/记忆维护都是 memory 的事情——本函数只做编排：
- * 调 LLM → 解析 → 执行工具 → 观察回填。事件（thought / process_summary）由此 yield，由
+ * loop 持有 per-run 的 WorkingMemory（ctx.workingMemory，瞬态成员）：每轮迭代开头按需压缩
+ * （compact）后取上下文（buildContext），结束后记录本次结果（append）。response_user 退出时
+ * 折叠过程摘要（foldProcessSummary）。压缩/折叠都是 WorkingMemory 自己的事情——本函数只做编排：
+ * 调 LLM → 解析 → 执行工具 → 观察回填。loop 用量在每次 append 与压缩后自发——经 ctx.eventBus
+ * 发 LoopUsageReported（仅 runId）。事件（thought / process_summary）由此 yield，由
  * AgentRunExecutor 统一 append + 富化。loop 不持任何 memory 模型，不知 conversation。
  */
 export async function* runReactLoop(
@@ -33,14 +36,26 @@ export async function* runReactLoop(
     ctx.config.runtimeConfig,
   );
 
+  /** 自发 loop 用量（append/compact 后）。仅 runId——conversation 反查由 conv 侧负责。 */
+  const reportUsage = () => {
+    const { used, total } = ctx.workingMemory.getContextUsage();
+    ctx.eventBus.dispatch(
+      LoopUsageReported,
+      createDomainEvent(LoopUsageReported, ctx.runId, {
+        runId: ctx.runId,
+        used,
+        total,
+      }),
+    );
+  };
+
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     ctx.signal.throwIfAborted();
 
-    // 申请本迭代上下文（memory 内部按需压缩后返回）。
-    const iterMessages = await ctx.loopMemory.requestContext(
-      ctx.runId,
-      ctx.signal,
-    );
+    // 按需压缩（超阈折叠较早步骤）后取本迭代上下文；压缩成功则自发用量。
+    const { compacted } = await ctx.workingMemory.compact(ctx.signal);
+    if (compacted) reportUsage();
+    const iterMessages = await ctx.workingMemory.buildContext();
     logger.debug('ReAct LLM call iterMessages', { total: iterMessages.length });
 
     const content = await ctx.llm.chatContent(
@@ -58,18 +73,16 @@ export async function* runReactLoop(
       throw new Error('No response from model');
     }
 
-    ctx.loopMemory.record(ctx.runId, Role.ASSIST, content);
+    ctx.workingMemory.append(Role.ASSIST, content);
+    reportUsage();
 
     let parsed: ReActAction;
     try {
       parsed = parseResponse(content);
     } catch (error) {
       const observation = `Error parsing response: ${(error as Error)?.message ?? String(error)}`;
-      ctx.loopMemory.record(
-        ctx.runId,
-        Role.USER,
-        `Observation: ${observation}`,
-      );
+      ctx.workingMemory.append(Role.USER, `Observation: ${observation}`);
+      reportUsage();
       continue;
     }
 
@@ -85,19 +98,13 @@ export async function* runReactLoop(
 
     // response_user 是终态工具（交付最终结果后结束本轮）。
     if (tool === ToolIds.RESPONSE_USER) {
-      const summary = await ctx.loopMemory.summarizeProcess(
-        ctx.runId,
-        ctx.signal,
-      );
+      const summary = await ctx.workingMemory.foldProcessSummary(ctx.signal);
       if (summary) yield { type: 'process_summary', summary };
       return;
     }
 
-    ctx.loopMemory.record(
-      ctx.runId,
-      Role.USER,
-      `Observation: ${observation}\n`,
-    );
+    ctx.workingMemory.append(Role.USER, `Observation: ${observation}\n`);
+    reportUsage();
   }
 
   throw new Error('Max iterations reached');

@@ -1,30 +1,33 @@
-import type { SSEFrame } from '@/shared/types/events';
-import type { EnrichedEvent } from '@/shared/types/events';
+import type { SSEFrame, EnrichedEvent } from '@/shared/types/events';
 import type { Transport } from '@/shared/transport';
 import { inject, singleton } from 'tsyringe';
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { RedisKeys } from '@/shared/constants';
 import { EventBus, createDomainEvent } from '@/server/libs/ddd';
 import { CancelRun } from '@/server/modules/conversation/contracts';
-import { Connection } from './connection';
 import { ChatService } from './chat.service';
-import { projectRun } from './run-projection';
+import { ConversationSession } from './conversation-session';
+import type {
+  ConversationMemory,
+  ConversationMemoryConfig,
+} from '../../domain/model/conversation-memory';
+import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
 
-/** 活跃 run 的会话内追踪——只持 runId + 事件缓冲，不持 agent 的 AgentRun 聚合。 */
-interface ActiveRun {
-  runId: string;
-  events: EnrichedEvent[];
-}
-
+/**
+ * SessionManager —— 会话 registry（@singleton）。以 conversationId 索引 ConversationSession，
+ * 维护跨会话的 runId 反查（runIndex）与孤儿 run 对账（依赖 ChatService）。
+ *
+ * 原先把 per-conversation 状态摊在 connections / activeRuns 平行 Map 里、每个方法首参 conversationId——
+ * 现收敛为 ConversationSession 实体（connection + activeRuns + memory 成员）。本类的公开方法是 thin delegators，
+ * 调用方（handlers / controllers）不变。
+ */
 @singleton()
 export class SessionManager {
   private readonly logger = Logger.child({ source: 'SessionManager' });
-
-  private connections = new Map<string, Connection>();
-  private activeRuns = new Map<string, Map<string, ActiveRun>>();
+  private readonly sessions = new Map<string, ConversationSession>();
   /** runId → {conversationId, messageId} 反查：loop 用量事件（仅 runId）据此路由到会话。 */
-  private runIndex = new Map<
+  private readonly runIndex = new Map<
     string,
     { conversationId: string; messageId: string }
   >();
@@ -38,31 +41,38 @@ export class SessionManager {
     private eventBus: EventBus,
   ) {}
 
+  private getOrCreate(conversationId: string): ConversationSession {
+    let session = this.sessions.get(conversationId);
+    if (!session) {
+      session = new ConversationSession(conversationId, 30_000, () =>
+        this.disposeChat(conversationId),
+      );
+      this.sessions.set(conversationId, session);
+    }
+    return session;
+  }
+
   // ════════════════════════════════════════
   // Session 生命周期
   // ════════════════════════════════════════
 
   disposeChat(conversationId: string): void {
-    const conn = this.connections.get(conversationId);
-    if (conn) {
-      conn.dispose();
-      this.connections.delete(conversationId);
+    const session = this.sessions.get(conversationId);
+    if (session) {
+      this.sessions.delete(conversationId);
+      const runIds = session.runIds();
+      session.dispose(); // 连接 idle 自释放路径下 connection 已 undefined，此处 no-op
+      for (const runId of runIds) this.runIndex.delete(runId);
     }
-
-    for (const run of this.activeRuns.get(conversationId)?.values() ?? []) {
-      this.runIndex.delete(run.runId);
-    }
-    this.activeRuns.delete(conversationId);
     this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
     this.logger.info(`Chat disposed`, { chatId: conversationId });
   }
 
   async disposeAll(): Promise<void> {
-    for (const conn of this.connections.values()) {
-      conn.dispose();
+    for (const session of this.sessions.values()) {
+      session.dispose();
     }
-    this.connections.clear();
-    this.activeRuns.clear();
+    this.sessions.clear();
     this.runIndex.clear();
     this.logger.info(`Closed all SSE connections`);
   }
@@ -78,12 +88,11 @@ export class SessionManager {
     conversationId: string,
     transport: Transport<SSEFrame>,
   ): Promise<void> {
-    // attach 之前判定「新会话」：attach 后 connections 必然命中。
-    const fresh = !this.connections.has(conversationId);
+    const session = this.getOrCreate(conversationId);
+    // attach 之前判定「新会话」：attach 后 hasConnection 必然为真。
+    const fresh = !session.hasConnection;
 
-    this.attachTransport(conversationId, transport, () =>
-      this.disposeChat(conversationId),
-    );
+    session.attachTransport(transport);
 
     if (!fresh) {
       this.logger.info(`Chat reconnected`, { chatId: conversationId });
@@ -103,50 +112,15 @@ export class SessionManager {
   }
 
   hasSession(conversationId: string): boolean {
-    return this.connections.has(conversationId);
+    return this.sessions.get(conversationId)?.hasConnection ?? false;
   }
 
   // ════════════════════════════════════════
   // SSE / Transport
   // ════════════════════════════════════════
 
-  attachTransport(
-    conversationId: string,
-    transport: Transport<SSEFrame>,
-    onIdle?: () => void,
-  ): void {
-    let conn = this.connections.get(conversationId);
-    if (!conn) {
-      conn = new Connection(conversationId, 30_000, () => {
-        this.connections.delete(conversationId);
-        onIdle?.();
-      });
-      this.connections.set(conversationId, conn);
-    }
-    conn.attach(transport);
-
-    // replay: 从本进程缓冲的事件现算 snapshot（重连同一进程的活跃 run）。
-    for (const [messageId, run] of this.activeRuns.get(conversationId) ?? []) {
-      const view = projectRun(run.events);
-      conn.send({
-        type: 'state_snapshot',
-        messageId,
-        content: view.content,
-        steps: view.steps,
-        status: view.status,
-        awaitingInput: view.awaitingInput,
-      } as SSEFrame);
-      this.logger.info(
-        `Replayed snapshot: ${view.content.length} chars, ${view.steps.length} steps`,
-        { chatId: conversationId, messageId },
-      );
-    }
-
-    this.logger.info(`Transport attached`, { chatId: conversationId });
-  }
-
   sendFrame(conversationId: string, frame: SSEFrame): boolean {
-    return this.connections.get(conversationId)?.send(frame) ?? false;
+    return this.sessions.get(conversationId)?.sendFrame(frame) ?? false;
   }
 
   // ════════════════════════════════════════
@@ -155,10 +129,7 @@ export class SessionManager {
 
   /** RunStarted：登记活跃 run（创建事件缓冲）。须在首条 RunEvent 前同步完成。 */
   registerRun(conversationId: string, messageId: string, runId: string): void {
-    if (!this.activeRuns.has(conversationId)) {
-      this.activeRuns.set(conversationId, new Map());
-    }
-    this.activeRuns.get(conversationId)!.set(messageId, { runId, events: [] });
+    this.getOrCreate(conversationId).registerRun(messageId, runId);
     this.runIndex.set(runId, { conversationId, messageId });
   }
 
@@ -174,7 +145,7 @@ export class SessionManager {
     conversationId: string,
     messageId: string,
   ): readonly EnrichedEvent[] | undefined {
-    return this.activeRuns.get(conversationId)?.get(messageId)?.events;
+    return this.sessions.get(conversationId)?.getRunEvents(messageId);
   }
 
   /** RunEvent：缓冲事件 + 桥接 SSE。 */
@@ -183,28 +154,21 @@ export class SessionManager {
     messageId: string,
     event: EnrichedEvent,
   ): void {
-    const run = this.activeRuns.get(conversationId)?.get(messageId);
-    if (run) {
-      run.events.push(event);
-    }
-    this.processRunEvent(conversationId, messageId, event);
+    this.sessions.get(conversationId)?.handleRunEvent(messageId, event);
   }
 
   hasActiveRun(conversationId: string, messageId: string): boolean {
-    return this.activeRuns.get(conversationId)?.has(messageId) ?? false;
+    return this.sessions.get(conversationId)?.hasActiveRun(messageId) ?? false;
   }
 
   finalizeRun(conversationId: string, messageId: string): void {
-    const runs = this.activeRuns.get(conversationId);
-    if (!runs) return;
-    const run = runs.get(messageId);
-    if (run) this.runIndex.delete(run.runId);
-    runs.delete(messageId);
-    if (runs.size === 0) {
-      this.activeRuns.delete(conversationId);
-      const conn = this.connections.get(conversationId);
-      if (conn) {
-        conn.markIdle();
+    const session = this.sessions.get(conversationId);
+    if (!session) return;
+    const runId = session.removeRun(messageId);
+    if (runId) this.runIndex.delete(runId);
+    if (session.hasNoRuns) {
+      if (session.hasConnection) {
+        session.markIdle();
       } else {
         // Headless run (no SSE connection) — dispose session immediately
         this.disposeChat(conversationId);
@@ -217,7 +181,7 @@ export class SessionManager {
     messageId: string,
     reason: string,
   ): void {
-    const run = this.activeRuns.get(conversationId)?.get(messageId);
+    const run = this.sessions.get(conversationId)?.getRun(messageId);
     if (!run) return;
     // 事件驱动取消：会话不再直接调 agent 的 executor；agent 取消后 cancelled 事件经 RunEvent 回流。
     this.eventBus.dispatch(
@@ -235,9 +199,9 @@ export class SessionManager {
     conversationId: string,
     reason: string,
   ): Promise<void> {
-    const runs = this.activeRuns.get(conversationId);
-    if (runs) {
-      for (const messageId of runs.keys()) {
+    const session = this.sessions.get(conversationId);
+    if (session) {
+      for (const messageId of session.runMessageIds()) {
         this.cancelActiveRun(conversationId, messageId, reason);
       }
     }
@@ -248,16 +212,32 @@ export class SessionManager {
   }
 
   // ════════════════════════════════════════
-  // RunEvent → SSE 桥接
+  // 会话记忆（ConversationMemory 成员）
   // ════════════════════════════════════════
 
-  processRunEvent(
+  /** 会话激活：一次性灌入消息 + 配置，构造 ConversationMemory 投影。 */
+  activateMemory(
     conversationId: string,
-    messageId: string,
-    event: EnrichedEvent,
+    messages: Message[],
+    config: ConversationMemoryConfig,
   ): void {
-    const frame = { ...event, messageId } as SSEFrame;
-    this.connections.get(conversationId)?.send(frame);
+    this.getOrCreate(conversationId).activateMemory(messages, config);
+  }
+
+  getMemory(conversationId: string): ConversationMemory {
+    const session = this.sessions.get(conversationId);
+    if (!session?.hasMemory()) {
+      throw new Error(`ConversationMemory: ${conversationId} not activated`);
+    }
+    return session.getMemory();
+  }
+
+  getMemoryConfig(conversationId: string): ConversationMemoryConfig {
+    const session = this.sessions.get(conversationId);
+    if (!session?.hasMemory()) {
+      throw new Error(`ConversationMemory: ${conversationId} not activated`);
+    }
+    return session.getMemoryConfig();
   }
 
   // ════════════════════════════════════════
@@ -297,17 +277,19 @@ export class SessionManager {
 
     // 重启后 activeRuns 已丢失，snapshot replay 与 cancel 都无法让客户端的
     // running 节点终止——这里显式补发终态帧。run 已死，seq/at 合成即可。
+    const session = this.sessions.get(conversationId);
     for (const msg of orphans) {
       const event =
         status === 'cancelled'
           ? ({ type: 'cancelled', reason } as const)
           : ({ type: 'error', error: reason } as const);
-      this.processRunEvent(conversationId, msg.id, {
+      session?.sendFrame({
         ...event,
         runId: msg.agentRunId!,
         seq: 0,
         at: Date.now(),
-      });
+        messageId: msg.id,
+      } as SSEFrame);
     }
   }
 }

@@ -9,7 +9,7 @@ export interface CompactionConfig {
 }
 
 /**
- * memory 域的配置片段——记忆压缩（历史层 + loop 内迭代层）。schema + read 双向闭环：
+ * compaction 配置片段——记忆压缩（历史层 + loop 内迭代层）。schema + read 双向闭环：
  * schema 供前端渲染、ajv `useDefaults` 回填；read 供消费方经 readConfigFragment 强类型取回。
  *
  * 无 `enabled` 硬开关——是否压缩由 threshold 兜底判定（用量超阈才折叠）。

@@ -3,10 +3,9 @@ import { Role } from '@/shared/entities/Message';
 import { commandHandler } from '@/server/decorator/handler';
 import { createDomainEvent, EventBus } from '@/server/libs/ddd';
 import { ChatService } from '../service/chat.service';
+import { SessionManager } from '../service/session-manager';
 import { CONVERSATION_REPOSITORY } from '../../conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
-import { CONVERSATION_MEMORY_PORT } from '@/server/modules/memory';
-import type { ConversationMemoryPort } from '@/server/modules/memory';
 import {
   StartChatCommand,
   TurnInitiated,
@@ -19,8 +18,8 @@ export class StartChatHandler {
   constructor(
     @inject(ChatService)
     private convService: ChatService,
-    @inject(CONVERSATION_MEMORY_PORT)
-    private convMemory: ConversationMemoryPort,
+    @inject(SessionManager)
+    private sessionManager: SessionManager,
     @inject(CONVERSATION_REPOSITORY)
     private convRepo: ConversationRepositoryPort,
     @inject(EventBus)
@@ -53,8 +52,9 @@ export class StartChatHandler {
 
     // 增量追加本轮 user 消息到会话记忆（assistant 占位不追加——种子只到 user query），
     // 再取有效历史作为 agent run 的种子。
-    this.convMemory.append(conversationId, setup.userMessage);
-    const effectiveHistory = await this.convMemory.buildContext(conversationId);
+    const memory = this.sessionManager.getMemory(conversationId);
+    memory.append(setup.userMessage);
+    const effectiveHistory = await memory.buildContext();
 
     this.eventBus.dispatch(
       TurnInitiated,

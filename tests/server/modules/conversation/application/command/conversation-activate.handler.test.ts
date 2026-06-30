@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 
 import { ConversationActivateHandler } from '@/server/modules/conversation/application/command/conversation-activate.handler';
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
+import type { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
-import type { ConversationMemoryPort } from '@/server/modules/memory';
 import type { EventBus } from '@/server/libs/ddd';
 import { ConversationActivateCommand } from '@/server/modules/conversation/contracts';
 import {
@@ -28,9 +28,9 @@ const stubEventBus = { dispatch: vi.fn() };
 const stubAgentService = {
   getSystemPrompt: vi.fn(() => Promise.resolve('')),
 };
-const stubConvMemory = {
-  activate: vi.fn(),
-} as unknown as ConversationMemoryPort;
+const stubSessionManager = {
+  activateMemory: vi.fn(),
+} as unknown as SessionManager;
 
 function makeHandler(conv: any) {
   return new ConversationActivateHandler(
@@ -38,7 +38,7 @@ function makeHandler(conv: any) {
     makeConvRepo(conv),
     stubEventBus as unknown as EventBus,
     stubAgentService as any,
-    stubConvMemory,
+    stubSessionManager,
   );
 }
 

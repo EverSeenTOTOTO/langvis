@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import '@/server/modules/memory/domain/service/compaction-config';
+import '@/server/libs/compaction';
 import '@/server/modules/agent/application/service/model-config.fragment';
-import { WorkingMemory } from '@/server/modules/memory/domain/model/working-memory';
-import type { CompactionConfig } from '@/server/modules/memory/domain/service/compaction-config';
+import { WorkingMemory } from '@/server/modules/agent/domain/model/working-memory';
+import type { CompactionConfig } from '@/server/libs/compaction';
 
 const COMPACTION_DEFAULTS: CompactionConfig = {
   threshold: 0.8,

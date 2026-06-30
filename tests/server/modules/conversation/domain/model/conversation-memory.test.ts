@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ConversationMemory } from '@/server/modules/memory/domain/model/conversation-memory';
+import { ConversationMemory } from '@/server/modules/conversation/domain/model/conversation-memory';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '@/server/utils/schemaValidator';
-import { MEMORY_FRAGMENT } from '@/server/modules/memory/domain/service/compaction-config';
+import { MEMORY_FRAGMENT } from '@/server/libs/compaction';
 
 describe('MEMORY_FRAGMENT.read', () => {
   it('从 runtimeConfig 读取 memory.compaction', () => {

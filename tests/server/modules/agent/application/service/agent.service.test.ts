@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import '@/server/modules/memory/domain/service/compaction-config';
+import '@/server/libs/compaction';
 import '@/server/modules/agent/application/service/model-config.fragment';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { ConfigValidationError } from '@/server/modules/agent/domain/errors';

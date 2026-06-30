@@ -7,7 +7,7 @@ import {
   CacheProvider,
   STRING_THRESHOLD,
   PREVIEW_LENGTH,
-} from '@/server/modules/memory/infrastructure/cache.provider';
+} from '@/server/modules/agent/infrastructure/cache.provider';
 import {
   isCachedReference,
   type CachedReference,
