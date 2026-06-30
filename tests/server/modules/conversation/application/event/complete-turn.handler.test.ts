@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { CompleteTurnHandler } from '@/server/modules/conversation/application/event/complete-turn.handler';
 import type { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
-import type { HistoryCompactionService } from '@/server/modules/conversation/application/service/history-compaction.service';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
+import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type { DomainEvent } from '@/server/libs/ddd';
 import type { EnrichedEvent } from '@/shared/types/events';
 import type { RunCompletedPayload } from '@/server/modules/conversation/contracts';
@@ -31,9 +31,10 @@ describe('CompleteTurnHandler — 终态文案持久化 + 历史压缩', () => {
       usage?: { used: number; total: number };
     } = {},
   ) {
+    const llm = { id: 'stub-llm' } as unknown as LlmPort;
     const memory = {
       append: vi.fn(),
-      getMessages: vi.fn().mockReturnValue([]),
+      compact: vi.fn().mockResolvedValue(opts.compactResult ?? null),
       getContextUsage: vi
         .fn()
         .mockReturnValue(opts.usage ?? { used: 0, total: 8000 }),
@@ -43,11 +44,6 @@ describe('CompleteTurnHandler — 终态文案持久化 + 历史压缩', () => {
       finalizeRun: vi.fn(),
       sendFrame: vi.fn().mockReturnValue(true),
       getMemory: vi.fn().mockReturnValue(memory),
-      getMemoryConfig: vi.fn().mockReturnValue({
-        contextSize: 8000,
-        modelId: 'gpt-4',
-        runtimeConfig: {},
-      }),
     } as unknown as SessionManager;
     const messageRepo = {
       update: vi.fn().mockResolvedValue({
@@ -63,15 +59,8 @@ describe('CompleteTurnHandler — 终态文案持久化 + 历史压缩', () => {
         },
       ]),
     } as unknown as MessageRepositoryPort;
-    const compaction = {
-      compact: vi.fn().mockResolvedValue(opts.compactResult ?? null),
-    } as unknown as HistoryCompactionService;
-    const handler = new CompleteTurnHandler(
-      sessionManager,
-      messageRepo,
-      compaction,
-    );
-    return { handler, messageRepo, sessionManager, memory, compaction };
+    const handler = new CompleteTurnHandler(sessionManager, messageRepo, llm);
+    return { handler, messageRepo, sessionManager, memory, llm };
   }
 
   it('cancelled 且无生成文本时，内容持久化为取消原因', async () => {
@@ -123,7 +112,7 @@ describe('CompleteTurnHandler — 终态文案持久化 + 历史压缩', () => {
   });
 
   it('压缩有结果时：落盘 compact 消息、append 回 memory、发 conversation_usage', async () => {
-    const { handler, messageRepo, sessionManager, memory, compaction } = setup(
+    const { handler, messageRepo, sessionManager, memory, llm } = setup(
       [
         ev({ type: 'start' }),
         ev({ type: 'text_chunk', content: 'hi' }),
@@ -140,14 +129,10 @@ describe('CompleteTurnHandler — 终态文案持久化 + 历史压缩', () => {
 
     await handler.handle(event);
 
-    expect(compaction.compact).toHaveBeenCalledWith(
-      expect.objectContaining({
-        contextSize: 8000,
-        runtimeConfig: {},
-        messages: expect.any(Array),
-        signal: expect.any(AbortSignal),
-      }),
-    );
+    expect(memory.compact).toHaveBeenCalledWith({
+      llm,
+      signal: expect.any(AbortSignal),
+    });
     expect(messageRepo.batchCreate).toHaveBeenCalledWith(conversationId, [
       expect.objectContaining({
         content: 'SUMMARY',
@@ -184,13 +169,12 @@ describe('CompleteTurnHandler — 终态文案持久化 + 历史压缩', () => {
   });
 
   it('run 已不在内存时只 finalize，不写库、不压缩', async () => {
-    const { handler, messageRepo, sessionManager, compaction } =
-      setup(undefined);
+    const { handler, messageRepo, sessionManager, memory } = setup(undefined);
 
     await handler.handle(event);
 
     expect(messageRepo.update).not.toHaveBeenCalled();
-    expect(compaction.compact).not.toHaveBeenCalled();
+    expect(memory.compact).not.toHaveBeenCalled();
     expect(sessionManager.finalizeRun).toHaveBeenCalledWith(
       conversationId,
       messageId,

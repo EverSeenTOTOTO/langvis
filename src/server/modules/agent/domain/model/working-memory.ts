@@ -30,7 +30,7 @@ export interface WorkingMemoryParams {
  * 历史经 buildIterMessages 格式化）播种、作为 AgentRunContext 的瞬态成员；loop 每步 append；
  * 自身用量超阈时（compact）把较早的 loop actions 折叠为一条 Observation 回顾（保留近期 keepRecent），
  * 使 loop 能在自身膨胀时继续；退出时 foldProcessSummary 把本 loop 过程折叠为过程摘要。fold 原语与
- * 历史层压缩（HistoryCompactionService）同一机制（libs/compaction）。临时产物，run 内消亡（ctx
+ * 历史层压缩（ConversationMemory.compact）同一机制（libs/compaction）。临时产物，run 内消亡（ctx
  * 释放即回收）。纯数据、无 EventBus 依赖、可纯单测。
  */
 export class WorkingMemory {
