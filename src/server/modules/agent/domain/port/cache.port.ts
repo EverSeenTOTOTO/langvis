@@ -1,6 +1,5 @@
 /**
  * CachePort —— 工具 I/O 压缩/缓存契约（消费者拥有端口，agent 实现并经 CACHE_SERVICE 注入）。
- * CompressionStrategy / CachedReference / isCachedReference 一并置此——cache 的对外语义。
  */
 
 /** 'file' 写入 workspace 临时文件；'skip' 原样返回。 */

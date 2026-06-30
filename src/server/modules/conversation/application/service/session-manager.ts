@@ -130,7 +130,6 @@ export class SessionManager {
     return this.sessions.get(conversationId)?.getRunEvents(messageId);
   }
 
-  /** RunEvent：缓冲事件 + 桥接 SSE。 */
   handleRunEvent(
     conversationId: string,
     messageId: string,

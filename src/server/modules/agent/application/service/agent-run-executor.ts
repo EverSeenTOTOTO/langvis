@@ -71,9 +71,8 @@ export class AgentRunExecutor {
 
     const run = new AgentRun(params.runId, config);
 
-    const seed = buildIterMessages(params.effectiveHistory);
     const workingMemory = new WorkingMemory({
-      seed,
+      seed: buildIterMessages(params.effectiveHistory),
       contextSize: config.contextSize,
       modelId: modelId ?? '',
       llm: this.llm,
@@ -105,9 +104,6 @@ export class AgentRunExecutor {
     return { run, ctx };
   }
 
-  /**
-   * run —— agent 拥有自身 run 持久化（初始 save + 终态 update）；调用方只消费事件流。
-   */
   async *run(params: {
     runId: string;
     workDir: string;
@@ -170,10 +166,9 @@ export class AgentRunExecutor {
     }
   }
 
-  /** 取消：run.cancel 原子地 abort + 记录 cancelled 事件，返回富化事件供推送 SSE。 */
   cancel(runId: string, reason: string): EnrichedEvent | null {
     const run = this.activeRuns.get(runId);
-    return run ? run.cancel(reason) : null;
+    return run?.cancel(reason) ?? null;
   }
 
   private executeTool(

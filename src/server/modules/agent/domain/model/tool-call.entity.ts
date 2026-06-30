@@ -7,7 +7,6 @@ import type { Tool } from './tool.base';
 
 /**
  * ToolCall — 一次工具调用的完整业务流程（聚合内实体）。
- * yield 原始 RunEvent，由 AgentRunExecutor 统一 append + 富化——事实与传输分离。
  */
 export interface ToolCallDeps {
   signal: AbortSignal;

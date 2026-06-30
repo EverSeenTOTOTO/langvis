@@ -17,20 +17,14 @@ type ReActAction = {
   input: Record<string, unknown>;
 };
 
-/**
- * runReactLoop —— 内联的 ReAct 循环（原 ReActAgent.call 的体）。
- * 编排：调 LLM → 解析 → 执行工具 → 观察回填。压缩/折叠都归 WorkingMemory（ctx.workingMemory，瞬态成员）。
- * loop 用量在每次 append 与压缩后自发——经 ctx.eventBus 发 LoopUsageReported（仅 runId，loop 不知 conversation）。
- * 事件（thought / process_summary）由此 yield，由 AgentRunExecutor 统一 append + 富化。
- */
 export async function* runReactLoop(
   ctx: AgentRunContext,
 ): AsyncGenerator<RunEvent, void, void> {
   const model =
     (ctx.config.runtimeConfig as { model?: ModelConfig }).model ?? {};
 
-  /** 自发 loop 用量（仅 runId——conversation 反查由 conv 侧负责）。 */
-  const reportUsage = () => {
+  const reportUsage = async () => {
+    await ctx.workingMemory.compact(ctx.signal);
     const { used, total } = ctx.workingMemory.getContextUsage();
     ctx.eventBus.dispatch(
       LoopUsageReported,
@@ -45,11 +39,7 @@ export async function* runReactLoop(
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     ctx.signal.throwIfAborted();
 
-    // 按需压缩（超阈折叠较早步骤）后取本迭代上下文；压缩成功则自发用量。
-    const { compacted } = await ctx.workingMemory.compact(ctx.signal);
-    if (compacted) reportUsage();
     const iterMessages = await ctx.workingMemory.buildContext();
-    logger.debug('ReAct LLM call iterMessages', { total: iterMessages.length });
 
     const content = await ctx.llm.chatContent(
       model.modelId,
@@ -67,7 +57,6 @@ export async function* runReactLoop(
     }
 
     ctx.workingMemory.append(Role.ASSIST, content);
-    reportUsage();
 
     let parsed: ReActAction;
     try {
@@ -75,7 +64,7 @@ export async function* runReactLoop(
     } catch (error) {
       const observation = `Error parsing response: ${(error as Error)?.message ?? String(error)}`;
       ctx.workingMemory.append(Role.USER, `Observation: ${observation}`);
-      reportUsage();
+      await reportUsage();
       continue;
     }
 
@@ -97,7 +86,7 @@ export async function* runReactLoop(
     }
 
     ctx.workingMemory.append(Role.USER, `Observation: ${observation}\n`);
-    reportUsage();
+    await reportUsage();
   }
 
   throw new Error('Max iterations reached');
