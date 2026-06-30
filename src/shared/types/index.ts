@@ -1,6 +1,6 @@
 import { JSONSchemaType } from 'ajv';
 
-/** model 域配置（chat 模型选择）——由 MODEL_FRAGMENT 发布、readConfigFragment 读取。 */
+/** model 域配置（chat 模型选择）——由 MODEL_FRAGMENT 发布，消费方直接从 runtimeConfig.model 读取。 */
 export interface ModelConfig {
   modelId?: string;
   temperature?: number;

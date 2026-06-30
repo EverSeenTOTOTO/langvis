@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import '@/server/modules/conversation/application/service/history-config.fragment';
 import { ConversationSession } from '@/server/modules/conversation/application/service/conversation-session';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';

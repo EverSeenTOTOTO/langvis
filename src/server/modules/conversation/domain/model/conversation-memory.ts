@@ -3,7 +3,6 @@ import { Role } from '@/shared/entities/Message';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import type { ContextUsage } from '@/server/utils/estimateTokens';
 import { findLatestCompactionSummary } from './compaction-summary';
-import { readConfigFragment } from '@/server/libs/config/config-fragment';
 import type { HistoryCompactionConfig } from '../../application/service/history-config.fragment';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { Summarizer } from '@/server/libs/compaction';
@@ -35,8 +34,9 @@ export interface ConversationCompactionResult {
  * 自维护历史压缩（compact）：有效历史用量超阈时把「上一个 C + tail」滚动折叠成新 C，返回载荷
  * （不含持久化——落盘 compact 消息是 CompleteTurnHandler 的职责，避免反向依赖 message repo）。
  * fold 原语来自 libs/compaction（与 agent 的 WorkingMemory 同机制）。对应 agent 的
- * WorkingMemory——两者皆自持压缩、瞬态、纯数据 + 一个 fold 方法。压缩配置经 history 片段自取
- * （readConfigFragment），llm 由 handler 按调用传入（构造期保持纯、无需把 LLM_PORT 贯穿会话层）。
+ * WorkingMemory——两者皆自持压缩、瞬态、纯数据 + 一个 fold 方法。压缩配置直取
+ * runtimeConfig.history（HistoryCompactionConfig，上游 resolveConversationConfig 已 parse 回填默认），
+ * llm 由 handler 按调用传入（构造期保持纯、无需把 LLM_PORT 贯穿会话层）。
  */
 export class ConversationMemory {
   protected readonly history: Message[];
@@ -56,10 +56,9 @@ export class ConversationMemory {
     this.history = [...params.history];
     this.contextSize = params.contextSize;
     this.modelId = params.modelId;
-    this.compaction = readConfigFragment<HistoryCompactionConfig>(
-      'history',
-      params.runtimeConfig,
-    );
+    this.compaction = (
+      params.runtimeConfig as { history: HistoryCompactionConfig }
+    ).history;
   }
 
   /** 增量追加一条消息（turn 的 user/assistant/compact 落盘后由 conv 经会话成员调用）。 */

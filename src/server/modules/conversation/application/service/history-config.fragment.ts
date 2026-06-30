@@ -11,7 +11,7 @@ export interface HistoryCompactionConfig {
  * 把「上一个摘要 C + tail」滚动折叠成新 C）。与 agent 的 loop 迭代压缩解耦：两层 threshold/windowSize
  * 独立可调。fold 原语在 libs/compaction，配置无关。
  *
- * 默认值唯一来源是 schema 的 default 关键字；read 假定 runtimeConfig 已被上游 parse
+ * 默认值唯一来源是 schema 的 default 关键字；消费方假定 runtimeConfig 已被上游 parse
  * （resolveConversationConfig 经 composeConfigSchema + useDefaults 回填）。无 enabled 硬开关——
  * 是否压缩由 threshold 兜底判定。
  */
@@ -41,6 +41,4 @@ export const HISTORY_FRAGMENT = defineConfigFragment({
       },
     },
   } as unknown as JSONSchemaType<unknown>,
-  read: (cfg): HistoryCompactionConfig =>
-    (cfg as { history: HistoryCompactionConfig }).history,
 });
