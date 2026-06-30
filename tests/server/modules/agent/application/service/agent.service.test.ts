@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import '@/server/libs/compaction';
+import '@/server/modules/agent/domain/model/loop-config.fragment';
 import '@/server/modules/agent/application/service/model-config.fragment';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { ConfigValidationError } from '@/server/modules/agent/domain/errors';
@@ -24,7 +24,7 @@ describe('AgentService', () => {
     const schema = makeService().getConfigSchema();
     expect(schema).toBeDefined();
     expect(Object.keys(schema.properties ?? {})).toEqual(
-      expect.arrayContaining(['model', 'memory']),
+      expect.arrayContaining(['model', 'loop']),
     );
   });
 

@@ -110,12 +110,12 @@ export interface RunCompletedPayload {
 // ── Utils ─────────────────────────────────────────────────
 
 /**
- * 从会话配置中取出用户配置（剥离遗留的 agent 键——收敛单一 agent 后不再使用，
- * 但既有会话行里可能仍存有该键，此处静默丢弃）。
+ * 从会话配置中取出用户配置（剥离遗留键：收敛单一 agent 后废弃的 `agent`；memory BC 解散、
+ * compaction 拆成 history/loop 后废弃的 `memory`。既有会话行可能仍存有这些键，此处静默丢弃）。
  */
 export function extractUserConfig(conv: {
   config?: Record<string, any> | null;
 }): Record<string, unknown> {
-  const { agent: _agent, ...rest } = conv.config ?? {};
+  const { agent: _agent, memory: _memory, ...rest } = conv.config ?? {};
   return rest;
 }

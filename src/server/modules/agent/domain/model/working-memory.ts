@@ -2,7 +2,7 @@ import type { LlmMessage } from '@/shared/types/entities';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { readConfigFragment } from '@/server/libs/config/config-fragment';
 import { winstonLogger } from '@/server/utils/logger';
-import type { CompactionConfig } from '@/server/libs/compaction';
+import type { LoopCompactionConfig } from './loop-config.fragment';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import type { ContextUsage } from '@/server/utils/estimateTokens';
 import { Summarizer } from '@/server/libs/compaction';
@@ -39,7 +39,7 @@ export class WorkingMemory {
   private readonly baseLen: number;
   private readonly contextSize: number;
   private readonly modelId: string;
-  private readonly compaction: CompactionConfig;
+  private readonly compaction: LoopCompactionConfig;
   private readonly summarizer: Summarizer;
   private readonly logger = winstonLogger.child({ source: 'WorkingMemory' });
 
@@ -48,8 +48,8 @@ export class WorkingMemory {
     this.baseLen = params.seed.length;
     this.contextSize = params.contextSize;
     this.modelId = params.modelId;
-    this.compaction = readConfigFragment<CompactionConfig>(
-      'memory',
+    this.compaction = readConfigFragment<LoopCompactionConfig>(
+      'loop',
       params.runtimeConfig,
     );
     this.summarizer = new Summarizer(

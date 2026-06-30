@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import '@/server/libs/compaction';
+import '@/server/modules/conversation/application/service/history-config.fragment';
 import '@/server/modules/agent/application/service/model-config.fragment';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
@@ -30,10 +30,10 @@ const stubLlm = {} as any;
 
 const signal = new AbortController().signal;
 
-// compact() 经 readConfigFragment 自取 modelId 与压缩参数——需 model + memory 片段就位。
+// compact() 经 readConfigFragment 自取 modelId 与压缩参数——需 model + history 片段就位。
 const RUNTIME_CONFIG = {
   model: { modelId: 'openai:gpt-4' },
-  memory: { compaction: { threshold: 0.8, windowSize: 10, keepRecent: 4 } },
+  history: { threshold: 0.8, windowSize: 10 },
 };
 
 function makeService() {

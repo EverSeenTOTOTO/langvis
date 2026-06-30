@@ -5,10 +5,10 @@ import { readConfigFragment } from '@/server/libs/config/config-fragment';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { winstonLogger } from '@/server/utils/logger';
-import type { CompactionConfig } from '@/server/libs/compaction';
+import type { HistoryCompactionConfig } from './history-config.fragment';
 import type { ContextUsage } from '@/server/utils/estimateTokens';
 import { estimateTokens } from '@/server/utils/estimateTokens';
-import { findLatestCompactionSummary } from '@/server/utils/compaction-summary';
+import { findLatestCompactionSummary } from '../../domain/model/compaction-summary';
 import { Summarizer } from '@/server/libs/compaction';
 
 /** 历史压缩（fold）产物：新 C 载荷 + 压缩后用量。conv 落盘 C 后 append 回 ConversationMemory。 */
@@ -48,7 +48,10 @@ export class HistoryCompactionService {
       runtimeConfig,
     ).modelId;
     if (!modelId) return null;
-    const cc = readConfigFragment<CompactionConfig>('memory', runtimeConfig);
+    const cc = readConfigFragment<HistoryCompactionConfig>(
+      'history',
+      runtimeConfig,
+    );
     const threshold = cc.threshold;
     const windowSize = cc.windowSize;
 

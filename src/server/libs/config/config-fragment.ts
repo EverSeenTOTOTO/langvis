@@ -35,6 +35,20 @@ export const defineConfigFragment = <F extends ConfigFragment>(
 export const getConfigFragments = (): readonly ConfigFragment[] => REGISTRY;
 
 /**
+ * 聚合所有已注册 fragment（按 key 平铺）为对话配置 schema。
+ * 组合器：不认识任何域细节——AgentService 据此供前端渲染、ajv `useDefaults` 回填默认；
+ * conv 侧 resolveConversationConfig 亦据此把原始 conv.config parse 成默认完整的 runtimeConfig
+ * （确保 readConfigFragment 读到的字段必有默认值）。
+ */
+export const composeConfigSchema = (): JSONSchemaType<unknown> =>
+  ({
+    type: 'object',
+    properties: Object.fromEntries(
+      getConfigFragments().map(f => [f.key, f.schema]),
+    ),
+  }) as unknown as JSONSchemaType<unknown>;
+
+/**
  * 自上而下读取：按 key 查注册表调对应 fragment 的 `read`，返回强类型配置。
  * 未知 key fail loud（invariant 违例）。消费方以此取代散落的 `cfg.xxx` 硬转。
  */
