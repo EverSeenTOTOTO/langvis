@@ -1,4 +1,3 @@
-import { readConfigFragment } from '@/server/libs/config/config-fragment';
 import { ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { ModelConfig } from '@/shared/types';
@@ -31,10 +30,8 @@ type ReActAction = {
 export async function* runReactLoop(
   ctx: AgentRunContext,
 ): AsyncGenerator<RunEvent, void, void> {
-  const model = readConfigFragment<ModelConfig>(
-    'model',
-    ctx.config.runtimeConfig,
-  );
+  const model =
+    (ctx.config.runtimeConfig as { model?: ModelConfig }).model ?? {};
 
   /** 自发 loop 用量（append/compact 后）。仅 runId——conversation 反查由 conv 侧负责。 */
   const reportUsage = () => {

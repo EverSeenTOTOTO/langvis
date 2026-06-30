@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import '@/server/modules/conversation/application/service/history-config.fragment';
 import { ConversationMemory } from '@/server/modules/conversation/domain/model/conversation-memory';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';

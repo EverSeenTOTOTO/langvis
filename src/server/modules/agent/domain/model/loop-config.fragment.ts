@@ -17,7 +17,7 @@ export interface LoopCompactionConfig {
  * 反向依赖；type-only import 不触发副作用，注册由 agent.module 的副作用 import 完成。
  *
  * 无 enabled 硬开关——是否压缩由 threshold 兜底判定（用量超阈才折叠）。默认值唯一来源是 schema
- * 的 default 关键字；read 假定 runtimeConfig 已被上游 parse（composeConfigSchema + useDefaults）。
+ * 的 default 关键字；消费方假定 runtimeConfig 已被上游 parse（composeConfigSchema + useDefaults）。
  */
 export const LOOP_FRAGMENT = defineConfigFragment({
   key: 'loop',
@@ -52,6 +52,4 @@ export const LOOP_FRAGMENT = defineConfigFragment({
       },
     },
   } as unknown as JSONSchemaType<unknown>,
-  read: (cfg): LoopCompactionConfig =>
-    (cfg as { loop: LoopCompactionConfig }).loop,
 });

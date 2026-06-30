@@ -1,6 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import '@/server/modules/agent/domain/model/loop-config.fragment';
-import '@/server/modules/agent/application/service/model-config.fragment';
 import { WorkingMemory } from '@/server/modules/agent/domain/model/working-memory';
 import type { LoopCompactionConfig } from '@/server/modules/agent/domain/model/loop-config.fragment';
 

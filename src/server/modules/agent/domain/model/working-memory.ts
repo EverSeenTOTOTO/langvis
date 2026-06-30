@@ -1,6 +1,5 @@
 import type { LlmMessage } from '@/shared/types/entities';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
-import { readConfigFragment } from '@/server/libs/config/config-fragment';
 import { winstonLogger } from '@/server/utils/logger';
 import type { LoopCompactionConfig } from './loop-config.fragment';
 import { estimateTokens } from '@/server/utils/estimateTokens';
@@ -19,7 +18,7 @@ export interface WorkingMemoryParams {
   modelId: string;
   /** per-run 的 LlmPort，折叠时复用（同模型、同取消域）。 */
   llm: LlmPort;
-  /** 已 parse 的 runtimeConfig——压缩配置由本域 fragment 自取（readConfigFragment），不外泄。 */
+  /** 已 parse 的 runtimeConfig——压缩配置直取 loop 键（LoopCompactionConfig），不外泄。 */
   runtimeConfig: Record<string, unknown>;
 }
 
@@ -48,10 +47,9 @@ export class WorkingMemory {
     this.baseLen = params.seed.length;
     this.contextSize = params.contextSize;
     this.modelId = params.modelId;
-    this.compaction = readConfigFragment<LoopCompactionConfig>(
-      'loop',
-      params.runtimeConfig,
-    );
+    this.compaction = (
+      params.runtimeConfig as { loop: LoopCompactionConfig }
+    ).loop;
     this.summarizer = new Summarizer(
       params.llm,
       this.logger,

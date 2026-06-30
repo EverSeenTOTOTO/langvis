@@ -137,7 +137,7 @@ export class ChatService {
       contextSize,
       modelId,
       // 经 composeConfigSchema + useDefaults parse 成默认完整的 runtimeConfig（剥离遗留 agent/memory
-      // 键、回填 history/loop 等片段默认值），使下游 readConfigFragment 读到的字段必有值。
+      // 键、回填 history/loop 等片段默认值），使下游直读的字段必有值。
       runtimeConfig: parse(
         composeConfigSchema(),
         extractUserConfig(conv),
