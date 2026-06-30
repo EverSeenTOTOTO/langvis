@@ -6,8 +6,7 @@ import type { HumanInputPort } from '../domain/port/human-input.port';
 import type { MessageRepositoryPort } from '../domain/port/message.repository.port';
 import { MESSAGE_REPOSITORY } from '../conversation.di-tokens';
 
-// Lua script for atomic check-and-set
-// Returns: 1 if success, 0 if already submitted, -1 if not found
+// Atomic check-and-set via Lua; returns 1 success / 0 already submitted / -1 not found.
 const SUBMIT_LUA_SCRIPT = `
 local key = KEYS[1]
 local data = redis.call('GET', key)

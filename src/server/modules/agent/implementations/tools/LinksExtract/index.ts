@@ -22,15 +22,12 @@ export default class LinksExtractTool extends Tool<LinksExtractOutput> {
     const { content } = data;
     const links: LinkInfo[] = [];
 
-    // Extract from HTML if it looks like HTML
     if (this.looksLikeHtml(content)) {
       links.push(...this.extractFromHtml(content));
     }
 
-    // Also extract plain URLs from text
     links.push(...this.extractFromText(content));
 
-    // Deduplicate and filter
     const result = this.deduplicateAndFilter(links);
 
     this.logger.info(`Extracted ${result.length} unique links from content`);
@@ -74,7 +71,6 @@ export default class LinksExtractTool extends Tool<LinksExtractOutput> {
 
   private extractFromText(text: string): LinkInfo[] {
     const links: LinkInfo[] = [];
-    // Match http/https URLs
     const urlRegex = /https?:\/\/[^\s<>"{}|^`\][\]]+/gi;
     let match;
 
@@ -93,11 +89,9 @@ export default class LinksExtractTool extends Tool<LinksExtractOutput> {
   }
 
   private extractContext(element: Element): string {
-    // Get parent element's text, limited to ~100 chars
     let parent = element.parentElement;
     let context = '';
 
-    // Try to get meaningful context from parent or grandparent
     for (let i = 0; i < 2 && parent; i++) {
       const text = parent.textContent?.trim() || '';
       if (text.length > 10) {
@@ -107,7 +101,6 @@ export default class LinksExtractTool extends Tool<LinksExtractOutput> {
       parent = parent.parentElement;
     }
 
-    // If no parent context, use sibling text
     if (!context) {
       const prevSibling = element.previousElementSibling;
       const nextSibling = element.nextElementSibling;
@@ -136,7 +129,6 @@ export default class LinksExtractTool extends Tool<LinksExtractOutput> {
       return false;
     }
 
-    // Filter out common non-content URLs
     const invalidPatterns = [
       /^javascript:/i,
       /^mailto:/i,
@@ -157,7 +149,6 @@ export default class LinksExtractTool extends Tool<LinksExtractOutput> {
     const result: LinkInfo[] = [];
 
     for (const link of links) {
-      // Normalize URL for deduplication
       const normalizedUrl = this.normalizeUrl(link.url);
 
       if (!seen.has(normalizedUrl) && this.isValidUrl(link.url)) {
@@ -175,7 +166,6 @@ export default class LinksExtractTool extends Tool<LinksExtractOutput> {
   private normalizeUrl(url: string): string {
     try {
       const parsed = new URL(url);
-      // Remove trailing slash and common tracking params
       let normalized = parsed.origin + parsed.pathname.replace(/\/$/, '');
 
       // Keep query params but remove common tracking ones

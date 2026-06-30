@@ -58,7 +58,6 @@ export default class ListToolsTool extends Tool<ListToolsOutput> {
       })
       .filter((t): t is Tool => t !== null);
 
-    // Skills
     const allSkills = await this.skillService.getAllSkillInfo();
     const filteredSkills = allSkills.filter(s => {
       return matchFilter(`${s.id} ${s.name} ${s.description ?? ''}`);

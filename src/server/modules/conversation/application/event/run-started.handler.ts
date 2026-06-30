@@ -6,10 +6,7 @@ import type { RunStartedPayload } from '@/server/modules/conversation/contracts'
 import { SessionManager } from '../service/session-manager';
 import { ChatService } from '../service/chat.service';
 
-/**
- * RunStartedHandler —— 会话收到 agent 的 run 开始信号，自行簿记。
- * registerRun 创建事件缓冲（**同步**，须在首条 RunEvent 前完成）；persistAgentRunId 落 message。
- */
+/** 会话收到 agent 的 run 开始信号，自行簿记。registerRun 须在首条 RunEvent 前同步完成。 */
 @eventHandler(RunStarted)
 export class RunStartedHandler {
   constructor(

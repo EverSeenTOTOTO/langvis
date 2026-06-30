@@ -1,8 +1,5 @@
 /**
- * RuntimeConfigVO — 运行时配置值对象（纯值，不可变快照）。
- *
- * 由 AgentService.createRunConfig 构造（校验 userConfig 后产出）。
- * 不再持有 agentId/agentName（单一 agent 后为死字段）。
+ * RuntimeConfigVO — 运行时配置不可变快照（AgentService.createRunConfig 校验后产出）。
  */
 
 export interface RuntimeConfigVOProps {
@@ -26,7 +23,6 @@ export class RuntimeConfigVO {
     Object.freeze(this);
   }
 
-  /** 由 AgentService 在校验通过后构造。 */
   static of(props: RuntimeConfigVOProps): RuntimeConfigVO {
     return new RuntimeConfigVO(props);
   }

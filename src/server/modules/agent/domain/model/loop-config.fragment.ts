@@ -9,15 +9,10 @@ export interface LoopCompactionConfig {
 }
 
 /**
- * loop 迭代压缩配置片段——agent 域 WorkingMemory 的 mid-loop 折叠参数（自身用量超阈时把较早的
- * loop actions 折叠为一条回顾、保留近期 keepRecent）。与 conv 的历史层压缩（history 片段）解耦：
- * 两层的 threshold/windowSize 独立可调。fold 原语本身在 libs/compaction，配置无关。
- *
- * 与 WorkingMemory 同居 domain/model——消费者是 domain 实体，fragment 随之放 domain 层避免域→应用
- * 反向依赖；type-only import 不触发副作用，注册由 agent.module 的副作用 import 完成。
- *
- * 无 enabled 硬开关——是否压缩由 threshold 兜底判定（用量超阈才折叠）。默认值唯一来源是 schema
- * 的 default 关键字；消费方假定 runtimeConfig 已被上游 parse（composeConfigSchema + useDefaults）。
+ * loop mid-loop 折叠参数（用量超阈时把较早的 loop actions 折叠为一条回顾、保留近期 keepRecent）。
+ * 与 conv 的 history 层压缩解耦：两层 threshold/windowSize 独立可调；fold 原语在 libs/compaction。
+ * 与 WorkingMemory 同居 domain/model 是为避免域→应用反向依赖（type-only import 无副作用，注册由 module 完成）。
+ * 无 enabled 硬开关——是否压缩由 threshold 兜底判定。默认值唯一来源是 schema 的 default 关键字。
  */
 export const LOOP_FRAGMENT = defineConfigFragment({
   key: 'loop',

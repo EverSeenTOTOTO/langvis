@@ -49,7 +49,6 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
     };
 
     const result = await this.db.dataSource.transaction(async manager => {
-      // Create document
       const doc = manager.create(DocumentEntity, {
         title: document.title,
         summary: document.summary,
@@ -64,7 +63,6 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
 
       this.logger.info(`Created document: ${doc.id}`);
 
-      // Create chunks
       const chunkEntities = chunks.map(chunk =>
         manager.create(DocumentChunkEntity, {
           documentId: doc.id,

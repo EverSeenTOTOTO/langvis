@@ -12,10 +12,6 @@ import { inject, singleton } from 'tsyringe';
 export class ConversationRepository implements ConversationRepositoryPort {
   constructor(@inject(DatabaseService) private readonly db: DatabaseService) {}
 
-  // ════════════════════════════════════════
-  // Conversation CRUD
-  // ════════════════════════════════════════
-
   async create(
     name: string,
     userId: string,
@@ -103,10 +99,6 @@ export class ConversationRepository implements ConversationRepositoryPort {
     const result = await conversationRepository.delete({ id, userId });
     return result.affected ? result.affected > 0 : false;
   }
-
-  // ════════════════════════════════════════
-  // Conversation Group CRUD
-  // ════════════════════════════════════════
 
   async createGroup(name: string, userId: string) {
     const groupRepository = this.db.getRepository(ConversationGroupEntity);

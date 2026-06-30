@@ -160,7 +160,6 @@ export default class WebFetchTool extends Tool<WebFetchOutput> {
     const proxy = process.env.WEB_FETCH_PROXY;
     const renderMode = render as RenderMode;
 
-    // Direct browser mode: skip fetch entirely
     if (renderMode === 'browser') {
       const html = await this.fetchWithPlaywright(url, timeout, ctx.signal);
       const { article, markdown } = this.extractContent(html, url);

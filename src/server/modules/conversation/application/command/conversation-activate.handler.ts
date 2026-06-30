@@ -42,8 +42,7 @@ export class ConversationActivateHandler {
       systemPrompt,
     });
 
-    // 激活会话记忆（ConversationSession 成员）：一次性灌入当前消息 + 配置（含刚烘焙的 system/context）。
-    // 后续 turn 经会话成员按 conversationId 操作，不再回调 conv 取历史。
+    // 激活会话记忆：一次性灌入当前消息 + 配置；后续 turn 经会话成员按 conversationId 操作，不再回调 conv。
     const [messages, config] = await Promise.all([
       this.chatService.getConversationMessages(conversationId),
       this.chatService.resolveConversationConfig(conversationId),

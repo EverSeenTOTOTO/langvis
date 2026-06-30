@@ -30,10 +30,8 @@ export class AgentService {
   ) {}
 
   /**
-   * 聚合所有 ConfigFragment（按 key 平铺）为对话配置 schema——前端配置弹窗据此渲染，conv 侧
-   * resolveConversationConfig 亦据此 parse runtimeConfig。各域自描述其片段，本服务不认识任何域
-   * 细节——纯组合器（composeConfigSchema）。懒构建：首次调用时 fragments 已在各域 .module 装配
-   * 阶段注册完毕。
+   * 聚合所有 ConfigFragment（按 key 平铺）为对话配置 schema——纯组合器，不认识任何域细节。
+   * 前端配置弹窗据此渲染，conv 侧 resolveConversationConfig 据此 parse runtimeConfig。
    */
   getConfigSchema(): JSONSchemaType<Record<string, unknown>> {
     if (!this.cachedSchema) {
@@ -44,19 +42,13 @@ export class AgentService {
     return this.cachedSchema;
   }
 
-  /**
-   * 全局唯一 agent 的 system prompt——内容固定，构建一次后 memoize。
-   * 首次调用会触发 ToolService/SkillService 注册（动态 import）。
-   */
+  /** 全局唯一 agent 的 system prompt——内容固定，构建一次后 memoize。首次调用触发动态 import 注册。 */
   getSystemPrompt(): Promise<string> {
     if (!this.cachedPrompt) this.cachedPrompt = this.doBuildPrompt();
     return this.cachedPrompt;
   }
 
-  /**
-   * 校验 userConfig 并产出 RuntimeConfigVO（AgentRun 的不可变配置快照）。
-   * 校验失败抛 ConfigValidationError。
-   */
+  /** 校验 userConfig 并产出 RuntimeConfigVO（不可变配置快照）；失败抛 ConfigValidationError。 */
   createRunConfig(
     userConfig: Record<string, unknown>,
     systemPrompt: string,
@@ -102,7 +94,6 @@ export class AgentService {
     return prompt.build();
   }
 
-  /** ReAct 基础 prompt 模板（原 react.prompt.ts 的 createPrompt）。 */
   private buildBasePrompt(parent: Prompt, tools: Tool[]): Prompt {
     return parent
       .with(

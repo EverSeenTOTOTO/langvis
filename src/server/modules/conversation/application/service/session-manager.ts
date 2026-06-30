@@ -15,12 +15,8 @@ import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
 
 /**
- * SessionManager —— 会话 registry（@singleton）。以 conversationId 索引 ConversationSession，
- * 维护跨会话的 runId 反查（runIndex）与孤儿 run 对账（依赖 ChatService）。
- *
- * 原先把 per-conversation 状态摊在 connections / activeRuns 平行 Map 里、每个方法首参 conversationId——
- * 现收敛为 ConversationSession 实体（connection + activeRuns + memory 成员）。本类的公开方法是 thin delegators，
- * 调用方（handlers / controllers）不变。
+ * 会话 registry（@singleton）：以 conversationId 索引 ConversationSession，维护跨会话的 runId
+ * 反查（runIndex）与孤儿 run 对账（依赖 ChatService）。公开方法是 thin delegators，调用方不变。
  */
 @singleton()
 export class SessionManager {
@@ -52,10 +48,6 @@ export class SessionManager {
     return session;
   }
 
-  // ════════════════════════════════════════
-  // Session 生命周期
-  // ════════════════════════════════════════
-
   disposeChat(conversationId: string): void {
     const session = this.sessions.get(conversationId);
     if (session) {
@@ -79,10 +71,8 @@ export class SessionManager {
 
   /**
    * 初始化会话：attachTransport + 孤儿 run 对账 + Redis 登记。
-   *
-   * 对账刻意放在 attachTransport 之后——这样标记终态的同一时刻能把帧推给客户端
-   * 驱动其收敛。服务重启后 activeRuns（内存）已丢失，snapshot replay 与 cancel
-   * 都无法让客户端的 running 节点终止；若对账早于 attach，客户端会永久卡在 loading。
+   * 对账刻意放在 attach 之后——服务重启后内存 activeRuns 已丢，snapshot replay 与 cancel 都无法让客户端的
+   * running 节点终止；attach 先行可让标记终态的同一时刻把帧推给客户端驱动其收敛。
    */
   async initSession(
     conversationId: string,
@@ -115,17 +105,9 @@ export class SessionManager {
     return this.sessions.get(conversationId)?.hasConnection ?? false;
   }
 
-  // ════════════════════════════════════════
-  // SSE / Transport
-  // ════════════════════════════════════════
-
   sendFrame(conversationId: string, frame: SSEFrame): boolean {
     return this.sessions.get(conversationId)?.sendFrame(frame) ?? false;
   }
-
-  // ════════════════════════════════════════
-  // Run 管理（会话簿记——agent 经事件驱动，会话自行维护）
-  // ════════════════════════════════════════
 
   /** RunStarted：登记活跃 run（创建事件缓冲）。须在首条 RunEvent 前同步完成。 */
   registerRun(conversationId: string, messageId: string, runId: string): void {
@@ -211,11 +193,7 @@ export class SessionManager {
     await this.reconcileOrphanedRuns(conversationId, 'cancelled', reason);
   }
 
-  // ════════════════════════════════════════
-  // 会话记忆（ConversationMemory 成员）
-  // ════════════════════════════════════════
-
-  /** 会话激活：一次性灌入消息 + 配置，构造 ConversationMemory 投影。 */
+  /** 会话激活：灌入消息 + 配置构造 ConversationMemory 投影。 */
   activateMemory(
     conversationId: string,
     messages: Message[],
@@ -232,19 +210,10 @@ export class SessionManager {
     return session.getMemory();
   }
 
-  // ════════════════════════════════════════
-  // Redis session state
-  // ════════════════════════════════════════
-
-  // ── 内部 ──
-
   /**
    * 孤儿 run 对账：扫描 status 仍为 initialized/running、但本进程 activeRuns 里
    * 已无对应记录的 run（典型成因：服务重启致内存 activeRuns 丢失），统一驱动到终态。
-   *
-   * 不再依赖 Redis session key 的存在性——重启后即便 key 已过期（>1h 才重连），
-   * 只要 DB 里仍是非终态且无活跃 run，就视为孤儿。须在 transport attach 后调用，
-   * 这样标记终态的同一时刻能把帧推给客户端驱动其收敛。
+   * 不依赖 Redis session key 的存在性——重启后即便 key 已过期（>1h 才重连），只要 DB 里仍是非终态且无活跃 run，就视为孤儿。
    */
   private async reconcileOrphanedRuns(
     conversationId: string,

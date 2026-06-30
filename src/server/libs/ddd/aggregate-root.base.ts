@@ -2,27 +2,10 @@ import type { DomainEvent } from './domain-event.base';
 import { Entity } from './entity.base';
 
 /**
- * AggregateRoot — 聚合根基类。
+ * AggregateRoot — 聚合根基类（参考 domain-driven-hexagon）。
  *
- * 参考 domain-driven-hexagon：聚合根收集领域事件（addEvent），
- * 应用服务/Repository 在持久化后读取并发布（domainEvents → clearEvents）。
- *
- * 用法：
- * ```typescript
- * class MyAggregate extends AggregateRoot<string> {
- *   doSomething() {
- *     // ... 业务逻辑
- *     this.addEvent(createDomainEvent('something_done', this.id, { detail }));
- *   }
- * }
- *
- * // 在应用服务中：
- * await repository.save(aggregate);
- * for (const event of aggregate.domainEvents) {
- *   eventBus.publish(event);
- * }
- * aggregate.clearEvents();
- * ```
+ * 聚合根内部通过 addEvent 收集领域事件，应用服务/Repository 在持久化后读取并发布
+ * （domainEvents → clearEvents），由此控制发布时机、保证事件只在持久化成功后落地。
  */
 export abstract class AggregateRoot<TId> extends Entity<TId> {
   private _domainEvents: DomainEvent[] = [];
@@ -31,17 +14,14 @@ export abstract class AggregateRoot<TId> extends Entity<TId> {
     super(id);
   }
 
-  /** 当前收集的领域事件（只读） */
   get domainEvents(): readonly DomainEvent[] {
     return this._domainEvents;
   }
 
-  /** 收集领域事件。由聚合根内部方法调用。 */
   protected addEvent(event: DomainEvent): void {
     this._domainEvents.push(event);
   }
 
-  /** 清空已收集的事件。由应用服务在发布后调用。 */
   clearEvents(): void {
     this._domainEvents = [];
   }

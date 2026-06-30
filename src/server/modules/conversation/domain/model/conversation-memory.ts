@@ -15,7 +15,7 @@ export interface ConversationMemoryConfig {
   runtimeConfig: Record<string, unknown>;
 }
 
-/** 历史压缩（fold）产物：新 C 载荷 + 压缩后用量。conv 落盘 C 后 append 回 ConversationMemory。 */
+/** 历史压缩（fold）产物：新 C 载荷 + 压缩后用量。 */
 export interface ConversationCompactionResult {
   content: string;
   startRef: string;
@@ -23,20 +23,11 @@ export interface ConversationCompactionResult {
 }
 
 /**
- * ConversationMemory —— 会话的持久消息模型（ConversationSession 的成员实体）。
- *
- * 持有整个会话的消息（群聊即所有参与人的消息），由 ConversationSession 在会话激活时播种；
- * turn 追加消息时增量 append。提供「有效历史」视图与用量：
- *  - 有效历史 = [最新压缩摘要 C, 其后 turn]（无 C 时为全部）；每条 assistant 消息前置其
- *    meta.processSummary（loop-exit 折叠产物，用户不可见、LLM 可见）。不做硬截断。
- *  - 用量与 buildContext 同口径（都是有效历史）。
- *
- * 自维护历史压缩（compact）：有效历史用量超阈时把「上一个 C + tail」滚动折叠成新 C，返回载荷
- * （不含持久化——落盘 compact 消息是 CompleteTurnHandler 的职责，避免反向依赖 message repo）。
- * fold 原语来自 libs/compaction（与 agent 的 WorkingMemory 同机制）。对应 agent 的
- * WorkingMemory——两者皆自持压缩、瞬态、纯数据 + 一个 fold 方法。压缩配置直取
- * runtimeConfig.history（HistoryCompactionConfig，上游 resolveConversationConfig 已 parse 回填默认），
- * llm 由 handler 按调用传入（构造期保持纯、无需把 LLM_PORT 贯穿会话层）。
+ * 会话的持久消息模型（ConversationSession 成员实体）。
+ * 有效历史 = [最新压缩摘要 C, 其后 turn]；每条 assistant 消息前置其 meta.processSummary
+ * （loop-exit 折叠产物，用户不可见、LLM 可见）；不做硬截断。用量与 buildContext 同口径。
+ * 自维护历史压缩（fold 原语来自 libs/compaction，与 agent 的 WorkingMemory 同机制），
+ * 返回载荷不含持久化——落盘 compact 消息是 CompleteTurnHandler 的职责，避免反向依赖 message repo。
  */
 export class ConversationMemory {
   protected readonly history: Message[];
@@ -61,12 +52,10 @@ export class ConversationMemory {
     ).history;
   }
 
-  /** 增量追加一条消息（turn 的 user/assistant/compact 落盘后由 conv 经会话成员调用）。 */
   append(message: Message): void {
     this.history.push(message);
   }
 
-  /** 原始消息（调试 / 投影用）。 */
   getMessages(): Message[] {
     return this.history;
   }
@@ -74,7 +63,7 @@ export class ConversationMemory {
   async buildContext(): Promise<LlmMessage[]> {
     const messages: LlmMessage[] = [];
 
-    // 脚手架：system + 会话上下文（meta.kind === 'context'），始终发出。
+    // system + 会话上下文（meta.kind === 'context'），始终发出。
     for (const msg of this.history) {
       if (msg.role === Role.SYSTEM) {
         messages.push({ role: 'system', content: msg.content });
@@ -86,13 +75,12 @@ export class ConversationMemory {
       }
     }
 
-    // 最新压缩摘要 C（若有）作为有效历史前缀，替代被它总结的早期 turn。
+    // C 作为有效历史前缀，替代被它总结的早期 turn。
     const { summary, tail } = this.getEffectiveTurns();
     if (summary) {
       messages.push({ role: 'user', content: summary.content });
     }
 
-    // C 之后的 turn（无 C 时为全部 turn）。
     for (const turn of this.groupIntoTurns(tail)) {
       for (const msg of turn) {
         let content = msg.content;
@@ -121,9 +109,8 @@ export class ConversationMemory {
   }
 
   /**
-   * 历史层压缩（fold）：有效历史用量超阈时把「上一个摘要 C + tail」滚动折叠成新 C，返回载荷。
-   * 不含持久化（compact 消息落盘是 CompleteTurnHandler 的职责）。未配 modelId / tail 为空 /
-   * 未超阈 / fold 返回空时返回 null。对应 agent 的 WorkingMemory.compact。
+   * 历史层压缩（fold）：有效历史用量超阈时把「上一个 C + tail」滚动折叠成新 C。
+   * 不含持久化（落盘是 CompleteTurnHandler 的职责）；未超阈或 fold 返回空时返回 null。
    */
   async compact(params: {
     llm: LlmPort;
@@ -157,7 +144,7 @@ export class ConversationMemory {
 
     if (!content) return null;
 
-    // 压缩后有效历史 = [新 C]；其用量即会话层用量，供 handler 直接回报。
+    // 压缩后有效历史 = [新 C]；其用量即会话层用量。
     return {
       content,
       startRef: summary?.id ?? this.history[0]?.id ?? '',
@@ -168,10 +155,7 @@ export class ConversationMemory {
     };
   }
 
-  /**
-   * 有效历史 = 最新压缩摘要 C + 其后的 turn（无 C 时为全部消息）。
-   * 被 buildContext 与 getContextUsage 共用，保证"用量"与"实际发给 LLM 的内容"口径一致。
-   */
+  /** 有效历史 = 最新 C + 其后 turn；buildContext 与 getContextUsage 共用，保证口径一致。 */
   protected getEffectiveTurns(): { summary: Message | null; tail: Message[] } {
     const { summary, index } = findLatestCompactionSummary(this.history);
     const tail = summary ? this.history.slice(index + 1) : this.history;

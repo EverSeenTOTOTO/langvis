@@ -5,13 +5,9 @@ function formatMessages(messages: LlmMessage[]): string {
 }
 
 /**
- * Summarizer 的 prompt 构造（who / when / do what / 关键事实）。
- *
- * 两种形态：
- * - prevSummary 非空：把"既有摘要 + 新增消息"融合为更新后的摘要（滚动折叠的增量步）。
- * - prevSummary 为空：对首块消息做初始摘要。
- *
- * 抽成独立文件便于后续替换模板而不动 fold 主流程。
+ * Summarizer 的 prompt 构造（保留 who / when / do what / 关键事实）。
+ * prevSummary 非空即滚动折叠的增量步（既有摘要 + 新增消息 → 更新摘要），为空则做首块初始摘要。
+ * 独立文件便于替换模板而不动 fold 主流程。
  */
 export function buildSummarizerPrompt(
   prevSummary: string | null,

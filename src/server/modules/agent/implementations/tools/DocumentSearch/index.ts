@@ -27,7 +27,6 @@ export default class DocumentSearchTool extends Tool<DocumentSearchOutput> {
     const data = ctx.input as unknown as DocumentSearchInput;
     const { query, limit = 10, threshold } = data;
 
-    // 1. Generate embedding for query
     yield {
       type: 'tool_progress',
       callId: ctx.callId,
@@ -47,7 +46,6 @@ export default class DocumentSearchTool extends Tool<DocumentSearchOutput> {
 
     const queryVector = embedResult.chunks[0].embedding;
 
-    // 2. Vector similarity search using pgvector
     const vectorStr = `[${queryVector.join(',')}]`;
 
     yield {
@@ -76,7 +74,6 @@ export default class DocumentSearchTool extends Tool<DocumentSearchOutput> {
 
     const rows = await this.db.dataSource.query(rawQuery, [vectorStr, limit]);
 
-    // 3. Calculate similarity and filter by threshold
     const results = rows
       .map((row: any) => ({
         chunkId: row.chunkId,
