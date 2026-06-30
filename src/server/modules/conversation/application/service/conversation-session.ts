@@ -80,6 +80,17 @@ export class ConversationSession {
       );
     }
 
+    // 会话用量基线：连接就绪后下发当前 conversation_usage（memory 已在 activate 先行灌入）。
+    // 未激活则跳过——complete-turn 会在首个 turn 后补发。
+    if (this.memory) {
+      const { used, total } = this.memory.getContextUsage();
+      this.connection.send({
+        type: 'conversation_usage',
+        used,
+        total,
+      } as SSEFrame);
+    }
+
     logger.info(`Transport attached`, { chatId: this.conversationId });
   }
 
