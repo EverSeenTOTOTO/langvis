@@ -29,7 +29,6 @@ export class ConversationSession {
   private connection: Connection | undefined;
   private readonly activeRuns = new Map<string, ActiveRun>();
   private memory: ConversationMemory | undefined;
-  private memoryConfig: ConversationMemoryConfig | undefined;
 
   constructor(
     readonly conversationId: string,
@@ -155,8 +154,8 @@ export class ConversationSession {
       history: messages,
       contextSize: config.contextSize,
       modelId: config.modelId,
+      runtimeConfig: config.runtimeConfig,
     });
-    this.memoryConfig = config;
   }
 
   hasMemory(): boolean {
@@ -172,20 +171,10 @@ export class ConversationSession {
     return this.memory;
   }
 
-  getMemoryConfig(): ConversationMemoryConfig {
-    if (!this.memoryConfig) {
-      throw new Error(
-        `ConversationMemory: ${this.conversationId} not activated (activateMemory missing)`,
-      );
-    }
-    return this.memoryConfig;
-  }
-
   dispose(): void {
     this.connection?.dispose();
     this.connection = undefined;
     this.activeRuns.clear();
     this.memory = undefined;
-    this.memoryConfig = undefined;
   }
 }

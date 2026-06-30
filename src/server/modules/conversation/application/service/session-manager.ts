@@ -232,14 +232,6 @@ export class SessionManager {
     return session.getMemory();
   }
 
-  getMemoryConfig(conversationId: string): ConversationMemoryConfig {
-    const session = this.sessions.get(conversationId);
-    if (!session?.hasMemory()) {
-      throw new Error(`ConversationMemory: ${conversationId} not activated`);
-    }
-    return session.getMemoryConfig();
-  }
-
   // ════════════════════════════════════════
   // Redis session state
   // ════════════════════════════════════════

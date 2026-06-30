@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import '@/server/modules/conversation/application/service/history-config.fragment';
 import { ConversationSession } from '@/server/modules/conversation/application/service/conversation-session';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
@@ -43,16 +44,9 @@ describe('ConversationSession —— 会话记忆成员（ConversationMemory 宿
     expect(ctx.some(m => m.content === 'q2')).toBe(true);
   });
 
-  it('getMemoryConfig 返回激活时灌入的配置', () => {
-    const s = makeSession();
-    s.activateMemory([msg(Role.SYSTEM, 'sys')], CONFIG);
-    expect(s.getMemoryConfig()).toEqual(CONFIG);
-  });
-
   it('未 activateMemory 时 getMemory 抛错（fail loud）', () => {
     const s = makeSession();
     expect(() => s.getMemory()).toThrow();
-    expect(() => s.getMemoryConfig()).toThrow();
   });
 
   it('dispose 后 getMemory 抛错（记忆随会话释放）', () => {
