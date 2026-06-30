@@ -4,7 +4,6 @@ import { ConversationActivateHandler } from '@/server/modules/conversation/appli
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
-import type { EventBus } from '@/server/libs/ddd';
 import { ConversationActivateCommand } from '@/server/modules/conversation/contracts';
 import {
   ConversationForbiddenError,
@@ -24,7 +23,6 @@ const stubChatService = {
   getConversationMessages: vi.fn().mockResolvedValue([]),
   resolveConversationConfig: vi.fn().mockResolvedValue(null),
 };
-const stubEventBus = { dispatch: vi.fn() };
 const stubAgentService = {
   getSystemPrompt: vi.fn(() => Promise.resolve('')),
 };
@@ -36,7 +34,6 @@ function makeHandler(conv: any) {
   return new ConversationActivateHandler(
     stubChatService as unknown as ChatService,
     makeConvRepo(conv),
-    stubEventBus as unknown as EventBus,
     stubAgentService as any,
     stubSessionManager,
   );

@@ -64,7 +64,6 @@ export class GetSessionStateQuery extends Query {
 import type { LlmMessage, Message } from '@/shared/types/entities';
 import type { EnrichedEvent } from '@/shared/types/events';
 
-export const ConversationActivated = 'conversation_activated';
 export const TurnInitiated = 'turn_initiated';
 /** agent→conv：run 开始（conv 据此 registerRun + persistAgentRunId）。 */
 export const RunStarted = 'run_started';
@@ -73,10 +72,6 @@ export const RunEvent = 'run_event';
 /** conv→agent：请求取消某 run（agent 据此 executor.cancel，取消事件经 RunEvent 回流）。 */
 export const CancelRun = 'cancel_run';
 export const RunCompleted = 'run_completed';
-
-export interface ConversationActivatedPayload {
-  conversationId: string;
-}
 
 export interface TurnInitiatedPayload {
   conversationId: string;

@@ -1,15 +1,11 @@
 import { inject } from 'tsyringe';
 import { commandHandler } from '@/server/decorator/handler';
-import { EventBus, createDomainEvent } from '@/server/libs/ddd';
 import { ChatService } from '../service/chat.service';
 import { SessionManager } from '../service/session-manager';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { CONVERSATION_REPOSITORY } from '../../conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
-import {
-  ConversationActivateCommand,
-  ConversationActivated,
-} from '../../contracts';
+import { ConversationActivateCommand } from '../../contracts';
 import {
   ConversationForbiddenError,
   ConversationNotFoundError,
@@ -22,8 +18,6 @@ export class ConversationActivateHandler {
     private chatService: ChatService,
     @inject(CONVERSATION_REPOSITORY)
     private convRepo: ConversationRepositoryPort,
-    @inject(EventBus)
-    private eventBus: EventBus,
     @inject(AgentService)
     private readonly agentService: AgentService,
     @inject(SessionManager)
@@ -57,12 +51,5 @@ export class ConversationActivateHandler {
     if (config) {
       this.sessionManager.activateMemory(conversationId, messages, config);
     }
-
-    this.eventBus.dispatch(
-      ConversationActivated,
-      createDomainEvent(ConversationActivated, conversationId, {
-        conversationId,
-      }),
-    );
   }
 }
