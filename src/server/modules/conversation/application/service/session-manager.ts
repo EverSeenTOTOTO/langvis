@@ -15,18 +15,13 @@ import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
 
 /**
- * 会话 registry（@singleton）：以 conversationId 索引 ConversationSession，维护跨会话的 runId
- * 反查（runIndex）与孤儿 run 对账（依赖 ChatService）。公开方法是 thin delegators，调用方不变。
+ * 会话 registry（@singleton）：以 conversationId 索引 ConversationSession，维护孤儿 run 对账（依赖 ChatService）。
+ * 公开方法是 thin delegators，调用方不变。
  */
 @singleton()
 export class SessionManager {
   private readonly logger = Logger.child({ source: 'SessionManager' });
   private readonly sessions = new Map<string, ConversationSession>();
-  /** runId → {conversationId, messageId} 反查：loop 用量事件（仅 runId）据此路由到会话。 */
-  private readonly runIndex = new Map<
-    string,
-    { conversationId: string; messageId: string }
-  >();
 
   constructor(
     @inject(RedisService)
@@ -52,9 +47,7 @@ export class SessionManager {
     const session = this.sessions.get(conversationId);
     if (session) {
       this.sessions.delete(conversationId);
-      const runIds = session.runIds();
       session.dispose(); // 连接 idle 自释放路径下 connection 已 undefined，此处 no-op
-      for (const runId of runIds) this.runIndex.delete(runId);
     }
     this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
     this.logger.info(`Chat disposed`, { chatId: conversationId });
@@ -65,7 +58,6 @@ export class SessionManager {
       session.dispose();
     }
     this.sessions.clear();
-    this.runIndex.clear();
     this.logger.info(`Closed all SSE connections`);
   }
 
@@ -112,14 +104,6 @@ export class SessionManager {
   /** RunStarted：登记活跃 run（创建事件缓冲）。须在首条 RunEvent 前同步完成。 */
   registerRun(conversationId: string, messageId: string, runId: string): void {
     this.getOrCreate(conversationId).registerRun(messageId, runId);
-    this.runIndex.set(runId, { conversationId, messageId });
-  }
-
-  /** runId → {conversationId, messageId} 反查（loop 用量事件按 runId 路由用）。 */
-  findByRunId(
-    runId: string,
-  ): { conversationId: string; messageId: string } | null {
-    return this.runIndex.get(runId) ?? null;
   }
 
   /** 取某活跃 run 的累积事件流（CompleteTurn 投影用）。 */
@@ -145,8 +129,7 @@ export class SessionManager {
   finalizeRun(conversationId: string, messageId: string): void {
     const session = this.sessions.get(conversationId);
     if (!session) return;
-    const runId = session.removeRun(messageId);
-    if (runId) this.runIndex.delete(runId);
+    session.removeRun(messageId);
     if (session.hasNoRuns) {
       if (session.hasConnection) {
         session.markIdle();

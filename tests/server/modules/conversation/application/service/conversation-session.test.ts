@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ConversationSession } from '@/server/modules/conversation/application/service/conversation-session';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
+import type { EnrichedEvent } from '@/shared/types/events';
 
 function msg(
   role: Role,
@@ -53,5 +54,41 @@ describe('ConversationSession —— 会话记忆成员（ConversationMemory 宿
     s.activateMemory([msg(Role.SYSTEM, 'sys')], CONFIG);
     s.dispose();
     expect(() => s.getMemory()).toThrow();
+  });
+});
+
+describe('ConversationSession —— handleRunEvent loop_usage 翻译', () => {
+  it('loop_usage 翻译为控制帧且不缓冲；普通事件缓冲并下发业务帧', () => {
+    const s = makeSession();
+    s.registerRun('m1', 'r1');
+    const sendFrame = vi.spyOn(s, 'sendFrame');
+
+    const usage = {
+      type: 'loop_usage',
+      used: 5,
+      total: 4096,
+      runId: 'r1',
+      seq: 3,
+      at: 0,
+    } as EnrichedEvent;
+    s.handleRunEvent('m1', usage);
+    expect(sendFrame).toHaveBeenCalledWith({
+      type: 'loop_usage',
+      runId: 'r1',
+      used: 5,
+      total: 4096,
+    });
+    expect(s.getRunEvents('m1')).toEqual([]);
+
+    const thought = {
+      type: 'thought',
+      content: 'hi',
+      runId: 'r1',
+      seq: 4,
+      at: 0,
+    } as EnrichedEvent;
+    s.handleRunEvent('m1', thought);
+    expect(sendFrame).toHaveBeenCalledWith({ ...thought, messageId: 'm1' });
+    expect(s.getRunEvents('m1')?.map(e => e.type)).toEqual(['thought']);
   });
 });

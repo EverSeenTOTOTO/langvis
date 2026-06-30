@@ -12,7 +12,6 @@ import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { generateId } from '@/shared/utils';
 import { ToolIds } from '@/shared/constants';
 import type { LlmMessage } from '@/shared/types/entities';
-import { EventBus } from '@/server/libs/ddd';
 import { WorkingMemory } from '@/server/modules/agent/domain/model/working-memory';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { ToolService } from './tool.service';
@@ -40,7 +39,6 @@ export class AgentRunExecutor {
     @inject(ProviderService) private readonly providerService: ProviderService,
     @inject(ToolService) private readonly toolService: ToolService,
     @inject(AgentService) private readonly agentService: AgentService,
-    @inject(EventBus) private readonly eventBus: EventBus,
   ) {}
 
   createRun(params: {
@@ -88,7 +86,6 @@ export class AgentRunExecutor {
       llm: this.llm,
       cache: this.cache,
       workingMemory,
-      eventBus: this.eventBus,
       executeTool: (toolName, args) =>
         this.executeTool(toolName, args, {
           signal: run.signal,
