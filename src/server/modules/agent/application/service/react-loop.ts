@@ -18,14 +18,10 @@ type ReActAction = {
 };
 
 /**
- * runReactLoop —— 内联的 ReAct 推理-行动-观察循环（原 ReActAgent.call 的体）。
- *
- * loop 持有 per-run 的 WorkingMemory（ctx.workingMemory，瞬态成员）：每轮迭代开头按需压缩
- * （compact）后取上下文（buildContext），结束后记录本次结果（append）。response_user 退出时
- * 折叠过程摘要（foldProcessSummary）。压缩/折叠都是 WorkingMemory 自己的事情——本函数只做编排：
- * 调 LLM → 解析 → 执行工具 → 观察回填。loop 用量在每次 append 与压缩后自发——经 ctx.eventBus
- * 发 LoopUsageReported（仅 runId）。事件（thought / process_summary）由此 yield，由
- * AgentRunExecutor 统一 append + 富化。loop 不持任何 memory 模型，不知 conversation。
+ * runReactLoop —— 内联的 ReAct 循环（原 ReActAgent.call 的体）。
+ * 编排：调 LLM → 解析 → 执行工具 → 观察回填。压缩/折叠都归 WorkingMemory（ctx.workingMemory，瞬态成员）。
+ * loop 用量在每次 append 与压缩后自发——经 ctx.eventBus 发 LoopUsageReported（仅 runId，loop 不知 conversation）。
+ * 事件（thought / process_summary）由此 yield，由 AgentRunExecutor 统一 append + 富化。
  */
 export async function* runReactLoop(
   ctx: AgentRunContext,
@@ -33,7 +29,7 @@ export async function* runReactLoop(
   const model =
     (ctx.config.runtimeConfig as { model?: ModelConfig }).model ?? {};
 
-  /** 自发 loop 用量（append/compact 后）。仅 runId——conversation 反查由 conv 侧负责。 */
+  /** 自发 loop 用量（仅 runId——conversation 反查由 conv 侧负责）。 */
   const reportUsage = () => {
     const { used, total } = ctx.workingMemory.getContextUsage();
     ctx.eventBus.dispatch(

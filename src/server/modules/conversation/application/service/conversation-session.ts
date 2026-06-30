@@ -18,12 +18,9 @@ export interface ActiveRun {
 const logger = Logger.child({ source: 'ConversationSession' });
 
 /**
- * ConversationSession —— 单个活跃会话的运行时态（瞬态、进程内，SessionManager 以 conversationId 索引）。
- *
- * 持有该会话的：传输层连接（Connection，多标签 SSE + idle timer）、活跃 run 簿记（activeRuns）、
- * 会话记忆（ConversationMemory——有效历史投影 + 用量）。对应 agent 侧的 AgentRunContext——per-scope
- * 运行时对象，非持久聚合。conversationId 是隐式 this，故本类方法不再带 conversationId 形参。
- * SessionManager 退化为 registry，经 conversationId 解析本对象后委托。
+ * 单个活跃会话的运行时态（瞬态、进程内）。持有传输层连接（多标签 SSE + idle timer）、
+ * 活跃 run 簿记（activeRuns）、会话记忆（ConversationMemory）。对应 agent 侧的 AgentRunContext——
+ * per-scope 运行时对象，非持久聚合。conversationId 是隐式 this，方法不带 conversationId 形参。
  */
 export class ConversationSession {
   private connection: Connection | undefined;
@@ -41,12 +38,9 @@ export class ConversationSession {
     return this.connection !== undefined;
   }
 
-  // ── 传输 ──
-
   /**
-   * attach 传输（多标签可重复 attach 同一会话）。首次 attach 建 Connection；
-   * 连接 idle 自释放时经 onConnectionLost 回调 registry.disposeChat。
-   * attach 后对本进程缓冲的活跃 run 补发 state_snapshot（重连同一进程的活跃 run）。
+   * attach 传输（多标签可重复 attach）。首次 attach 建 Connection；
+   * attach 后对缓冲的活跃 run 补发 state_snapshot（重连同一进程的活跃 run）。
    */
   attachTransport(transport: Transport<SSEFrame>): void {
     if (!this.connection) {
@@ -101,8 +95,6 @@ export class ConversationSession {
     this.connection?.markIdle();
   }
 
-  // ── run 簿记 ──
-
   registerRun(messageId: string, runId: string): void {
     this.activeRuns.set(messageId, { runId, events: [] });
   }
@@ -146,9 +138,7 @@ export class ConversationSession {
     return run.runId;
   }
 
-  // ── 会话记忆（ConversationMemory 成员）──
-
-  /** 激活：一次性灌入当前消息 + 配置，构造会话记忆投影。 */
+  /** 激活：灌入当前消息 + 配置构造会话记忆投影。 */
   activateMemory(messages: Message[], config: ConversationMemoryConfig): void {
     this.memory = new ConversationMemory({
       history: messages,

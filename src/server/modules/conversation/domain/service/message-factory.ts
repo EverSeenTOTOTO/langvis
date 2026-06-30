@@ -2,10 +2,7 @@ import type { Message, MessageAttachment } from '@/shared/types/entities';
 import { Role } from '@/shared/types/entities';
 import { generateId } from '@/shared/utils';
 
-/**
- * MessageFactory — 纯消息构建（无 repo 依赖）。
- */
-
+/** 纯消息构建（无 repo 依赖）。 */
 export function createActivationMessages(params: {
   conversationId: string;
   userId: string;

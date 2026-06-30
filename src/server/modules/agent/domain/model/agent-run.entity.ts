@@ -22,11 +22,10 @@ export class AgentRun extends AggregateRoot<string> {
   get isTerminated(): boolean {
     return this.#terminated;
   }
-  /** 唯一暴露事件流的方式 —— 给投影/持久化用 */
   get eventStream(): readonly EnrichedEvent[] {
     return this.events;
   }
-  /** 取消句柄 —— agent/tool 经 AgentRunContext.signal 读取 */
+  /** 取消句柄——agent/tool 经 AgentRunContext.signal 读取 */
   get signal(): AbortSignal {
     return this.abortController.signal;
   }
@@ -37,9 +36,8 @@ export class AgentRun extends AggregateRoot<string> {
   }
 
   /**
-   * 记录 agent yield 的事实 —— 唯一带终止守卫的入口。
-   * 注入 seq/at 元数据后追加，返回富化事件供传输层推送。
-   * 已终止则返回 null（静默丢弃，不抛异常以兼容外部 cancel 与执行循环的竞态）。
+   * 唯一带终止守卫的入口。已终止则返回 null——静默丢弃而非抛异常，以兼容外部 cancel
+   * 与执行循环的竞态。
    */
   append(event: RunEvent): EnrichedEvent | null {
     if (this.#terminated) return null;

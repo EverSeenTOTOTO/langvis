@@ -12,10 +12,7 @@ export class EventBus extends EventEmitter {
     this.setMaxListeners(50);
   }
 
-  /**
-   * Dispatch a domain event with logging.
-   * Replaces raw emit(eventType, domainEvent) calls.
-   */
+  /** 统一领域事件分发入口（带日志），取代裸 emit(eventType, event)。 */
   dispatch(eventType: string, event: DomainEvent): void {
     busLog.info(`Event ${eventType}`, {
       aggregateId: event.aggregateId,

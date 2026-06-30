@@ -54,7 +54,6 @@ export default class DocumentMetadataExtractTool extends Tool<DocumentMetadataEx
     const data = ctx.input as unknown as DocumentMetadataExtractInput;
     const { content, sourceUrl, sourceType } = data;
 
-    // Truncate content if too long (keep first 8000 chars)
     const truncatedContent =
       content.length > 8000 ? content.slice(0, 8000) : content;
 
@@ -110,7 +109,6 @@ ${wrapUntrusted(truncatedContent)}`;
       );
     }
 
-    // Validate and provide defaults
     const output: DocumentMetadataExtractOutput = {
       title: parsed.title || 'Untitled',
       summary: parsed.summary?.slice(0, 50) || '',

@@ -2,8 +2,6 @@ import type { Conversation } from '@/shared/types/entities';
 import type { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
 
 export interface ConversationRepositoryPort {
-  // ── Conversation CRUD ──
-
   create(
     name: string,
     userId: string,
@@ -24,8 +22,6 @@ export interface ConversationRepositoryPort {
   ): Promise<Conversation | null>;
 
   delete(id: string, userId: string): Promise<boolean>;
-
-  // ── Conversation Group CRUD ──
 
   createGroup(name: string, userId: string): Promise<ConversationGroupEntity>;
 

@@ -6,11 +6,8 @@ import { Entity } from '@/server/libs/ddd';
 import type { Tool } from './tool.base';
 
 /**
- * ToolCall — 工具执行上下文（聚合内实体）。
- *
- * 封装一次工具调用的完整业务流程：输入解析 → 执行 → 输出压缩 → 格式化。
- * yield 原始 RunEvent（tool_call/tool_progress/tool_result/tool_error），
- * 由 AgentRunExecutor 统一 append + 富化 —— 与 agent 一致，事实与传输分离。
+ * ToolCall — 一次工具调用的完整业务流程（聚合内实体）。
+ * yield 原始 RunEvent，由 AgentRunExecutor 统一 append + 富化——事实与传输分离。
  */
 export interface ToolCallDeps {
   signal: AbortSignal;
@@ -120,7 +117,6 @@ export class ToolCall extends Entity<string> {
     return this.observation;
   }
 
-  /** 业务规则：不可信输出包装 */
   get observation(): string {
     if (this.#status === 'failed') {
       return `Error executing tool "${this.toolName}": ${this.#error}`;

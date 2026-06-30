@@ -30,13 +30,12 @@ export class CompleteTurnHandler {
   async handle(event: DomainEvent<string, RunCompletedPayload>): Promise<void> {
     const { conversationId, messageId } = event.payload;
 
-    // 从会话缓冲的事件流投影最终状态（事实源 → 读模型）。run 持久化由 agent 的 executor 拥有。
+    // 从会话缓冲的事件流投影最终状态（事实源 → 读模型）；run 持久化由 agent 的 executor 拥有。
     const events = this.sessionManager.getRunEvents(conversationId, messageId);
     if (events && events.length > 0) {
       const view = projectRun(events);
 
-      // Conversation BC: Message 存最终文本。
-      // cancelled/failed 时 view.content 可能是空，用终止原因作内容避免空白气泡；completed 用生成文本。
+      // cancelled/failed 时 view.content 可能为空，用终止原因作内容避免空白气泡。
       let content = view.content;
       if (view.status === 'cancelled' || view.status === 'failed') {
         const terminal = [...events]
@@ -46,14 +45,13 @@ export class CompleteTurnHandler {
         else if (terminal?.type === 'error') content = terminal.error;
       }
 
-      // 过程摘要（loop-exit fold 产物）：附到 agent message 的 meta（用户不可见，下轮 LLM 可见）。
+      // 过程摘要（loop-exit fold 产物）与语音回复附到 agent message 的 meta（用户不可见，下轮 LLM 可见）。
       const psEvent = [...events]
         .reverse()
         .find(e => e.type === 'process_summary');
       const processSummary =
         psEvent?.type === 'process_summary' ? psEvent.summary : null;
 
-      // 语音回复（response_user 的 tts 产物）：附到 meta.audio。
       const audioEvent = [...events].reverse().find(e => e.type === 'audio');
       const audio =
         audioEvent?.type === 'audio'
@@ -69,8 +67,8 @@ export class CompleteTurnHandler {
         Object.keys(meta).length > 0 ? { content, meta } : { content },
       );
 
-      // post-turn 记忆维护：把本轮 assistant 消息追加到会话记忆，再驱动历史压缩（在会话成员历史上 fold）。
-      // 压缩产物由 conv 落盘为 compact 消息并 append 回记忆。await 以保序。
+      // post-turn 记忆维护：追加本轮 assistant 消息并驱动历史压缩（在会话成员历史上 fold，
+      // 产物落盘为 compact 消息并回填记忆）。await 以保序。
       await this.runPostTurnMemory(conversationId, updated ?? undefined);
     }
 

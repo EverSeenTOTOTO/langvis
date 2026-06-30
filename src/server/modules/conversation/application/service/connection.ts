@@ -2,12 +2,7 @@ import type { SSEFrame } from '@/shared/types/events';
 import type { Transport } from '@/shared/transport';
 import logger from '@/server/utils/logger';
 
-/**
- * Connection — 传输层连接管理器（应用层）。
- *
- * 管理多个 Transport 实例，支持多标签页并发连接，
- * 向所有活跃连接广播事件。空闲超时后自动回收。
- */
+/** 传输层连接管理器：多标签页并发连接，向所有活跃连接广播；空闲超时后自动回收。 */
 export class Connection {
   private transports = new Set<Transport<SSEFrame>>();
   private idleTimer: ReturnType<typeof setTimeout> | null = null;

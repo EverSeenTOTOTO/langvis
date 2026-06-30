@@ -11,68 +11,31 @@ import {
 } from '@/server/modules/agent/domain/port/cache.port';
 
 /*
- * Compression Strategy Overview
+ * Keep LLM context under STRING_THRESHOLD while preserving array/object shape
+ * (counts, indices, small metadata) for LLM reasoning without cache reads.
  *
- * Goal: keep LLM context under STRING_THRESHOLD while maximizing structure
- * visibility so the LLM can reason about array/object shape (count, indices,
- * small metadata) without reading cache files.
+ * Dynamic threshold: childThreshold = max(min(parentThreshold, STRING_THRESHOLD/N), MIN_ITEM_THRESHOLD)
+ *   - STRING_THRESHOLD/N: per-item budget so N items × budget ≈ STRING_THRESHOLD
+ *   - min(parentThreshold): child may tighten but never loosen the parent budget
+ *   - MIN_ITEM_THRESHOLD floor (2× standard ref size) avoids compressing strings
+ *     so short the CachedReference would be larger than the original
  *
- * Rules:
- *
- * 1. Strings — use the threshold passed from parent context (parentThreshold).
- *    Top-level strings use STRING_THRESHOLD. Strings inside arrays/objects
- *    use a tighter threshold derived from the child count.
- *
- * 2. Arrays — recursive compression with dynamic threshold, then fallback:
- *    a) Compute childThreshold for items (see formula below).
- *    b) Recursively compress each item with childThreshold.
- *    c) If the resulting JSON still exceeds STRING_THRESHOLD → whole-compress
- *       the recursively-compressed result as a single CachedReference.
- *    d) If the result fits → return the visible array structure.
- *
- * 3. Objects — same as arrays: compute childThreshold from field count,
- *    recursively compress each field. No whole-compress fallback for objects
- *    (objects rarely exceed STRING_THRESHOLD after field-level compression).
- *
- * 4. Dynamic threshold formula:
- *    childThreshold = max(min(parentThreshold, STRING_THRESHOLD / N), MIN_ITEM_THRESHOLD)
- *
- *    - STRING_THRESHOLD / N  — per-item budget ensuring N items × budget ≈ STRING_THRESHOLD
- *    - parentThreshold       — respect the parent's budget; child can tighten but not loosen
- *    - MIN_ITEM_THRESHOLD    — floor = 2 × CACHED_REF_STANDARD_SIZE, prevents compressing
- *      strings so short that the CachedReference itself would be larger than the original
- *
- * 5. Threshold propagation:
- *    When a structure (array/object) is inside another structure, it inherits
- *    the parent's threshold but may tighten it based on its own child count.
- *    The min() rule ensures children never exceed the parent budget.
- *
- * 6. Whole-compress fallback (arrays only):
- *    When even recursive compression produces output exceeding STRING_THRESHOLD,
- *    the entire result is serialized to a single file. resolve() first expands
- *    the outer CachedReference, then recursively resolves any inner ones.
+ * Arrays have a whole-compress fallback when recursive compression still exceeds
+ * STRING_THRESHOLD; objects do not (rarely exceed after field-level compression).
+ * resolve() first expands the outer ref, then recursively resolves inner ones.
  */
 
-// --- Thresholds and sizes ---
 export const STRING_THRESHOLD = 20000;
 
-// Preview length also determines CachedReference visible size.
-// Shorter preview → smaller CachedReference → lower MIN_ITEM_THRESHOLD →
-// more items can stay visible in arrays.
+// 同时决定 CachedReference 的 preview 长度：更短→更小 ref→更低 floor→更多 item 可见。
 export const PREVIEW_LENGTH = 100;
 
-// Approximate fixed JSON overhead for CachedReference keys:
-// {"$cached":"fc_16chars","$size":5digits,"$preview":"..."}
-// ≈ 55 chars excluding preview content
+// CachedReference 固定 JSON 开销（{"$cached":"fc_16","$size":5位,"$preview":"..."}，不含 preview）。
 const CACHED_REF_FIXED_OVERHEAD = 55;
-
-// Standard size of a CachedReference when serialized: fixed overhead + full preview
 export const CACHED_REF_STANDARD_SIZE =
   CACHED_REF_FIXED_OVERHEAD + PREVIEW_LENGTH;
 
-// Floor threshold = 2 × standard CachedReference size.
-// Only compress strings significantly larger than the reference itself,
-// so compression always yields meaningful context savings.
+// 下限 = 2× 标准 ref 大小——只压缩明显大于 ref 本身的串，确保压缩总省上下文。
 export const MIN_ITEM_THRESHOLD = CACHED_REF_STANDARD_SIZE * 2;
 
 @singleton()
@@ -94,12 +57,10 @@ export class CacheProvider implements CachePort {
 
     const threshold = parentThreshold;
 
-    // String: compress if exceeds current threshold
     if (typeof value === 'string' && value.length > threshold) {
       return this.storeSerialized(workDir, value);
     }
 
-    // Array: recursive compression with dynamic threshold + whole-compress fallback
     if (Array.isArray(value)) {
       const childThreshold = this.computeChildThreshold(
         value.length,
@@ -110,7 +71,6 @@ export class CacheProvider implements CachePort {
           this.compress(workDir, item, strategy, childThreshold),
         ),
       );
-      // Fallback: if visible structure still exceeds STRING_THRESHOLD, whole-compress
       const serialized = JSON.stringify(result);
       if (serialized.length > STRING_THRESHOLD) {
         return this.storeSerialized(workDir, serialized);
@@ -118,7 +78,6 @@ export class CacheProvider implements CachePort {
       return result;
     }
 
-    // Object: recursive compression with dynamic threshold
     if (value && typeof value === 'object' && !isCachedReference(value)) {
       const entries = Object.entries(value);
       const childThreshold = this.computeChildThreshold(

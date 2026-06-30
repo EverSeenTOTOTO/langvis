@@ -39,10 +39,6 @@ export class ChatService {
     private providerService: ProviderService,
   ) {}
 
-  // ════════════════════════════════════════
-  // 消息构建
-  // ════════════════════════════════════════
-
   async activate(params: {
     conversationId: string;
     userId: string;
@@ -60,10 +56,7 @@ export class ChatService {
     await this.messageRepo.batchCreate(params.conversationId, messages);
   }
 
-  /**
-   * 前置条件：会话必须已激活（存在 SYSTEM 消息）。
-   * start 前调用 —— 不再静默激活，让调用方显式先 activate。
-   */
+  /** start 前调用——不静默激活，让调用方显式先 activate（存在 SYSTEM 消息即视为已激活）。 */
   async assertActivated(conversationId: string): Promise<void> {
     const messages =
       await this.messageRepo.findByConversationId(conversationId);
@@ -114,12 +107,12 @@ export class ChatService {
   // 持久化辅助
   // ════════════════════════════════════════
 
-  /** 会话全部消息（供 ConversationMemoryPort.activate 一次性灌入）。 */
+  /** 供 ConversationMemoryPort.activate 一次性灌入。 */
   getConversationMessages(conversationId: string): Promise<Message[]> {
     return this.messageRepo.findByConversationId(conversationId);
   }
 
-  /** 会话配置（contextSize / modelId / runtimeConfig；供 ConversationMemoryPort.activate）。 */
+  /** contextSize / modelId / runtimeConfig；供 ConversationMemoryPort.activate。 */
   async resolveConversationConfig(conversationId: string): Promise<{
     contextSize: number;
     modelId: string;

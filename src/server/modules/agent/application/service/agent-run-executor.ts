@@ -106,8 +106,7 @@ export class AgentRunExecutor {
   }
 
   /**
-   * run —— 完整生命周期：建 run → 初始持久化 → 登记 → 执行（流事件）→ 终态持久化。
-   * agent 拥有自身 run 持久化（初始 save + 终态 update）；调用方只消费事件流。
+   * run —— agent 拥有自身 run 持久化（初始 save + 终态 update）；调用方只消费事件流。
    */
   async *run(params: {
     runId: string;
@@ -149,7 +148,7 @@ export class AgentRunExecutor {
     run: AgentRun,
     ctx: AgentRunContext,
   ): AsyncGenerator<EnrichedEvent> {
-    // 确保工具已注册（原 AgentService 构造时触发的初始化，现由执行器保证）。
+    // 工具注册现由执行器保证（原 AgentService 构造时触发）。
     await this.toolService.initialize();
 
     this.logger.debug(`Execute run ${chalk.cyan(run.runId)}`);
@@ -171,7 +170,7 @@ export class AgentRunExecutor {
     }
   }
 
-  /** 取消：按 runId 查活跃 run，run.cancel 原子地 abort + 记录 cancelled 事件，返回富化事件供推送 SSE。 */
+  /** 取消：run.cancel 原子地 abort + 记录 cancelled 事件，返回富化事件供推送 SSE。 */
   cancel(runId: string, reason: string): EnrichedEvent | null {
     const run = this.activeRuns.get(runId);
     return run ? run.cancel(reason) : null;
@@ -201,10 +200,7 @@ export class AgentRunExecutor {
   }
 }
 
-/**
- * 历史回复重建为扁平的 response_user 调用，保持与当前输出格式一致（agent 拥有的种子格式）。
- * 把 conv 的有效历史转为 loop 初始上下文。
- */
+/** 历史回复重建为扁平的 response_user 调用，保持与当前输出格式一致（agent 拥有的种子格式）。 */
 function buildIterMessages(messages: LlmMessage[]): LlmMessage[] {
   return messages.map(msg =>
     msg.role === 'assistant'

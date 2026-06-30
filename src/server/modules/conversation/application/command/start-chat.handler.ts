@@ -35,7 +35,7 @@ export class StartChatHandler {
     }
     const userConfig = extractUserConfig(dbConversation);
 
-    // 前置条件：会话必须已激活（调用方需先 activate）。不再静默激活。
+    // 前置条件：会话必须已激活（调用方需先 activate），不再静默激活。
     await this.convService.assertActivated(conversationId);
 
     const setup = await this.convService.appendMessage({
@@ -44,14 +44,13 @@ export class StartChatHandler {
       assistantId,
     });
 
-    // systemPrompt 取自激活时烘焙的 system 消息（会话自有数据）；agent 不再被回调取 prompt。
+    // systemPrompt 取自激活时烘焙的 system 消息；agent 不再被回调取 prompt。
     const systemMessage = setup.existingMessages.find(
       m => m.role === Role.SYSTEM,
     );
     const systemPrompt = systemMessage?.content ?? '';
 
-    // 增量追加本轮 user 消息到会话记忆（assistant 占位不追加——种子只到 user query），
-    // 再取有效历史作为 agent run 的种子。
+    // 种子只到 user query（assistant 占位不追加）；追加后取有效历史作 agent run 的种子。
     const memory = this.sessionManager.getMemory(conversationId);
     memory.append(setup.userMessage);
     const effectiveHistory = await memory.buildContext();

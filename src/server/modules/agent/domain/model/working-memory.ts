@@ -23,14 +23,9 @@ export interface WorkingMemoryParams {
 }
 
 /**
- * WorkingMemory — agent run 的瞬态、per-run 迭代上下文层（loop 工作记忆），纯数据。
- *
- * 维护 iterMessages（瞬态、loop 内逐条 append 并自压缩）。由 AgentRunExecutor 以种子（conv 有效
- * 历史经 buildIterMessages 格式化）播种、作为 AgentRunContext 的瞬态成员；loop 每步 append；
- * 自身用量超阈时（compact）把较早的 loop actions 折叠为一条 Observation 回顾（保留近期 keepRecent），
- * 使 loop 能在自身膨胀时继续；退出时 foldProcessSummary 把本 loop 过程折叠为过程摘要。fold 原语与
- * 历史层压缩（ConversationMemory.compact）同一机制（libs/compaction）。临时产物，run 内消亡（ctx
- * 释放即回收）。纯数据、无 EventBus 依赖、可纯单测。
+ * WorkingMemory — agent run 的瞬态、per-run loop 工作记忆（纯数据）。
+ * 维护 iterMessages（loop 内逐条 append 并自压缩）。退出时本 loop 消亡（ctx 释放即回收）。
+ * 压缩/折叠用与 conv 历史层同一 fold 原语（libs/compaction）。无 EventBus 依赖，可纯单测。
  */
 export class WorkingMemory {
   private readonly iterMessages: LlmMessage[];
@@ -79,9 +74,8 @@ export class WorkingMemory {
   }
 
   /**
-   * loop 内迭代压缩：iterMessages 用量超阈且 loop 步骤足够多时，把较早的 loop actions
-   * 折叠成一条 Observation 回顾、保留最近 keepRecent 条。返回是否压缩 + 压缩后用量；
-   * 不压缩时返回压缩前用量。异常吞掉（压缩失败不影响 loop）。
+   * loop 内迭代压缩：用量超阈且步骤足够多时把较早的 loop actions 折叠成一条 Observation 回顾、
+   * 保留最近 keepRecent 条。异常吞掉（压缩失败不影响 loop）。
    */
   async compact(signal: AbortSignal): Promise<CompactResult> {
     const loopActions = this.iterMessages.slice(this.baseLen);
@@ -119,9 +113,9 @@ export class WorkingMemory {
   }
 
   /**
-   * loop 退出折叠：把本 loop 的 actions（query 之后追加的部分）折叠为过程摘要。
-   * 仅在至少做过一次实质动作时触发（>1 条，避免对"直接回答"的 trivial turn 浪费一次 LLM 调用）。
-   * 异常吞掉返回 null（异常退出/折叠失败不产过程摘要）。
+   * loop 退出折叠：把本 loop 的 actions 折叠为过程摘要。
+   * 仅在至少做过一次实质动作时触发（>1 条，避免对 trivial "直接回答" turn 浪费一次 LLM 调用）。
+   * 异常吞掉返回 null。
    */
   async foldProcessSummary(signal: AbortSignal): Promise<string | null> {
     const loopActions = this.iterMessages.slice(this.baseLen);

@@ -11,11 +11,11 @@ import { container } from 'tsyringe';
 import type { BashInput, BashOutput } from './config';
 import AskUserTool from '../AskUser';
 
-const FLUSH_INTERVAL = 100; // 100ms
+const FLUSH_INTERVAL = 100;
 const DEFAULT_TIMEOUT = 60;
 const MAX_TIMEOUT = 600;
 const SIGTERM_GRACE = 5000;
-const PROGRESS_LIMIT = 8 * 1024; // 8KB preview via toolProgress
+const PROGRESS_LIMIT = 8 * 1024; // preview cap streamed via toolProgress
 
 const activeProcesses = new Set<ChildProcess>();
 
@@ -236,7 +236,6 @@ export default class BashTool extends Tool<BashOutput> {
 
     const exitCode = await exitPromise;
 
-    // Flush remaining
     const event = flushOutput('stdout') ?? flushOutput('stderr');
     if (event) yield { type: 'tool_progress', callId: ctx.callId, data: event };
 
