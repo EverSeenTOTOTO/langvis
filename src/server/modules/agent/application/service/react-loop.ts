@@ -3,8 +3,6 @@ import { Role } from '@/shared/entities/Message';
 import type { ModelConfig } from '@/shared/types';
 import type { RunEvent } from '@/shared/types/events';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import { LoopUsageReported } from '@/server/modules/agent/contracts';
-import { createDomainEvent } from '@/server/libs/ddd';
 import { winstonLogger } from '@/server/utils/logger';
 
 const logger = winstonLogger.child({ source: 'ReactLoop' });
@@ -22,19 +20,6 @@ export async function* runReactLoop(
 ): AsyncGenerator<RunEvent, void, void> {
   const model =
     (ctx.config.runtimeConfig as { model?: ModelConfig }).model ?? {};
-
-  const reportUsage = async () => {
-    await ctx.workingMemory.compact(ctx.signal);
-    const { used, total } = ctx.workingMemory.getContextUsage();
-    ctx.eventBus.dispatch(
-      LoopUsageReported,
-      createDomainEvent(LoopUsageReported, ctx.runId, {
-        runId: ctx.runId,
-        used,
-        total,
-      }),
-    );
-  };
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     ctx.signal.throwIfAborted();
@@ -64,7 +49,8 @@ export async function* runReactLoop(
     } catch (error) {
       const observation = `Error parsing response: ${(error as Error)?.message ?? String(error)}`;
       ctx.workingMemory.append(Role.USER, `Observation: ${observation}`);
-      await reportUsage();
+      await ctx.workingMemory.compact(ctx.signal);
+      yield { type: 'loop_usage', ...ctx.workingMemory.getContextUsage() };
       continue;
     }
 
@@ -86,7 +72,8 @@ export async function* runReactLoop(
     }
 
     ctx.workingMemory.append(Role.USER, `Observation: ${observation}\n`);
-    await reportUsage();
+    await ctx.workingMemory.compact(ctx.signal);
+    yield { type: 'loop_usage', ...ctx.workingMemory.getContextUsage() };
   }
 
   throw new Error('Max iterations reached');

@@ -110,27 +110,29 @@ export class ConversationSession {
     return [...this.activeRuns.keys()];
   }
 
-  /** 所有 run 的 runId（供 registry dispose 时清 runIndex）。 */
-  runIds(): string[] {
-    return [...this.activeRuns.values()].map(r => r.runId);
-  }
-
   get hasNoRuns(): boolean {
     return this.activeRuns.size === 0;
   }
 
   handleRunEvent(messageId: string, event: EnrichedEvent): void {
+    // loop 用量是 per-run 遥测事实——翻译为控制帧下发，不入 run 事件缓冲（不污染 snapshot/投影）。
+    if (event.type === 'loop_usage') {
+      this.sendFrame({
+        type: 'loop_usage',
+        runId: event.runId,
+        used: event.used,
+        total: event.total,
+      });
+      return;
+    }
     const run = this.activeRuns.get(messageId);
     if (run) run.events.push(event);
     this.sendFrame({ ...event, messageId } as SSEFrame);
   }
 
-  /** 移除 run；返回其 runId 供 registry 清 runIndex。 */
-  removeRun(messageId: string): string | undefined {
-    const run = this.activeRuns.get(messageId);
-    if (!run) return undefined;
+  /** 移除 run（从 activeRuns 摘除）。 */
+  removeRun(messageId: string): void {
     this.activeRuns.delete(messageId);
-    return run.runId;
   }
 
   /** 激活：灌入当前消息 + 配置构造会话记忆投影。 */

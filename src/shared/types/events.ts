@@ -48,7 +48,8 @@ export type RunEvent =
   | { type: 'cancelled'; reason: string }
   | { type: 'error'; error: string }
   | { type: 'process_summary'; summary: string }
-  | { type: 'audio'; filePath: string; voice?: string };
+  | { type: 'audio'; filePath: string; voice?: string }
+  | { type: 'loop_usage'; used: number; total: number };
 
 // ─── 应用层富化 ───
 
@@ -84,7 +85,7 @@ export type SSEFrame =
       status: RunStatus;
       awaitingInput: AwaitingInputProjection | null;
     }
-  // 上下文用量（memory 端到端拥有、经会话级控制帧下发，非 run 级 RunEvent）：
-  // 会话层基线（全员可见）+ loop 层（per-run、runId 关联消息）。
+  // 上下文用量控制帧：conversation_usage 是会话层基线（全员可见，conv 自算直发）；
+  // loop_usage 是 per-run 事实（见 RunEvent），conv 桥接时翻译为此控制帧下发（不带 seq/at/messageId）。
   | { type: 'conversation_usage'; used: number; total: number }
   | { type: 'loop_usage'; runId: string; used: number; total: number };
