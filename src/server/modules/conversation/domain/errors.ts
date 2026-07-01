@@ -32,14 +32,6 @@ export class DuplicateRunError extends ExceptionBase {
   }
 }
 
-export class ConversationForbiddenError extends ExceptionBase {
-  readonly code = 'CONVERSATION_FORBIDDEN';
-  readonly statusCode = 403;
-  constructor(conversationId: string, userId: string) {
-    super(`Conversation ${conversationId} does not belong to user ${userId}`);
-  }
-}
-
 export class ConversationNotActivatedError extends ExceptionBase {
   readonly code = 'CONVERSATION_NOT_ACTIVATED';
   readonly statusCode = 400;

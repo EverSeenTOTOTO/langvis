@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ArchiveEmailHandler } from '@/server/modules/email/application/command/archive-email.handler';
 import type { EmailService } from '@/server/modules/email/application/service/email.service';
-import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
 import type { ProviderService } from '@/server/libs/infrastructure/provider.service';
-import type { EventBus } from '@/server/libs/ddd';
+import type { CommandBus, EventBus } from '@/server/libs/ddd';
+import { CreateConversationCommand } from '@/server/modules/conversation/contracts';
 import {
   ArchiveEmailCommand,
   EmailArchived,
@@ -35,23 +35,23 @@ const defaultEmail = {
 
 function makeDeps(email: typeof defaultEmail | null = defaultEmail) {
   const emailService = makeEmailService(email);
-  const convRepo = {
-    create: vi.fn().mockResolvedValue({ id: 'conv_1' }),
-  } as unknown as ConversationRepositoryPort;
+  const commandBus = {
+    execute: vi.fn().mockResolvedValue({ id: 'conv_1' }),
+  } as unknown as CommandBus;
   const providerService = {
     getDefaultModel: vi.fn().mockReturnValue({ id: 'model_1' }),
   } as unknown as ProviderService;
   const eventBus = { dispatch: vi.fn() } as unknown as EventBus;
-  return { emailService, convRepo, providerService, eventBus };
+  return { emailService, commandBus, providerService, eventBus };
 }
 
 describe('ArchiveEmailHandler', () => {
-  it('throws EmailNotFoundError when email missing', async () => {
-    const { emailService, convRepo, providerService, eventBus } =
+  it('throws EmailNotFoundError when email missing (no conversation created)', async () => {
+    const { emailService, commandBus, providerService, eventBus } =
       makeDeps(null);
     const handler = new ArchiveEmailHandler(
       emailService,
-      convRepo,
+      commandBus,
       providerService,
       eventBus,
     );
@@ -61,14 +61,14 @@ describe('ArchiveEmailHandler', () => {
     ).rejects.toBeInstanceOf(EmailNotFoundError);
 
     expect(emailService.updateStatus).not.toHaveBeenCalled();
-    expect(convRepo.create).not.toHaveBeenCalled();
+    expect(commandBus.execute).not.toHaveBeenCalled();
   });
 
-  it('creates the conversation synchronously, dispatches EmailArchived, and returns both ids', async () => {
-    const { emailService, convRepo, providerService, eventBus } = makeDeps();
+  it('creates conversation via CreateConversationCommand (no repo reach), dispatches EmailArchived, returns both ids', async () => {
+    const { emailService, commandBus, providerService, eventBus } = makeDeps();
     const handler = new ArchiveEmailHandler(
       emailService,
-      convRepo,
+      commandBus,
       providerService,
       eventBus,
     );
@@ -81,15 +81,13 @@ describe('ArchiveEmailHandler', () => {
       'mail_1',
       'archived',
     );
-    expect(convRepo.create).toHaveBeenCalledWith(
-      '归档邮件: Hello',
-      'user_1',
-      expect.objectContaining({
-        model: expect.any(Object),
-      }),
-      null,
-      'Email Archive',
-    );
+    expect(commandBus.execute).toHaveBeenCalledTimes(1);
+    const cmd = (commandBus.execute as any).mock.calls[0][0];
+    expect(cmd).toBeInstanceOf(CreateConversationCommand);
+    expect(cmd.name).toBe('归档邮件: Hello');
+    expect(cmd.userId).toBe('user_1');
+    expect(cmd.config).toEqual({ model: { modelId: 'model_1' } });
+    expect(cmd.groupName).toBe('Email Archive');
     expect(eventBus.dispatch).toHaveBeenCalledWith(
       EmailArchived,
       expect.objectContaining({

@@ -1,4 +1,8 @@
-import type { Message, MessageAttachment } from '@/shared/types/entities';
+import type {
+  Conversation,
+  Message,
+  MessageAttachment,
+} from '@/shared/types/entities';
 import type { RunStatus } from '@/shared/types/agent';
 import { Role } from '@/shared/entities/Message';
 import { inject, singleton } from 'tsyringe';
@@ -18,8 +22,15 @@ import {
 } from '../../domain/service/message-factory';
 import { composeConfigSchema } from '@/server/libs/config/config-fragment';
 import { parse } from '@/server/utils/schemaValidator';
-import { ConversationNotActivatedError } from '../../domain/errors';
+import {
+  ConversationNotActivatedError,
+  ConversationNotFoundError,
+} from '../../domain/errors';
 import Logger from '@/server/utils/logger';
+import { isEmpty } from 'lodash-es';
+import type { EnrichedEvent } from '@/shared/types/events';
+import type { ConversationMemory } from '../../domain/model/conversation-memory';
+import { projectRun } from './run-projection';
 
 @singleton()
 export class ChatService {
@@ -64,6 +75,19 @@ export class ChatService {
     }
   }
 
+  /**
+   * 加载并校验会话归属:repo 按 (id, userId) 过滤,不存在/非本人统一 NotFound
+   * (不泄露存在性)。所有需要 ownership 的用例走这里,取代各 handler 各凭良心。
+   */
+  async requireConversation(
+    conversationId: string,
+    userId: string,
+  ): Promise<Conversation> {
+    const conversation = await this.convRepo.findById(conversationId, userId);
+    if (!conversation) throw new ConversationNotFoundError(conversationId);
+    return conversation;
+  }
+
   async appendMessage(params: {
     conversationId: string;
     userMessage: {
@@ -99,6 +123,50 @@ export class ChatService {
       userMessage,
       assistantId: assistantMessage.id,
       assistantMessage,
+    };
+  }
+
+  /**
+   * 开 turn 的应用编排:校验归属 + 已激活 → 追加 user/assistant 消息 → 推导 systemPrompt。
+   * memory 与事件派发留给 handler(session 作用域 + I/O 边界);此方法只做持久化与领域事实推导。
+   */
+  async startTurn(params: {
+    conversationId: string;
+    userId: string;
+    userMessage: {
+      role: Role;
+      content: string;
+      attachments?: MessageAttachment[] | null;
+      meta?: Record<string, unknown> | null;
+    };
+    assistantId?: string;
+  }): Promise<{
+    userMessage: Message;
+    assistantMessage: Message;
+    userConfig: Record<string, unknown>;
+    systemPrompt: string;
+  }> {
+    const conversation = await this.requireConversation(
+      params.conversationId,
+      params.userId,
+    );
+    await this.assertActivated(params.conversationId);
+
+    const setup = await this.appendMessage({
+      conversationId: params.conversationId,
+      userMessage: params.userMessage,
+      assistantId: params.assistantId,
+    });
+
+    const systemMessage = setup.existingMessages.find(
+      m => m.role === Role.SYSTEM,
+    );
+
+    return {
+      userMessage: setup.userMessage,
+      assistantMessage: setup.assistantMessage,
+      userConfig: conversation.config ?? {},
+      systemPrompt: systemMessage?.content ?? '',
     };
   }
 
@@ -206,5 +274,57 @@ export class ChatService {
       ),
     ]);
     return runs.length;
+  }
+
+  /**
+   * 收 turn 的应用编排:把 run 事件流投影成终态 → 持久化 assistant 消息(processSummary/audio 入 meta)
+   * → 历史压缩(超阈则落盘 compact 消息)。返回会话用量供 handler 发 conversation_usage 帧;
+   * 返回 null 表示不发帧(压缩失败已兜底)。events 与 memory 由 handler 传入(session 作用域,
+   * 不经此引入 ChatService→SessionManager 的环)。
+   */
+  async completeTurn(params: {
+    conversationId: string;
+    messageId: string;
+    events: readonly EnrichedEvent[];
+    memory: ConversationMemory;
+  }): Promise<{ used: number; total: number } | null> {
+    const view = projectRun(params.events);
+    const meta: Record<string, unknown> = {};
+    if (view.processSummary) meta.processSummary = view.processSummary;
+    if (view.audio) meta.audio = view.audio;
+
+    const assistantMessage = await this.messageRepo.update(
+      params.messageId,
+      isEmpty(meta)
+        ? { content: view.content }
+        : { content: view.content, meta },
+    );
+
+    try {
+      if (assistantMessage) params.memory.append(assistantMessage);
+      const result = await params.memory.compact(new AbortController().signal);
+      if (result) {
+        const [compactMessage] = await this.messageRepo.batchCreate(
+          params.conversationId,
+          [
+            {
+              role: Role.USER,
+              content: result.content,
+              meta: { kind: 'compact', startRef: result.startRef },
+              createdAt: new Date(),
+            },
+          ],
+        );
+        params.memory.append(compactMessage);
+        return { used: result.usage.used, total: result.usage.total };
+      }
+      const usage = params.memory.getContextUsage();
+      return { used: usage.used, total: usage.total };
+    } catch (err) {
+      this.logger.warn(
+        `Post-turn memory maintenance failed: ${(err as Error)?.message ?? err}`,
+      );
+      return null;
+    }
   }
 }

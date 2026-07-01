@@ -17,6 +17,7 @@ container.register(CONVERSATION_REPOSITORY, ConversationRepository, {
 container.register(HUMAN_INPUT_PORT, HumanInputRedisProvider);
 
 import './application/command/conversation-activate.handler';
+import './application/command/create-conversation.handler';
 import './application/command/conversation-update.handler';
 import './application/command/cancel-chat.handler';
 import './application/command/start-chat.handler';

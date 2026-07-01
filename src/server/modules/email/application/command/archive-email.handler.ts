@@ -1,10 +1,10 @@
 import { inject } from 'tsyringe';
 import { commandHandler } from '@/server/decorator/handler';
-import { EventBus, createDomainEvent } from '@/server/libs/ddd';
-import { CONVERSATION_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
-import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
+import { CommandBus, EventBus, createDomainEvent } from '@/server/libs/ddd';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import type { Conversation } from '@/shared/types/entities';
 import { EmailService } from '../service/email.service';
+import { CreateConversationCommand } from '@/server/modules/conversation/contracts';
 import {
   ArchiveEmailCommand,
   type ArchiveEmailResult,
@@ -18,8 +18,8 @@ export class ArchiveEmailHandler {
   constructor(
     @inject(EmailService)
     private readonly emailService: EmailService,
-    @inject(CONVERSATION_REPOSITORY)
-    private readonly convRepo: ConversationRepositoryPort,
+    @inject(CommandBus)
+    private readonly commandBus: CommandBus,
     @inject(ProviderService)
     private readonly providerService: ProviderService,
     @inject(EventBus)
@@ -39,16 +39,17 @@ export class ArchiveEmailHandler {
     // Create the conversation synchronously so its id can be returned to the
     // caller (the client opens a new tab straight to this conversation). The
     // heavier work — caching the body and starting the agent run — is fired via
-    // the EmailArchived event after we return.
+    // the EmailArchived event after we return. 建会话走 conversation 的命令(公开 API),
+    // 不再跨 BC 直连 conversation 的 repository。
     const defaultModel = this.providerService.getDefaultModel('chat');
-    const conversation = await this.convRepo.create(
-      `归档邮件: ${email.subject}`,
-      userId,
-      {
-        model: { modelId: defaultModel?.id },
-      },
-      null,
-      'Email Archive',
+    const conversation = await this.commandBus.execute<Conversation>(
+      new CreateConversationCommand(
+        `归档邮件: ${email.subject}`,
+        userId,
+        { model: { modelId: defaultModel?.id } },
+        null,
+        'Email Archive',
+      ),
     );
 
     this.eventBus.dispatch(

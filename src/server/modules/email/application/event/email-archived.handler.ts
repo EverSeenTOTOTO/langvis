@@ -52,10 +52,14 @@ export class EmailArchivedHandler {
     );
 
     await this.commandBus.execute(
-      new StartChatCommand(conversationId, {
-        role: Role.USER,
-        content: userContent,
-      }),
+      new StartChatCommand(
+        conversationId,
+        {
+          role: Role.USER,
+          content: userContent,
+        },
+        userId,
+      ),
     );
   }
 

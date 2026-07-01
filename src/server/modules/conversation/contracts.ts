@@ -11,6 +11,18 @@ export class ConversationActivateCommand extends Command {
   }
 }
 
+export class CreateConversationCommand extends Command {
+  constructor(
+    readonly name: string,
+    readonly userId: string,
+    readonly config?: Record<string, any> | null,
+    readonly groupId?: string | null,
+    readonly groupName?: string,
+  ) {
+    super();
+  }
+}
+
 export class CancelChatCommand extends Command {
   constructor(
     readonly conversationId: string,
@@ -43,6 +55,7 @@ export class StartChatCommand extends Command {
       attachments?: MessageAttachment[] | null;
       meta?: Record<string, any> | null;
     },
+    readonly userId: string,
     readonly assistantId?: string,
   ) {
     super();
