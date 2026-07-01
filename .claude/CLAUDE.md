@@ -27,6 +27,7 @@
   - `req_` - request
   - `tc_` - tool call
 - **Prefer application-layer timestamps over database-generated ones** (e.g., avoid `@CreateDateColumn`). Use `new Date()` in service layer to ensure consistent timezone handling across all timestamp fields.
+- **Server CQRS layering**: A handler orchestrates one use case (load aggregate → call its method → persist → publish event); it must **never** hold business rules or state-dependent authorization. Invariants live on the aggregate (or repo-scope for ownership). Input-shape validation belongs at the DTO/schema boundary; domain/invariant validation belongs in the aggregate. Full guide + handler decision checklist: [docs/cqrs-layering.md](docs/cqrs-layering.md).
 
 ## Testing & Validation
 

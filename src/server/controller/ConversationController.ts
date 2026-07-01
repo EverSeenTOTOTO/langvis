@@ -17,7 +17,10 @@ import type { MessageRepositoryPort } from '../modules/conversation/domain/port/
 import type { ConversationRepositoryPort } from '../modules/conversation/domain/port/conversation.repository.port';
 import { AGENT_RUN_REPOSITORY } from '../modules/agent/agent.di-tokens';
 import { CommandBus } from '@/server/libs/ddd';
-import { ConversationUpdateCommand } from '../modules/conversation/contracts';
+import {
+  ConversationUpdateCommand,
+  CreateConversationCommand,
+} from '../modules/conversation/contracts';
 import type { AgentRunRepositoryPort } from '../modules/agent/domain/port/agent-run.repository.port';
 import { Role } from '@/shared/entities/Message';
 import { projectRun } from '../modules/conversation/application/service/run-projection';
@@ -46,12 +49,14 @@ export default class ConversationController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const conversation = await this.convRepo.create(
-      dto.name,
-      userId,
-      dto.config,
-      dto.groupId,
-      dto.groupName,
+    const conversation = await this.commandBus.execute(
+      new CreateConversationCommand(
+        dto.name,
+        userId,
+        dto.config,
+        dto.groupId,
+        dto.groupName,
+      ),
     );
 
     return res.status(201).json(conversation);

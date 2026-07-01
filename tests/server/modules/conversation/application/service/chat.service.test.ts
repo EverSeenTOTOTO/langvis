@@ -6,6 +6,7 @@ import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/
 import type { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import type { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { Role } from '@/shared/entities/Message';
+import { ConversationNotFoundError } from '@/server/modules/conversation/domain/errors';
 
 function makeMockMessageRepo(): MessageRepositoryPort {
   return {
@@ -54,14 +55,16 @@ describe('ChatService', () => {
   let messageRepo: MessageRepositoryPort;
   let agentRunRepo: AgentRunRepositoryPort;
   let workspace: WorkspaceService;
+  let convRepo: ConversationRepositoryPort;
 
   beforeEach(() => {
     messageRepo = makeMockMessageRepo();
     agentRunRepo = makeMockAgentRunRepo();
     workspace = makeMockWorkspace();
+    convRepo = makeMockConvRepo();
     service = new ChatService(
       messageRepo,
-      makeMockConvRepo(),
+      convRepo,
       agentRunRepo,
       workspace,
       makeMockProviderService(),
@@ -337,6 +340,173 @@ describe('ChatService', () => {
       expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
         agentRunId: 'run_1',
       });
+    });
+  });
+
+  // ════════════════════════════════════════
+  // 归属校验 / turn 编排(从 handler 下沉至此)
+  // ════════════════════════════════════════
+
+  describe('requireConversation', () => {
+    it('returns conversation when found for owner', async () => {
+      const conv = { id: 'conv_1', userId: 'user_1', config: {} } as any;
+      (convRepo.findById as any).mockResolvedValue(conv);
+
+      await expect(
+        service.requireConversation('conv_1', 'user_1'),
+      ).resolves.toBe(conv);
+      expect(convRepo.findById).toHaveBeenCalledWith('conv_1', 'user_1');
+    });
+
+    it('throws NotFound when missing or not owned (repo-scoped 统一 NotFound)', async () => {
+      (convRepo.findById as any).mockResolvedValue(null);
+
+      await expect(
+        service.requireConversation('conv_1', 'user_1'),
+      ).rejects.toBeInstanceOf(ConversationNotFoundError);
+    });
+  });
+
+  describe('startTurn', () => {
+    it('requireConversation → assertActivated → appendMessage; derives systemPrompt + userConfig', async () => {
+      const conv = {
+        id: 'conv_1',
+        userId: 'user_1',
+        config: { model: { modelId: 'm1' } },
+      } as any;
+      (convRepo.findById as any).mockResolvedValue(conv);
+      (messageRepo.findByConversationId as any).mockResolvedValue([
+        { id: 'msg_sys', role: Role.SYSTEM, content: 'SYS PROMPT' },
+      ]);
+
+      const result = await service.startTurn({
+        conversationId: 'conv_1',
+        userId: 'user_1',
+        userMessage: { role: Role.USER, content: 'hi' },
+      });
+
+      expect(result.systemPrompt).toBe('SYS PROMPT');
+      expect(result.userConfig).toEqual({ model: { modelId: 'm1' } });
+      expect(result.userMessage.role).toBe(Role.USER);
+      expect(result.assistantMessage.role).toBe(Role.ASSIST);
+    });
+
+    it('throws NotFound when conversation missing', async () => {
+      (convRepo.findById as any).mockResolvedValue(null);
+
+      await expect(
+        service.startTurn({
+          conversationId: 'conv_1',
+          userId: 'user_1',
+          userMessage: { role: Role.USER, content: 'hi' },
+        }),
+      ).rejects.toBeInstanceOf(ConversationNotFoundError);
+    });
+  });
+
+  describe('completeTurn', () => {
+    function ev(p: { type: string } & Record<string, unknown>): any {
+      return { runId: 'run_1', seq: 0, at: 0, ...p };
+    }
+
+    it('投影终态文案持久化(无 meta 时只更 content)', async () => {
+      const memory = {
+        append: vi.fn(),
+        compact: vi.fn().mockResolvedValue(null),
+        getContextUsage: vi.fn().mockReturnValue({ used: 7, total: 8000 }),
+      };
+      (messageRepo.update as any).mockResolvedValue({ id: 'msg_1' });
+
+      const usage = await service.completeTurn({
+        conversationId: 'conv_1',
+        messageId: 'msg_1',
+        events: [
+          ev({ type: 'text_chunk', content: 'Hello' }),
+          ev({ type: 'final' }),
+        ],
+        memory: memory as any,
+      });
+
+      expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
+        content: 'Hello',
+      });
+      expect(usage).toEqual({ used: 7, total: 8000 });
+    });
+
+    it('有 process_summary 时随内容入 meta', async () => {
+      const memory = {
+        append: vi.fn(),
+        compact: vi.fn().mockResolvedValue(null),
+        getContextUsage: vi.fn().mockReturnValue({ used: 1, total: 8000 }),
+      };
+      (messageRepo.update as any).mockResolvedValue(null);
+
+      await service.completeTurn({
+        conversationId: 'conv_1',
+        messageId: 'msg_1',
+        events: [
+          ev({ type: 'text_chunk', content: 'ans' }),
+          ev({ type: 'process_summary', summary: 'loop 做了 X' }),
+          ev({ type: 'final' }),
+        ],
+        memory: memory as any,
+      });
+
+      expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
+        content: 'ans',
+        meta: { processSummary: 'loop 做了 X' },
+      });
+    });
+
+    it('压缩超阈:落盘 compact 消息、append 回 memory、返回 compact 用量', async () => {
+      const compactResult = {
+        content: 'SUMMARY',
+        startRef: 'm1',
+        usage: { used: 5, total: 4096 },
+      };
+      const memory = {
+        append: vi.fn(),
+        compact: vi.fn().mockResolvedValue(compactResult),
+        getContextUsage: vi.fn(),
+      };
+      (messageRepo.batchCreate as any).mockResolvedValue([{ id: 'compact_1' }]);
+      (messageRepo.update as any).mockResolvedValue({ id: 'msg_1' });
+
+      const usage = await service.completeTurn({
+        conversationId: 'conv_1',
+        messageId: 'msg_1',
+        events: [ev({ type: 'final' })],
+        memory: memory as any,
+      });
+
+      expect(memory.compact).toHaveBeenCalledWith(expect.any(AbortSignal));
+      expect(messageRepo.batchCreate).toHaveBeenCalledWith('conv_1', [
+        expect.objectContaining({
+          content: 'SUMMARY',
+          meta: { kind: 'compact', startRef: 'm1' },
+        }),
+      ]);
+      expect(memory.append).toHaveBeenCalledTimes(2);
+      expect(usage).toEqual({ used: 5, total: 4096 });
+      expect(memory.getContextUsage).not.toHaveBeenCalled();
+    });
+
+    it('压缩抛错时兜底返回 null(不抛)', async () => {
+      const memory = {
+        append: vi.fn(),
+        compact: vi.fn().mockRejectedValue(new Error('boom')),
+        getContextUsage: vi.fn(),
+      };
+      (messageRepo.update as any).mockResolvedValue({ id: 'msg_1' });
+
+      const usage = await service.completeTurn({
+        conversationId: 'conv_1',
+        messageId: 'msg_1',
+        events: [ev({ type: 'final' })],
+        memory: memory as any,
+      });
+
+      expect(usage).toBeNull();
     });
   });
 });

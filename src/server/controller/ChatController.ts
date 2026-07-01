@@ -108,14 +108,20 @@ export default class ChatController {
   async chat(
     @param('conversationId') conversationId: string,
     @body() dto: StartChatRequestDto,
+    @request() req: Request,
     @response() res: Response,
   ) {
+    const userId = await this.authService.getUserId(req);
     const { assistantId } = await this.commandBus.execute(
-      new StartChatCommand(conversationId, {
-        role: dto.role,
-        content: dto.content,
-        attachments: dto.attachments,
-      }),
+      new StartChatCommand(
+        conversationId,
+        {
+          role: dto.role,
+          content: dto.content,
+          attachments: dto.attachments,
+        },
+        userId,
+      ),
     );
 
     return res.status(200).json({ success: true, messageId: assistantId });
