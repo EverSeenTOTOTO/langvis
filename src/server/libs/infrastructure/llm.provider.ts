@@ -6,8 +6,9 @@ import type {
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 import { inject, singleton } from 'tsyringe';
-import type { Logger } from '@/server/utils/logger';
+import logger from '@/server/utils/logger';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import type { ModelDefinition, ModelType } from '@/shared/types/provider';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type {
   TextToSpeechInput,
@@ -118,11 +119,15 @@ export class LlmProvider implements LlmPort {
     return model.id;
   }
 
+  /** 某 type 的默认模型（委托 registry）；供 Summarizer 自取 compact 模型。 */
+  getDefaultModel(type: ModelType): ModelDefinition | undefined {
+    return this.providerService.getDefaultModel(type);
+  }
+
   async *chat(
     modelId: string | undefined,
     data: Partial<ChatCompletionCreateParams>,
     signal: AbortSignal,
-    logger: Logger,
   ): AsyncGenerator<string, string, void> {
     const resolved = this.resolveModel(modelId, 'chat');
     const providerId = this.resolveProviderId(resolved);
@@ -201,7 +206,6 @@ export class LlmProvider implements LlmPort {
     modelId: string | undefined,
     data: Partial<ChatCompletionCreateParams>,
     signal: AbortSignal,
-    logger: Logger,
   ): Promise<string> {
     const resolved = this.resolveModel(modelId, 'chat');
     const providerId = this.resolveProviderId(resolved);

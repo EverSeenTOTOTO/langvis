@@ -10,7 +10,7 @@ import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
 
 /** 活跃 run 的会话内追踪——只持 runId + 事件缓冲，不持 agent 的 AgentRun 聚合。 */
-export interface ActiveRun {
+interface ActiveRun {
   runId: string;
   events: EnrichedEvent[];
 }
@@ -25,7 +25,6 @@ export class ConversationSession {
   constructor(
     readonly conversationId: string,
     private readonly idleTimeout: number,
-    /** 连接释放（idle 超时 / 显式 dispose）时回调 registry 做会话级清理（disposeChat）。 */
     private readonly onConnectionLost: () => void,
   ) {}
 
@@ -140,13 +139,12 @@ export class ConversationSession {
     this.memory = new ConversationMemory({
       history: messages,
       contextSize: config.contextSize,
-      modelId: config.modelId,
       runtimeConfig: config.runtimeConfig,
     });
   }
 
   hasMemory(): boolean {
-    return this.memory !== undefined;
+    return !!this.memory;
   }
 
   getMemory(): ConversationMemory {

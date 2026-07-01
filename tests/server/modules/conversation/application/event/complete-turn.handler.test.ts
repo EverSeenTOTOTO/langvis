@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { CompleteTurnHandler } from '@/server/modules/conversation/application/event/complete-turn.handler';
 import type { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
-import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type { DomainEvent } from '@/server/libs/ddd';
 import type { EnrichedEvent } from '@/shared/types/events';
 import type { RunCompletedPayload } from '@/server/modules/conversation/contracts';
@@ -31,7 +30,6 @@ describe('CompleteTurnHandler — 终态文案持久化 + 历史压缩', () => {
       usage?: { used: number; total: number };
     } = {},
   ) {
-    const llm = { id: 'stub-llm' } as unknown as LlmPort;
     const memory = {
       append: vi.fn(),
       compact: vi.fn().mockResolvedValue(opts.compactResult ?? null),
@@ -59,8 +57,8 @@ describe('CompleteTurnHandler — 终态文案持久化 + 历史压缩', () => {
         },
       ]),
     } as unknown as MessageRepositoryPort;
-    const handler = new CompleteTurnHandler(sessionManager, messageRepo, llm);
-    return { handler, messageRepo, sessionManager, memory, llm };
+    const handler = new CompleteTurnHandler(sessionManager, messageRepo);
+    return { handler, messageRepo, sessionManager, memory };
   }
 
   it('cancelled 且无生成文本时，内容持久化为取消原因', async () => {
@@ -112,7 +110,7 @@ describe('CompleteTurnHandler — 终态文案持久化 + 历史压缩', () => {
   });
 
   it('压缩有结果时：落盘 compact 消息、append 回 memory、发 conversation_usage', async () => {
-    const { handler, messageRepo, sessionManager, memory, llm } = setup(
+    const { handler, messageRepo, sessionManager, memory } = setup(
       [
         ev({ type: 'start' }),
         ev({ type: 'text_chunk', content: 'hi' }),
@@ -129,10 +127,7 @@ describe('CompleteTurnHandler — 终态文案持久化 + 历史压缩', () => {
 
     await handler.handle(event);
 
-    expect(memory.compact).toHaveBeenCalledWith({
-      llm,
-      signal: expect.any(AbortSignal),
-    });
+    expect(memory.compact).toHaveBeenCalledWith(expect.any(AbortSignal));
     expect(messageRepo.batchCreate).toHaveBeenCalledWith(conversationId, [
       expect.objectContaining({
         content: 'SUMMARY',

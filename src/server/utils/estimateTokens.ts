@@ -1,5 +1,5 @@
 import type { LlmMessage } from '@/shared/types/entities';
-import { getEncoding, TiktokenEncoding } from 'js-tiktoken';
+import { getEncoding } from 'js-tiktoken';
 
 /** 上下文用量：已用 token / 总额。被 conv（会话层）与 memory（loop 层）共用。 */
 export type ContextUsage = {
@@ -7,34 +7,15 @@ export type ContextUsage = {
   total: number;
 };
 
-// Encoding mapping based on modelId patterns
-// cl100k_base: GPT-4, GPT-3.5-turbo, text-embedding-ada-002, etc.
-// o200k_base: GPT-4o, GPT-4o-mini, etc.
-// o1: o1 series
-function getEncodingForModel(modelId: string): TiktokenEncoding {
-  const lowerId = modelId.toLowerCase();
-
-  // GPT-4o series uses o200k_base
-  if (lowerId.includes('gpt-4o') || lowerId.includes('gpt-4-turbo')) {
-    return 'o200k_base';
-  }
-
-  // o1 series uses o200k_base
-  if (lowerId.startsWith('o1-') || lowerId === 'o1') {
-    return 'o200k_base';
-  }
-
-  // Default to cl100k_base for GPT-4, GPT-3.5, and others
-  return 'cl100k_base';
-}
+// 固定 encoding：token 估算仅用于压缩阈值与会话用量百分比，需要稳定单调代理而非精确值——
+// tiktoken 仅有 OpenAI encoding，per-model 配置只是虚假精度。cl100k_base 对多数模型是合理近似。
+const encoding = getEncoding('cl100k_base');
 
 function messageToString(message: LlmMessage): string {
   const parts: string[] = [];
 
-  // Role prefix
   parts.push(`${message.role}: ${message.content}`);
 
-  // Include attachments if present
   if (message.attachments && message.attachments.length > 0) {
     for (const attachment of message.attachments) {
       parts.push(
@@ -46,31 +27,17 @@ function messageToString(message: LlmMessage): string {
   return parts.join('\n');
 }
 
-/**
- * Estimate token count for messages using js-tiktoken.
- * Falls back to cl100k_base if model encoding is not recognized.
- */
-export function estimateTokens(
-  messages: LlmMessage[],
-  modelId: string,
-): number {
-  const encodingName = getEncodingForModel(modelId);
-  const encoding = getEncoding(encodingName);
-
+/** 估算消息 token 数（固定 cl100k_base encoding）。 */
+export function estimateTokens(messages: LlmMessage[]): number {
   let totalTokens = 0;
 
-  // Messages follow this format: <|start|>{role/name}\n{content}<|end|>\n
   for (const message of messages) {
-    // Every message follows <|start|>{role}\n{content}<|end|>\n format
-    // Add tokens for special tokens (approximate)
-    totalTokens += 4; // <|start|> + role + \n + <|end|> + \n overhead
-
-    const text = messageToString(message);
-    const tokens = encoding.encode(text);
-    totalTokens += tokens.length;
+    // <|start|>{role}\n{content}<|end|>\n 每条消息固定开销。
+    totalTokens += 4;
+    totalTokens += encoding.encode(messageToString(message)).length;
   }
 
-  // Every reply is primed with <|start|>assistant<|message|>
+  // 回复启动令牌 <|start|>assistant<|message|>。
   totalTokens += 3;
 
   return totalTokens;

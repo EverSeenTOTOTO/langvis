@@ -1,4 +1,8 @@
 import { tool } from '@/server/decorator/core';
+import {
+  lifecycleHook,
+  type LifecycleHook,
+} from '@/server/decorator/lifecycle';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
@@ -25,7 +29,11 @@ const CONTENT_RATIO_THRESHOLD = 0.1;
 const SPA_ROOT_SELECTORS = ['#root', '#app', '#__next', '#__nuxt'];
 
 @tool(ToolIds.WEB_FETCH)
-export default class WebFetchTool extends Tool<WebFetchOutput> {
+@lifecycleHook
+export default class WebFetchTool
+  extends Tool<WebFetchOutput>
+  implements LifecycleHook
+{
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
@@ -291,7 +299,7 @@ export default class WebFetchTool extends Tool<WebFetchOutput> {
     };
   }
 
-  async dispose(): Promise<void> {
+  async onShutdown(): Promise<void> {
     if (this.browser?.isConnected()) {
       await this.browser.close();
       this.browser = null;

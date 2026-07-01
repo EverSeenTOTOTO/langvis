@@ -83,7 +83,6 @@ ${wrapUntrusted(truncatedContent)}`;
         temperature: 0.3,
       },
       ctx.signal,
-      this.logger,
     );
 
     if (!responseContent) {

@@ -21,6 +21,9 @@ export interface MessageRepositoryPort {
 
   findByConversationId(conversationId: string): Promise<Message[]>;
 
+  /** 按 agentRunId 批量查消息（启动清扫：定位非终态 run 的 assistant 消息）。 */
+  findByAgentRunIds(runIds: string[]): Promise<Message[]>;
+
   save(message: Message): Promise<Message>;
 
   batchDeleteInConversation(

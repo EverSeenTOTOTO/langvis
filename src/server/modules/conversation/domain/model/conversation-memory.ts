@@ -2,16 +2,13 @@ import type { LlmMessage, Message, MessageKind } from '@/shared/types/entities';
 import { Role } from '@/shared/entities/Message';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import type { ContextUsage } from '@/server/utils/estimateTokens';
-import { findLatestCompactionSummary } from './compaction-summary';
 import type { HistoryCompactionConfig } from '../../application/service/history-config.fragment';
-import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { Summarizer } from '@/server/libs/compaction';
 import { winstonLogger } from '@/server/utils/logger';
 
 /** 会话记忆激活配置（激活时灌入，ConversationSession 持有）。 */
 export interface ConversationMemoryConfig {
   contextSize: number;
-  modelId: string;
   runtimeConfig: Record<string, unknown>;
 }
 
@@ -32,7 +29,6 @@ export interface ConversationCompactionResult {
 export class ConversationMemory {
   protected readonly history: Message[];
   protected readonly contextSize: number;
-  protected readonly modelId: string;
   protected readonly compaction: HistoryCompactionConfig;
   private readonly logger = winstonLogger.child({
     source: 'ConversationMemory',
@@ -41,12 +37,10 @@ export class ConversationMemory {
   constructor(params: {
     history: Message[];
     contextSize: number;
-    modelId: string;
     runtimeConfig: Record<string, unknown>;
   }) {
     this.history = [...params.history];
     this.contextSize = params.contextSize;
-    this.modelId = params.modelId;
     this.compaction = (
       params.runtimeConfig as { history: HistoryCompactionConfig }
     ).history;
@@ -103,7 +97,7 @@ export class ConversationMemory {
     const { summary, tail } = this.getEffectiveTurns();
     const effective = summary ? [summary, ...tail] : tail;
     return {
-      used: estimateTokens(effective as unknown as LlmMessage[], this.modelId),
+      used: estimateTokens(effective as unknown as LlmMessage[]),
       total: this.contextSize,
     };
   }
@@ -112,34 +106,29 @@ export class ConversationMemory {
    * 历史层压缩（fold）：有效历史用量超阈时把「上一个 C + tail」滚动折叠成新 C。
    * 不含持久化（落盘是 CompleteTurnHandler 的职责）；未超阈或 fold 返回空时返回 null。
    */
-  async compact(params: {
-    llm: LlmPort;
-    signal: AbortSignal;
-  }): Promise<ConversationCompactionResult | null> {
-    if (!this.modelId) return null;
+  async compact(
+    signal: AbortSignal,
+  ): Promise<ConversationCompactionResult | null> {
+    if (!this.contextSize) return null;
 
     const { summary, index } = findLatestCompactionSummary(this.history);
     const tail = summary ? this.history.slice(index + 1) : this.history;
     if (tail.length === 0) return null;
 
     const effective = summary ? [summary, ...tail] : tail;
-    const used = estimateTokens(toLlmMessages(effective), this.modelId);
+    const used = estimateTokens(toLlmMessages(effective));
     if (used <= this.contextSize * this.compaction.threshold) return null;
 
     this.logger.info(
       `History over threshold (${used}/${this.contextSize}, ${(this.compaction.threshold * 100).toFixed(0)}%) — compacting ${tail.length} messages`,
     );
 
-    const summarizer = new Summarizer(
-      params.llm,
-      this.logger,
-      this.compaction.windowSize,
-      this.modelId,
-    );
+    const summarizer = new Summarizer();
     const content = await summarizer.fold(
       summary?.content ?? null,
       toLlmMessages(tail),
-      params.signal,
+      this.compaction.windowSize,
+      signal,
     );
 
     if (!content) return null;
@@ -149,7 +138,7 @@ export class ConversationMemory {
       content,
       startRef: summary?.id ?? this.history[0]?.id ?? '',
       usage: {
-        used: estimateTokens([{ role: 'user', content }], this.modelId),
+        used: estimateTokens([{ role: 'user', content }]),
         total: this.contextSize,
       },
     };
@@ -189,4 +178,25 @@ export class ConversationMemory {
 
 function toLlmMessages(messages: Message[]): LlmMessage[] {
   return messages.map(m => ({ role: m.role, content: m.content }));
+}
+
+/** 压缩摘要 C：role=USER, meta.kind='compact'（与 'context' 并列的脚手架判别键）。 */
+function isCompactionSummary(message: Message): boolean {
+  return (message.meta?.kind as MessageKind | undefined) === 'compact';
+}
+
+/**
+ * 找最后一个压缩摘要 C（滚动折叠模型下，只有"最新且 end≤当前"的那个有效）。
+ * 位置即覆盖终点——C 排在被它总结的消息之后，buildContext 原样发出 C 作为有效历史前缀。
+ */
+function findLatestCompactionSummary(messages: Message[]): {
+  summary: Message | null;
+  index: number;
+} {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (isCompactionSummary(messages[i])) {
+      return { summary: messages[i], index: i };
+    }
+  }
+  return { summary: null, index: -1 };
 }

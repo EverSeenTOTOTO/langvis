@@ -6,11 +6,7 @@ import { ChatService } from '../service/chat.service';
 import { SessionManager } from '../service/session-manager';
 import { CONVERSATION_REPOSITORY } from '../../conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
-import {
-  StartChatCommand,
-  TurnInitiated,
-  extractUserConfig,
-} from '../../contracts';
+import { StartChatCommand, TurnInitiated } from '../../contracts';
 import { ConversationNotFoundError } from '../../domain/errors';
 
 @commandHandler(StartChatCommand)
@@ -33,7 +29,7 @@ export class StartChatHandler {
     if (!dbConversation) {
       throw new ConversationNotFoundError(conversationId);
     }
-    const userConfig = extractUserConfig(dbConversation);
+    const userConfig = dbConversation.config;
 
     // 前置条件：会话必须已激活（调用方需先 activate），不再静默激活。
     await this.convService.assertActivated(conversationId);
@@ -50,7 +46,6 @@ export class StartChatHandler {
     );
     const systemPrompt = systemMessage?.content ?? '';
 
-    // 种子只到 user query（assistant 占位不追加）；追加后取有效历史作 agent run 的种子。
     const memory = this.sessionManager.getMemory(conversationId);
     memory.append(setup.userMessage);
     const effectiveHistory = await memory.buildContext();

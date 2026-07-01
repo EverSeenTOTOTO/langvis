@@ -1,9 +1,14 @@
 import { createClient, RedisClientType } from 'redis';
 import { service } from '@/server/decorator/service';
+import {
+  lifecycleHook,
+  type LifecycleHook,
+} from '@/server/decorator/lifecycle';
 import Logger from '@/server/utils/logger';
 
 @service()
-export class RedisService {
+@lifecycleHook
+export class RedisService implements LifecycleHook {
   private redis: RedisClientType;
   private redisSubscriber: RedisClientType;
   private connected = false;
@@ -104,7 +109,7 @@ export class RedisService {
     return this.redisSubscriber;
   }
 
-  async dispose(): Promise<void> {
+  async onShutdown(): Promise<void> {
     if (this.connected) {
       await this.redis.quit();
       await this.redisSubscriber.quit();

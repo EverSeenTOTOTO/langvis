@@ -59,6 +59,12 @@ export class MessageRepository implements MessageRepositoryPort {
     });
   }
 
+  async findByAgentRunIds(runIds: string[]): Promise<Message[]> {
+    if (runIds.length === 0) return [];
+    const repo = this.db.getRepository(MessageEntity);
+    return await repo.find({ where: { agentRunId: In(runIds) } });
+  }
+
   async save(message: Message): Promise<Message> {
     const repo = this.db.getRepository(MessageEntity);
     return await repo.save(message as MessageEntity);

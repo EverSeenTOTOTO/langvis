@@ -1,6 +1,5 @@
 import type { LlmMessage } from '@/shared/types/entities';
-import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
-import { winstonLogger } from '@/server/utils/logger';
+import Logger from '@/server/utils/logger';
 import type { LoopCompactionConfig } from './loop-config.fragment';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import type { ContextUsage } from '@/server/utils/estimateTokens';
@@ -15,8 +14,6 @@ export interface WorkingMemoryParams {
   /** agent 提供的种子（conv 的有效历史 LlmMessage[]）。 */
   seed: LlmMessage[];
   contextSize: number;
-  modelId: string;
-  llm: LlmPort;
   runtimeConfig: Record<string, unknown>;
 }
 
@@ -27,27 +24,20 @@ export interface WorkingMemoryParams {
 export class WorkingMemory {
   private readonly iterMessages: LlmMessage[];
   /** seed 长度：压缩只动此下标之后（query/历史在前，不可变）。 */
-  private readonly baseLen: number;
+  private readonly base: number;
   private readonly contextSize: number;
-  private readonly modelId: string;
   private readonly compaction: LoopCompactionConfig;
   private readonly summarizer: Summarizer;
-  private readonly logger = winstonLogger.child({ source: 'WorkingMemory' });
+  private readonly logger = Logger.child({ source: 'WorkingMemory' });
 
   constructor(params: WorkingMemoryParams) {
     this.iterMessages = [...params.seed];
-    this.baseLen = params.seed.length;
+    this.base = params.seed.length;
     this.contextSize = params.contextSize;
-    this.modelId = params.modelId;
     this.compaction = (
       params.runtimeConfig as { loop: LoopCompactionConfig }
     ).loop;
-    this.summarizer = new Summarizer(
-      params.llm,
-      this.logger,
-      this.compaction.windowSize,
-      this.modelId,
-    );
+    this.summarizer = new Summarizer();
   }
 
   async buildContext(): Promise<LlmMessage[]> {
@@ -56,12 +46,12 @@ export class WorkingMemory {
 
   /** 调试用：seed 长度（loop actions = 此值之后的部分）。 */
   get baseLength(): number {
-    return this.baseLen;
+    return this.base;
   }
 
   getContextUsage(): ContextUsage {
     return {
-      used: estimateTokens(this.iterMessages, this.modelId),
+      used: estimateTokens(this.iterMessages),
       total: this.contextSize,
     };
   }
@@ -75,7 +65,7 @@ export class WorkingMemory {
    * 保留最近 keepRecent 条。异常吞掉（压缩失败不影响 loop）。
    */
   async compact(signal: AbortSignal): Promise<CompactResult> {
-    const loopActions = this.iterMessages.slice(this.baseLen);
+    const loopActions = this.iterMessages.slice(this.base);
     if (loopActions.length <= this.compaction.keepRecent) {
       return { compacted: false, usage: this.getContextUsage() };
     }
@@ -89,11 +79,16 @@ export class WorkingMemory {
     const older = loopActions.slice(0, -this.compaction.keepRecent);
 
     try {
-      const recap = await this.summarizer.fold(null, older, signal);
+      const recap = await this.summarizer.fold(
+        null,
+        older,
+        this.compaction.windowSize,
+        signal,
+      );
       if (!recap) return { compacted: false, usage: before };
 
       // 截断到 baseLen 后追加回顾 + 近期；seed [0..baseLen) 不变。
-      this.iterMessages.length = this.baseLen;
+      this.iterMessages.length = this.base;
       this.iterMessages.push({
         role: 'user',
         content: `Observation: [earlier steps in this turn — summarized]\n${recap}`,
@@ -114,11 +109,16 @@ export class WorkingMemory {
    * 仅在至少做过一次实质动作时触发（>1 条，避免对 trivial "直接回答" turn 浪费一次 LLM 调用）。
    */
   async foldProcessSummary(signal: AbortSignal): Promise<string | null> {
-    const loopActions = this.iterMessages.slice(this.baseLen);
+    const loopActions = this.iterMessages.slice(this.base);
     if (loopActions.length <= 1) return null;
 
     try {
-      return await this.summarizer.fold(null, loopActions, signal);
+      return await this.summarizer.fold(
+        null,
+        loopActions,
+        this.compaction.windowSize,
+        signal,
+      );
     } catch (err) {
       this.logger.warn(
         `Process summary failed: ${(err as Error)?.message ?? err}`,

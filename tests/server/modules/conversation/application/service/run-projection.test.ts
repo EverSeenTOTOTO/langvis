@@ -197,6 +197,30 @@ describe('projectRun', () => {
     ).toBe('cancelled');
   });
 
+  it('uses cancelled reason as content', () => {
+    const view = projectRun([
+      ev({ type: 'start' }),
+      ev({ type: 'cancelled', reason: 'user abort' }),
+    ]);
+    expect(view.content).toBe('user abort');
+  });
+
+  it('uses error message as content', () => {
+    const view = projectRun([
+      ev({ type: 'start' }),
+      ev({ type: 'error', error: 'kaboom' }),
+    ]);
+    expect(view.content).toBe('kaboom');
+  });
+
+  it('cancelled/failed overrides partial streamed content', () => {
+    const view = projectRun([
+      ev({ type: 'text_chunk', content: 'partial answer' }),
+      ev({ type: 'cancelled', reason: 'aborted' }),
+    ]);
+    expect(view.content).toBe('aborted');
+  });
+
   it('returns a fresh steps array each call (no shared mutation)', () => {
     const events = [
       ev({ type: 'thought', content: 't' }),
@@ -214,5 +238,28 @@ describe('projectRun', () => {
     expect(view.content).toBe('hi');
     expect(view.steps).toHaveLength(0);
     expect(view.status).toBe('running');
+  });
+
+  it('extracts the last process_summary', () => {
+    const view = projectRun([
+      ev({ type: 'process_summary', summary: 'old' }),
+      ev({ type: 'process_summary', summary: 'latest summary' }),
+      ev({ type: 'final' }),
+    ]);
+    expect(view.processSummary).toBe('latest summary');
+  });
+
+  it('extracts the last audio event', () => {
+    const view = projectRun([
+      ev({ type: 'audio', filePath: 'tts/a.mp3', voice: 'V' }),
+      ev({ type: 'final' }),
+    ]);
+    expect(view.audio).toEqual({ filePath: 'tts/a.mp3', voice: 'V' });
+  });
+
+  it('defaults processSummary/audio to null when absent', () => {
+    const view = projectRun([ev({ type: 'text_chunk', content: 'hi' })]);
+    expect(view.processSummary).toBeNull();
+    expect(view.audio).toBeNull();
   });
 });

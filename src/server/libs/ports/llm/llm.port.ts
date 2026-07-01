@@ -1,5 +1,4 @@
 import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
-import type { Logger } from '@/server/utils/logger';
 import type {
   TextToSpeechInput,
   TextToSpeechOutput,
@@ -18,14 +17,12 @@ export interface LlmPort {
     modelId: string | undefined,
     data: Partial<ChatCompletionCreateParams>,
     signal: AbortSignal,
-    logger: Logger,
   ): AsyncGenerator<string, string, void>;
 
   chatContent(
     modelId: string | undefined,
     data: Partial<ChatCompletionCreateParams>,
     signal: AbortSignal,
-    logger: Logger,
   ): Promise<string>;
 
   embed(

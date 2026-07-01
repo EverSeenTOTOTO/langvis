@@ -34,7 +34,6 @@ export async function* runReactLoop(
         stop: ['Observation:', 'Observation：'],
       },
       ctx.signal,
-      logger,
     );
 
     if (!content) {

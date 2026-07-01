@@ -16,7 +16,6 @@ import {
   createActivationMessages,
   createTurnMessages,
 } from '../../domain/service/message-factory';
-import { extractUserConfig } from '../../contracts';
 import { composeConfigSchema } from '@/server/libs/config/config-fragment';
 import { parse } from '@/server/utils/schemaValidator';
 import { ConversationNotActivatedError } from '../../domain/errors';
@@ -103,38 +102,28 @@ export class ChatService {
     };
   }
 
-  // ════════════════════════════════════════
-  // 持久化辅助
-  // ════════════════════════════════════════
-
-  /** 供 ConversationMemoryPort.activate 一次性灌入。 */
   getConversationMessages(conversationId: string): Promise<Message[]> {
     return this.messageRepo.findByConversationId(conversationId);
   }
 
-  /** contextSize / modelId / runtimeConfig；供 ConversationMemoryPort.activate。 */
   async resolveConversationConfig(conversationId: string): Promise<{
     contextSize: number;
-    modelId: string;
     runtimeConfig: Record<string, unknown>;
   } | null> {
     const conv = await this.convRepo.findById(conversationId);
     if (!conv) return null;
+
     const modelId =
-      (extractUserConfig(conv).model as { modelId?: string } | undefined)
-        ?.modelId ?? '';
+      (conv.config?.model as { modelId?: string } | undefined)?.modelId ?? '';
     const contextSize = modelId
       ? (this.providerService.getModel(modelId)?.contextSize ?? 0)
       : 0;
     return {
       contextSize,
-      modelId,
-      // 经 composeConfigSchema + useDefaults parse 成默认完整的 runtimeConfig（剥离遗留 agent/memory
-      // 键、回填 history/loop 等片段默认值），使下游直读的字段必有值。
-      runtimeConfig: parse(
-        composeConfigSchema(),
-        extractUserConfig(conv),
-      ) as Record<string, unknown>,
+      runtimeConfig: parse(composeConfigSchema(), conv.config) as Record<
+        string,
+        unknown
+      >,
     };
   }
 
@@ -192,5 +181,30 @@ export class ChatService {
         ),
       );
     }
+  }
+
+  /**
+   * 全局清扫（启动用例）：把所有非终态 run（重启残留）批量标记 failed，并更新其 assistant 消息文案。
+   * run 为权威——每个非终态 run 都落终态；消息可能缺失（崩溃早于落 agentRunId）则只更 run。
+   * 不再补发 SSE 帧：DB 在接客前即修好，前端重连/重拉自然拿到终态。
+   */
+  async markInterruptedRuns(reason: string): Promise<number> {
+    const runs = await this.agentRunRepo.findNonTerminal();
+    if (runs.length === 0) return 0;
+
+    const messages = await this.messageRepo.findByAgentRunIds(
+      runs.map(r => r.id),
+    );
+    const now = new Date();
+    await Promise.all([
+      ...messages.map(m => this.messageRepo.update(m.id, { content: reason })),
+      ...runs.map(r =>
+        this.agentRunRepo.update(r.id, {
+          status: 'failed',
+          completedAt: now,
+        }),
+      ),
+    ]);
+    return runs.length;
   }
 }
