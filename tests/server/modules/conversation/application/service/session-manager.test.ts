@@ -56,47 +56,14 @@ function makeManager(activeMessages: unknown[] = []): {
   return { manager, chat, redis };
 }
 
-describe('SessionManager — 孤儿 run 对账', () => {
+describe('SessionManager', () => {
   const conversationId = 'conv_1';
 
-  describe('initSession（重连对账）', () => {
-    it('将孤儿 run 标记 failed 并向客户端补发 error 帧', async () => {
+  describe('initSession（连接生命周期——孤儿对账已移至启动期 OrphanRunReconciler）', () => {
+    it('新会话：attach 传输并登记 redis key，不对账孤儿、不补发帧', async () => {
       const { manager, chat, redis } = makeManager([
         { id: 'msg_1', agentRunId: 'run_1' },
       ]);
-      const transport = new FakeTransport();
-
-      await manager.initSession(conversationId, transport);
-
-      expect(chat.markMessagesTerminated).toHaveBeenCalledWith(
-        [expect.objectContaining({ id: 'msg_1' })],
-        'failed',
-        'Generation interrupted (server restarted)',
-      );
-
-      const errorFrame = transport.sent.find(
-        f =>
-          f.type === 'error' &&
-          (f as { messageId?: string }).messageId === 'msg_1',
-      );
-      expect(errorFrame).toEqual(
-        expect.objectContaining({
-          type: 'error',
-          messageId: 'msg_1',
-          runId: 'run_1',
-          error: 'Generation interrupted (server restarted)',
-        }),
-      );
-
-      expect(redis.set).toHaveBeenCalledWith(
-        `chat_session:${conversationId}`,
-        expect.any(Object),
-        3600,
-      );
-    });
-
-    it('无孤儿时不标记、不补发，但仍登记新会话', async () => {
-      const { manager, chat, redis } = makeManager([]);
       const transport = new FakeTransport();
 
       await manager.initSession(conversationId, transport);
@@ -110,39 +77,19 @@ describe('SessionManager — 孤儿 run 对账', () => {
       );
     });
 
-    it('排除本进程仍活跃的 run（断线重连不打断在跑的 run）', async () => {
-      const { manager, chat } = makeManager([
-        { id: 'msg_live', agentRunId: 'run_live' },
-      ]);
-      manager.registerRun(conversationId, 'msg_live', 'run_live');
+    it('重连（connection 已存在）时跳过 redis 登记', async () => {
+      const { manager, redis } = makeManager([]);
+      await manager.initSession(conversationId, new FakeTransport());
+      (redis.set as ReturnType<typeof vi.fn>).mockClear();
 
       await manager.initSession(conversationId, new FakeTransport());
 
-      expect(chat.markMessagesTerminated).not.toHaveBeenCalled();
-    });
-
-    it('重连（connection 已存在）时跳过对账', async () => {
-      const { manager, chat } = makeManager([
-        { id: 'msg_1', agentRunId: 'run_1' },
-      ]);
-
-      await manager.initSession(conversationId, new FakeTransport());
-
-      (
-        chat.findActiveAssistantMessages as ReturnType<typeof vi.fn>
-      ).mockClear();
-      (chat.markMessagesTerminated as ReturnType<typeof vi.fn>).mockClear();
-      const second = new FakeTransport();
-      await manager.initSession(conversationId, second);
-
-      expect(chat.findActiveAssistantMessages).not.toHaveBeenCalled();
-      expect(chat.markMessagesTerminated).not.toHaveBeenCalled();
-      expect(second.sent).toHaveLength(0);
+      expect(redis.set).not.toHaveBeenCalled();
     });
   });
 
-  describe('cancelAllActiveRuns（取消对账）', () => {
-    it('activeRuns 为空时仍将孤儿 run 标记 cancelled 并补发 cancelled 帧', async () => {
+  describe('cancelAllActiveRuns（运行期取消：DB-only，不补发帧）', () => {
+    it('activeRuns 为空时仍将孤儿 run 标记 cancelled，但不补发帧', async () => {
       const { manager, chat } = makeManager([]);
       const transport = new FakeTransport();
       await manager.initSession(conversationId, transport);
@@ -159,19 +106,22 @@ describe('SessionManager — 孤儿 run 对账', () => {
         'cancelled',
         'Cancelled by user',
       );
+      // 不再补发帧——前端经重连/重拉拿到终态。
+      expect(transport.sent.find(f => f.type === 'cancelled')).toBeUndefined();
+    });
 
-      const cancelledFrame = transport.sent.find(
-        f =>
-          f.type === 'cancelled' &&
-          (f as { messageId?: string }).messageId === 'msg_orphan',
-      );
-      expect(cancelledFrame).toEqual(
-        expect.objectContaining({
-          type: 'cancelled',
-          messageId: 'msg_orphan',
-          reason: 'Cancelled by user',
-        }),
-      );
+    it('排除本进程仍活跃的 run（不打断在跑的 run）', async () => {
+      const { manager, chat } = makeManager([]);
+      await manager.initSession(conversationId, new FakeTransport());
+      manager.registerRun(conversationId, 'msg_live', 'run_live');
+
+      (
+        chat.findActiveAssistantMessages as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([{ id: 'msg_live', agentRunId: 'run_live' }]);
+
+      await manager.cancelAllActiveRuns(conversationId, 'x');
+
+      expect(chat.markMessagesTerminated).not.toHaveBeenCalled();
     });
   });
 });

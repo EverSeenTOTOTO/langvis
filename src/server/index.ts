@@ -4,6 +4,7 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import express, { Express } from 'express';
+import type { Server } from 'http';
 import path from 'node:path';
 import 'reflect-metadata';
 import bindControllers from './controller';
@@ -15,7 +16,7 @@ import './modules/document/document.module';
 import './modules/email/email.module';
 import './modules/settings/settings.module';
 import './modules/user/user.module';
-import { disposeAll } from './decorator/disposal';
+import { bootAll, shutdownAll } from './decorator/lifecycle';
 import bindAuthMiddleware from './middleware/auth';
 import bindRequestId from './middleware/requestId';
 import bindSSRMiddleware from './middleware/ssr';
@@ -57,35 +58,37 @@ export const createServer = async (): Promise<Express> => {
 const port = process.env.PORT || 3000;
 
 createServer()
-  .then(app => {
-    const server = app.listen(port, () => {
-      logger.info(`Server started at http://localhost:${port}`);
-    });
+  .then(async app => {
+    await bootAll(); // 生命周期启动钩子（DB 就绪 + 孤儿 run 清扫等）
+
+    const server = app.listen(port, () =>
+      logger.info(`Server started at http://localhost:${port}`),
+    );
 
     const shutdown = () => {
       logger.info('Shutting down server...');
-
-      disposeAll()
-        .then(() => {
-          server.closeAllConnections();
-          server.close(() => {
-            logger.info('Server shut down');
-            process.exit(0);
-          });
-        })
+      shutdownAll()
+        .then(() => gracefulClose(server, 0))
         .catch(err => {
           logger.error('Error during shutdown:', err);
-          server.closeAllConnections();
-          server.close(() => process.exit(1));
+          gracefulClose(server, 1);
         });
-
-      setTimeout(() => {
-        logger.warn('Forcing exit after timeout');
-        process.exit(1);
-      }, 5000).unref();
     };
 
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
   })
   .catch(logger.error);
+
+/** 关停收尾：关连接 → 关服务 → 退出；5s 强制兜底。 */
+function gracefulClose(server: Server, code: number): void {
+  server.closeAllConnections();
+  server.close(() => {
+    logger.info('Server shut down');
+    process.exit(code);
+  });
+  setTimeout(() => {
+    logger.warn('Forcing exit after timeout');
+    process.exit(1);
+  }, 5000).unref();
+}

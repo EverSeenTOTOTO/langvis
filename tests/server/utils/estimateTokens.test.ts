@@ -14,62 +14,34 @@ describe('estimateTokens', () => {
 
   describe('basic estimation', () => {
     it('should estimate tokens for a simple user message', () => {
-      const messages = [createMessage(Role.USER, 'Hello, world!')];
-      const tokens = estimateTokens(messages, 'openai:gpt-4');
+      const tokens = estimateTokens([
+        createMessage(Role.USER, 'Hello, world!'),
+      ]);
 
       expect(tokens).toBeGreaterThan(0);
       expect(tokens).toBeLessThan(50); // Simple message should be small
     });
 
     it('should return more tokens for longer content', () => {
-      const shortMessages = [createMessage(Role.USER, 'Hi')];
-      const longMessages = [
+      const shortTokens = estimateTokens([createMessage(Role.USER, 'Hi')]);
+      const longTokens = estimateTokens([
         createMessage(
           Role.USER,
           'This is a much longer message that should definitely result in more tokens than the short one.',
         ),
-      ];
-
-      const shortTokens = estimateTokens(shortMessages, 'openai:gpt-4');
-      const longTokens = estimateTokens(longMessages, 'openai:gpt-4');
+      ]);
 
       expect(longTokens).toBeGreaterThan(shortTokens);
     });
 
     it('should accumulate tokens for multiple messages', () => {
-      const oneMessage = [createMessage(Role.USER, 'Hello')];
-      const twoMessages = [
+      const oneTokens = estimateTokens([createMessage(Role.USER, 'Hello')]);
+      const twoTokens = estimateTokens([
         createMessage(Role.USER, 'Hello'),
         createMessage(Role.ASSIST, 'Hi there!'),
-      ];
-
-      const oneTokens = estimateTokens(oneMessage, 'openai:gpt-4');
-      const twoTokens = estimateTokens(twoMessages, 'openai:gpt-4');
+      ]);
 
       expect(twoTokens).toBeGreaterThan(oneTokens);
-    });
-  });
-
-  describe('model encoding selection', () => {
-    it('should use cl100k_base for GPT-4', () => {
-      const messages = [createMessage(Role.USER, 'Test message')];
-      const tokens = estimateTokens(messages, 'openai:gpt-4');
-
-      expect(tokens).toBeGreaterThan(0);
-    });
-
-    it('should use o200k_base for GPT-4o', () => {
-      const messages = [createMessage(Role.USER, 'Test message')];
-      const tokens = estimateTokens(messages, 'openai:gpt-4o');
-
-      expect(tokens).toBeGreaterThan(0);
-    });
-
-    it('should fallback to cl100k_base for unknown models', () => {
-      const messages = [createMessage(Role.USER, 'Test message')];
-      const tokens = estimateTokens(messages, 'unknown:model');
-
-      expect(tokens).toBeGreaterThan(0);
     });
   });
 
@@ -85,14 +57,8 @@ describe('estimateTokens', () => {
         },
       ];
 
-      const withoutTokens = estimateTokens(
-        [messageWithoutAttachment],
-        'openai:gpt-4',
-      );
-      const withTokens = estimateTokens(
-        [messageWithAttachment],
-        'openai:gpt-4',
-      );
+      const withoutTokens = estimateTokens([messageWithoutAttachment]);
+      const withTokens = estimateTokens([messageWithAttachment]);
 
       expect(withTokens).toBeGreaterThan(withoutTokens);
     });
@@ -100,23 +66,18 @@ describe('estimateTokens', () => {
 
   describe('edge cases', () => {
     it('should handle empty message array', () => {
-      const tokens = estimateTokens([], 'openai:gpt-4');
-      // Should return just the overhead for assistant priming (3 tokens)
-      expect(tokens).toBe(3);
+      // 仅 assistant 启动开销（3 tokens）
+      expect(estimateTokens([])).toBe(3);
     });
 
     it('should handle empty content', () => {
-      const messages = [createMessage(Role.USER, '')];
-      const tokens = estimateTokens(messages, 'openai:gpt-4');
-
-      expect(tokens).toBeGreaterThan(0);
+      expect(estimateTokens([createMessage(Role.USER, '')])).toBeGreaterThan(0);
     });
 
     it('should handle special characters', () => {
-      const messages = [createMessage(Role.USER, 'Hello 🎉 你好 مرحبا')];
-      const tokens = estimateTokens(messages, 'openai:gpt-4');
-
-      expect(tokens).toBeGreaterThan(0);
+      expect(
+        estimateTokens([createMessage(Role.USER, 'Hello 🎉 你好 مرحبا')]),
+      ).toBeGreaterThan(0);
     });
   });
 });

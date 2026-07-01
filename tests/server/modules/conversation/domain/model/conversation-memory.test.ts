@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConversationMemory } from '@/server/modules/conversation/domain/model/conversation-memory';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
-import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 
 // compact() 内部 new Summarizer；mock 掉以控制 fold 返回，避免真实 LLM 调用。
 const { foldMock } = vi.hoisted(() => ({ foldMock: vi.fn() }));
@@ -27,18 +26,12 @@ function makeMessage(
 }
 
 const RUNTIME_CONFIG = { history: { threshold: 0.8, windowSize: 10 } };
-const stubLlm = {} as LlmPort;
 const signal = new AbortController().signal;
 
-function createMemory(
-  history: Message[],
-  contextSize = 8000,
-  modelId = 'openai:gpt-4',
-) {
+function createMemory(history: Message[], contextSize = 8000) {
   return new ConversationMemory({
     history,
     contextSize,
-    modelId,
     runtimeConfig: RUNTIME_CONFIG,
   });
 }
@@ -54,7 +47,6 @@ describe('ConversationMemory', () => {
       const memory = new ConversationMemory({
         history: [],
         contextSize: 4000,
-        modelId: '',
         runtimeConfig: RUNTIME_CONFIG,
       });
       expect(memory.getContextUsage().total).toBe(4000);
@@ -236,14 +228,14 @@ describe('ConversationMemory', () => {
     it('未超阈：返回 null，不调用 fold', async () => {
       foldMock.mockResolvedValue('irrelevant');
       const m = createMemory([makeMessage(Role.USER, 'hi')], 100_000);
-      expect(await m.compact({ llm: stubLlm, signal })).toBeNull();
+      expect(await m.compact(signal)).toBeNull();
       expect(foldMock).not.toHaveBeenCalled();
     });
 
-    it('未配 modelId：返回 null，不调用 fold', async () => {
+    it('contextSize=0：返回 null，不调用 fold', async () => {
       foldMock.mockResolvedValue('x');
-      const m = createMemory([makeMessage(Role.USER, 'hi')], 100, '');
-      expect(await m.compact({ llm: stubLlm, signal })).toBeNull();
+      const m = createMemory([makeMessage(Role.USER, 'hi')], 0);
+      expect(await m.compact(signal)).toBeNull();
       expect(foldMock).not.toHaveBeenCalled();
     });
 
@@ -257,13 +249,18 @@ describe('ConversationMemory', () => {
       ];
       const m = createMemory(history, 100);
 
-      const r = await m.compact({ llm: stubLlm, signal });
+      const r = await m.compact(signal);
 
       expect(r).not.toBeNull();
       expect(r!.content).toBe('compacted summary');
       expect(r!.startRef).toBe(history[0]!.id);
       // 首次压缩：prevSummary=null，fold tail 消息
-      expect(foldMock).toHaveBeenCalledWith(null, expect.any(Array), signal);
+      expect(foldMock).toHaveBeenCalledWith(
+        null,
+        expect.any(Array),
+        10,
+        signal,
+      );
     });
 
     it('tail 为空（仅有 C 无新消息）：返回 null', async () => {
@@ -272,7 +269,7 @@ describe('ConversationMemory', () => {
         [makeMessage(Role.USER, 'only-a-summary', { kind: 'compact' })],
         100,
       );
-      expect(await m.compact({ llm: stubLlm, signal })).toBeNull();
+      expect(await m.compact(signal)).toBeNull();
       expect(foldMock).not.toHaveBeenCalled();
     });
   });

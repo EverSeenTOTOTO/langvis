@@ -100,11 +100,3 @@ export interface RunCompletedPayload {
   messageId: string;
   agentRunId: string;
 }
-
-/** 既有会话行可能仍存有收敛后废弃的键（`agent`、`memory`），此处静默丢弃。 */
-export function extractUserConfig(conv: {
-  config?: Record<string, any> | null;
-}): Record<string, unknown> {
-  const { agent: _agent, memory: _memory, ...rest } = conv.config ?? {};
-  return rest;
-}

@@ -12,6 +12,8 @@ export interface RunView {
   /** Non-null while the run is blocked on an ask_user / awaiting_input prompt
    * (the last awaiting tool_progress not yet resolved by a tool_result). */
   awaitingInput: AwaitingInputProjection | null;
+  processSummary: string | null;
+  audio: { filePath: string; voice?: string } | null;
 }
 
 export function projectRun(events: readonly EnrichedEvent[]): RunView {
@@ -19,8 +21,11 @@ export function projectRun(events: readonly EnrichedEvent[]): RunView {
   const steps: ReActStep[] = [];
   let currentStep: ReActStep | null = null;
   let awaitingInput: AwaitingInputProjection | null = null;
+  let processSummary: string | null = null;
+  let audio: { filePath: string; voice?: string } | null = null;
 
   let status: RunView['status'] = 'running';
+  let terminalReason: string | null = null;
 
   const finalizeCurrentStep = (at: number): void => {
     if (currentStep) {
@@ -107,20 +112,37 @@ export function projectRun(events: readonly EnrichedEvent[]): RunView {
       case 'error':
         finalizeCurrentStep(event.at);
         status = 'failed';
+        terminalReason = event.error;
         break;
 
       case 'cancelled':
         finalizeCurrentStep(event.at);
         status = 'cancelled';
+        terminalReason = event.reason;
+        break;
+
+      case 'process_summary':
+        processSummary = event.summary;
+        break;
+
+      case 'audio':
+        audio = { filePath: event.filePath, voice: event.voice };
         break;
 
       case 'start':
-      case 'process_summary':
-      case 'audio':
       case 'loop_usage':
         // Lifecycle / telemetry markers — no content accumulation.
         break;
     }
+  }
+
+  // 终态（failed/cancelled）用终止原因覆盖内容，避免空白气泡——投影单一来源，
+  // 实时快照与持久化文案由此一致。
+  if (
+    (status === 'failed' || status === 'cancelled') &&
+    terminalReason !== null
+  ) {
+    content = terminalReason;
   }
 
   // An open step (e.g. a tool_call whose result hasn't arrived — including one
@@ -130,5 +152,5 @@ export function projectRun(events: readonly EnrichedEvent[]): RunView {
     steps.push(currentStep);
   }
 
-  return { content, steps, status, awaitingInput };
+  return { content, steps, status, awaitingInput, processSummary, audio };
 }

@@ -1,5 +1,4 @@
 import { container, singleton } from 'tsyringe';
-import { registerDisposableToken } from './disposal';
 import { EventBus } from '@/server/libs/ddd/event-bus';
 import type { Command } from '@/server/libs/ddd/command.base';
 import type { Query } from '@/server/libs/ddd/query.base';
@@ -12,7 +11,6 @@ export function commandHandler<T extends Command>(
 ): ClassDecorator {
   return (target: any) => {
     singleton()(target);
-    registerDisposableToken(target);
     Reflect.defineMetadata(HANDLER_META, target, commandType);
   };
 }
@@ -22,7 +20,6 @@ export function queryHandler<T extends Query>(
 ): ClassDecorator {
   return (target: any) => {
     singleton()(target);
-    registerDisposableToken(target);
     Reflect.defineMetadata(HANDLER_META, target, queryType);
   };
 }
@@ -30,7 +27,6 @@ export function queryHandler<T extends Query>(
 export function eventHandler(eventType: string): ClassDecorator {
   return (target: any) => {
     singleton()(target);
-    registerDisposableToken(target);
     const eventBus = container.resolve(EventBus);
     eventBus.on(eventType, async (...args: any[]) => {
       try {

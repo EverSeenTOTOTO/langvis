@@ -10,8 +10,6 @@ export abstract class Tool<O = unknown> {
   protected abstract readonly logger: Logger;
 
   abstract call(ctx: ToolCallContext): AsyncGenerator<RunEvent, O, void>;
-
-  async dispose(): Promise<void> {}
 }
 
 export type ToolConstructor = new (...args: any[]) => Tool;

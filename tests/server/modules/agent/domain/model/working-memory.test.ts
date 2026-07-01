@@ -1,6 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { container } from 'tsyringe';
 import { WorkingMemory } from '@/server/modules/agent/domain/model/working-memory';
 import type { LoopCompactionConfig } from '@/server/modules/agent/domain/model/loop-config.fragment';
+import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
+import type { LlmProvider } from '@/server/libs/infrastructure/llm.provider';
+import type { LlmMessage } from '@/shared/types/entities';
 
 const COMPACTION_DEFAULTS: LoopCompactionConfig = {
   threshold: 0.8,
@@ -8,26 +12,31 @@ const COMPACTION_DEFAULTS: LoopCompactionConfig = {
   keepRecent: 4,
 };
 const RUNTIME_CONFIG = { loop: COMPACTION_DEFAULTS };
-import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
-import type { LlmMessage } from '@/shared/types/entities';
 
-function mockLlm(content = 'RECAP'): LlmPort {
-  return { chatContent: vi.fn(async () => content) } as unknown as LlmPort;
+// Summarizer 现自容器解析 LlmProvider——测试把 mock 注册到 LLM_PORT。
+function mockLlm(content = 'RECAP'): LlmProvider {
+  return {
+    getDefaultModel: () => undefined,
+    chatContent: vi.fn(async () => content),
+  } as unknown as LlmProvider;
 }
 
 function makeWorking(
   seed: LlmMessage[],
-  llm: LlmPort,
+  llm: LlmProvider,
   contextSize = 10,
 ): WorkingMemory {
+  container.register(LLM_PORT, { useValue: llm });
   return new WorkingMemory({
     seed,
     contextSize,
-    modelId: 'openai:gpt-4',
-    llm,
     runtimeConfig: RUNTIME_CONFIG,
   });
 }
+
+afterEach(() => {
+  container.clearInstances();
+});
 
 describe('WorkingMemory', () => {
   it('buildContext 返回种子；baseLength = 种子长度', async () => {
@@ -120,10 +129,11 @@ describe('WorkingMemory', () => {
 
     it('折叠异常时返回 null', async () => {
       const llm = {
+        getDefaultModel: () => undefined,
         chatContent: vi.fn(async () => {
           throw new Error('boom');
         }),
-      } as unknown as LlmPort;
+      } as unknown as LlmProvider;
       const w = makeWorking([{ role: 'system', content: 'sys' }], llm);
       w.append('assistant', 'a');
       w.append('user', 'b');

@@ -11,6 +11,7 @@ function makeMockMessageRepo(): MessageRepositoryPort {
   return {
     batchCreate: vi.fn().mockResolvedValue([]),
     findByConversationId: vi.fn().mockResolvedValue([]),
+    findByAgentRunIds: vi.fn().mockResolvedValue([]),
     findLastAssistantMessage: vi.fn().mockResolvedValue(null),
     findById: vi.fn().mockResolvedValue(null),
     save: vi.fn().mockResolvedValue({} as any),
@@ -25,6 +26,7 @@ function makeMockAgentRunRepo(): AgentRunRepositoryPort {
     save: vi.fn().mockResolvedValue({} as any),
     findById: vi.fn().mockResolvedValue(null),
     findByIds: vi.fn().mockResolvedValue([]),
+    findNonTerminal: vi.fn().mockResolvedValue([]),
     update: vi.fn().mockResolvedValue(null),
   };
 }
@@ -291,6 +293,37 @@ describe('ChatService', () => {
 
       expect(messageRepo.update).toHaveBeenCalledTimes(1);
       expect(agentRunRepo.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('markInterruptedRuns', () => {
+    it('把所有非终态 run 标记 failed 并更新其消息文案', async () => {
+      (agentRunRepo.findNonTerminal as any).mockResolvedValue([
+        { id: 'run_1' },
+        { id: 'run_2' },
+      ]);
+      (messageRepo.findByAgentRunIds as any).mockResolvedValue([
+        { id: 'msg_1', agentRunId: 'run_1' },
+        { id: 'msg_2', agentRunId: 'run_2' },
+      ]);
+
+      const count = await service.markInterruptedRuns('Generation interrupted');
+
+      expect(count).toBe(2);
+      expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
+        content: 'Generation interrupted',
+      });
+      expect(agentRunRepo.update).toHaveBeenCalledWith('run_1', {
+        status: 'failed',
+        completedAt: expect.any(Date),
+      });
+    });
+
+    it('无非终态 run 时返回 0 且不查消息', async () => {
+      const count = await service.markInterruptedRuns('x');
+
+      expect(count).toBe(0);
+      expect(messageRepo.findByAgentRunIds).not.toHaveBeenCalled();
     });
   });
 

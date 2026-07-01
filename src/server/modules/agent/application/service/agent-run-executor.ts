@@ -72,8 +72,6 @@ export class AgentRunExecutor {
     const workingMemory = new WorkingMemory({
       seed: buildIterMessages(params.effectiveHistory),
       contextSize: config.contextSize,
-      modelId: modelId ?? '',
-      llm: this.llm,
       runtimeConfig: config.runtimeConfig,
     });
 

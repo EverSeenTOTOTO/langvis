@@ -25,6 +25,13 @@ export class AgentRunRepository implements AgentRunRepositoryPort {
     return await repo.find({ where: { id: In(runIds) } });
   }
 
+  async findNonTerminal(): Promise<AgentRun[]> {
+    const repo = this.db.getRepository(AgentRunEntity);
+    return await repo.find({
+      where: { status: In(['initialized', 'running']) },
+    });
+  }
+
   async update(
     runId: string,
     partial: Partial<AgentRun>,

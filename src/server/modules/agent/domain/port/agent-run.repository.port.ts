@@ -7,5 +7,8 @@ export interface AgentRunRepositoryPort {
 
   findByIds(runIds: string[]): Promise<AgentRun[]>;
 
+  /** 所有非终态 run（initialized/running）——启动清扫用。 */
+  findNonTerminal(): Promise<AgentRun[]>;
+
   update(runId: string, partial: Partial<AgentRun>): Promise<AgentRun | null>;
 }

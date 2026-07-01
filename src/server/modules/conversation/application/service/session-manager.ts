@@ -1,6 +1,10 @@
 import type { SSEFrame, EnrichedEvent } from '@/shared/types/events';
 import type { Transport } from '@/shared/transport';
 import { inject, singleton } from 'tsyringe';
+import {
+  lifecycleHook,
+  type LifecycleHook,
+} from '@/server/decorator/lifecycle';
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { RedisKeys } from '@/shared/constants';
 import { EventBus, createDomainEvent } from '@/server/libs/ddd';
@@ -14,12 +18,9 @@ import type {
 import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
 
-/**
- * 会话 registry（@singleton）：以 conversationId 索引 ConversationSession，维护孤儿 run 对账（依赖 ChatService）。
- * 公开方法是 thin delegators，调用方不变。
- */
 @singleton()
-export class SessionManager {
+@lifecycleHook
+export class SessionManager implements LifecycleHook {
   private readonly logger = Logger.child({ source: 'SessionManager' });
   private readonly sessions = new Map<string, ConversationSession>();
 
@@ -53,7 +54,7 @@ export class SessionManager {
     this.logger.info(`Chat disposed`, { chatId: conversationId });
   }
 
-  async disposeAll(): Promise<void> {
+  async onShutdown(): Promise<void> {
     for (const session of this.sessions.values()) {
       session.dispose();
     }
@@ -61,11 +62,6 @@ export class SessionManager {
     this.logger.info(`Closed all SSE connections`);
   }
 
-  /**
-   * 初始化会话：attachTransport + 孤儿 run 对账 + Redis 登记。
-   * 对账刻意放在 attach 之后——服务重启后内存 activeRuns 已丢，snapshot replay 与 cancel 都无法让客户端的
-   * running 节点终止；attach 先行可让标记终态的同一时刻把帧推给客户端驱动其收敛。
-   */
   async initSession(
     conversationId: string,
     transport: Transport<SSEFrame>,
@@ -81,11 +77,7 @@ export class SessionManager {
       return;
     }
 
-    await this.reconcileOrphanedRuns(
-      conversationId,
-      'failed',
-      'Generation interrupted (server restarted)',
-    );
+    // 重启残留 run 的清扫已在启动期由 OrphanRunReconciler 完成，此处不再对账。
     await this.redisService.set(
       RedisKeys.CHAT_SESSION(conversationId),
       { conversationId, startedAt: Date.now() },
@@ -193,9 +185,9 @@ export class SessionManager {
   }
 
   /**
-   * 孤儿 run 对账：扫描 status 仍为 initialized/running、但本进程 activeRuns 里
-   * 已无对应记录的 run（典型成因：服务重启致内存 activeRuns 丢失），统一驱动到终态。
-   * 不依赖 Redis session key 的存在性——重启后即便 key 已过期（>1h 才重连），只要 DB 里仍是非终态且无活跃 run，就视为孤儿。
+   * 孤儿 run 对账（运行期取消用例）：扫描本会话 status 仍为 initialized/running、
+   * 但本进程 activeRuns 已无对应记录的 run，统一在 DB 里驱动到终态。
+   * 重启残留由 OrphanRunReconciler 在启动期清扫；此处只动 DB，不补发帧——前端经重连/重拉拿到终态。
    */
   private async reconcileOrphanedRuns(
     conversationId: string,
@@ -217,23 +209,6 @@ export class SessionManager {
     });
 
     await this.convService.markMessagesTerminated(orphans, status, reason);
-
-    // 重启后 activeRuns 已丢失，snapshot replay 与 cancel 都无法让客户端的
-    // running 节点终止——这里显式补发终态帧。run 已死，seq/at 合成即可。
-    const session = this.sessions.get(conversationId);
-    for (const msg of orphans) {
-      const event =
-        status === 'cancelled'
-          ? ({ type: 'cancelled', reason } as const)
-          : ({ type: 'error', error: reason } as const);
-      session?.sendFrame({
-        ...event,
-        runId: msg.agentRunId!,
-        seq: 0,
-        at: Date.now(),
-        messageId: msg.id,
-      } as SSEFrame);
-    }
   }
 }
 

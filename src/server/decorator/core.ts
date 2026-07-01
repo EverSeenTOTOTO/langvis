@@ -6,7 +6,6 @@ import { container, injectable, Lifecycle } from 'tsyringe';
 import { Tool } from '../modules/agent/domain/model/tool.base';
 import logger from '../utils/logger';
 import { parse } from '../utils/schemaValidator';
-import { registerDisposableToken } from './disposal';
 import { PARAM_METADATA_KEY, ParamMetadata, ParamType } from './param';
 
 const metaDataKey = Symbol.for('config');
@@ -15,7 +14,6 @@ export const tool = (token?: ToolIds) =>
   function configDecorator(target: any) {
     injectable()(target);
     Reflect.defineMetadata(metaDataKey, { type: 'tool', token }, target);
-    registerDisposableToken(target);
   };
 
 const proxyValidation = <T>(
