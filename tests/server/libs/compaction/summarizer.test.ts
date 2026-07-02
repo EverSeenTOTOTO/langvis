@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 describe('Summarizer.fold', () => {
-  it('prevSummary=null 且消息 ≤ 窗口：单次调用，prompt 不含既有摘要', async () => {
+  it('prevSummary=null 且消息 ≤ 窗口：单次调用，prompt 不含[Existing summary]', async () => {
     const { chatContent, prompts, llm } = mockLlm();
     container.register(LLM_PORT, { useValue: llm });
     const s = new Summarizer();
@@ -47,17 +47,17 @@ describe('Summarizer.fold', () => {
     await s.fold(null, makeMessages(3), 10, signal);
 
     expect(chatContent).toHaveBeenCalledTimes(1);
-    expect(prompts[0]!).not.toContain('既有摘要');
+    expect(prompts[0]!).not.toContain('[Existing summary]');
   });
 
-  it('带 prevSummary：prompt 包含既有摘要种子', async () => {
+  it('带 prevSummary：prompt 包含[Existing summary]种子', async () => {
     const { prompts, llm } = mockLlm();
     container.register(LLM_PORT, { useValue: llm });
     const s = new Summarizer();
 
     await s.fold('previous summary text', makeMessages(3), 10, signal);
 
-    expect(prompts[0]!).toContain('既有摘要');
+    expect(prompts[0]!).toContain('[Existing summary]');
     expect(prompts[0]!).toContain('previous summary text');
   });
 
@@ -70,8 +70,8 @@ describe('Summarizer.fold', () => {
 
     // 25 / 10 = 3 块（10,10,5）
     expect(chatContent).toHaveBeenCalledTimes(3);
-    // 第二块起，种子为上一块的 'summary' → prompt 含既有摘要
-    expect(prompts[1]!).toContain('既有摘要');
+    // 第二块起，种子为上一块的 'summary' → prompt 含[Existing summary]
+    expect(prompts[1]!).toContain('[Existing summary]');
   });
 
   it('空消息：直接返回 prevSummary，不调用 LLM', async () => {
