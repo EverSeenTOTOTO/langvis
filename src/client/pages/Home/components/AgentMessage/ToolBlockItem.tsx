@@ -5,7 +5,7 @@ import { isEmpty } from 'lodash-es';
 import { useMemo } from 'react';
 import type React from 'react';
 import type { UIToolCall } from '@/client/store/modules/message-node';
-import './ReActAgent/index.scss';
+import './index.scss';
 
 const TAG_COLORS = [
   'magenta',

@@ -1,0 +1,143 @@
+.react {
+  &-tool {
+    &-block,
+    &-thought-block {
+      padding: 8px 12px;
+      margin-block: 4px;
+      background: var(--ant-color-bg-container);
+      border: 1px solid var(--ant-color-border);
+      border-left: 3px solid #2f54eb; // geekblue
+      border-radius: 6px;
+    }
+
+    &-header {
+      margin-block-end: 4px;
+    }
+
+    &-time {
+      margin-inline-start: auto;
+      font-size: 12px;
+    }
+
+    &-progress {
+      display: block;
+      margin-block-end: 4px;
+      font-size: 13px;
+    }
+
+    &-args {
+      display: block;
+      max-height: 120px;
+      padding: 8px;
+      margin-block-start: 8px;
+      overflow: auto;
+      font-family: monospace;
+      font-size: 12px;
+      border-radius: 4px;
+
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+      }
+    }
+
+    &-output {
+      max-height: 200px;
+      padding: 8px;
+      margin-block-start: 8px;
+      overflow: auto;
+      font-family: monospace;
+      font-size: 12px;
+      background: var(--ant-color-bg-layout);
+      border-radius: 4px;
+    }
+
+    &-streaming-output {
+      max-height: 200px;
+      padding: 8px;
+      margin-block-start: 8px;
+      overflow: auto;
+      font-family: monospace;
+      font-size: 12px;
+      word-break: break-all;
+      white-space: pre-wrap;
+      background: var(--ant-color-bg-layout);
+      border-radius: 4px;
+
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+
+        &.stream-stderr {
+          color: var(--ant-color-error);
+        }
+      }
+
+      .stream-cursor {
+        display: inline-block;
+        width: 8px;
+        height: 14px;
+        vertical-align: text-bottom;
+        background: var(--ant-color-primary);
+        animation: blink 1s step-end infinite;
+      }
+    }
+
+    &-error {
+      display: block;
+      margin-block-start: 4px;
+      font-size: 13px;
+    }
+
+    &-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    &-processing {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--ant-color-bg-container);
+      border: 1px solid var(--ant-color-border);
+      border-radius: 6px;
+    }
+  }
+
+  &-skill-block {
+    padding: 8px 12px;
+    margin-block: 4px;
+    background: var(--ant-color-bg-container);
+    border: 1px solid var(--ant-color-border);
+    border-left: 3px solid #13c2c2; // cyan
+    border-radius: 6px;
+
+    .react-tool-header,
+    .react-tool-time,
+    .react-tool-error {
+      // Reuse tool styles
+    }
+  }
+
+  &-thought {
+    &-block {
+      padding: 8px 12px;
+      margin-block: 4px;
+      background: var(--ant-color-bg-container);
+      border: 1px solid var(--ant-color-border);
+      border-radius: 6px;
+    }
+
+    &-content {
+      margin-block-start: 4px;
+      margin-bottom: 0;
+    }
+  }
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
