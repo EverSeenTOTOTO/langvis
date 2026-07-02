@@ -17,7 +17,7 @@ export const LOOP_FRAGMENT = defineConfigFragment({
     type: 'object',
     nullable: true,
     default: {},
-    title: '迭代压缩',
+    title: 'Loop Iteration Compaction',
     description: 'ReAct loop 内迭代压缩（超阈折叠较早步骤、保留近期）',
     properties: {
       threshold: {

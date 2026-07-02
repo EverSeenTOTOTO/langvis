@@ -9,6 +9,7 @@ export const MODEL_FRAGMENT = defineConfigFragment({
   schema: {
     type: 'object',
     nullable: true,
+    title: 'Model',
     properties: {
       modelId: {
         type: 'string',

@@ -5,9 +5,11 @@ function formatMessages(messages: LlmMessage[]): string {
 }
 
 /**
- * Summarizer 的 prompt 构造（保留 who / when / do what / 关键事实）。
- * prevSummary 非空即滚动折叠的增量步（既有摘要 + 新增消息 → 更新摘要），为空则做首块初始摘要。
- * 独立文件便于替换模板而不动 fold 主流程。
+ * Builds the Summarizer prompt (preserves who / when / did what / key facts).
+ * A non-null prevSummary means this is a rolling fold increment (existing
+ * summary + new messages → updated summary); null means an initial summary of
+ * the first block. Kept in its own file so the template can be swapped without
+ * touching the fold flow.
  */
 export function buildSummarizerPrompt(
   prevSummary: string | null,
@@ -17,25 +19,25 @@ export function buildSummarizerPrompt(
 
   if (prevSummary) {
     return [
-      '你是对话压缩器。下面给出「既有摘要」和「新增消息」，请把新增消息融入既有摘要，产出一份更新后的摘要。',
-      '须保留：谁(who)、何时(when)、做了什么(do what)、以及关键事实与未决事项。保持简洁、按时间顺序、不要编造、不要遗漏关键信息。',
+      'You are a conversation compactor. Below are an "existing summary" and "new messages". Fold the new messages into the existing summary and produce an updated summary.',
+      'Preserve: who, when, did what, plus key facts and open items. Keep it concise and chronological; do not fabricate; do not drop key information.',
       '',
-      '【既有摘要】',
+      '[Existing summary]',
       prevSummary,
       '',
-      '【新增消息】',
+      '[New messages]',
       block,
       '',
-      '请直接输出更新后的摘要（不要多余解释、不要 Markdown 标题）：',
+      'Output the updated summary directly (no extra explanation, no Markdown headings):',
     ].join('\n');
   }
 
   return [
-    '你是对话压缩器。请把下面的消息压缩为一份摘要，保留：谁(who)、何时(when)、做了什么(do what)、以及关键事实与未决事项。保持简洁、按时间顺序、不要编造。',
+    'You are a conversation compactor. Compress the messages below into a summary, preserving: who, when, did what, plus key facts and open items. Keep it concise and chronological; do not fabricate.',
     '',
-    '【消息】',
+    '[Messages]',
     block,
     '',
-    '请直接输出摘要（不要多余解释、不要 Markdown 标题）：',
+    'Output the summary directly (no extra explanation, no Markdown headings):',
   ].join('\n');
 }

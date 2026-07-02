@@ -19,7 +19,7 @@ export const HISTORY_FRAGMENT = defineConfigFragment({
     type: 'object',
     nullable: true,
     default: {},
-    title: '历史压缩',
+    title: 'History Compaction',
     description: '会话历史压缩（超阈折叠历史为摘要 C）',
     properties: {
       threshold: {
