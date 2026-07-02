@@ -185,7 +185,7 @@ export default class ConversationController {
       return msg;
     });
 
-    return res.json({ messages: enriched });
+    return res.json(enriched);
   }
 
   @api('/:id/messages', { method: 'delete' })
