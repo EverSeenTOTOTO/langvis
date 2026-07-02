@@ -8,6 +8,7 @@ import type {
 import { inject, singleton } from 'tsyringe';
 import logger from '@/server/utils/logger';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import { stripThinking } from '@/server/libs/llm-text';
 import type { ModelDefinition, ModelType } from '@/shared/types/provider';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type {
@@ -253,7 +254,7 @@ export class LlmProvider implements LlmPort {
         logger.warn('LLM response truncated: max_tokens limit reached');
       }
 
-      return content;
+      return stripThinking(content);
     } catch (err) {
       const apiError = err as APIError;
       logger.error('LLM call failed', {

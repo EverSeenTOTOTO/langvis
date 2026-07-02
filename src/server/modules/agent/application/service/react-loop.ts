@@ -2,6 +2,7 @@ import { ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { ModelConfig } from '@/shared/types';
 import type { RunEvent } from '@/shared/types/events';
+import { stripThinking } from '@/server/libs/llm-text';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import { winstonLogger } from '@/server/utils/logger';
 
@@ -78,13 +79,12 @@ export async function* runReactLoop(
   throw new Error('Max iterations reached');
 }
 
-function parseResponse(content: string): ReActAction {
-  const cleanedContent = content
-    .trim()
-    .replace(/^```json\s*/, '')
-    .replace(/\s*```$/, '');
-
-  const parsed = JSON.parse(cleanedContent);
+export function parseResponse(content: string): ReActAction {
+  const parsed = JSON.parse(extractJsonObject(stripThinking(content))) as {
+    tool?: unknown;
+    input?: unknown;
+    thought?: unknown;
+  };
 
   if (
     typeof parsed.tool === 'string' &&
@@ -95,11 +95,49 @@ function parseResponse(content: string): ReActAction {
     return {
       thought: parsed.thought ? String(parsed.thought) : undefined,
       tool: parsed.tool,
-      input: parsed.input,
+      input: parsed.input as Record<string, unknown>,
     };
   }
 
   throw new Error(
     'Invalid response: missing or invalid top-level `tool`/`input`',
   );
+}
+
+/**
+ * Pull the first balanced `{…}` out of the response so leading reasoning
+ * residue, prose, or stray ```json fences can't break parsing. String-aware
+ * (braces inside `"…"` don't affect depth) and free of regex on the JSON
+ * hierarchy; deliberately does NOT strip fences globally, since a string value
+ * may legitimately contain triple backticks.
+ */
+function extractJsonObject(text: string): string {
+  const start = text.indexOf('{');
+  if (start === -1) {
+    throw new Error('no JSON object in response');
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+
+    if (ch === '"') inString = true;
+    else if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+
+  throw new Error('unbalanced braces in response');
 }
