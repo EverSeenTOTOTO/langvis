@@ -3,51 +3,47 @@ import Logger from '@/server/utils/logger';
 import type { LlmMessage } from '@/shared/types/entities';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import type { LlmProvider } from '@/server/libs/infrastructure/llm.provider';
-import { buildSummarizerPrompt } from './summarizer.prompt';
+import { Prompt } from '@/server/libs/prompt';
+
+export interface FoldOptions {
+  /** 要折叠的历史；若续接既有摘要，由调用方将其作为 messages[0] 传入。 */
+  messages: LlmMessage[];
+  windowSize: number;
+  signal: AbortSignal;
+  /** Prompt 模板：须含 "History" section，fold 逐块填充后 build。 */
+  prompt: Prompt;
+}
 
 /**
- * Summarizer —— fold 原语的实现。
+ * fold 原语：把 messages 按 windowSize 滚动折叠成一条摘要。prompt 由调用方注入
+ * （lib 不认识任何域），只需含一个 "History" section——fold 每块填入历史后 build。
  *
- * fold(prevSummary, messages, windowSize): 以 prevSummary 为种子，按滑动窗口逐块归纳——
- * 每块把「既有摘要 + 本块消息」交给 LLM 产出新摘要（即"摘要的摘要"，可递归）。
- * 首次 prevSummary=null。
+ * 滚动：第 1 块直接折叠；之后每块前置上一块的摘要（[previous summary]）继续折叠，
+ * 即"摘要的摘要"。续接场景（如历史压缩）的既有摘要在调用方作为 messages[0] 传入，
+ * 随第 1 块一起折叠——fold 无 prevSummary 参数。
  *
- * 三处复用同一原语：mid-loop IterationCompaction / loop-exit 过程摘要 / post-turn HistoryCompaction。
- *
- * 无状态：每次调用从容器解析 LlmProvider 并自取 compact 模型（缺省回退对话模型）。
+ * 无状态：从容器解析 LlmProvider 并自取 compact 模型（缺省回退对话模型）。
  */
-export class Summarizer {
-  async fold(
-    prevSummary: string | null,
-    messages: LlmMessage[],
-    windowSize: number,
-    signal: AbortSignal,
-  ): Promise<string> {
-    if (messages.length === 0) return prevSummary ?? '';
+export async function fold({
+  messages,
+  windowSize,
+  signal,
+  prompt,
+}: FoldOptions): Promise<string> {
+  if (messages.length === 0) return '';
 
-    let acc = prevSummary;
-    for (let i = 0; i < messages.length; i += windowSize) {
-      acc = await this.summarizeChunk(
-        acc,
-        messages.slice(i, i + windowSize),
-        signal,
-      );
-    }
+  const llm = container.resolve<LlmProvider>(LLM_PORT);
+  const modelId = llm.getDefaultModel('compact')?.id;
 
-    return acc ?? '';
-  }
-
-  private async summarizeChunk(
-    prev: string | null,
-    chunk: LlmMessage[],
-    signal: AbortSignal,
-  ): Promise<string> {
-    const llm = container.resolve<LlmProvider>(LLM_PORT);
+  let acc: string | null = null;
+  for (let i = 0; i < messages.length; i += windowSize) {
+    const chunk = messages.slice(i, i + windowSize);
+    const history = formatHistory(acc, chunk);
     const content = await llm.chatContent(
-      llm.getDefaultModel('compact')?.id,
+      modelId,
       {
         messages: [
-          { role: 'user', content: buildSummarizerPrompt(prev, chunk) },
+          { role: 'user', content: prompt.with('History', history).build() },
         ],
         temperature: 0,
       },
@@ -56,11 +52,17 @@ export class Summarizer {
 
     const trimmed = content.trim();
     if (!trimmed) {
-      Logger.warn(
-        'Summarizer returned empty content, keeping previous summary',
-      );
-      return prev ?? '';
+      Logger.warn('fold returned empty content, keeping previous summary');
+      continue;
     }
-    return trimmed;
+    acc = trimmed;
   }
+
+  return acc ?? '';
+}
+
+/** 格式化一块历史；滚动时前置上一块的摘要。 */
+function formatHistory(acc: string | null, chunk: LlmMessage[]): string {
+  const block = chunk.map(m => `[${m.role}]: ${m.content}`).join('\n\n');
+  return acc ? `[previous summary]: ${acc}\n\n${block}` : block;
 }

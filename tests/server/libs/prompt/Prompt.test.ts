@@ -1,4 +1,4 @@
-import { Prompt } from '@/server/modules/agent/domain/model/prompt';
+import { Prompt } from '@/server/libs/prompt';
 import { describe, expect, it } from 'vitest';
 
 describe('Prompt', () => {
