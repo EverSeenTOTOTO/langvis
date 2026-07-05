@@ -73,9 +73,9 @@ export class EmailArchivedHandler {
     const fromDisplay = fromName ? `${fromName} <${from}>` : from;
 
     if (typeof contentOrCached === 'string') {
-      return `使用 document_archive 技能归档邮件：${subject}\n\n发件人：${fromDisplay}\n发件时间：${sentAt}\n\n内容：\n${contentOrCached}`;
+      return `/document_archive 归档邮件：${subject}\n\n发件人：${fromDisplay}\n发件时间：${sentAt}\n\n内容：\n${contentOrCached}`;
     }
 
-    return `使用 document_archive 技能归档邮件：${subject}\n\n发件人：${fromDisplay}\n发件时间：${sentAt}\n\n内容已缓存：${JSON.stringify(contentOrCached)}`;
+    return `/document_archive 归档邮件：${subject}\n\n发件人：${fromDisplay}\n发件时间：${sentAt}\n\n内容已缓存：${JSON.stringify(contentOrCached)}`;
   }
 }

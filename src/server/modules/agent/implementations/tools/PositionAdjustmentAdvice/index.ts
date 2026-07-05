@@ -6,7 +6,7 @@ import { container } from 'tsyringe';
 import { wrapUntrusted } from '@/shared/utils';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
-import { Prompt } from '@/server/modules/agent/domain/model/prompt';
+import { Prompt } from '@/server/libs/prompt';
 import AskUserTool from '../AskUser';
 import type { PositionAdjustmentAdviceOutput } from './config';
 

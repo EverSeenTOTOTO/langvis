@@ -3,7 +3,8 @@ import Logger from '@/server/utils/logger';
 import type { LoopCompactionConfig } from './loop-config.fragment';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import type { ContextUsage } from '@/server/utils/estimateTokens';
-import { Summarizer } from '@/server/libs/compaction';
+import { fold } from '@/server/libs/compaction';
+import { Prompt } from '@/server/libs/prompt';
 
 export interface CompactResult {
   compacted: boolean;
@@ -27,7 +28,6 @@ export class WorkingMemory {
   private readonly base: number;
   private readonly contextSize: number;
   private readonly compaction: LoopCompactionConfig;
-  private readonly summarizer: Summarizer;
   private readonly logger = Logger.child({ source: 'WorkingMemory' });
 
   constructor(params: WorkingMemoryParams) {
@@ -37,7 +37,6 @@ export class WorkingMemory {
     this.compaction = (
       params.runtimeConfig as { loop: LoopCompactionConfig }
     ).loop;
-    this.summarizer = new Summarizer();
   }
 
   async buildContext(): Promise<LlmMessage[]> {
@@ -79,12 +78,12 @@ export class WorkingMemory {
     const older = loopActions.slice(0, -this.compaction.keepRecent);
 
     try {
-      const recap = await this.summarizer.fold(
-        null,
-        older,
-        this.compaction.windowSize,
+      const recap = await fold({
+        messages: older,
+        windowSize: this.compaction.windowSize,
         signal,
-      );
+        prompt: PROCESS_SUMMARY_PROMPT,
+      });
       if (!recap) return { compacted: false, usage: before };
 
       // 截断到 baseLen 后追加回顾 + 近期；seed [0..baseLen) 不变。
@@ -113,12 +112,12 @@ export class WorkingMemory {
     if (loopActions.length <= 1) return null;
 
     try {
-      return await this.summarizer.fold(
-        null,
-        loopActions,
-        this.compaction.windowSize,
+      return await fold({
+        messages: loopActions,
+        windowSize: this.compaction.windowSize,
         signal,
-      );
+        prompt: PROCESS_SUMMARY_PROMPT,
+      });
     } catch (err) {
       this.logger.warn(
         `Process summary failed: ${(err as Error)?.message ?? err}`,
@@ -127,3 +126,25 @@ export class WorkingMemory {
     }
   }
 }
+
+/**
+ * Process-summary prompt (mid-loop recap + loop-exit processSummary): folds an
+ * agent turn's tool/observation trace into a concise summary of the WORK. The
+ * final answer is delivered to the user and prepended to this summary verbatim
+ * (see ConversationMemory.buildContext), so it must NOT be restated here —
+ * capture the process that produced it (tools, attempts, difficulties, results).
+ *
+ * Static template: fold fills the History section per chunk (rolling summary is
+ * threaded by fold itself, prepended as [previous summary]).
+ */
+const PROCESS_SUMMARY_PROMPT = Prompt.empty()
+  .with('Role', 'You compact an agent turn into a concise process summary.')
+  .with(
+    'Instructions',
+    'Fold the history below into a concise process summary of the WORK done: tools called and why, what was attempted, difficulties or errors, intermediate results, and key decisions. The history may begin with a previous summary — incorporate it. Capture the trajectory of work only — the final answer is delivered to the user separately and must NOT be restated or paraphrased. Be concise and chronological; do not fabricate.',
+  )
+  .with('History', '')
+  .with(
+    'Output',
+    'Output only the process summary (no extra explanation, no Markdown headings).',
+  );

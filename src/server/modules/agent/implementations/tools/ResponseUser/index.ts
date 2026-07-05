@@ -65,6 +65,8 @@ export default class ResponseUserTool extends Tool<ResponseUserOutput> {
       return;
     }
 
+    this.logger.info(`Generating speech audio response for run ${ctx.runId}`);
+
     try {
       const params: TextToSpeechInput = {
         text: message,

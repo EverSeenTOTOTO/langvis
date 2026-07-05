@@ -3,11 +3,9 @@ import { ConversationMemory } from '@/server/modules/conversation/domain/model/c
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
 
-// compact() 内部 new Summarizer；mock 掉以控制 fold 返回，避免真实 LLM 调用。
+// compact() 内部调用 fold；mock 掉以控制返回，避免真实 LLM 调用。
 const { foldMock } = vi.hoisted(() => ({ foldMock: vi.fn() }));
-vi.mock('@/server/libs/compaction/summarizer', () => ({
-  Summarizer: vi.fn(() => ({ fold: foldMock })),
-}));
+vi.mock('@/server/libs/compaction/summarizer', () => ({ fold: foldMock }));
 
 function makeMessage(
   role: Role,
@@ -254,13 +252,13 @@ describe('ConversationMemory', () => {
       expect(r).not.toBeNull();
       expect(r!.content).toBe('compacted summary');
       expect(r!.startRef).toBe(history[0]!.id);
-      // 首次压缩：prevSummary=null，fold tail 消息
-      expect(foldMock).toHaveBeenCalledWith(
-        null,
-        expect.any(Array),
-        10,
+      // 首次压缩：无既有摘要，messages 即 tail
+      expect(foldMock).toHaveBeenCalledWith({
+        messages: expect.any(Array),
+        windowSize: 10,
         signal,
-      );
+        prompt: expect.any(Object),
+      });
     });
 
     it('tail 为空（仅有 C 无新消息）：返回 null', async () => {

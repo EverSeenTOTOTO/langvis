@@ -3,7 +3,8 @@ import { Role } from '@/shared/entities/Message';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import type { ContextUsage } from '@/server/utils/estimateTokens';
 import type { HistoryCompactionConfig } from '../../application/service/history-config.fragment';
-import { Summarizer } from '@/server/libs/compaction';
+import { fold } from '@/server/libs/compaction';
+import { Prompt } from '@/server/libs/prompt';
 import { winstonLogger } from '@/server/utils/logger';
 
 /** 会话记忆激活配置（激活时灌入，ConversationSession 持有）。 */
@@ -82,7 +83,7 @@ export class ConversationMemory {
         if (msg.role === Role.ASSIST) {
           const processSummary = msg.meta?.processSummary;
           if (typeof processSummary === 'string' && processSummary) {
-            content = `${processSummary}\n\n${content}`;
+            content = `<summary>${processSummary}</summary>\n\n${content}`;
           }
         }
 
@@ -123,13 +124,17 @@ export class ConversationMemory {
       `History over threshold (${used}/${this.contextSize}, ${(this.compaction.threshold * 100).toFixed(0)}%) — compacting ${tail.length} messages`,
     );
 
-    const summarizer = new Summarizer();
-    const content = await summarizer.fold(
-      summary?.content ?? null,
-      toLlmMessages(tail),
-      this.compaction.windowSize,
+    const tailMessages = toLlmMessages(tail);
+    // 既有摘要 C 作为 messages[0] 续接（fold 内部滚动折叠，无需单独 prevSummary）。
+    const messages = summary
+      ? [{ role: 'user' as const, content: summary.content }, ...tailMessages]
+      : tailMessages;
+    const content = await fold({
+      messages,
+      windowSize: this.compaction.windowSize,
       signal,
-    );
+      prompt: HISTORY_PROMPT,
+    });
 
     if (!content) return null;
 
@@ -179,6 +184,27 @@ export class ConversationMemory {
 function toLlmMessages(messages: Message[]): LlmMessage[] {
   return messages.map(m => ({ role: m.role, content: m.content }));
 }
+
+/**
+ * History-compaction prompt: folds whole past turns into a rolling summary C
+ * that replaces them as the effective-history prefix. Compacted turns are NOT
+ * preserved elsewhere, so retain topic + outcome gist (who/when/did what).
+ *
+ * Static template: fold fills the History section per chunk. The prior summary
+ * (if continuing) is passed by the caller as messages[0]; the rolling summary
+ * across chunks is threaded by fold itself.
+ */
+const HISTORY_PROMPT = Prompt.empty()
+  .with('Role', 'You are a conversation compactor.')
+  .with(
+    'Instructions',
+    'Fold the history below into a concise summary, incorporating any previous summary at the start. Preserve: who, when, did what, plus key facts and open items. Keep it concise and chronological; do not fabricate.',
+  )
+  .with('History', '')
+  .with(
+    'Output',
+    'Output the summary directly (no extra explanation, no Markdown headings).',
+  );
 
 /** 压缩摘要 C：role=USER, meta.kind='compact'（与 'context' 并列的脚手架判别键）。 */
 function isCompactionSummary(message: Message): boolean {
