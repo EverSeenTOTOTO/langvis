@@ -15,15 +15,12 @@ import {
 } from '../modules/conversation/conversation.di-tokens';
 import type { MessageRepositoryPort } from '../modules/conversation/domain/port/message.repository.port';
 import type { ConversationRepositoryPort } from '../modules/conversation/domain/port/conversation.repository.port';
-import { AGENT_RUN_REPOSITORY } from '../modules/agent/agent.di-tokens';
-import { CommandBus } from '@/server/libs/ddd';
+import { CommandBus, QueryBus } from '@/server/libs/ddd';
 import {
   ConversationUpdateCommand,
   CreateConversationCommand,
+  GetMessagesQuery,
 } from '../modules/conversation/contracts';
-import type { AgentRunRepositoryPort } from '../modules/agent/domain/port/agent-run.repository.port';
-import { Role } from '@/shared/entities/Message';
-import { projectRun } from '../modules/conversation/application/service/run-projection';
 
 @controller('/api/conversation')
 export default class ConversationController {
@@ -32,10 +29,10 @@ export default class ConversationController {
     private convRepo: ConversationRepositoryPort,
     @inject(MESSAGE_REPOSITORY)
     private messageRepo: MessageRepositoryPort,
-    @inject(AGENT_RUN_REPOSITORY)
-    private agentRunRepo: AgentRunRepositoryPort,
     @inject(CommandBus)
     private commandBus: CommandBus,
+    @inject(QueryBus)
+    private queryBus: QueryBus,
   ) {}
 
   @api('/', { method: 'post' })
@@ -154,38 +151,10 @@ export default class ConversationController {
     @param('id') id: string,
     @response() res: Response,
   ) {
-    const messages = await this.messageRepo.findByConversationId(id);
-
-    // Merge agent_runs data for assistant messages (BC composition):
-    // 事件流是事实源，projectRun 派生出 steps/status（+ content fallback）
-    const agentRunIds = messages
-      .filter(m => m.role === Role.ASSIST && m.agentRunId)
-      .map(m => m.agentRunId!);
-
-    const agentRuns =
-      agentRunIds.length > 0
-        ? await this.agentRunRepo.findByIds(agentRunIds)
-        : [];
-    const runMap = new Map(agentRuns.map(r => [r.id, r]));
-
-    const enriched = messages.map(msg => {
-      if (msg.role === Role.ASSIST && msg.agentRunId) {
-        const run = runMap.get(msg.agentRunId);
-        if (run) {
-          const view = projectRun(run.events ?? []);
-          return {
-            ...msg,
-            content: msg.content || view.content,
-            steps: view.steps,
-            status: run.status,
-          };
-        }
-        return { ...msg, steps: null, status: null };
-      }
-      return msg;
-    });
-
-    return res.json(enriched);
+    // steps/status（+ content fallback）的读模型组装在 GetMessagesHandler：
+    // 事件流是事实源，projectRun 派生；controller 只做 HTTP 适配。
+    const messages = await this.queryBus.execute(new GetMessagesQuery(id));
+    return res.json(messages);
   }
 
   @api('/:id/messages', { method: 'delete' })

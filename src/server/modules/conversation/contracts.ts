@@ -68,6 +68,12 @@ export class GetSessionStateQuery extends Query {
   }
 }
 
+export class GetMessagesQuery extends Query {
+  constructor(readonly conversationId: string) {
+    super();
+  }
+}
+
 import type { LlmMessage, Message } from '@/shared/types/entities';
 import type { EnrichedEvent } from '@/shared/types/events';
 

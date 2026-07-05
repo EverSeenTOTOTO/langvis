@@ -2,14 +2,11 @@ import fs from 'fs';
 import matter from 'gray-matter';
 import { globby } from 'globby';
 import { service } from '@/server/decorator/service';
+import type { SkillInfo } from '@/shared/types';
 import { isProd } from '@/server/utils';
 import Logger from '@/server/utils/logger';
 
-export interface SkillInfo {
-  id: string;
-  name: string;
-  description: string;
-}
+export type { SkillInfo };
 
 interface SkillEntry extends SkillInfo {
   filePath: string;
