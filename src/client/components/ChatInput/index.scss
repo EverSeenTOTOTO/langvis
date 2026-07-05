@@ -61,6 +61,56 @@
   margin: 0;
 }
 
+.chat-input-inline-control {
+  display: inline-block;
+  vertical-align: baseline;
+  user-select: none;
+}
+
+.chat-input-popover-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  max-width: 340px;
+  padding: 6px 8px;
+  overflow: hidden;
+  cursor: pointer;
+  border-radius: 6px;
+
+  &:hover {
+    background-color: var(--ant-color-fill-quaternary);
+  }
+
+  &.is-active {
+    background-color: var(--ant-color-fill-tertiary);
+  }
+
+  &-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ant-color-text);
+  }
+
+  &-desc {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-line-clamp: 2;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ant-color-text-secondary);
+    word-break: break-word;
+    -webkit-box-orient: vertical;
+  }
+}
+
+.chat-input-popover-empty {
+  padding: 8px;
+  font-size: 13px;
+  color: var(--ant-color-text-tertiary);
+  text-align: center;
+}
+
 .chat-input-send-button {
   flex-shrink: 0;
   width: 36px;

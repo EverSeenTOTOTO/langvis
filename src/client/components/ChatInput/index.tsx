@@ -9,15 +9,26 @@ import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { PlainTextPlugin } from '@lexical/react/LexicalPlainTextPlugin';
+import { mergeRegister } from '@lexical/utils';
 import { Button } from 'antd';
 import clsx from 'clsx';
 import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $getSelection,
+  $isNodeSelection,
+  COMMAND_PRIORITY_LOW,
   EditorState,
+  KEY_BACKSPACE_COMMAND,
+  KEY_DELETE_COMMAND,
 } from 'lexical';
 import React, { useCallback, useEffect, useRef } from 'react';
+import {
+  $isInlineControlNode,
+  InlineControlNode,
+  InlineControlRegistryProvider,
+} from './plugins';
 import './index.scss';
 
 export interface ChatInputProps {
@@ -31,6 +42,8 @@ export interface ChatInputProps {
   header?: React.ReactNode;
   /** Content rendered before the send button */
   suffix?: React.ReactNode;
+  /** Lexical plugins rendered inside the composer (e.g. ReplacePlugin/PopoverPlugin). */
+  children?: React.ReactNode;
   minRows?: number;
   maxRows?: number;
   className?: string;
@@ -49,6 +62,7 @@ const InnerEditor: React.FC<{
   cancelling?: boolean;
   placeholder?: string;
   suffix?: React.ReactNode;
+  children?: React.ReactNode;
   minRows?: number;
   maxRows?: number;
 }> = ({
@@ -60,6 +74,7 @@ const InnerEditor: React.FC<{
   cancelling,
   placeholder,
   suffix,
+  children,
   minRows = 2,
   maxRows = 6,
 }) => {
@@ -93,6 +108,31 @@ const InnerEditor: React.FC<{
       }
     });
   }, [editor, value]);
+
+  // Delete selected inline-control chips as a unit on Backspace/Delete.
+  useEffect(() => {
+    const deleteSelectedControls = (event: KeyboardEvent) => {
+      const selection = $getSelection();
+      if (!$isNodeSelection(selection)) return false;
+      const controls = selection.getNodes().filter($isInlineControlNode);
+      if (controls.length === 0) return false;
+      event.preventDefault();
+      controls.forEach(node => node.remove());
+      return true;
+    };
+    return mergeRegister(
+      editor.registerCommand(
+        KEY_BACKSPACE_COMMAND,
+        deleteSelectedControls,
+        COMMAND_PRIORITY_LOW,
+      ),
+      editor.registerCommand(
+        KEY_DELETE_COMMAND,
+        deleteSelectedControls,
+        COMMAND_PRIORITY_LOW,
+      ),
+    );
+  }, [editor]);
 
   const handleChange = useCallback(
     (editorState: EditorState) => {
@@ -160,10 +200,13 @@ const InnerEditor: React.FC<{
             placeholder={
               <div className="chat-input-placeholder">{placeholder}</div>
             }
-            ErrorBoundary={({ children }) => <>{children}</>}
+            ErrorBoundary={({ children: errorChildren }) => (
+              <>{errorChildren}</>
+            )}
           />
           <HistoryPlugin />
           <OnChangePlugin onChange={handleChange} />
+          {children}
         </div>
         <div className="chat-input-actions">
           {suffix}
@@ -199,6 +242,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   placeholder = 'Type a message...',
   header,
   suffix,
+  children,
   minRows = 2,
   maxRows = 6,
   className,
@@ -206,6 +250,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const initialConfig = {
     namespace: 'ChatInput',
     theme,
+    nodes: [InlineControlNode],
     onError: (error: Error) => {
       console.error(error);
     },
@@ -215,18 +260,22 @@ const ChatInput: React.FC<ChatInputProps> = ({
     <div className={clsx('chat-input-container', className)}>
       {header && <div className="chat-input-header">{header}</div>}
       <LexicalComposer initialConfig={initialConfig}>
-        <InnerEditor
-          value={value}
-          onChange={onChange}
-          onSubmit={onSubmit}
-          onCancel={onCancel}
-          loading={loading}
-          cancelling={cancelling}
-          placeholder={placeholder}
-          suffix={suffix}
-          minRows={minRows}
-          maxRows={maxRows}
-        />
+        <InlineControlRegistryProvider>
+          <InnerEditor
+            value={value}
+            onChange={onChange}
+            onSubmit={onSubmit}
+            onCancel={onCancel}
+            loading={loading}
+            cancelling={cancelling}
+            placeholder={placeholder}
+            suffix={suffix}
+            minRows={minRows}
+            maxRows={maxRows}
+          >
+            {children}
+          </InnerEditor>
+        </InlineControlRegistryProvider>
       </LexicalComposer>
     </div>
   );

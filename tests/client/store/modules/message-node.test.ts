@@ -240,3 +240,65 @@ describe('MessageNode — audio', () => {
     expect(node.audio).toEqual({ filePath: 'tts/old.mp3' });
   });
 });
+
+describe('MessageNode — isCompacting', () => {
+  it('response_user 交付后、final 前处于折叠窗口', () => {
+    const node = liveNode();
+    node.handleFrame(frame({ seq: 1, type: 'text_chunk', content: 'ans' }));
+    node.handleFrame(
+      frame({
+        seq: 2,
+        type: 'tool_call',
+        callId: 'tc_ru',
+        toolName: 'response_user',
+        toolArgs: {},
+      }),
+    );
+    node.handleFrame(
+      frame({ seq: 3, type: 'tool_result', callId: 'tc_ru', output: 'ok' }),
+    );
+
+    expect(node.isCompacting).toBe(true);
+  });
+
+  it('final 到达后退出折叠窗口', () => {
+    const node = liveNode();
+    node.handleFrame(
+      frame({
+        seq: 1,
+        type: 'tool_call',
+        callId: 'tc_ru',
+        toolName: 'response_user',
+        toolArgs: {},
+      }),
+    );
+    node.handleFrame(
+      frame({ seq: 2, type: 'tool_result', callId: 'tc_ru', output: 'ok' }),
+    );
+    node.handleFrame(frame({ seq: 3, type: 'final' }));
+
+    expect(node.isCompacting).toBe(false);
+  });
+
+  it('无 response_user 时不进入折叠窗口', () => {
+    const node = liveNode();
+    node.handleFrame(frame({ seq: 1, type: 'text_chunk', content: 'ans' }));
+
+    expect(node.isCompacting).toBe(false);
+  });
+
+  it('response_user 仍 pending 时不进入折叠窗口', () => {
+    const node = liveNode();
+    node.handleFrame(
+      frame({
+        seq: 1,
+        type: 'tool_call',
+        callId: 'tc_ru',
+        toolName: 'response_user',
+        toolArgs: {},
+      }),
+    );
+
+    expect(node.isCompacting).toBe(false);
+  });
+});

@@ -1,8 +1,7 @@
 import Drawer from '@/client/components/Drawer';
 import ContextUsageBar from '@/client/components/ContextUsageBar';
 import { lazy, Suspense } from 'react';
-
-const ChatInput = lazy(() => import('@/client/components/ChatInput'));
+import { SkillPickerPlugin } from '@/client/components/ChatInput/plugins/SkillPickerPlugin';
 import { getStore, useStore } from '@/client/store';
 import type { MessageAttachment } from '@/shared/types/entities';
 import { Role } from '@/shared/types/entities';
@@ -17,6 +16,7 @@ import { useFileUpload } from './hooks/useFileUpload';
 import { useVoiceInput } from './hooks/useVoiceInput';
 import './index.scss';
 
+const ChatInput = lazy(() => import('@/client/components/ChatInput'));
 const { Content } = Layout;
 
 export const prefetch = async () => {
@@ -74,10 +74,17 @@ const Chat: React.FC = () => {
     messagesRef.current?.scrollToBottom(false);
 
     if (!conversationStore.currentConversationId) {
-      await createConversationApi[1]({
+      const conv = await createConversationApi[1]({
         name: settingStore.tr('New Conversation'),
         config: {},
       });
+      if (conv) {
+        conversationStore.currentConversationId = conv.id;
+        // 新会话须先激活（落 SYSTEM 消息 + 建立 SSE），否则 startChat 会被
+        // 服务端 assertActivated 拦截。reaction 也会触发激活，connectTransport
+        // 已幂等去重，故此处显式 await 即可安全等待激活落地。
+        await chatStore.activateConversation(conv.id);
+      }
     }
 
     if (!conversationStore.currentConversationId) {
@@ -207,7 +214,9 @@ const Chat: React.FC = () => {
                 isVoiceProcessing
               }
               cancelling={isCancelling}
-            />
+            >
+              <SkillPickerPlugin />
+            </ChatInput>
           </Suspense>
         </div>
         <div className="chat-placeholder" />

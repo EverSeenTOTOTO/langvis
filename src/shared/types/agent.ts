@@ -13,3 +13,12 @@ export type RunStatus =
   | 'completed'
   | 'failed'
   | 'cancelled';
+
+/**
+ * 技能元信息。来自 `skills/<id>/skill.md` 的 front matter；客户端技能选择器消费。
+ */
+export interface SkillInfo {
+  id: string;
+  name: string;
+  description: string;
+}

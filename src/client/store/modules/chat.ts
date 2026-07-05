@@ -24,6 +24,7 @@ import type { SSEFrame } from '@/shared/types/events';
 export class ChatStore {
   private messageNodes = new Map<string, Map<string, MessageNode>>();
   private transports = new Map<string, SSEClientTransport>();
+  private connectingPromises = new Map<string, Promise<void>>();
 
   constructor(
     @inject(ConversationStore) private conversationStore: ConversationStore,
@@ -131,15 +132,25 @@ export class ChatStore {
   // ════════════════════════════════════════
 
   private async connectTransport(conversationId: string): Promise<void> {
-    let transport = this.transports.get(conversationId);
-    if (transport?.isConnected) return;
+    if (this.transports.get(conversationId)?.isConnected) return;
+    // 切换 currentConversationId 的 reaction 与发送前显式激活可能并发进入；
+    // 复用同一次连接 Promise，避免对同一会话建立两条 SSE。
+    const pending = this.connectingPromises.get(conversationId);
+    if (pending) return pending;
 
-    transport = new SSEClientTransport(`/api/chat/activate/${conversationId}`);
+    const transport = new SSEClientTransport(
+      `/api/chat/activate/${conversationId}`,
+    );
     this.transports.set(conversationId, transport);
-
     this.setupTransportListeners(conversationId, transport);
 
-    await transport.connect();
+    const connectPromise = transport.connect();
+    this.connectingPromises.set(conversationId, connectPromise);
+    try {
+      await connectPromise;
+    } finally {
+      this.connectingPromises.delete(conversationId);
+    }
   }
 
   private setupTransportListeners(
@@ -332,6 +343,7 @@ export class ChatStore {
       transport.close();
       this.transports.delete(oldId);
     }
+    this.connectingPromises.delete(oldId);
     this.messageNodes.delete(oldId);
   }
 }

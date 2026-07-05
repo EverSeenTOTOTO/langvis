@@ -22,6 +22,7 @@ import './application/command/conversation-update.handler';
 import './application/command/cancel-chat.handler';
 import './application/command/start-chat.handler';
 import './application/query/get-session-state.handler';
+import './application/query/get-messages.handler';
 import './application/service/history-config.fragment';
 import './application/event/run-started.handler';
 import './application/event/run-event.handler';

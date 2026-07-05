@@ -2,6 +2,7 @@ import type { SSEFrame } from '@/shared/types/events';
 import type { RunStatus } from '@/shared/types/agent';
 import type { ReActStep, PendingMessageSnapshot } from '@/shared/types/render';
 import type { Role } from '@/shared/types/entities';
+import { ToolIds } from '@/shared/constants';
 import { makeAutoObservable } from 'mobx';
 
 export type UIToolCall = {
@@ -241,6 +242,19 @@ export class MessageNode {
 
   get isInitialized(): boolean {
     return this.status === 'initialized';
+  }
+
+  /** response_user 已交付回答、final 尚未到达的折叠窗口（processSummary 阶段）。 */
+  get isCompacting(): boolean {
+    if (this.isTerminal) return false;
+    const responseUser = this.toolCalls.find(
+      tc => tc.toolName === ToolIds.RESPONSE_USER,
+    );
+    return (
+      !!responseUser &&
+      responseUser.status === 'completed' &&
+      !this.hasPendingTools
+    );
   }
 
   // ── 内部 ──
