@@ -64,6 +64,9 @@ export class WorkingMemory {
    * 保留最近 keepRecent 条。异常吞掉（压缩失败不影响 loop）。
    */
   async compact(signal: AbortSignal): Promise<CompactResult> {
+    if (!this.contextSize) {
+      return { compacted: false, usage: this.getContextUsage() };
+    }
     const loopActions = this.iterMessages.slice(this.base);
     if (loopActions.length <= this.compaction.keepRecent) {
       return { compacted: false, usage: this.getContextUsage() };

@@ -52,10 +52,9 @@ export class AgentRunExecutor {
     const cfg = params.userConfig as {
       model?: { modelId?: string };
     };
-    const modelId = cfg.model?.modelId;
-    const contextSize = modelId
-      ? (this.providerService.getModel(modelId)?.contextSize ?? 128_000)
-      : 128_000;
+    const { id: modelId, contextSize } = this.providerService.resolveChatModel(
+      cfg.model?.modelId,
+    );
 
     this.logger.info(
       `Create run ${chalk.cyan(params.runId)} — model: ${chalk.red(modelId ?? '(default)')} (${contextSize} ctx)`,
