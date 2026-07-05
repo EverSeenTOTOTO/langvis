@@ -181,11 +181,11 @@ export class ChatService {
     const conv = await this.convRepo.findById(conversationId);
     if (!conv) return null;
 
-    const modelId =
-      (conv.config?.model as { modelId?: string } | undefined)?.modelId ?? '';
-    const contextSize = modelId
-      ? (this.providerService.getModel(modelId)?.contextSize ?? 0)
-      : 0;
+    const modelId = (conv.config?.model as { modelId?: string } | undefined)
+      ?.modelId;
+    // 无显式 model 时回退默认 chat 模型：自动建会话(config={})否则落到 contextSize=0，
+    // 进度量条分母为 0（恒显 100%）且历史压缩被 !contextSize 静默禁用。
+    const { contextSize } = this.providerService.resolveChatModel(modelId);
     return {
       contextSize,
       runtimeConfig: parse(composeConfigSchema(), conv.config) as Record<

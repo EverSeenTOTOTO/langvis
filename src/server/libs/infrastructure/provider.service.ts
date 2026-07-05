@@ -87,6 +87,23 @@ export class ProviderService {
     return fallback;
   }
 
+  /**
+   * 解析实际使用的 chat 模型：优先显式 modelId（命中即用，含 stale id 回退），否则回退默认 chat 模型。
+   * 统一「无 model 配置」时 conversation 侧与 agent 侧的口径——避免一边回退 0、一边回退硬编码 128k
+   * 的不一致。id 供 LLM 调用（undefined 时由 provider 自取默认），contextSize 供用量与压缩阈值。
+   */
+  resolveChatModel(modelId?: string): {
+    id: string | undefined;
+    contextSize: number;
+  } {
+    if (modelId) {
+      const m = this.getModel(modelId);
+      if (m) return { id: m.id, contextSize: m.contextSize ?? 0 };
+    }
+    const fallback = this.getDefaultModel('chat');
+    return { id: fallback?.id, contextSize: fallback?.contextSize ?? 0 };
+  }
+
   getModelsByType(type: ModelType): ModelDefinition[] {
     const result: ModelDefinition[] = [];
     for (const model of this.models.values()) {

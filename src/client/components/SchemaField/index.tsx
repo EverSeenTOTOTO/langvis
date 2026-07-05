@@ -320,7 +320,11 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
     // Number/integer type
     if (effective.type === 'number' || effective.type === 'integer') {
       return (
-        <Form.Item key={fieldKey} {...commonProps}>
+        <Form.Item
+          key={fieldKey}
+          {...commonProps}
+          normalize={v => (v == null ? undefined : v)}
+        >
           <InputNumber
             min={effective.minimum}
             max={effective.maximum}
