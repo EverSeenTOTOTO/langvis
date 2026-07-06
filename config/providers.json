@@ -70,7 +70,6 @@
         "type": "chat",
         "contextSize": 1000000,
         "multimodal": true,
-        "primary": true,
         "defaults": { "temperature": 0.7, "topP": 0.7 }
       }
     ]
@@ -84,26 +83,19 @@
       {
         "id": "qwen3.6-flash",
         "name": "Qwen 3.6 Flash",
-        "type": "chat",
+        "type": "compact",
         "contextSize": 262000,
         "multimodal": true,
         "defaults": { "temperature": 0.7, "topP": 0.7 }
       },
       {
-        "id": "claude-opus-4-6",
-        "name": "Claude Opus 4.6",
+        "id": "qwen3.7-plus",
+        "name": "Qwen 3.7 Plus",
         "type": "chat",
         "contextSize": 1000000,
         "multimodal": true,
-        "defaults": { "temperature": 0.7 }
-      },
-      {
-        "id": "gemini-3-flash-preview",
-        "name": "Gemini 3 Flash Preview",
-        "type": "chat",
-        "contextSize": 1048576,
-        "multimodal": false,
-        "defaults": { "temperature": 0.7 }
+        "primary": true,
+        "defaults": { "temperature": 0.7, "topP": 0.7 }
       },
       {
         "id": "tts_hd",

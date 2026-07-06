@@ -1,4 +1,5 @@
 import { useStore } from '@/client/store';
+import { DEFAULT_UPLOAD_CONFIG } from '@/shared/constants';
 import { PaperClipOutlined } from '@ant-design/icons';
 import { Button, message, Tag, Upload } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
@@ -21,15 +22,7 @@ export const useFileUpload = (isLoading: boolean) => {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const { getFileIcon, getFileColor } = useFileIcon();
 
-  const uploadConfig = useMemo(() => {
-    const agentConfig = (conversationStore.currentConversation as any)?.config;
-    return (
-      agentConfig?.upload || {
-        maxSize: 10 * 1024 * 1024,
-        allowedTypes: ['image/*', 'application/pdf', 'text/*'],
-      }
-    );
-  }, [conversationStore.currentConversation]);
+  const uploadConfig = DEFAULT_UPLOAD_CONFIG;
 
   const handleUpload = useCallback(
     async (file: File): Promise<Attachment | null> => {
@@ -93,9 +86,9 @@ export const useFileUpload = (isLoading: boolean) => {
   const uploadButton = (
     <Upload
       accept={
-        uploadConfig.allowedTypes?.includes('*')
+        uploadConfig.allowedTypes.includes('*')
           ? undefined
-          : uploadConfig.allowedTypes?.join(',')
+          : uploadConfig.allowedTypes.join(',')
       }
       showUploadList={false}
       beforeUpload={file => {

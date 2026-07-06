@@ -17,11 +17,11 @@ export function buildBasePrompt(tools: Tool[]): Prompt {
     .with('Tools', formatToolsToMarkdown(tools))
     .with(
       'Skills',
-      `You can load workflow guidance using the \`skill_call\` tool. Skills provide step-by-step instructions for specific tasks. Call \`skill_call\` with a \`skillId\` to load the guidance, then follow it in subsequent iterations.\n\nUse \`list_tools\` to discover available skills.\n\nIf a user message contains a token of the form \`/<skill-id>\` (e.g. \`/girlfriend\`, \`/document_archive\`), treat it as an explicit request to invoke that skill: call \`skill_call\` with that id as the \`skillId\` (strip the leading \`/\`).`,
+      `You can load workflow guidance using the \`skill_call\` tool. Skills provide step-by-step instructions for specific tasks. Call \`skill_call\` with a \`skillId\` to load the guidance, then follow it in subsequent iterations.\n\nUse \`list_tools\` to discover available skills.\n\nIf a user message contains a token of the form \`/<skill-id>\` (e.g. \`/document_archive\`), treat it as an explicit request to invoke that skill: call \`skill_call\` with that id as the \`skillId\` (strip the leading \`/\`).`,
     )
     .with(
       'Output language',
-      '- Default to Chinese unless the user requests another language.',
+      'Default to Chinese unless the user requests another language.',
     )
     .with(
       'Output format',

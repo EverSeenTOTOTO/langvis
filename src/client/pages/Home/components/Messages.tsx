@@ -14,6 +14,8 @@ import {
   useRef,
 } from 'react';
 import AssistantMessage from './AssistantMessage';
+import CompactDivider from './CompactDivider';
+import ContextDivider from './ContextDivider';
 import SystemMessage from './SystemMessage';
 import UserMessage from './UserMessage';
 
@@ -25,9 +27,8 @@ export interface MessagesRef {
 
 const Messages = forwardRef<MessagesRef>((_props, ref) => {
   const conversationStore = useStore('conversation');
-  const currentMessages = conversationStore.currentMessages.filter(
-    msg => !msg.meta?.kind,
-  );
+  // 不过滤：context/compact 各自渲染为分割线，其余按 role——消除 meta.kind 隐藏边界。
+  const currentMessages = conversationStore.currentMessages;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -101,6 +102,12 @@ const Messages = forwardRef<MessagesRef>((_props, ref) => {
       <div className="chat-messages" ref={containerRef}>
         <div className="chat-messages-content" ref={contentRef}>
           {currentMessages.map(msg => {
+            if (msg.meta?.kind === 'context') {
+              return <ContextDivider key={msg.id} msg={msg} />;
+            }
+            if (msg.meta?.kind === 'compact') {
+              return <CompactDivider key={msg.id} msg={msg} />;
+            }
             switch (msg.role) {
               case Role.SYSTEM:
                 return <SystemMessage key={msg.id} msg={msg} />;

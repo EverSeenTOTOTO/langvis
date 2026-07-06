@@ -110,17 +110,14 @@ export class LlmProvider implements LlmPort {
     return idx > 0 ? modelId.slice(idx + 1) : modelId;
   }
 
-  private resolveModel(
-    modelId: string | undefined,
-    type: 'chat' | 'embedding' | 'tts' | 'stt',
-  ): string {
+  private resolveModel(modelId: string | undefined, type: ModelType): string {
     if (modelId) return modelId;
     const model = this.providerService.getDefaultModel(type);
     if (!model) throw new Error(`No ${type} model available`);
     return model.id;
   }
 
-  /** 某 type 的默认模型（委托 registry）；供 Summarizer 自取 compact 模型。 */
+  /** 某 type 的默认模型（委托 registry）*/
   getDefaultModel(type: ModelType): ModelDefinition | undefined {
     return this.providerService.getDefaultModel(type);
   }

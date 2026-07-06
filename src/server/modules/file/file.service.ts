@@ -3,13 +3,7 @@ import mime from 'mime-types';
 import path from 'path';
 import { service } from '@/server/decorator/service';
 import { resolveSafePath } from '@/server/utils/pathSafety';
-
-/** 上传限额——服务端全局策略（不按会话调；上传端点无 conversation 上下文）。 */
-const UPLOAD_LIMITS = {
-  maxSize: 10485760,
-  allowedTypes: ['image/*', 'application/pdf', 'text/*'],
-  maxCount: 5,
-};
+import { DEFAULT_UPLOAD_CONFIG } from '@/shared/constants';
 
 /** saveFile 校验失败时抛出；FileController 据此映射 400。 */
 export class FileValidationError extends Error {
@@ -98,22 +92,28 @@ export class FileService {
     return this.validatePath(filename);
   }
 
+  /** 上传限额取自 shared 的 DEFAULT_UPLOAD_CONFIG（与 upload ConfigFragment、客户端 picker 同源）。 */
   private validateUpload(file: Express.Multer.File): void {
-    if (UPLOAD_LIMITS.maxSize && file.size > UPLOAD_LIMITS.maxSize) {
+    if (
+      DEFAULT_UPLOAD_CONFIG.maxSize &&
+      file.size > DEFAULT_UPLOAD_CONFIG.maxSize
+    ) {
       throw new FileValidationError(
-        `File size ${file.size} exceeds limit: ${UPLOAD_LIMITS.maxSize} bytes`,
+        `File size ${file.size} exceeds limit: ${DEFAULT_UPLOAD_CONFIG.maxSize} bytes`,
       );
     }
-    if (!UPLOAD_LIMITS.allowedTypes.includes('*')) {
-      const allowed = UPLOAD_LIMITS.allowedTypes.some((type: string) => {
-        if (type.endsWith('/*')) {
-          return file.mimetype.startsWith(type.slice(0, -1));
-        }
-        return file.mimetype === type;
-      });
+    if (!DEFAULT_UPLOAD_CONFIG.allowedTypes.includes('*')) {
+      const allowed = DEFAULT_UPLOAD_CONFIG.allowedTypes.some(
+        (type: string) => {
+          if (type.endsWith('/*')) {
+            return file.mimetype.startsWith(type.slice(0, -1));
+          }
+          return file.mimetype === type;
+        },
+      );
       if (!allowed) {
         throw new FileValidationError(
-          `File type ${file.mimetype} not allowed. Allowed types: ${UPLOAD_LIMITS.allowedTypes.join(', ')}`,
+          `File type ${file.mimetype} not allowed. Allowed types: ${DEFAULT_UPLOAD_CONFIG.allowedTypes.join(', ')}`,
         );
       }
     }
