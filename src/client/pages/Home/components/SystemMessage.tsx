@@ -3,15 +3,11 @@ import { lazy, Suspense } from 'react';
 
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 import { Message } from '@/shared/types/entities';
-import { Collapse, Divider, Typography } from 'antd';
-import dayjs from 'dayjs';
+import { Collapse, Typography } from 'antd';
 import { observer } from 'mobx-react-lite';
 
 const SystemMessage: React.FC<{ msg: Message }> = ({ msg }) => {
   const settingStore = useStore('setting');
-  const conversationStore = useStore('conversation');
-
-  const createAt = conversationStore.currentConversation?.createdAt;
 
   return (
     <div className="system-message">
@@ -40,12 +36,6 @@ const SystemMessage: React.FC<{ msg: Message }> = ({ msg }) => {
           },
         }}
       />
-      <Divider>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          对话开始于{' '}
-          {createAt ? dayjs(createAt).format('YYYY-MM-DD HH:mm:ss') : ''}
-        </Typography.Text>
-      </Divider>
     </div>
   );
 };

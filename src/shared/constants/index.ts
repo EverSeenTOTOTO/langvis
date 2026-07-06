@@ -25,6 +25,8 @@ export enum ToolIds {
 
 export const UNGROUPED_GROUP_NAME = 'Ungrouped';
 
+export { DEFAULT_UPLOAD_CONFIG } from './upload';
+
 export const RedisKeys = {
   // Per-run level (HITL 关联键：AskUser 写、HumanInputPort 读，均以 runId 为准；
   // HTTP 端点 :messageId 在 HumanInputRedisProvider 边界翻译成 runId)
