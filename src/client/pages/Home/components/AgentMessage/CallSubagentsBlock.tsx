@@ -2,26 +2,26 @@ import { CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { Button, Flex, Tag, Typography } from 'antd';
 import { observer } from 'mobx-react-lite';
 import type { UIToolCall } from '@/client/store/modules/message-node';
-import { ToolIds } from '@/shared/constants';
 import Modal from '@/client/components/Modal';
 import { useStore } from '@/client/store';
 import { getToolColor } from './ToolBlockItem';
 import { RunDetailView } from './RunDetailView';
+import { lazy } from 'react';
+
+const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
 interface ChildState {
   runId: string;
   status: string;
-  response?: string;
+  query?: string;
+  brief?: string;
 }
 
-/** tool_progress 的 data 负载：{ childRunId, event }（event 为子 run 的 EnrichedEvent）。 */
 type SubagentProgress = {
   childRunId?: string;
-  event?: {
-    type?: string;
-    toolName?: string;
-    toolArgs?: { message?: string };
-  };
+  brief?: string;
+  query?: string;
+  event?: { type?: string };
 };
 
 function statusIcon(status: string): React.ReactNode {
@@ -50,20 +50,24 @@ export const CallSubagentsBlock = observer(function CallSubagentsBlock({
 
   const children: ChildState[] = (() => {
     const map = new Map<string, ChildState>();
-    for (const p of toolCall.progress) {
-      const d = p as SubagentProgress | undefined;
-      const id = d?.childRunId;
-      if (!id) continue;
+    const ensure = (id: string): ChildState => {
       let c = map.get(id);
       if (!c) {
         c = { runId: id, status: 'running' };
         map.set(id, c);
       }
-      const ev = d?.event;
+      return c;
+    };
+    for (const p of toolCall.progress) {
+      const d = p as SubagentProgress | undefined;
+      const id = d?.childRunId;
+      if (!id) continue;
+      const c = ensure(id);
+      if (d.brief !== undefined) c.brief = d.brief;
+      if (d.query !== undefined) c.query = d.query;
+      const ev = d.event;
       if (!ev) continue;
-      if (ev.type === 'tool_call' && ev.toolName === ToolIds.RESPONSE_USER) {
-        c.response = ev.toolArgs?.message;
-      } else if (ev.type === 'final') c.status = 'completed';
+      if (ev.type === 'final') c.status = 'completed';
       else if (ev.type === 'error') c.status = 'failed';
       else if (ev.type === 'cancelled') c.status = 'cancelled';
     }
@@ -85,41 +89,64 @@ export const CallSubagentsBlock = observer(function CallSubagentsBlock({
         </Typography.Text>
       </Flex>
 
-      <div className="react-subagent-children">
+      <div>
         {children.map(c => (
           <Flex
             key={c.runId}
-            align="center"
-            gap={8}
-            className="react-subagent-child"
+            vertical
+            gap={4}
+            style={{
+              paddingBlock: 4,
+            }}
           >
-            {statusIcon(c.status)}
-            <Typography.Text type="secondary" code>
-              {c.runId.slice(-10)}
-            </Typography.Text>
-            <Typography.Text type="secondary">{c.status}</Typography.Text>
-            {c.response && (
-              <Typography.Text
-                type="secondary"
-                ellipsis={{ tooltip: c.response }}
-                style={{ maxWidth: '60%' }}
+            <Flex align="center" gap={8} justify="space-between">
+              <Flex align="center" gap={8}>
+                {statusIcon(c.status)}
+                <Typography.Text type="secondary" code>
+                  {c.runId.slice(-10)}
+                </Typography.Text>
+                <Typography.Text type="secondary">{c.status}</Typography.Text>
+              </Flex>
+              <Modal
+                title={`${settingStore.tr('Sub-agent')} · ${c.runId.slice(-10)}`}
+                width="75%"
+                footer={false}
+                destroyOnHidden
+                trigger={
+                  <Button size="small" type="link">
+                    {settingStore.tr('View')}
+                  </Button>
+                }
               >
-                {c.response}
+                <RunDetailView runId={c.runId} />
+              </Modal>
+            </Flex>
+            {c.query && (
+              <Typography.Text ellipsis={{ tooltip: c.query }}>
+                {c.query}
               </Typography.Text>
             )}
-            <Modal
-              title={`${settingStore.tr('Sub-agent')} · ${c.runId.slice(-10)}`}
-              width="75%"
-              footer={false}
-              destroyOnHidden
-              trigger={
-                <Button size="small" type="link">
-                  {settingStore.tr('View')}
-                </Button>
-              }
-            >
-              <RunDetailView runId={c.runId} />
-            </Modal>
+            {c.brief && (
+              <Typography.Paragraph
+                type="secondary"
+                ellipsis={{
+                  rows: 3,
+                  tooltip: {
+                    title: <MarkdownRender>{c.brief}</MarkdownRender>,
+                    styles: {
+                      container: {
+                        minWidth: 480,
+                        maxHeight: '50vh',
+                        overflow: 'auto',
+                      },
+                    },
+                  },
+                }}
+                style={{ fontSize: 12 }}
+              >
+                {c.brief}
+              </Typography.Paragraph>
+            )}
           </Flex>
         ))}
       </div>

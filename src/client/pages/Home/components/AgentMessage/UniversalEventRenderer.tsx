@@ -53,7 +53,7 @@ export const UniversalEventRenderer = observer(function UniversalEventRenderer({
           key: '1',
           label: (
             <Typography.Text type="secondary">
-              Process Details ({timeline.length} steps)
+              Process Details ({timeline.length} blocks)
             </Typography.Text>
           ),
           children: (

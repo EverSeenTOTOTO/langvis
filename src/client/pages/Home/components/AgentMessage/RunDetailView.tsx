@@ -1,9 +1,11 @@
 import { Skeleton, Typography } from 'antd';
-import { useEffect } from 'react';
+import { lazy, useEffect } from 'react';
 import { useAsyncFn } from 'react-use';
 import { useStore } from '@/client/store';
 import type { RunViewResult } from '@/server/modules/agent/application/service/run-projection';
 import { RunSteps } from './RunSteps';
+
+const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
 export interface RunDetailViewProps {
   runId: string;
@@ -39,11 +41,7 @@ export function RunDetailView({
   return (
     <div>
       <RunSteps steps={view.steps} />
-      {view.content && (
-        <Typography.Paragraph style={{ marginTop: 8 }}>
-          {view.content}
-        </Typography.Paragraph>
-      )}
+      {view.content && <MarkdownRender>{view.content}</MarkdownRender>}
     </div>
   );
 }

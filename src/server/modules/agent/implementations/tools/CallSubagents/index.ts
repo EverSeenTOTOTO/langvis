@@ -54,9 +54,9 @@ export default class CallSubagentsTool extends Tool<CallSubagentsOutput> {
     ]);
     const basePrompt = this.agentService.buildSystemPrompt(childToolSet);
 
-    // 为每个 child 组装 LaunchParams（继承父 workDir / runtimeConfig / 取消信号）。
-    const launches = children.map(spec => {
-      const runId = generateId('run');
+    const plans = children.map(spec => ({ spec, runId: generateId('run') }));
+
+    const launches = plans.map(({ spec, runId }) => {
       const systemPrompt = `${basePrompt}\n\n## 任务背景\n${spec.brief}`;
       const params: LaunchParams = {
         runId,
@@ -72,6 +72,16 @@ export default class CallSubagentsTool extends Tool<CallSubagentsOutput> {
       };
       return this.executor.launch(params);
     });
+
+    // 每子一次性通报 { childRunId, brief, query }：带 childRunId，projectRun 既有
+    // 规则即保留，前端无需读父 toolArgs、无需 runId↔index 映射。
+    for (const { spec, runId } of plans) {
+      yield {
+        type: 'tool_progress',
+        callId: ctx.callId,
+        data: { childRunId: runId, brief: spec.brief, query: spec.query },
+      };
+    }
 
     // 收集每个 child 的终态（按 runId）。
     const results = new Map<string, ChildRunResult>();
