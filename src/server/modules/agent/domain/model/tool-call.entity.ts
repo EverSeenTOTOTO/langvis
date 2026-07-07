@@ -12,6 +12,7 @@ export interface ToolCallDeps {
   signal: AbortSignal;
   workDir: string;
   runId: string;
+  interactive: boolean;
   llm: LlmPort;
   cache: CachePort;
   chatModelId: string | undefined;
@@ -85,6 +86,7 @@ export class ToolCall extends Entity<string> {
         llm: this.deps.llm,
         chatModelId: this.deps.chatModelId,
         runId: this.deps.runId,
+        interactive: this.deps.interactive,
         runtimeConfig: this.deps.runtimeConfig,
       };
       const output = yield* this.tool.call(ctx);

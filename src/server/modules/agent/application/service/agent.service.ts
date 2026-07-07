@@ -111,19 +111,17 @@ export class AgentService {
 
   /**
    * 按 ToolSet 渲染 system prompt（per-run，conv 与子 agent 复用同一机制）。
-   * inline 成员 → buildBasePrompt 的工具文档段；listed + skills → "Other Tools and Skills" 列表。
+   * inline 成员 → base 的工具文档段；listed + skills → "Other Tools and Skills" 列表。
+   * base 默认 BASE_PROMPT；子 agent 传 SUBAGENT_PROMPT。
    */
-  buildSystemPrompt(toolSet: ToolSet): string {
+  buildSystemPrompt(toolSet: ToolSet, base = BASE_PROMPT): string {
     const inlineTools = toolSet
       .inlineIds()
       .map(id => container.resolve<Tool>(id));
     const other = [...toolSet.listedIds(), ...toolSet.skillIds()];
 
-    return BASE_PROMPT.insertBefore(
-      'Skills',
-      'Tools',
-      formatToolsToMarkdown(inlineTools),
-    )
+    return base
+      .insertBefore('Skills', 'Tools', formatToolsToMarkdown(inlineTools))
       .insertAfter('Skills', 'Other Tool and Skills', other.join(', '))
       .build();
   }

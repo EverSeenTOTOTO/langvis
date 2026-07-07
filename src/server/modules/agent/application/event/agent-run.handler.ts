@@ -68,6 +68,7 @@ export class AgentRunHandler {
         systemPrompt,
         seed,
         toolSet,
+        interactive: true,
       })) {
         this.eventBus.dispatch(
           RunEvent,

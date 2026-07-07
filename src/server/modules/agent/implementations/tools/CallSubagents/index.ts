@@ -12,6 +12,7 @@ import {
   type LaunchParams,
 } from '@/server/modules/agent/application/service/agent-run-executor';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
+import { SUBAGENT_PROMPT } from '@/server/modules/agent/application/service/base-prompt';
 import type {
   CallSubagentsInput,
   CallSubagentsOutput,
@@ -52,7 +53,10 @@ export default class CallSubagentsTool extends Tool<CallSubagentsOutput> {
       ToolIds.CALL_SUBAGENTS,
       ToolIds.ASK_USER,
     ]);
-    const basePrompt = this.agentService.buildSystemPrompt(childToolSet);
+    const basePrompt = this.agentService.buildSystemPrompt(
+      childToolSet,
+      SUBAGENT_PROMPT,
+    );
 
     const plans = children.map(spec => ({ spec, runId: generateId('run') }));
 
@@ -68,6 +72,7 @@ export default class CallSubagentsTool extends Tool<CallSubagentsOutput> {
           { role: 'user', content: spec.query },
         ],
         toolSet: childToolSet,
+        interactive: false,
         parentSignal: ctx.signal,
       };
       return this.executor.launch(params);

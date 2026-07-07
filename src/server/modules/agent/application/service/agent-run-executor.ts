@@ -34,6 +34,8 @@ export interface LaunchParams {
   seed: LlmMessage[];
   /** 该 run 的有界工具集——executeTool 仅允许集合内成员。conv 传全集，子 agent 传 parent.without(...)。 */
   toolSet: ToolSet;
+  /** 是否允许 HITL。conv run = true；子 agent = false（无 HTTP 提交入口）。 */
+  interactive: boolean;
   /** 父 run 的取消信号（子 agent 用）；父 abort 时传播并 cancel 本 run。conv run 不传。 */
   parentSignal?: AbortSignal;
 }
@@ -93,6 +95,7 @@ export class AgentRunExecutor {
           signal: run.signal,
           workDir: params.workDir,
           runId: run.runId,
+          interactive: params.interactive,
           llm: this.llm,
           cache: this.cache,
           chatModelId: modelId,

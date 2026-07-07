@@ -17,6 +17,46 @@ const MAX_TIMEOUT = 600;
 const SIGTERM_GRACE = 5000;
 const PROGRESS_LIMIT = 8 * 1024; // preview cap streamed via toolProgress
 
+/**
+ * 非交互式 run（子 agent）下静默通过的只读命令。保守策略：仅放行单条、首词命中白名单、
+ * 且不含控制/重定向/替换运算符的命令；含管道、重定向、&& 等一律拒绝（避免误放行副作用命令）。
+ * `find`（-exec/-delete 风险）、`git`（子命令相关）故意不放行。
+ */
+const READONLY_COMMANDS = new Set([
+  'rg',
+  'fd',
+  'lsd',
+  'ls',
+  'bat',
+  'cat',
+  'head',
+  'tail',
+  'pwd',
+  'wc',
+  'which',
+  'test',
+  'grep',
+  'echo',
+  'stat',
+  'du',
+  'df',
+  'file',
+  'env',
+  'printenv',
+  'basename',
+  'dirname',
+  'realpath',
+]);
+
+const SHELL_CONTROL_RE = /[|;<>&`]|\$\(/;
+
+function isReadonlyCommand(command: string): boolean {
+  if (SHELL_CONTROL_RE.test(command)) return false;
+  const first = command.trim().split(/\s+/)[0];
+  return !!first && READONLY_COMMANDS.has(first);
+}
+export { isReadonlyCommand };
+
 const activeProcesses = new Set<ChildProcess>();
 
 function registerProcessCleanup(): void {
@@ -86,56 +126,68 @@ export default class BashTool extends Tool<BashOutput> {
       MAX_TIMEOUT,
     );
 
-    const hitl = container.resolve<AskUserTool>(ToolIds.ASK_USER);
-    const message =
-      `### 执行命令\n\n` +
-      `\`\`\`bash\n${command}\n\`\`\`\n\n` +
-      `**工作目录:** \`${workDir}\``;
+    let userTimeout: number;
+    if (ctx.interactive) {
+      const hitl = container.resolve<AskUserTool>(ToolIds.ASK_USER);
+      const message =
+        `### 执行命令\n\n` +
+        `\`\`\`bash\n${command}\n\`\`\`\n\n` +
+        `**工作目录:** \`${workDir}\``;
 
-    const formSchema = {
-      type: 'object' as const,
-      properties: {
-        timeout: {
-          type: 'number' as const,
-          title: '超时时间（秒）',
-          description: `最大 ${MAX_TIMEOUT}s`,
-          default: suggestedTimeout,
-          minimum: 1,
-          maximum: MAX_TIMEOUT,
+      const formSchema = {
+        type: 'object' as const,
+        properties: {
+          timeout: {
+            type: 'number' as const,
+            title: '超时时间（秒）',
+            description: `最大 ${MAX_TIMEOUT}s`,
+            default: suggestedTimeout,
+            minimum: 1,
+            maximum: MAX_TIMEOUT,
+          },
+          confirmed: {
+            type: 'boolean' as const,
+            title: '确认执行？',
+            default: true,
+          },
+          remark: {
+            type: 'string' as const,
+            title: '备注',
+            description: '可选，补充说明或拒绝原因',
+          },
         },
-        confirmed: {
-          type: 'boolean' as const,
-          title: '确认执行？',
-          default: true,
-        },
-        remark: {
-          type: 'string' as const,
-          title: '备注',
-          description: '可选，补充说明或拒绝原因',
-        },
-      },
-      required: ['timeout', 'confirmed'],
-    };
+        required: ['timeout', 'confirmed'],
+      };
 
-    const { submitted, data } = yield* hitl.call({
-      ...ctx,
-      input: { message, formSchema: formSchema as any },
-    });
+      const { submitted, data } = yield* hitl.call({
+        ...ctx,
+        input: { message, formSchema: formSchema as any },
+      });
 
-    if (!submitted || !(data as Record<string, unknown>)?.confirmed) {
-      const remark = (data as Record<string, unknown>)?.remark;
-      throw new Error(
-        remark ? `用户取消了命令执行: ${remark}` : '用户取消了命令执行',
+      if (!submitted || !(data as Record<string, unknown>)?.confirmed) {
+        const remark = (data as Record<string, unknown>)?.remark;
+        throw new Error(
+          remark ? `用户取消了命令执行: ${remark}` : '用户取消了命令执行',
+        );
+      }
+
+      userTimeout = Math.min(
+        Math.max(
+          Number((data as Record<string, unknown>).timeout) || suggestedTimeout,
+          1,
+        ),
+        MAX_TIMEOUT,
       );
+    } else {
+      // 非交互式 run（子 agent）：只读命令静默通过，含副作用的一律拒绝（无 HITL 入口）。
+      if (!isReadonlyCommand(command)) {
+        throw new Error(
+          `Non-interactive run (sub-agent): command requires confirmation but HITL is unavailable. ` +
+            `Only single read-only commands are auto-approved; compound or mutating commands are refused.`,
+        );
+      }
+      userTimeout = suggestedTimeout;
     }
-
-    const userTimeout = Math.min(
-      Math.max(
-        Number((data as Record<string, unknown>).timeout) || suggestedTimeout,
-        1,
-      ),
-      MAX_TIMEOUT,
-    );
 
     ctx.signal.throwIfAborted();
 

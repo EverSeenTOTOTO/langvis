@@ -162,6 +162,7 @@ describe('CallSubagentsTool', () => {
 
     const params = launch.mock.calls[0][0] as LaunchParams;
     expect(params.parentSignal).toBe(controller.signal);
+    expect(params.interactive).toBe(false);
     expect(params.workDir).toBe('/tmp/wd');
     expect(params.userConfig).toEqual({ model: { modelId: 'p:m' } });
     expect(params.seed[0]).toMatchObject({ role: 'system' });

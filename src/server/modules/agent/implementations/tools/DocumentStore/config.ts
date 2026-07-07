@@ -33,7 +33,7 @@ export interface DocumentStoreOutput {
 export const config: ToolConfig<DocumentStoreInput, DocumentStoreOutput> = {
   name: 'DocumentStore Tool',
   description:
-    'Store document metadata and chunked content with embeddings to database.',
+    'Store document metadata and chunked content to database. Embeddings are generated internally from chunks (aligned by index) — callers must NOT pass embeddings.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -71,10 +71,9 @@ export const config: ToolConfig<DocumentStoreInput, DocumentStoreOutput> = {
           properties: {
             content: { type: 'string' },
             index: { type: 'number' },
-            embedding: { type: 'array', items: { type: 'number' } },
             metadata: { type: 'object', nullable: true },
           },
-          required: ['content', 'index', 'embedding'],
+          required: ['content', 'index'],
         },
       },
     },

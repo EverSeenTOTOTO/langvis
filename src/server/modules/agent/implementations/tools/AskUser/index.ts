@@ -74,6 +74,14 @@ export default class AskUserTool extends Tool<AskUserOutput> {
   ): AsyncGenerator<RunEvent, AskUserOutput, void> {
     ctx.signal.throwIfAborted();
 
+    // 非交互式 run（子 agent）无 HTTP 提交入口——直接 fail-fast，避免空等 300s 超时。
+    // 自 gated 的工具（如 Bash 只读命令）不会走到这里；本守卫兜底 FileEdit/PositionAdvice 等。
+    if (!ctx.interactive) {
+      throw new Error(
+        'HITL unavailable in non-interactive (sub-agent) run; cannot request user input',
+      );
+    }
+
     const params = ctx.input as unknown as AskUserInput;
     const { message, formSchema, timeout = 300_000 } = params;
     const key = RedisKeys.HUMAN_INPUT(ctx.runId);
