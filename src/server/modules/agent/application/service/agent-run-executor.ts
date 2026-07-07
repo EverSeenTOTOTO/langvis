@@ -7,14 +7,13 @@ import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
+import type { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { generateId } from '@/shared/utils';
-import { ToolIds } from '@/shared/constants';
 import type { LlmMessage } from '@/shared/types/entities';
 import { WorkingMemory } from '@/server/modules/agent/domain/model/working-memory';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
-import { ToolService } from './tool.service';
 import { AgentService } from './agent.service';
 import { runReactLoop } from './react-loop';
 import Logger from '@/server/utils/logger';
@@ -24,6 +23,20 @@ import {
   CACHE_PORT,
 } from '@/server/modules/agent/agent.di-tokens';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
+
+/** 对话无关的 run 启动参数——conv 与子 agent 都用它驱动 Launcher。 */
+export interface LaunchParams {
+  runId: string;
+  workDir: string;
+  userConfig: Record<string, unknown>;
+  systemPrompt: string;
+  /** run 的初始消息（已含 system 提示）；conv 由 effectiveHistory 经 buildIterMessages 派生，子 agent 由 brief+query 派生。 */
+  seed: LlmMessage[];
+  /** 该 run 的有界工具集——executeTool 仅允许集合内成员。conv 传全集，子 agent 传 parent.without(...)。 */
+  toolSet: ToolSet;
+  /** 父 run 的取消信号（子 agent 用）；父 abort 时传播并 cancel 本 run。conv run 不传。 */
+  parentSignal?: AbortSignal;
+}
 
 @singleton()
 export class AgentRunExecutor {
@@ -37,18 +50,10 @@ export class AgentRunExecutor {
     @inject(AGENT_RUN_REPOSITORY)
     private readonly agentRunRepo: AgentRunRepositoryPort,
     @inject(ProviderService) private readonly providerService: ProviderService,
-    @inject(ToolService) private readonly toolService: ToolService,
     @inject(AgentService) private readonly agentService: AgentService,
   ) {}
 
-  createRun(params: {
-    runId: string;
-    workDir: string;
-    userConfig: Record<string, unknown>;
-    systemPrompt: string;
-    /** conv 提供的有效历史（LLM-ready）；agent 据此格式化 WorkingMemory 种子。 */
-    effectiveHistory: LlmMessage[];
-  }): { run: AgentRun; ctx: AgentRunContext } {
+  createRun(params: LaunchParams): { run: AgentRun; ctx: AgentRunContext } {
     const cfg = params.userConfig as {
       model?: { modelId?: string };
     };
@@ -60,7 +65,7 @@ export class AgentRunExecutor {
       `Create run ${chalk.cyan(params.runId)} — model: ${chalk.red(modelId ?? '(default)')} (${contextSize} ctx)`,
     );
 
-    const config = this.agentService.createRunConfig(
+    const config = this.agentService.buildRunConfig(
       params.userConfig,
       params.systemPrompt,
       contextSize,
@@ -69,7 +74,7 @@ export class AgentRunExecutor {
     const run = new AgentRun(params.runId, config);
 
     const workingMemory = new WorkingMemory({
-      seed: buildIterMessages(params.effectiveHistory),
+      seed: params.seed,
       contextSize: config.contextSize,
       runtimeConfig: config.runtimeConfig,
     });
@@ -84,7 +89,7 @@ export class AgentRunExecutor {
       cache: this.cache,
       workingMemory,
       executeTool: (toolName, args) =>
-        this.executeTool(toolName, args, {
+        this.executeTool(toolName, args, params.toolSet, {
           signal: run.signal,
           workDir: params.workDir,
           runId: run.runId,
@@ -98,14 +103,17 @@ export class AgentRunExecutor {
     return { run, ctx };
   }
 
-  async *run(params: {
-    runId: string;
-    workDir: string;
-    userConfig: Record<string, unknown>;
-    systemPrompt: string;
-    effectiveHistory: LlmMessage[];
-  }): AsyncGenerator<EnrichedEvent> {
+  async *launch(params: LaunchParams): AsyncGenerator<EnrichedEvent> {
     const { run, ctx } = this.createRun(params);
+
+    // 父取消传播到子 run：父信号 abort 即 cancel 本 run（仅子 agent 场景需要）。
+    if (params.parentSignal) {
+      if (params.parentSignal.aborted) run.cancel('parent aborted');
+      else
+        params.parentSignal.addEventListener('abort', () =>
+          run.cancel('parent aborted'),
+        );
+    }
 
     await this.agentRunRepo.save({
       id: run.runId,
@@ -138,11 +146,8 @@ export class AgentRunExecutor {
     run: AgentRun,
     ctx: AgentRunContext,
   ): AsyncGenerator<EnrichedEvent> {
-    // 工具注册现由执行器保证（原 AgentService 构造时触发）。
-    await this.toolService.initialize();
-
     this.logger.debug(`Execute run ${chalk.cyan(run.runId)}`);
-    yield run.start();
+    if (!run.isTerminated) yield run.start();
 
     try {
       for await (const event of runReactLoop(ctx)) {
@@ -165,11 +170,18 @@ export class AgentRunExecutor {
     return run?.cancel(reason) ?? null;
   }
 
+  /** 取活跃 run（内存中）——CRUD 实时进度读取用；不存在则 undefined（调用方回落到 repo）。 */
+  getActiveRun(runId: string): AgentRun | undefined {
+    return this.activeRuns.get(runId);
+  }
+
   private executeTool(
     toolName: string,
     args: Record<string, unknown>,
+    toolSet: ToolSet,
     deps: ToolCallDeps,
   ): AsyncGenerator<RunEvent, string, void> {
+    if (!toolSet.has(toolName)) throw new ToolNotFoundError(toolName);
     let tool: Tool;
     try {
       tool = container.resolve<Tool>(toolName);
@@ -187,19 +199,4 @@ export class AgentRunExecutor {
 
     return toolCall.execute();
   }
-}
-
-/** 历史回复重建为扁平的 response_user 调用，保持与当前输出格式一致（agent 拥有的种子格式）。 */
-function buildIterMessages(messages: LlmMessage[]): LlmMessage[] {
-  return messages.map(msg =>
-    msg.role === 'assistant'
-      ? {
-          role: 'assistant' as const,
-          content: JSON.stringify({
-            tool: ToolIds.RESPONSE_USER,
-            input: { message: msg.content },
-          }),
-        }
-      : { role: msg.role, content: msg.content },
-  );
 }

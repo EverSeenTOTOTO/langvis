@@ -4,6 +4,9 @@ import type { EnrichedEvent } from '@/shared/types/events';
 /**
  * 纯投影函数：把 AgentRun 的事实流 fold 成读模型 RunView，供 SSE 回放 / 回回完成 / 历史读回共用，
  * 单一投影来源保证实时流与历史读回一致。无状态、无副作用、可对任意子流重算。
+ *
+ * 归属：这是 agent run 的投影，归 agent 模块（agentRun 应脱离对话体系独立运行）。
+ * conv 侧（chat.service / get-messages / conversation-session）按需从这里导入。
  */
 export interface RunView {
   content: string;
@@ -14,6 +17,13 @@ export interface RunView {
   awaitingInput: AwaitingInputProjection | null;
   processSummary: string | null;
   audio: { filePath: string; voice?: string } | null;
+}
+
+/** GetRunView 查询的 DTO——任意 run（含子 agent）的投影 + 权威状态。前后端共享。 */
+export interface RunViewResult {
+  runId: string;
+  status: string;
+  view: RunView;
 }
 
 export function projectRun(events: readonly EnrichedEvent[]): RunView {

@@ -13,6 +13,9 @@ import type {
   RunEventPayload,
 } from '@/server/modules/conversation/contracts';
 import { AgentRunExecutor } from '../service/agent-run-executor';
+import { AgentService } from '../service/agent.service';
+import { ToolIds } from '@/shared/constants';
+import type { LlmMessage } from '@/shared/types/entities';
 import { eventHandler } from '@/server/decorator/handler';
 import Logger from '@/server/utils/logger';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
@@ -26,6 +29,7 @@ export class AgentRunHandler {
 
   constructor(
     @inject(AgentRunExecutor) private executor: AgentRunExecutor,
+    @inject(AgentService) private agentService: AgentService,
     @inject(WorkspaceService) private workspaceService: WorkspaceService,
     @inject(EventBus) private eventBus: EventBus,
   ) {}
@@ -42,6 +46,9 @@ export class AgentRunHandler {
     } = event.payload;
     const runId = generateId('run');
     const workDir = await this.workspaceService.getWorkDir(conversationId);
+    // conv 适配：把 effectiveHistory 转成 agent 种子格式，并取 conv 默认 ToolSet（全集）。
+    const seed = buildIterMessages(effectiveHistory);
+    const toolSet = this.agentService.buildToolSet();
 
     this.eventBus.dispatch(
       RunStarted,
@@ -54,12 +61,13 @@ export class AgentRunHandler {
 
     const startTime = Date.now();
     try {
-      for await (const enriched of this.executor.run({
+      for await (const enriched of this.executor.launch({
         runId,
         workDir,
         userConfig,
         systemPrompt,
-        effectiveHistory,
+        seed,
+        toolSet,
       })) {
         this.eventBus.dispatch(
           RunEvent,
@@ -84,4 +92,22 @@ export class AgentRunHandler {
       );
     }
   }
+}
+
+/**
+ * 历史回复重建为扁平的 response_user 调用，保持与当前 ReAct 输出格式一致。
+ * conv→agent 种子格式转换（assistant 文本 → response_user tool-call JSON），仅在 conv 适配层使用。
+ */
+function buildIterMessages(messages: LlmMessage[]): LlmMessage[] {
+  return messages.map(msg =>
+    msg.role === 'assistant'
+      ? {
+          role: 'assistant' as const,
+          content: JSON.stringify({
+            tool: ToolIds.RESPONSE_USER,
+            input: { message: msg.content },
+          }),
+        }
+      : { role: msg.role, content: msg.content },
+  );
 }

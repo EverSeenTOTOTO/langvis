@@ -1,7 +1,7 @@
 import type { SSEFrame, EnrichedEvent } from '@/shared/types/events';
 import type { Transport } from '@/shared/transport';
 import { Connection } from './connection';
-import { projectRun } from './run-projection';
+import { projectRun } from '@/server/modules/agent/application/service/run-projection';
 import {
   ConversationMemory,
   type ConversationMemoryConfig,

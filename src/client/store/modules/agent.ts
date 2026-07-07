@@ -1,6 +1,7 @@
 import { api, ApiRequest } from '@/client/decorator/api';
 import { store } from '@/client/decorator/store';
 import type { SkillInfo } from '@/shared/types';
+import type { RunViewResult } from '@/server/modules/agent/application/service/run-projection';
 
 @store()
 export class AgentStore {
@@ -14,5 +15,23 @@ export class AgentStore {
   @api('/api/agent/skills')
   async listSkills(_params?: void, req?: ApiRequest): Promise<SkillInfo[]> {
     return (await req!.send()) as SkillInfo[];
+  }
+
+  /** 取任意 run（含子 agent run）的投影视图：live 优先、repo 回落。 */
+  @api('/api/agent/runs/:runId')
+  async getRunViewById(
+    _params: { runId: string },
+    req?: ApiRequest<{ runId: string }>,
+  ): Promise<RunViewResult | undefined> {
+    return (await req!.send()) as RunViewResult | undefined;
+  }
+
+  /** 列出某父 run 派生的子 agent run 摘要（childRunId 从父 tool_progress 解析）。 */
+  @api('/api/agent/runs/:parentRunId/children')
+  async getChildRuns(
+    _params: { parentRunId: string },
+    req?: ApiRequest<{ parentRunId: string }>,
+  ) {
+    return req!.send();
   }
 }

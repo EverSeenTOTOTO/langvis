@@ -130,16 +130,6 @@ export class WorkingMemory {
   }
 }
 
-/**
- * Process-summary prompt (mid-loop recap + loop-exit processSummary): folds an
- * agent turn's tool/observation trace into a concise summary of the WORK. The
- * final answer is delivered to the user and prepended to this summary verbatim
- * (see ConversationMemory.buildContext), so it must NOT be restated here —
- * capture the process that produced it (tools, attempts, difficulties, results).
- *
- * Static template: fold fills the History section per chunk (rolling summary is
- * threaded by fold itself, prepended as [previous summary]).
- */
 const PROCESS_SUMMARY_PROMPT = Prompt.empty()
   .with('Role', 'You compact an agent turn into a concise process summary.')
   .with(
