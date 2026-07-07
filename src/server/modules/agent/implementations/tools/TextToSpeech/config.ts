@@ -4,7 +4,7 @@ import {
   TTS_EMOTIONS,
   type TtsVoice,
   type TtsEmotion,
-} from '../tts-options';
+} from '@/shared/constants';
 
 export const config: ToolConfig<
   {

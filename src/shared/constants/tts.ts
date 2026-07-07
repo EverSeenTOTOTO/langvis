@@ -1,7 +1,3 @@
-/**
- * TTS 共享选项——`text_to_speech` 与 `response_user`（tts 配置）复用，
- * 避免语音/情绪枚举在多处重复。
- */
 export const TTS_VOICES = [
   'zh_female_roumeinvyou_emo_v2_mars_bigtts',
   'zh_female_meilinvyou_emo_v2_mars_bigtts',

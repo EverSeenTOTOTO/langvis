@@ -123,7 +123,7 @@ export default class BashTool extends Tool<BashOutput> {
     });
 
     if (!submitted || !(data as Record<string, unknown>)?.confirmed) {
-      const remark = (data as Record<string, unknown>).remark;
+      const remark = (data as Record<string, unknown>)?.remark;
       throw new Error(
         remark ? `用户取消了命令执行: ${remark}` : '用户取消了命令执行',
       );

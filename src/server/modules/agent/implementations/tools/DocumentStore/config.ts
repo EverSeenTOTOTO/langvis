@@ -19,9 +19,10 @@ export interface DocumentStoreInput {
   chunks: Array<{
     content: string;
     index: number;
-    embedding: number[];
     metadata?: Record<string, unknown>;
   }>;
+  /** 与 chunks 同序、按位对齐（长度不等会在入口失败）。 */
+  embeddings: number[][];
 }
 
 export interface DocumentStoreOutput {

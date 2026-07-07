@@ -2,7 +2,7 @@ import { CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { Flex, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { isEmpty } from 'lodash-es';
-import { useMemo } from 'react';
+import { observer } from 'mobx-react-lite';
 import type React from 'react';
 import type { UIToolCall } from '@/client/store/modules/message-node';
 import './index.scss';
@@ -45,7 +45,7 @@ export interface ToolBlockItemProps {
  * Renders a single tool call with status, progress, and output.
  * Used by both top-level renderers and nested agent call blocks.
  */
-export function ToolBlockItem({
+export const ToolBlockItem = observer(function ToolBlockItem({
   toolCall,
   depth = 0,
   customRender,
@@ -53,17 +53,14 @@ export function ToolBlockItem({
   const color = getToolColor(toolCall.toolName);
   const isPending = toolCall.status === 'pending';
 
-  const streamingChunks = useMemo(() => {
-    const chunks: { type: 'stdout' | 'stderr'; text: string }[] = [];
-    for (const p of toolCall.progress) {
-      const d = p as { type?: string; text?: string } | undefined;
-      if (d?.type === 'stdout' && d.text)
-        chunks.push({ type: 'stdout', text: d.text });
-      else if (d?.type === 'stderr' && d.text)
-        chunks.push({ type: 'stderr', text: d.text });
-    }
-    return chunks;
-  }, [toolCall.progress]);
+  const streamingChunks: { type: 'stdout' | 'stderr'; text: string }[] = [];
+  for (const p of toolCall.progress) {
+    const d = p as { type?: string; text?: string } | undefined;
+    if (d?.type === 'stdout' && d.text)
+      streamingChunks.push({ type: 'stdout', text: d.text });
+    else if (d?.type === 'stderr' && d.text)
+      streamingChunks.push({ type: 'stderr', text: d.text });
+  }
 
   const latestProgress = toolCall.progress.at(-1) as
     | { status?: string; message?: string }
@@ -145,7 +142,7 @@ export function ToolBlockItem({
       )}
     </div>
   );
-}
+});
 
 export interface StandaloneThoughtBlockProps {
   thought: string;

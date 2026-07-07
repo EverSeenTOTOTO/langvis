@@ -26,7 +26,13 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
     ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, DocumentStoreOutput, void> {
     const data = ctx.input as unknown as DocumentStoreInput;
-    const { document, chunks } = data;
+    const { document, chunks, embeddings } = data;
+
+    if (embeddings.length !== chunks.length) {
+      throw new Error(
+        `embeddings/chunks length mismatch: ${embeddings.length} vs ${chunks.length}`,
+      );
+    }
 
     // Coerce keywords: LLM may pass comma-separated string(s).
     // Ajv coerceTypes wraps a bare string as single-element array,
@@ -63,12 +69,12 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
 
       this.logger.info(`Created document: ${doc.id}`);
 
-      const chunkEntities = chunks.map(chunk =>
+      const chunkEntities = chunks.map((chunk, i) =>
         manager.create(DocumentChunkEntity, {
           documentId: doc.id,
           chunkIndex: chunk.index,
           content: chunk.content,
-          embedding: chunk.embedding,
+          embedding: embeddings[i],
           metadata: chunk.metadata,
         }),
       );

@@ -1,7 +1,6 @@
 import { CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { Button, Flex, Tag, Typography } from 'antd';
 import { observer } from 'mobx-react-lite';
-import { useMemo } from 'react';
 import type { UIToolCall } from '@/client/store/modules/message-node';
 import { ToolIds } from '@/shared/constants';
 import Modal from '@/client/components/Modal';
@@ -49,7 +48,7 @@ export const CallSubagentsBlock = observer(function CallSubagentsBlock({
 }): React.ReactElement {
   const settingStore = useStore('setting');
 
-  const children = useMemo(() => {
+  const children: ChildState[] = (() => {
     const map = new Map<string, ChildState>();
     for (const p of toolCall.progress) {
       const d = p as SubagentProgress | undefined;
@@ -69,7 +68,7 @@ export const CallSubagentsBlock = observer(function CallSubagentsBlock({
       else if (ev.type === 'cancelled') c.status = 'cancelled';
     }
     return [...map.values()];
-  }, [toolCall.progress]);
+  })();
 
   const Icon = statusIcon(
     toolCall.status === 'pending' ? 'running' : toolCall.status,
@@ -103,7 +102,7 @@ export const CallSubagentsBlock = observer(function CallSubagentsBlock({
               <Typography.Text
                 type="secondary"
                 ellipsis={{ tooltip: c.response }}
-                style={{ maxWidth: 240 }}
+                style={{ maxWidth: '60%' }}
               >
                 {c.response}
               </Typography.Text>

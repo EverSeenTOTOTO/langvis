@@ -94,14 +94,12 @@ export function projectRun(events: readonly EnrichedEvent[]): RunView {
         break;
 
       case 'tool_progress': {
-        // Ephemeral — not part of the steps projection, but an awaiting_input
-        // prompt marks the run as blocked until the user submits (used to
-        // restore the confirmation form on reconnect).
         const data = event.data as
           | {
               status?: string;
               message?: string;
               schema?: Record<string, unknown>;
+              childRunId?: unknown;
             }
           | undefined;
         if (data?.status === 'awaiting_input' && data.schema) {
@@ -110,6 +108,9 @@ export function projectRun(events: readonly EnrichedEvent[]): RunView {
             message: data.message ?? 'Please provide input',
             schema: data.schema,
           };
+        }
+        if (data?.childRunId && currentStep?.action) {
+          (currentStep.action.progress ??= []).push(event.data);
         }
         break;
       }

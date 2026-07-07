@@ -42,6 +42,8 @@ export interface ReActStep {
     callId: string;
     toolName: string;
     toolArgs: Record<string, unknown>;
+    /** call_subagents 子 run 进度（{ childRunId, event }[]）；实时累积或 projectRun 重建。 */
+    progress?: unknown[];
   };
   observation?: string;
   startedAt: number;

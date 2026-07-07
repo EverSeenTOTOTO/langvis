@@ -12,12 +12,8 @@ export interface EmbeddingGenerateInput {
 }
 
 export interface EmbeddingGenerateOutput {
-  chunks: Array<{
-    content: string;
-    index: number;
-    embedding: number[];
-    metadata?: Record<string, unknown>;
-  }>;
+  /** 与输入 chunks 同序的向量数组；不含 content（避免原文回流 observation 拖慢后续步骤）。 */
+  embeddings: number[][];
   model?: string;
   dimension: number;
 }
@@ -62,22 +58,14 @@ export const config: ToolConfig<
   outputSchema: {
     type: 'object',
     properties: {
-      chunks: {
+      embeddings: {
         type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            content: { type: 'string' },
-            index: { type: 'number' },
-            embedding: { type: 'array', items: { type: 'number' } },
-            metadata: { type: 'object', nullable: true },
-          },
-          required: ['content', 'index', 'embedding'],
-        },
+        items: { type: 'array', items: { type: 'number' } },
+        description: 'Vectors aligned to the input chunks order (no content).',
       },
       model: { type: 'string' },
       dimension: { type: 'number' },
     },
-    required: ['chunks', 'model', 'dimension'],
+    required: ['embeddings', 'model', 'dimension'],
   } as any,
 };

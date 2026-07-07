@@ -44,7 +44,7 @@ export default class DocumentSearchTool extends Tool<DocumentSearchOutput> {
       input: { chunks: [{ content: query, index: 0 }] },
     });
 
-    const queryVector = embedResult.chunks[0].embedding;
+    const queryVector = embedResult.embeddings[0];
 
     const vectorStr = `[${queryVector.join(',')}]`;
 

@@ -52,7 +52,7 @@ export function stepsToToolCalls(steps: ReActStep[]): UIToolCall[] {
       // A step without completedAt is still in flight (e.g. a tool awaiting
       // input) — show it as pending so the reconnect view matches the live one.
       status: s.completedAt ? 'completed' : 'pending',
-      progress: [],
+      progress: s.action!.progress ?? [],
       output: s.observation,
       startedAt: s.startedAt,
       completedAt: s.completedAt,
