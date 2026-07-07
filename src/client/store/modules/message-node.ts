@@ -41,6 +41,50 @@ export type TimelineItem =
   | { kind: 'thought'; key: string; content: string }
   | { kind: 'tool'; key: string; callId: string };
 
+/** ReActStep[] → UIToolCall[]（历史/快照读回用；与实时路径同一视图形状）。 */
+export function stepsToToolCalls(steps: ReActStep[]): UIToolCall[] {
+  return steps
+    .filter(s => s.action)
+    .map(s => ({
+      callId: s.action!.callId,
+      toolName: s.action!.toolName,
+      toolArgs: s.action!.toolArgs,
+      // A step without completedAt is still in flight (e.g. a tool awaiting
+      // input) — show it as pending so the reconnect view matches the live one.
+      status: s.completedAt ? 'completed' : 'pending',
+      progress: [],
+      output: s.observation,
+      startedAt: s.startedAt,
+      completedAt: s.completedAt,
+    }));
+}
+
+/** ReActStep[] → TimelineItem[]（thought/action 绑定、按到达序）。 */
+export function stepsToTimeline(steps: ReActStep[]): TimelineItem[] {
+  // Each step is (thought?) → (action?). Drop empty thoughts so a
+  // thoughtless step (tool_call with no preceding thought) contributes only
+  // its tool — matches the live path, which appends a thought item only when
+  // a thought frame actually arrives.
+  const items: TimelineItem[] = [];
+  steps.forEach((s, index) => {
+    if (s.thought.length > 0) {
+      items.push({
+        kind: 'thought',
+        key: `th_${index}`,
+        content: s.thought,
+      });
+    }
+    if (s.action) {
+      items.push({
+        kind: 'tool',
+        key: s.action.callId,
+        callId: s.action.callId,
+      });
+    }
+  });
+  return items;
+}
+
 /**
  * MessageNode — 客户端消息节点。
  *
@@ -85,8 +129,8 @@ export class MessageNode {
       this.steps = data.steps ?? [];
       this.audio = data.audio ?? null;
       // Derive toolCalls + ordered timeline from steps
-      this.toolCalls = this.stepsToToolCalls(this.steps);
-      this.timeline = this.stepsToTimeline(this.steps);
+      this.toolCalls = stepsToToolCalls(this.steps);
+      this.timeline = stepsToTimeline(this.steps);
     }
 
     makeAutoObservable(this);
@@ -193,8 +237,8 @@ export class MessageNode {
     this.content = snapshot.content;
     this.status = (snapshot.status as RunStatus) ?? 'running';
     this.steps = snapshot.steps;
-    this.toolCalls = this.stepsToToolCalls(this.steps);
-    this.timeline = this.stepsToTimeline(this.steps);
+    this.toolCalls = stepsToToolCalls(this.steps);
+    this.timeline = stepsToTimeline(this.steps);
     // Restore an in-flight ask_user prompt so the confirmation form survives
     // a reconnect while the run is blocked awaiting input.
     this._awaitingInputData = snapshot.awaitingInput ?? null;
@@ -258,48 +302,6 @@ export class MessageNode {
   }
 
   // ── 内部 ──
-
-  private stepsToToolCalls(steps: ReActStep[]): UIToolCall[] {
-    return steps
-      .filter(s => s.action)
-      .map(s => ({
-        callId: s.action!.callId,
-        toolName: s.action!.toolName,
-        toolArgs: s.action!.toolArgs,
-        // A step without completedAt is still in flight (e.g. a tool awaiting
-        // input) — show it as pending so the reconnect view matches the live one.
-        status: s.completedAt ? 'completed' : 'pending',
-        progress: [],
-        output: s.observation,
-        startedAt: s.startedAt,
-        completedAt: s.completedAt,
-      }));
-  }
-
-  private stepsToTimeline(steps: ReActStep[]): TimelineItem[] {
-    // Each step is (thought?) → (action?). Drop empty thoughts so a
-    // thoughtless step (tool_call with no preceding thought) contributes only
-    // its tool — matches the live path, which appends a thought item only when
-    // a thought frame actually arrives.
-    const items: TimelineItem[] = [];
-    steps.forEach((s, index) => {
-      if (s.thought.length > 0) {
-        items.push({
-          kind: 'thought',
-          key: `th_${index}`,
-          content: s.thought,
-        });
-      }
-      if (s.action) {
-        items.push({
-          kind: 'tool',
-          key: s.action.callId,
-          callId: s.action.callId,
-        });
-      }
-    });
-    return items;
-  }
 
   private extractAwaitingInput(frame: SSEFrame): void {
     if (frame.type !== 'tool_progress') return;

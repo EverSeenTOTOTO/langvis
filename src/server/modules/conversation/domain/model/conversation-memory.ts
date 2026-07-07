@@ -185,15 +185,6 @@ function toLlmMessages(messages: Message[]): LlmMessage[] {
   return messages.map(m => ({ role: m.role, content: m.content }));
 }
 
-/**
- * History-compaction prompt: folds whole past turns into a rolling summary C
- * that replaces them as the effective-history prefix. Compacted turns are NOT
- * preserved elsewhere, so retain topic + outcome gist (who/when/did what).
- *
- * Static template: fold fills the History section per chunk. The prior summary
- * (if continuing) is passed by the caller as messages[0]; the rolling summary
- * across chunks is threaded by fold itself.
- */
 const HISTORY_PROMPT = Prompt.empty()
   .with('Role', 'You are a conversation compactor.')
   .with(

@@ -6,7 +6,7 @@ import { AGENT_RUN_REPOSITORY } from '@/server/modules/agent/agent.di-tokens';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
-import { projectRun } from '../service/run-projection';
+import { projectRun } from '@/server/modules/agent/application/service/run-projection';
 import { GetMessagesQuery } from '../../contracts';
 
 /**

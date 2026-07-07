@@ -30,7 +30,7 @@ describe('AgentService', () => {
 
   describe('createRunConfig', () => {
     it('校验 userConfig 后产出 RuntimeConfigVO 快照', () => {
-      const cfg = makeService().createRunConfig(
+      const cfg = makeService().buildRunConfig(
         { model: { modelId: 'gpt-4' } },
         'prompt',
         8192,
@@ -48,11 +48,7 @@ describe('AgentService', () => {
     it('非法 userConfig 抛 ConfigValidationError', () => {
       // temperature 超出 schema 的 maximum(1)
       expect(() =>
-        makeService().createRunConfig(
-          { model: { temperature: 99 } },
-          'p',
-          4000,
-        ),
+        makeService().buildRunConfig({ model: { temperature: 99 } }, 'p', 4000),
       ).toThrow(ConfigValidationError);
     });
   });

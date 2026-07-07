@@ -42,7 +42,7 @@ description: Archive web pages and emails to vector database with metadata extra
 根据用户选择：
 
 - **archive_email**: 邮件原文作为 content，sourceType = "email"，直接执行下方「归档管线」
-- **archive_links**: 调用 `links_extract` 提取链接 → 筛选：侧重文章、教程、深度内容类链接，排除推广、版本发布通知、产品更新等轻量链接 → `ask_user` 多选确认要归档哪些链接 → 对每个选中链接，逐个执行：`web_fetch` 获取网页内容 → 以网页内容作为 content、sourceType = "web" → 执行「归档管线」
+- **archive_links**: 调用 `links_extract` 提取链接 → 筛选：侧重文章、教程、深度内容类链接，排除推广、版本发布通知、产品更新等轻量链接 → `ask_user` 多选确认要归档哪些链接 → 按下文「批量归档（多链接并发）」用 `call_subagents` 并发归档每个选中链接
 - **cancel**: 返回 `final_answer` 取消
 
 ## 网页归档工作流
@@ -125,6 +125,13 @@ description: Archive web pages and emails to vector database with metadata extra
   ```
 - output: `{ documentId, chunkCount }`
 
-## 批量归档注意事项
+## 批量归档（多链接并发）
 
-对多个 URL 逐个执行：`web_fetch` → 归档管线。每个 URL 产生一条独立的 Document 记录。由于暂时没有并发机制，必须挨个处理。
+当要归档**多个链接**时，使用 `call_subagents` 并发处理——每个链接派一个子 agent，各自独立完成 `web_fetch` → 归档管线（避免单循环处理多链接时的上下文混淆/部分失败）。
+
+一次 `call_subagents` 调用，`children` 为每个选中链接一项：
+
+- `brief`：把「归档管线（上述 Step 1–4）」+「关键规则（rawContent 必须是完整原文、尽量透传 `$cached`、每条链接是独立文档等）」作为背景传给子 agent。
+- `query`：`归档此链接：<url>（sourceType = "web"）`。
+
+`call_subagents` 等全部子 agent 结束（allSettled）后返回各自结果；据此向用户汇总（成功 X 条、失败 Y 条及原因）。**单个链接无需子 agent**，直接执行管线即可。

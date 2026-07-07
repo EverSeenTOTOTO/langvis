@@ -30,7 +30,7 @@ import Logger from '@/server/utils/logger';
 import { isEmpty } from 'lodash-es';
 import type { EnrichedEvent } from '@/shared/types/events';
 import type { ConversationMemory } from '../../domain/model/conversation-memory';
-import { projectRun } from './run-projection';
+import { projectRun } from '@/server/modules/agent/application/service/run-projection';
 
 @singleton()
 export class ChatService {

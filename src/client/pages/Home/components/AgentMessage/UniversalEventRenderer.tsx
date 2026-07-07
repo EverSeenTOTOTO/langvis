@@ -6,6 +6,7 @@ import { Collapse, Typography } from 'antd';
 import { observer } from 'mobx-react-lite';
 import { Fragment, useEffect, useState } from 'react';
 import { SkillCallBlock } from './SkillCallBlock';
+import { CallSubagentsBlock } from './CallSubagentsBlock';
 import { StandaloneThoughtBlock, ToolBlockItem } from './ToolBlockItem';
 
 export interface UniversalEventRendererProps {
@@ -73,6 +74,8 @@ export const UniversalEventRenderer = observer(function UniversalEventRenderer({
                 const toolEl =
                   tc.toolName === 'skill_call' ? (
                     <SkillCallBlock toolCall={tc} depth={0} />
+                  ) : tc.toolName === 'call_subagents' ? (
+                    <CallSubagentsBlock toolCall={tc} />
                   ) : (
                     <ToolBlockItem
                       toolCall={tc}
