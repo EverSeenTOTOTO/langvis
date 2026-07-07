@@ -4,11 +4,12 @@ import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
 import { DocumentEntity } from '@/shared/entities/Document';
 import type { Logger } from '@/server/utils/logger';
 import type { ToolConfig } from '@/shared/types';
-import { inject } from 'tsyringe';
+import { container, inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
+import type EmbeddingGenerateTool from '../EmbeddingGenerate';
 import type { DocumentStoreInput, DocumentStoreOutput } from './config';
 import { config } from './config';
 
@@ -26,13 +27,15 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
     ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, DocumentStoreOutput, void> {
     const data = ctx.input as unknown as DocumentStoreInput;
-    const { document, chunks, embeddings } = data;
+    const { document, chunks } = data;
 
-    if (embeddings.length !== chunks.length) {
-      throw new Error(
-        `embeddings/chunks length mismatch: ${embeddings.length} vs ${chunks.length}`,
-      );
-    }
+    // 向量由内部 EmbeddingGenerate 按 chunks 顺序生成（与 DocumentSearch 同模式），
+    // 调用方不再搬运 number[][]，模型循环里也不会出现大块向量。
+    const embedTool = container.resolve<EmbeddingGenerateTool>(
+      ToolIds.EMBEDDING_GENERATE,
+    );
+    const embedResult = yield* embedTool.call({ ...ctx, input: { chunks } });
+    const embeddings = embedResult.embeddings;
 
     // Coerce keywords: LLM may pass comma-separated string(s).
     // Ajv coerceTypes wraps a bare string as single-element array,

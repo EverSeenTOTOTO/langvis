@@ -15,6 +15,8 @@ export interface ToolCallContext {
   readonly chatModelId: string | undefined;
   /** HITL 关联键（AskUser 写 human_input:<runId>），不进入 AgentRunContext。 */
   readonly runId: string;
+  /** 是否允许 HITL。conv run = true；子 agent = false（无 HTTP 提交入口，AskUser 会 fail-fast）。 */
+  readonly interactive: boolean;
   /** 运行时配置快照。供工具读取用户默认值（如 TTS voice/modelId），避免把这些内部参数暴露给模型。 */
   readonly runtimeConfig: Record<string, unknown>;
 }

@@ -89,23 +89,9 @@ description: Archive web pages and emails to vector database with metadata extra
 
 注意：maxChunkSize 不要随意调大，最多 2000。
 
-### Step 3: 生成向量
+### Step 3: 存储到数据库
 
-**如果 chunks ≤ 32**，一次调用 `embedding_generate`：
-
-- input: `{ "chunks": <Step 2 输出的 .chunks 数组> }`
-- output: `{ embeddings: [[...], ...], model, dimension }`（向量与输入 chunks 同序；**不含 content**——content 由 Step 2 持有，避免原文回流进 observation 拖慢后续步骤）
-
-**如果 chunks > 32**，分批调用 `embedding_generate`，每批最多 32 个 chunks：
-
-- 将 Step 2 的 chunks 按顺序分成多批，每批 ≤ 32 个
-- 对每批调用 `embedding_generate`：`{ "chunks": <该批 .chunks 数组> }`
-- 收集所有批次的输出，将各批 `embeddings` 按顺序拼接为一个完整数组
-- 最终合并结果：`{ embeddings: [[...], ...], model, dimension }`
-
-### Step 4: 存储到数据库
-
-调用 `document_store`（content 来自 Step 2、向量来自 Step 3，两者同序、按位对齐，长度必须相等）：
+调用 `document_store`（向量由工具内部按 chunks 顺序自动生成，调用方无需、也不应传入 embeddings）：
 
 - input:
   ```json
@@ -120,8 +106,7 @@ description: Archive web pages and emails to vector database with metadata extra
       "sourceType": "<来源类型>",
       "rawContent": "<原文或$cached引用>"
     },
-    "chunks": "<Step 2 输出的 .chunks 数组>",
-    "embeddings": "<Step 3 输出的 .embeddings 数组>"
+    "chunks": "<Step 2 输出的 .chunks 数组>"
   }
   ```
 - output: `{ documentId, chunkCount }`
@@ -132,7 +117,7 @@ description: Archive web pages and emails to vector database with metadata extra
 
 一次 `call_subagents` 调用，`children` 为每个选中链接一项：
 
-- `brief`：把「归档管线（上述 Step 1–4）」+「关键规则（rawContent 必须是完整原文、尽量透传 `$cached`、每条链接是独立文档等）」作为背景传给子 agent。
+- `brief`：把「归档管线（上述 Step 1–3）」+「关键规则（rawContent 必须是完整原文、尽量透传 `$cached`、每条链接是独立文档等）」作为背景传给子 agent。
 - `query`：`归档此链接：<url>（sourceType = "web"）`。
 
 `call_subagents` 等全部子 agent 结束（allSettled）后返回各自结果；据此向用户汇总（成功 X 条、失败 Y 条及原因）。**单个链接无需子 agent**，直接执行管线即可。

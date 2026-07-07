@@ -42,6 +42,7 @@ function makeDeps(): ToolCallDeps {
     signal: new AbortController().signal,
     workDir: '/tmp/workdir',
     runId: 'run_1',
+    interactive: true,
     llm: makeMockLlm(),
     cache: makeMockCache(),
     chatModelId: undefined,
