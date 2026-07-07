@@ -15,9 +15,7 @@ export const BASE_PROMPT = Prompt.empty()
   )
   .with(
     'Output format',
-    `Your ENTIRE response MUST be a SINGLE, VALID JSON object. Do NOT include any plain text, markdown blocks (e.g. \`\`\`json), or extraneous characters before or after the JSON.
-
-Every response is a flat tool call. The JSON object must conform to this single structure:
+    `Every response is a flat tool call. The JSON object must conform to this single structure:
 
 \`\`\`typescript
 interface Response {

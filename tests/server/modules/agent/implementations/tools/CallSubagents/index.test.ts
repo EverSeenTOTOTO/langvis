@@ -95,21 +95,39 @@ describe('CallSubagentsTool', () => {
     ]);
     expect(launch).toHaveBeenCalledTimes(2);
 
-    // every child event re-yielded as parent tool_progress on the parent callId
-    expect(yielded).toHaveLength(5); // child0: start,tool_call,final(3) + child1: start,error(2)
+    // first two yields are per-child started blobs ({ childRunId, brief, query }),
+    // rest are the children's events re-yielded as tool_progress
+    expect(yielded).toHaveLength(7); // 2 started + child0(3) + child1(2)
+    const startedBlobs = yielded.slice(0, 2) as Array<{
+      data: { childRunId: string; brief: string; query: string };
+    }>;
+    expect(startedBlobs[0].data).toMatchObject({ brief: 'b1', query: 'q1' });
+    expect(startedBlobs[1].data).toMatchObject({ brief: 'b2', query: 'q2' });
+
+    const eventBlobs = yielded.slice(2);
     expect(
-      yielded.every(e => (e as { type: string }).type === 'tool_progress'),
+      eventBlobs.every(e => (e as { type: string }).type === 'tool_progress'),
     ).toBe(true);
     expect(
-      yielded.every(e => (e as { callId: string }).callId === 'tc_parent'),
+      eventBlobs.every(e => (e as { callId: string }).callId === 'tc_parent'),
     ).toBe(true);
     expect(
       new Set(
-        yielded.map(
+        eventBlobs.map(
           e => (e as { data: { childRunId: string } }).data.childRunId,
         ),
       ).size,
     ).toBe(2);
+    // started blobs' runIds are exactly the children that emitted events
+    expect(
+      startedBlobs.every(s =>
+        eventBlobs.some(
+          e =>
+            (e as { data: { childRunId: string } }).data.childRunId ===
+            s.data.childRunId,
+        ),
+      ),
+    ).toBe(true);
 
     // aggregated results: one completed (with response), one failed
     expect(value.results).toHaveLength(2);
