@@ -10,7 +10,6 @@ export enum ToolIds {
   DOCUMENT_SEARCH = 'document_search',
   LINKS_EXTRACT = 'links_extract',
   CACHED_READ = 'cached_read',
-  POSITION_ADJUSTMENT_ADVICE = 'position_adjustment_advice',
   FILE_EDIT = 'file_edit',
   BASH = 'bash',
   LIST_TOOLS = 'list_tools',
