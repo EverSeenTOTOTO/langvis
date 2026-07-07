@@ -15,7 +15,6 @@ container.register(CACHE_PORT, CacheProvider, {
 import './application/event/agent-run.handler';
 import './application/event/cancel-run.handler';
 import './application/query/get-run-view.handler';
-import './application/query/get-child-runs.handler';
 // config fragment 自注册——基础库不反向认识任何域。
 import './application/service/model-config.fragment';
 import './domain/model/loop-config.fragment';

@@ -1,4 +1,4 @@
-import { Typography } from 'antd';
+import { Skeleton, Typography } from 'antd';
 import { useEffect } from 'react';
 import { useAsyncFn } from 'react-use';
 import { useStore } from '@/client/store';
@@ -24,7 +24,7 @@ export function RunDetailView({
   }, [fetch, runId]);
 
   if (state.loading) {
-    return <Typography.Text type="secondary">Loading…</Typography.Text>;
+    return <Skeleton active loading />;
   }
   if (state.error || !state.value) {
     return (

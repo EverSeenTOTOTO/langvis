@@ -6,10 +6,7 @@ import { param, request, response } from '../decorator/param';
 import { QueryBus } from '@/server/libs/ddd';
 import { AgentService } from '../modules/agent/application/service/agent.service';
 import { SkillService } from '../modules/agent/application/service/skill.service';
-import {
-  GetChildRunsQuery,
-  GetRunViewQuery,
-} from '../modules/agent/application/query/run.queries';
+import { GetRunViewQuery } from '../modules/agent/application/query/run.queries';
 
 @controller('/api/agent')
 export default class AgentController {
@@ -36,16 +33,5 @@ export default class AgentController {
     const result = await this.queryBus.execute(new GetRunViewQuery(runId));
     if (!result) return res.status(404).json({ error: 'Run not found' });
     return res.json(result);
-  }
-
-  /** 列出某父 run 的子 agent run（childRunId 从父 tool_progress 解析）。 */
-  @api('/runs/:parentRunId/children', { method: 'get' })
-  async getChildRuns(
-    @param('parentRunId') parentRunId: string,
-    @response() res: Response,
-  ) {
-    return res.json(
-      await this.queryBus.execute(new GetChildRunsQuery(parentRunId)),
-    );
   }
 }

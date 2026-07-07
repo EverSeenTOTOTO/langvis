@@ -43,10 +43,7 @@ export default class EmbeddingGenerateTool extends Tool<EmbeddingGenerateOutput>
     const sortedData = await ctx.llm.embed(model, texts, signal);
 
     const output: EmbeddingGenerateOutput = {
-      chunks: chunks.map((chunk, i) => ({
-        ...chunk,
-        embedding: sortedData[i].embedding,
-      })),
+      embeddings: sortedData.map(d => d.embedding),
       model,
       dimension: sortedData[0].embedding.length,
     };

@@ -6,10 +6,3 @@ export class GetRunViewQuery extends Query {
     super();
   }
 }
-
-/** 列出某父 run 派生的子 agent run（childRunId 从父 tool_progress 事件解析，无 schema 变更）。 */
-export class GetChildRunsQuery extends Query {
-  constructor(readonly parentRunId: string) {
-    super();
-  }
-}

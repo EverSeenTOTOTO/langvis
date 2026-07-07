@@ -94,18 +94,18 @@ description: Archive web pages and emails to vector database with metadata extra
 **如果 chunks ≤ 32**，一次调用 `embedding_generate`：
 
 - input: `{ "chunks": <Step 2 输出的 .chunks 数组> }`
-- output: `{ chunks: [{ content, index, embedding, metadata? }], model, dimension }`
+- output: `{ embeddings: [[...], ...], model, dimension }`（向量与输入 chunks 同序；**不含 content**——content 由 Step 2 持有，避免原文回流进 observation 拖慢后续步骤）
 
 **如果 chunks > 32**，分批调用 `embedding_generate`，每批最多 32 个 chunks：
 
 - 将 Step 2 的 chunks 按顺序分成多批，每批 ≤ 32 个
 - 对每批调用 `embedding_generate`：`{ "chunks": <该批 .chunks 数组> }`
-- 收集所有批次的输出，将各批 `chunks` 按顺序合并为一个完整数组
-- 最终合并结果格式与一次调用相同：`{ chunks: [{ content, index, embedding, metadata? }], model, dimension }`
+- 收集所有批次的输出，将各批 `embeddings` 按顺序拼接为一个完整数组
+- 最终合并结果：`{ embeddings: [[...], ...], model, dimension }`
 
 ### Step 4: 存储到数据库
 
-调用 `document_store`：
+调用 `document_store`（content 来自 Step 2、向量来自 Step 3，两者同序、按位对齐，长度必须相等）：
 
 - input:
   ```json
@@ -120,7 +120,8 @@ description: Archive web pages and emails to vector database with metadata extra
       "sourceType": "<来源类型>",
       "rawContent": "<原文或$cached引用>"
     },
-    "chunks": "<Step3 输出的 .chunks 数组>"
+    "chunks": "<Step 2 输出的 .chunks 数组>",
+    "embeddings": "<Step 3 输出的 .embeddings 数组>"
   }
   ```
 - output: `{ documentId, chunkCount }`

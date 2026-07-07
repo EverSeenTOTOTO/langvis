@@ -25,13 +25,4 @@ export class AgentStore {
   ): Promise<RunViewResult | undefined> {
     return (await req!.send()) as RunViewResult | undefined;
   }
-
-  /** 列出某父 run 派生的子 agent run 摘要（childRunId 从父 tool_progress 解析）。 */
-  @api('/api/agent/runs/:parentRunId/children')
-  async getChildRuns(
-    _params: { parentRunId: string },
-    req?: ApiRequest<{ parentRunId: string }>,
-  ) {
-    return req!.send();
-  }
 }

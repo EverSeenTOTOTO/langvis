@@ -27,6 +27,12 @@ export enum ToolIds {
 export const UNGROUPED_GROUP_NAME = 'Ungrouped';
 
 export { DEFAULT_UPLOAD_CONFIG } from './upload';
+export {
+  TTS_VOICES,
+  TTS_EMOTIONS,
+  type TtsVoice,
+  type TtsEmotion,
+} from './tts';
 
 export const RedisKeys = {
   // Per-run level (HITL 关联键：AskUser 写、HumanInputPort 读，均以 runId 为准；

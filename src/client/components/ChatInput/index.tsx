@@ -223,7 +223,7 @@ const InnerEditor: React.FC<{
               )
             }
             onClick={loading && !cancelling ? handleCancel : handleSend}
-            disabled={cancelling || (!loading && !value?.trim())}
+            disabled={cancelling || !(loading || value?.trim())}
             loading={false}
           />
         </div>

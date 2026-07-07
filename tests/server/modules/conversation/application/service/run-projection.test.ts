@@ -262,4 +262,78 @@ describe('projectRun', () => {
     expect(view.processSummary).toBeNull();
     expect(view.audio).toBeNull();
   });
+
+  it('reconstructs call_subagents child progress onto the step action', () => {
+    // Parent folds its own tool_progress (child blobs) onto the call_subagents
+    // step's action.progress — so historical read-back / snapshot replay show
+    // children from the same shape the live SSE path accumulates.
+    const view = projectRun([
+      ev({
+        type: 'tool_call',
+        callId: 'tc_sa',
+        toolName: 'call_subagents',
+        toolArgs: { children: [{ query: 'q1' }, { query: 'q2' }] },
+      }),
+      ev({
+        type: 'tool_progress',
+        callId: 'tc_sa',
+        data: {
+          childRunId: 'run_child_1',
+          event: {
+            type: 'tool_call',
+            toolName: 'response_user',
+            toolArgs: { message: 'ok1' },
+          },
+        },
+      }),
+      ev({
+        type: 'tool_progress',
+        callId: 'tc_sa',
+        data: { childRunId: 'run_child_1', event: { type: 'final' } },
+      }),
+      ev({
+        type: 'tool_progress',
+        callId: 'tc_sa',
+        data: {
+          childRunId: 'run_child_2',
+          event: { type: 'tool_call', toolName: 'web_fetch', toolArgs: {} },
+        },
+      }),
+      ev({
+        type: 'tool_result',
+        callId: 'tc_sa',
+        toolName: 'call_subagents',
+        output: { results: [] },
+      }),
+    ]);
+
+    expect(view.steps).toHaveLength(1);
+    const progress = view.steps[0].action?.progress;
+    expect(progress).toHaveLength(3);
+    expect((progress![0] as { childRunId: string }).childRunId).toBe(
+      'run_child_1',
+    );
+  });
+
+  it('keeps an in-flight call_subagents step with its accumulated child progress', () => {
+    // No tool_result yet (run still going) — the open step still carries
+    // progress so a reconnect snapshot exposes children.
+    const view = projectRun([
+      ev({
+        type: 'tool_call',
+        callId: 'tc_sa',
+        toolName: 'call_subagents',
+        toolArgs: {},
+      }),
+      ev({
+        type: 'tool_progress',
+        callId: 'tc_sa',
+        data: { childRunId: 'run_child_1', event: { type: 'thought' } },
+      }),
+    ]);
+
+    expect(view.steps).toHaveLength(1);
+    expect(view.steps[0].completedAt).toBeUndefined();
+    expect(view.steps[0].action?.progress).toHaveLength(1);
+  });
 });
