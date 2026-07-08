@@ -1,11 +1,11 @@
 import { inject } from 'tsyringe';
 import type { DomainEvent } from '@/server/libs/ddd';
 import { createDomainEvent, EventBus } from '@/server/libs/ddd';
-import { CancelRun, RunEvent } from '@/server/modules/conversation/contracts';
+import { CancelRun, RunEvent } from '@/server/modules/agent/contracts';
 import type {
   CancelRunPayload,
   RunEventPayload,
-} from '@/server/modules/conversation/contracts';
+} from '@/server/modules/agent/contracts';
 import { AgentRunExecutor } from '../service/agent-run-executor';
 import { eventHandler } from '@/server/decorator/handler';
 

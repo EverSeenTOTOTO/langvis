@@ -2,16 +2,14 @@ import { inject } from 'tsyringe';
 import { generateId } from '@/shared/utils';
 import type { DomainEvent } from '@/server/libs/ddd';
 import { createDomainEvent, EventBus } from '@/server/libs/ddd';
+import { TurnInitiated } from '@/server/modules/conversation/contracts';
+import type { TurnInitiatedPayload } from '@/server/modules/conversation/contracts';
 import {
-  TurnInitiated,
   RunStarted,
   RunEvent,
   RunCompleted,
-} from '@/server/modules/conversation/contracts';
-import type {
-  TurnInitiatedPayload,
-  RunEventPayload,
-} from '@/server/modules/conversation/contracts';
+} from '@/server/modules/agent/contracts';
+import type { RunEventPayload } from '@/server/modules/agent/contracts';
 import { AgentRunExecutor } from '../service/agent-run-executor';
 import { AgentService } from '../service/agent.service';
 import { ToolIds } from '@/shared/constants';

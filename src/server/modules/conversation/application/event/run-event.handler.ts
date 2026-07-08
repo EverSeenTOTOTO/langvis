@@ -1,8 +1,8 @@
 import { inject } from 'tsyringe';
 import type { DomainEvent } from '@/server/libs/ddd';
 import { eventHandler } from '@/server/decorator/handler';
-import { RunEvent } from '@/server/modules/conversation/contracts';
-import type { RunEventPayload } from '@/server/modules/conversation/contracts';
+import { RunEvent } from '@/server/modules/agent/contracts';
+import type { RunEventPayload } from '@/server/modules/agent/contracts';
 import { SessionManager } from '../service/session-manager';
 
 /** 会话收到 agent 的每条富化事件，缓冲 + SSE 桥接（取代此前 agent 直接调 sessionManager 的硬耦合）。 */

@@ -1,8 +1,8 @@
 import { inject } from 'tsyringe';
 import type { DomainEvent } from '@/server/libs/ddd';
 import { eventHandler } from '@/server/decorator/handler';
-import { RunStarted } from '@/server/modules/conversation/contracts';
-import type { RunStartedPayload } from '@/server/modules/conversation/contracts';
+import { RunStarted } from '@/server/modules/agent/contracts';
+import type { RunStartedPayload } from '@/server/modules/agent/contracts';
 import { SessionManager } from '../service/session-manager';
 import { ChatService } from '../service/chat.service';
 

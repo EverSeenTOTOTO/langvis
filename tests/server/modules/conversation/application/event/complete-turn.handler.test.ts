@@ -4,7 +4,7 @@ import type { SessionManager } from '@/server/modules/conversation/application/s
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { DomainEvent } from '@/server/libs/ddd';
 import type { EnrichedEvent } from '@/shared/types/events';
-import type { RunCompletedPayload } from '@/server/modules/conversation/contracts';
+import type { RunCompletedPayload } from '@/server/modules/agent/contracts';
 
 function ev(p: { type: string } & Record<string, unknown>): EnrichedEvent {
   return { runId: 'run_1', seq: 0, at: 0, ...p } as EnrichedEvent;
