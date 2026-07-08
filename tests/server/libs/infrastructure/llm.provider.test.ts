@@ -208,3 +208,102 @@ describe('LlmProvider.stt', () => {
     expect(url).toBe('https://api.302.ai/v1/custom/stt');
   });
 });
+
+describe('LlmProvider.embed', () => {
+  let llmService: LlmProvider;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    const provider = {
+      id: '302',
+      name: '302AI',
+      baseUrl: 'https://api.302.ai/v1',
+      apiKey: 'test-key',
+      models: [{ id: '302:emb', type: 'embedding' }],
+    };
+    const providerService = {
+      getProvider: vi.fn().mockReturnValue(provider),
+      // undefined → endpoint defaults to '/embeddings'
+      getModel: vi.fn().mockReturnValue(undefined),
+      getDefaultModel: vi.fn().mockReturnValue(provider.models[0]),
+    } as unknown as ProviderService;
+    llmService = new LlmProvider(providerService);
+  });
+
+  it('batches by EMBED_BATCH_SIZE (32) and concatenates results in input order', async () => {
+    const texts = Array.from({ length: 75 }, (_, i) => String(i));
+    const fetchSpy = vi.fn(async (_url, init) => {
+      const body = JSON.parse((init as { body: string }).body) as {
+        texts: string[];
+      };
+      return {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            embeddings: body.texts.map(t => [Number(t)]),
+          }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const result = await llmService.embed(
+      '302:emb',
+      texts,
+      new AbortController().signal,
+    );
+
+    // 75 texts → 32 + 32 + 11
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    const batchSizes = fetchSpy.mock.calls.map(
+      ([, init]) =>
+        (JSON.parse((init as { body: string }).body).texts as string[]).length,
+    );
+    expect(batchSizes).toEqual([32, 32, 11]);
+
+    expect(result).toHaveLength(75);
+    expect(result.map(r => r.embedding[0])).toEqual(
+      Array.from({ length: 75 }, (_, i) => i),
+    );
+  });
+
+  it('sends a single batch when texts ≤ 32', async () => {
+    const fetchSpy = vi.fn(async (_url, init) => {
+      const body = JSON.parse((init as { body: string }).body) as {
+        texts: string[];
+      };
+      return {
+        ok: true,
+        json: () => Promise.resolve({ embeddings: body.texts.map(() => [1]) }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await llmService.embed(
+      '302:emb',
+      ['a', 'b', 'c'],
+      new AbortController().signal,
+    );
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws on a failing batch — no partial success leaks to the caller', async () => {
+    let call = 0;
+    const fetchSpy = vi.fn(async () => {
+      call += 1;
+      if (call === 2) {
+        return { ok: false, status: 500, text: () => Promise.resolve('boom') };
+      }
+      return { ok: true, json: () => Promise.resolve({ embeddings: [[1]] }) };
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await expect(
+      llmService.embed(
+        '302:emb',
+        Array.from({ length: 40 }, (_, i) => String(i)),
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('Embedding API failed: 500 - boom');
+  });
+});

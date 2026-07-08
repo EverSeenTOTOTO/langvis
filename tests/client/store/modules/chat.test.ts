@@ -86,11 +86,9 @@ describe('ChatStore transport', () => {
   it('routes run_view → applyView, and refreshes on terminal transition', async () => {
     await (chatStore as any).connectTransport('conv_1');
     const transport = MockedTransport.mock.results[0].value;
-    const messageHandler = (
-      transport.addEventListener as Mock
-    ).mock.calls.find(([ev]) => ev === 'message')?.[1] as
-      | ((e: { detail: unknown }) => void)
-      | undefined;
+    const messageHandler = (transport.addEventListener as Mock).mock.calls.find(
+      ([ev]) => ev === 'message',
+    )?.[1] as ((e: { detail: unknown }) => void) | undefined;
     if (!messageHandler) throw new Error('message listener not registered');
 
     const node = new MessageNode({
@@ -99,10 +97,7 @@ describe('ChatStore transport', () => {
       role: Role.ASSIST,
       createdAt: new Date(),
     });
-    (chatStore as any).messageNodes.set(
-      'conv_1',
-      new Map([['m1', node]]),
-    );
+    (chatStore as any).messageNodes.set('conv_1', new Map([['m1', node]]));
     // Read loopUsage through the store's own reference — makeAutoObservable
     // deep-wraps conversationStore, so the test's direct reference would diverge.
     const loopUsage = (chatStore as any).conversationStore.loopUsage as Map<

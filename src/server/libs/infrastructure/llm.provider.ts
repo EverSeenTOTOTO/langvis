@@ -20,6 +20,9 @@ import type {
 import { TraceContext } from '@/server/middleware/trace-context';
 import { Role, type LlmMessage, type Message } from '@/shared/types/entities';
 
+/** Embedding API 单次批量上限——超过则自动分批串行拼接，对调用方透明。 */
+const EMBED_BATCH_SIZE = Number(process.env.EMBED_BATCH_SIZE) || 32;
+
 function toMultimodalContent(
   content: string,
   attachments?: Message['attachments'],
@@ -278,24 +281,31 @@ export class LlmProvider implements LlmPort {
     const model = this.providerService.getModel(resolved);
     const endpoint = model?.endpoint ?? '/embeddings';
     const url = `${provider.baseUrl}${endpoint}`;
+    const headers = {
+      Authorization: `Bearer ${provider.apiKey}`,
+      'Content-Type': 'application/json',
+    };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${provider.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ model: modelCode, texts }),
-      signal,
-    });
+    // provider 单批有上限——自动分批串行，按输入顺序拼回，对调用方透明。
+    const out: { embedding: number[] }[] = [];
+    for (let i = 0; i < texts.length; i += EMBED_BATCH_SIZE) {
+      const batch = texts.slice(i, i + EMBED_BATCH_SIZE);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ model: modelCode, texts: batch }),
+        signal,
+      });
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Embedding API failed: ${response.status} - ${text}`);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Embedding API failed: ${response.status} - ${text}`);
+      }
+
+      const result = (await response.json()) as { embeddings: number[][] };
+      for (const emb of result.embeddings) out.push({ embedding: emb });
     }
-
-    const result = (await response.json()) as { embeddings: number[][] };
-    return result.embeddings.map(emb => ({ embedding: emb }));
+    return out;
   }
 
   async tts(
