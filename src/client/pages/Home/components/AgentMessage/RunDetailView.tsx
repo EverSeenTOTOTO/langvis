@@ -2,7 +2,7 @@ import { Skeleton, Typography } from 'antd';
 import { lazy, useEffect } from 'react';
 import { useAsyncFn } from 'react-use';
 import { useStore } from '@/client/store';
-import type { RunViewResult } from '@/server/modules/agent/application/service/run-projection';
+import type { RunViewResult } from '@/server/modules/conversation/application/service/run-projection';
 import { RunSteps } from './RunSteps';
 
 const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));

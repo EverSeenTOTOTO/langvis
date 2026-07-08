@@ -1,7 +1,7 @@
 import { api, ApiRequest } from '@/client/decorator/api';
 import { store } from '@/client/decorator/store';
 import type { SkillInfo } from '@/shared/types';
-import type { RunViewResult } from '@/server/modules/agent/application/service/run-projection';
+import type { RunViewResult } from '@/server/modules/conversation/application/service/run-projection';
 
 @store()
 export class AgentStore {
