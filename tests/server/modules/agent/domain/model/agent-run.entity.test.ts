@@ -33,16 +33,15 @@ describe('AgentRun', () => {
   });
 
   describe('append (事实追加)', () => {
-    it('appends events and enriches with runId/seq/at', () => {
+    it('appends events and enriches with runId/at', () => {
       const run = createRun();
       const e1 = run.append({ type: 'text_chunk', content: 'a' })!;
       const e2 = run.append({ type: 'text_chunk', content: 'b' })!;
 
       expect(run.eventStream).toHaveLength(2);
-      expect(e1.seq).toBe(1);
-      expect(e2.seq).toBe(2);
       expect(e1.runId).toBe('run_1');
       expect(e1.at).toBeGreaterThan(0);
+      expect(e2.at).toBeGreaterThanOrEqual(e1.at);
     });
 
     it('returns null and drops events after termination', () => {
