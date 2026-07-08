@@ -107,7 +107,9 @@ describe('SessionManager', () => {
         'Cancelled by user',
       );
       // 不再补发帧——前端经重连/重拉拿到终态。
-      expect(transport.sent.find(f => f.type === 'cancelled')).toBeUndefined();
+      expect(
+        transport.sent.find(f => (f.type as string) === 'cancelled'),
+      ).toBeUndefined();
     });
 
     it('排除本进程仍活跃的 run（不打断在跑的 run）', async () => {

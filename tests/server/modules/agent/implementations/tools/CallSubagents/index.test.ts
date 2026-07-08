@@ -40,7 +40,7 @@ describe('CallSubagentsTool', () => {
     const launch = vi.fn((params: LaunchParams) => {
       const idx = callIdx++;
       return (async function* (): AsyncGenerator<EnrichedEvent> {
-        yield { type: 'start', runId: params.runId, seq: 1, at: 0 };
+        yield { type: 'start', runId: params.runId, at: 0 };
         if (idx === 0) {
           yield {
             type: 'tool_call',
@@ -48,16 +48,14 @@ describe('CallSubagentsTool', () => {
             toolName: ToolIds.RESPONSE_USER,
             toolArgs: { message: 'A done' },
             runId: params.runId,
-            seq: 2,
             at: 0,
           } as EnrichedEvent;
-          yield { type: 'final', runId: params.runId, seq: 3, at: 0 };
+          yield { type: 'final', runId: params.runId, at: 0 };
         } else {
           yield {
             type: 'error',
             error: 'boom',
             runId: params.runId,
-            seq: 2,
             at: 0,
           };
         }
@@ -143,7 +141,7 @@ describe('CallSubagentsTool', () => {
   it('passes parentSignal / workDir / runtimeConfig / seed to each child launch', async () => {
     const launch = vi.fn((params: LaunchParams) =>
       (async function* (): AsyncGenerator<EnrichedEvent> {
-        yield { type: 'final', runId: params.runId, seq: 1, at: 0 };
+        yield { type: 'final', runId: params.runId, at: 0 };
       })(),
     );
     const agentService = {

@@ -7,7 +7,7 @@ import { Role } from '@/shared/entities/Message';
 import type { EnrichedEvent } from '@/shared/types/events';
 
 function makeEnriched(event: Record<string, unknown>): EnrichedEvent {
-  return { runId: 'run_1', seq: 0, at: 0, ...event } as EnrichedEvent;
+  return { ...event, runId: 'run_1', at: 0 } as EnrichedEvent;
 }
 
 describe('GetMessagesHandler', () => {
