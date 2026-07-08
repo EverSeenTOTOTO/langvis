@@ -1,5 +1,8 @@
 import type { RunStatus } from '@/shared/types/agent';
-import type { ReActStep, AwaitingInputProjection } from '@/shared/types/render';
+import type {
+  ReActStep,
+  AwaitingInputProjection,
+} from '@/shared/types/render';
 import type { Role } from '@/shared/types/entities';
 import { ToolIds } from '@/shared/constants';
 import { makeAutoObservable } from 'mobx';
@@ -64,11 +67,7 @@ export function stepsToTimeline(steps: ReActStep[]): TimelineItem[] {
       items.push({ kind: 'thought', key: `th_${index}`, content: s.thought });
     }
     if (s.action) {
-      items.push({
-        kind: 'tool',
-        key: s.action.callId,
-        callId: s.action.callId,
-      });
+      items.push({ kind: 'tool', key: s.action.callId, callId: s.action.callId });
     }
   });
   return items;

@@ -80,7 +80,6 @@ describe('ConversationSession —— handleRunEvent → run_view 投影帧', () 
       used: 5,
       total: 4096,
       runId: 'r1',
-      seq: 3,
       at: 0,
     } as EnrichedEvent;
     s.handleRunEvent('m1', usage);
@@ -102,7 +101,6 @@ describe('ConversationSession —— handleRunEvent → run_view 投影帧', () 
       type: 'thought',
       content: 'hi',
       runId: 'r1',
-      seq: 4,
       at: 0,
     } as EnrichedEvent;
     s.handleRunEvent('m1', thought);
@@ -133,7 +131,6 @@ describe('ConversationSession —— handleRunEvent → run_view 投影帧', () 
         type: 'text_chunk',
         content: 'abc'[i],
         runId: 'r1',
-        seq: i + 1,
         at: 0,
       } as EnrichedEvent);
     }
@@ -152,13 +149,11 @@ describe('ConversationSession —— handleRunEvent → run_view 投影帧', () 
       type: 'text_chunk',
       content: 'ans',
       runId: 'r1',
-      seq: 1,
       at: 0,
     } as EnrichedEvent);
     s.handleRunEvent('m1', {
       type: 'final',
       runId: 'r1',
-      seq: 2,
       at: 0,
     } as EnrichedEvent);
     // 合并窗口内尚未下发（定时器 pending）
@@ -188,7 +183,6 @@ describe('ConversationSession —— handleRunEvent → run_view 投影帧', () 
       toolName: 'ask_user',
       toolArgs: {},
       runId: 'r1',
-      seq: 1,
       at: 0,
     } as EnrichedEvent);
     s.handleRunEvent('m1', {
@@ -200,7 +194,6 @@ describe('ConversationSession —— handleRunEvent → run_view 投影帧', () 
         schema: { type: 'object' },
       },
       runId: 'r1',
-      seq: 2,
       at: 0,
     } as EnrichedEvent);
     // 合并窗口内不同步下发
@@ -224,7 +217,6 @@ describe('ConversationSession —— handleRunEvent → run_view 投影帧', () 
       type: 'text_chunk',
       content: 'x',
       runId: 'r1',
-      seq: 1,
       at: 0,
     } as EnrichedEvent);
     s.removeRun('m1');

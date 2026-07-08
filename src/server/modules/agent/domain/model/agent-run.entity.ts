@@ -10,7 +10,6 @@ export class AgentRun extends AggregateRoot<string> {
   private status: RunStatus = 'initialized';
   private events: EnrichedEvent[] = [];
   #terminated = false;
-  private seq = 0;
   private readonly abortController = new AbortController();
 
   get runId(): string {
@@ -75,7 +74,6 @@ export class AgentRun extends AggregateRoot<string> {
     const enriched: EnrichedEvent = {
       ...event,
       runId: this.id,
-      seq: ++this.seq,
       at: Date.now(),
     };
     this.events.push(enriched);

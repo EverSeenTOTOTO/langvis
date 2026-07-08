@@ -73,15 +73,7 @@ export class SSEClientTransport extends Transport<SSEFrame> {
             return;
           }
 
-          if (frame.type === 'session_error') {
-            eventSource.close();
-            this.eventSource = null;
-            this.connectionState = 'closed';
-            this.emit('error', frame.error);
-            return;
-          }
-
-          // Business frame
+          // Business frame (run_view)
           this.emit('message', frame);
         } catch {
           this.emit('error', 'Failed parsing SSE message');
