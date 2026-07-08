@@ -4,27 +4,9 @@
  * @see docs/plans/2026-05-30-ddd-refactor/03-conversation.md
  */
 
-import type { RunStatus } from './agent';
-
-/**
- * 工具调用记录 — 从 tool_result / tool_error 事件投影而来。
- * 仅在工具完成时追加（无 pending 状态）。
- */
-export type ToolCallRecord = {
-  callId: string;
-  toolName: string;
-  toolArgs: Record<string, unknown>;
-  status: 'completed' | 'failed';
-  output?: unknown;
-  error?: string;
-  duration: number;
-  startedAt: number;
-  completedAt: number;
-};
-
 /**
  * ask_user / awaiting_input 提示的投影 —— run 阻塞等待用户输入时非空。
- * 断线重连时随 state_snapshot 下发，前端据以恢复确认表单。
+ * 随 run_view 帧下发（实时 / 重连 / 历史同此一帧），前端据以渲染确认表单。
  */
 export interface AwaitingInputProjection {
   callId: string;
@@ -42,38 +24,16 @@ export interface ReActStep {
     callId: string;
     toolName: string;
     toolArgs: Record<string, unknown>;
-    /** call_subagents 子 run 进度（{ childRunId, event }[]）；实时累积或 projectRun 重建。 */
+    /** Lifecycle of the tool call. Set by the projection so renderers can show
+     * pending / failed states without inferring from completedAt. */
+    status: 'pending' | 'completed' | 'failed';
+    /** Present when status === 'failed' (from tool_error). */
+    error?: string;
+    /** 工具进度（call_subagents 的 { childRunId, event }[]、Bash 的 stdout/stderr
+     * 块等）；实时累积或 projectRun 重建。 */
     progress?: unknown[];
   };
   observation?: string;
   startedAt: number;
   completedAt?: number;
 }
-
-/**
- * PendingMessage 快照 — SSE 断线重连时的状态恢复依据。
- * 由 Conversation 聚合根内的 PendingMessage 实体产出。
- */
-export interface PendingMessageSnapshot {
-  messageId: string;
-  content: string;
-  steps: ReActStep[];
-  status: 'running' | 'completed' | 'failed' | 'cancelled';
-  /** Restored on reconnect when the run is blocked on an ask_user prompt. */
-  awaitingInput?: AwaitingInputProjection | null;
-}
-
-/**
- * AgentRun 运行时快照 — 用于断线重连。
- * 前端请求快照 → 恢复渲染状态 → 重新订阅 SSE 实时流。
- *
- * @deprecated 由 PendingMessageSnapshot 替代，保留用于过渡期兼容。
- */
-export type RunSnapshot = {
-  runId: string;
-  messageId: string;
-  status: RunStatus;
-  content: string;
-  toolCallRecords: ToolCallRecord[];
-  thoughts: string[];
-};

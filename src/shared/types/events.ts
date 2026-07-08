@@ -77,13 +77,18 @@ export type SSEFrame =
   | { type: 'connected' }
   | { type: 'session_replaced' }
   | { type: 'session_error'; error: string }
+  // 投影帧：服务端 fold run 事件为 RunView 后整包下发（实时 + 重连同此一帧）。
+  // 客户端是纯渲染者——每帧整体替换状态，不再自行 reduce 原始事件（消除实时/回放分叉）。
   | {
-      type: 'state_snapshot';
+      type: 'run_view';
       messageId: string;
+      runId: string;
       content: string;
       steps: ReActStep[];
       status: RunStatus;
       awaitingInput: AwaitingInputProjection | null;
+      processSummary: string | null;
+      audio: { filePath: string; voice?: string } | null;
     }
   // 上下文用量控制帧：conversation_usage 是会话层基线（全员可见，conv 自算直发）；
   // loop_usage 是 per-run 事实（见 RunEvent），conv 桥接时翻译为此控制帧下发（不带 seq/at/messageId）。

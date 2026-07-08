@@ -178,34 +178,21 @@ export class ChatStore {
         return;
       }
 
-      // State snapshot → initialize MessageNode from server state
-      if (frame.type === 'state_snapshot') {
-        const msgId = (frame as any).messageId as string;
-        if (msgId) {
-          const node = this.messageNodes.get(conversationId)?.get(msgId);
-          if (node) {
-            node.applySnapshot(frame as any);
-          }
+      // 投影帧 → 整体替换 MessageNode 状态（实时 / 重连 / 历史同此一帧）
+      if (frame.type === 'run_view') {
+        const node = this.messageNodes
+          .get(conversationId)
+          ?.get(frame.messageId);
+        if (!node) return;
+        const wasTerminal = node.isTerminal;
+        node.applyView(frame);
+        // 终态由 run_view.status 承载（final/cancelled/error 不再单独成帧）：
+        // 转入终态时刷新消息（取回持久化 content/meta），并清掉该 run 的瞬态用量。
+        if (!wasTerminal && node.isTerminal) {
+          this.conversationStore.loopUsage.delete(frame.runId);
+          this.refreshMessages(conversationId);
         }
         return;
-      }
-
-      // Terminal events → refresh messages from server
-      if (
-        frame.type === 'final' ||
-        frame.type === 'cancelled' ||
-        frame.type === 'error'
-      ) {
-        // loop 终结：清掉该 run 的瞬态用量，bar 回落到会话基线。
-        this.conversationStore.loopUsage.delete(frame.runId);
-        this.refreshMessages(conversationId);
-      }
-
-      // Route to MessageNode
-      const msgId = (frame as any).messageId as string;
-      if (msgId) {
-        const node = this.messageNodes.get(conversationId)?.get(msgId);
-        if (node) node.handleFrame(frame);
       }
     });
 

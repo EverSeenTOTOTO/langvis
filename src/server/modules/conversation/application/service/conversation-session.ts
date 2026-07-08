@@ -1,7 +1,11 @@
 import type { SSEFrame, EnrichedEvent } from '@/shared/types/events';
 import type { Transport } from '@/shared/transport';
 import { Connection } from './connection';
-import { projectRun } from '@/server/modules/agent/application/service/run-projection';
+import {
+  applyEventToView,
+  emptyRunView,
+  type RunView,
+} from '@/server/modules/agent/application/service/run-projection';
 import {
   ConversationMemory,
   type ConversationMemoryConfig,
@@ -9,11 +13,19 @@ import {
 import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
 
-/** 活跃 run 的会话内追踪——只持 runId + 事件缓冲，不持 agent 的 AgentRun 聚合。 */
+/** 活跃 run 的会话内追踪——持 runId + 事件缓冲 + 增量投影视图。 */
 interface ActiveRun {
   runId: string;
   events: EnrichedEvent[];
+  view: RunView;
+  /** Coalesced flush timer — one per run, fans out to all tabs via Connection. */
+  flushTimer?: ReturnType<typeof setTimeout>;
 }
+
+/** Coalesce window for run_view emission — bounds wire/render rate during rapid
+ * streams (text_chunk / tool_progress). Terminal + awaiting-input transitions
+ * bypass it and flush synchronously (see handleRunEvent). */
+const RUN_VIEW_FLUSH_MS = 30;
 
 const logger = Logger.child({ source: 'ConversationSession' });
 
@@ -34,7 +46,7 @@ export class ConversationSession {
 
   /**
    * attach 传输（多标签可重复 attach）。首次 attach 建 Connection；
-   * attach 后对缓冲的活跃 run 补发 state_snapshot（重连同一进程的活跃 run）。
+   * attach 后对缓冲的活跃 run 补发 run_view（重连同一进程的活跃 run）。
    */
   attachTransport(transport: Transport<SSEFrame>): void {
     if (!this.connection) {
@@ -52,17 +64,9 @@ export class ConversationSession {
     this.connection.attach(transport);
 
     for (const [messageId, run] of this.activeRuns) {
-      const view = projectRun(run.events);
-      this.connection.send({
-        type: 'state_snapshot',
-        messageId,
-        content: view.content,
-        steps: view.steps,
-        status: view.status,
-        awaitingInput: view.awaitingInput,
-      } as SSEFrame);
+      this.connection.send(this.buildRunViewFrame(messageId, run));
       logger.info(
-        `Replayed snapshot: ${view.content.length} chars, ${view.steps.length} steps`,
+        `Replayed view: ${run.view.content.length} chars, ${run.view.steps.length} steps`,
         { chatId: this.conversationId, messageId },
       );
     }
@@ -90,7 +94,11 @@ export class ConversationSession {
   }
 
   registerRun(messageId: string, runId: string): void {
-    this.activeRuns.set(messageId, { runId, events: [] });
+    this.activeRuns.set(messageId, {
+      runId,
+      events: [],
+      view: emptyRunView(),
+    });
   }
 
   hasActiveRun(messageId: string): boolean {
@@ -125,12 +133,58 @@ export class ConversationSession {
       return;
     }
     const run = this.activeRuns.get(messageId);
-    if (run) run.events.push(event);
-    this.sendFrame({ ...event, messageId } as SSEFrame);
+    if (!run) return;
+
+    // 缓冲原始事件——CompleteTurn 仍按事件流 projectRun 持久化 content/meta。
+    run.events.push(event);
+    applyEventToView(run.view, event);
+    // 投影帧一律走合并窗口（吞吐优化）。终态的「保证最后一帧送达」由 removeRun 的
+    // drain 负责——绑定 run 生命周期，而非在热路径里按事件类型特判。
+    this.scheduleRunViewFlush(messageId);
   }
 
-  /** 移除 run（从 activeRuns 摘除）。 */
+  /** Coalesce run_view emission — first event in a quiet window arms a timer,
+   * subsequent ones just keep folding into run.view; the timer flushes the latest. */
+  private scheduleRunViewFlush(messageId: string): void {
+    const run = this.activeRuns.get(messageId);
+    if (!run || run.flushTimer) return;
+    run.flushTimer = setTimeout(() => {
+      const r = this.activeRuns.get(messageId);
+      if (r) r.flushTimer = undefined;
+      this.flushRunView(messageId);
+    }, RUN_VIEW_FLUSH_MS);
+  }
+
+  /** Send the current run.view as a run_view frame. No-op if the run was removed
+   * (a coalesced timer may fire after removeRun). Clears any pending timer. */
+  private flushRunView(messageId: string): void {
+    const run = this.activeRuns.get(messageId);
+    if (!run) return;
+    if (run.flushTimer) {
+      clearTimeout(run.flushTimer);
+      run.flushTimer = undefined;
+    }
+    this.sendFrame(this.buildRunViewFrame(messageId, run));
+  }
+
+  private buildRunViewFrame(messageId: string, run: ActiveRun): SSEFrame {
+    return {
+      type: 'run_view',
+      messageId,
+      runId: run.runId,
+      content: run.view.content,
+      steps: run.view.steps,
+      status: run.view.status,
+      awaitingInput: run.view.awaitingInput,
+      processSummary: run.view.processSummary,
+      audio: run.view.audio,
+    };
+  }
+
+  /** 移除 run（从 activeRuns 摘除）。Drain：摘除前同步下发最终视图——这是「保证终态
+   *  送达」的唯一正确性 flush，绑定 run 生命周期，而非热路径里的事件类型特判。 */
   removeRun(messageId: string): void {
+    this.flushRunView(messageId);
     this.activeRuns.delete(messageId);
   }
 
@@ -157,6 +211,9 @@ export class ConversationSession {
   }
 
   dispose(): void {
+    for (const run of this.activeRuns.values()) {
+      if (run.flushTimer) clearTimeout(run.flushTimer);
+    }
     this.connection?.dispose();
     this.connection = undefined;
     this.activeRuns.clear();

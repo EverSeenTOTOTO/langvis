@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { projectRun } from '@/server/modules/agent/application/service/run-projection';
+import {
+  projectRun,
+  applyEventToView,
+  emptyRunView,
+} from '@/server/modules/agent/application/service/run-projection';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 
 let seq = 0;
@@ -174,6 +178,48 @@ describe('projectRun', () => {
     expect(view.steps[0].observation).toContain('command failed');
   });
 
+  it('marks action.status pending in-flight, completed on tool_result', () => {
+    const inflight = projectRun([
+      ev({ type: 'tool_call', callId: 'tc_p', toolName: 'Bash', toolArgs: {} }),
+    ]);
+    expect(inflight.steps[0].action?.status).toBe('pending');
+
+    const done = projectRun([
+      ev({ type: 'tool_call', callId: 'tc_p', toolName: 'Bash', toolArgs: {} }),
+      ev({ type: 'tool_result', callId: 'tc_p', toolName: 'Bash', output: 'ok' }),
+    ]);
+    expect(done.steps[0].action?.status).toBe('completed');
+  });
+
+  it('marks action.status failed with error on tool_error', () => {
+    const view = projectRun([
+      ev({ type: 'tool_call', callId: 'tc_f', toolName: 'Bash', toolArgs: {} }),
+      ev({ type: 'tool_error', callId: 'tc_f', toolName: 'Bash', error: 'boom' }),
+    ]);
+    expect(view.steps[0].action?.status).toBe('failed');
+    expect(view.steps[0].action?.error).toBe('boom');
+  });
+
+  it('retains non-child tool progress (e.g. Bash stdout/stderr)', () => {
+    const view = projectRun([
+      ev({ type: 'tool_call', callId: 'tc_b', toolName: 'Bash', toolArgs: {} }),
+      ev({
+        type: 'tool_progress',
+        callId: 'tc_b',
+        data: { type: 'stdout', text: 'line1\n' },
+      }),
+      ev({
+        type: 'tool_progress',
+        callId: 'tc_b',
+        data: { type: 'stderr', text: 'warn' },
+      }),
+      ev({ type: 'tool_result', callId: 'tc_b', toolName: 'Bash', output: 'done' }),
+    ]);
+    const progress = view.steps[0].action?.progress;
+    expect(progress).toHaveLength(2);
+    expect(progress?.[0]).toEqual({ type: 'stdout', text: 'line1\n' });
+  });
+
   it('marks completed on final and finalizes in-progress step', () => {
     const view = projectRun([
       ev({ type: 'text_chunk', content: 'answer' }),
@@ -335,5 +381,40 @@ describe('projectRun', () => {
     expect(view.steps).toHaveLength(1);
     expect(view.steps[0].completedAt).toBeUndefined();
     expect(view.steps[0].action?.progress).toHaveLength(1);
+  });
+
+  it('incremental fold equals projectRun over every prefix', () => {
+    // Exercises every event type so the incremental reducer can't silently
+    // diverge from the full-array fold at any prefix length.
+    const events: EnrichedEvent[] = [
+      ev({ type: 'start' }),
+      ev({ type: 'thought', content: 'plan' }),
+      ev({ type: 'tool_call', callId: 'tc_1', toolName: 'Bash', toolArgs: {} }),
+      ev({
+        type: 'tool_progress',
+        callId: 'tc_1',
+        data: { status: 'awaiting_input', message: 'ok?', schema: { type: 'object' } },
+      }),
+      ev({
+        type: 'tool_progress',
+        callId: 'tc_1',
+        data: { childRunId: 'rc1', event: { type: 'thought' } },
+      }),
+      ev({ type: 'text_chunk', content: 'partial ' }),
+      ev({ type: 'tool_result', callId: 'tc_1', toolName: 'Bash', output: { ok: true } }),
+      ev({ type: 'text_chunk', content: 'answer' }),
+      ev({ type: 'thought', content: 'again' }),
+      ev({ type: 'tool_call', callId: 'tc_2', toolName: 'Read', toolArgs: {} }),
+      ev({ type: 'tool_error', callId: 'tc_2', toolName: 'Read', error: 'missing' }),
+      ev({ type: 'audio', filePath: 'a.mp3', voice: 'V' }),
+      ev({ type: 'process_summary', summary: 'sum' }),
+      ev({ type: 'final' }),
+    ];
+
+    for (let k = 0; k <= events.length; k++) {
+      const incremental = emptyRunView();
+      for (let i = 0; i < k; i++) applyEventToView(incremental, events[i]);
+      expect(incremental).toEqual(projectRun(events.slice(0, k)));
+    }
   });
 });
