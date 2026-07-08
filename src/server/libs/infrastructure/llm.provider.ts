@@ -23,6 +23,16 @@ import { Role, type LlmMessage, type Message } from '@/shared/types/entities';
 /** Embedding API 单次批量上限——超过则自动分批串行拼接，对调用方透明。 */
 const EMBED_BATCH_SIZE = Number(process.env.EMBED_BATCH_SIZE) || 32;
 
+/**
+ * 单请求超时（ms）。覆盖 SDK 默认 10min——供应商挂死时按此超时，避免用户在 SSE 端无限等待。
+ * 可经 LLM_REQUEST_TIMEOUT_MS 按供应商/模型微调（建议 60_000~180_000）。
+ */
+const LLM_REQUEST_TIMEOUT_MS =
+  Number(process.env.LLM_REQUEST_TIMEOUT_MS) || 120_000;
+
+/** 重试上限——timeout 会触发 SDK 重试，压低到 1 以免单次挂死的墙钟等待被翻倍。 */
+const LLM_MAX_RETRIES = 1;
+
 function toMultimodalContent(
   content: string,
   attachments?: Message['attachments'],
@@ -97,6 +107,8 @@ export class LlmProvider implements LlmPort {
     const client = new OpenAI({
       baseURL: provider.baseUrl,
       apiKey: provider.apiKey,
+      timeout: LLM_REQUEST_TIMEOUT_MS,
+      maxRetries: LLM_MAX_RETRIES,
     });
 
     this.clientCache.set(providerId, client);
