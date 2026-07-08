@@ -5,7 +5,7 @@ import {
   applyEventToView,
   emptyRunView,
   type RunView,
-} from '@/server/modules/agent/application/service/run-projection';
+} from '@/server/modules/conversation/application/service/run-projection';
 import {
   ConversationMemory,
   type ConversationMemoryConfig,

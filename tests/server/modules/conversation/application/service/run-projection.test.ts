@@ -3,7 +3,7 @@ import {
   projectRun,
   applyEventToView,
   emptyRunView,
-} from '@/server/modules/agent/application/service/run-projection';
+} from '@/server/modules/conversation/application/service/run-projection';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 
 function ev(event: RunEvent): EnrichedEvent {
