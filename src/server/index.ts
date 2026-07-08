@@ -59,7 +59,7 @@ const port = process.env.PORT || 3000;
 
 createServer()
   .then(async app => {
-    await bootAll(); // 生命周期启动钩子（DB 就绪 + 孤儿 run 清扫等）
+    await bootAll(); // 生命周期启动钩子（DB 就绪 + 孤儿 run 清扫 + 沙箱探测 等）
 
     const server = app.listen(port, () =>
       logger.info(`Server started at http://localhost:${port}`),

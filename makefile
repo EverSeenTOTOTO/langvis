@@ -23,6 +23,7 @@ prepare: better-auth-typeorm
 	# https://github.com/oven-sh/bun/issues/4677#issuecomment-1713522789
 	# https://github.com/oven-sh/bun/pull/18086
 	jq '.main = .module' node_modules/tsyringe/package.json > tmp.json && mv tmp.json node_modules/tsyringe/package.json
+	docker build -t langvis-bash-sandbox:latest docker/sandbox
 
 .PHONY: lint
 lint:
