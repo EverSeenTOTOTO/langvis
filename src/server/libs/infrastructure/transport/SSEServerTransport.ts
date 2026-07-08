@@ -3,9 +3,13 @@ import { Transport } from '@/shared/transport';
 import type { SSEFrame } from '@/shared/types/events';
 import logger from '@/server/utils/logger';
 
+/** SSE 心跳间隔——非流式 LLM 调用期间无业务帧，靠注释行保活以防代理 idle 断连。 */
+const SSE_HEARTBEAT_MS = 20_000;
+
 export class SSEServerTransport extends Transport<SSEFrame> {
   private closed = false;
   private disconnected = false;
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     req: Request,
@@ -21,6 +25,14 @@ export class SSEServerTransport extends Transport<SSEFrame> {
 
     // Send connected immediately — event replay happens at a higher level
     this.send({ type: 'connected' });
+
+    // 注释行心跳：业务无帧时段（如非流式 LLM 调用）持续写字节，防止代理读超时断连。
+    // 以 `:` 开头的行是 SSE 注释，原生 EventSource 会忽略，前端无需改动。
+    this.heartbeat = setInterval(() => {
+      if (this.closed || !this.response.writable) return;
+      this.response.write(': ping\n\n');
+      this.response.flush();
+    }, SSE_HEARTBEAT_MS);
 
     req.on('close', () => {
       this.markDisconnect();
@@ -69,6 +81,11 @@ export class SSEServerTransport extends Transport<SSEFrame> {
   close(): void {
     if (this.closed) return;
     this.closed = true;
+
+    if (this.heartbeat) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = null;
+    }
 
     if (!this.response.writableEnded) {
       this.response.end();
