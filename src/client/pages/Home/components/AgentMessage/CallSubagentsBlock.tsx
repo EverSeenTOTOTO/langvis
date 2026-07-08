@@ -6,9 +6,6 @@ import Modal from '@/client/components/Modal';
 import { useStore } from '@/client/store';
 import { getToolColor } from './ToolBlockItem';
 import { RunDetailView } from './RunDetailView';
-import { lazy } from 'react';
-
-const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 
 interface ChildState {
   runId: string;
@@ -114,7 +111,7 @@ export const CallSubagentsBlock = observer(function CallSubagentsBlock({
                 destroyOnHidden
                 trigger={
                   <Button size="small" type="link">
-                    {settingStore.tr('View')}
+                    {settingStore.tr('Detail')}
                   </Button>
                 }
               >
@@ -129,19 +126,7 @@ export const CallSubagentsBlock = observer(function CallSubagentsBlock({
             {c.brief && (
               <Typography.Paragraph
                 type="secondary"
-                ellipsis={{
-                  rows: 3,
-                  tooltip: {
-                    title: <MarkdownRender>{c.brief}</MarkdownRender>,
-                    styles: {
-                      container: {
-                        minWidth: 480,
-                        maxHeight: '50vh',
-                        overflow: 'auto',
-                      },
-                    },
-                  },
-                }}
+                ellipsis={{ rows: 3, expandable: 'collapsible' }}
                 style={{ fontSize: 12 }}
               >
                 {c.brief}
@@ -159,3 +144,4 @@ export const CallSubagentsBlock = observer(function CallSubagentsBlock({
     </div>
   );
 });
+

@@ -1,26 +1,25 @@
-import { spawn, type ChildProcess } from 'child_process';
 import { tool } from '@/server/decorator/core';
+import { inject, container } from 'tsyringe';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import { createTimeoutController } from '@/server/utils/abort';
-import { container } from 'tsyringe';
 import type { BashInput, BashOutput } from './config';
 import AskUserTool from '../AskUser';
+import { SANDBOX_BACKEND } from '@/server/modules/agent/agent.di-tokens';
+import { runChild, type BashBackend } from './bash-backend';
 
-const FLUSH_INTERVAL = 100;
 const DEFAULT_TIMEOUT = 60;
 const MAX_TIMEOUT = 600;
-const SIGTERM_GRACE = 5000;
-const PROGRESS_LIMIT = 8 * 1024; // preview cap streamed via toolProgress
 
 /**
  * 非交互式 run（子 agent）下静默通过的只读命令。保守策略：仅放行单条、首词命中白名单、
  * 且不含控制/重定向/替换运算符的命令；含管道、重定向、&& 等一律拒绝（避免误放行副作用命令）。
  * `find`（-exec/-delete 风险）、`git`（子命令相关）故意不放行。
+ *
+ * 仅在 DirectBash（dev，无沙箱）+ 非交互式时生效；DockerBash 下沙箱即边界，allowlist 失效。
  */
 const READONLY_COMMANDS = new Set([
   'rg',
@@ -57,67 +56,23 @@ function isReadonlyCommand(command: string): boolean {
 }
 export { isReadonlyCommand };
 
-const activeProcesses = new Set<ChildProcess>();
-
-function registerProcessCleanup(): void {
-  const cleanup = () => {
-    for (const child of activeProcesses) {
-      try {
-        if (child.pid) process.kill(-child.pid, 'SIGKILL');
-      } catch {
-        /* process may already be dead */
-      }
-    }
-    activeProcesses.clear();
-  };
-  process.on('exit', cleanup);
-  process.on('SIGINT', cleanup);
-  process.on('SIGTERM', cleanup);
-}
-
-function killProcessTree(child: ChildProcess): void {
-  activeProcesses.delete(child);
-  if (!child.pid || child.exitCode !== null) return;
-  try {
-    process.kill(-child.pid, 'SIGTERM');
-  } catch {
-    /* process may already be dead */
-  }
-  setTimeout(() => {
-    try {
-      if (child.pid && child.exitCode === null) {
-        process.kill(-child.pid, 'SIGKILL');
-      }
-    } catch {
-      /* process may already be dead */
-    }
-  }, SIGTERM_GRACE).unref();
-}
-
 @tool(ToolIds.BASH)
 export default class BashTool extends Tool<BashOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  private cleanupRegistered = false;
+  private readonly backend: BashBackend;
 
-  constructor() {
+  constructor(@inject(SANDBOX_BACKEND) backend: BashBackend) {
     super();
-  }
-
-  private ensureCleanupRegistered(): void {
-    if (!this.cleanupRegistered) {
-      registerProcessCleanup();
-      this.cleanupRegistered = true;
-    }
+    this.backend = backend;
   }
 
   async *call(
     ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, BashOutput, void> {
     ctx.signal.throwIfAborted();
-    this.ensureCleanupRegistered();
 
     const { command, timeout } = ctx.input as unknown as BashInput;
     const workDir = ctx.workDir;
@@ -178,123 +133,26 @@ export default class BashTool extends Tool<BashOutput> {
         ),
         MAX_TIMEOUT,
       );
+    } else if (
+      this.backend.requiresReadonlyGuard &&
+      !isReadonlyCommand(command)
+    ) {
+      // dev + 非交互式：无沙箱又无人类，allowlist 是唯一兜底（弱守卫，仅防意外）。
+      throw new Error(
+        `Non-interactive run (sub-agent): command requires confirmation but HITL is unavailable. ` +
+          `Only single read-only commands are auto-approved; compound or mutating commands are refused. ` +
+          `In prod this runs sandboxed instead.`,
+      );
     } else {
-      // 非交互式 run（子 agent）：只读命令静默通过，含副作用的一律拒绝（无 HITL 入口）。
-      if (!isReadonlyCommand(command)) {
-        throw new Error(
-          `Non-interactive run (sub-agent): command requires confirmation but HITL is unavailable. ` +
-            `Only single read-only commands are auto-approved; compound or mutating commands are refused.`,
-        );
-      }
       userTimeout = suggestedTimeout;
     }
 
     ctx.signal.throwIfAborted();
 
-    const child = spawn(command, {
-      shell: true,
-      cwd: workDir,
-      detached: true,
-      env: { ...process.env, TERM: 'dumb' },
-      stdio: ['pipe', 'pipe', 'pipe'],
+    return yield* runChild(this.backend.spawn(command, workDir), {
+      timeoutSec: userTimeout,
+      signal: ctx.signal,
+      callId: ctx.callId,
     });
-    activeProcesses.add(child);
-
-    let stdout = '';
-    let stderr = '';
-    let lastFlushedStdout = 0;
-    let lastFlushedStderr = 0;
-    let progressSent = 0;
-    let timedOut = false;
-    let resolveExit: (code: number) => void;
-    const exitPromise = new Promise<number>(resolve => (resolveExit = resolve));
-
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-
-    child.on('close', code => resolveExit(code ?? -1));
-    child.on('error', err => {
-      stderr += err.message;
-      resolveExit(-1);
-    });
-
-    const [timeoutController, timeoutCleanup] = createTimeoutController(
-      userTimeout * 1000,
-      ctx.signal,
-    );
-
-    const onAbort = () => killProcessTree(child);
-    ctx.signal.addEventListener('abort', onAbort, { once: true });
-
-    timeoutController.signal.addEventListener('abort', () => {
-      timedOut = true;
-      killProcessTree(child);
-    });
-
-    const flushOutput = (
-      source: 'stdout' | 'stderr',
-    ): { type: 'stdout' | 'stderr'; text: string } | null => {
-      if (progressSent >= PROGRESS_LIMIT) return null;
-
-      const output = source === 'stdout' ? stdout : stderr;
-      const flushed =
-        source === 'stdout' ? lastFlushedStdout : lastFlushedStderr;
-
-      if (output.length <= flushed) return null;
-
-      const remaining = PROGRESS_LIMIT - progressSent;
-      let text = output.slice(flushed, flushed + remaining);
-
-      if (!text) return null;
-
-      progressSent += text.length;
-
-      if (PROGRESS_LIMIT <= progressSent) {
-        text += ' <truncated...>';
-      }
-
-      if (source === 'stdout') lastFlushedStdout = flushed + text.length;
-      else lastFlushedStderr = flushed + text.length;
-
-      return { type: source, text };
-    };
-
-    try {
-      while (child.exitCode === null) {
-        const result = await Promise.race([
-          exitPromise.then((code: number) => ({ exit: true, code })),
-          new Promise<{ timeout: true }>(r =>
-            setTimeout(() => r({ timeout: true }), FLUSH_INTERVAL),
-          ),
-        ]);
-
-        if ('exit' in result) break;
-
-        const event = flushOutput('stdout') ?? flushOutput('stderr');
-        if (event)
-          yield { type: 'tool_progress', callId: ctx.callId, data: event };
-      }
-    } finally {
-      ctx.signal.removeEventListener('abort', onAbort);
-      timeoutCleanup();
-      activeProcesses.delete(child);
-      killProcessTree(child);
-    }
-
-    const exitCode = await exitPromise;
-
-    const event = flushOutput('stdout') ?? flushOutput('stderr');
-    if (event) yield { type: 'tool_progress', callId: ctx.callId, data: event };
-
-    if (timedOut) {
-      stderr += `\nProcess timed out after ${userTimeout}s and was killed.`;
-    }
-
-    return { exitCode, stdout, stderr, timedOut };
   }
 }
