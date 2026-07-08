@@ -8,7 +8,7 @@ import {
 import { RedisService } from '@/server/libs/infrastructure/redis.service';
 import { RedisKeys } from '@/shared/constants';
 import { EventBus, createDomainEvent } from '@/server/libs/ddd';
-import { CancelRun } from '@/server/modules/conversation/contracts';
+import { CancelRun } from '@/server/modules/agent/contracts';
 import { ChatService } from './chat.service';
 import { ConversationSession } from './conversation-session';
 import type {

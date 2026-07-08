@@ -75,16 +75,8 @@ export class GetMessagesQuery extends Query {
 }
 
 import type { LlmMessage, Message } from '@/shared/types/entities';
-import type { EnrichedEvent } from '@/shared/types/events';
 
 export const TurnInitiated = 'turn_initiated';
-/** agent→conv：run 开始（conv 据此 registerRun + persistAgentRunId）。 */
-export const RunStarted = 'run_started';
-/** agent→conv：run 的每条富化事件（conv 据此 SSE 桥接 + 缓冲）。 */
-export const RunEvent = 'run_event';
-/** conv→agent：请求取消某 run（agent 据此 executor.cancel，取消事件经 RunEvent 回流）。 */
-export const CancelRun = 'cancel_run';
-export const RunCompleted = 'run_completed';
 
 export interface TurnInitiatedPayload {
   conversationId: string;
@@ -95,27 +87,5 @@ export interface TurnInitiatedPayload {
   effectiveHistory: LlmMessage[];
 }
 
-export interface RunStartedPayload {
-  conversationId: string;
-  messageId: string;
-  runId: string;
-}
-
-export interface RunEventPayload {
-  conversationId: string;
-  messageId: string;
-  event: EnrichedEvent;
-}
-
-export interface CancelRunPayload {
-  runId: string;
-  conversationId: string;
-  messageId: string;
-  reason: string;
-}
-
-export interface RunCompletedPayload {
-  conversationId: string;
-  messageId: string;
-  agentRunId: string;
-}
+// Run* 领域事件契约（RunStarted / RunEvent / CancelRun / RunCompleted）归 agent 模块所有，
+// 见 @/server/modules/agent/contracts.ts——agent 拥有并外发，conv 按需 import。

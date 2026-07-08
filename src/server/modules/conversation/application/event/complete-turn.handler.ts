@@ -4,8 +4,8 @@ import { eventHandler } from '@/server/decorator/handler';
 import type { SSEFrame } from '@/shared/types/events';
 import { SessionManager } from '../service/session-manager';
 import { ChatService } from '../service/chat.service';
-import { RunCompleted } from '../../contracts';
-import type { RunCompletedPayload } from '../../contracts';
+import { RunCompleted } from '@/server/modules/agent/contracts';
+import type { RunCompletedPayload } from '@/server/modules/agent/contracts';
 
 /**
  * RunCompleted 订阅者:读 session 缓冲的 run 事件流 → 交 ChatService 投影/持久化/压缩
