@@ -16,13 +16,6 @@ export interface DocumentStoreInput {
     sourceType: DocumentSourceType;
     rawContent: string;
   };
-  chunks: Array<{
-    content: string;
-    index: number;
-    metadata?: Record<string, unknown>;
-  }>;
-  /** 与 chunks 同序、按位对齐（长度不等会在入口失败）。 */
-  embeddings: number[][];
 }
 
 export interface DocumentStoreOutput {
@@ -33,7 +26,7 @@ export interface DocumentStoreOutput {
 export const config: ToolConfig<DocumentStoreInput, DocumentStoreOutput> = {
   name: 'DocumentStore Tool',
   description:
-    'Store document metadata and chunked content to database. Embeddings are generated internally from chunks (aligned by index) — callers must NOT pass embeddings.',
+    'Store a document to the database. Chunking and embeddings are both handled internally — the caller only passes the document (with rawContent).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -64,20 +57,8 @@ export const config: ToolConfig<DocumentStoreInput, DocumentStoreOutput> = {
           'rawContent',
         ],
       },
-      chunks: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            content: { type: 'string' },
-            index: { type: 'number' },
-            metadata: { type: 'object', nullable: true },
-          },
-          required: ['content', 'index'],
-        },
-      },
     },
-    required: ['document', 'chunks'],
+    required: ['document'],
   } as any,
   outputSchema: {
     type: 'object',

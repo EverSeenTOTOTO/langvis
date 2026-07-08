@@ -80,18 +80,9 @@ description: Archive web pages and emails to vector database with metadata extra
 - input: `{ "content": "<原文或$cached引用>", "sourceUrl": "<来源URL>", "sourceType": "<web|email|text>" }`
 - output: `{ title, summary, keywords, category, metadata }`
 
-### Step 2: 内容分块
+### Step 2: 存储到数据库
 
-调用 `content_chunk`：
-
-- input: `{ "content": "<原文或$cached引用>", "strategy": "paragraph", "options": { "maxChunkSize": 1000 } }`
-- output: `{ chunks: [{ content, index, metadata? }] }`
-
-注意：maxChunkSize 不要随意调大，最多 2000。
-
-### Step 3: 存储到数据库
-
-调用 `document_store`（向量由工具内部按 chunks 顺序自动生成，调用方无需、也不应传入 embeddings）：
+调用 `document_store`（分块与向量都在工具内部自动完成——内部依次调用 `content_chunk` 切分、`embedding_generate` 生成向量；调用方只传 `document`，无需、也不应传入 chunks 或 embeddings）：
 
 - input:
   ```json
@@ -105,8 +96,7 @@ description: Archive web pages and emails to vector database with metadata extra
       "sourceUrl": "<来源URL>",
       "sourceType": "<来源类型>",
       "rawContent": "<原文或$cached引用>"
-    },
-    "chunks": "<Step 2 输出的 .chunks 数组>"
+    }
   }
   ```
 - output: `{ documentId, chunkCount }`
@@ -117,7 +107,7 @@ description: Archive web pages and emails to vector database with metadata extra
 
 一次 `call_subagents` 调用，`children` 为每个选中链接一项：
 
-- `brief`：把「归档管线（上述 Step 1–3）」+「关键规则（rawContent 必须是完整原文、尽量透传 `$cached`、每条链接是独立文档等）」作为背景传给子 agent。
+- `brief`：把「归档管线（上述 Step 1–2）」+「关键规则（rawContent 必须是完整原文、尽量透传 `$cached`、每条链接是独立文档等）」作为背景传给子 agent。
 - `query`：`归档此链接：<url>（sourceType = "web"）`。
 
 `call_subagents` 等全部子 agent 结束（allSettled）后返回各自结果；据此向用户汇总（成功 X 条、失败 Y 条及原因）。**单个链接无需子 agent**，直接执行管线即可。

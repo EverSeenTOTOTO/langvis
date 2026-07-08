@@ -33,10 +33,14 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
             <>
               {content}
               {node.isCompacting && (
-                <Typography.Text type="secondary" italic>
+                <Typography.Paragraph
+                  type="secondary"
+                  italic
+                  style={{ marginBlock: 8 }}
+                >
                   <LoadingOutlined style={{ marginInlineEnd: 4 }} />
                   Compacting...
-                </Typography.Text>
+                </Typography.Paragraph>
               )}
             </>
           )
