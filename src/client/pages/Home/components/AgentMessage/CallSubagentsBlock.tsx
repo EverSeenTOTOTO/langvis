@@ -144,4 +144,3 @@ export const CallSubagentsBlock = observer(function CallSubagentsBlock({
     </div>
   );
 });
-
