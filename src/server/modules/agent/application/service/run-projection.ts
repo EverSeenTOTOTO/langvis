@@ -26,142 +26,166 @@ export interface RunViewResult {
   view: RunView;
 }
 
-export function projectRun(events: readonly EnrichedEvent[]): RunView {
-  let content = '';
-  const steps: ReActStep[] = [];
-  let currentStep: ReActStep | null = null;
-  let awaitingInput: AwaitingInputProjection | null = null;
-  let processSummary: string | null = null;
-  let audio: { filePath: string; voice?: string } | null = null;
-
-  let status: RunView['status'] = 'running';
-  let terminalReason: string | null = null;
-
-  const finalizeCurrentStep = (at: number): void => {
-    if (currentStep) {
-      currentStep.completedAt = at;
-      steps.push(currentStep);
-      currentStep = null;
-    }
+export function emptyRunView(): RunView {
+  return {
+    content: '',
+    steps: [],
+    status: 'running',
+    awaitingInput: null,
+    processSummary: null,
+    audio: null,
   };
+}
 
-  for (const event of events) {
-    switch (event.type) {
-      case 'thought':
-        if (!currentStep) {
-          currentStep = { thought: event.content ?? '', startedAt: event.at };
-        } else {
-          currentStep.thought += event.content ?? '';
-        }
-        break;
+/**
+ * The currently-open step — the one still accumulating thought / tool progress
+ * / result. It is `steps[last]` without a `completedAt`; null once the last step
+ * is finalized (or before any step exists). Deriving it from `completedAt` lets
+ * the reducer be a pure fold over RunView with no extra cursor state, and makes
+ * an in-flight step (e.g. a tool_call whose result hasn't arrived, or one blocked
+ * on awaiting_input) appear in `steps` the instant it starts — so a running
+ * run's snapshot exposes its pending tool.
+ */
+function openStep(view: RunView): ReActStep | null {
+  const last = view.steps[view.steps.length - 1];
+  return last && last.completedAt === undefined ? last : null;
+}
 
-      case 'tool_call':
-        // thought is optional in the flat ReAct format ({ thought?, tool, input }),
-        // so a tool_call may arrive without a preceding thought — start a step
-        // here so the action/observation isn't dropped from the projection.
-        if (!currentStep) {
-          currentStep = { thought: '', startedAt: event.at };
-        }
-        currentStep.action = {
-          callId: event.callId!,
-          toolName: event.toolName!,
-          toolArgs: event.toolArgs ?? {},
-        };
-        break;
+function ensureStep(view: RunView, at: number): ReActStep {
+  let step = openStep(view);
+  if (!step) {
+    step = { thought: '', startedAt: at };
+    view.steps.push(step);
+  }
+  return step;
+}
 
-      case 'tool_result':
-        // A result resolves any pending awaiting_input prompt.
-        awaitingInput = null;
-        if (currentStep) {
-          currentStep.observation =
+function finalizeOpenStep(view: RunView, at: number): void {
+  const step = openStep(view);
+  if (step) step.completedAt = at;
+}
+
+/**
+ * Fold one event into the view (mutates and returns `view`). Stateless per call
+ * beyond the passed accumulator — `projectRun` is `events.reduce` over this, and
+ * ConversationSession folds one event at a time into a per-run view. Behaviour
+ * is identical to the previous full-array fold for every prefix.
+ */
+export function applyEventToView(view: RunView, event: EnrichedEvent): RunView {
+  switch (event.type) {
+    case 'thought': {
+      ensureStep(view, event.at).thought += event.content ?? '';
+      break;
+    }
+
+    case 'tool_call': {
+      // thought is optional in the flat ReAct format ({ thought?, tool, input }),
+      // so a tool_call may arrive without a preceding thought — ensureStep opens
+      // a new step here so the action/observation isn't dropped from the projection.
+      const step = ensureStep(view, event.at);
+      step.action = {
+        callId: event.callId!,
+        toolName: event.toolName!,
+        toolArgs: event.toolArgs ?? {},
+        status: 'pending',
+      };
+      break;
+    }
+
+    case 'tool_result':
+      // A result resolves any pending awaiting_input prompt.
+      view.awaitingInput = null;
+      {
+        const step = openStep(view);
+        if (step?.action) {
+          step.action.status = 'completed';
+          step.observation =
             typeof event.output === 'string'
               ? event.output
               : JSON.stringify(event.output);
-          finalizeCurrentStep(event.at);
+          step.completedAt = event.at;
         }
-        break;
-
-      case 'tool_error':
-        awaitingInput = null;
-        if (currentStep) {
-          currentStep.observation = `Error: ${event.error}`;
-          finalizeCurrentStep(event.at);
-        }
-        break;
-
-      case 'text_chunk':
-        content += event.content ?? '';
-        break;
-
-      case 'tool_progress': {
-        const data = event.data as
-          | {
-              status?: string;
-              message?: string;
-              schema?: Record<string, unknown>;
-              childRunId?: unknown;
-            }
-          | undefined;
-        if (data?.status === 'awaiting_input' && data.schema) {
-          awaitingInput = {
-            callId: event.callId!,
-            message: data.message ?? 'Please provide input',
-            schema: data.schema,
-          };
-        }
-        if (data?.childRunId && currentStep?.action) {
-          (currentStep.action.progress ??= []).push(event.data);
-        }
-        break;
       }
+      break;
 
-      case 'final':
-        finalizeCurrentStep(event.at);
-        status = 'completed';
-        break;
+    case 'tool_error':
+      view.awaitingInput = null;
+      {
+        const step = openStep(view);
+        if (step?.action) {
+          step.action.status = 'failed';
+          step.action.error = event.error;
+          step.observation = `Error: ${event.error}`;
+          step.completedAt = event.at;
+        }
+      }
+      break;
 
-      case 'error':
-        finalizeCurrentStep(event.at);
-        status = 'failed';
-        terminalReason = event.error;
-        break;
+    case 'text_chunk':
+      // Terminal failure/cancellation overrides content (set on the terminal
+      // event below); ignore any late chunks so the override sticks.
+      if (view.status !== 'failed' && view.status !== 'cancelled') {
+        view.content += event.content ?? '';
+      }
+      break;
 
-      case 'cancelled':
-        finalizeCurrentStep(event.at);
-        status = 'cancelled';
-        terminalReason = event.reason;
-        break;
-
-      case 'process_summary':
-        processSummary = event.summary;
-        break;
-
-      case 'audio':
-        audio = { filePath: event.filePath, voice: event.voice };
-        break;
-
-      case 'start':
-      case 'loop_usage':
-        // Lifecycle / telemetry markers — no content accumulation.
-        break;
+    case 'tool_progress': {
+      const data = event.data as
+        | {
+            status?: string;
+            message?: string;
+            schema?: Record<string, unknown>;
+            childRunId?: unknown;
+          }
+        | undefined;
+      if (data?.status === 'awaiting_input' && data.schema) {
+        view.awaitingInput = {
+          callId: event.callId!,
+          message: data.message ?? 'Please provide input',
+          schema: data.schema,
+        };
+      }
+      // Retain ALL tool progress (call_subagents child blobs, Bash stdout/stderr
+      // chunks, status messages, …) — the live renderers read these from the
+      // projected view now, so nothing can be dropped here.
+      const step = openStep(view);
+      if (step?.action) (step.action.progress ??= []).push(event.data);
+      break;
     }
-  }
 
-  // 终态（failed/cancelled）用终止原因覆盖内容，避免空白气泡——投影单一来源，
-  // 实时快照与持久化文案由此一致。
-  if (
-    (status === 'failed' || status === 'cancelled') &&
-    terminalReason !== null
-  ) {
-    content = terminalReason;
-  }
+    case 'final':
+      finalizeOpenStep(view, event.at);
+      view.status = 'completed';
+      break;
 
-  // An open step (e.g. a tool_call whose result hasn't arrived — including one
-  // blocked on awaiting_input) is in-flight; include it so a running run
-  // exposes its pending tool call in the projection (snapshot / historical read).
-  if (currentStep) {
-    steps.push(currentStep);
-  }
+    case 'error':
+      finalizeOpenStep(view, event.at);
+      view.status = 'failed';
+      view.content = event.error;
+      break;
 
-  return { content, steps, status, awaitingInput, processSummary, audio };
+    case 'cancelled':
+      finalizeOpenStep(view, event.at);
+      view.status = 'cancelled';
+      view.content = event.reason;
+      break;
+
+    case 'process_summary':
+      view.processSummary = event.summary;
+      break;
+
+    case 'audio':
+      view.audio = { filePath: event.filePath, voice: event.voice };
+      break;
+
+    case 'start':
+    case 'loop_usage':
+      // Lifecycle / telemetry markers — no content accumulation.
+      break;
+  }
+  return view;
+}
+
+export function projectRun(events: readonly EnrichedEvent[]): RunView {
+  return events.reduce(applyEventToView, emptyRunView());
 }

@@ -33,6 +33,8 @@ vi.mock('@/client/store/modules/transport/SSEClientTransport', () => ({
 
 import { ChatStore } from '@/client/store/modules/chat';
 import { SSEClientTransport } from '@/client/store/modules/transport/SSEClientTransport';
+import { MessageNode } from '@/client/store/modules/message-node';
+import { Role } from '@/shared/types/entities';
 
 const MockedTransport = SSEClientTransport as unknown as Mock;
 
@@ -79,5 +81,60 @@ describe('ChatStore transport', () => {
     await (chatStore as any).connectTransport('conv_b');
 
     expect(MockedTransport).toHaveBeenCalledTimes(2);
+  });
+
+  it('routes run_view → applyView, and refreshes on terminal transition', async () => {
+    await (chatStore as any).connectTransport('conv_1');
+    const transport = MockedTransport.mock.results[0].value;
+    const messageHandler = (
+      transport.addEventListener as Mock
+    ).mock.calls.find(([ev]) => ev === 'message')?.[1] as
+      | ((e: { detail: unknown }) => void)
+      | undefined;
+    if (!messageHandler) throw new Error('message listener not registered');
+
+    const node = new MessageNode({
+      id: 'm1',
+      conversationId: 'conv_1',
+      role: Role.ASSIST,
+      createdAt: new Date(),
+    });
+    (chatStore as any).messageNodes.set(
+      'conv_1',
+      new Map([['m1', node]]),
+    );
+    // Read loopUsage through the store's own reference — makeAutoObservable
+    // deep-wraps conversationStore, so the test's direct reference would diverge.
+    const loopUsage = (chatStore as any).conversationStore.loopUsage as Map<
+      string,
+      unknown
+    >;
+
+    const runView = (status: string) => ({
+      type: 'run_view',
+      messageId: 'm1',
+      runId: 'r1',
+      content: 'hello',
+      steps: [],
+      status,
+      awaitingInput: null,
+      processSummary: null,
+      audio: null,
+    });
+
+    // Running view → state replaced, no terminal refresh.
+    messageHandler({ detail: runView('running') });
+    expect(node.content).toBe('hello');
+    expect(node.status).toBe('running');
+
+    // Terminal view → refresh + loopUsage cleared, exactly once.
+    loopUsage.set('r1', { used: 5, total: 4096 });
+    const refreshSpy = vi
+      .spyOn(chatStore as any, 'refreshMessages')
+      .mockImplementation(() => {});
+    messageHandler({ detail: runView('completed') });
+    expect(node.status).toBe('completed');
+    expect(refreshSpy).toHaveBeenCalledWith('conv_1');
+    expect(loopUsage.has('r1')).toBe(false);
   });
 });
