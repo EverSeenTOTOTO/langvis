@@ -226,4 +226,37 @@ describe('ConversationSession —— handleRunEvent → run_view 投影帧', () 
     vi.advanceTimersByTime(30);
     expect(runViews(sendFrame.mock.calls)).toHaveLength(1);
   });
+
+  it('getChildRunEvents 从活跃父 run 缓冲提取子 run 事件', () => {
+    const s = makeSession();
+    s.registerRun('m_parent', 'run_parent');
+    // 灌入父 run 事件（含子 run 转发块）
+    s.handleRunEvent('m_parent', {
+      type: 'tool_call',
+      callId: 'tc_sa',
+      toolName: 'call_subagents',
+      toolArgs: {},
+      runId: 'run_parent',
+      at: 0,
+    } as EnrichedEvent);
+    s.handleRunEvent('m_parent', {
+      type: 'tool_progress',
+      callId: 'tc_sa',
+      data: {
+        childRunId: 'run_child',
+        event: {
+          type: 'thought',
+          content: 'child thinks',
+          runId: 'run_child',
+          at: 0,
+        } as EnrichedEvent,
+      },
+      runId: 'run_parent',
+      at: 0,
+    } as EnrichedEvent);
+
+    const child = s.getChildRunEvents('run_child');
+    expect(child?.map(e => e.type)).toEqual(['thought']);
+    expect(s.getChildRunEvents('run_nonexistent')).toBeUndefined();
+  });
 });

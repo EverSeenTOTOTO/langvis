@@ -74,6 +74,13 @@ export class GetMessagesQuery extends Query {
   }
 }
 
+/** 取任意 run（含子 agent run）的投影视图——live（父 session 缓冲）优先、repo 回落。 */
+export class GetRunViewQuery extends Query {
+  constructor(readonly runId: string) {
+    super();
+  }
+}
+
 import type { LlmMessage, Message } from '@/shared/types/entities';
 
 export const TurnInitiated = 'turn_initiated';
