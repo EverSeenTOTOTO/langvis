@@ -10,6 +10,7 @@ import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-ca
 import type { RunEvent } from '@/shared/types/events';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
 import type EmbeddingGenerateTool from '../EmbeddingGenerate';
+import type ContentChunkTool from '../ContentChunk';
 import type { DocumentStoreInput, DocumentStoreOutput } from './config';
 import { config } from './config';
 
@@ -27,7 +28,19 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
     ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, DocumentStoreOutput, void> {
     const data = ctx.input as unknown as DocumentStoreInput;
-    const { document, chunks } = data;
+    const { document } = data;
+
+    // 分块:复用 content_chunk 工具(与 embedding 同样内部 resolve 调用)。
+    // 分块策略/参数是存储层的内部细节,用 content_chunk 的默认值(paragraph/1000),
+    // 不暴露给调用方。
+    const chunkTool = container.resolve<ContentChunkTool>(
+      ToolIds.CONTENT_CHUNK,
+    );
+    const chunkResult = yield* chunkTool.call({
+      ...ctx,
+      input: { content: document.rawContent },
+    });
+    const chunks = chunkResult.chunks;
 
     // 向量由内部 EmbeddingGenerate 按 chunks 顺序生成（与 DocumentSearch 同模式），
     // 调用方不再搬运 number[][]，模型循环里也不会出现大块向量。
