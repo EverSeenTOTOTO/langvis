@@ -6,7 +6,7 @@ import { param, request, response } from '../decorator/param';
 import { QueryBus } from '@/server/libs/ddd';
 import { AgentService } from '../modules/agent/application/service/agent.service';
 import { SkillService } from '../modules/agent/application/service/skill.service';
-import { GetRunViewQuery } from '../modules/agent/application/query/run.queries';
+import { GetRunViewQuery } from '../modules/conversation/contracts';
 
 @controller('/api/agent')
 export default class AgentController {

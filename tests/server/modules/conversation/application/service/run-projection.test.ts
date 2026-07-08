@@ -3,6 +3,7 @@ import {
   projectRun,
   applyEventToView,
   emptyRunView,
+  extractChildEvents,
 } from '@/server/modules/conversation/application/service/run-projection';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 
@@ -415,5 +416,56 @@ describe('projectRun', () => {
       for (let i = 0; i < k; i++) applyEventToView(incremental, events[i]);
       expect(incremental).toEqual(projectRun(events.slice(0, k)));
     }
+  });
+
+  it('extracts a child run events from parent tool_progress blobs', () => {
+    // CallSubagents forwards each child event into the parent as
+    // tool_progress { childRunId, event }, plus a once-off { childRunId, brief, query }.
+    const parent: EnrichedEvent[] = [
+      ev({
+        type: 'tool_call',
+        callId: 'tc_sa',
+        toolName: 'call_subagents',
+        toolArgs: {},
+      }),
+      ev({
+        type: 'tool_progress',
+        callId: 'tc_sa',
+        data: { childRunId: 'run_a', brief: 'b', query: 'q' },
+      }),
+      ev({
+        type: 'tool_progress',
+        callId: 'tc_sa',
+        data: {
+          childRunId: 'run_a',
+          event: ev({ type: 'thought', content: 'child thinks' }),
+        },
+      }),
+      ev({
+        type: 'tool_progress',
+        callId: 'tc_sa',
+        data: {
+          childRunId: 'run_b',
+          event: ev({ type: 'thought', content: 'other child' }),
+        },
+      }),
+      ev({
+        type: 'tool_progress',
+        callId: 'tc_sa',
+        data: {
+          childRunId: 'run_a',
+          event: ev({ type: 'text_chunk', content: 'hi' }),
+        },
+      }),
+    ];
+
+    const childA = extractChildEvents(parent, 'run_a');
+    expect(childA.map(e => e.type)).toEqual(['thought', 'text_chunk']);
+    expect(extractChildEvents(parent, 'run_b').map(e => e.type)).toEqual([
+      'thought',
+    ]);
+    expect(extractChildEvents(parent, 'run_unknown')).toEqual([]);
+    // The extracted events project to the child's own view.
+    expect(projectRun(childA).content).toBe('hi');
   });
 });

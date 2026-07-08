@@ -4,6 +4,7 @@ import { Connection } from './connection';
 import {
   applyEventToView,
   emptyRunView,
+  extractChildEvents,
   type RunView,
 } from '@/server/modules/conversation/application/service/run-projection';
 import {
@@ -107,6 +108,16 @@ export class ConversationSession {
 
   getRunEvents(messageId: string): readonly EnrichedEvent[] | undefined {
     return this.activeRuns.get(messageId)?.events;
+  }
+
+  /** 子 run（call_subagents 的 child）事件——从活跃父 run 的 tool_progress 进度块提取。
+   *  仅父 run 仍在 session 缓冲内时可查；历史回落到 get-run-view 的 repo 路径。 */
+  getChildRunEvents(childRunId: string): readonly EnrichedEvent[] | undefined {
+    for (const run of this.activeRuns.values()) {
+      const child = extractChildEvents(run.events, childRunId);
+      if (child.length > 0) return child;
+    }
+    return undefined;
   }
 
   getRun(messageId: string): ActiveRun | undefined {

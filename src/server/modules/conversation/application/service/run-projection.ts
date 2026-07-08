@@ -190,3 +190,26 @@ export function applyEventToView(view: RunView, event: EnrichedEvent): RunView {
 export function projectRun(events: readonly EnrichedEvent[]): RunView {
   return events.reduce(applyEventToView, emptyRunView());
 }
+
+/**
+ * 提取某子 run（call_subagents 的 child）的事件流——CallSubagents 把每个 child 事件
+ * 以 tool_progress { childRunId, event } 转发进父 run；这里按 childRunId 过滤、解包。
+ * 仅取带 `event` 的 per-event 块（跳过 { childRunId, brief, query } 的 started 块）。
+ * 顺序保留（父按 child 事件到达序转发）。
+ */
+export function extractChildEvents(
+  events: readonly EnrichedEvent[],
+  childRunId: string,
+): EnrichedEvent[] {
+  const child: EnrichedEvent[] = [];
+  for (const e of events) {
+    if (e.type !== 'tool_progress') continue;
+    const data = e.data as
+      | { childRunId?: unknown; event?: EnrichedEvent }
+      | undefined;
+    if (data?.childRunId === childRunId && data.event) {
+      child.push(data.event);
+    }
+  }
+  return child;
+}
