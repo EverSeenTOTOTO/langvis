@@ -45,7 +45,7 @@ export function SkillCallBlock({
     >
       <Flex align="center" gap={8} className="react-tool-header">
         {Icon}
-        <Tag color="cyan">Skill</Tag>
+        <Tag color="cyan">{settingStore.tr('Skill')}</Tag>
         <Tag color={getToolColor(skillId)}>{skillId}</Tag>
         {toolCall.startedAt && (
           <Typography.Text type="secondary" className="react-tool-time">
@@ -54,7 +54,7 @@ export function SkillCallBlock({
         )}
         {!isPending && (
           <Modal
-            title={`技能: ${skillId}`}
+            title={`${settingStore.tr('Skill')}: ${skillId}`}
             width="75%"
             footer={false}
             trigger={

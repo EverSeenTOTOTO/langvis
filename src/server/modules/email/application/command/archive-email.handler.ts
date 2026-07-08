@@ -34,7 +34,7 @@ export class ArchiveEmailHandler {
       throw new EmailNotFoundError(emailId);
     }
 
-    await this.emailService.updateStatus(emailId, 'archived');
+    await this.emailService.markArchived(emailId);
 
     // Create the conversation synchronously so its id can be returned to the
     // caller (the client opens a new tab straight to this conversation). The

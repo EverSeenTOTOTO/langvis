@@ -1,5 +1,6 @@
 import { useStore } from '@/client/store';
 import { DEFAULT_UPLOAD_CONFIG } from '@/shared/constants';
+import { generateId } from '@/shared/utils';
 import { PaperClipOutlined } from '@ant-design/icons';
 import { Button, message, Tag, Upload } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
@@ -26,7 +27,7 @@ export const useFileUpload = (isLoading: boolean) => {
 
   const handleUpload = useCallback(
     async (file: File): Promise<Attachment | null> => {
-      const tempUid = `temp-${Date.now()}`;
+      const tempUid = generateId('temp');
 
       setFileList(prev => [
         ...prev,

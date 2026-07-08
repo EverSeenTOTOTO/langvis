@@ -1,4 +1,5 @@
 import { useStore } from '@/client/store';
+import { generateId } from '@/shared/utils';
 import { AudioOutlined } from '@ant-design/icons';
 import { Button, message } from 'antd';
 import { useCallback, useRef, useState } from 'react';
@@ -21,7 +22,7 @@ export const useVoiceInput = (
       setIsVoiceProcessing(true);
       try {
         const ext = mimeType.includes('ogg') ? 'ogg' : 'webm';
-        const file = new File([blob], `voice-${Date.now()}.${ext}`, {
+        const file = new File([blob], `${generateId('voice')}.${ext}`, {
           type: mimeType,
         });
 

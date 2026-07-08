@@ -79,7 +79,7 @@ export const CallSubagentsBlock = observer(function CallSubagentsBlock({
     <div className="react-tool-block">
       <Flex align="center" gap={8} className="react-tool-header">
         {Icon}
-        <Tag color="geekblue">Tool</Tag>
+        <Tag color="geekblue">{settingStore.tr('Tool')}</Tag>
         <Tag color={getToolColor(toolCall.toolName)}>{toolCall.toolName}</Tag>
         <Typography.Text type="secondary">
           {settingStore.tr('Sub-agents')} ({children.length})

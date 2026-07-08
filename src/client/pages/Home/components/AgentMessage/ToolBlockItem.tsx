@@ -1,10 +1,15 @@
-import { CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
+import {
+  CheckCircleOutlined,
+  CloudOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { Flex, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { isEmpty } from 'lodash-es';
 import { observer } from 'mobx-react-lite';
 import type React from 'react';
 import type { UIToolCall } from '@/client/store/modules/message-node';
+import { useStore } from '@/client/store';
 import './index.scss';
 
 const TAG_COLORS = [
@@ -50,6 +55,7 @@ export const ToolBlockItem = observer(function ToolBlockItem({
   depth = 0,
   customRender,
 }: ToolBlockItemProps): React.ReactElement {
+  const settingStore = useStore('setting');
   const color = getToolColor(toolCall.toolName);
   const isPending = toolCall.status === 'pending';
 
@@ -86,7 +92,7 @@ export const ToolBlockItem = observer(function ToolBlockItem({
     >
       <Flex align="center" gap={8} className="react-tool-header">
         {Icon}
-        <Tag color="geekblue">Tool</Tag>
+        <Tag color="geekblue">{settingStore.tr('Tool')}</Tag>
         <Tag color={color}>{toolCall.toolName}</Tag>
         {toolCall.startedAt && (
           <Typography.Text type="secondary" className="react-tool-time">
@@ -151,17 +157,17 @@ export interface StandaloneThoughtBlockProps {
 export function StandaloneThoughtBlock({
   thought,
 }: StandaloneThoughtBlockProps): React.ReactElement {
+  const settingStore = useStore('setting');
   return (
     <div className="react-thought-block">
       <Flex align="center" gap={8} className="react-tool-header">
-        <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
-        <Tag color="blue">Thought</Tag>
+        <CloudOutlined style={{ color: 'var(--ant-color-info)' }} />
+        <Tag color="blue">{settingStore.tr('Thought')}</Tag>
       </Flex>
       <Typography.Paragraph
         type="secondary"
         italic
         ellipsis={{ rows: 2, expandable: 'collapsible' }}
-        className="react-thought-content"
       >
         💭 {thought}
       </Typography.Paragraph>

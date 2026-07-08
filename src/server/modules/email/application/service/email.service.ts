@@ -102,6 +102,11 @@ export class EmailService {
     return { success: ok };
   }
 
+  async markArchived(id: string): Promise<boolean> {
+    const { success } = await this.updateStatus(id, 'archived');
+    return success;
+  }
+
   private extractAttachmentNames(raw?: Record<string, unknown>): string[] {
     const names: string[] = [];
     if (!raw) return names;
