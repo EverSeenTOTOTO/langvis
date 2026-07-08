@@ -4,6 +4,7 @@ import path from 'path';
 import { service } from '@/server/decorator/service';
 import { resolveSafePath } from '@/server/utils/pathSafety';
 import { DEFAULT_UPLOAD_CONFIG } from '@/shared/constants';
+import { generateId } from '@/shared/utils';
 
 /** saveFile 校验失败时抛出；FileController 据此映射 400。 */
 export class FileValidationError extends Error {
@@ -130,9 +131,7 @@ export class FileService {
   }> {
     this.validateUpload(file);
     const ext = path.extname(file.originalname) || '';
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).slice(2, 8);
-    const baseName = `${timestamp}-${random}${ext}`;
+    const baseName = `${generateId('file')}${ext}`;
     const filename = dir ? `${dir}/${baseName}` : baseName;
 
     const filePath = this.getFilePath(filename);

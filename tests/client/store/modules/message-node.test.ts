@@ -1,10 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { MessageNode } from '@/client/store/modules/message-node';
 import { Role } from '@/shared/types/entities';
-import type {
-  ReActStep,
-  AwaitingInputProjection,
-} from '@/shared/types/render';
+import type { ReActStep, AwaitingInputProjection } from '@/shared/types/render';
 import type { RunStatus } from '@/shared/types/agent';
 
 /** Build an applyView payload (the shape of a run_view frame's projected fields). */
@@ -33,9 +30,7 @@ function liveNode(): MessageNode {
   });
 }
 
-function step(
-  partial: Partial<ReActStep> & { startedAt?: number },
-): ReActStep {
+function step(partial: Partial<ReActStep> & { startedAt?: number }): ReActStep {
   return { thought: '', startedAt: 1, ...partial } as ReActStep;
 }
 
@@ -283,14 +278,20 @@ describe('MessageNode — isCompacting', () => {
 
   it('response_user 交付后、final 前处于折叠窗口', () => {
     const node = liveNode();
-    node.applyView(view({ status: 'running', steps: [responseUserStep('completed')] }));
+    node.applyView(
+      view({ status: 'running', steps: [responseUserStep('completed')] }),
+    );
     expect(node.isCompacting).toBe(true);
   });
 
   it('final 到达后退出折叠窗口', () => {
     const node = liveNode();
-    node.applyView(view({ status: 'running', steps: [responseUserStep('completed')] }));
-    node.applyView(view({ status: 'completed', steps: [responseUserStep('completed')] }));
+    node.applyView(
+      view({ status: 'running', steps: [responseUserStep('completed')] }),
+    );
+    node.applyView(
+      view({ status: 'completed', steps: [responseUserStep('completed')] }),
+    );
     expect(node.isCompacting).toBe(false);
   });
 
@@ -302,7 +303,9 @@ describe('MessageNode — isCompacting', () => {
 
   it('response_user 仍 pending 时不进入折叠窗口', () => {
     const node = liveNode();
-    node.applyView(view({ status: 'running', steps: [responseUserStep('pending')] }));
+    node.applyView(
+      view({ status: 'running', steps: [responseUserStep('pending')] }),
+    );
     expect(node.isCompacting).toBe(false);
   });
 });

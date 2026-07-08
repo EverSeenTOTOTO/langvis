@@ -49,7 +49,6 @@ export default class FileController {
     }
 
     try {
-      // Get file stats first to check if file exists and get metadata
       const fileStats = await this.fileService.getFileStats(filename);
 
       if (!fileStats) {
@@ -127,7 +126,6 @@ export default class FileController {
       return;
     }
 
-    // Check if file extension is allowed for inline viewing
     const ext = path.extname(filename).toLowerCase();
     const allowedExtensions = this.getInlineExtensions();
 
@@ -140,7 +138,6 @@ export default class FileController {
     }
 
     try {
-      // Get file stats first to check if file exists and get metadata
       const fileStats = await this.fileService.getFileStats(filename);
 
       if (!fileStats) {
@@ -152,7 +149,6 @@ export default class FileController {
       const { size } = fileStats;
       const rangeExtensions = this.getRangeExtensions();
 
-      // Add cache control for better performance
       res.setHeader('Cache-Control', 'public, max-age=31536000');
       res.setHeader('ETag', `"${fileStats.mtime.getTime()}-${fileStats.size}"`);
       res.setHeader('Last-Modified', fileStats.mtime.toUTCString());

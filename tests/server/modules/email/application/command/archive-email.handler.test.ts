@@ -21,7 +21,7 @@ function makeEmailService(
 ): EmailService {
   return {
     getById: vi.fn().mockResolvedValue(email),
-    updateStatus: vi.fn().mockResolvedValue(true),
+    markArchived: vi.fn().mockResolvedValue(true),
   } as unknown as EmailService;
 }
 
@@ -60,7 +60,7 @@ describe('ArchiveEmailHandler', () => {
       handler.execute(new ArchiveEmailCommand('mail_1', 'user_1')),
     ).rejects.toBeInstanceOf(EmailNotFoundError);
 
-    expect(emailService.updateStatus).not.toHaveBeenCalled();
+    expect(emailService.markArchived).not.toHaveBeenCalled();
     expect(commandBus.execute).not.toHaveBeenCalled();
   });
 
@@ -77,10 +77,7 @@ describe('ArchiveEmailHandler', () => {
       new ArchiveEmailCommand('mail_1', 'user_1'),
     );
 
-    expect(emailService.updateStatus).toHaveBeenCalledWith(
-      'mail_1',
-      'archived',
-    );
+    expect(emailService.markArchived).toHaveBeenCalledWith('mail_1');
     expect(commandBus.execute).toHaveBeenCalledTimes(1);
     const cmd = (commandBus.execute as any).mock.calls[0][0];
     expect(cmd).toBeInstanceOf(CreateConversationCommand);

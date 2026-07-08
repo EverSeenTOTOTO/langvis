@@ -186,7 +186,12 @@ describe('projectRun', () => {
 
     const done = projectRun([
       ev({ type: 'tool_call', callId: 'tc_p', toolName: 'Bash', toolArgs: {} }),
-      ev({ type: 'tool_result', callId: 'tc_p', toolName: 'Bash', output: 'ok' }),
+      ev({
+        type: 'tool_result',
+        callId: 'tc_p',
+        toolName: 'Bash',
+        output: 'ok',
+      }),
     ]);
     expect(done.steps[0].action?.status).toBe('completed');
   });
@@ -194,7 +199,12 @@ describe('projectRun', () => {
   it('marks action.status failed with error on tool_error', () => {
     const view = projectRun([
       ev({ type: 'tool_call', callId: 'tc_f', toolName: 'Bash', toolArgs: {} }),
-      ev({ type: 'tool_error', callId: 'tc_f', toolName: 'Bash', error: 'boom' }),
+      ev({
+        type: 'tool_error',
+        callId: 'tc_f',
+        toolName: 'Bash',
+        error: 'boom',
+      }),
     ]);
     expect(view.steps[0].action?.status).toBe('failed');
     expect(view.steps[0].action?.error).toBe('boom');
@@ -213,7 +223,12 @@ describe('projectRun', () => {
         callId: 'tc_b',
         data: { type: 'stderr', text: 'warn' },
       }),
-      ev({ type: 'tool_result', callId: 'tc_b', toolName: 'Bash', output: 'done' }),
+      ev({
+        type: 'tool_result',
+        callId: 'tc_b',
+        toolName: 'Bash',
+        output: 'done',
+      }),
     ]);
     const progress = view.steps[0].action?.progress;
     expect(progress).toHaveLength(2);
@@ -393,7 +408,11 @@ describe('projectRun', () => {
       ev({
         type: 'tool_progress',
         callId: 'tc_1',
-        data: { status: 'awaiting_input', message: 'ok?', schema: { type: 'object' } },
+        data: {
+          status: 'awaiting_input',
+          message: 'ok?',
+          schema: { type: 'object' },
+        },
       }),
       ev({
         type: 'tool_progress',
@@ -401,11 +420,21 @@ describe('projectRun', () => {
         data: { childRunId: 'rc1', event: { type: 'thought' } },
       }),
       ev({ type: 'text_chunk', content: 'partial ' }),
-      ev({ type: 'tool_result', callId: 'tc_1', toolName: 'Bash', output: { ok: true } }),
+      ev({
+        type: 'tool_result',
+        callId: 'tc_1',
+        toolName: 'Bash',
+        output: { ok: true },
+      }),
       ev({ type: 'text_chunk', content: 'answer' }),
       ev({ type: 'thought', content: 'again' }),
       ev({ type: 'tool_call', callId: 'tc_2', toolName: 'Read', toolArgs: {} }),
-      ev({ type: 'tool_error', callId: 'tc_2', toolName: 'Read', error: 'missing' }),
+      ev({
+        type: 'tool_error',
+        callId: 'tc_2',
+        toolName: 'Read',
+        error: 'missing',
+      }),
       ev({ type: 'audio', filePath: 'a.mp3', voice: 'V' }),
       ev({ type: 'process_summary', summary: 'sum' }),
       ev({ type: 'final' }),

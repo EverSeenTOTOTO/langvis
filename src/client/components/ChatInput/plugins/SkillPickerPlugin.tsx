@@ -46,6 +46,7 @@ const SkillList: React.FC<{
   close: () => void;
   editor: LexicalEditor;
 }> = ({ skills, query, insert, close, editor }) => {
+  const settingStore = useStore('setting');
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return skills;
@@ -102,7 +103,11 @@ const SkillList: React.FC<{
   }, [editor, filtered, active, choose]);
 
   if (filtered.length === 0) {
-    return <div className="chat-input-popover-empty">无匹配技能</div>;
+    return (
+      <div className="chat-input-popover-empty">
+        {settingStore.tr('No matching skills')}
+      </div>
+    );
   }
 
   return (

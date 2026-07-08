@@ -90,7 +90,7 @@ describe('FileService - Extended', () => {
       const result = await fileService.saveFile(mockFile);
       testFiles.push(result.filename);
 
-      expect(result.filename).toMatch(/^\d+-[a-z0-9]+\.txt$/);
+      expect(result.filename).toMatch(/^file_[0-9a-f]{8}\.txt$/);
       expect(result.size).toBe(12);
       expect(result.mimeType).toBe('text/plain');
       expect(result.url).toContain('/api/files/play/');

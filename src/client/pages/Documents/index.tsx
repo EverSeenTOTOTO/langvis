@@ -39,15 +39,6 @@ import './index.scss';
 const { RangePicker } = DatePicker;
 const { Text, Paragraph, Title } = Typography;
 
-const CATEGORY_OPTIONS: { label: string; value: DCType }[] = [
-  { label: 'Tech Blog', value: 'tech_blog' },
-  { label: 'Social Media', value: 'social_media' },
-  { label: 'Paper', value: 'paper' },
-  { label: 'Documentation', value: 'documentation' },
-  { label: 'News', value: 'news' },
-  { label: 'Other', value: 'other' },
-];
-
 const CATEGORY_COLORS: Record<DCType, string> = {
   tech_blog: 'blue',
   social_media: 'magenta',
@@ -82,6 +73,9 @@ interface SearchParams {
 const Documents: React.FC = () => {
   const documentStore = useStore('document');
   const settingStore = useStore('setting');
+  const categoryOptions = (Object.keys(CATEGORY_LABELS) as DCType[]).map(
+    value => ({ value, label: settingStore.tr(CATEGORY_LABELS[value]) }),
+  );
   const [form] = Form.useForm();
 
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -284,7 +278,7 @@ const Documents: React.FC = () => {
                 <Select
                   placeholder={settingStore.tr('Category')}
                   allowClear
-                  options={CATEGORY_OPTIONS}
+                  options={categoryOptions}
                 />
               </Form.Item>
             </Col>
