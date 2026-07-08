@@ -60,6 +60,8 @@ export class ConversationSession {
           this.connection = undefined;
           this.onConnectionLost();
         },
+        // 有活跃 run 时拒绝 idle 释放——避免在 run 执行中清掉事件缓冲/记忆导致 run 孤儿化。
+        () => this.activeRuns.size === 0,
       );
     }
     this.connection.attach(transport);

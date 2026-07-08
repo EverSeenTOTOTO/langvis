@@ -1,8 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ConversationSession } from '@/server/modules/conversation/application/service/conversation-session';
+import { Transport } from '@/shared/transport';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
 import type { SSEFrame, EnrichedEvent } from '@/shared/types/events';
+
+class MockTransport extends Transport<SSEFrame> {
+  isConnected = true;
+  isConnecting = false;
+  connect = vi.fn().mockResolvedValue(undefined);
+  send = vi.fn((_f: SSEFrame) => true);
+  close = vi.fn(() => {
+    this.isConnected = false;
+  });
+  disconnect = vi.fn();
+  fireDisconnect() {
+    this.dispatchEvent(new Event('disconnect'));
+  }
+}
 
 type RunViewFrame = Extract<SSEFrame, { type: 'run_view' }>;
 
@@ -258,5 +273,32 @@ describe('ConversationSession —— handleRunEvent → run_view 投影帧', () 
     const child = s.getChildRunEvents('run_child');
     expect(child?.map(e => e.type)).toEqual(['thought']);
     expect(s.getChildRunEvents('run_nonexistent')).toBeUndefined();
+  });
+});
+
+describe('ConversationSession —— 活跃 run 期间不 idle 释放', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('有活跃 run 且传输断开时，idle 到期也不释放；run 结束后才释放', () => {
+    const onConnectionLost = vi.fn();
+    const s = new ConversationSession('c1', 1000, onConnectionLost);
+    const transport = new MockTransport();
+    s.attachTransport(transport);
+    s.registerRun('m1', 'r1');
+
+    // 传输断开（代理 idle 断连）→ Connection idle 计时启动。
+    transport.fireDisconnect();
+
+    // 活跃 run 中——idle 到期也必须保留会话（run 仍可查、可取消）。
+    vi.advanceTimersByTime(1000);
+    expect(onConnectionLost).not.toHaveBeenCalled();
+    expect(s.hasActiveRun('m1')).toBe(true);
+
+    // run 结束 → removeRun 后空闲，markIdle 重新计时并释放。
+    s.removeRun('m1');
+    s.markIdle();
+    vi.advanceTimersByTime(1000);
+    expect(onConnectionLost).toHaveBeenCalledTimes(1);
   });
 });

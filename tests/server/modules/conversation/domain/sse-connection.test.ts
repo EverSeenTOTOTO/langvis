@@ -176,4 +176,24 @@ describe('Connection', () => {
     expect(t1.send).not.toHaveBeenCalled();
     expect(t2.send).toHaveBeenCalled();
   });
+
+  it('should defer idle disposal while canDispose returns false', () => {
+    let disposable = false;
+    const conn = new Connection('conv_1', 1000, onDispose, () => disposable);
+    const transport = new MockTransport();
+    conn.attach(transport);
+
+    transport.fireDisconnect();
+    expect(conn.connectedCount).toBe(0);
+
+    // Active run in flight — idle timer fires but must not dispose.
+    vi.advanceTimersByTime(1000);
+    expect(onDispose).not.toHaveBeenCalled();
+
+    // Run finishes → re-arm via markIdle, now disposable.
+    disposable = true;
+    conn.markIdle();
+    vi.advanceTimersByTime(1000);
+    expect(onDispose).toHaveBeenCalledTimes(1);
+  });
 });
