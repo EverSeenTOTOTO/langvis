@@ -80,9 +80,8 @@ const Chat: React.FC = () => {
       });
       if (conv) {
         conversationStore.currentConversationId = conv.id;
-        // 新会话须先激活（落 SYSTEM 消息 + 建立 SSE），否则 startChat 会被
-        // 服务端 assertActivated 拦截。reaction 也会触发激活，connectTransport
-        // 已幂等去重，故此处显式 await 即可安全等待激活落地。
+        // 新会话须先激活（落 SYSTEM 消息 + 建立 SSE）再开首个 turn；
+        // startChat 内的 ensureConnected 已幂等去重，此处显式 await 提前落地、避免首帧等待。
         await chatStore.activateConversation(conv.id);
       }
     }
@@ -141,6 +140,18 @@ const Chat: React.FC = () => {
     resizeObserver.observe(el);
     return () => resizeObserver.disconnect();
   }, []);
+
+  // 标签页重新可见时无感重连：长 idle / 休眠后 SSE 已断、服务端 session 已被回收，
+  // 趁用户回来提前重激活，免得等到发送时才重连。ensureConnected 幂等，失败静默（发送时再试）。
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      const id = conversationStore.currentConversationId;
+      if (id) chatStore.ensureConnected(id).catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [chatStore, conversationStore]);
 
   return (
     <Layout className="chat-page">

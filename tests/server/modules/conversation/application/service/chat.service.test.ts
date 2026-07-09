@@ -368,7 +368,7 @@ describe('ChatService', () => {
   });
 
   describe('startTurn', () => {
-    it('requireConversation → assertActivated → appendMessage; derives systemPrompt + userConfig', async () => {
+    it('requireConversation → appendMessage; derives systemPrompt (SYSTEM msg) + userConfig', async () => {
       const conv = {
         id: 'conv_1',
         userId: 'user_1',

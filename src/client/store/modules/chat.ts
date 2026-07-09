@@ -121,7 +121,7 @@ export class ChatStore {
     }
 
     try {
-      await this.connectTransport(conversationId);
+      await this.ensureConnected(conversationId);
     } catch {
       this.refreshMessages(conversationId);
     }
@@ -131,9 +131,11 @@ export class ChatStore {
   // SSE Transport
   // ════════════════════════════════════════
 
-  private async connectTransport(conversationId: string): Promise<void> {
+  /** 确保会话 SSE 信道在线：已连则 no-op，否则（重连 /activate）重新激活 memory。
+   *  即“激活状态”的无感检查——transport 活性 ⟺ session 活着 ⟺ memory 在位。 */
+  async ensureConnected(conversationId: string): Promise<void> {
     if (this.transports.get(conversationId)?.isConnected) return;
-    // 切换 currentConversationId 的 reaction 与发送前显式激活可能并发进入；
+    // 切换 currentConversationId 的 reaction、发送前、标签页重新可见时都可能并发进入；
     // 复用同一次连接 Promise，避免对同一会话建立两条 SSE。
     const pending = this.connectingPromises.get(conversationId);
     if (pending) return pending;
@@ -254,6 +256,16 @@ export class ChatStore {
       antMessage.error(
         this.settingStore.tr('Failed to create or get conversation'),
       );
+      return;
+    }
+
+    // 发送前确保会话已激活：长 idle 后 SSE 静默断开、服务端 session 已被 idle 回收，
+    // 此处重连 /activate 重新激活 memory（已连则 no-op）。连不上则 fail-clean，不盲发。
+    try {
+      await this.ensureConnected(conversationId);
+    } catch {
+      antMessage.error(this.settingStore.tr('Failed to connect to SSE'));
+      this.refreshMessages(conversationId);
       return;
     }
 
