@@ -49,7 +49,8 @@ export type RunEvent =
   | { type: 'error'; error: string }
   | { type: 'process_summary'; summary: string }
   | { type: 'audio'; filePath: string; voice?: string }
-  | { type: 'loop_usage'; used: number; total: number };
+  | { type: 'loop_usage'; used: number; total: number }
+  | { type: 'hook'; hookId: string; summary: string; data?: unknown };
 
 // ─── 应用层富化 ───
 
@@ -61,6 +62,13 @@ export type EnrichedEvent = RunEvent & {
   runId: string;
   at: number;
 };
+
+/** 一次 hook 生效的投影记录（RunView.hooks / run_view.hooks 的元素）。 */
+export interface HookRecord {
+  hookId: string;
+  summary: string;
+  data?: unknown;
+}
 
 // ─── 传输帧 ───
 
@@ -84,6 +92,7 @@ export type SSEFrame =
       awaitingInput: AwaitingInputProjection | null;
       processSummary: string | null;
       audio: { filePath: string; voice?: string } | null;
+      hooks: HookRecord[];
     }
   // 上下文用量控制帧：conversation_usage 是会话层基线（全员可见，conv 自算直发）；
   // loop_usage 是 per-run 事实（见 RunEvent），conv 桥接时翻译为此控制帧下发（不带 at/messageId）。

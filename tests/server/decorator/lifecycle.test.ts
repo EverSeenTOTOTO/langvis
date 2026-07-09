@@ -51,7 +51,7 @@ describe('lifecycle aspect', () => {
     expect(onShutdown).not.toHaveBeenCalled();
   });
 
-  it('单个 hook 抛错不阻断其余', async () => {
+  it('单个 hook 抛错则整个 phase reject（fail-fast，不容忍环境缺陷）', async () => {
     const ok = vi.fn().mockResolvedValue(undefined);
     @service()
     @lifecycleHook
@@ -66,8 +66,9 @@ describe('lifecycle aspect', () => {
     void FailingHook;
     void OkHook;
 
-    await shutdownAll();
-    expect(ok).toHaveBeenCalledTimes(1);
+    await expect(shutdownAll()).rejects.toThrow('boom');
+    // fail-fast：FailingHook 先注册先抛，OkHook 不再执行
+    expect(ok).not.toHaveBeenCalled();
   });
 
   it('缺省 onBoot/onShutdown 不报错（鸭子类型跳过）', async () => {

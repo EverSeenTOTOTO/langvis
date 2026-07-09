@@ -8,6 +8,7 @@ import {
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
 import { WorkingMemory } from '@/server/modules/agent/domain/model/working-memory';
+import { HookPlan, type Hook } from '@/server/modules/agent/domain/model/hook';
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { ToolIds } from '@/shared/constants';
@@ -215,6 +216,7 @@ interface BuildCtxOptions {
   seed?: LlmMessage[];
   controller?: AbortController;
   contextSize?: number;
+  hooks?: HookPlan;
 }
 interface BuiltCtx {
   ctx: AgentRunContext;
@@ -252,6 +254,7 @@ function buildCtx(opts: BuildCtxOptions): BuiltCtx {
     llm,
     cache: makeMockCache(),
     workingMemory,
+    hooks: opts.hooks,
     executeTool: fakeExecuteTool(opts.handler),
   };
   return { ctx, run, calls, workingMemory };
@@ -550,6 +553,48 @@ describe('runReactLoop', () => {
       const events = await collect(runReactLoop(ctx));
 
       expect(events.some(e => e.type === 'process_summary')).toBe(false);
+    });
+  });
+
+  describe('HookPipeline', () => {
+    it('在 post-observation 边界 apply hook；终态 response_user 不触发', async () => {
+      const spyHook: Hook = {
+        id: 'spy',
+        phase: 'post-observation',
+        apply: vi.fn(async (_ctx: AgentRunContext) => null),
+      };
+      const { ctx } = buildCtx({
+        responses: [call('t1'), responseUser('done')],
+        handler: okHandler,
+        hooks: new HookPlan([spyHook]),
+      });
+
+      await collect(runReactLoop(ctx));
+
+      // t1 迭代 append observation → 触发一次；response_user 终态无 observation → 不触发
+      expect(spyHook.apply).toHaveBeenCalledTimes(1);
+    });
+
+    it('hook 返回 effect 时 yield hook 事件', async () => {
+      const { ctx } = buildCtx({
+        responses: [call('t1'), responseUser('done')],
+        handler: okHandler,
+        hooks: new HookPlan([
+          {
+            id: 'effect-hook',
+            phase: 'post-observation',
+            apply: async () => ({ summary: 'did something', data: { x: 1 } }),
+          },
+        ]),
+      });
+
+      const events = await collect(runReactLoop(ctx));
+      const hookEvents = events.filter(e => e.type === 'hook');
+      expect(hookEvents).toHaveLength(1);
+      const hookEvent = hookEvents[0] as Extract<RunEvent, { type: 'hook' }>;
+      expect(hookEvent.hookId).toBe('effect-hook');
+      expect(hookEvent.summary).toBe('did something');
+      expect(hookEvent.data).toEqual({ x: 1 });
     });
   });
 });
