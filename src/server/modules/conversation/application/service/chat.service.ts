@@ -22,10 +22,7 @@ import {
 } from '../../domain/service/message-factory';
 import { composeConfigSchema } from '@/server/libs/config/config-fragment';
 import { parse } from '@/server/utils/schemaValidator';
-import {
-  ConversationNotActivatedError,
-  ConversationNotFoundError,
-} from '../../domain/errors';
+import { ConversationNotFoundError } from '../../domain/errors';
 import Logger from '@/server/utils/logger';
 import { isEmpty } from 'lodash-es';
 import type { EnrichedEvent } from '@/shared/types/events';
@@ -64,15 +61,6 @@ export class ChatService {
     );
     const messages = createActivationMessages({ ...params, workDir });
     await this.messageRepo.batchCreate(params.conversationId, messages);
-  }
-
-  /** start 前调用——不静默激活，让调用方显式先 activate（存在 SYSTEM 消息即视为已激活）。 */
-  async assertActivated(conversationId: string): Promise<void> {
-    const messages =
-      await this.messageRepo.findByConversationId(conversationId);
-    if (!messages.some(m => m.role === Role.SYSTEM)) {
-      throw new ConversationNotActivatedError(conversationId);
-    }
   }
 
   /**
@@ -127,8 +115,9 @@ export class ChatService {
   }
 
   /**
-   * 开 turn 的应用编排:校验归属 + 已激活 → 追加 user/assistant 消息 → 推导 systemPrompt。
+   * 开 turn 的应用编排:校验归属 → 追加 user/assistant 消息 → 推导 systemPrompt。
    * memory 与事件派发留给 handler(session 作用域 + I/O 边界);此方法只做持久化与领域事实推导。
+   * 激活(SYSTEM 消息)由客户端 /activate 保证先行落地,此处不再 DB 探针校验。
    */
   async startTurn(params: {
     conversationId: string;
@@ -150,7 +139,6 @@ export class ChatService {
       params.conversationId,
       params.userId,
     );
-    await this.assertActivated(params.conversationId);
 
     const setup = await this.appendMessage({
       conversationId: params.conversationId,

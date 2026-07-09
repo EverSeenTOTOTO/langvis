@@ -32,14 +32,6 @@ export class DuplicateRunError extends ExceptionBase {
   }
 }
 
-export class ConversationNotActivatedError extends ExceptionBase {
-  readonly code = 'CONVERSATION_NOT_ACTIVATED';
-  readonly statusCode = 400;
-  constructor(conversationId: string) {
-    super(`Conversation ${conversationId} is not activated`);
-  }
-}
-
 export class SessionNotFoundError extends ExceptionBase {
   readonly code = 'SESSION_NOT_FOUND';
   readonly statusCode = 404;

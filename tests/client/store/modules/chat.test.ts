@@ -4,7 +4,10 @@ import type { Mock } from 'vitest';
 
 // connect 的实现由每个用例决定，但 vi.mock 工厂在模块加载前求值，
 // 故用 vi.hoisted 把句柄提升出去，工厂内引用同一个 mock。
-const { connectMock } = vi.hoisted(() => ({ connectMock: vi.fn() }));
+const { connectMock, messageErrorMock } = vi.hoisted(() => ({
+  connectMock: vi.fn(),
+  messageErrorMock: vi.fn(),
+}));
 
 vi.mock('@/client/decorator/api', () => ({
   api: () => () => {},
@@ -17,6 +20,15 @@ vi.mock('@/client/decorator/hydrate', () => ({
 
 vi.mock('@/client/decorator/store', () => ({
   store: () => (target: any) => target,
+}));
+
+vi.mock('antd', () => ({
+  message: {
+    error: messageErrorMock,
+    success: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+  },
 }));
 
 vi.mock('@/client/store/modules/transport/SSEClientTransport', () => ({
@@ -60,14 +72,14 @@ describe('ChatStore transport', () => {
 
   it('dedupes concurrent connects to a single SSE per conversation', async () => {
     // 两个并发调用者（发送前显式激活 + currentConversationId 变化的 reaction）
-    // 都进入 connectTransport 时，应复用同一条 in-flight 连接。
+    // 都进入 ensureConnected 时，应复用同一条 in-flight 连接。
     let resolveConnect: () => void = () => {};
     connectMock.mockImplementation(
       () => new Promise<void>(resolve => (resolveConnect = resolve)),
     );
 
-    const p1 = (chatStore as any).connectTransport('conv_1');
-    const p2 = (chatStore as any).connectTransport('conv_1');
+    const p1 = chatStore.ensureConnected('conv_1');
+    const p2 = chatStore.ensureConnected('conv_1');
 
     expect(MockedTransport).toHaveBeenCalledTimes(1);
     expect(connectMock).toHaveBeenCalledTimes(1);
@@ -77,14 +89,14 @@ describe('ChatStore transport', () => {
   });
 
   it('connects separately for different conversations', async () => {
-    await (chatStore as any).connectTransport('conv_a');
-    await (chatStore as any).connectTransport('conv_b');
+    await chatStore.ensureConnected('conv_a');
+    await chatStore.ensureConnected('conv_b');
 
     expect(MockedTransport).toHaveBeenCalledTimes(2);
   });
 
   it('routes run_view → applyView, and refreshes on terminal transition', async () => {
-    await (chatStore as any).connectTransport('conv_1');
+    await chatStore.ensureConnected('conv_1');
     const transport = MockedTransport.mock.results[0].value;
     const messageHandler = (transport.addEventListener as Mock).mock.calls.find(
       ([ev]) => ev === 'message',
@@ -131,5 +143,71 @@ describe('ChatStore transport', () => {
     expect(node.status).toBe('completed');
     expect(refreshSpy).toHaveBeenCalledWith('conv_1');
     expect(loopUsage.has('r1')).toBe(false);
+  });
+});
+
+describe('ChatStore startChat', () => {
+  let chatStore: ChatStore;
+  let conversationStore: any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    connectMock.mockResolvedValue(undefined);
+
+    conversationStore = {
+      currentConversationId: undefined,
+      messages: {},
+      conversationUsage: null,
+      loopUsage: new Map(),
+      getMessagesByConversationId: vi.fn().mockResolvedValue([]),
+    };
+    const settingStore = { tr: (s: string) => s } as any;
+
+    chatStore = new ChatStore(conversationStore, settingStore);
+  });
+
+  it('ensures the SSE session is (re)activated before posting (#5: idle-eviction recovery)', async () => {
+    // 发送前必须先 ensureConnected：长 idle 后 SSE 静默断开、服务端 session 已被
+    // idle 回收，重连 /activate 重新激活 memory，避免 POST /start 撞上 getMemory not activated。
+    const order: string[] = [];
+    connectMock.mockImplementation(() => {
+      order.push('connect');
+      return Promise.resolve();
+    });
+    const req = {
+      send: vi.fn().mockImplementation(() => {
+        order.push('send');
+        return Promise.resolve({ messageId: 'm_asst' });
+      }),
+    };
+
+    await chatStore.startChat(
+      { conversationId: 'conv_1', role: Role.USER, content: 'hi' },
+      req as any,
+    );
+
+    // connect 先于 send 完成 —— 证明发送路径会先保证会话激活。
+    expect(order).toEqual(['connect', 'send']);
+    expect(MockedTransport).toHaveBeenCalledWith('/api/chat/activate/conv_1');
+    expect(req.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not post when (re)activation fails — fail-clean (#5)', async () => {
+    // ensureConnected 连不上时不应盲发 POST（否则服务端 getMemory 必抛 not activated → 500）：
+    // 提示 + 刷新 + 直接返回，send 不被调用。
+    connectMock.mockRejectedValue(new Error('SSE timeout'));
+    const req = { send: vi.fn().mockResolvedValue({ messageId: 'm_asst' }) };
+    const refreshSpy = vi
+      .spyOn(chatStore as any, 'refreshMessages')
+      .mockImplementation(() => {});
+
+    await chatStore.startChat(
+      { conversationId: 'conv_1', role: Role.USER, content: 'hi' },
+      req as any,
+    );
+
+    expect(req.send).not.toHaveBeenCalled();
+    expect(messageErrorMock).toHaveBeenCalledWith('Failed to connect to SSE');
+    expect(refreshSpy).toHaveBeenCalledWith('conv_1');
   });
 });
