@@ -13,6 +13,8 @@ import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { generateId } from '@/shared/utils';
 import type { LlmMessage } from '@/shared/types/entities';
 import { WorkingMemory } from '@/server/modules/agent/domain/model/working-memory';
+import { HookPlan } from '@/server/modules/agent/domain/model/hook';
+import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { AgentService } from './agent.service';
 import { runReactLoop } from './react-loop';
@@ -90,6 +92,7 @@ export class AgentRunExecutor {
       llm: this.llm,
       cache: this.cache,
       workingMemory,
+      hooks: new HookPlan(resolveAgentHooks()),
       executeTool: (toolName, args) =>
         this.executeTool(toolName, args, params.toolSet, {
           signal: run.signal,

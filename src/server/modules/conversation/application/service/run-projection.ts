@@ -1,5 +1,5 @@
 import type { ReActStep, AwaitingInputProjection } from '@/shared/types/render';
-import type { EnrichedEvent } from '@/shared/types/events';
+import type { EnrichedEvent, HookRecord } from '@/shared/types/events';
 
 /**
  * 纯投影函数：把 agent run 的事实流 fold 成读模型 RunView。conv 的读模型——
@@ -18,6 +18,8 @@ export interface RunView {
   awaitingInput: AwaitingInputProjection | null;
   processSummary: string | null;
   audio: { filePath: string; voice?: string } | null;
+  /** 本次 run 中生效过的 hook 事实（按到达序累积）。 */
+  hooks: HookRecord[];
 }
 
 /** GetRunView 查询的 DTO——任意 run（含子 agent）的投影 + 权威状态。前后端共享。 */
@@ -35,6 +37,7 @@ export function emptyRunView(): RunView {
     awaitingInput: null,
     processSummary: null,
     audio: null,
+    hooks: [],
   };
 }
 
@@ -177,6 +180,14 @@ export function applyEventToView(view: RunView, event: EnrichedEvent): RunView {
 
     case 'audio':
       view.audio = { filePath: event.filePath, voice: event.voice };
+      break;
+
+    case 'hook':
+      view.hooks.push({
+        hookId: event.hookId,
+        summary: event.summary,
+        data: event.data,
+      });
       break;
 
     case 'start':

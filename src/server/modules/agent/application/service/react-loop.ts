@@ -4,6 +4,7 @@ import type { ModelConfig } from '@/shared/types';
 import type { RunEvent } from '@/shared/types/events';
 import { stripThinking } from '@/server/libs/llm-text';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
+import type { HookPhase } from '@/server/modules/agent/domain/model/hook';
 import { winstonLogger } from '@/server/utils/logger';
 
 const logger = winstonLogger.child({ source: 'ReactLoop' });
@@ -16,6 +17,30 @@ type ReActAction = {
   input: Record<string, unknown>;
 };
 
+/**
+ * 在 loop 边界依次跑该相位的 hook。管道为空（ctx.hooks 缺省）时 no-op、不发事件。
+ * hook 经 ctx.workingMemory 调整上下文（与 compact 同途径）。
+ */
+async function* applyHooks(
+  ctx: AgentRunContext,
+  phase: HookPhase,
+): AsyncGenerator<RunEvent, void, void> {
+  const hooks = ctx.hooks?.forPhase(phase);
+  if (!hooks) return;
+  for (const hook of hooks) {
+    if (hook.condition && !(await hook.condition(ctx))) continue;
+    const effect = await hook.apply(ctx);
+    if (effect) {
+      yield {
+        type: 'hook',
+        hookId: hook.id,
+        summary: effect.summary,
+        data: effect.data,
+      };
+    }
+  }
+}
+
 export async function* runReactLoop(
   ctx: AgentRunContext,
 ): AsyncGenerator<RunEvent, void, void> {
@@ -24,6 +49,7 @@ export async function* runReactLoop(
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     ctx.signal.throwIfAborted();
+    yield* applyHooks(ctx, 'pre-llm');
 
     const iterMessages = await ctx.workingMemory.buildContext();
 
@@ -42,6 +68,7 @@ export async function* runReactLoop(
     }
 
     ctx.workingMemory.append(Role.ASSIST, content);
+    yield* applyHooks(ctx, 'post-llm');
 
     let parsed: ReActAction;
     try {
@@ -49,7 +76,7 @@ export async function* runReactLoop(
     } catch (error) {
       const observation = `Error parsing response: ${(error as Error)?.message ?? String(error)}`;
       ctx.workingMemory.append(Role.USER, `Observation: ${observation}`);
-      await ctx.workingMemory.compact(ctx.signal);
+      yield* applyHooks(ctx, 'post-observation');
       yield { type: 'loop_usage', ...ctx.workingMemory.getContextUsage() };
       continue;
     }
@@ -72,7 +99,7 @@ export async function* runReactLoop(
     }
 
     ctx.workingMemory.append(Role.USER, `Observation: ${observation}\n`);
-    await ctx.workingMemory.compact(ctx.signal);
+    yield* applyHooks(ctx, 'post-observation');
     yield { type: 'loop_usage', ...ctx.workingMemory.getContextUsage() };
   }
 

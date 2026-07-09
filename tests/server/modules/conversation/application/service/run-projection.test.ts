@@ -324,6 +324,35 @@ describe('projectRun', () => {
     expect(view.audio).toBeNull();
   });
 
+  it('accumulates hook effects into view.hooks', () => {
+    const view = projectRun([
+      ev({
+        type: 'hook',
+        hookId: 'compaction',
+        summary: 'compacted turn history',
+        data: { used: 5 },
+      }),
+      ev({
+        type: 'hook',
+        hookId: 'compaction',
+        summary: 'compacted turn history',
+        data: { used: 8 },
+      }),
+      ev({ type: 'final' }),
+    ]);
+    expect(view.hooks).toHaveLength(2);
+    expect(view.hooks[0]).toEqual({
+      hookId: 'compaction',
+      summary: 'compacted turn history',
+      data: { used: 5 },
+    });
+  });
+
+  it('defaults hooks to [] when absent', () => {
+    const view = projectRun([ev({ type: 'text_chunk', content: 'hi' })]);
+    expect(view.hooks).toEqual([]);
+  });
+
   it('reconstructs call_subagents child progress onto the step action', () => {
     // Parent folds its own tool_progress (child blobs) onto the call_subagents
     // step's action.progress — so historical read-back / snapshot replay show
@@ -437,6 +466,12 @@ describe('projectRun', () => {
       }),
       ev({ type: 'audio', filePath: 'a.mp3', voice: 'V' }),
       ev({ type: 'process_summary', summary: 'sum' }),
+      ev({
+        type: 'hook',
+        hookId: 'compaction',
+        summary: 'compacted',
+        data: { used: 3 },
+      }),
       ev({ type: 'final' }),
     ];
 
