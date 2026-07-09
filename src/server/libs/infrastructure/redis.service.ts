@@ -110,11 +110,12 @@ export class RedisService implements LifecycleHook {
   }
 
   async onShutdown(): Promise<void> {
-    if (this.connected) {
-      await this.redis.quit();
-      await this.redisSubscriber.quit();
-      this.connected = false;
-      this.logger.info('Redis connections closed');
-    }
+    if (!this.connected) return;
+    this.connected = false;
+    // client 可能已因异常断开（isOpen=false 而 connected 标志仍 true）——
+    // 按 isOpen 守，避免对已关 client quit 抛 "The client is closed"。
+    if (this.redis.isOpen) await this.redis.quit();
+    if (this.redisSubscriber.isOpen) await this.redisSubscriber.quit();
+    this.logger.info('Redis connections closed');
   }
 }
