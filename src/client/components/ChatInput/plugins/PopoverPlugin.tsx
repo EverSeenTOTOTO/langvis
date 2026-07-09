@@ -136,7 +136,13 @@ export const PopoverPlugin: React.FC<PopoverPluginProps> = ({
   // Close on scroll (the snapshot anchor would go stale) and on click-outside.
   useEffect(() => {
     if (!open) return;
-    const onScroll = () => close();
+    const onScroll = (e: Event) => {
+      // Ignore the popup's own list scroll — only external scrolls (page/chat)
+      // make the snapshot caret anchor stale and warrant closing.
+      const target = e.target as Element | null;
+      if (target && target.closest?.('.ant-popover')) return;
+      close();
+    };
     const onDocMouseDown = (e: MouseEvent) => {
       const root = editor.getRootElement();
       const target = e.target as Element | null;
