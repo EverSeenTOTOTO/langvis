@@ -1,100 +1,47 @@
 # Langvis
 
-A personal AI Agent platform with streaming conversation and document intelligence.
+A personal AI agent platform — streaming conversation, tool use, document intelligence, and voice, built around a resilient, event-sourced agent runtime.
 
 ## Highlights
 
-### AsyncGenerator Control Flow
+### Agent & conversation
 
-Agent execution uses native AsyncGenerator for fine-grained control:
+- **Tool-using agent** out of the box: web fetch, document archive & semantic search, Docker-sandboxed shell, file editing, sub-agent orchestration, and more.
+- **Skills system**: drop a markdown file under `skills/` to teach the agent a new workflow — ships with translate, mock interview, document archive, and others.
+- **Long-context memory**: a fold-based compaction model keeps conversations coherent well past the model's context window.
+- **Human in the loop**: structured forms (`ask_user`) let the agent pause and collect input mid-run.
+- **Voice**: text-to-speech and speech-to-text are first-class, so skills can speak their replies.
 
-```typescript
-// Agent yields events, tools yield results
-yield ctx.agentToolCallEvent(tool, input);
-const result = yield * tool.call(input, ctx);
-yield ctx.agentToolResultEvent(tool, result);
-```
+### Document intelligence
 
-**Benefits:**
+- Archive web pages and emails into a vector store (pgvector) with automatic metadata extraction, chunking, and embeddings — then retrieve them semantically.
 
-- Natural suspension points for each event
-- Built-in progress reporting via `yield`
-- Stack unwinding on abort/cancel
-- No callback hell or promise chaining
+### Under the hood
 
-### Lifecycle-Aware Abort Mechanism
+- **Event-sourced agent runs**: execution and read-side projection are cleanly separated, so the live stream, persistence, and resume all read from the same event log.
+- **CQRS layering**: handlers orchestrate one use case each; invariants live on aggregates, validation at the DTO boundary.
+- **Provider-agnostic LLM/cache ports**: swap models or cache backends without touching the agent core.
+- **Lifecycle-aware cancellation**: a single abort signal propagates from the UI, a client disconnect, or a timeout down to every tool, with stack unwinding at each yield point.
 
-Every execution context carries an `AbortController`:
+## Tech Stack
 
-```typescript
-// Anywhere in the execution chain
-ctx.abort('User cancelled');
-
-// Generator breaks at next yield point
-// Resources cleanup in finally block
-```
-
-**Propagation:**
-
-- Frontend → HTTP `/cancel` → `session.cancel()` → `ctx.abort()`
-- Client disconnect → SSE close event → `session.handleDisconnect()`
-- Timeout/background → direct `ctx.abort()`
-
-### Phase State Machine
-
-Both frontend and backend use explicit phase machines:
-
-```
-Backend Session:  waiting → running → done
-Frontend View:    idle → connecting → streaming → (final|error|cancelled)
-```
-
-Phase determines valid transitions and cancellation behavior:
-
-- `waiting`: SSE connected, no agent running → cleanup only
-- `running`: Agent active → abort + persist + cleanup
-- `done`: Terminal state → idempotent
-
-### Seamless Reconnection
-
-Agent execution is decoupled from SSE connection:
-
-```
-User refreshes page
-    │
-    ├─ SSE disconnects
-    │     └─ Agent continues, events persisted to DB
-    │
-    └─ Page loads
-          ├─ GET /session/:id → { phase: 'running' }
-          └─ Reconnect SSE, resume receiving events
-```
-
-Session state stored in Redis survives process restarts and supports cross-instance reconnection.
-
-## Prerequisites
-
-- Node.js 18+ or Bun
-- PostgreSQL 14+ with pgvector
-- Redis 6+
-- OpenAI API key
+- **Frontend**: React 18, Ant Design V6, Lexical editor, MobX, Vite
+- **Backend**: Express, TypeORM, PostgreSQL + pgvector, Redis
+- **LLM**: OpenAI-compatible API
+- **Tooling**: Bun, Make, Vitest
 
 ## Getting Started
+
+Prerequisites: Node.js 18+ or Bun, PostgreSQL 14+ with pgvector, Redis 6+, an OpenAI API key.
 
 ```bash
 bun install
 make prepare
-cp .env.example .env.development
-# Edit .env.development with your credentials
+cp .env.example .env.development   # then fill in your credentials
 make dev
 ```
 
-See `makefile` for all available commands.
-
-## Documentation
-
-- [Chat Architecture](docs/chat.md) — SSE streaming, agent execution, reconnection
-- [Human in the Loop](docs/human_in_the_loop.md) — Human in the loop
+See the `makefile` for all commands (`lint`, `test`, `build`, `start`).
 
 ## License
 
