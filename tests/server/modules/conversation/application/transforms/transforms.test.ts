@@ -43,10 +43,7 @@ function makeCtx(messages: Message[], contextSize = 10): ConversationContext {
   return {
     conversationId: 'conv_test',
     messages: ListMonad.of(messages),
-    contextSize,
-    compaction: COMPACTION,
-    signal: new AbortController().signal,
-    bakedRunIds: new Set(),
+    config: { contextSize, runtimeConfig: { history: COMPACTION } },
     transforms: new ConvTransformPlan(),
   };
 }
@@ -117,7 +114,6 @@ describe('SummaryBakeTransform', () => {
     await collect(new SummaryBakeTransform(agentRunRepo).apply(ctx));
     const assist = ctx.messages.get(1)!;
     expect(assist.content).toBe('<summary>did X then Y</summary>\n\na');
-    expect(ctx.bakedRunIds.has('run_1')).toBe(true);
     expect(agentRunRepo.findByIds).toHaveBeenCalledWith(['run_1']);
   });
 

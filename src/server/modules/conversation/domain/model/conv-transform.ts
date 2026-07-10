@@ -1,22 +1,19 @@
 import type { StreamFrame } from '@/shared/types/events';
 import type { Message } from '@/shared/types/entities';
 import { ListMonad } from '@/server/libs/list';
-import type { HistoryCompactionConfig } from '../../application/service/history-config.fragment';
+import type { ConversationConfig } from '../../contracts';
 
 export type ConvPhase = 'activated' | 'turn-start' | 'turn-end';
 
 /**
  * 会话运行时上下文——ConversationSession 满足此接口（session 即 ctx，无 wrapper 对象）。
  * 转换（transform）只经此窄接口访问会话状态，够不到 activeRuns/connection/dispose。
- * messages 可变（转换替换整个值=改）；其余为只读配置/派生。
+ * messages 可变（转换替换整个值=改）；config/transforms 为激活时灌入的只读快照。
  */
 export interface ConversationContext {
   readonly conversationId: string;
   messages: ListMonad<Message>;
-  readonly contextSize: number;
-  readonly compaction: HistoryCompactionConfig;
-  readonly signal: AbortSignal;
-  bakedRunIds: Set<string>;
+  readonly config: ConversationConfig;
   readonly transforms: ConvTransformPlan;
 }
 

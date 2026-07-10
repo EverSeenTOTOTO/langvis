@@ -10,6 +10,8 @@ import type {
 import Logger from '@/server/utils/logger';
 import { convTransform } from './registry';
 
+const SUMMARY_PREFIX = '<summary>';
+
 @singleton()
 @convTransform
 export class SummaryBakeTransform implements ConvTransform {
@@ -23,40 +25,37 @@ export class SummaryBakeTransform implements ConvTransform {
   ) {}
 
   async *apply(ctx: ConversationContext): AsyncGenerator<void> {
-    const unbaked = ctx.messages
+    const candidates = ctx.messages
       .toArray()
       .filter(
         m =>
           m.role === Role.ASSIST &&
           m.agentRunId &&
-          !ctx.bakedRunIds.has(m.agentRunId),
+          !m.content.startsWith(SUMMARY_PREFIX),
       );
-    if (unbaked.length === 0) return;
+    if (candidates.length === 0) return;
 
-    const runIds = [...new Set(unbaked.map(m => m.agentRunId!))];
+    const runIds = [...new Set(candidates.map(m => m.agentRunId!))];
     const runs = await this.agentRunRepo.findByIds(runIds);
     const summaries = new Map<string, string>();
     for (const run of runs) {
       if (run.processSummary) summaries.set(run.id, run.processSummary);
     }
+    if (summaries.size === 0) return;
 
     let baked = 0;
     ctx.messages = ctx.messages.map(msg => {
       if (
         msg.role !== Role.ASSIST ||
         !msg.agentRunId ||
-        ctx.bakedRunIds.has(msg.agentRunId)
+        msg.content.startsWith(SUMMARY_PREFIX)
       ) {
         return msg;
       }
-      ctx.bakedRunIds.add(msg.agentRunId);
       const ps = summaries.get(msg.agentRunId);
       if (!ps) return msg;
       baked++;
-      return {
-        ...msg,
-        content: `<summary>${ps}</summary>\n\n${msg.content}`,
-      };
+      return { ...msg, content: `<summary>${ps}</summary>\n\n${msg.content}` };
     });
 
     if (baked > 0) {

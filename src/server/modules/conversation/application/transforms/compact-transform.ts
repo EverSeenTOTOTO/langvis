@@ -12,6 +12,7 @@ import {
   toLlmMessages,
 } from '@/server/modules/conversation/domain/model/history-projection';
 import { HISTORY_PROMPT } from '@/server/modules/conversation/domain/model/conversation-memory';
+import type { HistoryCompactionConfig } from '@/server/modules/conversation/application/service/history-config.fragment';
 import { fold } from '@/server/libs/compaction';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import Logger from '@/server/utils/logger';
@@ -30,7 +31,9 @@ export class CompactTransform implements ConvTransform {
   ) {}
 
   async *apply(ctx: ConversationContext): AsyncGenerator<void> {
-    if (!ctx.contextSize) return;
+    const { contextSize, runtimeConfig } = ctx.config;
+    if (!contextSize) return;
+    const compaction = (runtimeConfig as { history: HistoryCompactionConfig }).history;
 
     const history = ctx.messages.toArray();
     const { summary, index } = findLatestCompactionSummary(history);
@@ -39,10 +42,10 @@ export class CompactTransform implements ConvTransform {
 
     const effective = summary ? [summary, ...tail] : tail;
     const used = estimateTokens(toLlmMessages(effective));
-    if (used <= ctx.contextSize * ctx.compaction.threshold) return;
+    if (used <= contextSize * compaction.threshold) return;
 
     this.logger.info(
-      `History over threshold (${used}/${ctx.contextSize}, ${(ctx.compaction.threshold * 100).toFixed(0)}%) — compacting ${tail.length} messages`,
+      `History over threshold (${used}/${contextSize}, ${(compaction.threshold * 100).toFixed(0)}%) — compacting ${tail.length} messages`,
     );
 
     const tailMessages = toLlmMessages(tail);
@@ -51,8 +54,8 @@ export class CompactTransform implements ConvTransform {
       : tailMessages;
     const content = await fold({
       messages,
-      windowSize: ctx.compaction.windowSize,
-      signal: ctx.signal,
+      windowSize: compaction.windowSize,
+      signal: new AbortController().signal,
       prompt: HISTORY_PROMPT,
     });
     if (!content) return;
@@ -75,3 +78,4 @@ export class CompactTransform implements ConvTransform {
     );
   }
 }
+

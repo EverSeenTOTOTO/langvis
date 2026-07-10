@@ -13,8 +13,9 @@ import { ChatService } from './chat.service';
 import { ConversationSession } from './conversation-session';
 import type {
   ConversationMemory,
-  ConversationMemoryConfig,
 } from '../../domain/model/conversation-memory';
+import type { ConversationConfig } from '../../contracts';
+import type { ConversationContext } from '../../domain/model/conv-transform';
 import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
 
@@ -181,7 +182,7 @@ export class SessionManager implements LifecycleHook {
   activateMemory(
     conversationId: string,
     messages: Message[],
-    config: ConversationMemoryConfig,
+    config: ConversationConfig,
   ): void {
     this.getOrCreate(conversationId).activateMemory(messages, config);
   }
@@ -192,6 +193,45 @@ export class SessionManager implements LifecycleHook {
       throw new Error(`ConversationMemory: ${conversationId} not activated`);
     }
     return session.getMemory();
+  }
+
+  /** 会话上下文激活（新路径：messages 上 session + 解析 transform 管道）。 */
+  activateContext(
+    conversationId: string,
+    messages: Message[],
+    config: ConversationConfig,
+  ): void {
+    this.getOrCreate(conversationId).activateContext(messages, config);
+  }
+
+  hasCtx(conversationId: string): boolean {
+    return this.sessions.get(conversationId)?.hasCtx() ?? false;
+  }
+
+  getCtx(conversationId: string): ConversationContext {
+    const session = this.sessions.get(conversationId);
+    if (!session?.hasCtx()) {
+      throw new Error(`ConversationContext: ${conversationId} not activated`);
+    }
+    return session.getCtx();
+  }
+
+  flushRunView(conversationId: string, messageId: string): void {
+    this.sessions.get(conversationId)?.flushRunView(messageId);
+  }
+
+  beginMaintenance(conversationId: string): void {
+    this.sessions.get(conversationId)?.beginMaintenance();
+  }
+
+  endMaintenance(conversationId: string): void {
+    this.sessions.get(conversationId)?.endMaintenance();
+  }
+
+  awaitMaintenance(conversationId: string): Promise<void> {
+    return (
+      this.sessions.get(conversationId)?.awaitMaintenance() ?? Promise.resolve()
+    );
   }
 
   /**
