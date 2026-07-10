@@ -14,12 +14,6 @@ import {
   computeContextUsage,
 } from './history-projection';
 
-/** 会话记忆激活配置（激活时灌入，ConversationSession 持有）。 */
-export interface ConversationMemoryConfig {
-  contextSize: number;
-  runtimeConfig: Record<string, unknown>;
-}
-
 /** 历史压缩（fold）产物：新 C 载荷 + 压缩后用量。 */
 export interface ConversationCompactionResult {
   content: string;

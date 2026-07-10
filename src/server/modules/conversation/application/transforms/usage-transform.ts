@@ -19,7 +19,7 @@ export class UsageTransform implements ConvTransform {
   async *apply(ctx: ConversationContext): AsyncGenerator<StreamFrame | void> {
     const { used, total } = computeContextUsage(
       ctx.messages.toArray(),
-      ctx.contextSize,
+      ctx.config.contextSize,
     );
     this.logger.debug(
       `conversation_usage (conv ${ctx.conversationId}): used=${used} total=${total}`,

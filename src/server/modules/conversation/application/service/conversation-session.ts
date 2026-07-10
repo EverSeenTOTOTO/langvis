@@ -7,12 +7,16 @@ import {
   extractChildEvents,
   type RunView,
 } from '@/server/modules/conversation/application/service/run-projection';
-import {
-  ConversationMemory,
-  type ConversationMemoryConfig,
-} from '../../domain/model/conversation-memory';
+import { ConversationMemory } from '../../domain/model/conversation-memory';
+import type { ConversationConfig } from '../../contracts';
 import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
+import { ListMonad } from '@/server/libs/list';
+import {
+  ConvTransformPlan,
+  type ConversationContext,
+} from '../../domain/model/conv-transform';
+import { resolveConvTransforms } from '../transforms';
 
 /** 活跃 run 的会话内追踪——持 runId + 事件缓冲 + 增量投影视图。 */
 interface ActiveRun {
@@ -34,6 +38,12 @@ export class ConversationSession {
   private connection: Connection | undefined;
   private readonly activeRuns = new Map<string, ActiveRun>();
   private memory: ConversationMemory | undefined;
+  private messages: ListMonad<Message> | undefined;
+  private config: ConversationConfig | undefined;
+  private transforms: ConvTransformPlan | undefined;
+  private maintenance:
+    | { promise: Promise<void>; resolve: () => void }
+    | undefined;
 
   constructor(
     readonly conversationId: string,
@@ -60,8 +70,8 @@ export class ConversationSession {
           this.connection = undefined;
           this.onConnectionLost();
         },
-        // 有活跃 run 时拒绝 idle 释放——避免在 run 执行中清掉事件缓冲/记忆导致 run 孤儿化。
-        () => this.activeRuns.size === 0,
+        // 有活跃 run 或在飞维护时拒绝 idle 释放——避免清掉事件缓冲/上下文/压缩导致孤儿化。
+        () => this.activeRuns.size === 0 && !this.maintenance,
       );
     }
     this.connection.attach(transport);
@@ -170,7 +180,7 @@ export class ConversationSession {
 
   /** Send the current run.view as a run_view frame. No-op if the run was removed
    * (a coalesced timer may fire after removeRun). Clears any pending timer. */
-  private flushRunView(messageId: string): void {
+  flushRunView(messageId: string): void {
     const run = this.activeRuns.get(messageId);
     if (!run) return;
     if (run.flushTimer) {
@@ -202,7 +212,7 @@ export class ConversationSession {
   }
 
   /** 激活：灌入当前消息 + 配置构造会话记忆投影。 */
-  activateMemory(messages: Message[], config: ConversationMemoryConfig): void {
+  activateMemory(messages: Message[], config: ConversationConfig): void {
     this.memory = new ConversationMemory({
       history: messages,
       contextSize: config.contextSize,
@@ -223,7 +233,48 @@ export class ConversationSession {
     return this.memory;
   }
 
+  /** 激活会话上下文：messages 上 session，灌入解析后的配置 + 解析 transform 管道。 */
+  activateContext(messages: Message[], config: ConversationConfig): void {
+    this.messages = ListMonad.of(messages);
+    this.config = config;
+    this.transforms = new ConvTransformPlan(resolveConvTransforms());
+  }
+
+  hasCtx(): boolean {
+    return this.config !== undefined;
+  }
+
+  /** session 即 ctx：返回 this 经窄接口 ConversationContext（转换只够到 messages/config/transforms）。 */
+  getCtx(): ConversationContext {
+    if (!this.config || !this.messages || !this.transforms) {
+      throw new Error(
+        `ConversationContext: ${this.conversationId} not activated (activateContext missing)`,
+      );
+    }
+    return this as unknown as ConversationContext;
+  }
+
+  /** turn-end 维护屏障：begin 在终态帧前、end 在维护完成后；
+   *  awaitMaintenance 供 turn-start 等待在飞维护（永不 reject）。 */
+  beginMaintenance(): void {
+    let resolve!: () => void;
+    const promise = new Promise<void>(r => {
+      resolve = r;
+    });
+    this.maintenance = { promise, resolve };
+  }
+
+  endMaintenance(): void {
+    this.maintenance?.resolve();
+    this.maintenance = undefined;
+  }
+
+  awaitMaintenance(): Promise<void> {
+    return (this.maintenance?.promise ?? Promise.resolve()).catch(() => {});
+  }
+
   dispose(): void {
+    this.endMaintenance();
     for (const run of this.activeRuns.values()) {
       if (run.flushTimer) clearTimeout(run.flushTimer);
     }
@@ -231,5 +282,8 @@ export class ConversationSession {
     this.connection = undefined;
     this.activeRuns.clear();
     this.memory = undefined;
+    this.messages = undefined;
+    this.config = undefined;
+    this.transforms = undefined;
   }
 }
