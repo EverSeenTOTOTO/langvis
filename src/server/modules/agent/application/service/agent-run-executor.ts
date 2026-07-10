@@ -12,7 +12,7 @@ import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { generateId } from '@/shared/utils';
 import type { LlmMessage } from '@/shared/types/entities';
-import { WorkingMemory } from '@/server/modules/agent/domain/model/working-memory';
+import { ListMonad } from '@/server/libs/list';
 import { HookPlan } from '@/server/modules/agent/domain/model/hook';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
@@ -77,11 +77,6 @@ export class AgentRunExecutor {
 
     const run = new AgentRun(params.runId, config);
 
-    const workingMemory = new WorkingMemory({
-      seed: params.seed,
-      contextSize: config.contextSize,
-    });
-
     const ctx: AgentRunContext = {
       run,
       config,
@@ -90,7 +85,8 @@ export class AgentRunExecutor {
       signal: run.signal,
       llm: this.llm,
       cache: this.cache,
-      workingMemory,
+      messages: ListMonad.of(params.seed),
+      base: params.seed.length,
       hooks: new HookPlan(resolveAgentHooks()),
       executeTool: (toolName, args) =>
         this.executeTool(toolName, args, params.toolSet, {

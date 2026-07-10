@@ -1,17 +1,23 @@
+import { ListMonad } from '@/server/libs/list';
+
 export interface Section {
   name: string;
   content: string;
 }
 
 export class Prompt {
-  private constructor(private readonly sections: readonly Section[]) {}
+  private constructor(private readonly sections: ListMonad<Section>) {}
 
   static empty(): Prompt {
-    return new Prompt([]);
+    return new Prompt(ListMonad.of([]));
+  }
+
+  static of(sections: Section[]): Prompt {
+    return new Prompt(ListMonad.of(sections));
   }
 
   concat(other: Prompt): Prompt {
-    return new Prompt([...this.sections, ...other.sections]);
+    return new Prompt(this.sections.concat(other.sections));
   }
 
   map(f: (s: Section) => Section): Prompt {
@@ -19,15 +25,11 @@ export class Prompt {
   }
 
   chain(f: (sections: readonly Section[]) => Prompt): Prompt {
-    return f(this.sections);
-  }
-
-  static of(sections: Section[]): Prompt {
-    return new Prompt(sections);
+    return f(this.sections.toArray());
   }
 
   reduce<T>(f: (acc: T, s: Section) => T, initial: T): T {
-    return this.sections.reduce(f, initial);
+    return this.sections.fold(initial, f);
   }
 
   with(name: string, content: string): Prompt {
@@ -44,10 +46,10 @@ export class Prompt {
   insertAfter(after: string, name: string, content: string): Prompt {
     if (!this.has(after)) return this.with(name, content);
     return new Prompt(
-      this.sections.reduce<Section[]>(
-        (acc, s) =>
-          s.name === after ? [...acc, s, { name, content }] : [...acc, s],
-        [],
+      this.sections.flatMap(s =>
+        s.name === after
+          ? ListMonad.of<Section>([s, { name, content }])
+          : ListMonad.of([s]),
       ),
     );
   }
@@ -55,20 +57,20 @@ export class Prompt {
   insertBefore(before: string, name: string, content: string): Prompt {
     if (!this.has(before)) return this.with(name, content);
     return new Prompt(
-      this.sections.reduce<Section[]>(
-        (acc, s) =>
-          s.name === before ? [...acc, { name, content }, s] : [...acc, s],
-        [],
+      this.sections.flatMap(s =>
+        s.name === before
+          ? ListMonad.of<Section>([{ name, content }, s])
+          : ListMonad.of([s]),
       ),
     );
   }
 
   get(name: string): Section | undefined {
-    return this.sections.find(s => s.name === name);
+    return this.sections.toArray().find(s => s.name === name);
   }
 
   has(name: string): boolean {
-    return this.sections.some(s => s.name === name);
+    return this.sections.toArray().some(s => s.name === name);
   }
 
   build(): string {

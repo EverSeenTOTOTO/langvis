@@ -4,7 +4,7 @@ import { estimateTokens } from '@/server/utils/estimateTokens';
 import type { ContextUsage } from '@/server/utils/estimateTokens';
 import type { HistoryCompactionConfig } from '../../application/service/history-config.fragment';
 import { fold } from '@/server/libs/compaction';
-import { MessageList } from '@/server/libs/messages';
+import { ListMonad } from '@/server/libs/list';
 import { Prompt } from '@/server/libs/prompt';
 import { winstonLogger } from '@/server/utils/logger';
 
@@ -22,16 +22,16 @@ export interface ConversationCompactionResult {
 }
 
 /**
- * 会话的持久消息模型（ConversationSession 成员实体，贫血：状态 MessageList monad + 编排接缝）。
+ * 会话的持久消息模型（ConversationSession 成员实体，贫血：状态 ListMonad monad + 编排接缝）。
  * 有效历史 = [最新压缩摘要 C, 其后 turn]；不做硬截断。用量与 buildContext 同口径。
  *
  * processSummary 不再放 message.meta：它是 run-scoped 派生属性，存 AgentRun.processSummary；
  * buildContext 的消费者 transform 按 assistant 消息的 agentRunId 取回、前缀 <summary>（富在 join 端）。
- * 自维护历史压缩（fold 原语来自 libs/compaction，与 agent 的 WorkingMemory 同机制），
+ * 自维护历史压缩（fold 原语来自 libs/compaction，与 agent 侧同机制），
  * 返回载荷不含持久化——落盘 compact 消息是 CompleteTurnHandler 的职责，避免反向依赖 message repo。
  */
 export class ConversationMemory {
-  protected history: MessageList<Message>;
+  protected history: ListMonad<Message>;
   protected readonly contextSize: number;
   protected readonly compaction: HistoryCompactionConfig;
   private readonly logger = winstonLogger.child({
@@ -43,7 +43,7 @@ export class ConversationMemory {
     contextSize: number;
     runtimeConfig: Record<string, unknown>;
   }) {
-    this.history = MessageList.of(params.history);
+    this.history = ListMonad.of(params.history);
     this.contextSize = params.contextSize;
     this.compaction = (
       params.runtimeConfig as { history: HistoryCompactionConfig }

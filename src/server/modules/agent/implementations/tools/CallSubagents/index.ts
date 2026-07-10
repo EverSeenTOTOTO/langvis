@@ -22,8 +22,7 @@ import type {
 /**
  * CallSubagents —— 主 agent 并发派生子 agent 的工具。
  *
- * 每个子 agent 是一次完整的、对话无关的 run（经 Launcher 启动）：自己的 ReAct 循环、自己的
- * WorkingMemory、跑到 response_user 终态。子事件以父级 tool_progress 转发（不污染父步骤投影），
+ * 每个子 agent 是一次完整的、对话无关的 run（经 Launcher 启动）：自己的 ReAct 循环、跑到 response_user 终态。子事件以父级 tool_progress 转发（不污染父步骤投影），
  * 全部结束后（allSettled）收集各子终态返回。
  *
  * 子 ToolSet = 默认全集 ∖ {call_subagents, ask_user}：禁嵌套、禁 HITL（HITL 以 runId 为键，
