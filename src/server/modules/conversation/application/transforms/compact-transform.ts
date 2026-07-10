@@ -1,0 +1,77 @@
+import { singleton, inject } from 'tsyringe';
+import { Role } from '@/shared/entities/Message';
+import { MESSAGE_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
+import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
+import type {
+  ConversationContext,
+  ConvPhase,
+  ConvTransform,
+} from '@/server/modules/conversation/domain/model/conv-transform';
+import {
+  findLatestCompactionSummary,
+  toLlmMessages,
+} from '@/server/modules/conversation/domain/model/history-projection';
+import { HISTORY_PROMPT } from '@/server/modules/conversation/domain/model/conversation-memory';
+import { fold } from '@/server/libs/compaction';
+import { estimateTokens } from '@/server/utils/estimateTokens';
+import Logger from '@/server/utils/logger';
+import { convTransform } from './registry';
+
+@singleton()
+@convTransform
+export class CompactTransform implements ConvTransform {
+  readonly id = 'compact';
+  readonly phase: ConvPhase = 'turn-end';
+  private readonly logger = Logger.child({ source: 'CompactTransform' });
+
+  constructor(
+    @inject(MESSAGE_REPOSITORY)
+    private readonly messageRepo: MessageRepositoryPort,
+  ) {}
+
+  async *apply(ctx: ConversationContext): AsyncGenerator<void> {
+    if (!ctx.contextSize) return;
+
+    const history = ctx.messages.toArray();
+    const { summary, index } = findLatestCompactionSummary(history);
+    const tail = summary ? history.slice(index + 1) : history;
+    if (tail.length === 0) return;
+
+    const effective = summary ? [summary, ...tail] : tail;
+    const used = estimateTokens(toLlmMessages(effective));
+    if (used <= ctx.contextSize * ctx.compaction.threshold) return;
+
+    this.logger.info(
+      `History over threshold (${used}/${ctx.contextSize}, ${(ctx.compaction.threshold * 100).toFixed(0)}%) — compacting ${tail.length} messages`,
+    );
+
+    const tailMessages = toLlmMessages(tail);
+    const messages = summary
+      ? [{ role: 'user' as const, content: summary.content }, ...tailMessages]
+      : tailMessages;
+    const content = await fold({
+      messages,
+      windowSize: ctx.compaction.windowSize,
+      signal: ctx.signal,
+      prompt: HISTORY_PROMPT,
+    });
+    if (!content) return;
+
+    const startRef = summary?.id ?? history[0]?.id ?? '';
+    const [compactMessage] = await this.messageRepo.batchCreate(
+      ctx.conversationId,
+      [
+        {
+          role: Role.USER,
+          content,
+          meta: { kind: 'compact', startRef },
+          createdAt: new Date(),
+        },
+      ],
+    );
+    ctx.messages = ctx.messages.append(compactMessage);
+    this.logger.info(
+      `compacted (conv ${ctx.conversationId}): ${history.length}→${ctx.messages.length} msgs`,
+    );
+  }
+}

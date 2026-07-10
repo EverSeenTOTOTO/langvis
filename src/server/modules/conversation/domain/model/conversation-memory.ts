@@ -137,7 +137,7 @@ export class ConversationMemory {
   }
 }
 
-const HISTORY_PROMPT = Prompt.empty()
+export const HISTORY_PROMPT = Prompt.empty()
   .with('Role', 'You are a conversation compactor.')
   .with(
     'Instructions',

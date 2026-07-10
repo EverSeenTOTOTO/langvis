@@ -29,3 +29,4 @@ import './application/event/run-started.handler';
 import './application/event/run-event.handler';
 import './application/event/complete-turn.handler';
 import './application/service/orphan-run-reconciler';
+import './application/transforms';
