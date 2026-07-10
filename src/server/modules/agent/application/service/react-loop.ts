@@ -17,10 +17,6 @@ type ReActAction = {
   input: Record<string, unknown>;
 };
 
-/**
- * 在 loop 边界依次跑该相位的 hook。管道为空（ctx.hooks 缺省）时 no-op、不发事件。
- * hook 经 ctx.workingMemory 调整上下文（与 compact 同途径）。
- */
 async function* applyHooks(
   ctx: AgentRunContext,
   phase: HookPhase,
@@ -28,15 +24,8 @@ async function* applyHooks(
   const hooks = ctx.hooks?.forPhase(phase);
   if (!hooks) return;
   for (const hook of hooks) {
-    const effect = await hook.apply(ctx);
-    if (effect) {
-      yield {
-        type: 'hook',
-        hookId: hook.id,
-        summary: effect.summary,
-        data: effect.data,
-      };
-    }
+    logger.debug(`hook ${hook.id} @ ${phase} (run ${ctx.runId})`);
+    yield* hook.apply(ctx);
   }
 }
 
@@ -50,7 +39,7 @@ export async function* runReactLoop(
     ctx.signal.throwIfAborted();
     yield* applyHooks(ctx, 'pre-llm');
 
-    const iterMessages = await ctx.workingMemory.buildContext();
+    const iterMessages = ctx.messages.toArray();
 
     const content = await ctx.llm.chatContent(
       model.modelId,
@@ -66,17 +55,21 @@ export async function* runReactLoop(
       throw new Error('No response from model');
     }
 
-    ctx.workingMemory.append(Role.ASSIST, content);
+    ctx.messages = ctx.messages.append({ role: Role.ASSIST, content });
+
     yield* applyHooks(ctx, 'post-llm');
 
     let parsed: ReActAction;
     try {
       parsed = parseResponse(content);
     } catch (error) {
-      const observation = `Error parsing response: ${(error as Error)?.message ?? String(error)}`;
-      ctx.workingMemory.append(Role.USER, `Observation: ${observation}`);
+      ctx.messages = ctx.messages.append({
+        role: Role.USER,
+        content: `Observation: Error parsing response: ${(error as Error)?.message ?? String(error)}`,
+      });
+
       yield* applyHooks(ctx, 'post-observation');
-      yield { type: 'loop_usage', ...ctx.workingMemory.getContextUsage() };
+
       continue;
     }
 
@@ -90,15 +83,17 @@ export async function* runReactLoop(
 
     const observation = yield* ctx.executeTool(tool, input);
 
-    // response_user 是终态工具（交付最终结果后结束本轮）。loop-exit hook（如过程摘要生产者）在此跑。
     if (tool === ToolIds.RESPONSE_USER) {
       yield* applyHooks(ctx, 'loop-exit');
       return;
     }
 
-    ctx.workingMemory.append(Role.USER, `Observation: ${observation}\n`);
+    ctx.messages = ctx.messages.append({
+      role: Role.USER,
+      content: `Observation: ${observation}\n`,
+    });
+
     yield* applyHooks(ctx, 'post-observation');
-    yield { type: 'loop_usage', ...ctx.workingMemory.getContextUsage() };
   }
 
   throw new Error('Max iterations reached');

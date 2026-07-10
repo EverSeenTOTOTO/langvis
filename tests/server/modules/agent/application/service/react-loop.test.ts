@@ -7,7 +7,7 @@ import {
 } from '@/server/modules/agent/application/service/react-loop';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
-import { WorkingMemory } from '@/server/modules/agent/domain/model/working-memory';
+import { ListMonad } from '@/server/libs/list';
 import { HookPlan, type Hook } from '@/server/modules/agent/domain/model/hook';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
@@ -163,7 +163,7 @@ function scriptedLlm(responses: string[]): ScriptedLlm {
 }
 
 /**
- * Deterministic `LlmProvider` registered at `LLM_PORT` so `WorkingMemory`'s `Summarizer`
+ * Deterministic `LlmProvider` registered at `LLM_PORT` so the fold's `Summarizer`
  * (which `container.resolve`s it per fold) never hits a real model and never consumes the
  * loop's scripted responses. Implements `getDefaultModel` because `Summarizer` calls it.
  */
@@ -223,10 +223,9 @@ interface BuiltCtx {
   ctx: AgentRunContext;
   run: AgentRun;
   calls: { messages: LlmMessage[] }[];
-  workingMemory: WorkingMemory;
 }
 
-/** Assemble a real `AgentRunContext` (real `AgentRun`/`RuntimeConfigVO`/`WorkingMemory`) minus
+/** Assemble a real `AgentRunContext` (real `AgentRun`/`RuntimeConfigVO`) minus
  * the LLM (scripted) and the tool path (faked) — enough to drive the real `runReactLoop`. */
 function buildCtx(opts: BuildCtxOptions): BuiltCtx {
   const { llm, calls } = scriptedLlm(opts.responses);
@@ -241,10 +240,7 @@ function buildCtx(opts: BuildCtxOptions): BuiltCtx {
     },
   });
   const run = new AgentRun('run_1', config);
-  const workingMemory = new WorkingMemory({
-    seed: opts.seed ?? [{ role: 'user', content: 'do the task' }],
-    contextSize,
-  });
+  const seed = opts.seed ?? [{ role: 'user', content: 'do the task' }];
   const ctx: AgentRunContext = {
     run,
     config,
@@ -253,11 +249,12 @@ function buildCtx(opts: BuildCtxOptions): BuiltCtx {
     signal: opts.controller?.signal ?? run.signal,
     llm,
     cache: makeMockCache(),
-    workingMemory,
+    messages: ListMonad.of(seed),
+    base: seed.length,
     hooks: opts.hooks ?? new HookPlan(resolveAgentHooks()),
     executeTool: fakeExecuteTool(opts.handler),
   };
-  return { ctx, run, calls, workingMemory };
+  return { ctx, run, calls };
 }
 
 async function collect(gen: AsyncGenerator<RunEvent>): Promise<RunEvent[]> {
@@ -553,10 +550,13 @@ describe('runReactLoop', () => {
 
   describe('HookPipeline', () => {
     it('在 post-observation 边界 apply hook；终态 response_user 不触发', async () => {
+      let spyCalls = 0;
       const spyHook: Hook = {
         id: 'spy',
         phase: 'post-observation',
-        apply: vi.fn(async (_ctx: AgentRunContext) => null),
+        apply: async function* (_ctx: AgentRunContext) {
+          spyCalls++;
+        },
       };
       const { ctx } = buildCtx({
         responses: [call('t1'), responseUser('done')],
@@ -567,7 +567,7 @@ describe('runReactLoop', () => {
       await collect(runReactLoop(ctx));
 
       // t1 迭代 append observation → 触发一次；response_user 终态无 observation → 不触发
-      expect(spyHook.apply).toHaveBeenCalledTimes(1);
+      expect(spyCalls).toBe(1);
     });
 
     it('hook 返回 effect 时 yield hook 事件', async () => {
@@ -578,7 +578,14 @@ describe('runReactLoop', () => {
           {
             id: 'effect-hook',
             phase: 'post-observation',
-            apply: async () => ({ summary: 'did something', data: { x: 1 } }),
+            apply: async function* () {
+              yield {
+                type: 'hook',
+                hookId: 'effect-hook',
+                summary: 'did something',
+                data: { x: 1 },
+              };
+            },
           },
         ]),
       });
