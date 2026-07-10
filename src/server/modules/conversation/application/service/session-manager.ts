@@ -11,9 +11,7 @@ import { EventBus, createDomainEvent } from '@/server/libs/ddd';
 import { CancelRun } from '@/server/modules/agent/contracts';
 import { ChatService } from './chat.service';
 import { ConversationSession } from './conversation-session';
-import type {
-  ConversationMemory,
-} from '../../domain/model/conversation-memory';
+import type { ConversationMemory } from '../../domain/model/conversation-memory';
 import type { ConversationConfig } from '../../contracts';
 import type { ConversationContext } from '../../domain/model/conv-transform';
 import type { Message } from '@/shared/types/entities';

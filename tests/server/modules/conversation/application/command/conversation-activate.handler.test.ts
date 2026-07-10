@@ -16,7 +16,14 @@ const stubAgentService = {
   getSystemPrompt: vi.fn(() => Promise.resolve('')),
 };
 const stubSessionManager = {
-  activateMemory: vi.fn(),
+  activateContext: vi.fn(),
+  getCtx: vi.fn(() => ({
+    conversationId: 'conv_1',
+    messages: { toArray: () => [] },
+    config: { contextSize: 8000, runtimeConfig: {} },
+    transforms: { forPhase: () => [] },
+  })),
+  sendFrame: vi.fn(),
 } as unknown as SessionManager;
 
 function makeHandler() {
@@ -41,7 +48,7 @@ describe('ConversationActivateHandler', () => {
     expect(stubChatService.activate).not.toHaveBeenCalled();
   });
 
-  it('requireConversation 通过后:activate + 预热会话记忆', async () => {
+  it('requireConversation 通过后:activate + 激活会话上下文 + 跑 activated transform', async () => {
     stubChatService.requireConversation.mockResolvedValueOnce(undefined);
     stubChatService.resolveConversationConfig.mockResolvedValueOnce({
       contextSize: 8000,
@@ -58,17 +65,22 @@ describe('ConversationActivateHandler', () => {
     expect(stubChatService.activate).toHaveBeenCalledWith(
       expect.objectContaining({ conversationId: 'conv_1', userId: 'user_1' }),
     );
-    expect(stubSessionManager.activateMemory).toHaveBeenCalled();
+    expect(stubSessionManager.activateContext).toHaveBeenCalledWith(
+      'conv_1',
+      [],
+      { contextSize: 8000, runtimeConfig: {} },
+    );
+    expect(stubSessionManager.getCtx).toHaveBeenCalledWith('conv_1');
   });
 
-  it('config 为 null 时不预热记忆', async () => {
+  it('config 为 null 时不激活上下文', async () => {
     stubChatService.requireConversation.mockResolvedValueOnce(undefined);
     stubChatService.resolveConversationConfig.mockResolvedValueOnce(null);
-    (stubSessionManager.activateMemory as any).mockClear();
+    (stubSessionManager.activateContext as any).mockClear();
     const handler = makeHandler();
 
     await handler.execute(new ConversationActivateCommand('conv_1', 'user_1'));
 
-    expect(stubSessionManager.activateMemory).not.toHaveBeenCalled();
+    expect(stubSessionManager.activateContext).not.toHaveBeenCalled();
   });
 });
