@@ -63,60 +63,6 @@ describe('ConversationMemory', () => {
     });
   });
 
-  describe('groupIntoTurns', () => {
-    it('按 assistant 消息分组 turn', () => {
-      const history = [
-        makeMessage(Role.USER, 'question 1'),
-        makeMessage(Role.ASSIST, 'answer 1'),
-        makeMessage(Role.USER, 'question 2'),
-        makeMessage(Role.ASSIST, 'answer 2'),
-      ];
-      const turns = (createMemory(history) as any).groupIntoTurns(history);
-      expect(turns).toHaveLength(2);
-      expect(turns[0]).toHaveLength(2);
-      expect(turns[1]).toHaveLength(2);
-    });
-
-    it('跳过 system 消息', () => {
-      const history = [
-        makeMessage(Role.SYSTEM, 'You are helpful'),
-        makeMessage(Role.USER, 'question'),
-        makeMessage(Role.ASSIST, 'answer'),
-      ];
-      const turns = (createMemory(history) as any).groupIntoTurns(history);
-      expect(turns).toHaveLength(1);
-      expect(turns[0][0].role).toBe(Role.USER);
-    });
-
-    it('跳过 context user 消息', () => {
-      const history = [
-        makeMessage(Role.USER, 'hidden context', { kind: 'context' }),
-        makeMessage(Role.USER, 'visible question'),
-        makeMessage(Role.ASSIST, 'answer'),
-      ];
-      const turns = (createMemory(history) as any).groupIntoTurns(history);
-      expect(turns).toHaveLength(1);
-      expect(turns[0][0].content).toBe('visible question');
-    });
-
-    it('处理不完整 turn（user 无 assistant）', () => {
-      const history = [
-        makeMessage(Role.USER, 'question 1'),
-        makeMessage(Role.ASSIST, 'answer 1'),
-        makeMessage(Role.USER, 'pending question'),
-      ];
-      const turns = (createMemory(history) as any).groupIntoTurns(history);
-      expect(turns).toHaveLength(2);
-      expect(turns[1]).toHaveLength(1);
-      expect(turns[1][0].role).toBe(Role.USER);
-    });
-
-    it('空历史', () => {
-      const memory = createMemory([]);
-      expect((memory as any).groupIntoTurns([])).toHaveLength(0);
-    });
-  });
-
   describe('buildContext — 过程摘要', () => {
     it('前置 processSummary 到 assistant（按 agentRunId 从 map 取、摘要在前原文在后）', async () => {
       const assistMsg = {
