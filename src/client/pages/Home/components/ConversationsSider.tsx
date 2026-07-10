@@ -11,6 +11,7 @@ import {
   MenuUnfoldOutlined,
   MessageOutlined,
   PlusOutlined,
+  SelectOutlined,
 } from '@ant-design/icons';
 import {
   App,
@@ -191,6 +192,12 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
 
               const convMenuItems: MenuProps['items'] = [
                 {
+                  key: 'open-in-new-tab',
+                  icon: <SelectOutlined />,
+                  label: settingStore.tr('Open in new tab'),
+                  onClick: () => handleOpenInNewTab(conv.id),
+                },
+                {
                   key: 'edit',
                   icon: <EditOutlined />,
                   label: settingStore.tr('Edit'),
@@ -251,6 +258,12 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
       };
     });
   }, [groupStore.sortedGroups, settingStore]);
+
+  const handleOpenInNewTab = (conversationId: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('conversationId', conversationId);
+    window.open(url.toString(), '_blank', 'noopener');
+  };
 
   const handleDeleteConversation = (conversationId: string) => {
     modal.confirm({

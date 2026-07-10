@@ -1,5 +1,6 @@
 import Drawer from '@/client/components/Drawer';
 import ContextUsageBar from '@/client/components/ContextUsageBar';
+import type { ChatInputRef } from '@/client/components/ChatInput';
 import { lazy, Suspense } from 'react';
 import { SkillPickerPlugin } from '@/client/components/ChatInput/plugins/SkillPickerPlugin';
 import { getStore, useStore } from '@/client/store';
@@ -35,6 +36,7 @@ const Chat: React.FC = () => {
   const isMobile = useMedia('(max-width: 768px)', false);
   const messagesRef = useRef<MessagesRef>(null);
   const inputRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<ChatInputRef>(null);
 
   const createConversationApi = useAsyncFn(
     conversationStore.createConversation.bind(conversationStore),
@@ -56,6 +58,7 @@ const Chat: React.FC = () => {
           ? `${prev}\n<speech>\n${text}\n</speech>`
           : `<speech>\n${text}\n</speech>`,
       );
+      chatInputRef.current?.focus();
     },
   );
 
@@ -190,6 +193,7 @@ const Chat: React.FC = () => {
             }
           >
             <ChatInput
+              ref={chatInputRef}
               value={value}
               onChange={setValue}
               onSubmit={handleSend}
