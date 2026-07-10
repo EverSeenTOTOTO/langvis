@@ -1,7 +1,11 @@
 import type { AgentRunContext } from '../port/agent-run-context.port';
 
-/** Hook 触发的 loop 边界。 */
-export type HookPhase = 'pre-llm' | 'post-llm' | 'post-observation';
+/** Hook 触发的 loop 边界。loop-exit = response_user 终态点（loop 即将退出）。 */
+export type HookPhase =
+  | 'pre-llm'
+  | 'post-llm'
+  | 'post-observation'
+  | 'loop-exit';
 
 /** Hook 本轮生效后的事实摘要（供 hook 事件）。 */
 export interface HookEffect {
@@ -33,6 +37,7 @@ export class HookPlan {
       'pre-llm': hooks.filter(h => h.phase === 'pre-llm'),
       'post-llm': hooks.filter(h => h.phase === 'post-llm'),
       'post-observation': hooks.filter(h => h.phase === 'post-observation'),
+      'loop-exit': hooks.filter(h => h.phase === 'loop-exit'),
     };
   }
 

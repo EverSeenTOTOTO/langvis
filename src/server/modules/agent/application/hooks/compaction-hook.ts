@@ -6,7 +6,7 @@ import type {
   HookPhase,
 } from '@/server/modules/agent/domain/model/hook';
 import type { LoopCompactionConfig } from '@/server/modules/agent/domain/model/loop-config.fragment';
-import { PROCESS_SUMMARY_PROMPT } from '@/server/modules/agent/domain/model/working-memory';
+import { PROCESS_SUMMARY_PROMPT } from './prompts';
 import { fold } from '@/server/libs/compaction';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import Logger from '@/server/utils/logger';
