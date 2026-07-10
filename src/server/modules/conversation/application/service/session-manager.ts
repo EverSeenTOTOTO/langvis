@@ -1,4 +1,4 @@
-import type { SSEFrame, EnrichedEvent } from '@/shared/types/events';
+import type { StreamFrame, EnrichedEvent } from '@/shared/types/events';
 import type { Transport } from '@/shared/transport';
 import { inject, singleton } from 'tsyringe';
 import {
@@ -64,7 +64,7 @@ export class SessionManager implements LifecycleHook {
 
   async initSession(
     conversationId: string,
-    transport: Transport<SSEFrame>,
+    transport: Transport<StreamFrame>,
   ): Promise<void> {
     const session = this.getOrCreate(conversationId);
     // attach 之前判定「新会话」：attach 后 hasConnection 必然为真。
@@ -89,7 +89,7 @@ export class SessionManager implements LifecycleHook {
     return this.sessions.get(conversationId)?.hasConnection ?? false;
   }
 
-  sendFrame(conversationId: string, frame: SSEFrame): boolean {
+  sendFrame(conversationId: string, frame: StreamFrame): boolean {
     return this.sessions.get(conversationId)?.sendFrame(frame) ?? false;
   }
 

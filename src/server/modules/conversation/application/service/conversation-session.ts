@@ -1,4 +1,4 @@
-import type { SSEFrame, EnrichedEvent } from '@/shared/types/events';
+import type { StreamFrame, EnrichedEvent } from '@/shared/types/events';
 import type { Transport } from '@/shared/transport';
 import { Connection } from './connection';
 import {
@@ -49,7 +49,7 @@ export class ConversationSession {
    * attach 传输（多标签可重复 attach）。首次 attach 建 Connection；
    * attach 后对缓冲的活跃 run 补发 run_view（重连同一进程的活跃 run）。
    */
-  attachTransport(transport: Transport<SSEFrame>): void {
+  attachTransport(transport: Transport<StreamFrame>): void {
     if (!this.connection) {
       this.connection = new Connection(
         this.conversationId,
@@ -82,13 +82,13 @@ export class ConversationSession {
         type: 'conversation_usage',
         used,
         total,
-      } as SSEFrame);
+      } as StreamFrame);
     }
 
     logger.info(`Transport attached`, { chatId: this.conversationId });
   }
 
-  sendFrame(frame: SSEFrame): boolean {
+  sendFrame(frame: StreamFrame): boolean {
     return this.connection?.send(frame) ?? false;
   }
 
@@ -180,7 +180,7 @@ export class ConversationSession {
     this.sendFrame(this.buildRunViewFrame(messageId, run));
   }
 
-  private buildRunViewFrame(messageId: string, run: ActiveRun): SSEFrame {
+  private buildRunViewFrame(messageId: string, run: ActiveRun): StreamFrame {
     return {
       type: 'run_view',
       messageId,

@@ -8,7 +8,7 @@
  * EnrichedEvent — 应用层：RunEvent + 执行元数据 (runId, at)。
  * 由 AgentRun.record() 在推送时注入。
  *
- * SSEFrame — 传输层：服务端 fold 后的投影帧 run_view + SSE 通道控制帧。
+ * StreamFrame — 传输层：服务端 fold 后的投影帧 run_view + SSE 通道控制帧。
  * 不再透传原始 EnrichedEvent——客户端按 run_view 整包渲染。
  */
 
@@ -78,7 +78,7 @@ export interface HookRecord {
  * 控制帧 = SSE 通道自身的状态事件 + 用量遥测。
  * 不再透传原始 EnrichedEvent 业务帧——客户端是纯渲染者。
  */
-export type SSEFrame =
+export type StreamFrame =
   | { type: 'connected' }
   | { type: 'session_replaced' }
   | {

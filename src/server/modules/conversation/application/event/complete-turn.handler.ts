@@ -1,7 +1,7 @@
 import { inject } from 'tsyringe';
 import type { DomainEvent } from '@/server/libs/ddd';
 import { eventHandler } from '@/server/decorator/handler';
-import type { SSEFrame } from '@/shared/types/events';
+import type { StreamFrame } from '@/shared/types/events';
 import { SessionManager } from '../service/session-manager';
 import { ChatService } from '../service/chat.service';
 import { RunCompleted } from '@/server/modules/agent/contracts';
@@ -43,7 +43,7 @@ export class CompleteTurnHandler {
           type: 'conversation_usage',
           used: usage.used,
           total: usage.total,
-        } as SSEFrame);
+        } as StreamFrame);
       }
     } finally {
       this.sessionManager.finalizeRun(conversationId, messageId);

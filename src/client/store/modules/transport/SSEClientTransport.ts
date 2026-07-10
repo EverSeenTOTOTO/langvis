@@ -1,5 +1,5 @@
 import { Transport } from '@/shared/transport';
-import type { SSEFrame } from '@/shared/types/events';
+import type { StreamFrame } from '@/shared/types/events';
 import { isClient } from '@/shared/utils';
 import { getPrefetchPath } from '../../../decorator/api';
 import { makeObservable, observable, computed } from 'mobx';
@@ -8,7 +8,7 @@ const CONNECTION_TIMEOUT_MS = 30_000;
 
 type ConnectionState = 'connecting' | 'connected' | 'closed';
 
-export class SSEClientTransport extends Transport<SSEFrame> {
+export class SSEClientTransport extends Transport<StreamFrame> {
   private eventSource: EventSource | null = null;
   connectionState: ConnectionState = 'connecting';
 
@@ -57,7 +57,7 @@ export class SSEClientTransport extends Transport<SSEFrame> {
         clearTimeout(timeout);
 
         try {
-          const frame: SSEFrame = JSON.parse(event.data);
+          const frame: StreamFrame = JSON.parse(event.data);
 
           if (frame.type === 'connected') {
             this.connectionState = 'connected';
@@ -82,7 +82,7 @@ export class SSEClientTransport extends Transport<SSEFrame> {
     });
   }
 
-  send(_message: SSEFrame): boolean {
+  send(_message: StreamFrame): boolean {
     return false;
   }
 

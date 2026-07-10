@@ -4,16 +4,16 @@ import type { RedisService } from '@/server/libs/infrastructure/redis.service';
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { EventBus } from '@/server/libs/ddd';
 import { Transport } from '@/shared/transport';
-import type { SSEFrame } from '@/shared/types/events';
+import type { StreamFrame } from '@/shared/types/events';
 
 /** 记录所有 send 帧的最小 Transport 实现。 */
-class FakeTransport extends Transport<SSEFrame> {
-  sent: SSEFrame[] = [];
+class FakeTransport extends Transport<StreamFrame> {
+  sent: StreamFrame[] = [];
   private connected = true;
 
   async connect(): Promise<void> {}
   disconnect(): void {}
-  send(frame: SSEFrame): boolean {
+  send(frame: StreamFrame): boolean {
     this.sent.push(frame);
     return true;
   }
