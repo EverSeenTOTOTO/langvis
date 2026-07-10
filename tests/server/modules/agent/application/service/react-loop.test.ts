@@ -9,6 +9,7 @@ import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
 import { WorkingMemory } from '@/server/modules/agent/domain/model/working-memory';
 import { HookPlan, type Hook } from '@/server/modules/agent/domain/model/hook';
+import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { ToolIds } from '@/shared/constants';
@@ -243,7 +244,6 @@ function buildCtx(opts: BuildCtxOptions): BuiltCtx {
   const workingMemory = new WorkingMemory({
     seed: opts.seed ?? [{ role: 'user', content: 'do the task' }],
     contextSize,
-    runtimeConfig: config.runtimeConfig,
   });
   const ctx: AgentRunContext = {
     run,
@@ -254,7 +254,7 @@ function buildCtx(opts: BuildCtxOptions): BuiltCtx {
     llm,
     cache: makeMockCache(),
     workingMemory,
-    hooks: opts.hooks,
+    hooks: opts.hooks ?? new HookPlan(resolveAgentHooks()),
     executeTool: fakeExecuteTool(opts.handler),
   };
   return { ctx, run, calls, workingMemory };

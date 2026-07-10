@@ -90,10 +90,9 @@ export async function* runReactLoop(
 
     const observation = yield* ctx.executeTool(tool, input);
 
-    // response_user 是终态工具（交付最终结果后结束本轮）。
+    // response_user 是终态工具（交付最终结果后结束本轮）。loop-exit hook（如过程摘要生产者）在此跑。
     if (tool === ToolIds.RESPONSE_USER) {
-      const summary = await ctx.workingMemory.foldProcessSummary(ctx.signal);
-      if (summary) ctx.run.processSummary = summary;
+      yield* applyHooks(ctx, 'loop-exit');
       return;
     }
 

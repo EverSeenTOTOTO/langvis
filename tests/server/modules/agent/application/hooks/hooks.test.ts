@@ -2,8 +2,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { container } from 'tsyringe';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
 import { CompactionHook } from '@/server/modules/agent/application/hooks/compaction-hook';
+import { ProcessSummaryHook } from '@/server/modules/agent/application/hooks/process-summary-hook';
 import { WorkingMemory } from '@/server/modules/agent/domain/model/working-memory';
 import { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
+import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import type { LlmProvider } from '@/server/libs/infrastructure/llm.provider';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
@@ -19,7 +21,7 @@ function mockLlm(content = 'RECAP'): LlmProvider {
   } as unknown as LlmProvider;
 }
 
-/** 组装真实 WorkingMemory + RuntimeConfigVO 的 ctx，驱动 CompactionHook 自持逻辑（经读写缝）。 */
+/** 组装真实 WorkingMemory + RuntimeConfigVO + AgentRun 的 ctx，驱动各自持逻辑的 hook（经读写缝）。 */
 function makeCtx(opts: {
   seed: LlmMessage[];
   contextSize?: number;
@@ -38,10 +40,10 @@ function makeCtx(opts: {
   const workingMemory = new WorkingMemory({
     seed: opts.seed,
     contextSize,
-    runtimeConfig: config.runtimeConfig,
   });
   for (const step of opts.loopSteps) workingMemory.append('user', step);
   return {
+    run: new AgentRun('run_test', config),
     workingMemory,
     config,
     signal: new AbortController().signal,
@@ -49,9 +51,10 @@ function makeCtx(opts: {
 }
 
 describe('agent hook registry（自动识别）', () => {
-  it('resolveAgentHooks 发现 @agentHook 标记的 CompactionHook', () => {
+  it('resolveAgentHooks 发现 @agentHook 标记的 CompactionHook 与 ProcessSummaryHook', () => {
     const hooks = resolveAgentHooks();
     expect(hooks.some(h => h instanceof CompactionHook)).toBe(true);
+    expect(hooks.some(h => h instanceof ProcessSummaryHook)).toBe(true);
   });
 });
 
@@ -116,5 +119,52 @@ describe('CompactionHook（自持压缩逻辑，经 WorkingMemory 读写缝）',
     const effect = await new CompactionHook().apply(ctx);
     expect(effect).toBeNull();
     expect(ctx.workingMemory.messages.length).toBe(before);
+  });
+});
+
+describe('ProcessSummaryHook（loop-exit 生产者：fold → run.processSummary）', () => {
+  afterEach(() => {
+    container.clearInstances();
+  });
+
+  it('loop 动作 ≤1 时跳过（trivial turn），不动 run.processSummary', async () => {
+    const llm = mockLlm('SHOULD NOT BE CALLED');
+    const ctx = makeCtx({
+      seed: [{ role: 'system', content: 'sys' }],
+      loopSteps: ['direct answer'], // 1 个 loop 动作
+      llm,
+    });
+    const effect = await new ProcessSummaryHook().apply(ctx);
+    expect(effect).toBeNull();
+    expect(ctx.run.processSummary).toBeNull();
+    expect(llm.chatContent).not.toHaveBeenCalled();
+  });
+
+  it('loop 动作 >1 时折叠并写 run.processSummary', async () => {
+    const ctx = makeCtx({
+      seed: [{ role: 'system', content: 'sys' }],
+      loopSteps: ['thought+action', 'observation', 'final'],
+      llm: mockLlm('THE SUMMARY'),
+    });
+    const effect = await new ProcessSummaryHook().apply(ctx);
+    expect(effect).not.toBeNull();
+    expect(ctx.run.processSummary).toBe('THE SUMMARY');
+  });
+
+  it('折叠异常时返回 null、不写 run.processSummary', async () => {
+    const llm = {
+      getDefaultModel: () => undefined,
+      chatContent: vi.fn(async () => {
+        throw new Error('boom');
+      }),
+    } as unknown as LlmProvider;
+    const ctx = makeCtx({
+      seed: [{ role: 'system', content: 'sys' }],
+      loopSteps: ['a', 'b'],
+      llm,
+    });
+    const effect = await new ProcessSummaryHook().apply(ctx);
+    expect(effect).toBeNull();
+    expect(ctx.run.processSummary).toBeNull();
   });
 });

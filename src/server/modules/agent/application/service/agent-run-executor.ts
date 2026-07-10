@@ -80,7 +80,6 @@ export class AgentRunExecutor {
     const workingMemory = new WorkingMemory({
       seed: params.seed,
       contextSize: config.contextSize,
-      runtimeConfig: config.runtimeConfig,
     });
 
     const ctx: AgentRunContext = {
