@@ -28,7 +28,6 @@ async function* applyHooks(
   const hooks = ctx.hooks?.forPhase(phase);
   if (!hooks) return;
   for (const hook of hooks) {
-    if (hook.condition && !(await hook.condition(ctx))) continue;
     const effect = await hook.apply(ctx);
     if (effect) {
       yield {
@@ -94,7 +93,7 @@ export async function* runReactLoop(
     // response_user 是终态工具（交付最终结果后结束本轮）。
     if (tool === ToolIds.RESPONSE_USER) {
       const summary = await ctx.workingMemory.foldProcessSummary(ctx.signal);
-      if (summary) yield { type: 'process_summary', summary };
+      if (summary) ctx.run.processSummary = summary;
       return;
     }
 

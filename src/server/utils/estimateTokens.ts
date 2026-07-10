@@ -28,7 +28,7 @@ function messageToString(message: LlmMessage): string {
 }
 
 /** 估算消息 token 数（固定 cl100k_base encoding）。 */
-export function estimateTokens(messages: LlmMessage[]): number {
+export function estimateTokens(messages: readonly LlmMessage[]): number {
   let totalTokens = 0;
 
   for (const message of messages) {

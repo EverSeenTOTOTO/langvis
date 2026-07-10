@@ -4,6 +4,8 @@ import { createDomainEvent, EventBus } from '@/server/libs/ddd';
 import { ChatService } from '../service/chat.service';
 import { SessionManager } from '../service/session-manager';
 import { StartChatCommand, TurnInitiated } from '../../contracts';
+import { AGENT_RUN_REPOSITORY } from '@/server/modules/agent/agent.di-tokens';
+import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 
 @commandHandler(StartChatCommand)
 export class StartChatHandler {
@@ -14,6 +16,8 @@ export class StartChatHandler {
     private sessionManager: SessionManager,
     @inject(EventBus)
     private eventBus: EventBus,
+    @inject(AGENT_RUN_REPOSITORY)
+    private readonly agentRunRepo: AgentRunRepositoryPort,
   ) {}
 
   async execute(command: StartChatCommand): Promise<{ assistantId: string }> {
@@ -30,7 +34,23 @@ export class StartChatHandler {
 
     const memory = this.sessionManager.getMemory(conversationId);
     memory.append(turn.userMessage);
-    const effectiveHistory = await memory.buildContext();
+
+    // 消费者 transform 数据源：按 history 中 assistant 消息的 agentRunId 批量取过程摘要（存于 AgentRun）
+    const runIds = [
+      ...new Set(
+        memory
+          .getMessages()
+          .map(m => m.agentRunId)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    const runs = await this.agentRunRepo.findByIds(runIds);
+    const processSummaries = new Map<string, string>();
+    for (const run of runs) {
+      if (run.processSummary) processSummaries.set(run.id, run.processSummary);
+    }
+
+    const effectiveHistory = await memory.buildContext(processSummaries);
 
     this.eventBus.dispatch(
       TurnInitiated,

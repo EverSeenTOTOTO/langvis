@@ -315,17 +315,16 @@ describe('runReactLoop', () => {
     });
 
     it('a multi-step run (2 tools then response_user) folds a process_summary', async () => {
-      const { ctx, calls } = buildCtx({
+      const { ctx, run, calls } = buildCtx({
         responses: [call('t1'), call('t2'), responseUser('done')],
         handler: okHandler,
       });
 
       const events = await collect(runReactLoop(ctx));
-      const types = events.map(e => e.type);
 
       expect(events.filter(e => e.type === 'tool_call')).toHaveLength(3);
       expect(events.filter(e => e.type === 'loop_usage')).toHaveLength(2);
-      expect(types).toContain('process_summary');
+      expect(run.processSummary).toBe(SUMMARY_STUB);
       expect(calls).toHaveLength(3);
     });
   });
@@ -529,30 +528,26 @@ describe('runReactLoop', () => {
   });
 
   describe('ProcessSummary', () => {
-    it('folds a process summary on multi-step terminal', async () => {
-      const { ctx } = buildCtx({
+    it('folds a process summary on multi-step terminal (writes run.processSummary)', async () => {
+      const { ctx, run } = buildCtx({
         responses: [call('t1'), call('t2'), responseUser('done')],
         handler: okHandler,
       });
 
-      const events = await collect(runReactLoop(ctx));
-      const summary = events.find(e => e.type === 'process_summary') as {
-        summary: string;
-      };
+      await collect(runReactLoop(ctx));
 
-      expect(summary).toBeDefined();
-      expect(summary.summary).toBe(SUMMARY_STUB);
+      expect(run.processSummary).toBe(SUMMARY_STUB);
     });
 
     it('does not fold a process summary on a single-action terminal', async () => {
-      const { ctx } = buildCtx({
+      const { ctx, run } = buildCtx({
         responses: [responseUser('hi')],
         handler: okHandler,
       });
 
-      const events = await collect(runReactLoop(ctx));
+      await collect(runReactLoop(ctx));
 
-      expect(events.some(e => e.type === 'process_summary')).toBe(false);
+      expect(run.processSummary).toBeNull();
     });
   });
 

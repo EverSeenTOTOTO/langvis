@@ -4,6 +4,7 @@ import { StartChatHandler } from '@/server/modules/conversation/application/comm
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import type { EventBus } from '@/server/libs/ddd';
+import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import {
   StartChatCommand,
   TurnInitiated,
@@ -12,6 +13,9 @@ import { ConversationNotFoundError } from '@/server/modules/conversation/domain/
 import { Role } from '@/shared/entities/Message';
 
 const stubEventBus = { dispatch: vi.fn() };
+const stubAgentRunRepo = {
+  findByIds: vi.fn().mockResolvedValue([]),
+} as unknown as AgentRunRepositoryPort;
 
 function makeSessionManager(memory: any) {
   return {
@@ -30,6 +34,7 @@ describe('StartChatHandler', () => {
       chatService,
       makeSessionManager({}),
       stubEventBus as unknown as EventBus,
+      stubAgentRunRepo,
     );
 
     await expect(
@@ -48,6 +53,7 @@ describe('StartChatHandler', () => {
   it('appends user message, builds context, dispatches TurnInitiated, returns assistantId', async () => {
     const memory = {
       append: vi.fn(),
+      getMessages: vi.fn(() => []),
       buildContext: vi
         .fn()
         .mockResolvedValue([{ role: 'system', content: 'sys' }]),
@@ -64,6 +70,7 @@ describe('StartChatHandler', () => {
       chatService,
       makeSessionManager(memory),
       stubEventBus as unknown as EventBus,
+      stubAgentRunRepo,
     );
 
     const result = await handler.execute(

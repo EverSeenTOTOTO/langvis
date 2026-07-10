@@ -7,6 +7,10 @@ import type { RunStatus } from '@/shared/types/agent';
 export class AgentRun extends AggregateRoot<string> {
   readonly config: RuntimeConfigVO;
 
+  /** loop 退出过程摘要：生产者在 response_user 折叠写入，executor 持久化。
+   * 非事件溯源字段（类比 completedAt）——不参与 run 执行 replay，仅作派生属性落库。 */
+  processSummary: string | null = null;
+
   private status: RunStatus = 'initialized';
   private events: EnrichedEvent[] = [];
   #terminated = false;

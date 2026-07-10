@@ -265,7 +265,7 @@ export class ChatService {
   }
 
   /**
-   * 收 turn 的应用编排:把 run 事件流投影成终态 → 持久化 assistant 消息(processSummary/audio 入 meta)
+   * 收 turn 的应用编排:把 run 事件流投影成终态 → 持久化 assistant 消息(audio 入 meta)
    * → 历史压缩(超阈则落盘 compact 消息)。返回会话用量供 handler 发 conversation_usage 帧;
    * 返回 null 表示不发帧(压缩失败已兜底)。events 与 memory 由 handler 传入(session 作用域,
    * 不经此引入 ChatService→SessionManager 的环)。
@@ -278,7 +278,6 @@ export class ChatService {
   }): Promise<{ used: number; total: number } | null> {
     const view = projectRun(params.events);
     const meta: Record<string, unknown> = {};
-    if (view.processSummary) meta.processSummary = view.processSummary;
     if (view.audio) meta.audio = view.audio;
 
     const assistantMessage = await this.messageRepo.update(

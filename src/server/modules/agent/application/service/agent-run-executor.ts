@@ -133,6 +133,7 @@ export class AgentRunExecutor {
       },
       startedAt: new Date(),
       completedAt: null,
+      processSummary: null,
     });
     this.activeRuns.set(run.runId, run);
 
@@ -144,6 +145,7 @@ export class AgentRunExecutor {
         events: [...run.eventStream],
         status: run.currentStatus,
         completedAt: new Date(),
+        processSummary: run.processSummary,
       });
     }
   }
