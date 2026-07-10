@@ -1,4 +1,4 @@
-import type { LlmMessage, Message, MessageKind } from '@/shared/types/entities';
+import type { LlmMessage, Message } from '@/shared/types/entities';
 import { Role } from '@/shared/entities/Message';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import type { ContextUsage } from '@/server/utils/estimateTokens';
@@ -7,6 +7,12 @@ import { fold } from '@/server/libs/compaction';
 import { ListMonad } from '@/server/libs/list';
 import { Prompt } from '@/server/libs/prompt';
 import { winstonLogger } from '@/server/utils/logger';
+import {
+  findLatestCompactionSummary,
+  toLlmMessages,
+  projectToLlmMessages,
+  computeContextUsage,
+} from './history-projection';
 
 /** 会话记忆激活配置（激活时灌入，ConversationSession 持有）。 */
 export interface ConversationMemoryConfig {
@@ -76,46 +82,11 @@ export class ConversationMemory {
       })
       .toArray();
 
-    const messages: LlmMessage[] = [];
-
-    // system + 会话上下文（meta.kind === 'context'），始终发出。
-    for (const msg of history) {
-      if (msg.role === Role.SYSTEM) {
-        messages.push({ role: 'system', content: msg.content });
-      } else if (
-        msg.role === Role.USER &&
-        (msg.meta?.kind as MessageKind | undefined) === 'context'
-      ) {
-        messages.push({ role: 'user', content: msg.content });
-      }
-    }
-
-    // C 作为有效历史前缀，替代被它总结的早期 turn（基于带 summary 的 history 快照）。
-    const { summary, index } = findLatestCompactionSummary(history);
-    const tail = summary ? history.slice(index + 1) : history;
-    if (summary) {
-      messages.push({ role: 'user', content: summary.content });
-    }
-
-    for (const turn of this.groupIntoTurns(tail)) {
-      for (const msg of turn) {
-        messages.push({
-          role: msg.role as LlmMessage['role'],
-          content: msg.content,
-        });
-      }
-    }
-
-    return messages;
+    return projectToLlmMessages(history);
   }
 
   getContextUsage(): ContextUsage {
-    const { summary, tail } = this.getEffectiveTurns();
-    const effective = summary ? [summary, ...tail] : tail;
-    return {
-      used: estimateTokens(effective as unknown as LlmMessage[]),
-      total: this.contextSize,
-    };
+    return computeContextUsage(this.history.toArray(), this.contextSize);
   }
 
   /**
@@ -164,42 +135,6 @@ export class ConversationMemory {
       },
     };
   }
-
-  /** 有效历史 = 最新 C + 其后 turn；buildContext 与 getContextUsage 共用，保证口径一致。 */
-  protected getEffectiveTurns(): { summary: Message | null; tail: Message[] } {
-    const history = this.history.toArray();
-    const { summary, index } = findLatestCompactionSummary(history);
-    const tail = summary ? history.slice(index + 1) : history;
-    return { summary, tail };
-  }
-
-  protected groupIntoTurns(messages: Message[]): Message[][] {
-    const turns: Message[][] = [];
-    let current: Message[] = [];
-
-    for (const msg of messages) {
-      if (msg.role === Role.SYSTEM) continue;
-      // 任何带 meta.kind 的都是脚手架（context/compact），非对话 turn。
-      if (msg.meta?.kind) continue;
-
-      current.push(msg);
-
-      if (msg.role === Role.ASSIST) {
-        turns.push(current);
-        current = [];
-      }
-    }
-
-    if (current.length > 0) {
-      turns.push(current);
-    }
-
-    return turns;
-  }
-}
-
-function toLlmMessages(messages: Message[]): LlmMessage[] {
-  return messages.map(m => ({ role: m.role, content: m.content }));
 }
 
 const HISTORY_PROMPT = Prompt.empty()
@@ -213,24 +148,3 @@ const HISTORY_PROMPT = Prompt.empty()
     'Output',
     'Output the summary directly (no extra explanation, no Markdown headings).',
   );
-
-/** 压缩摘要 C：role=USER, meta.kind='compact'（与 'context' 并列的脚手架判别键）。 */
-function isCompactionSummary(message: Message): boolean {
-  return (message.meta?.kind as MessageKind | undefined) === 'compact';
-}
-
-/**
- * 找最后一个压缩摘要 C（滚动折叠模型下，只有"最新且 end≤当前"的那个有效）。
- * 位置即覆盖终点——C 排在被它总结的消息之后，buildContext 原样发出 C 作为有效历史前缀。
- */
-function findLatestCompactionSummary(messages: Message[]): {
-  summary: Message | null;
-  index: number;
-} {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (isCompactionSummary(messages[i])) {
-      return { summary: messages[i], index: i };
-    }
-  }
-  return { summary: null, index: -1 };
-}
