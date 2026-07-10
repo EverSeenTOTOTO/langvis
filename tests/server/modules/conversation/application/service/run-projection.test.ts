@@ -301,15 +301,6 @@ describe('projectRun', () => {
     expect(view.status).toBe('running');
   });
 
-  it('extracts the last process_summary', () => {
-    const view = projectRun([
-      ev({ type: 'process_summary', summary: 'old' }),
-      ev({ type: 'process_summary', summary: 'latest summary' }),
-      ev({ type: 'final' }),
-    ]);
-    expect(view.processSummary).toBe('latest summary');
-  });
-
   it('extracts the last audio event', () => {
     const view = projectRun([
       ev({ type: 'audio', filePath: 'tts/a.mp3', voice: 'V' }),
@@ -318,9 +309,8 @@ describe('projectRun', () => {
     expect(view.audio).toEqual({ filePath: 'tts/a.mp3', voice: 'V' });
   });
 
-  it('defaults processSummary/audio to null when absent', () => {
+  it('defaults audio to null when absent', () => {
     const view = projectRun([ev({ type: 'text_chunk', content: 'hi' })]);
-    expect(view.processSummary).toBeNull();
     expect(view.audio).toBeNull();
   });
 
@@ -465,7 +455,6 @@ describe('projectRun', () => {
         error: 'missing',
       }),
       ev({ type: 'audio', filePath: 'a.mp3', voice: 'V' }),
-      ev({ type: 'process_summary', summary: 'sum' }),
       ev({
         type: 'hook',
         hookId: 'compaction',

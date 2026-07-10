@@ -47,7 +47,6 @@ export type RunEvent =
   | { type: 'final' }
   | { type: 'cancelled'; reason: string }
   | { type: 'error'; error: string }
-  | { type: 'process_summary'; summary: string }
   | { type: 'audio'; filePath: string; voice?: string }
   | { type: 'loop_usage'; used: number; total: number }
   | { type: 'hook'; hookId: string; summary: string; data?: unknown };
@@ -90,7 +89,6 @@ export type SSEFrame =
       steps: ReActStep[];
       status: RunStatus;
       awaitingInput: AwaitingInputProjection | null;
-      processSummary: string | null;
       audio: { filePath: string; voice?: string } | null;
       hooks: HookRecord[];
     }

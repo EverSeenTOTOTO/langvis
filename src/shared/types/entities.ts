@@ -49,6 +49,7 @@ export type AgentRun = {
   config: RuntimeConfigVOProps | null;
   startedAt: Date;
   completedAt: Date | null;
+  processSummary: string | null;
 };
 
 export type LlmMessage = {

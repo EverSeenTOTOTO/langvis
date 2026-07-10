@@ -10,15 +10,14 @@ export interface HookEffect {
 }
 
 /**
- * Hook —— 系统发起的上下文变换（与 compact 同途径，经 ctx.workingMemory）。
- * `apply` 返回 HookEffect 表示本轮生效（供事件），返回 null 表示未生效。
+ * Hook —— 系统发起的上下文变换（经 ctx.workingMemory 读写缝）。
+ * `apply` 返回 HookEffect 表示本轮生效（供事件），返回 null 表示未生效（自判、不动）。
+ * 不设 `condition` 字段：是否生效由 apply 内部决定（不动即原样返回 null）。
  * 签名只命名 AgentRunContext port、不引用 WorkingMemory 具体类——memory 改造时只换 apply 体，签名不动。
  */
 export interface Hook {
   readonly id: string;
   readonly phase: HookPhase;
-  /** 可选确定性条件（不用 LLM 语义判断）；省略则每轮该相位都跑。 */
-  condition?: (ctx: AgentRunContext) => boolean | Promise<boolean>;
   apply: (ctx: AgentRunContext) => Promise<HookEffect | null>;
 }
 

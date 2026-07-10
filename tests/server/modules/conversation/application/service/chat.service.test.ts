@@ -433,31 +433,6 @@ describe('ChatService', () => {
       expect(usage).toEqual({ used: 7, total: 8000 });
     });
 
-    it('有 process_summary 时随内容入 meta', async () => {
-      const memory = {
-        append: vi.fn(),
-        compact: vi.fn().mockResolvedValue(null),
-        getContextUsage: vi.fn().mockReturnValue({ used: 1, total: 8000 }),
-      };
-      (messageRepo.update as any).mockResolvedValue(null);
-
-      await service.completeTurn({
-        conversationId: 'conv_1',
-        messageId: 'msg_1',
-        events: [
-          ev({ type: 'text_chunk', content: 'ans' }),
-          ev({ type: 'process_summary', summary: 'loop 做了 X' }),
-          ev({ type: 'final' }),
-        ],
-        memory: memory as any,
-      });
-
-      expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
-        content: 'ans',
-        meta: { processSummary: 'loop 做了 X' },
-      });
-    });
-
     it('压缩超阈:落盘 compact 消息、append 回 memory、返回 compact 用量', async () => {
       const compactResult = {
         content: 'SUMMARY',

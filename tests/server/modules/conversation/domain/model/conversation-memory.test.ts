@@ -118,15 +118,18 @@ describe('ConversationMemory', () => {
   });
 
   describe('buildContext — 过程摘要', () => {
-    it('前置 meta.processSummary 到 assistant 消息（摘要在前、原文在后）', async () => {
+    it('前置 processSummary 到 assistant（按 agentRunId 从 map 取、摘要在前原文在后）', async () => {
+      const assistMsg = {
+        ...makeMessage(Role.ASSIST, 'Here is the answer'),
+        agentRunId: 'run_1',
+      };
       const history = [
         makeMessage(Role.USER, 'What is example.com?'),
-        makeMessage(Role.ASSIST, 'Here is the answer', {
-          processSummary: '搜索了 example.com 并总结',
-        }),
+        assistMsg,
       ];
+      const summaries = new Map([['run_1', '搜索了 example.com 并总结']]);
 
-      const messages = await createMemory(history).buildContext();
+      const messages = await createMemory(history).buildContext(summaries);
       const assist = messages.find(m => m.role === 'assistant')!;
 
       expect(assist.content).toContain('搜索了 example.com 并总结');

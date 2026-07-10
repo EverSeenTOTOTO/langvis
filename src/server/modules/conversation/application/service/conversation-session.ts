@@ -189,7 +189,6 @@ export class ConversationSession {
       steps: run.view.steps,
       status: run.view.status,
       awaitingInput: run.view.awaitingInput,
-      processSummary: run.view.processSummary,
       audio: run.view.audio,
       hooks: run.view.hooks,
     };

@@ -4,6 +4,7 @@ import { estimateTokens } from '@/server/utils/estimateTokens';
 import type { ContextUsage } from '@/server/utils/estimateTokens';
 import type { HistoryCompactionConfig } from '../../application/service/history-config.fragment';
 import { fold } from '@/server/libs/compaction';
+import { MessageList } from '@/server/libs/messages';
 import { Prompt } from '@/server/libs/prompt';
 import { winstonLogger } from '@/server/utils/logger';
 
@@ -21,14 +22,16 @@ export interface ConversationCompactionResult {
 }
 
 /**
- * 会话的持久消息模型（ConversationSession 成员实体）。
- * 有效历史 = [最新压缩摘要 C, 其后 turn]；每条 assistant 消息前置其 meta.processSummary
- * （loop-exit 折叠产物，用户不可见、LLM 可见）；不做硬截断。用量与 buildContext 同口径。
+ * 会话的持久消息模型（ConversationSession 成员实体，贫血：状态 MessageList monad + 编排接缝）。
+ * 有效历史 = [最新压缩摘要 C, 其后 turn]；不做硬截断。用量与 buildContext 同口径。
+ *
+ * processSummary 不再放 message.meta：它是 run-scoped 派生属性，存 AgentRun.processSummary；
+ * buildContext 的消费者 transform 按 assistant 消息的 agentRunId 取回、前缀 <summary>（富在 join 端）。
  * 自维护历史压缩（fold 原语来自 libs/compaction，与 agent 的 WorkingMemory 同机制），
  * 返回载荷不含持久化——落盘 compact 消息是 CompleteTurnHandler 的职责，避免反向依赖 message repo。
  */
 export class ConversationMemory {
-  protected readonly history: Message[];
+  protected history: MessageList<Message>;
   protected readonly contextSize: number;
   protected readonly compaction: HistoryCompactionConfig;
   private readonly logger = winstonLogger.child({
@@ -40,7 +43,7 @@ export class ConversationMemory {
     contextSize: number;
     runtimeConfig: Record<string, unknown>;
   }) {
-    this.history = [...params.history];
+    this.history = MessageList.of(params.history);
     this.contextSize = params.contextSize;
     this.compaction = (
       params.runtimeConfig as { history: HistoryCompactionConfig }
@@ -48,18 +51,35 @@ export class ConversationMemory {
   }
 
   append(message: Message): void {
-    this.history.push(message);
+    this.history = this.history.append(message);
   }
 
   getMessages(): Message[] {
-    return this.history;
+    return this.history.toArray();
   }
 
-  async buildContext(): Promise<LlmMessage[]> {
+  /**
+   * 投影有效历史为 LLM 上下文。消费者 transform 先把 processSummary（按 agentRunId 从 AgentRun 取）
+   * 前缀到 assistant 消息，再投影：system + 会话上下文恒发 → 最新 C 作前缀 → 其后 turn。
+   */
+  async buildContext(
+    processSummaries: ReadonlyMap<string, string> = new Map(),
+  ): Promise<LlmMessage[]> {
+    // 消费者 transform：assistant 消息按 agentRunId 取 processSummary、前缀 <summary>
+    const history = this.history
+      .map(msg => {
+        if (msg.role !== Role.ASSIST || !msg.agentRunId) return msg;
+        const ps = processSummaries.get(msg.agentRunId);
+        return ps
+          ? { ...msg, content: `<summary>${ps}</summary>\n\n${msg.content}` }
+          : msg;
+      })
+      .toArray();
+
     const messages: LlmMessage[] = [];
 
     // system + 会话上下文（meta.kind === 'context'），始终发出。
-    for (const msg of this.history) {
+    for (const msg of history) {
       if (msg.role === Role.SYSTEM) {
         messages.push({ role: 'system', content: msg.content });
       } else if (
@@ -70,24 +90,19 @@ export class ConversationMemory {
       }
     }
 
-    // C 作为有效历史前缀，替代被它总结的早期 turn。
-    const { summary, tail } = this.getEffectiveTurns();
+    // C 作为有效历史前缀，替代被它总结的早期 turn（基于带 summary 的 history 快照）。
+    const { summary, index } = findLatestCompactionSummary(history);
+    const tail = summary ? history.slice(index + 1) : history;
     if (summary) {
       messages.push({ role: 'user', content: summary.content });
     }
 
     for (const turn of this.groupIntoTurns(tail)) {
       for (const msg of turn) {
-        let content = msg.content;
-
-        if (msg.role === Role.ASSIST) {
-          const processSummary = msg.meta?.processSummary;
-          if (typeof processSummary === 'string' && processSummary) {
-            content = `<summary>${processSummary}</summary>\n\n${content}`;
-          }
-        }
-
-        messages.push({ role: msg.role as LlmMessage['role'], content });
+        messages.push({
+          role: msg.role as LlmMessage['role'],
+          content: msg.content,
+        });
       }
     }
 
@@ -112,8 +127,9 @@ export class ConversationMemory {
   ): Promise<ConversationCompactionResult | null> {
     if (!this.contextSize) return null;
 
-    const { summary, index } = findLatestCompactionSummary(this.history);
-    const tail = summary ? this.history.slice(index + 1) : this.history;
+    const history = this.history.toArray();
+    const { summary, index } = findLatestCompactionSummary(history);
+    const tail = summary ? history.slice(index + 1) : history;
     if (tail.length === 0) return null;
 
     const effective = summary ? [summary, ...tail] : tail;
@@ -141,7 +157,7 @@ export class ConversationMemory {
     // 压缩后有效历史 = [新 C]；其用量即会话层用量。
     return {
       content,
-      startRef: summary?.id ?? this.history[0]?.id ?? '',
+      startRef: summary?.id ?? history[0]?.id ?? '',
       usage: {
         used: estimateTokens([{ role: 'user', content }]),
         total: this.contextSize,
@@ -151,8 +167,9 @@ export class ConversationMemory {
 
   /** 有效历史 = 最新 C + 其后 turn；buildContext 与 getContextUsage 共用，保证口径一致。 */
   protected getEffectiveTurns(): { summary: Message | null; tail: Message[] } {
-    const { summary, index } = findLatestCompactionSummary(this.history);
-    const tail = summary ? this.history.slice(index + 1) : this.history;
+    const history = this.history.toArray();
+    const { summary, index } = findLatestCompactionSummary(history);
+    const tail = summary ? history.slice(index + 1) : history;
     return { summary, tail };
   }
 

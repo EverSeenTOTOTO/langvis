@@ -16,7 +16,6 @@ export interface RunView {
   /** Non-null while the run is blocked on an ask_user / awaiting_input prompt
    * (the last awaiting tool_progress not yet resolved by a tool_result). */
   awaitingInput: AwaitingInputProjection | null;
-  processSummary: string | null;
   audio: { filePath: string; voice?: string } | null;
   /** 本次 run 中生效过的 hook 事实（按到达序累积）。 */
   hooks: HookRecord[];
@@ -35,7 +34,6 @@ export function emptyRunView(): RunView {
     steps: [],
     status: 'running',
     awaitingInput: null,
-    processSummary: null,
     audio: null,
     hooks: [],
   };
@@ -172,10 +170,6 @@ export function applyEventToView(view: RunView, event: EnrichedEvent): RunView {
       finalizeOpenStep(view, event.at);
       view.status = 'cancelled';
       view.content = event.reason;
-      break;
-
-    case 'process_summary':
-      view.processSummary = event.summary;
       break;
 
     case 'audio':
