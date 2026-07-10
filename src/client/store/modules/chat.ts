@@ -18,7 +18,7 @@ import { SSEClientTransport } from './transport/SSEClientTransport';
 import { ConversationStore } from './conversation';
 import { SettingStore } from './setting';
 import type { Message } from '@/shared/types/entities';
-import type { SSEFrame } from '@/shared/types/events';
+import type { StreamFrame } from '@/shared/types/events';
 
 @store()
 export class ChatStore {
@@ -160,7 +160,7 @@ export class ChatStore {
     transport: SSEClientTransport,
   ): void {
     transport.addEventListener('message', (e: CustomEvent) => {
-      const frame = e.detail as SSEFrame;
+      const frame = e.detail as StreamFrame;
 
       if (frame.type === 'connected') return;
 

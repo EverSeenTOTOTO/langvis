@@ -1,12 +1,12 @@
 import type { Request, Response } from 'express';
 import { Transport } from '@/shared/transport';
-import type { SSEFrame } from '@/shared/types/events';
+import type { StreamFrame } from '@/shared/types/events';
 import logger from '@/server/utils/logger';
 
 /** SSE 心跳间隔——非流式 LLM 调用期间无业务帧，靠注释行保活以防代理 idle 断连。 */
 const SSE_HEARTBEAT_MS = 20_000;
 
-export class SSEServerTransport extends Transport<SSEFrame> {
+export class SSEServerTransport extends Transport<StreamFrame> {
   private closed = false;
   private disconnected = false;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
@@ -59,7 +59,7 @@ export class SSEServerTransport extends Transport<SSEFrame> {
     return Promise.resolve();
   }
 
-  send(message: SSEFrame): boolean {
+  send(message: StreamFrame): boolean {
     if (this.closed || !this.response.writable) return false;
 
     const payload = `data: ${JSON.stringify(message)}\n\n`;

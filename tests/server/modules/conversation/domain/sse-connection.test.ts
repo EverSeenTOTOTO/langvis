@@ -1,16 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Connection } from '@/server/modules/conversation/application/service/connection';
-import type { SSEFrame } from '@/shared/types/events';
+import type { StreamFrame } from '@/shared/types/events';
 import { Transport } from '@/shared/transport';
 
-class MockTransport extends Transport<SSEFrame> {
+class MockTransport extends Transport<StreamFrame> {
   isConnected = true;
   isConnecting = false;
-  sentFrames: SSEFrame[] = [];
+  sentFrames: StreamFrame[] = [];
   closed = false;
 
   connect = vi.fn().mockResolvedValue(undefined);
-  send = vi.fn((frame: SSEFrame) => {
+  send = vi.fn((frame: StreamFrame) => {
     this.sentFrames.push(frame);
     return true;
   });

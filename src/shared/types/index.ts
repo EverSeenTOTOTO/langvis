@@ -24,6 +24,6 @@ export interface ToolConfig<
 }
 
 // ─── DDD 类型 ───
-export type { RunEvent, EnrichedEvent, SSEFrame } from './events';
+export type { RunEvent, EnrichedEvent, StreamFrame } from './events';
 export type { RunStatus, SkillInfo } from './agent';
 export type { ReActStep, AwaitingInputProjection } from './render';

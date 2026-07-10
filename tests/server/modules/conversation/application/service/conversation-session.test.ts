@@ -3,13 +3,13 @@ import { ConversationSession } from '@/server/modules/conversation/application/s
 import { Transport } from '@/shared/transport';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
-import type { SSEFrame, EnrichedEvent } from '@/shared/types/events';
+import type { StreamFrame, EnrichedEvent } from '@/shared/types/events';
 
-class MockTransport extends Transport<SSEFrame> {
+class MockTransport extends Transport<StreamFrame> {
   isConnected = true;
   isConnecting = false;
   connect = vi.fn().mockResolvedValue(undefined);
-  send = vi.fn((_f: SSEFrame) => true);
+  send = vi.fn((_f: StreamFrame) => true);
   close = vi.fn(() => {
     this.isConnected = false;
   });
@@ -19,10 +19,10 @@ class MockTransport extends Transport<SSEFrame> {
   }
 }
 
-type RunViewFrame = Extract<SSEFrame, { type: 'run_view' }>;
+type RunViewFrame = Extract<StreamFrame, { type: 'run_view' }>;
 
-/** Collect run_view frames from a spy's call list, narrowed off the SSEFrame union. */
-function runViews(calls: SSEFrame[][]): RunViewFrame[] {
+/** Collect run_view frames from a spy's call list, narrowed off the StreamFrame union. */
+function runViews(calls: StreamFrame[][]): RunViewFrame[] {
   return calls
     .filter(c => c[0]?.type === 'run_view')
     .map(c => c[0] as RunViewFrame);
