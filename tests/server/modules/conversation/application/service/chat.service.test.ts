@@ -404,84 +404,29 @@ describe('ChatService', () => {
     });
   });
 
-  describe('completeTurn', () => {
+  describe('persistAssistantTurn', () => {
     function ev(p: { type: string } & Record<string, unknown>): any {
       return { runId: 'run_1', seq: 0, at: 0, ...p };
     }
 
-    it('投影终态文案持久化(无 meta 时只更 content)', async () => {
-      const memory = {
-        append: vi.fn(),
-        compact: vi.fn().mockResolvedValue(null),
-        getContextUsage: vi.fn().mockReturnValue({ used: 7, total: 8000 }),
-      };
-      (messageRepo.update as any).mockResolvedValue({ id: 'msg_1' });
+    it('投影终态文案持久化（无 audio 时只更 content），返回更新后的消息', async () => {
+      (messageRepo.update as any).mockResolvedValue({ id: 'msg_1', content: 'Hello' });
 
-      const usage = await service.completeTurn({
-        conversationId: 'conv_1',
-        messageId: 'msg_1',
-        events: [
-          ev({ type: 'text_chunk', content: 'Hello' }),
-          ev({ type: 'final' }),
-        ],
-        memory: memory as any,
-      });
+      const msg = await service.persistAssistantTurn('msg_1', [
+        ev({ type: 'text_chunk', content: 'Hello' }),
+        ev({ type: 'final' }),
+      ]);
 
       expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
         content: 'Hello',
       });
-      expect(usage).toEqual({ used: 7, total: 8000 });
+      expect(msg).toEqual({ id: 'msg_1', content: 'Hello' });
     });
 
-    it('压缩超阈:落盘 compact 消息、append 回 memory、返回 compact 用量', async () => {
-      const compactResult = {
-        content: 'SUMMARY',
-        startRef: 'm1',
-        usage: { used: 5, total: 4096 },
-      };
-      const memory = {
-        append: vi.fn(),
-        compact: vi.fn().mockResolvedValue(compactResult),
-        getContextUsage: vi.fn(),
-      };
-      (messageRepo.batchCreate as any).mockResolvedValue([{ id: 'compact_1' }]);
+    it('只做投影+持久化：不触发压缩/落盘（那些是 turn-end transform 职责）', async () => {
       (messageRepo.update as any).mockResolvedValue({ id: 'msg_1' });
-
-      const usage = await service.completeTurn({
-        conversationId: 'conv_1',
-        messageId: 'msg_1',
-        events: [ev({ type: 'final' })],
-        memory: memory as any,
-      });
-
-      expect(memory.compact).toHaveBeenCalledWith(expect.any(AbortSignal));
-      expect(messageRepo.batchCreate).toHaveBeenCalledWith('conv_1', [
-        expect.objectContaining({
-          content: 'SUMMARY',
-          meta: { kind: 'compact', startRef: 'm1' },
-        }),
-      ]);
-      expect(memory.append).toHaveBeenCalledTimes(2);
-      expect(usage).toEqual({ used: 5, total: 4096 });
-      expect(memory.getContextUsage).not.toHaveBeenCalled();
-    });
-
-    it('压缩抛错时兜底返回 null(不抛)', async () => {
-      const memory = {
-        append: vi.fn(),
-        compact: vi.fn().mockRejectedValue(new Error('boom')),
-        getContextUsage: vi.fn(),
-      };
-      (messageRepo.update as any).mockResolvedValue({ id: 'msg_1' });
-
-      const usage = await service.completeTurn({
-        conversationId: 'conv_1',
-        messageId: 'msg_1',
-        events: [ev({ type: 'final' })],
-        memory: memory as any,
-      });
-
-      expect(usage).toBeNull();
+      await service.persistAssistantTurn('msg_1', [ev({ type: 'final' })]);
+      expect(messageRepo.batchCreate).not.toHaveBeenCalled();
     });
   });
 });

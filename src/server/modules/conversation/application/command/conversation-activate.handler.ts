@@ -4,6 +4,7 @@ import { ChatService } from '../service/chat.service';
 import { SessionManager } from '../service/session-manager';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { ConversationActivateCommand } from '../../contracts';
+import { runConvTransforms } from '../transforms';
 
 @commandHandler(ConversationActivateCommand)
 export class ConversationActivateHandler {
@@ -30,13 +31,19 @@ export class ConversationActivateHandler {
       systemPrompt,
     });
 
-    // 激活会话记忆:一次性灌入当前消息 + 配置;后续 turn 经会话成员按 conversationId 操作,不再回调 conv。
+    // 激活会话上下文：一次性灌入当前消息 + 解析后的配置 + 解析 transform 管道。
     const [messages, config] = await Promise.all([
       this.chatService.getConversationMessages(conversationId),
       this.chatService.resolveConversationConfig(conversationId),
     ]);
-    if (config) {
-      this.sessionManager.activateMemory(conversationId, messages, config);
+    if (!config) return;
+
+    this.sessionManager.activateContext(conversationId, messages, config);
+
+    // activated-phase transform（usage 基线等）。激活先于任何 turn，无需屏障。
+    const ctx = this.sessionManager.getCtx(conversationId);
+    for await (const frame of runConvTransforms(ctx, 'activated')) {
+      if (frame) this.sessionManager.sendFrame(conversationId, frame);
     }
   }
 }

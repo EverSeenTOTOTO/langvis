@@ -26,7 +26,6 @@ import { ConversationNotFoundError } from '../../domain/errors';
 import Logger from '@/server/utils/logger';
 import { isEmpty } from 'lodash-es';
 import type { EnrichedEvent } from '@/shared/types/events';
-import type { ConversationMemory } from '../../domain/model/conversation-memory';
 import { projectRun } from '@/server/modules/conversation/application/service/run-projection';
 
 @singleton()
@@ -265,53 +264,20 @@ export class ChatService {
   }
 
   /**
-   * 收 turn 的应用编排:把 run 事件流投影成终态 → 持久化 assistant 消息(audio 入 meta)
-   * → 历史压缩(超阈则落盘 compact 消息)。返回会话用量供 handler 发 conversation_usage 帧;
-   * 返回 null 表示不发帧(压缩失败已兜底)。events 与 memory 由 handler 传入(session 作用域,
-   * 不经此引入 ChatService→SessionManager 的环)。
+   * 收 turn 的持久化接缝：把 run 事件流投影成终态 → 持久化 assistant 消息（audio 入 meta）。
+   * 不再触碰会话上下文/压缩——那些是 turn-end transform 的职责（见 CompleteTurnHandler）。
+   * 返回更新后的消息供调用方 append 到 ctx.messages；events 由 handler 传入（session 作用域）。
    */
-  async completeTurn(params: {
-    conversationId: string;
-    messageId: string;
-    events: readonly EnrichedEvent[];
-    memory: ConversationMemory;
-  }): Promise<{ used: number; total: number } | null> {
-    const view = projectRun(params.events);
+  async persistAssistantTurn(
+    messageId: string,
+    events: readonly EnrichedEvent[],
+  ): Promise<Message | null> {
+    const view = projectRun(events);
     const meta: Record<string, unknown> = {};
     if (view.audio) meta.audio = view.audio;
-
-    const assistantMessage = await this.messageRepo.update(
-      params.messageId,
-      isEmpty(meta)
-        ? { content: view.content }
-        : { content: view.content, meta },
+    return this.messageRepo.update(
+      messageId,
+      isEmpty(meta) ? { content: view.content } : { content: view.content, meta },
     );
-
-    try {
-      if (assistantMessage) params.memory.append(assistantMessage);
-      const result = await params.memory.compact(new AbortController().signal);
-      if (result) {
-        const [compactMessage] = await this.messageRepo.batchCreate(
-          params.conversationId,
-          [
-            {
-              role: Role.USER,
-              content: result.content,
-              meta: { kind: 'compact', startRef: result.startRef },
-              createdAt: new Date(),
-            },
-          ],
-        );
-        params.memory.append(compactMessage);
-        return { used: result.usage.used, total: result.usage.total };
-      }
-      const usage = params.memory.getContextUsage();
-      return { used: usage.used, total: usage.total };
-    } catch (err) {
-      this.logger.warn(
-        `Post-turn memory maintenance failed: ${(err as Error)?.message ?? err}`,
-      );
-      return null;
-    }
   }
 }

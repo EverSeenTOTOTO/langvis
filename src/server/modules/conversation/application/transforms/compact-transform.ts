@@ -33,7 +33,8 @@ export class CompactTransform implements ConvTransform {
   async *apply(ctx: ConversationContext): AsyncGenerator<void> {
     const { contextSize, runtimeConfig } = ctx.config;
     if (!contextSize) return;
-    const compaction = (runtimeConfig as { history: HistoryCompactionConfig }).history;
+    const compaction = (runtimeConfig as { history: HistoryCompactionConfig })
+      .history;
 
     const history = ctx.messages.toArray();
     const { summary, index } = findLatestCompactionSummary(history);
@@ -78,4 +79,3 @@ export class CompactTransform implements ConvTransform {
     );
   }
 }
-

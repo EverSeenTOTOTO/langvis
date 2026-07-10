@@ -4,8 +4,8 @@ import { createDomainEvent, EventBus } from '@/server/libs/ddd';
 import { ChatService } from '../service/chat.service';
 import { SessionManager } from '../service/session-manager';
 import { StartChatCommand, TurnInitiated } from '../../contracts';
-import { AGENT_RUN_REPOSITORY } from '@/server/modules/agent/agent.di-tokens';
-import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
+import { projectToLlmMessages } from '../../domain/model/history-projection';
+import { runConvTransforms } from '../transforms';
 
 @commandHandler(StartChatCommand)
 export class StartChatHandler {
@@ -16,15 +16,12 @@ export class StartChatHandler {
     private sessionManager: SessionManager,
     @inject(EventBus)
     private eventBus: EventBus,
-    @inject(AGENT_RUN_REPOSITORY)
-    private readonly agentRunRepo: AgentRunRepositoryPort,
   ) {}
 
   async execute(command: StartChatCommand): Promise<{ assistantId: string }> {
     const { conversationId, userMessage, userId, assistantId } = command;
 
-    // 持久化 + 归属校验 + systemPrompt 推导 在 ChatService.startTurn;
-    // memory 与事件派发是 session 作用域 / I/O,留 handler。
+    // 持久化 + 归属校验 + systemPrompt 推导 在 ChatService.startTurn。
     const turn = await this.chatService.startTurn({
       conversationId,
       userId,
@@ -32,25 +29,18 @@ export class StartChatHandler {
       assistantId,
     });
 
-    const memory = this.sessionManager.getMemory(conversationId);
-    memory.append(turn.userMessage);
+    // 屏障：等在飞 turn-end 维护（compact 等）完成后再动 ctx.messages——
+    // 否则 compact 的 C 会落在本次 userMessage 之后、被位置投影丢掉。
+    await this.sessionManager.awaitMaintenance(conversationId);
 
-    // 消费者 transform 数据源：按 history 中 assistant 消息的 agentRunId 批量取过程摘要（存于 AgentRun）
-    const runIds = [
-      ...new Set(
-        memory
-          .getMessages()
-          .map(m => m.agentRunId)
-          .filter((id): id is string => !!id),
-      ),
-    ];
-    const runs = await this.agentRunRepo.findByIds(runIds);
-    const processSummaries = new Map<string, string>();
-    for (const run of runs) {
-      if (run.processSummary) processSummaries.set(run.id, run.processSummary);
+    const ctx = this.sessionManager.getCtx(conversationId);
+    ctx.messages = ctx.messages.append(turn.userMessage);
+
+    // turn-start transform（summary-bake 把 processSummary 烘进 ctx.messages）；投影读已变换的列表。
+    for await (const frame of runConvTransforms(ctx, 'turn-start')) {
+      if (frame) this.sessionManager.sendFrame(conversationId, frame);
     }
-
-    const effectiveHistory = await memory.buildContext(processSummaries);
+    const effectiveHistory = projectToLlmMessages(ctx.messages.toArray());
 
     this.eventBus.dispatch(
       TurnInitiated,
