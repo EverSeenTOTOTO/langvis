@@ -100,7 +100,7 @@ export interface TurnInitiatedPayload {
   assistantMessage: Message;
   userConfig: Record<string, unknown>;
   systemPrompt: string;
-  /** 会话有效历史（LLM-ready，conv 的 ConversationMemory 产物）—— agent 直接作种子，不再回调 conv。 */
+  /** 会话有效历史（LLM-ready，conv turn-start transform/projection 产物）—— agent 直接作种子，不再回调 conv。 */
   effectiveHistory: LlmMessage[];
 }
 

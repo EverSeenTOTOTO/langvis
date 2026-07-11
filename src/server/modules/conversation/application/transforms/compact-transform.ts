@@ -11,12 +11,24 @@ import {
   findLatestCompactionSummary,
   toLlmMessages,
 } from '@/server/modules/conversation/domain/model/history-projection';
-import { HISTORY_PROMPT } from '@/server/modules/conversation/domain/model/conversation-memory';
 import type { HistoryCompactionConfig } from '@/server/modules/conversation/application/service/history-config.fragment';
 import { fold } from '@/server/libs/compaction';
+import { Prompt } from '@/server/libs/prompt';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import Logger from '@/server/utils/logger';
 import { convTransform } from './registry';
+
+const HISTORY_PROMPT = Prompt.empty()
+  .with('Role', 'You are a conversation compactor.')
+  .with(
+    'Instructions',
+    'Fold the history below into a concise summary, incorporating any previous summary at the start. Preserve: who, when, did what, plus key facts and open items. Keep it concise and chronological; do not fabricate.',
+  )
+  .with('History', '')
+  .with(
+    'Output',
+    'Output the summary directly (no extra explanation, no Markdown headings).',
+  );
 
 @singleton()
 @convTransform

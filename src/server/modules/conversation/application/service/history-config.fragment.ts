@@ -7,7 +7,7 @@ export interface HistoryCompactionConfig {
 }
 
 /**
- * 历史层压缩配置片段——conv 域 ConversationMemory.compact 的 post-turn 折叠参数（有效历史用量超阈时
+ * 历史层压缩配置片段——conv 域 CompactTransform 的 post-turn 折叠参数（有效历史用量超阈时
  * 把「上一个摘要 C + tail」滚动折叠成新 C）。
  */
 export const HISTORY_FRAGMENT = defineConfigFragment({

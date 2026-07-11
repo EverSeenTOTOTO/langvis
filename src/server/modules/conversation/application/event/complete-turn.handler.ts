@@ -50,8 +50,10 @@ export class CompleteTurnHandler {
       this.sessionManager.flushRunView(conversationId, messageId);
       this.sessionManager.sendFrame(conversationId, {
         type: 'conversation_usage',
-        used: computeContextUsage(ctx.messages.toArray(), ctx.config.contextSize)
-          .used,
+        used: computeContextUsage(
+          ctx.messages.toArray(),
+          ctx.config.contextSize,
+        ).used,
         total: ctx.config.contextSize,
       });
       for await (const frame of runConvTransforms(ctx, 'turn-end')) {

@@ -4,6 +4,7 @@ import { Transport } from '@/shared/transport';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
 import type { StreamFrame, EnrichedEvent } from '@/shared/types/events';
+import { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
 
 class MockTransport extends Transport<StreamFrame> {
   isConnected = true;
@@ -44,40 +45,41 @@ function msg(
   };
 }
 
-const CONFIG = { contextSize: 8000, modelId: 'gpt-4', runtimeConfig: {} };
+const CONFIG = { contextSize: 8000, runtimeConfig: {} };
 const makeSession = (id = 'c1') =>
   new ConversationSession(id, 30_000, () => {});
 
-describe('ConversationSession —— 会话记忆成员（ConversationMemory 宿主）', () => {
-  it('activateMemory + getMemory.buildContext 返回有效历史；getContextUsage 用量', async () => {
+describe('ConversationSession —— 会话上下文（messages/config/transforms 宿主）', () => {
+  it('activateContext + getCtx：messages 可读、config 暴露 contextSize', () => {
     const s = makeSession();
-    s.activateMemory(
+    s.activateContext(
       [msg(Role.SYSTEM, 'sys'), msg(Role.USER, 'q1'), msg(Role.ASSIST, 'a1')],
       CONFIG,
+      new ConvTransformPlan(),
     );
-    const ctx = await s.getMemory().buildContext();
-    expect(ctx.some(m => m.content === 'q1')).toBe(true);
-    expect(s.getMemory().getContextUsage().total).toBe(8000);
+    const ctx = s.getCtx();
+    expect(ctx.messages.toArray().some(m => m.content === 'q1')).toBe(true);
+    expect(ctx.config.contextSize).toBe(8000);
   });
 
-  it('append 经 getMemory 反映到 buildContext', async () => {
+  it('append 经 ctx.messages 反映', () => {
     const s = makeSession();
-    s.activateMemory([msg(Role.SYSTEM, 'sys')], CONFIG);
-    s.getMemory().append(msg(Role.USER, 'q2'));
-    const ctx = await s.getMemory().buildContext();
-    expect(ctx.some(m => m.content === 'q2')).toBe(true);
+    s.activateContext([msg(Role.SYSTEM, 'sys')], CONFIG, new ConvTransformPlan());
+    const ctx = s.getCtx();
+    ctx.messages = ctx.messages.append(msg(Role.USER, 'q2'));
+    expect(ctx.messages.toArray().some(m => m.content === 'q2')).toBe(true);
   });
 
-  it('未 activateMemory 时 getMemory 抛错（fail loud）', () => {
+  it('未 activateContext 时 getCtx 抛错（fail loud）', () => {
     const s = makeSession();
-    expect(() => s.getMemory()).toThrow();
+    expect(() => s.getCtx()).toThrow();
   });
 
-  it('dispose 后 getMemory 抛错（记忆随会话释放）', () => {
+  it('dispose 后 getCtx 抛错（上下文随会话释放）', () => {
     const s = makeSession();
-    s.activateMemory([msg(Role.SYSTEM, 'sys')], CONFIG);
+    s.activateContext([msg(Role.SYSTEM, 'sys')], CONFIG, new ConvTransformPlan());
     s.dispose();
-    expect(() => s.getMemory()).toThrow();
+    expect(() => s.getCtx()).toThrow();
   });
 });
 

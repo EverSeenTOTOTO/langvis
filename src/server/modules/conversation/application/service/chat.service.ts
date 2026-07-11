@@ -277,7 +277,9 @@ export class ChatService {
     if (view.audio) meta.audio = view.audio;
     return this.messageRepo.update(
       messageId,
-      isEmpty(meta) ? { content: view.content } : { content: view.content, meta },
+      isEmpty(meta)
+        ? { content: view.content }
+        : { content: view.content, meta },
     );
   }
 }
