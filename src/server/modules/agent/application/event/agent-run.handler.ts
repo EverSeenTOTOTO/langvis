@@ -39,7 +39,6 @@ export class AgentRunHandler {
       conversationId,
       assistantMessage,
       runtimeConfig,
-      systemPrompt,
       effectiveHistory,
     } = event.payload;
     const runId = generateId('run');
@@ -63,7 +62,6 @@ export class AgentRunHandler {
         runId,
         workDir,
         runtimeConfig,
-        systemPrompt,
         seed,
         toolSet,
         interactive: true,

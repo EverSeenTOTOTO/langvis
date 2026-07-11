@@ -5,7 +5,6 @@ import { RunAlreadyCompletedError } from '@/server/modules/agent/domain/errors';
 
 function makeConfig(): RunConfigVO {
   return RunConfigVO.of({
-    systemPrompt: 'You are helpful',
     tools: [],
     runtimeConfig: {},
   });

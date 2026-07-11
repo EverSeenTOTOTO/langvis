@@ -6,18 +6,15 @@
 import type { ConversationConfig } from '@/server/libs/config';
 
 export interface RunConfigVOProps {
-  systemPrompt: string;
   tools: string[];
   runtimeConfig: ConversationConfig;
 }
 
 export class RunConfigVO {
-  readonly systemPrompt: string;
   readonly tools: string[];
   readonly runtimeConfig: ConversationConfig;
 
   private constructor(props: RunConfigVOProps) {
-    this.systemPrompt = props.systemPrompt;
     this.tools = props.tools;
     this.runtimeConfig = props.runtimeConfig;
     Object.freeze(this);

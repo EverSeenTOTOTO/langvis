@@ -40,7 +40,6 @@ function makeCtx(opts: {
   container.register(LLM_PORT, { useValue: llm });
   const contextSize = opts.contextSize ?? 10;
   const config = RunConfigVO.of({
-    systemPrompt: '',
     tools: [],
     runtimeConfig: { model: {}, loop: COMPACTION },
   });
