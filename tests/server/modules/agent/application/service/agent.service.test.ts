@@ -1,6 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import '@/server/modules/agent/domain/model/loop-config.fragment';
-import '@/server/modules/agent/application/service/model-config.fragment';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { ConfigValidationError } from '@/server/modules/agent/domain/errors';
 
@@ -29,7 +27,7 @@ describe('AgentService', () => {
   });
 
   describe('createRunConfig', () => {
-    it('校验 userConfig 后产出 RuntimeConfigVO 快照', () => {
+    it('校验 userConfig 后产出 RunConfigVO 快照', () => {
       const cfg = makeService().buildRunConfig(
         { model: { modelId: 'gpt-4' } },
         'prompt',

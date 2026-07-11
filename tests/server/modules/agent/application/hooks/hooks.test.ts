@@ -5,7 +5,7 @@ import { CompactionHook } from '@/server/modules/agent/application/hooks/compact
 import { ProcessSummaryHook } from '@/server/modules/agent/application/hooks/process-summary-hook';
 import { LoopUsageHook } from '@/server/modules/agent/application/hooks/loop-usage-hook';
 import { ListMonad } from '@/server/libs/list';
-import { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
+import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
@@ -39,7 +39,7 @@ function makeCtx(opts: {
   const llm = opts.llm ?? mockLlm();
   container.register(LLM_PORT, { useValue: llm });
   const contextSize = opts.contextSize ?? 10;
-  const config = RuntimeConfigVO.of({
+  const config = RunConfigVO.of({
     systemPrompt: '',
     tools: [],
     runtimeConfig: { model: {}, loop: COMPACTION },
@@ -206,9 +206,7 @@ describe('LoopUsageHook（post-observation 遥测：yield loop_usage）', () => 
       seed: [{ role: 'system', content: 'sys' }],
       loopSteps: ['a', 'b'],
     });
-    const events = await collect(
-      new LoopUsageHook(providerService).apply(ctx),
-    );
+    const events = await collect(new LoopUsageHook(providerService).apply(ctx));
     expect(events).toHaveLength(1);
     const usage = events[0] as Extract<RunEvent, { type: 'loop_usage' }>;
     expect(usage.type).toBe('loop_usage');

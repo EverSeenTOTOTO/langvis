@@ -1,17 +1,13 @@
 import type { JSONSchemaType } from 'ajv';
-import { defineConfigFragment } from '@/server/libs/config/config-fragment';
+import type { ConfigFragment } from '../config-fragment';
 
 export interface LoopCompactionConfig {
   threshold: number;
   windowSize: number;
-  /** loop 内压缩时保留的近期消息数（含成对的 action/observation）。 */
   keepRecent: number;
 }
 
-/**
- * loop mid-loop 折叠参数（用量超阈时把较早的 loop actions 折叠为一条回顾、保留近期 keepRecent）。
- */
-export const LOOP_FRAGMENT = defineConfigFragment({
+export const LOOP_FRAGMENT: ConfigFragment<'loop', LoopCompactionConfig> = {
   key: 'loop',
   schema: {
     type: 'object',
@@ -44,4 +40,4 @@ export const LOOP_FRAGMENT = defineConfigFragment({
       },
     },
   } as unknown as JSONSchemaType<unknown>,
-});
+};

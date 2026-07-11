@@ -1,7 +1,7 @@
 import type { RunStatus } from './agent';
 import type { ReActStep } from './render';
 import type { EnrichedEvent } from './events';
-import type { RuntimeConfigVOProps } from '@/server/modules/agent/domain/model/runtime-config.vo';
+import type { RunConfigVOProps } from '@/server/modules/agent/domain/model/run-config.vo';
 
 export enum Role {
   SYSTEM = 'system',
@@ -46,7 +46,7 @@ export type AgentRun = {
   status: RunStatus;
   /** 事实源 —— content/steps 由 projectRun 派生 */
   events: EnrichedEvent[] | null;
-  config: RuntimeConfigVOProps | null;
+  config: RunConfigVOProps | null;
   startedAt: Date;
   completedAt: Date | null;
   processSummary: string | null;

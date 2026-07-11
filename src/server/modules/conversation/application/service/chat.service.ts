@@ -19,7 +19,7 @@ import {
   createActivationMessages,
   createTurnMessages,
 } from '../../domain/service/message-factory';
-import { composeConfigSchema } from '@/server/libs/config/config-fragment';
+import { configSchema, type ConversationConfig } from '@/server/libs/config';
 import { parse } from '@/server/utils/schemaValidator';
 import { ConversationNotFoundError } from '../../domain/errors';
 import Logger from '@/server/utils/logger';
@@ -158,16 +158,13 @@ export class ChatService {
     return this.messageRepo.findByConversationId(conversationId);
   }
 
-  /** 解析会话配置为 runtimeConfig（composeConfigSchema 全量 parse）。contextSize 不在此——按需派生。 */
+  /** 解析会话配置为 runtimeConfig（configSchema 全量 parse，边界处一次 as）。contextSize 不在此——按需派生。 */
   async resolveConversationConfig(
     conversationId: string,
-  ): Promise<Record<string, unknown> | null> {
+  ): Promise<ConversationConfig | null> {
     const conv = await this.convRepo.findById(conversationId);
     if (!conv) return null;
-    return parse(composeConfigSchema(), conv.config) as Record<
-      string,
-      unknown
-    >;
+    return parse(configSchema, conv.config) as ConversationConfig;
   }
 
   async persistAgentRunId(messageId: string, agentRunId: string) {

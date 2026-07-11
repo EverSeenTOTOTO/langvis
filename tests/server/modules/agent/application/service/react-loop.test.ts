@@ -6,7 +6,7 @@ import {
   runReactLoop,
 } from '@/server/modules/agent/application/service/react-loop';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
-import { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
+import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { ListMonad } from '@/server/libs/list';
 import { HookPlan, type Hook } from '@/server/modules/agent/domain/model/hook';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
@@ -225,11 +225,11 @@ interface BuiltCtx {
   calls: { messages: LlmMessage[] }[];
 }
 
-/** Assemble a real `AgentRunContext` (real `AgentRun`/`RuntimeConfigVO`) minus
+/** Assemble a real `AgentRunContext` (real `AgentRun`/`RunConfigVO`) minus
  * the LLM (scripted) and the tool path (faked) — enough to drive the real `runReactLoop`. */
 function buildCtx(opts: BuildCtxOptions): BuiltCtx {
   const { llm, calls } = scriptedLlm(opts.responses);
-  const config = RuntimeConfigVO.of({
+  const config = RunConfigVO.of({
     systemPrompt: 'test system prompt',
     tools: [],
     runtimeConfig: {

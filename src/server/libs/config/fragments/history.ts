@@ -1,16 +1,15 @@
 import type { JSONSchemaType } from 'ajv';
-import { defineConfigFragment } from '@/server/libs/config/config-fragment';
+import type { ConfigFragment } from '../config-fragment';
 
 export interface HistoryCompactionConfig {
   threshold: number;
   windowSize: number;
 }
 
-/**
- * 历史层压缩配置片段——conv 域 CompactTransform 的 post-turn 折叠参数（有效历史用量超阈时
- * 把「上一个摘要 C + tail」滚动折叠成新 C）。
- */
-export const HISTORY_FRAGMENT = defineConfigFragment({
+export const HISTORY_FRAGMENT: ConfigFragment<
+  'history',
+  HistoryCompactionConfig
+> = {
   key: 'history',
   schema: {
     type: 'object',
@@ -34,4 +33,4 @@ export const HISTORY_FRAGMENT = defineConfigFragment({
       },
     },
   } as unknown as JSONSchemaType<unknown>,
-});
+};

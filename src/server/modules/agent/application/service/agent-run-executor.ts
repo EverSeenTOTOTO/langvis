@@ -12,6 +12,7 @@ import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { generateId } from '@/shared/utils';
 import type { LlmMessage } from '@/shared/types/entities';
+import type { ConversationConfig } from '@/server/libs/config';
 import { ListMonad } from '@/server/libs/list';
 import { HookPlan } from '@/server/modules/agent/domain/model/hook';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
@@ -30,7 +31,7 @@ export interface LaunchParams {
   runId: string;
   workDir: string;
   /** conv 侧一次性 parse 的运行时配置（agent 直接复用，不再二次 parse）。contextSize 按需派生，不在此处。 */
-  runtimeConfig: Record<string, unknown>;
+  runtimeConfig: ConversationConfig;
   systemPrompt: string;
   /** run 的初始消息（已含 system 提示）；conv 由 effectiveHistory 经 buildIterMessages 派生，子 agent 由 brief+query 派生。 */
   seed: LlmMessage[];
@@ -58,8 +59,7 @@ export class AgentRunExecutor {
 
   createRun(params: LaunchParams): { run: AgentRun; ctx: AgentRunContext } {
     const { runtimeConfig } = params;
-    const modelId = (runtimeConfig as { model?: { modelId?: string } }).model
-      ?.modelId;
+    const modelId = runtimeConfig.model?.modelId;
 
     this.logger.info(
       `Create run ${chalk.cyan(params.runId)} — model: ${chalk.red(modelId ?? '(default)')}`,

@@ -1,11 +1,11 @@
-import { RuntimeConfigVO } from './runtime-config.vo';
+import { RunConfigVO } from './run-config.vo';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 import { RunAlreadyCompletedError } from '../errors';
 import { AggregateRoot } from '@/server/libs/ddd';
 import type { RunStatus } from '@/shared/types/agent';
 
 export class AgentRun extends AggregateRoot<string> {
-  readonly config: RuntimeConfigVO;
+  readonly config: RunConfigVO;
 
   /** loop 退出过程摘要：生产者在 response_user 折叠写入，executor 持久化。
    * 非事件溯源字段（类比 completedAt）——不参与 run 执行 replay，仅作派生属性落库。 */
@@ -33,7 +33,7 @@ export class AgentRun extends AggregateRoot<string> {
     return this.abortController.signal;
   }
 
-  constructor(runId: string, config: RuntimeConfigVO) {
+  constructor(runId: string, config: RunConfigVO) {
     super(runId);
     this.config = config;
   }

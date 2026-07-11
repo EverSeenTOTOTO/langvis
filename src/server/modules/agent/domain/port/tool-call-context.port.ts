@@ -1,4 +1,5 @@
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
+import type { ConversationConfig } from '@/server/libs/config';
 
 /**
  * ToolCallContext —— 与 AgentRunContext 对称
@@ -18,5 +19,5 @@ export interface ToolCallContext {
   /** 是否允许 HITL。conv run = true；子 agent = false（无 HTTP 提交入口，AskUser 会 fail-fast）。 */
   readonly interactive: boolean;
   /** 运行时配置快照。供工具读取用户默认值（如 TTS voice/modelId），避免把这些内部参数暴露给模型。 */
-  readonly runtimeConfig: Record<string, unknown>;
+  readonly runtimeConfig: ConversationConfig;
 }

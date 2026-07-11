@@ -10,6 +10,7 @@ import {
 import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
 import { ListMonad } from '@/server/libs/list';
+import type { ConversationConfig } from '@/server/libs/config';
 import {
   ConvTransformPlan,
   type ConversationContext,
@@ -96,7 +97,7 @@ export class ConversationSession {
   private connection: Connection | undefined;
   private readonly activeRuns = new Map<string, ActiveRun>();
   private messages: ListMonad<Message> | undefined;
-  private runtimeConfig: Record<string, unknown> | undefined;
+  private runtimeConfig: ConversationConfig | undefined;
   private transforms: ConvTransformPlan | undefined;
   private maintenance:
     | { promise: Promise<void>; resolve: () => void }
@@ -217,7 +218,7 @@ export class ConversationSession {
   /** 激活会话上下文：messages 上 session，灌入解析后的 runtimeConfig + transform 管道（由调用方解析传入——session 不碰容器）。 */
   activateContext(
     messages: Message[],
-    runtimeConfig: Record<string, unknown>,
+    runtimeConfig: ConversationConfig,
     transforms: ConvTransformPlan,
   ): void {
     this.messages = ListMonad.of(messages);

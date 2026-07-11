@@ -11,7 +11,6 @@ import {
   findLatestCompactionSummary,
   toLlmMessages,
 } from '@/server/modules/conversation/domain/model/history-projection';
-import type { HistoryCompactionConfig } from '@/server/modules/conversation/application/service/history-config.fragment';
 import { fold } from '@/server/libs/compaction';
 import { Prompt } from '@/server/libs/prompt';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
@@ -50,9 +49,8 @@ export class CompactTransform implements ConvTransform {
       ctx.runtimeConfig,
     );
     if (!contextSize) return;
-    const compaction = (
-      ctx.runtimeConfig as { history: HistoryCompactionConfig }
-    ).history;
+    const compaction = ctx.runtimeConfig.history;
+    if (!compaction) return;
 
     const history = ctx.messages.toArray();
     const { summary, index } = findLatestCompactionSummary(history);

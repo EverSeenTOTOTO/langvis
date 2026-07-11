@@ -5,9 +5,9 @@ import { parse } from '@/server/utils/schemaValidator';
 import type { Tool } from '../../domain/model/tool.base';
 import { ToolSet } from '../../domain/model/tool-set.vo';
 import type { ToolMember } from '../../domain/model/tool-set.vo';
-import { RuntimeConfigVO } from '../../domain/model/runtime-config.vo';
+import { RunConfigVO } from '../../domain/model/run-config.vo';
 import { ConfigValidationError } from '../../domain/errors';
-import { composeConfigSchema } from '@/server/libs/config/config-fragment';
+import { configSchema, type ConversationConfig } from '@/server/libs/config';
 import { BASE_PROMPT } from './base-prompt';
 import { ToolService } from './tool.service';
 import { SkillService } from './skill.service';
@@ -24,7 +24,6 @@ export class AgentService {
     ToolIds.CALL_SUBAGENTS,
   ];
 
-  private cachedSchema: JSONSchemaType<Record<string, unknown>> | null = null;
   private cachedPrompt: Promise<string> | null = null;
 
   constructor(
@@ -32,17 +31,8 @@ export class AgentService {
     @inject(SkillService) private readonly skillService: SkillService,
   ) {}
 
-  /**
-   * 聚合所有 ConfigFragment（按 key 平铺）为对话配置 schema——纯组合器，不认识任何域细节。
-   * 前端配置弹窗据此渲染，conv 侧 resolveConversationConfig 据此 parse runtimeConfig。
-   */
   getConfigSchema(): JSONSchemaType<Record<string, unknown>> {
-    if (!this.cachedSchema) {
-      this.cachedSchema = composeConfigSchema() as JSONSchemaType<
-        Record<string, unknown>
-      >;
-    }
-    return this.cachedSchema;
+    return configSchema as JSONSchemaType<Record<string, unknown>>;
   }
 
   /**
@@ -62,20 +52,23 @@ export class AgentService {
     return this.cachedPrompt;
   }
 
-  /** 校验 userConfig 并产出 RuntimeConfigVO（不可变配置快照）；失败抛 ConfigValidationError。 */
+  /** 校验 userConfig 并产出 RunConfigVO（不可变配置快照）；失败抛 ConfigValidationError。 */
   buildRunConfig(
     userConfig: Record<string, unknown>,
     systemPrompt: string,
-  ): RuntimeConfigVO {
-    let runtimeConfig: Record<string, unknown>;
+  ): RunConfigVO {
+    let runtimeConfig: ConversationConfig;
 
     try {
-      runtimeConfig = parse(this.getConfigSchema(), userConfig);
+      runtimeConfig = parse(
+        this.getConfigSchema(),
+        userConfig,
+      ) as ConversationConfig;
     } catch (e) {
       throw new ConfigValidationError((e as Error)?.message ?? String(e));
     }
 
-    return RuntimeConfigVO.of({
+    return RunConfigVO.of({
       systemPrompt,
       tools: this.inlineTools,
       runtimeConfig,
@@ -83,14 +76,14 @@ export class AgentService {
   }
 
   /**
-   * 从 conv 侧已 parse 的 runtimeConfig 直接产出 RuntimeConfigVO——不再二次 parse。
+   * 从 conv 侧已 parse 的 runtimeConfig 直接产出 RunConfigVO——不再二次 parse。
    * contextSize 不参与（按需派生）。
    */
   buildResolvedRunConfig(
     systemPrompt: string,
-    runtimeConfig: Record<string, unknown>,
-  ): RuntimeConfigVO {
-    return RuntimeConfigVO.of({
+    runtimeConfig: ConversationConfig,
+  ): RunConfigVO {
+    return RunConfigVO.of({
       systemPrompt,
       tools: this.inlineTools,
       runtimeConfig,

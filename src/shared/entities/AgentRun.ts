@@ -1,7 +1,7 @@
 import type { AgentRun as AgentRunType } from '@/shared/types/entities';
 import type { RunStatus } from '@/shared/types/agent';
 import type { EnrichedEvent } from '@/shared/types/events';
-import type { RuntimeConfigVOProps } from '@/server/modules/agent/domain/model/runtime-config.vo';
+import type { RunConfigVOProps } from '@/server/modules/agent/domain/model/run-config.vo';
 import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
 import { generateId } from '@/shared/utils';
 
@@ -27,7 +27,7 @@ export class AgentRunEntity implements AgentRunType {
   events!: EnrichedEvent[] | null;
 
   @Column({ type: 'jsonb', nullable: true })
-  config!: RuntimeConfigVOProps | null;
+  config!: RunConfigVOProps | null;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   startedAt!: Date;
