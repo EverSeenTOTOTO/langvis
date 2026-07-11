@@ -64,7 +64,7 @@ export default class ListToolsTool extends Tool<ListToolsOutput> {
     });
 
     return {
-      tools: formatToolsToMarkdown(toolInstances),
+      tools: formatToolsToMarkdown(toolInstances, { detail: true }),
       skills: formatSkillsToMarkdown(filteredSkills),
     };
   }
