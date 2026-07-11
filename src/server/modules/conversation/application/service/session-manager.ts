@@ -11,9 +11,9 @@ import { EventBus, createDomainEvent } from '@/server/libs/ddd';
 import { CancelRun } from '@/server/modules/agent/contracts';
 import { ChatService } from './chat.service';
 import { ConversationSession } from './conversation-session';
-import type { ConversationMemory } from '../../domain/model/conversation-memory';
 import type { ConversationConfig } from '../../contracts';
 import type { ConversationContext } from '../../domain/model/conv-transform';
+import { getConvTransformPlan } from '../transforms';
 import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
 
@@ -176,30 +176,17 @@ export class SessionManager implements LifecycleHook {
     await this.reconcileOrphanedRuns(conversationId, 'cancelled', reason);
   }
 
-  /** 会话激活：灌入消息 + 配置构造 ConversationMemory 投影。 */
-  activateMemory(
-    conversationId: string,
-    messages: Message[],
-    config: ConversationConfig,
-  ): void {
-    this.getOrCreate(conversationId).activateMemory(messages, config);
-  }
-
-  getMemory(conversationId: string): ConversationMemory {
-    const session = this.sessions.get(conversationId);
-    if (!session?.hasMemory()) {
-      throw new Error(`ConversationMemory: ${conversationId} not activated`);
-    }
-    return session.getMemory();
-  }
-
-  /** 会话上下文激活（新路径：messages 上 session + 解析 transform 管道）。 */
+  /** 会话上下文激活：messages 上 session + 解析 transform 管道（全局单例，跨会话不变）。 */
   activateContext(
     conversationId: string,
     messages: Message[],
     config: ConversationConfig,
   ): void {
-    this.getOrCreate(conversationId).activateContext(messages, config);
+    this.getOrCreate(conversationId).activateContext(
+      messages,
+      config,
+      getConvTransformPlan(),
+    );
   }
 
   hasCtx(conversationId: string): boolean {

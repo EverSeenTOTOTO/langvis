@@ -46,7 +46,11 @@ describe('StartChatHandler', () => {
 
     await expect(
       handler.execute(
-        new StartChatCommand('conv_1', { role: Role.USER, content: 'hi' }, 'user_1'),
+        new StartChatCommand(
+          'conv_1',
+          { role: Role.USER, content: 'hi' },
+          'user_1',
+        ),
       ),
     ).rejects.toBeInstanceOf(ConversationNotFoundError);
 
@@ -68,7 +72,11 @@ describe('StartChatHandler', () => {
     const handler = new StartChatHandler(chatService, sm, stubEventBus);
 
     const result = await handler.execute(
-      new StartChatCommand('conv_1', { role: Role.USER, content: 'hi' }, 'user_1'),
+      new StartChatCommand(
+        'conv_1',
+        { role: Role.USER, content: 'hi' },
+        'user_1',
+      ),
     );
 
     expect(sm.awaitMaintenance).toHaveBeenCalledWith('conv_1');

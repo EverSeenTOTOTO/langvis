@@ -78,7 +78,9 @@ describe('CompleteTurnHandler — turn-end 触发适配器（线性屏障）', (
       conversationId,
       expect.objectContaining({ type: 'conversation_usage', total: 4096 }),
     );
-    expect(sessionManager.beginMaintenance).toHaveBeenCalledWith(conversationId);
+    expect(sessionManager.beginMaintenance).toHaveBeenCalledWith(
+      conversationId,
+    );
     expect(sessionManager.endMaintenance).toHaveBeenCalledWith(conversationId);
     expect(sessionManager.finalizeRun).toHaveBeenCalledWith(
       conversationId,

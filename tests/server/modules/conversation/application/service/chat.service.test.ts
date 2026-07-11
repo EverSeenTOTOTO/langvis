@@ -410,7 +410,10 @@ describe('ChatService', () => {
     }
 
     it('投影终态文案持久化（无 audio 时只更 content），返回更新后的消息', async () => {
-      (messageRepo.update as any).mockResolvedValue({ id: 'msg_1', content: 'Hello' });
+      (messageRepo.update as any).mockResolvedValue({
+        id: 'msg_1',
+        content: 'Hello',
+      });
 
       const msg = await service.persistAssistantTurn('msg_1', [
         ev({ type: 'text_chunk', content: 'Hello' }),

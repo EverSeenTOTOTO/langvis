@@ -7,7 +7,6 @@ import {
   extractChildEvents,
   type RunView,
 } from '@/server/modules/conversation/application/service/run-projection';
-import { ConversationMemory } from '../../domain/model/conversation-memory';
 import type { ConversationConfig } from '../../contracts';
 import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
@@ -16,7 +15,6 @@ import {
   ConvTransformPlan,
   type ConversationContext,
 } from '../../domain/model/conv-transform';
-import { resolveConvTransforms } from '../transforms';
 
 /** 活跃 run 的会话内追踪——持 runId + 事件缓冲 + 增量投影视图。 */
 interface ActiveRun {
@@ -37,7 +35,6 @@ const logger = Logger.child({ source: 'ConversationSession' });
 export class ConversationSession {
   private connection: Connection | undefined;
   private readonly activeRuns = new Map<string, ActiveRun>();
-  private memory: ConversationMemory | undefined;
   private messages: ListMonad<Message> | undefined;
   private config: ConversationConfig | undefined;
   private transforms: ConvTransformPlan | undefined;
@@ -201,33 +198,15 @@ export class ConversationSession {
     this.activeRuns.delete(messageId);
   }
 
-  /** 激活：灌入当前消息 + 配置构造会话记忆投影。 */
-  activateMemory(messages: Message[], config: ConversationConfig): void {
-    this.memory = new ConversationMemory({
-      history: messages,
-      contextSize: config.contextSize,
-      runtimeConfig: config.runtimeConfig,
-    });
-  }
-
-  hasMemory(): boolean {
-    return !!this.memory;
-  }
-
-  getMemory(): ConversationMemory {
-    if (!this.memory) {
-      throw new Error(
-        `ConversationMemory: ${this.conversationId} not activated (activateMemory missing)`,
-      );
-    }
-    return this.memory;
-  }
-
-  /** 激活会话上下文：messages 上 session，灌入解析后的配置 + 解析 transform 管道。 */
-  activateContext(messages: Message[], config: ConversationConfig): void {
+  /** 激活会话上下文：messages 上 session，灌入解析后的配置 + transform 管道（由调用方解析传入——session 不碰容器）。 */
+  activateContext(
+    messages: Message[],
+    config: ConversationConfig,
+    transforms: ConvTransformPlan,
+  ): void {
     this.messages = ListMonad.of(messages);
     this.config = config;
-    this.transforms = new ConvTransformPlan(resolveConvTransforms());
+    this.transforms = transforms;
   }
 
   hasCtx(): boolean {
@@ -271,7 +250,6 @@ export class ConversationSession {
     this.connection?.dispose();
     this.connection = undefined;
     this.activeRuns.clear();
-    this.memory = undefined;
     this.messages = undefined;
     this.config = undefined;
     this.transforms = undefined;

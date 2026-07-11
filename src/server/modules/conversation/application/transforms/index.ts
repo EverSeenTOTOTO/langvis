@@ -4,4 +4,4 @@ import './summary-bake-transform';
 import './compact-transform';
 
 export { resolveConvTransforms, convTransform } from './registry';
-export { runConvTransforms } from './run-transforms';
+export { runConvTransforms, getConvTransformPlan } from './run-transforms';
