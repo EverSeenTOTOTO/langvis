@@ -15,7 +15,7 @@ import type { LlmMessage } from '@/shared/types/entities';
 import { ListMonad } from '@/server/libs/list';
 import { HookPlan } from '@/server/modules/agent/domain/model/hook';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import type { ConversationConfig } from '@/server/modules/conversation/contracts';
 import { AgentService } from './agent.service';
 import { runReactLoop } from './react-loop';
 import Logger from '@/server/utils/logger';
@@ -30,7 +30,8 @@ import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 export interface LaunchParams {
   runId: string;
   workDir: string;
-  userConfig: Record<string, unknown>;
+  /** conv 侧一次性解析的会话配置（contextSize + runtimeConfig）；agent 直接复用，不再二次 parse/resolveChatModel。 */
+  config: ConversationConfig;
   systemPrompt: string;
   /** run 的初始消息（已含 system 提示）；conv 由 effectiveHistory 经 buildIterMessages 派生，子 agent 由 brief+query 派生。 */
   seed: LlmMessage[];
@@ -53,26 +54,22 @@ export class AgentRunExecutor {
     @inject(CACHE_PORT) private readonly cache: CachePort,
     @inject(AGENT_RUN_REPOSITORY)
     private readonly agentRunRepo: AgentRunRepositoryPort,
-    @inject(ProviderService) private readonly providerService: ProviderService,
     @inject(AgentService) private readonly agentService: AgentService,
   ) {}
 
   createRun(params: LaunchParams): { run: AgentRun; ctx: AgentRunContext } {
-    const cfg = params.userConfig as {
-      model?: { modelId?: string };
-    };
-    const { id: modelId, contextSize } = this.providerService.resolveChatModel(
-      cfg.model?.modelId,
-    );
+    const { contextSize, runtimeConfig } = params.config;
+    const modelId = (runtimeConfig as { model?: { modelId?: string } }).model
+      ?.modelId;
 
     this.logger.info(
       `Create run ${chalk.cyan(params.runId)} — model: ${chalk.red(modelId ?? '(default)')} (${contextSize} ctx)`,
     );
 
-    const config = this.agentService.buildRunConfig(
-      params.userConfig,
+    const config = this.agentService.buildResolvedRunConfig(
       params.systemPrompt,
       contextSize,
+      runtimeConfig,
     );
 
     const run = new AgentRun(params.runId, config);
@@ -98,6 +95,7 @@ export class AgentRunExecutor {
           cache: this.cache,
           chatModelId: modelId,
           runtimeConfig: config.runtimeConfig,
+          contextSize: config.contextSize,
         }),
     };
 

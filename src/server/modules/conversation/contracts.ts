@@ -98,7 +98,8 @@ export const TurnInitiated = 'turn_initiated';
 export interface TurnInitiatedPayload {
   conversationId: string;
   assistantMessage: Message;
-  userConfig: Record<string, unknown>;
+  /** 会话解析后的配置（conv 侧一次性解析，agent 直接复用——不再二次 parse/resolveChatModel）。 */
+  config: ConversationConfig;
   systemPrompt: string;
   /** 会话有效历史（LLM-ready，conv turn-start transform/projection 产物）—— agent 直接作种子，不再回调 conv。 */
   effectiveHistory: LlmMessage[];

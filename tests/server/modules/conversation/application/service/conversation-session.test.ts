@@ -64,7 +64,11 @@ describe('ConversationSession —— 会话上下文（messages/config/transform
 
   it('append 经 ctx.messages 反映', () => {
     const s = makeSession();
-    s.activateContext([msg(Role.SYSTEM, 'sys')], CONFIG, new ConvTransformPlan());
+    s.activateContext(
+      [msg(Role.SYSTEM, 'sys')],
+      CONFIG,
+      new ConvTransformPlan(),
+    );
     const ctx = s.getCtx();
     ctx.messages = ctx.messages.append(msg(Role.USER, 'q2'));
     expect(ctx.messages.toArray().some(m => m.content === 'q2')).toBe(true);
@@ -77,7 +81,11 @@ describe('ConversationSession —— 会话上下文（messages/config/transform
 
   it('dispose 后 getCtx 抛错（上下文随会话释放）', () => {
     const s = makeSession();
-    s.activateContext([msg(Role.SYSTEM, 'sys')], CONFIG, new ConvTransformPlan());
+    s.activateContext(
+      [msg(Role.SYSTEM, 'sys')],
+      CONFIG,
+      new ConvTransformPlan(),
+    );
     s.dispose();
     expect(() => s.getCtx()).toThrow();
   });

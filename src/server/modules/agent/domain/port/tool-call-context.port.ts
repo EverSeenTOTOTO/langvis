@@ -19,4 +19,6 @@ export interface ToolCallContext {
   readonly interactive: boolean;
   /** 运行时配置快照。供工具读取用户默认值（如 TTS voice/modelId），避免把这些内部参数暴露给模型。 */
   readonly runtimeConfig: Record<string, unknown>;
+  /** 模型上下文窗口（conv 侧解析）；子 agent 派生 launch 配置时需要。 */
+  readonly contextSize: number;
 }
