@@ -2,7 +2,10 @@ import { ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { RunEvent } from '@/shared/types/events';
 import { stripThinking } from '@/server/libs/llm-text';
-import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
+import type {
+  AgentRunContext,
+  ToolExecutor,
+} from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { HookPhase } from '@/server/modules/agent/domain/model/hook';
 import { winstonLogger } from '@/server/utils/logger';
 
@@ -30,6 +33,7 @@ async function* applyHooks(
 
 export async function* runReactLoop(
   ctx: AgentRunContext,
+  runTool: ToolExecutor,
 ): AsyncGenerator<RunEvent, void, void> {
   const model = ctx.config.runtimeConfig.model ?? {};
 
@@ -79,7 +83,7 @@ export async function* runReactLoop(
       yield { type: 'thought', content: parsed.thought };
     }
 
-    const observation = yield* ctx.executeTool(tool, input);
+    const observation = yield* runTool(tool, input);
 
     if (tool === ToolIds.RESPONSE_USER) {
       yield* applyHooks(ctx, 'loop-exit');

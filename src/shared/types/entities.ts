@@ -37,6 +37,8 @@ export type Message = {
   status?: RunStatus | null;
   /** Merged from agent_runs for assistant messages — re-derived from run events, not a Message DB column */
   audio?: { filePath: string; voice?: string } | null;
+  /** Merged from agent_runs.processSummary for assistant messages — not a Message DB column */
+  summary?: string;
   meta?: Record<string, unknown> | null;
   createdAt: Date;
   conversationId: string;
@@ -58,6 +60,8 @@ export type LlmMessage = {
   role: Role | 'system' | 'user' | 'assistant';
   content: string;
   attachments?: MessageAttachment[] | null;
+  /** Prior turn processSummary; → thought at agent seed restoration. */
+  summary?: string;
 };
 
 export type Conversation = {

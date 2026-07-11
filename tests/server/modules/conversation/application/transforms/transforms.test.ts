@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { container } from 'tsyringe';
 import { resolveConvTransforms } from '@/server/modules/conversation/application/transforms';
 import { UsageTransform } from '@/server/modules/conversation/application/transforms/usage-transform';
-import { SummaryBakeTransform } from '@/server/modules/conversation/application/transforms/summary-bake-transform';
+import { SummaryAttachTransform } from '@/server/modules/conversation/application/transforms/summary-attach-transform';
 import { CompactTransform } from '@/server/modules/conversation/application/transforms/compact-transform';
 import {
   ConvTransformPlan,
@@ -75,21 +75,19 @@ describe('conv transform registry（自动识别）', () => {
   it('resolveConvTransforms 发现 @convTransform 标记的三个 transform', () => {
     const transforms = resolveConvTransforms();
     expect(transforms.some(t => t instanceof UsageTransform)).toBe(true);
-    expect(transforms.some(t => t instanceof SummaryBakeTransform)).toBe(true);
+    expect(transforms.some(t => t instanceof SummaryAttachTransform)).toBe(
+      true,
+    );
     expect(transforms.some(t => t instanceof CompactTransform)).toBe(true);
   });
 
-  it('相位分桶：summary-bake 进 turn-start+turn-end，compact 进 turn-end，usage 进 activated+turn-end', () => {
+  it('相位分桶：summary-attach 进 turn-start，compact 进 turn-end，usage 进 activated+turn-end', () => {
     const plan = new ConvTransformPlan(resolveConvTransforms());
     const ids = (ts: readonly { id: string }[]) => ts.map(t => t.id);
     expect(ids(plan.forPhase('activated'))).toEqual(['usage']);
-    expect(ids(plan.forPhase('turn-start'))).toEqual(['summary-bake']);
-    // 导入序即运行序：烘焙 → 折叠 → 量用量
-    expect(ids(plan.forPhase('turn-end'))).toEqual([
-      'summary-bake',
-      'compact',
-      'usage',
-    ]);
+    expect(ids(plan.forPhase('turn-start'))).toEqual(['summary-attach']);
+    // 导入序即运行序：折叠 → 量用量
+    expect(ids(plan.forPhase('turn-end'))).toEqual(['compact', 'usage']);
   });
 });
 
@@ -110,8 +108,8 @@ describe('UsageTransform', () => {
   });
 });
 
-describe('SummaryBakeTransform', () => {
-  it('按 agentRunId 取 processSummary 并前缀 <summary> 到 assistant', async () => {
+describe('SummaryAttachTransform', () => {
+  it('按 agentRunId 取 processSummary 并 attach 为 msg.summary（不改 content）', async () => {
     const agentRunRepo = {
       findByIds: vi.fn(async () => [
         { id: 'run_1', processSummary: 'did X then Y' },
@@ -121,32 +119,33 @@ describe('SummaryBakeTransform', () => {
       makeMessage(Role.USER, 'q'),
       makeMessage(Role.ASSIST, 'a', { agentRunId: 'run_1' }),
     ]);
-    await collect(new SummaryBakeTransform(agentRunRepo).apply(ctx));
+    await collect(new SummaryAttachTransform(agentRunRepo).apply(ctx));
     const assist = ctx.messages.get(1)!;
-    expect(assist.content).toBe('<summary>did X then Y</summary>\n\na');
+    expect(assist.summary).toBe('did X then Y');
+    expect(assist.content).toBe('a'); // content 不被 mutate
     expect(agentRunRepo.findByIds).toHaveBeenCalledWith(['run_1']);
   });
 
-  it('幂等：重复 apply 不二次前缀', async () => {
+  it('幂等：已 attach 的不重复查 repo', async () => {
     const agentRunRepo = {
       findByIds: vi.fn(async () => [{ id: 'run_1', processSummary: 'PS' }]),
     } as unknown as AgentRunRepositoryPort;
-    const t = new SummaryBakeTransform(agentRunRepo);
+    const t = new SummaryAttachTransform(agentRunRepo);
     const ctx = makeCtx([
       makeMessage(Role.ASSIST, 'a', { agentRunId: 'run_1' }),
     ]);
     await collect(t.apply(ctx));
-    await collect(t.apply(ctx)); // 第二次：bakedRunIds 命中，不再查 repo
+    await collect(t.apply(ctx)); // 第二次：msg.summary 已存在，跳过、不再查 repo
     expect(agentRunRepo.findByIds).toHaveBeenCalledTimes(1);
-    expect(ctx.messages.get(0)!.content).toBe('<summary>PS</summary>\n\na');
+    expect(ctx.messages.get(0)!.summary).toBe('PS');
   });
 
-  it('无未烘焙 assistant 时不动、不查 repo', async () => {
+  it('无待 attach 的 assistant 时不动、不查 repo', async () => {
     const agentRunRepo = {
       findByIds: vi.fn(),
     } as unknown as AgentRunRepositoryPort;
     const ctx = makeCtx([makeMessage(Role.USER, 'q')]);
-    await collect(new SummaryBakeTransform(agentRunRepo).apply(ctx));
+    await collect(new SummaryAttachTransform(agentRunRepo).apply(ctx));
     expect(agentRunRepo.findByIds).not.toHaveBeenCalled();
   });
 });

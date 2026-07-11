@@ -20,7 +20,7 @@ export interface ConversationContext {
 
 export interface ConvTransform {
   readonly id: string;
-  /** 一个 transform 可注册在多个相位（如 summary-bake @ turn-start + turn-end）。 */
+  /** 一个 transform 可注册在多个相位（如 summary-attach @ turn-start + turn-end）。 */
   readonly phase: ConvPhase | ConvPhase[];
   apply: (ctx: ConversationContext) => AsyncGenerator<StreamFrame | void>;
 }

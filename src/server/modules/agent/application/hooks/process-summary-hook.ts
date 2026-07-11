@@ -2,7 +2,7 @@ import { singleton } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
-import { PROCESS_SUMMARY_PROMPT } from './prompts';
+import { PROCESS_SUMMARY_PROMPT } from './compaction-hook';
 import { fold } from '@/server/libs/compaction';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';

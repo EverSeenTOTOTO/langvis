@@ -51,8 +51,8 @@ export function groupIntoTurns(messages: Message[]): Message[][] {
 }
 
 /**
- * 投影有效历史为 LLM 上下文：system + 会话上下文恒发 → 最新 C 作前缀 → 其后 turn。
- * 不含 processSummary 拼接——那是 summary-bake transform 的职责，调用前已烘进 messages。
+ * 投影有效历史为 LLM 上下文：system + 会话上下文 → 最新 C 作前缀 → 其后 turn。
+ * assistant 的 summary 透传给 agent 种子作 thought。
  */
 export function projectToLlmMessages(messages: Message[]): LlmMessage[] {
   const out: LlmMessage[] = [];
@@ -76,7 +76,11 @@ export function projectToLlmMessages(messages: Message[]): LlmMessage[] {
 
   for (const turn of groupIntoTurns(tail)) {
     for (const msg of turn) {
-      out.push({ role: msg.role as LlmMessage['role'], content: msg.content });
+      out.push({
+        role: msg.role as LlmMessage['role'],
+        content: msg.content,
+        summary: msg.summary,
+      });
     }
   }
 

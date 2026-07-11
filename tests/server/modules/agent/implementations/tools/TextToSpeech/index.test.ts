@@ -27,7 +27,6 @@ function makeCtx(input: Record<string, unknown>): {
     signal: new AbortController().signal,
     workDir: '/tmp',
     llm: { tts } as unknown as LlmPort,
-    chatModelId: undefined,
     runId: 'run_42',
     runtimeConfig: {},
   } as unknown as ToolCallContext;

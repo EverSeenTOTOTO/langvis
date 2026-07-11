@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
-import { groupIntoTurns } from '@/server/modules/conversation/application/service/history-projection';
+import {
+  groupIntoTurns,
+  projectToLlmMessages,
+} from '@/server/modules/conversation/application/service/history-projection';
 
 function makeMessage(
   role: Role,
@@ -70,6 +73,24 @@ describe('history-projection', () => {
 
     it('空历史', () => {
       expect(groupIntoTurns([])).toHaveLength(0);
+    });
+  });
+
+  describe('projectToLlmMessages', () => {
+    it('透传 assistant 的 summary（processSummary），user/system 无 summary', () => {
+      const history: Message[] = [
+        { ...makeMessage(Role.SYSTEM, 'sys'), id: 'm_sys' },
+        { ...makeMessage(Role.USER, 'q'), id: 'm_u' },
+        { ...makeMessage(Role.ASSIST, 'a'), id: 'm_a', summary: 'did X' },
+      ];
+      const out = projectToLlmMessages(history);
+      const sys = out.find(m => m.role === 'system')!;
+      const user = out.find(m => m.role === 'user')!;
+      const assist = out.find(m => m.role === 'assistant')!;
+      expect(sys.summary).toBeUndefined();
+      expect(user.summary).toBeUndefined();
+      expect(assist.summary).toBe('did X');
+      expect(assist.content).toBe('a');
     });
   });
 });

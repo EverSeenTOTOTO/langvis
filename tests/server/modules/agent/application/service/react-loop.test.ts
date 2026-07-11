@@ -15,7 +15,10 @@ import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { ToolIds } from '@/shared/constants';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
-import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
+import type {
+  AgentRunContext,
+  ToolExecutor,
+} from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { RunEvent } from '@/shared/types/events';
 import type { LlmMessage } from '@/shared/types/entities';
@@ -188,13 +191,13 @@ function makeMockCache(): CachePort {
 }
 
 /**
- * Fake `executeTool` mirroring the real `ToolCall` event shapes + observation semantics
+ * Fake `ToolExecutor` mirroring the real `ToolCall` event shapes + observation semantics
  * (`tool-call.entity.ts`): yields `tool_call` then `tool_result`/`tool_error`, returns the
  * observation string. A handler that **throws** fails before any event is yielded (models a
  * resolution failure like `ToolNotFoundError`); one returning `{ error }` fails after the
  * `tool_call` (models an execution failure).
  */
-function fakeExecuteTool(handler: ToolHandler): AgentRunContext['executeTool'] {
+function fakeExecuteTool(handler: ToolHandler): ToolExecutor {
   let counter = 0;
   return (toolName, args) => {
     const callId = `tc_${++counter}`;
@@ -223,6 +226,7 @@ interface BuiltCtx {
   ctx: AgentRunContext;
   run: AgentRun;
   calls: { messages: LlmMessage[] }[];
+  runTool: ToolExecutor;
 }
 
 /** Assemble a real `AgentRunContext` (real `AgentRun`/`RunConfigVO`) minus
@@ -249,9 +253,9 @@ function buildCtx(opts: BuildCtxOptions): BuiltCtx {
     messages: ListMonad.of(seed),
     base: seed.length,
     hooks: opts.hooks ?? new HookPlan(resolveAgentHooks()),
-    executeTool: fakeExecuteTool(opts.handler),
+    interactive: true,
   };
-  return { ctx, run, calls };
+  return { ctx, run, calls, runTool: fakeExecuteTool(opts.handler) };
 }
 
 async function collect(gen: AsyncGenerator<RunEvent>): Promise<RunEvent[]> {
@@ -279,12 +283,12 @@ describe('runReactLoop', () => {
 
   describe('HappyPath', () => {
     it('runs one tool then response_user to completion without throwing', async () => {
-      const { ctx, calls } = buildCtx({
+      const { ctx, calls, runTool } = buildCtx({
         responses: [call('t1', { a: 1 }), responseUser('done')],
         handler: okHandler,
       });
 
-      const events = await collect(runReactLoop(ctx));
+      const events = await collect(runReactLoop(ctx, runTool));
       const types = events.map(e => e.type);
 
       expect(types).toContain('tool_call');
@@ -299,12 +303,12 @@ describe('runReactLoop', () => {
     });
 
     it('a direct response_user (single action) terminates with no process_summary', async () => {
-      const { ctx, calls } = buildCtx({
+      const { ctx, calls, runTool } = buildCtx({
         responses: [responseUser('hi')],
         handler: okHandler,
       });
 
-      const events = await collect(runReactLoop(ctx));
+      const events = await collect(runReactLoop(ctx, runTool));
       const types = events.map(e => e.type);
 
       expect(types).toEqual(['tool_call', 'tool_result']);
@@ -314,12 +318,12 @@ describe('runReactLoop', () => {
     });
 
     it('a multi-step run (2 tools then response_user) folds a process_summary', async () => {
-      const { ctx, run, calls } = buildCtx({
+      const { ctx, run, calls, runTool } = buildCtx({
         responses: [call('t1'), call('t2'), responseUser('done')],
         handler: okHandler,
       });
 
-      const events = await collect(runReactLoop(ctx));
+      const events = await collect(runReactLoop(ctx, runTool));
 
       expect(events.filter(e => e.type === 'tool_call')).toHaveLength(3);
       expect(events.filter(e => e.type === 'loop_usage')).toHaveLength(2);
@@ -329,9 +333,9 @@ describe('runReactLoop', () => {
   });
 
   describe('ToolArgsForwarded', () => {
-    it('passes the parsed input through to executeTool', async () => {
+    it('passes the parsed input through to the tool executor', async () => {
       let received: Record<string, unknown> = {};
-      const { ctx } = buildCtx({
+      const { ctx, runTool } = buildCtx({
         responses: [
           call('t1', { key: 'value', count: 42 }),
           responseUser('ok'),
@@ -342,7 +346,7 @@ describe('runReactLoop', () => {
         },
       });
 
-      await collect(runReactLoop(ctx));
+      await collect(runReactLoop(ctx, runTool));
 
       expect(received).toEqual({ key: 'value', count: 42 });
     });
@@ -350,12 +354,12 @@ describe('runReactLoop', () => {
 
   describe('Thought', () => {
     it('yields a thought event before the matching tool_call', async () => {
-      const { ctx } = buildCtx({
+      const { ctx, runTool } = buildCtx({
         responses: [call('t1', {}, 'let me think'), responseUser('ok')],
         handler: okHandler,
       });
 
-      const events = await collect(runReactLoop(ctx));
+      const events = await collect(runReactLoop(ctx, runTool));
       const firstCallIdx = events.findIndex(e => e.type === 'tool_call');
 
       expect(events[0]).toMatchObject({
@@ -368,13 +372,13 @@ describe('runReactLoop', () => {
 
   describe('ToolErrorFeedback', () => {
     it('yields tool_error and feeds the error back so the model can recover', async () => {
-      const { ctx, calls } = buildCtx({
+      const { ctx, calls, runTool } = buildCtx({
         responses: [call('t1'), responseUser('recovered')],
         handler: name =>
           name === 't1' ? { error: 'crashed' } : { output: 'ok' },
       });
 
-      const events = await collect(runReactLoop(ctx));
+      const events = await collect(runReactLoop(ctx, runTool));
       const errEvent = events.find(e => e.type === 'tool_error') as {
         toolName: string;
         error: string;
@@ -393,12 +397,12 @@ describe('runReactLoop', () => {
 
   describe('ParseErrorRecovery', () => {
     it('appends a parse-error observation and continues instead of throwing', async () => {
-      const { ctx, calls } = buildCtx({
+      const { ctx, calls, runTool } = buildCtx({
         responses: ['this is not json at all', responseUser('ok')],
         handler: okHandler,
       });
 
-      const events = await collect(runReactLoop(ctx));
+      const events = await collect(runReactLoop(ctx, runTool));
       const types = events.map(e => e.type);
 
       expect(types).toContain('loop_usage');
@@ -414,7 +418,7 @@ describe('runReactLoop', () => {
 
   describe('UnknownTool', () => {
     it('propagates a resolution failure (current behavior: fail, do not nudge)', async () => {
-      const { ctx } = buildCtx({
+      const { ctx, runTool } = buildCtx({
         responses: [call('ghost')],
         handler: name => {
           if (name === 'ghost') throw new ToolNotFoundError('ghost');
@@ -422,7 +426,7 @@ describe('runReactLoop', () => {
         },
       });
 
-      await expect(collect(runReactLoop(ctx))).rejects.toThrow(
+      await expect(collect(runReactLoop(ctx, runTool))).rejects.toThrow(
         ToolNotFoundError,
       );
     });
@@ -430,12 +434,12 @@ describe('runReactLoop', () => {
 
   describe('NoResponse', () => {
     it('throws when the model returns empty content', async () => {
-      const { ctx } = buildCtx({
+      const { ctx, runTool } = buildCtx({
         responses: [''],
         handler: okHandler,
       });
 
-      await expect(collect(runReactLoop(ctx))).rejects.toThrow(
+      await expect(collect(runReactLoop(ctx, runTool))).rejects.toThrow(
         'No response from model',
       );
     });
@@ -445,19 +449,19 @@ describe('runReactLoop', () => {
     it('rejects on the first iteration when the signal is pre-aborted', async () => {
       const controller = new AbortController();
       controller.abort();
-      const { ctx, calls } = buildCtx({
+      const { ctx, calls, runTool } = buildCtx({
         responses: [call('t1')],
         handler: okHandler,
         controller,
       });
 
-      await expect(collect(runReactLoop(ctx))).rejects.toThrow();
+      await expect(collect(runReactLoop(ctx, runTool))).rejects.toThrow();
       expect(calls).toHaveLength(0);
     });
 
     it('rejects on the next iteration after a mid-loop abort', async () => {
       const controller = new AbortController();
-      const { ctx, calls } = buildCtx({
+      const { ctx, calls, runTool } = buildCtx({
         responses: [call('t1'), call('t2'), responseUser('done')],
         handler: name => {
           if (name === 't2') controller.abort('mid');
@@ -466,19 +470,19 @@ describe('runReactLoop', () => {
         controller,
       });
 
-      await expect(collect(runReactLoop(ctx))).rejects.toThrow();
+      await expect(collect(runReactLoop(ctx, runTool))).rejects.toThrow();
       expect(calls).toHaveLength(2);
     });
   });
 
   describe('LoopUsage', () => {
     it('emits a loop_usage event after each non-terminal tool iteration', async () => {
-      const { ctx } = buildCtx({
+      const { ctx, runTool } = buildCtx({
         responses: [call('t1'), responseUser('done')],
         handler: okHandler,
       });
 
-      const events = await collect(runReactLoop(ctx));
+      const events = await collect(runReactLoop(ctx, runTool));
       const loopUsages = events.filter(e => e.type === 'loop_usage') as Array<{
         used: number;
         total: number;
@@ -493,12 +497,12 @@ describe('runReactLoop', () => {
 
   describe('MessageGrowth', () => {
     it('grows the context fed to the LLM by one action + observation per turn', async () => {
-      const { ctx, calls } = buildCtx({
+      const { ctx, calls, runTool } = buildCtx({
         responses: [call('t1'), responseUser('done')],
         handler: okHandler,
       });
 
-      await collect(runReactLoop(ctx));
+      await collect(runReactLoop(ctx, runTool));
 
       expect(calls).toHaveLength(2);
       const msgs = calls[1].messages;
@@ -512,12 +516,12 @@ describe('runReactLoop', () => {
 
   describe('TerminalResponseUser', () => {
     it('ends the loop on response_user with a single LLM call and no loop_usage', async () => {
-      const { ctx, calls } = buildCtx({
+      const { ctx, calls, runTool } = buildCtx({
         responses: [responseUser('final')],
         handler: okHandler,
       });
 
-      const events = await collect(runReactLoop(ctx));
+      const events = await collect(runReactLoop(ctx, runTool));
       const types = events.map(e => e.type);
 
       expect(calls).toHaveLength(1);
@@ -528,23 +532,23 @@ describe('runReactLoop', () => {
 
   describe('ProcessSummary', () => {
     it('folds a process summary on multi-step terminal (writes run.processSummary)', async () => {
-      const { ctx, run } = buildCtx({
+      const { ctx, run, runTool } = buildCtx({
         responses: [call('t1'), call('t2'), responseUser('done')],
         handler: okHandler,
       });
 
-      await collect(runReactLoop(ctx));
+      await collect(runReactLoop(ctx, runTool));
 
       expect(run.processSummary).toBe(SUMMARY_STUB);
     });
 
     it('does not fold a process summary on a single-action terminal', async () => {
-      const { ctx, run } = buildCtx({
+      const { ctx, run, runTool } = buildCtx({
         responses: [responseUser('hi')],
         handler: okHandler,
       });
 
-      await collect(runReactLoop(ctx));
+      await collect(runReactLoop(ctx, runTool));
 
       expect(run.processSummary).toBeNull();
     });
@@ -560,20 +564,20 @@ describe('runReactLoop', () => {
           spyCalls++;
         },
       };
-      const { ctx } = buildCtx({
+      const { ctx, runTool } = buildCtx({
         responses: [call('t1'), responseUser('done')],
         handler: okHandler,
         hooks: new HookPlan([spyHook]),
       });
 
-      await collect(runReactLoop(ctx));
+      await collect(runReactLoop(ctx, runTool));
 
       // t1 迭代 append observation → 触发一次；response_user 终态无 observation → 不触发
       expect(spyCalls).toBe(1);
     });
 
     it('hook 返回 effect 时 yield hook 事件', async () => {
-      const { ctx } = buildCtx({
+      const { ctx, runTool } = buildCtx({
         responses: [call('t1'), responseUser('done')],
         handler: okHandler,
         hooks: new HookPlan([
@@ -592,7 +596,7 @@ describe('runReactLoop', () => {
         ]),
       });
 
-      const events = await collect(runReactLoop(ctx));
+      const events = await collect(runReactLoop(ctx, runTool));
       const hookEvents = events.filter(e => e.type === 'hook');
       expect(hookEvents).toHaveLength(1);
       const hookEvent = hookEvents[0] as Extract<RunEvent, { type: 'hook' }>;

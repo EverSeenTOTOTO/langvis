@@ -36,7 +36,7 @@ export class StartChatHandler {
     const ctx = this.sessionManager.getCtx(conversationId);
     ctx.messages = ctx.messages.append(turn.userMessage);
 
-    // turn-start transform（summary-bake 把 processSummary 烘进 ctx.messages）；投影读已变换的列表。
+    // turn-start transform（summary-attach 把 processSummary 挂到 msg.summary）；投影读已变换的列表。
     for await (const frame of runConvTransforms(ctx, 'turn-start')) {
       if (frame) this.sessionManager.sendFrame(conversationId, frame);
     }

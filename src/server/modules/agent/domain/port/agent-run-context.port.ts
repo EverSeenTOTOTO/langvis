@@ -7,6 +7,12 @@ import type { HookPlan } from '../model/hook';
 import type { ListMonad } from '@/server/libs/list';
 import type { LlmMessage } from '@/shared/types/entities';
 
+/** 工具执行能力；executor 持有，显式注入 loop。 */
+export type ToolExecutor = (
+  toolName: string,
+  args: Record<string, unknown>,
+) => AsyncGenerator<RunEvent, string, void>;
+
 export interface AgentRunContext {
   readonly run: AgentRun;
   readonly config: RunConfigVO;
@@ -18,9 +24,6 @@ export interface AgentRunContext {
   messages: ListMonad<LlmMessage>;
   readonly base: number;
   readonly hooks?: HookPlan;
-
-  executeTool(
-    toolName: string,
-    args: Record<string, unknown>,
-  ): AsyncGenerator<RunEvent, string, void>;
+  /** 是否允许 HITL。conv run = true；子 agent = false。ToolCall 经 ToolCallContext 透传给工具。 */
+  readonly interactive: boolean;
 }

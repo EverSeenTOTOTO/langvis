@@ -12,7 +12,6 @@ function makeCtx(input: unknown, signal?: AbortSignal) {
     signal: signal ?? new AbortController().signal,
     workDir: '/tmp/wd',
     llm: {},
-    chatModelId: undefined,
     runId: 'run_parent',
     runtimeConfig: { model: { modelId: 'p:m' } },
   } as never;
