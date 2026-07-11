@@ -1,9 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
-import type { ToolCallDeps } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
+import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
+import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
+import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
+import { ListMonad } from '@/server/libs/list';
 import type { RunEvent } from '@/shared/types/events';
 
 function makeMockTool(config?: {
@@ -37,26 +40,28 @@ function makeMockLlm(): LlmPort {
   } as unknown as LlmPort;
 }
 
-function makeDeps(): ToolCallDeps {
+function makeCtx(): AgentRunContext {
+  const config = RunConfigVO.of({ tools: [], runtimeConfig: {} });
   return {
-    signal: new AbortController().signal,
-    workDir: '/tmp/workdir',
+    run: new AgentRun('run_1', config),
+    config,
     runId: 'run_1',
-    interactive: true,
+    workDir: '/tmp/workdir',
+    signal: new AbortController().signal,
     llm: makeMockLlm(),
     cache: makeMockCache(),
-    chatModelId: undefined,
-    runtimeConfig: {},
+    messages: ListMonad.of([]),
+    base: 0,
+    interactive: true,
   };
 }
 
-function createToolCall(tool?: Tool, deps?: ToolCallDeps): ToolCall {
+function createToolCall(tool?: Tool, ctx?: AgentRunContext): ToolCall {
   return new ToolCall(
     'tc_1',
     tool ?? makeMockTool(),
     { input: 'test' },
-    (deps ?? makeDeps()).cache,
-    deps ?? makeDeps(),
+    ctx ?? makeCtx(),
   );
 }
 
@@ -71,13 +76,13 @@ async function collect(
 describe('ToolCall', () => {
   describe('execute', () => {
     it('resolves input args and compresses output keyed by workDir', async () => {
-      const deps = makeDeps();
-      const toolCall = createToolCall(makeMockTool(), deps);
+      const ctx = makeCtx();
+      const toolCall = createToolCall(makeMockTool(), ctx);
       await collect(toolCall.execute());
-      expect(deps.cache.resolve).toHaveBeenCalledWith('/tmp/workdir', {
+      expect(ctx.cache.resolve).toHaveBeenCalledWith('/tmp/workdir', {
         input: 'test',
       });
-      expect(deps.cache.compress).toHaveBeenCalledWith(
+      expect(ctx.cache.compress).toHaveBeenCalledWith(
         '/tmp/workdir',
         'tool output',
         undefined,
@@ -127,14 +132,14 @@ describe('ToolCall', () => {
     });
   });
 
-  describe('deps getters', () => {
-    it('exposes signal/workDir/runId/llm from deps', () => {
-      const deps = makeDeps();
-      const toolCall = createToolCall(makeMockTool(), deps);
-      expect(toolCall.signal).toBe(deps.signal);
+  describe('ctx getters', () => {
+    it('exposes signal/workDir/runId/llm from ctx', () => {
+      const ctx = makeCtx();
+      const toolCall = createToolCall(makeMockTool(), ctx);
+      expect(toolCall.signal).toBe(ctx.signal);
       expect(toolCall.workDir).toBe('/tmp/workdir');
       expect(toolCall.runId).toBe('run_1');
-      expect(toolCall.llm).toBe(deps.llm);
+      expect(toolCall.llm).toBe(ctx.llm);
     });
   });
 

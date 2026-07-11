@@ -1,8 +1,10 @@
 import { container, inject, singleton } from 'tsyringe';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
-import type { ToolCallDeps } from '@/server/modules/agent/domain/model/tool-call.entity';
-import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
+import type {
+  AgentRunContext,
+  ToolExecutor,
+} from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
@@ -11,6 +13,7 @@ import type { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { generateId } from '@/shared/utils';
+import { ToolIds } from '@/shared/constants';
 import type { LlmMessage } from '@/shared/types/entities';
 import type { ConversationConfig } from '@/server/libs/config';
 import { ListMonad } from '@/server/libs/list';
@@ -32,7 +35,7 @@ export interface LaunchParams {
   workDir: string;
   /** conv 侧一次性 parse 的运行时配置（agent 直接复用，不再二次 parse）。contextSize 按需派生，不在此处。 */
   runtimeConfig: ConversationConfig;
-  /** run 的初始消息（已含 system 提示）；conv 由 effectiveHistory 经 buildIterMessages 派生，子 agent 由 brief+query 派生。 */
+  /** run 初始消息；conv 直传 effectiveHistory（ReAct 还原在 createRun），子 agent 由 brief+query 派生。 */
   seed: LlmMessage[];
   /** 该 run 的有界工具集——executeTool 仅允许集合内成员。conv 传全集，子 agent 传 parent.without(...)。 */
   toolSet: ToolSet;
@@ -56,7 +59,11 @@ export class AgentRunExecutor {
     @inject(AgentService) private readonly agentService: AgentService,
   ) {}
 
-  createRun(params: LaunchParams): { run: AgentRun; ctx: AgentRunContext } {
+  createRun(params: LaunchParams): {
+    run: AgentRun;
+    ctx: AgentRunContext;
+    runTool: ToolExecutor;
+  } {
     const { runtimeConfig } = params;
     const modelId = runtimeConfig.model?.modelId;
 
@@ -76,27 +83,22 @@ export class AgentRunExecutor {
       signal: run.signal,
       llm: this.llm,
       cache: this.cache,
-      messages: ListMonad.of(params.seed),
+      messages: ListMonad.of(params.seed).map(restoreReactMessage),
       base: params.seed.length,
       hooks: new HookPlan(resolveAgentHooks()),
-      executeTool: (toolName, args) =>
-        this.executeTool(toolName, args, params.toolSet, {
-          signal: run.signal,
-          workDir: params.workDir,
-          runId: run.runId,
-          interactive: params.interactive,
-          llm: this.llm,
-          cache: this.cache,
-          chatModelId: modelId,
-          runtimeConfig: config.runtimeConfig,
-        }),
+      interactive: params.interactive,
     };
 
-    return { run, ctx };
+    return {
+      run,
+      ctx,
+      runTool: (toolName, args) =>
+        this.executeTool(ctx, toolName, args, params.toolSet),
+    };
   }
 
   async *launch(params: LaunchParams): AsyncGenerator<EnrichedEvent> {
-    const { run, ctx } = this.createRun(params);
+    const { run, ctx, runTool } = this.createRun(params);
 
     // 父取消传播到子 run：父信号 abort 即 cancel 本 run（仅子 agent 场景需要）。
     if (params.parentSignal) {
@@ -122,7 +124,7 @@ export class AgentRunExecutor {
     this.activeRuns.set(run.runId, run);
 
     try {
-      yield* this.execute(run, ctx);
+      yield* this.execute(run, ctx, runTool);
     } finally {
       this.activeRuns.delete(run.runId);
       await this.agentRunRepo.update(run.runId, {
@@ -137,12 +139,13 @@ export class AgentRunExecutor {
   async *execute(
     run: AgentRun,
     ctx: AgentRunContext,
+    runTool: ToolExecutor,
   ): AsyncGenerator<EnrichedEvent> {
     this.logger.debug(`Execute run ${chalk.cyan(run.runId)}`);
     if (!run.isTerminated) yield run.start();
 
     try {
-      for await (const event of runReactLoop(ctx)) {
+      for await (const event of runReactLoop(ctx, runTool)) {
         const enriched = run.append(event);
         if (enriched) yield enriched;
       }
@@ -168,10 +171,10 @@ export class AgentRunExecutor {
   }
 
   private executeTool(
+    ctx: AgentRunContext,
     toolName: string,
     args: Record<string, unknown>,
     toolSet: ToolSet,
-    deps: ToolCallDeps,
   ): AsyncGenerator<RunEvent, string, void> {
     if (!toolSet.has(toolName)) throw new ToolNotFoundError(toolName);
     let tool: Tool;
@@ -181,14 +184,22 @@ export class AgentRunExecutor {
       throw new ToolNotFoundError(toolName);
     }
 
-    const toolCall = new ToolCall(
-      generateId('tc'),
-      tool,
-      args,
-      deps.cache,
-      deps,
-    );
+    const toolCall = new ToolCall(generateId('tc'), tool, args, ctx);
 
     return toolCall.execute();
   }
+}
+
+/** assistant 文本 → response_user JSON；msg.summary 注入为 thought。 */
+export function restoreReactMessage(m: LlmMessage): LlmMessage {
+  return m.role === 'assistant'
+    ? {
+        role: 'assistant' as const,
+        content: JSON.stringify({
+          ...(m.summary ? { thought: m.summary } : {}),
+          tool: ToolIds.RESPONSE_USER,
+          input: { message: m.content },
+        }),
+      }
+    : { role: m.role, content: m.content };
 }

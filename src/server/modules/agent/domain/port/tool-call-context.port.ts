@@ -12,8 +12,6 @@ export interface ToolCallContext {
   readonly signal: AbortSignal;
   readonly workDir: string;
   readonly llm: LlmPort;
-  /** chat/chatContent 类工具调用 LLM 时传入（无绑定层后由调用方提供）。 */
-  readonly chatModelId: string | undefined;
   /** HITL 关联键（AskUser 写 human_input:<runId>），不进入 AgentRunContext。 */
   readonly runId: string;
   /** 是否允许 HITL。conv run = true；子 agent = false（无 HTTP 提交入口，AskUser 会 fail-fast）。 */

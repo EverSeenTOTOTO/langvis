@@ -10,14 +10,13 @@ import type {
 import Logger from '@/server/utils/logger';
 import { convTransform } from './registry';
 
-const SUMMARY_PREFIX = '<summary>';
-
+/** 把上一轮 processSummary attach 为 msg.summary（透传至 agent 种子作 thought）。 */
 @singleton()
 @convTransform
-export class SummaryBakeTransform implements ConvTransform {
-  readonly id = 'summary-bake';
-  readonly phase: ConvPhase[] = ['turn-start', 'turn-end'];
-  private readonly logger = Logger.child({ source: 'SummaryBakeTransform' });
+export class SummaryAttachTransform implements ConvTransform {
+  readonly id = 'summary-attach';
+  readonly phase: ConvPhase[] = ['turn-start'];
+  private readonly logger = Logger.child({ source: 'SummaryAttachTransform' });
 
   constructor(
     @inject(AGENT_RUN_REPOSITORY)
@@ -27,12 +26,7 @@ export class SummaryBakeTransform implements ConvTransform {
   async *apply(ctx: ConversationContext): AsyncGenerator<void> {
     const candidates = ctx.messages
       .toArray()
-      .filter(
-        m =>
-          m.role === Role.ASSIST &&
-          m.agentRunId &&
-          !m.content.startsWith(SUMMARY_PREFIX),
-      );
+      .filter(m => m.role === Role.ASSIST && m.agentRunId && !m.summary);
     if (candidates.length === 0) return;
 
     const runIds = [...new Set(candidates.map(m => m.agentRunId!))];
@@ -43,24 +37,20 @@ export class SummaryBakeTransform implements ConvTransform {
     }
     if (summaries.size === 0) return;
 
-    let baked = 0;
+    let attached = 0;
     ctx.messages = ctx.messages.map(msg => {
-      if (
-        msg.role !== Role.ASSIST ||
-        !msg.agentRunId ||
-        msg.content.startsWith(SUMMARY_PREFIX)
-      ) {
+      if (msg.role !== Role.ASSIST || !msg.agentRunId || msg.summary) {
         return msg;
       }
       const ps = summaries.get(msg.agentRunId);
       if (!ps) return msg;
-      baked++;
-      return { ...msg, content: `<summary>${ps}</summary>\n\n${msg.content}` };
+      attached++;
+      return { ...msg, summary: ps };
     });
 
-    if (baked > 0) {
+    if (attached > 0) {
       this.logger.debug(
-        `baked ${baked} process summary(ies) into history (conv ${ctx.conversationId})`,
+        `attached ${attached} process summary(ies) as data (conv ${ctx.conversationId})`,
       );
     }
   }

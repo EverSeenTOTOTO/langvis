@@ -47,7 +47,7 @@ export class CompleteTurnHandler {
       if (assistant) ctx.messages = ctx.messages.append(assistant);
 
       this.sessionManager.flushRunView(conversationId, messageId);
-      // turn-end transform 发用量帧（usage 跑在 summary-bake/compact 之后，量的是压缩后用量）。
+      // turn-end transform 发用量帧（usage 跑在 summary-attach/compact 之后，量的是压缩后用量）。
       for await (const frame of runConvTransforms(ctx, 'turn-end')) {
         if (frame) this.sessionManager.sendFrame(conversationId, frame);
       }

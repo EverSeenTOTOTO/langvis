@@ -1,25 +1,11 @@
 import type { RunEvent } from '@/shared/types/events';
-import type { CachePort } from '../port/cache.port';
-import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
+import type { AgentRunContext } from '../port/agent-run-context.port';
 import type { ToolCallContext } from '../port/tool-call-context.port';
-import type { ConversationConfig } from '@/server/libs/config';
+import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { Entity } from '@/server/libs/ddd';
 import type { Tool } from './tool.base';
 
-/**
- * ToolCall — 一次工具调用的完整业务流程（聚合内实体）。
- */
-export interface ToolCallDeps {
-  signal: AbortSignal;
-  workDir: string;
-  runId: string;
-  interactive: boolean;
-  llm: LlmPort;
-  cache: CachePort;
-  chatModelId: string | undefined;
-  runtimeConfig: ConversationConfig;
-}
-
+/** ToolCall — 一次工具调用的完整业务流程（聚合内实体）。 */
 export class ToolCall extends Entity<string> {
   readonly toolName: string;
   readonly toolArgs: Record<string, unknown>;
@@ -28,16 +14,16 @@ export class ToolCall extends Entity<string> {
   input: Record<string, unknown> = {};
 
   get signal(): AbortSignal {
-    return this.deps.signal;
+    return this.ctx.signal;
   }
   get workDir(): string {
-    return this.deps.workDir;
+    return this.ctx.workDir;
   }
   get runId(): string {
-    return this.deps.runId;
+    return this.ctx.runId;
   }
   get llm(): LlmPort {
-    return this.deps.llm;
+    return this.ctx.llm;
   }
 
   #status: 'pending' | 'completed' | 'failed' = 'pending';
@@ -45,28 +31,25 @@ export class ToolCall extends Entity<string> {
   #error?: string;
   #completedAt?: number;
 
-  private readonly deps: ToolCallDeps;
+  private readonly ctx: AgentRunContext;
   private readonly tool: Tool;
-  private readonly cache: CachePort;
 
   constructor(
     callId: string,
     tool: Tool,
     toolArgs: Record<string, unknown>,
-    cache: CachePort,
-    deps: ToolCallDeps,
+    ctx: AgentRunContext,
   ) {
     super(callId);
     this.toolName = tool.id;
     this.tool = tool;
     this.toolArgs = toolArgs;
-    this.cache = cache;
-    this.deps = deps;
+    this.ctx = ctx;
     this.startedAt = Date.now();
   }
 
   async *execute(): AsyncGenerator<RunEvent, string, void> {
-    this.input = (await this.cache.resolve(
+    this.input = (await this.ctx.cache.resolve(
       this.workDir,
       this.toolArgs,
     )) as Record<string, unknown>;
@@ -79,20 +62,19 @@ export class ToolCall extends Entity<string> {
     };
 
     try {
-      const ctx: ToolCallContext = {
+      const callCtx: ToolCallContext = {
         callId: this.id,
         input: this.input,
-        signal: this.deps.signal,
-        workDir: this.deps.workDir,
-        llm: this.deps.llm,
-        chatModelId: this.deps.chatModelId,
-        runId: this.deps.runId,
-        interactive: this.deps.interactive,
-        runtimeConfig: this.deps.runtimeConfig,
+        signal: this.ctx.signal,
+        workDir: this.ctx.workDir,
+        llm: this.ctx.llm,
+        runId: this.ctx.runId,
+        interactive: this.ctx.interactive,
+        runtimeConfig: this.ctx.config.runtimeConfig,
       };
-      const output = yield* this.tool.call(ctx);
+      const output = yield* this.tool.call(callCtx);
 
-      const compressed = await this.cache.compress(
+      const compressed = await this.ctx.cache.compress(
         this.workDir,
         output,
         this.tool.config?.compression as 'skip' | 'file' | undefined,
