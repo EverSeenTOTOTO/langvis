@@ -104,6 +104,14 @@ export class ProviderService {
     return { id: fallback?.id, contextSize: fallback?.contextSize ?? 0 };
   }
 
+  /** 从 runtimeConfig 派生模型上下文窗口（model.modelId → resolveChatModel）；无 model 走默认。 */
+  resolveContextSize(runtimeConfig: Record<string, unknown>): number {
+    const modelId = (
+      runtimeConfig as { model?: { modelId?: string } } | undefined
+    )?.model?.modelId;
+    return this.resolveChatModel(modelId).contextSize;
+  }
+
   getModelsByType(type: ModelType): ModelDefinition[] {
     const result: ModelDefinition[] = [];
     for (const model of this.models.values()) {

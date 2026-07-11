@@ -7,13 +7,11 @@ describe('RuntimeConfigVO', () => {
       const config = RuntimeConfigVO.of({
         systemPrompt: 'You are helpful',
         tools: ['tool_a', 'tool_b'],
-        contextSize: 8192,
         runtimeConfig: { model: { modelId: 'gpt-4' } },
       });
 
       expect(config.systemPrompt).toBe('You are helpful');
       expect(config.tools).toEqual(['tool_a', 'tool_b']);
-      expect(config.contextSize).toBe(8192);
       expect(config.runtimeConfig).toEqual({ model: { modelId: 'gpt-4' } });
     });
 
@@ -21,19 +19,17 @@ describe('RuntimeConfigVO', () => {
       const config = RuntimeConfigVO.of({
         systemPrompt: 'p',
         tools: [],
-        contextSize: 4000,
         runtimeConfig: {},
       });
 
       expect(Object.isFrozen(config)).toBe(true);
-      expect(() => ((config as any).contextSize = 999)).toThrow();
+      expect(() => ((config as any).tools = [])).toThrow();
     });
 
     it('tools 默认透传（空数组即空数组）', () => {
       const config = RuntimeConfigVO.of({
         systemPrompt: 'p',
         tools: [],
-        contextSize: 4000,
         runtimeConfig: {},
       });
 

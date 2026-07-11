@@ -7,7 +7,6 @@ function makeConfig(): RuntimeConfigVO {
   return RuntimeConfigVO.of({
     systemPrompt: 'You are helpful',
     tools: [],
-    contextSize: 8000,
     runtimeConfig: {},
   });
 }

@@ -4,7 +4,6 @@ import type { MessageRepositoryPort } from '@/server/modules/conversation/domain
 import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import type { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
-import type { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { Role } from '@/shared/entities/Message';
 import { ConversationNotFoundError } from '@/server/modules/conversation/domain/errors';
 
@@ -44,11 +43,6 @@ function makeMockConvRepo(): ConversationRepositoryPort {
   } as unknown as ConversationRepositoryPort;
 }
 
-function makeMockProviderService(): ProviderService {
-  return {
-    getModel: vi.fn().mockReturnValue({ contextSize: 8000 }),
-  } as unknown as ProviderService;
-}
 
 describe('ChatService', () => {
   let service: ChatService;
@@ -62,13 +56,7 @@ describe('ChatService', () => {
     agentRunRepo = makeMockAgentRunRepo();
     workspace = makeMockWorkspace();
     convRepo = makeMockConvRepo();
-    service = new ChatService(
-      messageRepo,
-      convRepo,
-      agentRunRepo,
-      workspace,
-      makeMockProviderService(),
-    );
+    service = new ChatService(messageRepo, convRepo, agentRunRepo, workspace);
   });
 
   // ════════════════════════════════════════

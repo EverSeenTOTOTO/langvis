@@ -38,7 +38,7 @@ export class AgentRunHandler {
     const {
       conversationId,
       assistantMessage,
-      config,
+      runtimeConfig,
       systemPrompt,
       effectiveHistory,
     } = event.payload;
@@ -62,7 +62,7 @@ export class AgentRunHandler {
       for await (const enriched of this.executor.launch({
         runId,
         workDir,
-        config,
+        runtimeConfig,
         systemPrompt,
         seed,
         toolSet,

@@ -66,7 +66,6 @@ export class AgentService {
   buildRunConfig(
     userConfig: Record<string, unknown>,
     systemPrompt: string,
-    contextSize: number,
   ): RuntimeConfigVO {
     let runtimeConfig: Record<string, unknown>;
 
@@ -79,24 +78,21 @@ export class AgentService {
     return RuntimeConfigVO.of({
       systemPrompt,
       tools: this.inlineTools,
-      contextSize,
       runtimeConfig,
     });
   }
 
   /**
-   * 从 conv 侧已解析的配置（contextSize + runtimeConfig）直接产出 RuntimeConfigVO——
-   * 不再二次 parse/resolveChatModel（conv 已在 resolveConversationConfig 做过，同 schema）。
+   * 从 conv 侧已 parse 的 runtimeConfig 直接产出 RuntimeConfigVO——不再二次 parse。
+   * contextSize 不参与（按需派生）。
    */
   buildResolvedRunConfig(
     systemPrompt: string,
-    contextSize: number,
     runtimeConfig: Record<string, unknown>,
   ): RuntimeConfigVO {
     return RuntimeConfigVO.of({
       systemPrompt,
       tools: this.inlineTools,
-      contextSize,
       runtimeConfig,
     });
   }

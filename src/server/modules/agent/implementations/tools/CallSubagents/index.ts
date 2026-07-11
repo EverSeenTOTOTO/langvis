@@ -64,10 +64,7 @@ export default class CallSubagentsTool extends Tool<CallSubagentsOutput> {
       const params: LaunchParams = {
         runId,
         workDir: ctx.workDir,
-        config: {
-          contextSize: ctx.contextSize,
-          runtimeConfig: ctx.runtimeConfig,
-        },
+        runtimeConfig: ctx.runtimeConfig,
         systemPrompt,
         seed: [
           { role: 'system', content: systemPrompt },

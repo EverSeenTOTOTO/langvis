@@ -17,7 +17,6 @@ export interface ToolCallDeps {
   cache: CachePort;
   chatModelId: string | undefined;
   runtimeConfig: Record<string, unknown>;
-  contextSize: number;
 }
 
 export class ToolCall extends Entity<string> {
@@ -89,7 +88,6 @@ export class ToolCall extends Entity<string> {
         runId: this.deps.runId,
         interactive: this.deps.interactive,
         runtimeConfig: this.deps.runtimeConfig,
-        contextSize: this.deps.contextSize,
       };
       const output = yield* this.tool.call(ctx);
 

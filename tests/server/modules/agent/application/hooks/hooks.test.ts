@@ -8,6 +8,7 @@ import { ListMonad } from '@/server/libs/list';
 import { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
+import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import type { LlmProvider } from '@/server/libs/infrastructure/llm.provider';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { RunEvent } from '@/shared/types/events';
@@ -34,27 +35,32 @@ function makeCtx(opts: {
   contextSize?: number;
   loopSteps: string[];
   llm?: LlmProvider;
-}): AgentRunContext {
+}): { ctx: AgentRunContext; providerService: ProviderService } {
   const llm = opts.llm ?? mockLlm();
   container.register(LLM_PORT, { useValue: llm });
   const contextSize = opts.contextSize ?? 10;
   const config = RuntimeConfigVO.of({
     systemPrompt: '',
     tools: [],
-    contextSize,
     runtimeConfig: { model: {}, loop: COMPACTION },
   });
+  const providerService = {
+    resolveContextSize: () => contextSize,
+  } as unknown as ProviderService;
   const seed = opts.seed;
   let messages = ListMonad.of<LlmMessage>(seed);
   for (const step of opts.loopSteps)
     messages = messages.append({ role: 'user', content: step });
   return {
-    run: new AgentRun('run_test', config),
-    messages,
-    base: seed.length,
-    config,
-    signal: new AbortController().signal,
-  } as unknown as AgentRunContext;
+    ctx: {
+      run: new AgentRun('run_test', config),
+      messages,
+      base: seed.length,
+      config,
+      signal: new AbortController().signal,
+    } as unknown as AgentRunContext,
+    providerService,
+  };
 }
 
 describe('agent hook registry（自动识别）', () => {
@@ -72,39 +78,45 @@ describe('CompactionHook（自持压缩逻辑，经 ctx.messages 读写缝）', 
   });
 
   it('loop 步骤 ≤ keepRecent 时不动（无事件）', async () => {
-    const ctx = makeCtx({
+    const { ctx, providerService } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       loopSteps: ['s0', 's1', 's2', 's3'], // = keepRecent
     });
     const before = ctx.messages.length;
-    const events = await collect(new CompactionHook().apply(ctx));
+    const events = await collect(
+      new CompactionHook(providerService).apply(ctx),
+    );
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(before);
   });
 
   it('未超阈时不动', async () => {
     const llm = mockLlm();
-    const ctx = makeCtx({
+    const { ctx, providerService } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       contextSize: 1_000_000,
       loopSteps: ['s0', 's1', 's2', 's3', 's4', 's5'],
       llm,
     });
-    const events = await collect(new CompactionHook().apply(ctx));
+    const events = await collect(
+      new CompactionHook(providerService).apply(ctx),
+    );
     expect(events).toHaveLength(0);
     expect(llm.chatContent).not.toHaveBeenCalled();
   });
 
   it('超阈且步骤足够时折叠较早步骤、保留近期 keepRecent', async () => {
     const llm = mockLlm('THE RECAP');
-    const ctx = makeCtx({
+    const { ctx, providerService } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       contextSize: 10, // 阈值 8 token，几条消息即超
       loopSteps: Array.from({ length: 6 }, (_, i) => `observation step ${i}`),
       llm,
     });
 
-    const events = await collect(new CompactionHook().apply(ctx));
+    const events = await collect(
+      new CompactionHook(providerService).apply(ctx),
+    );
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ type: 'hook', hookId: 'compaction' });
     expect(llm.chatContent).toHaveBeenCalledTimes(1); // older=2 < windowSize → 单块
@@ -118,14 +130,16 @@ describe('CompactionHook（自持压缩逻辑，经 ctx.messages 读写缝）', 
   });
 
   it('折叠返回空时回退不动', async () => {
-    const ctx = makeCtx({
+    const { ctx, providerService } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       contextSize: 10,
       loopSteps: ['s0', 's1', 's2', 's3', 's4', 's5'],
       llm: mockLlm('   '), // trim 后为空
     });
     const before = ctx.messages.length;
-    const events = await collect(new CompactionHook().apply(ctx));
+    const events = await collect(
+      new CompactionHook(providerService).apply(ctx),
+    );
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(before);
   });
@@ -138,7 +152,7 @@ describe('ProcessSummaryHook（loop-exit 生产者：fold → run.processSummary
 
   it('loop 动作 ≤1 时跳过（trivial turn），不动 run.processSummary', async () => {
     const llm = mockLlm('SHOULD NOT BE CALLED');
-    const ctx = makeCtx({
+    const { ctx } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       loopSteps: ['direct answer'], // 1 个 loop 动作
       llm,
@@ -150,7 +164,7 @@ describe('ProcessSummaryHook（loop-exit 生产者：fold → run.processSummary
   });
 
   it('loop 动作 >1 时折叠并写 run.processSummary', async () => {
-    const ctx = makeCtx({
+    const { ctx } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       loopSteps: ['thought+action', 'observation', 'final'],
       llm: mockLlm('THE SUMMARY'),
@@ -171,7 +185,7 @@ describe('ProcessSummaryHook（loop-exit 生产者：fold → run.processSummary
         throw new Error('boom');
       }),
     } as unknown as LlmProvider;
-    const ctx = makeCtx({
+    const { ctx } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       loopSteps: ['a', 'b'],
       llm,
@@ -187,12 +201,14 @@ describe('LoopUsageHook（post-observation 遥测：yield loop_usage）', () => 
     container.clearInstances();
   });
 
-  it('从 ctx.messages + config.contextSize 算用量并发 loop_usage', async () => {
-    const ctx = makeCtx({
+  it('从 ctx.messages + 派生 contextSize 算用量并发 loop_usage', async () => {
+    const { ctx, providerService } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       loopSteps: ['a', 'b'],
     });
-    const events = await collect(new LoopUsageHook().apply(ctx));
+    const events = await collect(
+      new LoopUsageHook(providerService).apply(ctx),
+    );
     expect(events).toHaveLength(1);
     const usage = events[0] as Extract<RunEvent, { type: 'loop_usage' }>;
     expect(usage.type).toBe('loop_usage');

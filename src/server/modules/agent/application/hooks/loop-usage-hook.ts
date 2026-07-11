@@ -1,8 +1,9 @@
-import { singleton } from 'tsyringe';
+import { singleton, inject } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import { estimateTokens } from '@/server/utils/estimateTokens';
+import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
 
@@ -13,9 +14,16 @@ export class LoopUsageHook implements Hook {
   readonly phase: HookPhase = 'post-observation';
   private readonly logger = Logger.child({ source: 'LoopUsageHook' });
 
+  constructor(
+    @inject(ProviderService)
+    private readonly providerService: ProviderService,
+  ) {}
+
   async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent> {
     const used = estimateTokens(ctx.messages.toArray());
-    const total = ctx.config.contextSize;
+    const total = this.providerService.resolveContextSize(
+      ctx.config.runtimeConfig,
+    );
     this.logger.debug(
       `loop_usage (run ${ctx.runId}): used=${used} total=${total}`,
     );

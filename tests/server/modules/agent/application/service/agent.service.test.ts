@@ -33,11 +33,9 @@ describe('AgentService', () => {
       const cfg = makeService().buildRunConfig(
         { model: { modelId: 'gpt-4' } },
         'prompt',
-        8192,
       );
 
       expect(cfg.systemPrompt).toBe('prompt');
-      expect(cfg.contextSize).toBe(8192);
       expect(cfg.tools).toEqual(
         expect.arrayContaining(['response_user', 'cached_read']),
       );
@@ -48,7 +46,7 @@ describe('AgentService', () => {
     it('非法 userConfig 抛 ConfigValidationError', () => {
       // temperature 超出 schema 的 maximum(1)
       expect(() =>
-        makeService().buildRunConfig({ model: { temperature: 99 } }, 'p', 4000),
+        makeService().buildRunConfig({ model: { temperature: 99 } }, 'p'),
       ).toThrow(ConfigValidationError);
     });
   });

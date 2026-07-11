@@ -31,14 +31,18 @@ export class ConversationActivateHandler {
       systemPrompt,
     });
 
-    // 激活会话上下文：一次性灌入当前消息 + 解析后的配置 + 解析 transform 管道。
-    const [messages, config] = await Promise.all([
+    // 激活会话上下文：一次性灌入当前消息 + 解析后的 runtimeConfig + 解析 transform 管道。
+    const [messages, runtimeConfig] = await Promise.all([
       this.chatService.getConversationMessages(conversationId),
       this.chatService.resolveConversationConfig(conversationId),
     ]);
-    if (!config) return;
+    if (!runtimeConfig) return;
 
-    this.sessionManager.activateContext(conversationId, messages, config);
+    this.sessionManager.activateContext(
+      conversationId,
+      messages,
+      runtimeConfig,
+    );
 
     // activated-phase transform（usage 基线等）。激活先于任何 turn，无需屏障。
     const ctx = this.sessionManager.getCtx(conversationId);

@@ -7,7 +7,6 @@ import {
   extractChildEvents,
   type RunView,
 } from '@/server/modules/conversation/application/service/run-projection';
-import type { ConversationConfig } from '../../contracts';
 import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
 import { ListMonad } from '@/server/libs/list';
@@ -97,7 +96,7 @@ export class ConversationSession {
   private connection: Connection | undefined;
   private readonly activeRuns = new Map<string, ActiveRun>();
   private messages: ListMonad<Message> | undefined;
-  private config: ConversationConfig | undefined;
+  private runtimeConfig: Record<string, unknown> | undefined;
   private transforms: ConvTransformPlan | undefined;
   private maintenance:
     | { promise: Promise<void>; resolve: () => void }
@@ -215,24 +214,24 @@ export class ConversationSession {
     this.activeRuns.delete(messageId);
   }
 
-  /** 激活会话上下文：messages 上 session，灌入解析后的配置 + transform 管道（由调用方解析传入——session 不碰容器）。 */
+  /** 激活会话上下文：messages 上 session，灌入解析后的 runtimeConfig + transform 管道（由调用方解析传入——session 不碰容器）。 */
   activateContext(
     messages: Message[],
-    config: ConversationConfig,
+    runtimeConfig: Record<string, unknown>,
     transforms: ConvTransformPlan,
   ): void {
     this.messages = ListMonad.of(messages);
-    this.config = config;
+    this.runtimeConfig = runtimeConfig;
     this.transforms = transforms;
   }
 
   hasCtx(): boolean {
-    return this.config !== undefined;
+    return this.runtimeConfig !== undefined;
   }
 
-  /** session 即 ctx：返回 this 经窄接口 ConversationContext（转换只够到 messages/config/transforms）。 */
+  /** session 即 ctx：返回 this 经窄接口 ConversationContext（转换只够到 messages/runtimeConfig/transforms）。 */
   getCtx(): ConversationContext {
-    if (!this.config || !this.messages || !this.transforms) {
+    if (!this.runtimeConfig || !this.messages || !this.transforms) {
       throw new Error(
         `ConversationContext: ${this.conversationId} not activated (activateContext missing)`,
       );
@@ -266,7 +265,7 @@ export class ConversationSession {
     this.connection = undefined;
     this.activeRuns.clear();
     this.messages = undefined;
-    this.config = undefined;
+    this.runtimeConfig = undefined;
     this.transforms = undefined;
   }
 }
