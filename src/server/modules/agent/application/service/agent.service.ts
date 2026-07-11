@@ -85,6 +85,23 @@ export class AgentService {
   }
 
   /**
+   * 从 conv 侧已解析的配置（contextSize + runtimeConfig）直接产出 RuntimeConfigVO——
+   * 不再二次 parse/resolveChatModel（conv 已在 resolveConversationConfig 做过，同 schema）。
+   */
+  buildResolvedRunConfig(
+    systemPrompt: string,
+    contextSize: number,
+    runtimeConfig: Record<string, unknown>,
+  ): RuntimeConfigVO {
+    return RuntimeConfigVO.of({
+      systemPrompt,
+      tools: this.inlineTools,
+      contextSize,
+      runtimeConfig,
+    });
+  }
+
+  /**
    * 构建一个 ToolSet：全集 = 已发现工具，inline/listed 分类沿用 inlineTools；
    * 可剔除指定 id（子 agent 派生用）。inline 成员保持 inlineTools 顺序、listed 保持发现顺序，
    * 保证 conv 默认 ToolSet 渲染出的提示与历史逐字节一致。
