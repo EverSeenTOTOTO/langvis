@@ -7,7 +7,6 @@ import type { RunStatus } from '@/shared/types/agent';
 import { Role } from '@/shared/entities/Message';
 import { inject, singleton } from 'tsyringe';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import {
   MESSAGE_REPOSITORY,
   CONVERSATION_REPOSITORY,
@@ -41,8 +40,6 @@ export class ChatService {
     private agentRunRepo: AgentRunRepositoryPort,
     @inject(WorkspaceService)
     private workspaceService: WorkspaceService,
-    @inject(ProviderService)
-    private providerService: ProviderService,
   ) {}
 
   async activate(params: {
@@ -161,25 +158,16 @@ export class ChatService {
     return this.messageRepo.findByConversationId(conversationId);
   }
 
-  async resolveConversationConfig(conversationId: string): Promise<{
-    contextSize: number;
-    runtimeConfig: Record<string, unknown>;
-  } | null> {
+  /** 解析会话配置为 runtimeConfig（composeConfigSchema 全量 parse）。contextSize 不在此——按需派生。 */
+  async resolveConversationConfig(
+    conversationId: string,
+  ): Promise<Record<string, unknown> | null> {
     const conv = await this.convRepo.findById(conversationId);
     if (!conv) return null;
-
-    const modelId = (conv.config?.model as { modelId?: string } | undefined)
-      ?.modelId;
-    // 无显式 model 时回退默认 chat 模型：自动建会话(config={})否则落到 contextSize=0，
-    // 进度量条分母为 0（恒显 100%）且历史压缩被 !contextSize 静默禁用。
-    const { contextSize } = this.providerService.resolveChatModel(modelId);
-    return {
-      contextSize,
-      runtimeConfig: parse(composeConfigSchema(), conv.config) as Record<
-        string,
-        unknown
-      >,
-    };
+    return parse(composeConfigSchema(), conv.config) as Record<
+      string,
+      unknown
+    >;
   }
 
   async persistAgentRunId(messageId: string, agentRunId: string) {
@@ -278,8 +266,9 @@ export class ChatService {
     if (view.audio) meta.audio = view.audio;
     return this.messageRepo.update(
       messageId,
-      isEmpty(meta) ? { content: view.content } : { content: view.content, meta },
+      isEmpty(meta)
+        ? { content: view.content }
+        : { content: view.content, meta },
     );
   }
 }
-

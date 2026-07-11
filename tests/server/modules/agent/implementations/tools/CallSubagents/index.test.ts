@@ -15,7 +15,6 @@ function makeCtx(input: unknown, signal?: AbortSignal) {
     chatModelId: undefined,
     runId: 'run_parent',
     runtimeConfig: { model: { modelId: 'p:m' } },
-    contextSize: 4096,
   } as never;
 }
 
@@ -163,10 +162,7 @@ describe('CallSubagentsTool', () => {
     expect(params.parentSignal).toBe(controller.signal);
     expect(params.interactive).toBe(false);
     expect(params.workDir).toBe('/tmp/wd');
-    expect(params.config).toEqual({
-      contextSize: 4096,
-      runtimeConfig: { model: { modelId: 'p:m' } },
-    });
+    expect(params.runtimeConfig).toEqual({ model: { modelId: 'p:m' } });
     expect(params.seed[0]).toMatchObject({ role: 'system' });
     expect(params.seed[1]).toMatchObject({ role: 'user', content: 'q' });
   });

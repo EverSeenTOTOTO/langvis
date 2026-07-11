@@ -15,7 +15,6 @@ import type { LlmMessage } from '@/shared/types/entities';
 import { ListMonad } from '@/server/libs/list';
 import { HookPlan } from '@/server/modules/agent/domain/model/hook';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
-import type { ConversationConfig } from '@/server/modules/conversation/contracts';
 import { AgentService } from './agent.service';
 import { runReactLoop } from './react-loop';
 import Logger from '@/server/utils/logger';
@@ -30,8 +29,8 @@ import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 export interface LaunchParams {
   runId: string;
   workDir: string;
-  /** conv 侧一次性解析的会话配置（contextSize + runtimeConfig）；agent 直接复用，不再二次 parse/resolveChatModel。 */
-  config: ConversationConfig;
+  /** conv 侧一次性 parse 的运行时配置（agent 直接复用，不再二次 parse）。contextSize 按需派生，不在此处。 */
+  runtimeConfig: Record<string, unknown>;
   systemPrompt: string;
   /** run 的初始消息（已含 system 提示）；conv 由 effectiveHistory 经 buildIterMessages 派生，子 agent 由 brief+query 派生。 */
   seed: LlmMessage[];
@@ -58,17 +57,16 @@ export class AgentRunExecutor {
   ) {}
 
   createRun(params: LaunchParams): { run: AgentRun; ctx: AgentRunContext } {
-    const { contextSize, runtimeConfig } = params.config;
+    const { runtimeConfig } = params;
     const modelId = (runtimeConfig as { model?: { modelId?: string } }).model
       ?.modelId;
 
     this.logger.info(
-      `Create run ${chalk.cyan(params.runId)} — model: ${chalk.red(modelId ?? '(default)')} (${contextSize} ctx)`,
+      `Create run ${chalk.cyan(params.runId)} — model: ${chalk.red(modelId ?? '(default)')}`,
     );
 
     const config = this.agentService.buildResolvedRunConfig(
       params.systemPrompt,
-      contextSize,
       runtimeConfig,
     );
 
@@ -95,7 +93,6 @@ export class AgentRunExecutor {
           cache: this.cache,
           chatModelId: modelId,
           runtimeConfig: config.runtimeConfig,
-          contextSize: config.contextSize,
         }),
     };
 
@@ -121,7 +118,6 @@ export class AgentRunExecutor {
       config: {
         systemPrompt: run.config.systemPrompt,
         tools: run.config.tools,
-        contextSize: run.config.contextSize,
         runtimeConfig: run.config.runtimeConfig,
       },
       startedAt: new Date(),

@@ -9,6 +9,7 @@ import {
   type ConversationContext,
 } from '@/server/modules/conversation/domain/model/conv-transform';
 import { ListMonad } from '@/server/libs/list';
+import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
 import type { StreamFrame } from '@/shared/types/events';
@@ -39,13 +40,17 @@ function makeMessage(
   };
 }
 
-function makeCtx(messages: Message[], contextSize = 10): ConversationContext {
+function makeCtx(messages: Message[]): ConversationContext {
   return {
     conversationId: 'conv_test',
     messages: ListMonad.of(messages),
-    config: { contextSize, runtimeConfig: { history: COMPACTION } },
+    runtimeConfig: { history: COMPACTION },
     transforms: new ConvTransformPlan(),
   };
+}
+
+function mockProvider(contextSize: number): ProviderService {
+  return { resolveContextSize: () => contextSize } as unknown as ProviderService;
 }
 
 async function collect(gen: AsyncGenerator<StreamFrame | void>) {
@@ -87,9 +92,9 @@ describe('conv transform registry（自动识别）', () => {
 });
 
 describe('UsageTransform', () => {
-  it('从 ctx.messages + contextSize 算用量并 yield conversation_usage', async () => {
-    const ctx = makeCtx([makeMessage(Role.USER, 'hello world question')], 8000);
-    const events = await collect(new UsageTransform().apply(ctx));
+  it('从 ctx.messages + 派生 contextSize 算用量并 yield conversation_usage', async () => {
+    const ctx = makeCtx([makeMessage(Role.USER, 'hello world question')]);
+    const events = await collect(new UsageTransform(mockProvider(8000)).apply(ctx));
     expect(events).toHaveLength(1);
     const usage = events[0] as Extract<
       StreamFrame,
@@ -154,10 +159,9 @@ describe('CompactTransform', () => {
     } as unknown as MessageRepositoryPort;
     const ctx = makeCtx(
       [makeMessage(Role.USER, 'q'), makeMessage(Role.ASSIST, 'a')],
-      1_000_000,
     );
     const before = ctx.messages.length;
-    await collect(new CompactTransform(messageRepo).apply(ctx));
+    await collect(new CompactTransform(messageRepo, mockProvider(1_000_000)).apply(ctx));
     expect(foldMock).not.toHaveBeenCalled();
     expect(messageRepo.batchCreate).not.toHaveBeenCalled();
     expect(ctx.messages.length).toBe(before);
@@ -182,10 +186,11 @@ describe('CompactTransform', () => {
         makeMessage(Role.USER, 'question two'),
         makeMessage(Role.ASSIST, 'answer two'),
       ],
-      10, // 阈值 8 token，几条消息即超
     );
 
-    const events = await collect(new CompactTransform(messageRepo).apply(ctx));
+    const events = await collect(
+      new CompactTransform(messageRepo, mockProvider(10)).apply(ctx),
+    );
     expect(events).toHaveLength(0); // compact 不发帧
     expect(foldMock).toHaveBeenCalledTimes(1);
     expect(messageRepo.batchCreate).toHaveBeenCalledTimes(1);
@@ -203,9 +208,8 @@ describe('CompactTransform', () => {
     } as unknown as MessageRepositoryPort;
     const ctx = makeCtx(
       [makeMessage(Role.USER, 'q one'), makeMessage(Role.ASSIST, 'a one')],
-      10,
     );
-    await collect(new CompactTransform(messageRepo).apply(ctx));
+    await collect(new CompactTransform(messageRepo, mockProvider(10)).apply(ctx));
     expect(messageRepo.batchCreate).not.toHaveBeenCalled();
     expect(ctx.messages.length).toBe(2);
   });

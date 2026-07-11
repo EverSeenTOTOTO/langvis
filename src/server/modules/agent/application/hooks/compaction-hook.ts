@@ -1,4 +1,4 @@
-import { singleton } from 'tsyringe';
+import { singleton, inject } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { LoopCompactionConfig } from '@/server/modules/agent/domain/model/loop-config.fragment';
@@ -6,6 +6,7 @@ import type { RunEvent } from '@/shared/types/events';
 import { PROCESS_SUMMARY_PROMPT } from './prompts';
 import { fold } from '@/server/libs/compaction';
 import { estimateTokens } from '@/server/utils/estimateTokens';
+import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
 
@@ -16,11 +17,18 @@ export class CompactionHook implements Hook {
   readonly phase: HookPhase = 'post-observation';
   private readonly logger = Logger.child({ source: 'CompactionHook' });
 
+  constructor(
+    @inject(ProviderService)
+    private readonly providerService: ProviderService,
+  ) {}
+
   async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent> {
     const compaction = (
       ctx.config.runtimeConfig as { loop: LoopCompactionConfig }
     ).loop;
-    const contextSize = ctx.config.contextSize;
+    const contextSize = this.providerService.resolveContextSize(
+      ctx.config.runtimeConfig,
+    );
     if (!contextSize) return;
 
     const list = ctx.messages;

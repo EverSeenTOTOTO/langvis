@@ -14,6 +14,7 @@ import {
 import type { HistoryCompactionConfig } from '@/server/modules/conversation/application/service/history-config.fragment';
 import { fold } from '@/server/libs/compaction';
 import { Prompt } from '@/server/libs/prompt';
+import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import Logger from '@/server/utils/logger';
 import { convTransform } from './registry';
@@ -40,13 +41,18 @@ export class CompactTransform implements ConvTransform {
   constructor(
     @inject(MESSAGE_REPOSITORY)
     private readonly messageRepo: MessageRepositoryPort,
+    @inject(ProviderService)
+    private readonly providerService: ProviderService,
   ) {}
 
   async *apply(ctx: ConversationContext): AsyncGenerator<void> {
-    const { contextSize, runtimeConfig } = ctx.config;
+    const contextSize = this.providerService.resolveContextSize(
+      ctx.runtimeConfig,
+    );
     if (!contextSize) return;
-    const compaction = (runtimeConfig as { history: HistoryCompactionConfig })
-      .history;
+    const compaction = (
+      ctx.runtimeConfig as { history: HistoryCompactionConfig }
+    ).history;
 
     const history = ctx.messages.toArray();
     const { summary, index } = findLatestCompactionSummary(history);

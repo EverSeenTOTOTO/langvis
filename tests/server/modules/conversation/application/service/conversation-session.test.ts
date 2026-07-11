@@ -45,7 +45,7 @@ function msg(
   };
 }
 
-const CONFIG = { contextSize: 8000, runtimeConfig: {} };
+const CONFIG = { model: { modelId: 'm1' } };
 const makeSession = (id = 'c1') =>
   new ConversationSession(id, 30_000, () => {});
 
@@ -59,7 +59,7 @@ describe('ConversationSession —— 会话上下文（messages/config/transform
     );
     const ctx = s.getCtx();
     expect(ctx.messages.toArray().some(m => m.content === 'q1')).toBe(true);
-    expect(ctx.config.contextSize).toBe(8000);
+    expect(ctx.runtimeConfig).toEqual(CONFIG);
   });
 
   it('append 经 ctx.messages 反映', () => {

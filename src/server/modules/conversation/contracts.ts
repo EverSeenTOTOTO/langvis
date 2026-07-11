@@ -83,23 +83,14 @@ export class GetRunViewQuery extends Query {
 
 import type { LlmMessage, Message } from '@/shared/types/entities';
 
-/**
- * 会话解析后的配置（跨 BC 契约）：contextSize（模型派生）+ runtimeConfig（composeConfigSchema 解析的全量配置）。
- * 由 conv 侧 resolveConversationConfig 一次性解析、存于 ConversationSession，经 TurnInitiated 传 agent 复用——
- * 避免两边各 parse/resolveChatModel 一遍（同 schema、同 provider，纯冗余）。
- */
-export interface ConversationConfig {
-  contextSize: number;
-  runtimeConfig: Record<string, unknown>;
-}
-
 export const TurnInitiated = 'turn_initiated';
 
 export interface TurnInitiatedPayload {
   conversationId: string;
   assistantMessage: Message;
-  /** 会话解析后的配置（conv 侧一次性解析，agent 直接复用——不再二次 parse/resolveChatModel）。 */
-  config: ConversationConfig;
+  /** 会话解析后的运行时配置（conv 侧 resolveConversationConfig 一次性 parse，agent 直接复用——不再二次 parse）。
+   *  contextSize 不在此处：模型派生值，由各消费者经 providerService.resolveChatModel 按需取，避免层层透传。 */
+  runtimeConfig: Record<string, unknown>;
   systemPrompt: string;
   /** 会话有效历史（LLM-ready，conv turn-start transform/projection 产物）—— agent 直接作种子，不再回调 conv。 */
   effectiveHistory: LlmMessage[];

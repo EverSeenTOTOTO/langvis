@@ -47,7 +47,6 @@ function makeDeps(): ToolCallDeps {
     cache: makeMockCache(),
     chatModelId: undefined,
     runtimeConfig: {},
-    contextSize: 8000,
   };
 }
 

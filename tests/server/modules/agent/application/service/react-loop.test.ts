@@ -12,6 +12,7 @@ import { HookPlan, type Hook } from '@/server/modules/agent/domain/model/hook';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
+import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { ToolIds } from '@/shared/constants';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
@@ -216,7 +217,6 @@ interface BuildCtxOptions {
   handler: ToolHandler;
   seed?: LlmMessage[];
   controller?: AbortController;
-  contextSize?: number;
   hooks?: HookPlan;
 }
 interface BuiltCtx {
@@ -229,11 +229,9 @@ interface BuiltCtx {
  * the LLM (scripted) and the tool path (faked) — enough to drive the real `runReactLoop`. */
 function buildCtx(opts: BuildCtxOptions): BuiltCtx {
   const { llm, calls } = scriptedLlm(opts.responses);
-  const contextSize = opts.contextSize ?? 128_000;
   const config = RuntimeConfigVO.of({
     systemPrompt: 'test system prompt',
     tools: [],
-    contextSize,
     runtimeConfig: {
       model: {},
       loop: { threshold: 0.8, windowSize: 10, keepRecent: 4 },
@@ -270,6 +268,11 @@ const okHandler: ToolHandler = (name, _args) => ({ output: `${name}_result` });
 describe('runReactLoop', () => {
   beforeEach(() => {
     container.register(LLM_PORT, { useValue: summaryStubLlm() });
+    // hooks（CompactionHook/LoopUsageHook）经 ProviderService 派生 contextSize；mock 成大值抑制 mid-loop 压缩。
+    container.registerInstance(ProviderService, {
+      resolveContextSize: () => 128_000,
+      resolveChatModel: () => ({ id: undefined, contextSize: 128_000 }),
+    } as unknown as ProviderService);
   });
   afterEach(() => {
     container.clearInstances();

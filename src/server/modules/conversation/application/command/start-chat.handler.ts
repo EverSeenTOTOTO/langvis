@@ -47,7 +47,7 @@ export class StartChatHandler {
       createDomainEvent(TurnInitiated, conversationId, {
         conversationId,
         assistantMessage: turn.assistantMessage,
-        config: ctx.config,
+        runtimeConfig: ctx.runtimeConfig,
         systemPrompt: turn.systemPrompt,
         effectiveHistory,
       }),
