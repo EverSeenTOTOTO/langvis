@@ -4,7 +4,7 @@ import { createDomainEvent, EventBus } from '@/server/libs/ddd';
 import { ChatService } from '../service/chat.service';
 import { SessionManager } from '../service/session-manager';
 import { StartChatCommand, TurnInitiated } from '../../contracts';
-import { projectToLlmMessages } from '../../domain/model/history-projection';
+import { projectToLlmMessages } from '../service/history-projection';
 import { runConvTransforms } from '../transforms';
 
 @commandHandler(StartChatCommand)

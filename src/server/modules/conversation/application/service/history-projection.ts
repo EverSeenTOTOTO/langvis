@@ -1,7 +1,5 @@
 import type { LlmMessage, Message, MessageKind } from '@/shared/types/entities';
 import { Role } from '@/shared/entities/Message';
-import { estimateTokens } from '@/server/utils/estimateTokens';
-import type { ContextUsage } from '@/server/utils/estimateTokens';
 
 export function toLlmMessages(messages: Message[]): LlmMessage[] {
   return messages.map(m => ({ role: m.role, content: m.content }));
@@ -83,18 +81,4 @@ export function projectToLlmMessages(messages: Message[]): LlmMessage[] {
   }
 
   return out;
-}
-
-/** 有效历史用量（最新 C + 其后 turn）；与 projectToLlmMessages 同口径。 */
-export function computeContextUsage(
-  messages: Message[],
-  contextSize: number,
-): ContextUsage {
-  const { summary, index } = findLatestCompactionSummary(messages);
-  const tail = summary ? messages.slice(index + 1) : messages;
-  const effective = summary ? [summary, ...tail] : tail;
-  return {
-    used: estimateTokens(effective as unknown as LlmMessage[]),
-    total: contextSize,
-  };
 }

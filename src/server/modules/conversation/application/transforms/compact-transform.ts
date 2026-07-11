@@ -10,7 +10,7 @@ import type {
 import {
   findLatestCompactionSummary,
   toLlmMessages,
-} from '@/server/modules/conversation/domain/model/history-projection';
+} from '@/server/modules/conversation/application/service/history-projection';
 import { fold } from '@/server/libs/compaction';
 import { Prompt } from '@/server/libs/prompt';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';

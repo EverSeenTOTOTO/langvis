@@ -39,6 +39,16 @@ class ActiveRun {
   ) {}
 
   handleEvent(event: EnrichedEvent): void {
+    // loop 用量是 per-run 遥测——翻译为控制帧直发，不入事件缓冲/投影（不污染 snapshot）。
+    if (event.type === 'loop_usage') {
+      this.send({
+        type: 'loop_usage',
+        runId: this.runId,
+        used: event.used,
+        total: event.total,
+      });
+      return;
+    }
     this.events.push(event);
     applyEventToView(this.view, event);
     this.scheduleFlush();
@@ -169,7 +179,6 @@ export class ConversationSession {
     return this.activeRuns.get(messageId)?.getEvents();
   }
 
-  /** 子 run 事件——扫描活跃 run 缓冲；仅父 run 仍在 session 内时可查，历史回落 repo。 */
   getChildRunEvents(childRunId: string): readonly EnrichedEvent[] | undefined {
     for (const run of this.activeRuns.values()) {
       const child = run.extractChildEvents(childRunId);
@@ -191,31 +200,18 @@ export class ConversationSession {
   }
 
   handleRunEvent(messageId: string, event: EnrichedEvent): void {
-    // loop 用量是 per-run 遥测事实——翻译为控制帧下发，不入 run 事件缓冲（不污染 snapshot/投影）。
-    if (event.type === 'loop_usage') {
-      this.sendFrame({
-        type: 'loop_usage',
-        runId: event.runId,
-        used: event.used,
-        total: event.total,
-      });
-      return;
-    }
     this.activeRuns.get(messageId)?.handleEvent(event);
   }
 
-  /** Send the run's current view as a run_view frame（终态 flush 由 removeRun 负责）。 */
   flushRunView(messageId: string): void {
     this.activeRuns.get(messageId)?.flush();
   }
 
-  /** 移除 run：drain 下发最终视图，再摘除。这是「保证终态送达」的唯一正确性 flush。 */
   removeRun(messageId: string): void {
     this.activeRuns.get(messageId)?.flush();
     this.activeRuns.delete(messageId);
   }
 
-  /** 激活会话上下文：messages 上 session，灌入解析后的 runtimeConfig + transform 管道（由调用方解析传入——session 不碰容器）。 */
   activateContext(
     messages: Message[],
     runtimeConfig: ConversationConfig,
