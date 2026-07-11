@@ -97,10 +97,7 @@ export class ChatStore {
         content: msg.content,
         status: msg.status as any,
         steps: msg.steps ?? undefined,
-        audio:
-          (msg.meta?.audio as
-            | { filePath: string; voice?: string }
-            | undefined) ?? undefined,
+        audio: msg.audio ?? undefined,
       });
       nodes.set(msg.id, node);
     }

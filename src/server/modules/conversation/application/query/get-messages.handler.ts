@@ -11,7 +11,7 @@ import { GetMessagesQuery } from '../../contracts';
 
 /**
  * GetMessagesHandler — 读模型组装：取会话消息 + 跨 BC 取 agent_runs，
- * 对 assistant 消息用 projectRun(run.events) 派生 steps/status（events 唯一事实，
+ * 对 assistant 消息用 projectRun(run.events) 派生 steps/status/audio（events 唯一事实，
  * 不物化派生结果），content 取 msg.content 兜底 view.content。
  */
 @queryHandler(GetMessagesQuery)
@@ -46,9 +46,10 @@ export class GetMessagesHandler {
             content: msg.content || view.content,
             steps: view.steps,
             status: run.status,
+            audio: view.audio,
           };
         }
-        return { ...msg, steps: null, status: null };
+        return { ...msg, steps: null, status: null, audio: null };
       }
       return msg;
     });

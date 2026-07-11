@@ -23,7 +23,6 @@ import { configSchema, type ConversationConfig } from '@/server/libs/config';
 import { parse } from '@/server/utils/schemaValidator';
 import { ConversationNotFoundError } from '../../domain/errors';
 import Logger from '@/server/utils/logger';
-import { isEmpty } from 'lodash-es';
 import type { EnrichedEvent } from '@/shared/types/events';
 import { projectRun } from '@/server/modules/conversation/application/service/run-projection';
 
@@ -251,21 +250,15 @@ export class ChatService {
   }
 
   /**
-   * 收 turn 的持久化接缝：把 run 事件流投影成终态 → 持久化 assistant 消息（audio 入 meta）。
-   * content/audio 都从同一 RunView 投影而来；压缩/用量是 turn-end transform 的职责。
+   * 收 turn 的持久化接缝：把 run 事件流投影成终态文案 → 持久化 assistant 消息。
+   * audio 不入 meta——它是 run 事件的派生量，重载时由 GetMessagesHandler 经
+   * projectRun(run.events) 复算（与 steps/status 同源）。
    */
   async persistAssistantTurn(
     messageId: string,
     events: readonly EnrichedEvent[],
   ): Promise<Message | null> {
     const view = projectRun(events);
-    const meta: Record<string, unknown> = {};
-    if (view.audio) meta.audio = view.audio;
-    return this.messageRepo.update(
-      messageId,
-      isEmpty(meta)
-        ? { content: view.content }
-        : { content: view.content, meta },
-    );
+    return this.messageRepo.update(messageId, { content: view.content });
   }
 }

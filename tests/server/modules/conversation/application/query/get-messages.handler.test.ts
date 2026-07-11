@@ -40,14 +40,55 @@ describe('GetMessagesHandler', () => {
 
     // 非 assistant 透传
     expect(result[0]).toEqual(messages[0]);
-    // assistant 合并 steps（空，无 tool_call）+ status（来自 run.status）
+    // assistant 合并 steps（空，无 tool_call）+ status（来自 run.status）+ audio（无 audio 事件 → null）
     expect(result[1]).toMatchObject({
       id: 'm2',
       content: 'hello',
       steps: [],
       status: 'completed',
+      audio: null,
     });
     expect(agentRunRepo.findByIds).toHaveBeenCalledWith(['run_1']);
+  });
+
+  it('merges audio re-derived from run events (ignoring any stale meta.audio snapshot)', async () => {
+    const messages = [
+      {
+        id: 'm2',
+        role: Role.ASSIST,
+        content: 'hello',
+        agentRunId: 'run_1',
+        // stale snapshot — must be ignored; audio comes from run events now
+        meta: { audio: { filePath: 'stale.mp3' } },
+        conversationId: 'conv_1',
+      },
+    ];
+    const messageRepo = {
+      findByConversationId: vi.fn().mockResolvedValue(messages),
+    } as unknown as MessageRepositoryPort;
+    const agentRunRepo = {
+      findByIds: vi.fn().mockResolvedValue([
+        {
+          id: 'run_1',
+          status: 'completed',
+          events: [
+            makeEnriched({
+              type: 'audio',
+              filePath: 'tts/run_1.mp3',
+              voice: 'V',
+            }),
+          ],
+        },
+      ]),
+    } as unknown as AgentRunRepositoryPort;
+
+    const handler = new GetMessagesHandler(messageRepo, agentRunRepo);
+    const result = await handler.execute(new GetMessagesQuery('conv_1'));
+
+    expect(result[0].audio).toEqual({
+      filePath: 'tts/run_1.mp3',
+      voice: 'V',
+    });
   });
 
   it('returns null steps/status when the agent run is missing', async () => {
@@ -74,6 +115,7 @@ describe('GetMessagesHandler', () => {
       id: 'm2',
       steps: null,
       status: null,
+      audio: null,
     });
   });
 
