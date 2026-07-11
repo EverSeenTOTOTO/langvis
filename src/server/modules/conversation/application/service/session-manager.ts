@@ -17,6 +17,11 @@ import { getConvTransformPlan } from '../transforms';
 import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
 
+export interface ChatState {
+  conversationId: string;
+  startedAt: number;
+}
+
 @singleton()
 @lifecycleHook
 export class SessionManager implements LifecycleHook {
@@ -79,7 +84,7 @@ export class SessionManager implements LifecycleHook {
     // 重启残留 run 的清扫已在启动期由 OrphanRunReconciler 完成，此处不再对账。
     await this.redisService.set(
       RedisKeys.CHAT_SESSION(conversationId),
-      { conversationId, startedAt: Date.now() },
+      { conversationId, startedAt: Date.now() } satisfies ChatState,
       3600,
     );
   }
@@ -245,9 +250,4 @@ export class SessionManager implements LifecycleHook {
 
     await this.convService.markMessagesTerminated(orphans, status, reason);
   }
-}
-
-export interface ChatState {
-  conversationId: string;
-  startedAt: number;
 }

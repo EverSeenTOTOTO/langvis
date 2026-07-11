@@ -5,10 +5,29 @@ import type {
   ConvPhase,
   ConvTransform,
 } from '@/server/modules/conversation/domain/model/conv-transform';
-import { computeContextUsage } from '@/server/modules/conversation/domain/model/history-projection';
+import { findLatestCompactionSummary } from '@/server/modules/conversation/application/service/history-projection';
+import type { LlmMessage, Message } from '@/shared/types/entities';
+import {
+  estimateTokens,
+  type ContextUsage,
+} from '@/server/utils/estimateTokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
 import { convTransform } from './registry';
+
+/** 有效历史用量：最新压缩摘要 C + 其后 turn（与 compact-transform 同口径）。 */
+function computeContextUsage(
+  messages: Message[],
+  contextSize: number,
+): ContextUsage {
+  const { summary, index } = findLatestCompactionSummary(messages);
+  const tail = summary ? messages.slice(index + 1) : messages;
+  const effective = summary ? [summary, ...tail] : tail;
+  return {
+    used: estimateTokens(effective as unknown as LlmMessage[]),
+    total: contextSize,
+  };
+}
 
 @singleton()
 @convTransform

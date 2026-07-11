@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
-import { groupIntoTurns } from '@/server/modules/conversation/domain/model/history-projection';
+import { groupIntoTurns } from '@/server/modules/conversation/application/service/history-projection';
 
 function makeMessage(
   role: Role,

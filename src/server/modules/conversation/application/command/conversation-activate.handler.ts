@@ -20,7 +20,7 @@ export class ConversationActivateHandler {
   async execute(command: ConversationActivateCommand): Promise<void> {
     const { conversationId, userId } = command;
 
-    // 归属校验下沉到 ChatService.requireConversation(不存在/非本人统一 NotFound,不泄露存在性)。
+    // ensure
     await this.chatService.requireConversation(conversationId, userId);
 
     const systemPrompt = await this.agentService.getSystemPrompt();

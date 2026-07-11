@@ -7,7 +7,7 @@ import type { EnrichedEvent, HookRecord } from '@/shared/types/events';
  * 与历史读回一致。无状态、无副作用、可对任意子流重算。
  *
  * 归属：这是 conv 对 agent 事件流的读模型投影（agent 只存/外发 RunEvent，
- * 不感知 view）。agent 侧不引用本文件。
+ * 不感知 view）。
  */
 export interface RunView {
   content: string;

@@ -85,7 +85,7 @@ export class AgentService {
   /**
    * 构建一个 ToolSet：全集 = 已发现工具，inline/listed 分类沿用 inlineTools；
    * 可剔除指定 id（子 agent 派生用）。inline 成员保持 inlineTools 顺序、listed 保持发现顺序，
-   * 保证 conv 默认 ToolSet 渲染出的提示与历史逐字节一致。
+   * 保证 conv 默认 ToolSet 渲染出的提示与历史一致。
    */
   buildToolSet(exclude: string[] = []): ToolSet {
     const discovered = this.toolService.getCachedToolIds();
