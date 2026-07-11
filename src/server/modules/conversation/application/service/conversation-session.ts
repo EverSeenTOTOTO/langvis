@@ -16,21 +16,82 @@ import {
   type ConversationContext,
 } from '../../domain/model/conv-transform';
 
-/** 活跃 run 的会话内追踪——持 runId + 事件缓冲 + 增量投影视图。 */
-interface ActiveRun {
-  runId: string;
-  events: EnrichedEvent[];
-  view: RunView;
-  /** Coalesced flush timer — one per run, fans out to all tabs via Connection. */
-  flushTimer?: ReturnType<typeof setTimeout>;
-}
-
 /** Coalesce window for run_view emission — bounds wire/render rate during rapid
  * streams (text_chunk / tool_progress). Terminal + awaiting-input transitions
  * bypass it and flush synchronously (see handleRunEvent). */
 const RUN_VIEW_FLUSH_MS = 30;
 
 const logger = Logger.child({ source: 'ConversationSession' });
+
+/**
+ * 活跃 run 的会话内追踪——自持事件缓冲 + 增量投影视图 + 合并 flush。
+ * session 只登记/查找/转发事件，run 的投影与下发逻辑内聚于此。
+ */
+class ActiveRun {
+  private events: EnrichedEvent[] = [];
+  private view: RunView = emptyRunView();
+  private flushTimer?: ReturnType<typeof setTimeout>;
+
+  constructor(
+    readonly messageId: string,
+    readonly runId: string,
+    private readonly send: (frame: StreamFrame) => void,
+  ) {}
+
+  handleEvent(event: EnrichedEvent): void {
+    this.events.push(event);
+    applyEventToView(this.view, event);
+    this.scheduleFlush();
+  }
+
+  getEvents(): readonly EnrichedEvent[] {
+    return this.events;
+  }
+
+  /** 子 run（call_subagents 的 child）事件——从 tool_progress 进度块按 childRunId 解包。 */
+  extractChildEvents(childRunId: string): readonly EnrichedEvent[] {
+    return extractChildEvents(this.events, childRunId);
+  }
+
+  /** 当前视图的 run_view 帧（重连补发用，不碰合并定时器）。 */
+  buildFrame(): StreamFrame {
+    return {
+      type: 'run_view',
+      messageId: this.messageId,
+      runId: this.runId,
+      content: this.view.content,
+      steps: this.view.steps,
+      status: this.view.status,
+      awaitingInput: this.view.awaitingInput,
+      audio: this.view.audio,
+      hooks: this.view.hooks,
+    };
+  }
+
+  /** Coalesce run_view emission — first event in a quiet window arms a timer,
+   * subsequent ones keep folding into view; the timer flushes the latest. */
+  private scheduleFlush(): void {
+    if (this.flushTimer) return;
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = undefined;
+      this.flush();
+    }, RUN_VIEW_FLUSH_MS);
+  }
+
+  /** Send current view as run_view frame. Clears any pending timer. */
+  flush(): void {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = undefined;
+    }
+    this.send(this.buildFrame());
+  }
+
+  /** Clear pending timer without flushing（会话释放时）。 */
+  dispose(): void {
+    if (this.flushTimer) clearTimeout(this.flushTimer);
+  }
+}
 
 export class ConversationSession {
   private connection: Connection | undefined;
@@ -73,12 +134,12 @@ export class ConversationSession {
     }
     this.connection.attach(transport);
 
-    for (const [messageId, run] of this.activeRuns) {
-      this.connection.send(this.buildRunViewFrame(messageId, run));
-      logger.info(
-        `Replayed view: ${run.view.content.length} chars, ${run.view.steps.length} steps`,
-        { chatId: this.conversationId, messageId },
-      );
+    for (const run of this.activeRuns.values()) {
+      this.connection.send(run.buildFrame());
+      logger.info(`Replayed run_view (run ${run.runId})`, {
+        chatId: this.conversationId,
+        messageId: run.messageId,
+      });
     }
 
     // 会话用量基线由 activated-phase 的 usage transform 下发（激活先于 attach），此处不再内联发送。
@@ -94,11 +155,10 @@ export class ConversationSession {
   }
 
   registerRun(messageId: string, runId: string): void {
-    this.activeRuns.set(messageId, {
-      runId,
-      events: [],
-      view: emptyRunView(),
-    });
+    this.activeRuns.set(
+      messageId,
+      new ActiveRun(messageId, runId, f => this.sendFrame(f)),
+    );
   }
 
   hasActiveRun(messageId: string): boolean {
@@ -106,14 +166,13 @@ export class ConversationSession {
   }
 
   getRunEvents(messageId: string): readonly EnrichedEvent[] | undefined {
-    return this.activeRuns.get(messageId)?.events;
+    return this.activeRuns.get(messageId)?.getEvents();
   }
 
-  /** 子 run（call_subagents 的 child）事件——从活跃父 run 的 tool_progress 进度块提取。
-   *  仅父 run 仍在 session 缓冲内时可查；历史回落到 get-run-view 的 repo 路径。 */
+  /** 子 run 事件——扫描活跃 run 缓冲；仅父 run 仍在 session 内时可查，历史回落 repo。 */
   getChildRunEvents(childRunId: string): readonly EnrichedEvent[] | undefined {
     for (const run of this.activeRuns.values()) {
-      const child = extractChildEvents(run.events, childRunId);
+      const child = run.extractChildEvents(childRunId);
       if (child.length > 0) return child;
     }
     return undefined;
@@ -142,59 +201,17 @@ export class ConversationSession {
       });
       return;
     }
-    const run = this.activeRuns.get(messageId);
-    if (!run) return;
-
-    // 缓冲原始事件——CompleteTurn 仍按事件流 projectRun 持久化 content/meta。
-    run.events.push(event);
-    applyEventToView(run.view, event);
-    // 投影帧一律走合并窗口（吞吐优化）。终态的「保证最后一帧送达」由 removeRun 的
-    // drain 负责——绑定 run 生命周期，而非在热路径里按事件类型特判。
-    this.scheduleRunViewFlush(messageId);
+    this.activeRuns.get(messageId)?.handleEvent(event);
   }
 
-  /** Coalesce run_view emission — first event in a quiet window arms a timer,
-   * subsequent ones just keep folding into run.view; the timer flushes the latest. */
-  private scheduleRunViewFlush(messageId: string): void {
-    const run = this.activeRuns.get(messageId);
-    if (!run || run.flushTimer) return;
-    run.flushTimer = setTimeout(() => {
-      const r = this.activeRuns.get(messageId);
-      if (r) r.flushTimer = undefined;
-      this.flushRunView(messageId);
-    }, RUN_VIEW_FLUSH_MS);
-  }
-
-  /** Send the current run.view as a run_view frame. No-op if the run was removed
-   * (a coalesced timer may fire after removeRun). Clears any pending timer. */
+  /** Send the run's current view as a run_view frame（终态 flush 由 removeRun 负责）。 */
   flushRunView(messageId: string): void {
-    const run = this.activeRuns.get(messageId);
-    if (!run) return;
-    if (run.flushTimer) {
-      clearTimeout(run.flushTimer);
-      run.flushTimer = undefined;
-    }
-    this.sendFrame(this.buildRunViewFrame(messageId, run));
+    this.activeRuns.get(messageId)?.flush();
   }
 
-  private buildRunViewFrame(messageId: string, run: ActiveRun): StreamFrame {
-    return {
-      type: 'run_view',
-      messageId,
-      runId: run.runId,
-      content: run.view.content,
-      steps: run.view.steps,
-      status: run.view.status,
-      awaitingInput: run.view.awaitingInput,
-      audio: run.view.audio,
-      hooks: run.view.hooks,
-    };
-  }
-
-  /** 移除 run（从 activeRuns 摘除）。Drain：摘除前同步下发最终视图——这是「保证终态
-   *  送达」的唯一正确性 flush，绑定 run 生命周期，而非热路径里的事件类型特判。 */
+  /** 移除 run：drain 下发最终视图，再摘除。这是「保证终态送达」的唯一正确性 flush。 */
   removeRun(messageId: string): void {
-    this.flushRunView(messageId);
+    this.activeRuns.get(messageId)?.flush();
     this.activeRuns.delete(messageId);
   }
 
@@ -244,9 +261,7 @@ export class ConversationSession {
 
   dispose(): void {
     this.endMaintenance();
-    for (const run of this.activeRuns.values()) {
-      if (run.flushTimer) clearTimeout(run.flushTimer);
-    }
+    for (const run of this.activeRuns.values()) run.dispose();
     this.connection?.dispose();
     this.connection = undefined;
     this.activeRuns.clear();

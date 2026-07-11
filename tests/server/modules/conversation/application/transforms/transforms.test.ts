@@ -75,11 +75,12 @@ describe('conv transform registry（自动识别）', () => {
   it('相位分桶：summary-bake 进 turn-start+turn-end，compact 进 turn-end，usage 进 activated+turn-end', () => {
     const plan = new ConvTransformPlan(resolveConvTransforms());
     const ids = (ts: readonly { id: string }[]) => ts.map(t => t.id);
-    expect(ids(plan.forPhase('activated')).sort()).toEqual(['usage']);
-    expect(ids(plan.forPhase('turn-start')).sort()).toEqual(['summary-bake']);
-    expect(ids(plan.forPhase('turn-end')).sort()).toEqual([
-      'compact',
+    expect(ids(plan.forPhase('activated'))).toEqual(['usage']);
+    expect(ids(plan.forPhase('turn-start'))).toEqual(['summary-bake']);
+    // 导入序即运行序：烘焙 → 折叠 → 量用量
+    expect(ids(plan.forPhase('turn-end'))).toEqual([
       'summary-bake',
+      'compact',
       'usage',
     ]);
   });

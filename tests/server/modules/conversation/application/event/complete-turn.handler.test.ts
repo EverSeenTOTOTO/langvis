@@ -74,13 +74,9 @@ describe('CompleteTurnHandler — turn-end 触发适配器（线性屏障）', (
       conversationId,
       messageId,
     );
-    expect(sessionManager.sendFrame).toHaveBeenCalledWith(
-      conversationId,
-      expect.objectContaining({ type: 'conversation_usage', total: 4096 }),
-    );
-    expect(sessionManager.beginMaintenance).toHaveBeenCalledWith(
-      conversationId,
-    );
+    // usage 帧由 turn-end 的 usage transform 发（此处 ctx 为空 plan，故无 usage 帧）；
+    // handler 本身不再直接发 usage 帧。
+    expect(sessionManager.beginMaintenance).toHaveBeenCalledWith(conversationId);
     expect(sessionManager.endMaintenance).toHaveBeenCalledWith(conversationId);
     expect(sessionManager.finalizeRun).toHaveBeenCalledWith(
       conversationId,
