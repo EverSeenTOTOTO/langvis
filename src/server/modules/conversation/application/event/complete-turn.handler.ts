@@ -5,7 +5,6 @@ import { RunCompleted } from '@/server/modules/agent/contracts';
 import type { RunCompletedPayload } from '@/server/modules/agent/contracts';
 import { SessionManager } from '../service/session-manager';
 import { ChatService } from '../service/chat.service';
-import { computeContextUsage } from '../../domain/model/history-projection';
 import { runConvTransforms } from '../transforms';
 import Logger from '@/server/utils/logger';
 
@@ -48,14 +47,7 @@ export class CompleteTurnHandler {
       if (assistant) ctx.messages = ctx.messages.append(assistant);
 
       this.sessionManager.flushRunView(conversationId, messageId);
-      this.sessionManager.sendFrame(conversationId, {
-        type: 'conversation_usage',
-        used: computeContextUsage(
-          ctx.messages.toArray(),
-          ctx.config.contextSize,
-        ).used,
-        total: ctx.config.contextSize,
-      });
+      // turn-end transform 发用量帧（usage 跑在 summary-bake/compact 之后，量的是压缩后用量）。
       for await (const frame of runConvTransforms(ctx, 'turn-end')) {
         if (frame) this.sessionManager.sendFrame(conversationId, frame);
       }

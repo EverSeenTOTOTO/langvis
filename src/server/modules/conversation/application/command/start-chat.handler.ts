@@ -29,7 +29,7 @@ export class StartChatHandler {
       assistantId,
     });
 
-    // 屏障：等在飞 turn-end 维护（compact 等）完成后再动 ctx.messages——
+    // 屏障：等上一个 turn-end 维护（compact 等）完成后再动 ctx.messages——
     // 否则 compact 的 C 会落在本次 userMessage 之后、被位置投影丢掉。
     await this.sessionManager.awaitMaintenance(conversationId);
 

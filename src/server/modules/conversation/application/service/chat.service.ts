@@ -182,10 +182,12 @@ export class ChatService {
     };
   }
 
-  persistAgentRunId(messageId: string, agentRunId: string): void {
-    this.messageRepo.update(messageId, { agentRunId }).catch(err => {
+  async persistAgentRunId(messageId: string, agentRunId: string) {
+    try {
+      await this.messageRepo.update(messageId, { agentRunId });
+    } catch (err) {
       this.logger.warn('Failed to persist agentRunId', err);
-    });
+    }
   }
 
   /**
@@ -265,8 +267,7 @@ export class ChatService {
 
   /**
    * 收 turn 的持久化接缝：把 run 事件流投影成终态 → 持久化 assistant 消息（audio 入 meta）。
-   * 不再触碰会话上下文/压缩——那些是 turn-end transform 的职责（见 CompleteTurnHandler）。
-   * 返回更新后的消息供调用方 append 到 ctx.messages；events 由 handler 传入（session 作用域）。
+   * content/audio 都从同一 RunView 投影而来；压缩/用量是 turn-end transform 的职责。
    */
   async persistAssistantTurn(
     messageId: string,
@@ -277,9 +278,8 @@ export class ChatService {
     if (view.audio) meta.audio = view.audio;
     return this.messageRepo.update(
       messageId,
-      isEmpty(meta)
-        ? { content: view.content }
-        : { content: view.content, meta },
+      isEmpty(meta) ? { content: view.content } : { content: view.content, meta },
     );
   }
 }
+
