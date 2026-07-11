@@ -562,6 +562,7 @@ describe('runReactLoop', () => {
         phase: 'post-observation',
         apply: async function* (_ctx: AgentRunContext) {
           spyCalls++;
+          return 'next';
         },
       };
       const { ctx, runTool } = buildCtx({
@@ -591,6 +592,7 @@ describe('runReactLoop', () => {
                 summary: 'did something',
                 data: { x: 1 },
               };
+              return 'next';
             },
           },
         ]),
