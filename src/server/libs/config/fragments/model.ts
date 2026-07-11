@@ -1,10 +1,13 @@
 import type { JSONSchemaType } from 'ajv';
-import { defineConfigFragment } from '@/server/libs/config/config-fragment';
+import type { ConfigFragment } from '../config-fragment';
 
-/**
- * model 配置片段——chat 模型选择。model 整体可选（无对象级 default）：缺省时 executor 以默认模型运行；
- */
-export const MODEL_FRAGMENT = defineConfigFragment({
+export interface ModelConfig {
+  modelId?: string;
+  temperature?: number;
+  topP?: number;
+}
+
+export const MODEL_FRAGMENT: ConfigFragment<'model', ModelConfig> = {
   key: 'model',
   schema: {
     type: 'object',
@@ -33,4 +36,4 @@ export const MODEL_FRAGMENT = defineConfigFragment({
     },
     required: ['modelId'],
   } as unknown as JSONSchemaType<unknown>,
-});
+};

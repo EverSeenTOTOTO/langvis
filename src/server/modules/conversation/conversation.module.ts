@@ -24,7 +24,6 @@ import './application/command/start-chat.handler';
 import './application/query/get-session-state.handler';
 import './application/query/get-messages.handler';
 import './application/query/get-run-view.handler';
-import './application/service/history-config.fragment';
 import './application/event/run-started.handler';
 import './application/event/run-event.handler';
 import './application/event/complete-turn.handler';

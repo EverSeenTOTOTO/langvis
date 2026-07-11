@@ -1,7 +1,6 @@
 import { singleton, inject } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
-import type { LoopCompactionConfig } from '@/server/modules/agent/domain/model/loop-config.fragment';
 import type { RunEvent } from '@/shared/types/events';
 import { PROCESS_SUMMARY_PROMPT } from './prompts';
 import { fold } from '@/server/libs/compaction';
@@ -23,9 +22,8 @@ export class CompactionHook implements Hook {
   ) {}
 
   async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent> {
-    const compaction = (
-      ctx.config.runtimeConfig as { loop: LoopCompactionConfig }
-    ).loop;
+    const compaction = ctx.config.runtimeConfig.loop;
+    if (!compaction) return;
     const contextSize = this.providerService.resolveContextSize(
       ctx.config.runtimeConfig,
     );

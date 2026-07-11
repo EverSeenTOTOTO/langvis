@@ -1,4 +1,4 @@
-import type { RuntimeConfigVO } from '../model/runtime-config.vo';
+import type { RunConfigVO } from '../model/run-config.vo';
 import type { AgentRun } from '../model/agent-run.entity';
 import type { RunEvent } from '@/shared/types/events';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
@@ -9,7 +9,7 @@ import type { LlmMessage } from '@/shared/types/entities';
 
 export interface AgentRunContext {
   readonly run: AgentRun;
-  readonly config: RuntimeConfigVO;
+  readonly config: RunConfigVO;
   readonly runId: string;
   readonly workDir: string;
   readonly signal: AbortSignal;

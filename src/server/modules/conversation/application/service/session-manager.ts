@@ -12,6 +12,7 @@ import { CancelRun } from '@/server/modules/agent/contracts';
 import { ChatService } from './chat.service';
 import { ConversationSession } from './conversation-session';
 import type { ConversationContext } from '../../domain/model/conv-transform';
+import type { ConversationConfig } from '@/server/libs/config';
 import { getConvTransformPlan } from '../transforms';
 import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
@@ -179,7 +180,7 @@ export class SessionManager implements LifecycleHook {
   activateContext(
     conversationId: string,
     messages: Message[],
-    runtimeConfig: Record<string, unknown>,
+    runtimeConfig: ConversationConfig,
   ): void {
     this.getOrCreate(conversationId).activateContext(
       messages,

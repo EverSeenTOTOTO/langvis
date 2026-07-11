@@ -105,11 +105,8 @@ export class ProviderService {
   }
 
   /** 从 runtimeConfig 派生模型上下文窗口（model.modelId → resolveChatModel）；无 model 走默认。 */
-  resolveContextSize(runtimeConfig: Record<string, unknown>): number {
-    const modelId = (
-      runtimeConfig as { model?: { modelId?: string } } | undefined
-    )?.model?.modelId;
-    return this.resolveChatModel(modelId).contextSize;
+  resolveContextSize(runtimeConfig: { model?: { modelId?: string } }): number {
+    return this.resolveChatModel(runtimeConfig.model?.modelId).contextSize;
   }
 
   getModelsByType(type: ModelType): ModelDefinition[] {

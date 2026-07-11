@@ -50,7 +50,9 @@ function makeCtx(messages: Message[]): ConversationContext {
 }
 
 function mockProvider(contextSize: number): ProviderService {
-  return { resolveContextSize: () => contextSize } as unknown as ProviderService;
+  return {
+    resolveContextSize: () => contextSize,
+  } as unknown as ProviderService;
 }
 
 async function collect(gen: AsyncGenerator<StreamFrame | void>) {
@@ -94,7 +96,9 @@ describe('conv transform registry（自动识别）', () => {
 describe('UsageTransform', () => {
   it('从 ctx.messages + 派生 contextSize 算用量并 yield conversation_usage', async () => {
     const ctx = makeCtx([makeMessage(Role.USER, 'hello world question')]);
-    const events = await collect(new UsageTransform(mockProvider(8000)).apply(ctx));
+    const events = await collect(
+      new UsageTransform(mockProvider(8000)).apply(ctx),
+    );
     expect(events).toHaveLength(1);
     const usage = events[0] as Extract<
       StreamFrame,
@@ -157,11 +161,14 @@ describe('CompactTransform', () => {
     const messageRepo = {
       batchCreate: vi.fn(),
     } as unknown as MessageRepositoryPort;
-    const ctx = makeCtx(
-      [makeMessage(Role.USER, 'q'), makeMessage(Role.ASSIST, 'a')],
-    );
+    const ctx = makeCtx([
+      makeMessage(Role.USER, 'q'),
+      makeMessage(Role.ASSIST, 'a'),
+    ]);
     const before = ctx.messages.length;
-    await collect(new CompactTransform(messageRepo, mockProvider(1_000_000)).apply(ctx));
+    await collect(
+      new CompactTransform(messageRepo, mockProvider(1_000_000)).apply(ctx),
+    );
     expect(foldMock).not.toHaveBeenCalled();
     expect(messageRepo.batchCreate).not.toHaveBeenCalled();
     expect(ctx.messages.length).toBe(before);
@@ -179,14 +186,12 @@ describe('CompactTransform', () => {
         },
       ]),
     } as unknown as MessageRepositoryPort;
-    const ctx = makeCtx(
-      [
-        makeMessage(Role.USER, 'question one'),
-        makeMessage(Role.ASSIST, 'answer one'),
-        makeMessage(Role.USER, 'question two'),
-        makeMessage(Role.ASSIST, 'answer two'),
-      ],
-    );
+    const ctx = makeCtx([
+      makeMessage(Role.USER, 'question one'),
+      makeMessage(Role.ASSIST, 'answer one'),
+      makeMessage(Role.USER, 'question two'),
+      makeMessage(Role.ASSIST, 'answer two'),
+    ]);
 
     const events = await collect(
       new CompactTransform(messageRepo, mockProvider(10)).apply(ctx),
@@ -206,10 +211,13 @@ describe('CompactTransform', () => {
     const messageRepo = {
       batchCreate: vi.fn(),
     } as unknown as MessageRepositoryPort;
-    const ctx = makeCtx(
-      [makeMessage(Role.USER, 'q one'), makeMessage(Role.ASSIST, 'a one')],
+    const ctx = makeCtx([
+      makeMessage(Role.USER, 'q one'),
+      makeMessage(Role.ASSIST, 'a one'),
+    ]);
+    await collect(
+      new CompactTransform(messageRepo, mockProvider(10)).apply(ctx),
     );
-    await collect(new CompactTransform(messageRepo, mockProvider(10)).apply(ctx));
     expect(messageRepo.batchCreate).not.toHaveBeenCalled();
     expect(ctx.messages.length).toBe(2);
   });

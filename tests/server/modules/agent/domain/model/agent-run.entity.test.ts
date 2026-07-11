@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
-import { RuntimeConfigVO } from '@/server/modules/agent/domain/model/runtime-config.vo';
+import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { RunAlreadyCompletedError } from '@/server/modules/agent/domain/errors';
 
-function makeConfig(): RuntimeConfigVO {
-  return RuntimeConfigVO.of({
+function makeConfig(): RunConfigVO {
+  return RunConfigVO.of({
     systemPrompt: 'You are helpful',
     tools: [],
     runtimeConfig: {},

@@ -1,6 +1,5 @@
 import { ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
-import type { ModelConfig } from '@/shared/types';
 import type { RunEvent } from '@/shared/types/events';
 import { stripThinking } from '@/server/libs/llm-text';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
@@ -32,8 +31,7 @@ async function* applyHooks(
 export async function* runReactLoop(
   ctx: AgentRunContext,
 ): AsyncGenerator<RunEvent, void, void> {
-  const model =
-    (ctx.config.runtimeConfig as { model?: ModelConfig }).model ?? {};
+  const model = ctx.config.runtimeConfig.model ?? {};
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     ctx.signal.throwIfAborted();

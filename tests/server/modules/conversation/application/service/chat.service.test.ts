@@ -43,7 +43,6 @@ function makeMockConvRepo(): ConversationRepositoryPort {
   } as unknown as ConversationRepositoryPort;
 }
 
-
 describe('ChatService', () => {
   let service: ChatService;
   let messageRepo: MessageRepositoryPort;
