@@ -3,7 +3,7 @@ import { betterAuth } from 'better-auth';
 import type { Request } from 'express';
 import { inject } from 'tsyringe';
 import { service } from '@/server/decorator/service';
-import { getSessionHeaders } from '@/server/utils';
+import { getSessionHeaders } from '@/server/utils/http';
 import { DatabaseService } from './database.service';
 import type { AuthPort } from '@/server/modules/user/domain/port/auth.port';
 

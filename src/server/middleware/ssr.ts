@@ -1,4 +1,4 @@
-import { isProd } from '@/server/utils';
+import { isProd } from '@/server/utils/env';
 import { Express } from 'express';
 import fs from 'fs';
 import path from 'path';

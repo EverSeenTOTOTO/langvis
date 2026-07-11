@@ -6,9 +6,6 @@ import {
   type RunView,
 } from '@/server/modules/conversation/application/service/run-projection';
 
-/** Coalesce window for run_view emission — bounds wire/render rate during rapid
- * streams (text_chunk / tool_progress). Terminal + awaiting-input transitions
- * bypass it and flush synchronously (see handleRunEvent). */
 const RUN_VIEW_FLUSH_MS = 30;
 
 /**
@@ -44,6 +41,11 @@ export class ActiveRun {
 
   getEvents(): readonly EnrichedEvent[] {
     return this.events;
+  }
+
+  /** 终态文案——live view 的 content，事件增量 fold 维护，turn 收尾直接取用。 */
+  getFinalContent(): string {
+    return this.view.content;
   }
 
   /** 子 run（call_subagents 的 child）事件——从 tool_progress 进度块按 childRunId 解包。 */

@@ -1,4 +1,4 @@
-import { isProd } from '@/server/utils';
+import { isProd } from '@/server/utils/env';
 import bodyParser from 'body-parser';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';

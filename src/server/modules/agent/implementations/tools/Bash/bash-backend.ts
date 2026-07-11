@@ -10,7 +10,7 @@ import path from 'node:path';
 import { singleton } from 'tsyringe';
 import { generateId } from '@/shared/utils';
 import { createTimeoutController } from '@/server/utils/abort';
-import { isProd } from '@/server/utils';
+import { isProd } from '@/server/utils/env';
 import {
   lifecycleHook,
   type LifecycleHook,

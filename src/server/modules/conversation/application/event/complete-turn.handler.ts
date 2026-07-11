@@ -12,7 +12,6 @@ import Logger from '@/server/utils/logger';
  * RunCompleted 订阅者：turn-end 触发适配器。线性编排——
  * 开屏障 → 投影+持久化+append assistant → 发终态 run_view + 「涨」用量 → runConvTransforms(turn-end)
  * → finally 关屏障 + finalizeRun（恒执行，任何抛错都不漏 run）。
- * 终态帧在 compact 之前下发（fold 不再阻塞体感）；屏障保证下个 turn-start 等到在飞维护完成。
  */
 @singleton()
 @eventHandler(RunCompleted)
@@ -40,9 +39,11 @@ export class CompleteTurnHandler {
 
     this.sessionManager.beginMaintenance(conversationId);
     try {
-      const assistant = await this.chatService.persistAssistantTurn(
+      const content =
+        this.sessionManager.getFinalContent(conversationId, messageId) ?? '';
+      const assistant = await this.chatService.persistAssistantContent(
         messageId,
-        events,
+        content,
       );
       if (assistant) ctx.messages = ctx.messages.append(assistant);
 

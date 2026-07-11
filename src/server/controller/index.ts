@@ -1,7 +1,7 @@
 import bindController from '@/server/decorator/controller';
 import type { Express } from 'express';
 import { globby } from 'globby';
-import { isProd } from '../utils';
+import { isProd } from '../utils/env';
 
 export default async (app: Express) => {
   const suffix = isProd ? '.js' : '.ts';

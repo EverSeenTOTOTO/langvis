@@ -390,21 +390,14 @@ describe('ChatService', () => {
     });
   });
 
-  describe('persistAssistantTurn', () => {
-    function ev(p: { type: string } & Record<string, unknown>): any {
-      return { runId: 'run_1', seq: 0, at: 0, ...p };
-    }
-
-    it('投影终态文案持久化（无 audio 时只更 content），返回更新后的消息', async () => {
+  describe('persistAssistantContent', () => {
+    it('转发终态文案持久化，返回更新后的消息（投影由 live view 完成，不在本层）', async () => {
       (messageRepo.update as any).mockResolvedValue({
         id: 'msg_1',
         content: 'Hello',
       });
 
-      const msg = await service.persistAssistantTurn('msg_1', [
-        ev({ type: 'text_chunk', content: 'Hello' }),
-        ev({ type: 'final' }),
-      ]);
+      const msg = await service.persistAssistantContent('msg_1', 'Hello');
 
       expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
         content: 'Hello',
@@ -412,22 +405,10 @@ describe('ChatService', () => {
       expect(msg).toEqual({ id: 'msg_1', content: 'Hello' });
     });
 
-    it('只做投影+持久化：不触发压缩/落盘（那些是 turn-end transform 职责）', async () => {
+    it('只做持久化：不触发压缩/落盘（那些是 turn-end transform 职责）', async () => {
       (messageRepo.update as any).mockResolvedValue({ id: 'msg_1' });
-      await service.persistAssistantTurn('msg_1', [ev({ type: 'final' })]);
+      await service.persistAssistantContent('msg_1', 'Hello');
       expect(messageRepo.batchCreate).not.toHaveBeenCalled();
-    });
-
-    it('audio 不入 meta：即便事件流含 audio 事件，也只持久化 content', async () => {
-      (messageRepo.update as any).mockResolvedValue({ id: 'msg_1' });
-      await service.persistAssistantTurn('msg_1', [
-        ev({ type: 'text_chunk', content: 'Hello' }),
-        ev({ type: 'audio', filePath: 'tts/run_1.mp3', voice: 'V' }),
-        ev({ type: 'final' }),
-      ]);
-      expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
-        content: 'Hello',
-      });
     });
   });
 });

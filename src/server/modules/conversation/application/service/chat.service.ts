@@ -23,8 +23,6 @@ import { configSchema, type ConversationConfig } from '@/server/libs/config';
 import { parse } from '@/server/utils/schemaValidator';
 import { ConversationNotFoundError } from '../../domain/errors';
 import Logger from '@/server/utils/logger';
-import type { EnrichedEvent } from '@/shared/types/events';
-import { projectRun } from '@/server/modules/conversation/application/service/run-projection';
 
 @singleton()
 export class ChatService {
@@ -244,15 +242,15 @@ export class ChatService {
   }
 
   /**
-   * 收 turn 的持久化接缝：把 run 事件流投影成终态文案 → 持久化 assistant 消息。
+   * 收 turn 的持久化接缝：落库 assistant 消息文案。content 由调用方取自 live view
+   * （ActiveRun 增量 fold 维护的终态文案）——与实时流/历史读回字面同源，无需在此重 fold。
    * audio 不入 meta——它是 run 事件的派生量，重载时由 GetMessagesHandler 经
    * projectRun(run.events) 复算（与 steps/status 同源）。
    */
-  async persistAssistantTurn(
+  async persistAssistantContent(
     messageId: string,
-    events: readonly EnrichedEvent[],
+    content: string,
   ): Promise<Message | null> {
-    const view = projectRun(events);
-    return this.messageRepo.update(messageId, { content: view.content });
+    return this.messageRepo.update(messageId, { content });
   }
 }

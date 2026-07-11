@@ -8,7 +8,7 @@ import { createRoutes } from './routes';
 import { createStore } from './store';
 import { getPrefetchPath, serverFetch } from './decorator/api';
 import { isEmpty } from 'lodash-es';
-import { getSessionHeaders } from '@/server/utils';
+import { getSessionHeaders } from '@/server/utils/http';
 
 enableStaticRendering(true);
 

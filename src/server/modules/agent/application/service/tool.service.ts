@@ -6,7 +6,7 @@ import path from 'path';
 import { registerTool } from '@/server/decorator/core';
 import { ToolConfig } from '@/shared/types';
 import type { ToolConstructor } from '../../domain/model/tool.base';
-import { isProd } from '@/server/utils';
+import { isProd } from '@/server/utils/env';
 
 @service()
 export class ToolService {

@@ -56,7 +56,3 @@ description: Bidirectional Chinese↔English translator with optional target lan
 ### B. 其他情况（短语 / 句子 / 译向中文）→ 纯译文
 
 直接给出译文，**不要**附加解释、原文复读或多余说明。
-
-## 交付
-
-完成后调用 `response_user` 交付结果（纯文本，无需 `tts`）。

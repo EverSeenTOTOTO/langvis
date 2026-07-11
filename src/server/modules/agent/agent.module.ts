@@ -1,5 +1,5 @@
 import { container, Lifecycle } from 'tsyringe';
-import { isProd } from '@/server/utils';
+import { isProd } from '@/server/utils/env';
 import {
   AGENT_RUN_REPOSITORY,
   CACHE_PORT,

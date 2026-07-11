@@ -89,6 +89,11 @@ export class ConversationSession {
     return this.activeRuns.get(messageId)?.getEvents();
   }
 
+  /** 活跃 run 的 live 投影文案（turn 收尾持久化用，免重 fold）。 */
+  getFinalContent(messageId: string): string | undefined {
+    return this.activeRuns.get(messageId)?.getFinalContent();
+  }
+
   getChildRunEvents(childRunId: string): readonly EnrichedEvent[] | undefined {
     for (const run of this.activeRuns.values()) {
       const child = run.extractChildEvents(childRunId);
