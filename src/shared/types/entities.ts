@@ -35,6 +35,8 @@ export type Message = {
   steps?: ReActStep[] | null;
   /** Merged from agent_runs for assistant messages — not a Message DB column */
   status?: RunStatus | null;
+  /** Merged from agent_runs for assistant messages — re-derived from run events, not a Message DB column */
+  audio?: { filePath: string; voice?: string } | null;
   meta?: Record<string, unknown> | null;
   createdAt: Date;
   conversationId: string;

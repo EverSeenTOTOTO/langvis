@@ -418,5 +418,17 @@ describe('ChatService', () => {
       await service.persistAssistantTurn('msg_1', [ev({ type: 'final' })]);
       expect(messageRepo.batchCreate).not.toHaveBeenCalled();
     });
+
+    it('audio 不入 meta：即便事件流含 audio 事件，也只持久化 content', async () => {
+      (messageRepo.update as any).mockResolvedValue({ id: 'msg_1' });
+      await service.persistAssistantTurn('msg_1', [
+        ev({ type: 'text_chunk', content: 'Hello' }),
+        ev({ type: 'audio', filePath: 'tts/run_1.mp3', voice: 'V' }),
+        ev({ type: 'final' }),
+      ]);
+      expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
+        content: 'Hello',
+      });
+    });
   });
 });
