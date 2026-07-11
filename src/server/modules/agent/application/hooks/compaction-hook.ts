@@ -1,6 +1,10 @@
 import { singleton, inject } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
+import type {
+  Hook,
+  HookDirective,
+  HookPhase,
+} from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import { Prompt } from '@/server/libs/prompt';
 import { fold } from '@/server/libs/compaction';
@@ -34,21 +38,21 @@ export class CompactionHook implements Hook {
     private readonly providerService: ProviderService,
   ) {}
 
-  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent> {
+  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, HookDirective> {
     const compaction = ctx.config.runtimeConfig.loop;
-    if (!compaction) return;
+    if (!compaction) return 'next';
     const contextSize = this.providerService.resolveContextSize(
       ctx.config.runtimeConfig,
     );
-    if (!contextSize) return;
+    if (!contextSize) return 'next';
 
     const list = ctx.messages;
     const base = ctx.base;
     const loopActions = list.drop(base);
-    if (loopActions.length <= compaction.keepRecent) return;
+    if (loopActions.length <= compaction.keepRecent) return 'next';
 
     const beforeTokens = estimateTokens(list.toArray());
-    if (beforeTokens <= contextSize * compaction.threshold) return;
+    if (beforeTokens <= contextSize * compaction.threshold) return 'next';
 
     const recent = loopActions.takeLast(compaction.keepRecent);
     const older = loopActions.dropLast(compaction.keepRecent);
@@ -60,7 +64,7 @@ export class CompactionHook implements Hook {
         signal: ctx.signal,
         prompt: PROCESS_SUMMARY_PROMPT,
       });
-      if (!recap) return;
+      if (!recap) return 'next';
 
       ctx.messages = list
         .take(base)
@@ -91,5 +95,6 @@ export class CompactionHook implements Hook {
         `Iteration compaction failed: ${(err as Error)?.message ?? err}`,
       );
     }
+    return 'next';
   }
 }

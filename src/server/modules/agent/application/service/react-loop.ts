@@ -6,7 +6,10 @@ import type {
   AgentRunContext,
   ToolExecutor,
 } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type { HookPhase } from '@/server/modules/agent/domain/model/hook';
+import type {
+  HookDirective,
+  HookPhase,
+} from '@/server/modules/agent/domain/model/hook';
 import { winstonLogger } from '@/server/utils/logger';
 
 const logger = winstonLogger.child({ source: 'ReactLoop' });
@@ -22,13 +25,19 @@ type ReActAction = {
 async function* applyHooks(
   ctx: AgentRunContext,
   phase: HookPhase,
-): AsyncGenerator<RunEvent, void, void> {
+): AsyncGenerator<RunEvent, HookDirective, void> {
   const hooks = ctx.hooks?.forPhase(phase);
-  if (!hooks) return;
+  if (!hooks) return 'next';
   for (const hook of hooks) {
     logger.debug(`hook ${hook.id} @ ${phase} (run ${ctx.runId})`);
-    yield* hook.apply(ctx);
+    const d = yield* hook.apply(ctx); // yield* 透出 generator 的 return
+    if (d !== 'next') return d; // continue/break 短路本相位余下 hook，原样冒泡给 loop
   }
+  return 'next';
+}
+
+async function* exitLoop(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
+  yield* applyHooks(ctx, 'loop-exit');
 }
 
 export async function* runReactLoop(
@@ -39,7 +48,10 @@ export async function* runReactLoop(
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     ctx.signal.throwIfAborted();
-    yield* applyHooks(ctx, 'pre-llm');
+
+    let d = yield* applyHooks(ctx, 'pre-llm');
+    if (d === 'break') return yield* exitLoop(ctx);
+    if (d === 'continue') continue;
 
     const iterMessages = ctx.messages.toArray();
 
@@ -59,7 +71,9 @@ export async function* runReactLoop(
 
     ctx.messages = ctx.messages.append({ role: Role.ASSIST, content });
 
-    yield* applyHooks(ctx, 'post-llm');
+    d = yield* applyHooks(ctx, 'post-llm');
+    if (d === 'break') return yield* exitLoop(ctx);
+    if (d === 'continue') continue;
 
     let parsed: ReActAction;
     try {
@@ -70,8 +84,8 @@ export async function* runReactLoop(
         content: `Observation: Error parsing response: ${(error as Error)?.message ?? String(error)}`,
       });
 
-      yield* applyHooks(ctx, 'post-observation');
-
+      d = yield* applyHooks(ctx, 'post-observation');
+      if (d === 'break') return yield* exitLoop(ctx);
       continue;
     }
 
@@ -85,17 +99,16 @@ export async function* runReactLoop(
 
     const observation = yield* runTool(tool, input);
 
-    if (tool === ToolIds.RESPONSE_USER) {
-      yield* applyHooks(ctx, 'loop-exit');
-      return;
-    }
+    if (tool === ToolIds.RESPONSE_USER) return yield* exitLoop(ctx);
 
     ctx.messages = ctx.messages.append({
       role: Role.USER,
       content: `Observation: ${observation}\n`,
     });
 
-    yield* applyHooks(ctx, 'post-observation');
+    d = yield* applyHooks(ctx, 'post-observation');
+    if (d === 'break') return yield* exitLoop(ctx);
+    // 'next' | 'continue' → 自然进入下一轮迭代
   }
 
   throw new Error('Max iterations reached');
