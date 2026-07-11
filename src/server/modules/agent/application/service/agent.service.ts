@@ -53,10 +53,7 @@ export class AgentService {
   }
 
   /** 校验 userConfig 并产出 RunConfigVO（不可变配置快照）；失败抛 ConfigValidationError。 */
-  buildRunConfig(
-    userConfig: Record<string, unknown>,
-    systemPrompt: string,
-  ): RunConfigVO {
+  buildRunConfig(userConfig: Record<string, unknown>): RunConfigVO {
     let runtimeConfig: ConversationConfig;
 
     try {
@@ -69,7 +66,6 @@ export class AgentService {
     }
 
     return RunConfigVO.of({
-      systemPrompt,
       tools: this.inlineTools,
       runtimeConfig,
     });
@@ -79,12 +75,8 @@ export class AgentService {
    * 从 conv 侧已 parse 的 runtimeConfig 直接产出 RunConfigVO——不再二次 parse。
    * contextSize 不参与（按需派生）。
    */
-  buildResolvedRunConfig(
-    systemPrompt: string,
-    runtimeConfig: ConversationConfig,
-  ): RunConfigVO {
+  buildResolvedRunConfig(runtimeConfig: ConversationConfig): RunConfigVO {
     return RunConfigVO.of({
-      systemPrompt,
       tools: this.inlineTools,
       runtimeConfig,
     });

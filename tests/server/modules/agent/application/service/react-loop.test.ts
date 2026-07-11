@@ -230,7 +230,6 @@ interface BuiltCtx {
 function buildCtx(opts: BuildCtxOptions): BuiltCtx {
   const { llm, calls } = scriptedLlm(opts.responses);
   const config = RunConfigVO.of({
-    systemPrompt: 'test system prompt',
     tools: [],
     runtimeConfig: {
       model: {},

@@ -21,7 +21,7 @@ export class StartChatHandler {
   async execute(command: StartChatCommand): Promise<{ assistantId: string }> {
     const { conversationId, userMessage, userId, assistantId } = command;
 
-    // 持久化 + 归属校验 + systemPrompt 推导 在 ChatService.startTurn。
+    // 持久化 + 归属校验 在 ChatService.startTurn。
     const turn = await this.chatService.startTurn({
       conversationId,
       userId,
@@ -48,7 +48,6 @@ export class StartChatHandler {
         conversationId,
         assistantMessage: turn.assistantMessage,
         runtimeConfig: ctx.runtimeConfig,
-        systemPrompt: turn.systemPrompt,
         effectiveHistory,
       }),
     );

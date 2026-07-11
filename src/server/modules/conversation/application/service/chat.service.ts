@@ -110,7 +110,7 @@ export class ChatService {
   }
 
   /**
-   * 开 turn 的应用编排:校验归属 → 追加 user/assistant 消息 → 推导 systemPrompt。
+   * 开 turn 的应用编排:校验归属 → 追加 user/assistant 消息。
    * memory 与事件派发留给 handler(session 作用域 + I/O 边界);此方法只做持久化与领域事实推导。
    * 激活(SYSTEM 消息)由客户端 /activate 保证先行落地,此处不再 DB 探针校验。
    */
@@ -128,7 +128,6 @@ export class ChatService {
     userMessage: Message;
     assistantMessage: Message;
     userConfig: Record<string, unknown>;
-    systemPrompt: string;
   }> {
     const conversation = await this.requireConversation(
       params.conversationId,
@@ -141,15 +140,10 @@ export class ChatService {
       assistantId: params.assistantId,
     });
 
-    const systemMessage = setup.existingMessages.find(
-      m => m.role === Role.SYSTEM,
-    );
-
     return {
       userMessage: setup.userMessage,
       assistantMessage: setup.assistantMessage,
       userConfig: conversation.config ?? {},
-      systemPrompt: systemMessage?.content ?? '',
     };
   }
 

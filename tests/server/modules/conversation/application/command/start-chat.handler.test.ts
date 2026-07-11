@@ -66,7 +66,6 @@ describe('StartChatHandler', () => {
         userMessage: { id: 'msg_u', role: 'user', content: 'hi' },
         assistantMessage: { id: 'msg_a', role: 'assistant', content: '' },
         userConfig: { model: { modelId: 'm1' } },
-        systemPrompt: 'sys',
       }),
     } as unknown as ChatService;
     const handler = new StartChatHandler(chatService, sm, stubEventBus);
@@ -91,7 +90,6 @@ describe('StartChatHandler', () => {
       expect.objectContaining({
         payload: expect.objectContaining({
           assistantMessage: expect.objectContaining({ id: 'msg_a' }),
-          systemPrompt: 'sys',
           effectiveHistory: [
             { role: 'system', content: 'sys' },
             { role: 'user', content: 'hi' },

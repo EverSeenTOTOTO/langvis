@@ -32,7 +32,6 @@ export interface LaunchParams {
   workDir: string;
   /** conv 侧一次性 parse 的运行时配置（agent 直接复用，不再二次 parse）。contextSize 按需派生，不在此处。 */
   runtimeConfig: ConversationConfig;
-  systemPrompt: string;
   /** run 的初始消息（已含 system 提示）；conv 由 effectiveHistory 经 buildIterMessages 派生，子 agent 由 brief+query 派生。 */
   seed: LlmMessage[];
   /** 该 run 的有界工具集——executeTool 仅允许集合内成员。conv 传全集，子 agent 传 parent.without(...)。 */
@@ -65,10 +64,7 @@ export class AgentRunExecutor {
       `Create run ${chalk.cyan(params.runId)} — model: ${chalk.red(modelId ?? '(default)')}`,
     );
 
-    const config = this.agentService.buildResolvedRunConfig(
-      params.systemPrompt,
-      runtimeConfig,
-    );
+    const config = this.agentService.buildResolvedRunConfig(runtimeConfig);
 
     const run = new AgentRun(params.runId, config);
 
@@ -116,7 +112,6 @@ export class AgentRunExecutor {
       status: 'running',
       events: [],
       config: {
-        systemPrompt: run.config.systemPrompt,
         tools: run.config.tools,
         runtimeConfig: run.config.runtimeConfig,
       },

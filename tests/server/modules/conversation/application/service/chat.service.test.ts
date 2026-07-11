@@ -355,7 +355,7 @@ describe('ChatService', () => {
   });
 
   describe('startTurn', () => {
-    it('requireConversation → appendMessage; derives systemPrompt (SYSTEM msg) + userConfig', async () => {
+    it('requireConversation → appendMessage; derives userConfig', async () => {
       const conv = {
         id: 'conv_1',
         userId: 'user_1',
@@ -372,7 +372,6 @@ describe('ChatService', () => {
         userMessage: { role: Role.USER, content: 'hi' },
       });
 
-      expect(result.systemPrompt).toBe('SYS PROMPT');
       expect(result.userConfig).toEqual({ model: { modelId: 'm1' } });
       expect(result.userMessage.role).toBe(Role.USER);
       expect(result.assistantMessage.role).toBe(Role.ASSIST);

@@ -65,7 +65,6 @@ export default class CallSubagentsTool extends Tool<CallSubagentsOutput> {
         runId,
         workDir: ctx.workDir,
         runtimeConfig: ctx.runtimeConfig,
-        systemPrompt,
         seed: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: spec.query },
