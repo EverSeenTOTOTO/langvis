@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import { isEmpty, isObject } from 'lodash-es';
 import winston from 'winston';
 import 'winston-daily-rotate-file';
-import { isProd } from '.';
+import { isProd } from './env';
 import { TraceContext } from '@/server/middleware/trace-context';
 
 export type Logger = winston.Logger;

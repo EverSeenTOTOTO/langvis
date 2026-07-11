@@ -36,6 +36,7 @@ function setup(
   const sessionManager = {
     awaitMaintenance: vi.fn().mockResolvedValue(undefined),
     getRunEvents: vi.fn().mockReturnValue(eventStream),
+    getFinalContent: vi.fn().mockReturnValue('answer'),
     getCtx: vi.fn(() => ctx),
     flushRunView: vi.fn(),
     sendFrame: vi.fn().mockReturnValue(true),
@@ -44,7 +45,7 @@ function setup(
     finalizeRun: vi.fn(),
   } as unknown as SessionManager;
   const chatService = {
-    persistAssistantTurn: vi.fn().mockResolvedValue(persistResult),
+    persistAssistantContent: vi.fn().mockResolvedValue(persistResult),
   } as unknown as ChatService;
   const handler = new CompleteTurnHandler(sessionManager, chatService);
   return { handler, sessionManager, chatService, ctx };
@@ -65,9 +66,9 @@ describe('CompleteTurnHandler — turn-end 触发适配器（线性屏障）', (
 
     await handler.handle(event);
 
-    expect(chatService.persistAssistantTurn).toHaveBeenCalledWith(
+    expect(chatService.persistAssistantContent).toHaveBeenCalledWith(
       messageId,
-      expect.any(Array),
+      'answer',
     );
     expect(ctx.messages.length).toBe(1); // assistant appended
     expect(sessionManager.flushRunView).toHaveBeenCalledWith(
@@ -107,7 +108,7 @@ describe('CompleteTurnHandler — turn-end 触发适配器（线性屏障）', (
 
     await handler.handle(event);
 
-    expect(chatService.persistAssistantTurn).not.toHaveBeenCalled();
+    expect(chatService.persistAssistantContent).not.toHaveBeenCalled();
     expect(sessionManager.flushRunView).not.toHaveBeenCalled();
     expect(sessionManager.sendFrame).not.toHaveBeenCalled();
     expect(sessionManager.finalizeRun).toHaveBeenCalledWith(
@@ -120,6 +121,7 @@ describe('CompleteTurnHandler — turn-end 触发适配器（线性屏障）', (
     const sessionManager = {
       awaitMaintenance: vi.fn().mockResolvedValue(undefined),
       getRunEvents: vi.fn().mockReturnValue([ev({ type: 'final' })]),
+      getFinalContent: vi.fn().mockReturnValue('answer'),
       getCtx: vi.fn(() => makeCtx()),
       flushRunView: vi.fn(),
       sendFrame: vi.fn(),
@@ -128,7 +130,7 @@ describe('CompleteTurnHandler — turn-end 触发适配器（线性屏障）', (
       finalizeRun: vi.fn(),
     } as unknown as SessionManager;
     const chatService = {
-      persistAssistantTurn: vi.fn().mockRejectedValue(new Error('boom')),
+      persistAssistantContent: vi.fn().mockRejectedValue(new Error('boom')),
     } as unknown as ChatService;
     const handler = new CompleteTurnHandler(sessionManager, chatService);
 

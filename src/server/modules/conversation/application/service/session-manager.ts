@@ -110,6 +110,14 @@ export class SessionManager implements LifecycleHook {
     return this.sessions.get(conversationId)?.getRunEvents(messageId);
   }
 
+  /** 取某活跃 run 的 live 投影文案（turn 收尾持久化用，免重 fold）。 */
+  getFinalContent(
+    conversationId: string,
+    messageId: string,
+  ): string | undefined {
+    return this.sessions.get(conversationId)?.getFinalContent(messageId);
+  }
+
   /** 取某子 run（call_subagents 的 child）的事件流——扫描活跃 session 的父 run 缓冲，
    *  从父的 tool_progress { childRunId, event } 块中提取。未找到返回 undefined（调用方回落到 repo）。 */
   getChildRunEvents(childRunId: string): readonly EnrichedEvent[] | undefined {

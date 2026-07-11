@@ -1,7 +1,7 @@
 import { service } from '@/server/decorator/service';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { isProd } from '@/server/utils';
+import { isProd } from '@/server/utils/env';
 
 const LOCALES_DIR = join(
   process.cwd(),

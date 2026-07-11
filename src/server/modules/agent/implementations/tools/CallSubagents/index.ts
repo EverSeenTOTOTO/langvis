@@ -7,6 +7,7 @@ import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { generateId } from '@/shared/utils';
+import { mergeGenerators } from '@/server/utils/mergeGenerators';
 import {
   AgentRunExecutor,
   type LaunchParams,
@@ -25,8 +26,7 @@ import type {
  * 每个子 agent 是一次完整的、对话无关的 run（经 Launcher 启动）：自己的 ReAct 循环、跑到 response_user 终态。子事件以父级 tool_progress 转发（不污染父步骤投影），
  * 全部结束后（allSettled）收集各子终态返回。
  *
- * 子 ToolSet = 默认全集 ∖ {call_subagents, ask_user}：禁嵌套、禁 HITL（HITL 以 runId 为键，
- * 子 run 无对应 HTTP 入口会死锁）。
+ * 子 ToolSet = 默认全集 ∖ {call_subagents, ask_user}：禁嵌套、禁 HITL。
  */
 @tool(ToolIds.CALL_SUBAGENTS)
 export default class CallSubagentsTool extends Tool<CallSubagentsOutput> {
@@ -123,43 +123,4 @@ export default class CallSubagentsTool extends Tool<CallSubagentsOutput> {
 
     return { results: [...results.values()] };
   }
-}
-
-/**
- * 并发汇流多个 AsyncGenerator：任一产出即转发，全部结束后收尾。单条流抛错不影响其它
- * （allSettled 语义）。事件按到达顺序交错转发，保证父 run 能近实时看到各 child 进展。
- */
-async function* mergeGenerators<T>(
-  gens: readonly AsyncGenerator<T>[],
-): AsyncGenerator<T> {
-  const queue: T[] = [];
-  let wake: (() => void) | null = null;
-  let active = gens.length;
-
-  const tasks = gens.map(async gen => {
-    try {
-      for await (const item of gen) {
-        queue.push(item);
-        wake?.();
-        wake = null;
-      }
-    } catch {
-      // 单条流失败不击垮汇流——allSettled。
-    } finally {
-      active -= 1;
-      wake?.();
-      wake = null;
-    }
-  });
-
-  while (active > 0 || queue.length > 0) {
-    if (queue.length === 0) {
-      await new Promise<void>(resolve => {
-        wake = resolve;
-      });
-    }
-    while (queue.length > 0) yield queue.shift() as T;
-  }
-
-  await Promise.allSettled(tasks);
 }

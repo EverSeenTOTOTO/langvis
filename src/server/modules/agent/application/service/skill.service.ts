@@ -3,7 +3,7 @@ import matter from 'gray-matter';
 import { globby } from 'globby';
 import { service } from '@/server/decorator/service';
 import type { SkillInfo } from '@/shared/types';
-import { isProd } from '@/server/utils';
+import { isProd } from '@/server/utils/env';
 import Logger from '@/server/utils/logger';
 
 export type { SkillInfo };
