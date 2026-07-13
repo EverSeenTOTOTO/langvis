@@ -12,3 +12,7 @@ third-party/*
 upload/*
 docs/plans
 secret.txt
+
+# eval harness run artifacts
+tests/eval/results.jsonl
+tests/eval/report.md
