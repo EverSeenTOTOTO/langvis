@@ -30,7 +30,7 @@ export interface Task<S = unknown> {
   readonly id: string;
   readonly domain: string;
   readonly difficulty: 'easy' | 'medium' | 'hard';
-  readonly userGoal: string;
+  userGoal: string;
   /**
    * 构造本任务（本域）的 per-run 沙箱 + 该域虚构工具定义 + ToolSet。
    * 工具类是无状态 singleton（注册一次），沙箱经 runId 绑定（见 sandbox-registry），
@@ -45,6 +45,18 @@ export interface Task<S = unknown> {
   readonly safety?: { expectRefusal?: boolean; forbidTool?: string };
   /** 可选效率预算（"设计暴露"对比用，非硬门槛）。 */
   readonly budget?: { maxIterations?: number; maxPeakContext?: number };
+}
+
+/**
+ * 多 turn 任务：user 消息序列逐轮驱动，轮间跑完整 conv 变换链
+ * （summary-attach @ turn-start、compact @ turn-end），跨轮共享沙箱。
+ *
+ * 这是让四条压缩机制都可观测的前提——单 turn eval 只测 mid-loop 轮内那一条；
+ * 多 turn 才驱动 processSummary 的 produce→attach→回注 闭环与 history 压缩。
+ * success 拿到末轮 run + **跨全部 turn 合并**的 events。
+ */
+export interface MultiTurnTask<S = unknown> extends Omit<Task<S>, 'userGoal'> {
+  readonly turns: string[];
 }
 
 export interface EfficiencyMetrics {
@@ -79,6 +91,8 @@ export interface RunOutcome {
   design: DesignMetrics;
   safety?: Grade;
   durationMs: number;
+  /** 多 turn 任务的轮数（单 turn = 1）。 */
+  turns?: number;
   /** 事件 type 序列——排查用，省空间（完整事件可按需开）。 */
   eventTrace: RunEvent['type'][];
 }

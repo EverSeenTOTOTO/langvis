@@ -18,11 +18,14 @@
  *
  *  resume：已写入 results.jsonl 的 (task×model×trial) 自动跳过；中断后重跑即续。
  */
-import { ALL_TASKS } from './tasks';
+import { ALL_TASKS, type AnyTask } from './tasks';
 import { MODELS, TRIALS } from './configs';
-import { runOnce } from './runner';
+import { runOnce, runMultiTurn } from './runner';
 import { append, completedKeys, loadExisting, printReport } from './report';
-import type { RunOutcome } from './types';
+import type { MultiTurnTask, RunOutcome } from './types';
+
+const isMultiTurn = (t: AnyTask): t is MultiTurnTask =>
+  Array.isArray((t as MultiTurnTask).turns);
 
 interface Args {
   tasks?: string[];
@@ -67,7 +70,9 @@ async function main(): Promise<void> {
           continue;
         }
         console.log(`run ${key}`);
-        const outcome = await runOnce(t, m, trial);
+        const outcome = isMultiTurn(t)
+          ? await runMultiTurn(t, m, trial)
+          : await runOnce(t, m, trial);
         await append(outcome);
         fresh.push(outcome);
         console.log(
