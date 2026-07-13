@@ -1,24 +1,7 @@
-/**
- * 单 (task×model×trial) 的核心装配与驱动。域无关。
- *
- * 关键约束（探索钉死）：
- * - 真实 LlmProvider 经 `import '@/server/libs/infrastructure/index'` 副作用注册到 LLM_PORT。
- * - AGENT_RUN_REPOSITORY 必须 stub（execute 不写库，但 launch 会；此处用 createRun+execute 绕开）。
- * - CACHE_PORT 必须 stub 透传（ToolCall.execute 调 cache.resolve/compress）。
- * - 每次驱动要裹 TraceContext.run（LlmProvider 读 traceId，不包就抛）。
- * - 虚构工具是无状态 singleton（registerTool Singleton），沙箱经 runId 绑定（sandbox-registry）。
- * - system prompt 走 seed 首条 system 消息（LaunchParams 无 prompt 字段）；用 buildSystemPrompt(toolSet, BASE_PROMPT)，勿用 getSystemPrompt()。
- *
- * 运行期兜底全在生产 guard hook（StuckHook/MaxIterationsHook/BudgetHook，阈值取自 guard 配置 fragment）：
- * eval 经 runtimeConfigFor 把阈值调小、任务可经 task.budget.maxIterations 进一步覆盖。
- * eval 不再内联判边界——直接收集事件，由 hook 在 run 自身控制流内终止；
- * 检测到 guard 终止（design.*Hit）即强制 correctness=fail（合成 response_user 非真正完成）。
- * 单次 LLM 调用挂起由 LlmProvider per-call 超时兜底。
- */
+/** 单 (task×model×trial) 的核心装配与驱动。域无关。 */
 import 'reflect-metadata';
 import '@/server/libs/infrastructure/index';
-import { tmpdir } from 'node:os';
-import { container } from 'tsyringe';
+import { container, Lifecycle } from 'tsyringe';
 import { AgentRunExecutor } from '@/server/modules/agent/application/service/agent-run-executor';
 import type { LaunchParams } from '@/server/modules/agent/application/service/agent-run-executor';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
@@ -32,8 +15,8 @@ import {
   AGENT_RUN_REPOSITORY,
   CACHE_PORT,
 } from '@/server/modules/agent/agent.di-tokens';
+import { CacheProvider } from '@/server/modules/agent/infrastructure/cache.provider';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
-import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { generateId } from '@/shared/utils';
@@ -41,6 +24,7 @@ import { Role } from '@/shared/types/entities';
 import type { Message } from '@/shared/types/entities';
 import type { EnrichedEvent } from '@/shared/types/events';
 import { MESSAGE_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
+import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import type {
   ConversationContext as ConvCtx,
   ConvTransformPlan,
@@ -64,13 +48,6 @@ import { deriveDesign, deriveEfficiency } from './metrics';
 import { judgeWith } from './judge';
 import { buildEvalRepos, resetEvalRepos } from './eval-repos';
 
-/** 透传 CachePort：虚构工具不用 $cached、compression:'skip'。 */
-const passthroughCache: CachePort = {
-  resolve: async (_w, value) => value,
-  compress: async (_w, value) => value,
-  readFile: async () => '',
-};
-
 const responseUserDef: FictionalToolDef = {
   id: ToolIds.RESPONSE_USER,
   Clz: ResponseUserTool as ToolConstructor,
@@ -79,6 +56,7 @@ const responseUserDef: FictionalToolDef = {
 
 let _executor: AgentRunExecutor | undefined;
 let _agentService: AgentService | undefined;
+let _workspace: WorkspaceService | undefined;
 let _transforms: ConvTransformPlan | undefined;
 const registered = new Set<string>();
 
@@ -89,19 +67,22 @@ async function registerOnce(def: FictionalToolDef): Promise<void> {
 }
 
 /**
- * 幂等装配：登记 eval repo 桩（真够用：让 summary-attach/compact 可观测）、
- * passthrough cache、注册 response_user、解析 executor/agentService/conv transform plan。
- * repo 对象只建一次（conv transform 是 @singleton，构造时捕获 repo 引用），reset 时原地清空。
+ * 幂等装配：eval repo 桩（让 summary-attach/compact 可观测）、生产 CacheProvider
+ * （大输出 offload 进隔离 workDir）、response_user、executor/agentService/workspace/transforms。
+ * repo 桩只建一次（conv transform 是 @singleton，构造时捕获 repo 引用），reset 时原地清空。
  */
 async function ensureContainer(): Promise<void> {
   if (_executor) return;
   const { agentRunRepo, messageRepo } = buildEvalRepos();
   container.register(AGENT_RUN_REPOSITORY, { useValue: agentRunRepo });
   container.register(MESSAGE_REPOSITORY, { useValue: messageRepo });
-  container.register(CACHE_PORT, { useValue: passthroughCache });
+  container.register(CACHE_PORT, CacheProvider, {
+    lifecycle: Lifecycle.Singleton,
+  });
   await registerOnce(responseUserDef);
   _agentService = container.resolve(AgentService);
   _executor = container.resolve(AgentRunExecutor);
+  _workspace = container.resolve(WorkspaceService);
   _transforms = getConvTransformPlan();
 }
 
@@ -128,16 +109,17 @@ export async function runOnce<S>(
   trial: number,
 ): Promise<RunOutcome> {
   await ensureContainer();
-  resetEvalRepos(generateId('conv'));
+  const conversationId = generateId('conv');
+  resetEvalRepos(conversationId);
 
   const { sandbox, tools, toolSet } = task.setup();
   for (const def of tools) await registerOnce(def);
 
   const systemPrompt = _agentService!.buildSystemPrompt(toolSet, BASE_PROMPT);
   const runId = generateId('eval');
-  // guard：eval 默认（runtimeConfigFor 调小）+ 任务级 maxIterations 覆盖。
-  // 卡死/迭代上限/预算三道闸均已落到生产 hook（StuckHook/MaxIterationsHook/BudgetHook），
-  // eval 不再内联判边界——直接收集事件，由 hook 在 run 自身控制流内终止。
+  // workDir 按会话隔离（生产同款 WorkspaceService），避免多 run/多 trial 共享 /tmp 互相污染。
+  const workDir = await _workspace!.getWorkDir(conversationId);
+  // guard 阈值由生产 hook 在 run 控制流内终止；task.budget.maxIterations 可进一步覆盖。
   const runtimeConfig = runtimeConfigFor(modelId);
   if (task.budget?.maxIterations != null) {
     runtimeConfig.guard = {
@@ -147,7 +129,7 @@ export async function runOnce<S>(
   }
   const params: LaunchParams = {
     runId,
-    workDir: tmpdir(),
+    workDir,
     runtimeConfig,
     seed: [
       { role: 'system', content: systemPrompt },
@@ -233,7 +215,7 @@ function assistantContent(events: readonly EnrichedEvent[]): string {
  *   → ctx.messages.append(assistantMsg{ agentRunId: runId, content })
  *   → runConvTransforms(ctx, 'turn-end')   // compact（若超阈值折叠历史）、usage
  *
- * 跨轮共享沙箱（在整段 run 外层 bind 一次）。success 拿末轮 run + 全部轮合并的 events。
+ * 沙箱按 runId per-turn 绑/解（跨轮共享同一 sandbox 实例）。success 拿末轮 run + 全部轮合并的 events。
  */
 export async function runMultiTurn<S>(
   task: MultiTurnTask<S>,
@@ -255,6 +237,8 @@ export async function runMultiTurn<S>(
       maxIterations: task.budget.maxIterations,
     };
   }
+  // workDir 按会话隔离、跨轮共享（生产同款：一个会话一个 workspace）。
+  const workDir = await _workspace!.getWorkDir(conversationId);
 
   // conv 侧上下文——session 即 ctx（无 wrapper 对象），镜像 ConversationContext。
   const ctx: ConvCtx = {
@@ -308,7 +292,7 @@ export async function runMultiTurn<S>(
         runTool,
       } = _executor!.createRun({
         runId,
-        workDir: tmpdir(),
+        workDir,
         runtimeConfig,
         seed,
         toolSet,
