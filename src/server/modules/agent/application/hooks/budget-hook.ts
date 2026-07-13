@@ -1,0 +1,77 @@
+import { injectable } from 'tsyringe';
+import { ToolIds } from '@/shared/constants';
+import { Role } from '@/shared/entities/Message';
+import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
+import type {
+  Hook,
+  HookDirective,
+  HookPhase,
+} from '@/server/modules/agent/domain/model/hook';
+import type { RunEvent } from '@/shared/types/events';
+import { estimateTokens } from '@/server/utils/estimateTokens';
+import { parseResponse } from '@/server/modules/agent/application/service/react-loop';
+import Logger from '@/server/utils/logger';
+import { agentHook } from './registry';
+
+/** 累计 token 预算上限（平写死，暂不支持外部配置）。 */
+const TOKEN_BUDGET = 1_000_000;
+
+const budgetMessage = (used: number) =>
+  `This turn exceeded its token budget (≈${used} / ${TOKEN_BUDGET}). Stopping here — please rephrase or continue in a new turn.`;
+
+/**
+ * 累计 token 预算兜底。每次 post-llm 把"本 tick 的 input+output 估算"（此刻全量 messages）
+ * 累加进实例字段 consumed——这是已花费成本：压缩只缩后续前缀、不抵消历史花费，故用累加而非当前上下文大小。
+ * 超额时若模型已正当 response_user 则放行（不覆盖收尾），否则强制答复并 break。
+ *
+ * 状态内聚在实例字段而非 ctx：hook 为 per-run 实例（见 registry），consumed 天然随 run 生灭，
+ * 不污染 ctx、且杜绝跨 run 共享可变字段的并发污染。
+ */
+@injectable()
+@agentHook
+export class BudgetHook implements Hook {
+  readonly id = 'token-budget';
+  readonly phase: HookPhase = 'post-llm';
+  private readonly logger = Logger.child({ source: 'BudgetHook' });
+  private consumed = 0;
+
+  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, HookDirective> {
+    this.consumed += estimateTokens(ctx.messages.toArray());
+    if (this.consumed <= TOKEN_BUDGET) return 'next';
+
+    const last = ctx.messages.get(ctx.messages.length - 1);
+    if (last?.content) {
+      try {
+        if (parseResponse(last.content).tool === ToolIds.RESPONSE_USER) {
+          this.logger.info(
+            `budget exceeded but model answered (run ${ctx.runId}): consumed=${this.consumed}; letting through`,
+          );
+          return 'next';
+        }
+      } catch {
+        /* 非 JSON——按未直接答复处理 */
+      }
+    }
+
+    this.logger.warn(
+      `token budget exceeded (run ${ctx.runId}): consumed=${this.consumed} > ${TOKEN_BUDGET}; responding and breaking`,
+    );
+    yield* responseUser(ctx, budgetMessage(this.consumed));
+    return 'break';
+  }
+}
+
+/** 复刻 response_user 工具的可观测效果：yield text_chunk + append 一条 response_user ReAct JSON。 */
+export async function* responseUser(
+  ctx: AgentRunContext,
+  message: string,
+): AsyncGenerator<RunEvent, void> {
+  yield { type: 'text_chunk', content: message };
+  ctx.messages = ctx.messages.append({
+    role: Role.ASSIST,
+    content: JSON.stringify({
+      tool: ToolIds.RESPONSE_USER,
+      input: { message },
+    }),
+  });
+}

@@ -4,6 +4,7 @@ import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
 import { CompactionHook } from '@/server/modules/agent/application/hooks/compaction-hook';
 import { ProcessSummaryHook } from '@/server/modules/agent/application/hooks/process-summary-hook';
 import { LoopUsageHook } from '@/server/modules/agent/application/hooks/loop-usage-hook';
+import { BudgetHook } from '@/server/modules/agent/application/hooks/budget-hook';
 import { ListMonad } from '@/server/libs/list';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
@@ -62,12 +63,23 @@ function makeCtx(opts: {
   };
 }
 
-describe('agent hook registry（自动识别）', () => {
-  it('resolveAgentHooks 发现 @agentHook 标记的三个 hook', () => {
+describe('agent hook registry（自动识别 + per-run 实例）', () => {
+  it('resolveAgentHooks 发现 @agentHook 标记的四个 hook', () => {
     const hooks = resolveAgentHooks();
     expect(hooks.some(h => h instanceof CompactionHook)).toBe(true);
     expect(hooks.some(h => h instanceof ProcessSummaryHook)).toBe(true);
     expect(hooks.some(h => h instanceof LoopUsageHook)).toBe(true);
+    expect(hooks.some(h => h instanceof BudgetHook)).toBe(true);
+  });
+
+  it('hook 为 per-run 实例：每次 resolve 构造新对象（useClass + 非 singleton）', () => {
+    const a = resolveAgentHooks();
+    const b = resolveAgentHooks();
+    expect(a).not.toBe(b);
+    const find = (hs: typeof a, id: string) => hs.find(h => h.id === id)!;
+    // BudgetHook 持可变 consumed，必须 per-run——两次解析不得同实例
+    expect(find(a, 'token-budget')).not.toBe(find(b, 'token-budget'));
+    expect(find(a, 'compaction')).not.toBe(find(b, 'compaction'));
   });
 });
 

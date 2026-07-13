@@ -1,4 +1,4 @@
-import { singleton, inject } from 'tsyringe';
+import { injectable, inject } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type {
   Hook,
@@ -11,7 +11,7 @@ import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
 
-@singleton()
+@injectable()
 @agentHook
 export class LoopUsageHook implements Hook {
   readonly id = 'loop-usage';

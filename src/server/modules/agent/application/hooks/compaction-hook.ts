@@ -1,4 +1,4 @@
-import { singleton, inject } from 'tsyringe';
+import { injectable, inject } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type {
   Hook,
@@ -26,7 +26,7 @@ export const PROCESS_SUMMARY_PROMPT = Prompt.empty()
     'Output only the process summary (no extra explanation, no Markdown headings).',
   );
 
-@singleton()
+@injectable()
 @agentHook
 export class CompactionHook implements Hook {
   readonly id = 'compaction';

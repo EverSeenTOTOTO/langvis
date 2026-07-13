@@ -2,5 +2,6 @@
 import './compaction-hook';
 import './process-summary-hook';
 import './loop-usage-hook';
+import './budget-hook';
 
 export { resolveAgentHooks, agentHook } from './registry';
