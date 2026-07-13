@@ -17,7 +17,6 @@ import type {
   SpeechToTextInput,
   SpeechToTextOutput,
 } from '@/server/libs/ports/llm/llm.types';
-import { TraceContext } from '@/server/middleware/trace-context';
 import { Role, type LlmMessage, type Message } from '@/shared/types/entities';
 
 /** Embedding API 单次批量上限——超过则自动分批串行拼接，对调用方透明。 */
@@ -159,7 +158,6 @@ export class LlmProvider implements LlmPort {
     const messages = toOpenAIMessages(rawMessages as LlmMessage[]);
 
     logger.debug('LLM call request', {
-      traceId: TraceContext.getOrFail().traceId!,
       model: resolved,
       temperature: data.temperature ?? defaultParams.temperature,
       stop: data.stop,
@@ -237,7 +235,6 @@ export class LlmProvider implements LlmPort {
     const messages = toOpenAIMessages(rawMessages as LlmMessage[]);
 
     logger.debug('LLM call request', {
-      traceId: TraceContext.getOrFail().traceId!,
       model: resolved,
       temperature: data.temperature ?? defaultParams.temperature,
       stop: data.stop,
