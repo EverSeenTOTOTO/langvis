@@ -1,4 +1,4 @@
-import { singleton } from 'tsyringe';
+import { injectable } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type {
   Hook,
@@ -11,7 +11,7 @@ import { fold } from '@/server/libs/compaction';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
 
-@singleton()
+@injectable()
 @agentHook
 export class ProcessSummaryHook implements Hook {
   readonly id = 'process-summary';

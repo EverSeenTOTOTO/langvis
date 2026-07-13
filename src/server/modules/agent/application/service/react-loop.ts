@@ -14,8 +14,6 @@ import { winstonLogger } from '@/server/utils/logger';
 
 const logger = winstonLogger.child({ source: 'ReactLoop' });
 
-const MAX_ITERATIONS = Number.MAX_SAFE_INTEGER;
-
 type ReActAction = {
   thought?: string;
   tool: string;
@@ -46,7 +44,7 @@ export async function* runReactLoop(
 ): AsyncGenerator<RunEvent, void, void> {
   const model = ctx.config.runtimeConfig.model ?? {};
 
-  for (let i = 0; i < MAX_ITERATIONS; i++) {
+  for (;;) {
     ctx.signal.throwIfAborted();
 
     let d = yield* applyHooks(ctx, 'pre-llm');
@@ -110,8 +108,6 @@ export async function* runReactLoop(
     if (d === 'break') return yield* exitLoop(ctx);
     // 'next' | 'continue' → 自然进入下一轮迭代
   }
-
-  throw new Error('Max iterations reached');
 }
 
 export function parseResponse(content: string): ReActAction {
