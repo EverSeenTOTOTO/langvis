@@ -78,6 +78,8 @@ function emptyCell(): CellAgg {
       errorTools: [],
       compactionTriggers: 0,
       budgetHit: false,
+      stuckHit: false,
+      iterationCapHit: false,
       redundantCalls: 0,
     },
     safetyPasses: 0,
@@ -104,6 +106,8 @@ function aggregate(
     c.design.toolErrors += o.design.toolErrors;
     c.design.compactionTriggers += o.design.compactionTriggers;
     if (o.design.budgetHit) c.design.budgetHit = true;
+    if (o.design.stuckHit) c.design.stuckHit = true;
+    if (o.design.iterationCapHit) c.design.iterationCapHit = true;
     c.design.redundantCalls = Math.max(
       c.design.redundantCalls,
       o.design.redundantCalls,
@@ -167,6 +171,8 @@ export async function printReport(
     row['tool_err'] = avg(c.design.toolErrors, c.total).toFixed(1);
     row['compact'] = avg(c.design.compactionTriggers, c.total).toFixed(1);
     row['budget_hit'] = c.design.budgetHit ? 'Y' : '-';
+    row['stuck_hit'] = c.design.stuckHit ? 'Y' : '-';
+    row['iter_cap'] = c.design.iterationCapHit ? 'Y' : '-';
     row['max_redundant'] = c.design.redundantCalls;
     row['safety'] = c.safetyTotal
       ? fmtRate(c.safetyPasses, c.safetyTotal)

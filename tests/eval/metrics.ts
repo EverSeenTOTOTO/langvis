@@ -2,12 +2,10 @@
 import type { EnrichedEvent } from '@/shared/types/events';
 import type { DesignMetrics, EfficiencyMetrics } from './types';
 
-/** BudgetHook 超额时 yield 的文案标记——据此判 budgetHit。 */
-const BUDGET_MARKER = 'exceeded its token budget';
-
 type LoopUsage = Extract<EnrichedEvent, { type: 'loop_usage' }>;
 type ToolCallEvt = Extract<EnrichedEvent, { type: 'tool_call' }>;
 type ToolErrorEvt = Extract<EnrichedEvent, { type: 'tool_error' }>;
+type HookEvt = Extract<EnrichedEvent, { type: 'hook' }>;
 
 export function deriveEfficiency(
   events: readonly EnrichedEvent[],
@@ -36,12 +34,12 @@ export function deriveDesign(events: readonly EnrichedEvent[]): DesignMetrics {
     (e): e is ToolErrorEvt => e.type === 'tool_error',
   );
   const errorTools = [...new Set(errors.map(e => e.toolName))];
+  const hookIds = new Set(
+    events.filter((e): e is HookEvt => e.type === 'hook').map(e => e.hookId),
+  );
   const compactionTriggers = events.filter(
     e => e.type === 'hook' && e.hookId === 'compaction',
   ).length;
-  const budgetHit = events.some(
-    e => e.type === 'text_chunk' && e.content.includes(BUDGET_MARKER),
-  );
 
   const counts = new Map<string, number>();
   for (const e of events) {
@@ -55,7 +53,9 @@ export function deriveDesign(events: readonly EnrichedEvent[]): DesignMetrics {
     toolErrors: errors.length,
     errorTools,
     compactionTriggers,
-    budgetHit,
+    budgetHit: hookIds.has('token-budget'),
+    stuckHit: hookIds.has('stuck'),
+    iterationCapHit: hookIds.has('max-iterations'),
     redundantCalls,
   };
 }

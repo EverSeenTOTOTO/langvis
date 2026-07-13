@@ -61,7 +61,10 @@ export interface DesignMetrics {
   toolErrors: number;
   errorTools: string[];
   compactionTriggers: number;
+  /** guard hook 触发终止（BudgetHook/StuckHook/MaxIterationsHook 各自发的 hook 事件）。 */
   budgetHit: boolean;
+  stuckHit: boolean;
+  iterationCapHit: boolean;
   /** 最高重复 (toolName+args) 次数——卡死/冗余调用信号。 */
   redundantCalls: number;
 }

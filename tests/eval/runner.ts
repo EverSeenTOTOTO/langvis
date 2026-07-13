@@ -9,12 +9,11 @@
  * - 虚构工具是无状态 singleton（registerTool Singleton），沙箱经 runId 绑定（sandbox-registry）。
  * - system prompt 走 seed 首条 system 消息（LaunchParams 无 prompt 字段）；用 buildSystemPrompt(toolSet, BASE_PROMPT)，勿用 getSystemPrompt()。
  *
- * 双运行时上限（都按工作量、非 wall-clock——慢服务器/合理长任务不被误杀）：
- * - 卡死检测：连续 STUCK_THRESHOLD 个 tick 无新工具调用（重复同 args 或 parse-fail）→ cancel。
- *   合法推进的任务每步都有新调用，永不触发；只卡 runaway。
- * - 迭代上限：tick 数到 maxTicks（task.budget.maxIterations ?? DEFAULT_MAX_TICKS）→ cancel。
- *   兜底非卡死但过长的 run；任务作者可按需调高。
- * 单次 LLM 调用挂起由 LlmProvider per-call 超时兜底；生产 BudgetHook(1M token) 是终极成本兜底。
+ * 运行期兜底全在生产 guard hook（StuckHook/MaxIterationsHook/BudgetHook，阈值取自 guard 配置 fragment）：
+ * eval 经 runtimeConfigFor 把阈值调小、任务可经 task.budget.maxIterations 进一步覆盖。
+ * eval 不再内联判边界——直接收集事件，由 hook 在 run 自身控制流内终止；
+ * 检测到 guard 终止（design.*Hit）即强制 correctness=fail（合成 response_user 非真正完成）。
+ * 单次 LLM 调用挂起由 LlmProvider per-call 超时兜底。
  */
 import 'reflect-metadata';
 import '@/server/libs/infrastructure/index';
@@ -40,13 +39,10 @@ import type { ToolConfig } from '@/shared/types';
 import { generateId } from '@/shared/utils';
 import type { EnrichedEvent } from '@/shared/types/events';
 import type { FictionalToolDef, Grade, RunOutcome, Task } from './types';
-import { DEFAULT_MAX_TICKS, runtimeConfigFor } from './configs';
+import { runtimeConfigFor } from './configs';
 import { bindSandbox, unbindSandbox } from './sandbox-registry';
 import { deriveDesign, deriveEfficiency } from './metrics';
 import { judgeWith } from './judge';
-
-/** 连续无进展 tick 数到此即判卡死。5 给模型短暂困惑后恢复的余地，合法任务几乎不会连续 5 次无新调用。 */
-const STUCK_THRESHOLD = 5;
 
 /** 透传 CachePort：虚构工具不用 $cached、compression:'skip'。 */
 const passthroughCache: CachePort = {
@@ -119,11 +115,20 @@ export async function runOnce<S>(
 
   const systemPrompt = _agentService!.buildSystemPrompt(toolSet, BASE_PROMPT);
   const runId = generateId('eval');
-  const maxTicks = task.budget?.maxIterations ?? DEFAULT_MAX_TICKS;
+  // guard：eval 默认（runtimeConfigFor 调小）+ 任务级 maxIterations 覆盖。
+  // 卡死/迭代上限/预算三道闸均已落到生产 hook（StuckHook/MaxIterationsHook/BudgetHook），
+  // eval 不再内联判边界——直接收集事件，由 hook 在 run 自身控制流内终止。
+  const runtimeConfig = runtimeConfigFor(modelId);
+  if (task.budget?.maxIterations != null) {
+    runtimeConfig.guard = {
+      ...runtimeConfig.guard!,
+      maxIterations: task.budget.maxIterations,
+    };
+  }
   const params: LaunchParams = {
     runId,
     workDir: tmpdir(),
-    runtimeConfig: runtimeConfigFor(modelId),
+    runtimeConfig,
     seed: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: task.userGoal },
@@ -137,38 +142,10 @@ export async function runOnce<S>(
 
   const events: EnrichedEvent[] = [];
   const start = Date.now();
-  let ticks = 0;
-  let novelThisTick = false;
-  let stuckStreak = 0;
-  let stopReason: string | undefined;
-  const seenCalls = new Set<string>();
   try {
     await TraceContext.run({ requestId: runId, traceId: runId }, async () => {
       for await (const e of _executor!.execute(run, ctx, runTool)) {
         events.push(e);
-        if (e.type === 'tool_call') {
-          const key = `${e.toolName}:${JSON.stringify(e.toolArgs)}`;
-          if (!seenCalls.has(key)) {
-            seenCalls.add(key);
-            novelThisTick = true;
-          }
-        }
-        if (e.type === 'loop_usage') {
-          // tick 边界：本 tick 是否产生了新工具调用
-          if (novelThisTick) stuckStreak = 0;
-          else stuckStreak++;
-          novelThisTick = false;
-          ticks++;
-          if (!run.isTerminated) {
-            if (stuckStreak >= STUCK_THRESHOLD) {
-              run.cancel('eval stuck');
-              stopReason = 'eval stuck';
-            } else if (ticks >= maxTicks) {
-              run.cancel('eval iteration cap');
-              stopReason = 'eval iteration cap';
-            }
-          }
-        }
       }
     });
   } finally {
@@ -177,6 +154,8 @@ export async function runOnce<S>(
 
   const durationMs = Date.now() - start;
 
+  // design 先于 correctness：guard 终止须据此改判。
+  const design = deriveDesign(events);
   const ruleGrade = task.success(sandbox, run, events);
   let correctness = ruleGrade;
   if (task.judge) {
@@ -186,10 +165,16 @@ export async function runOnce<S>(
       reason: `${ruleGrade.reason} | judge: ${j.reason}`,
     };
   }
-  if (stopReason) {
+  // guard 终止 = 合成 response_user 收尾，非真正完成 → 强制 fail 并标注哪个 guard 触发。
+  const guardHit = [
+    design.budgetHit && 'budget',
+    design.stuckHit && 'stuck',
+    design.iterationCapHit && 'iteration-cap',
+  ].filter(Boolean);
+  if (guardHit.length) {
     correctness = {
-      ...correctness,
-      reason: `${correctness.reason} [${stopReason}]`,
+      pass: false,
+      reason: `${correctness.reason} [guard:${guardHit.join(',')}]`,
     };
   }
 
@@ -200,7 +185,7 @@ export async function runOnce<S>(
     status: run.currentStatus,
     correctness,
     efficiency: deriveEfficiency(events),
-    design: deriveDesign(events),
+    design,
     safety: task.safety ? gradeSafety(task.safety, events) : undefined,
     durationMs,
     eventTrace: events.map(e => e.type),

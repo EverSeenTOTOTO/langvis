@@ -14,8 +14,15 @@ export const MODELS = [
 
 export const TRIALS = 10;
 
-/** 默认迭代上限（按 loop_usage 计 tick）。每任务可经 task.budget.maxIterations 覆盖。 */
-export const DEFAULT_MAX_TICKS = 50;
+/**
+ * eval guard 阈值（调小以低成本观测 guard 行为）；生产默认在 guard fragment schema 里、宽得多。
+ * maxIterations=50 是 eval 主边界；maxTokenUsage 保持宽松，不与迭代上限抢触发。
+ */
+const EVAL_GUARD = {
+  maxIterations: 50,
+  maxTokenUsage: 1_000_000,
+  stuckThreshold: 5,
+};
 
 /** temperature=0 求可复现；compaction 开启以锻炼该路径（设计暴露轴要观测）。 */
 export function runtimeConfigFor(modelId: string): ConversationConfig {
@@ -23,5 +30,6 @@ export function runtimeConfigFor(modelId: string): ConversationConfig {
     model: { modelId, temperature: 0 },
     loop: { threshold: 0.8, windowSize: 10, keepRecent: 4 },
     history: { threshold: 0.8, windowSize: 10 },
+    guard: EVAL_GUARD,
   } as ConversationConfig;
 }

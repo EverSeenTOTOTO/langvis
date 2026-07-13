@@ -4,6 +4,7 @@ import { ListMonad } from '@/server/libs/list';
 import type { LlmMessage } from '@/shared/types/entities';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { RunEvent } from '@/shared/types/events';
+import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { BudgetHook } from '@/server/modules/agent/application/hooks/budget-hook';
 
 // 控制 estimateTokens 返回值——BudgetHook 用它累加 consumed。per-test 设值。
@@ -28,19 +29,35 @@ async function collect(
   return { events, ret };
 }
 
-function ctxWith(messages: LlmMessage[]): AgentRunContext {
+function ctxWith(
+  messages: LlmMessage[],
+  guard: { maxTokenUsage: number },
+): AgentRunContext {
+  const config = RunConfigVO.of({
+    tools: [],
+    runtimeConfig: {
+      model: {},
+      guard: {
+        maxIterations: 1000,
+        maxTokenUsage: guard.maxTokenUsage,
+        stuckThreshold: 5,
+      },
+    },
+  });
   return {
     runId: 'run_test',
     messages: ListMonad.of<LlmMessage>(messages),
+    config,
   } as unknown as AgentRunContext;
 }
 
-describe('BudgetHook（累计 token 预算兜底）', () => {
+describe('BudgetHook（累计 token 预算兜底，阈值取自 guard.maxTokenUsage）', () => {
   it('未超额 → next，无事件、不 append', async () => {
     mockTokens.value = 100;
-    const ctx = ctxWith([
-      { role: 'assistant', content: '{"tool":"search","input":{"q":"x"}}' },
-    ]);
+    const ctx = ctxWith(
+      [{ role: 'assistant', content: '{"tool":"search","input":{"q":"x"}}' }],
+      { maxTokenUsage: 1_000_000 },
+    );
     const before = ctx.messages.length;
     const { events, ret } = await collect(new BudgetHook().apply(ctx));
     expect(ret).toBe('next');
@@ -48,19 +65,26 @@ describe('BudgetHook（累计 token 预算兜底）', () => {
     expect(ctx.messages.length).toBe(before);
   });
 
-  it('超额且模型未答复 → yield text_chunk + append 合成 response_user + break', async () => {
+  it('超额且模型未答复 → hook 事件 + text_chunk + append 合成 response_user + break', async () => {
     mockTokens.value = 1_200_000;
-    const ctx = ctxWith([
-      {
-        role: 'assistant',
-        content: JSON.stringify({ tool: 'search', input: { q: 'x' } }),
-      },
-    ]);
+    const ctx = ctxWith(
+      [
+        {
+          role: 'assistant',
+          content: JSON.stringify({ tool: 'search', input: { q: 'x' } }),
+        },
+      ],
+      { maxTokenUsage: 1_000_000 },
+    );
     const before = ctx.messages.length;
     const { events, ret } = await collect(new BudgetHook().apply(ctx));
     expect(ret).toBe('break');
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ type: 'text_chunk' });
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      type: 'hook',
+      hookId: 'token-budget',
+    });
+    expect(events[1]).toMatchObject({ type: 'text_chunk' });
     expect(ctx.messages.length).toBe(before + 1);
     const appended = ctx.messages.get(ctx.messages.length - 1)!;
     expect(appended.content).toContain(ToolIds.RESPONSE_USER);
@@ -68,19 +92,37 @@ describe('BudgetHook（累计 token 预算兜底）', () => {
 
   it('超额但模型已正当 response_user → 放行 next，不覆盖', async () => {
     mockTokens.value = 1_200_000;
-    const ctx = ctxWith([
-      {
-        role: 'assistant',
-        content: JSON.stringify({
-          tool: ToolIds.RESPONSE_USER,
-          input: { message: 'done' },
-        }),
-      },
-    ]);
+    const ctx = ctxWith(
+      [
+        {
+          role: 'assistant',
+          content: JSON.stringify({
+            tool: ToolIds.RESPONSE_USER,
+            input: { message: 'done' },
+          }),
+        },
+      ],
+      { maxTokenUsage: 1_000_000 },
+    );
     const before = ctx.messages.length;
     const { events, ret } = await collect(new BudgetHook().apply(ctx));
     expect(ret).toBe('next');
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(before);
+  });
+
+  it('guard 缺失 → 不启用（next）', async () => {
+    mockTokens.value = 1_200_000;
+    const config = RunConfigVO.of({ tools: [], runtimeConfig: { model: {} } });
+    const ctx = {
+      runId: 'run_test',
+      messages: ListMonad.of<LlmMessage>([
+        { role: 'assistant', content: '{"tool":"search","input":{}}' },
+      ]),
+      config,
+    } as unknown as AgentRunContext;
+    const { events, ret } = await collect(new BudgetHook().apply(ctx));
+    expect(ret).toBe('next');
+    expect(events).toHaveLength(0);
   });
 });
