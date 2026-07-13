@@ -63,6 +63,8 @@ export class CompactionHook implements Hook {
         windowSize: compaction.windowSize,
         signal: ctx.signal,
         prompt: PROCESS_SUMMARY_PROMPT,
+        modelId:
+          compaction.compactModelId ?? ctx.config.runtimeConfig.model?.modelId,
       });
       if (!recap) return 'next';
 

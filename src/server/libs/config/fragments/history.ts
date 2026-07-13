@@ -4,6 +4,8 @@ import type { ConfigFragment } from '../config-fragment';
 export interface HistoryCompactionConfig {
   threshold: number;
   windowSize: number;
+  /** 压缩用的 chat 模型；缺省回退本 run 模型 → 系统默认 chat。 */
+  compactModelId?: string;
 }
 
 export const HISTORY_FRAGMENT: ConfigFragment<
@@ -30,6 +32,13 @@ export const HISTORY_FRAGMENT: ConfigFragment<
         default: 10,
         minimum: 1,
         description: '折叠滑动窗口大小',
+      },
+      compactModelId: {
+        type: 'string',
+        format: 'model-select',
+        modelType: 'chat',
+        nullable: true,
+        description: '压缩用的 chat 模型（缺省回退本 run 模型）',
       },
     },
   } as unknown as JSONSchemaType<unknown>,

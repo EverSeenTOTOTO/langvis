@@ -119,4 +119,29 @@ describe('fold', () => {
 
     expect(out).toBe('s0');
   });
+
+  it('FoldOptions.modelId 透传给 chatContent（优先于默认）', async () => {
+    const chatContent: ReturnType<typeof vi.fn> = vi.fn(async () => 'SUM');
+    registerLlm(chatContent);
+    await fold({
+      messages: [{ role: 'user', content: 'x' }],
+      windowSize: 10,
+      signal,
+      prompt: tpl,
+      modelId: 'my-compact',
+    });
+    expect(chatContent.mock.calls[0]![0]).toBe('my-compact');
+  });
+
+  it('未传 modelId → 回退 getDefaultModel("chat")', async () => {
+    const chatContent: ReturnType<typeof vi.fn> = vi.fn(async () => 'SUM');
+    registerLlm(chatContent);
+    await fold({
+      messages: [{ role: 'user', content: 'x' }],
+      windowSize: 10,
+      signal,
+      prompt: tpl,
+    });
+    expect(chatContent.mock.calls[0]![0]).toBe('compact-model');
+  });
 });
