@@ -10,10 +10,7 @@ import {
   spawn as mockedSpawn,
   execFileSync as mockedExec,
 } from 'child_process';
-import {
-  DirectBash,
-  DockerBash,
-} from '@/server/modules/agent/implementations/tools/Bash/bash-backend';
+import { DockerBash } from '@/server/modules/agent/implementations/tools/Bash/bash-backend';
 
 const lastSpawnArgv = (): string[] => {
   const call = vi.mocked(mockedSpawn).mock.calls.at(-1)!;
@@ -25,11 +22,6 @@ describe('BashBackend', () => {
   beforeEach(() => {
     vi.mocked(mockedSpawn).mockClear();
     vi.mocked(mockedExec).mockClear();
-  });
-
-  it('DirectBash guards autonomous runs; DockerBash does not (sandbox is the boundary)', () => {
-    expect(new DirectBash().requiresReadonlyGuard).toBe(true);
-    expect(new DockerBash().requiresReadonlyGuard).toBe(false);
   });
 
   describe('DockerBash.spawn argv', () => {

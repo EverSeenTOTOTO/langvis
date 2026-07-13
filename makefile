@@ -18,11 +18,14 @@ better-auth-typeorm:
 	fi
 
 .PHONY: prepare
-prepare: better-auth-typeorm
+prepare: better-auth-typeorm sandbox-image
 	bunx husky
 	# https://github.com/oven-sh/bun/issues/4677#issuecomment-1713522789
 	# https://github.com/oven-sh/bun/pull/18086
 	jq '.main = .module' node_modules/tsyringe/package.json > tmp.json && mv tmp.json node_modules/tsyringe/package.json
+
+.PHONY: sandbox-image
+sandbox-image:
 	docker build -t langvis-bash-sandbox:latest docker/sandbox
 
 .PHONY: lint
