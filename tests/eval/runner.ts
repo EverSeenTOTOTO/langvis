@@ -5,6 +5,7 @@ import { container, Lifecycle } from 'tsyringe';
 import { AgentRunExecutor } from '@/server/modules/agent/application/service/agent-run-executor';
 import type { LaunchParams } from '@/server/modules/agent/application/service/agent-run-executor';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
+import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import { BASE_PROMPT } from '@/server/modules/agent/application/service/base-prompt';
 import { registerTool } from '@/server/decorator/core';
 import type { ToolConstructor } from '@/server/modules/agent/domain/model/tool.base';
@@ -35,6 +36,7 @@ import {
 } from '@/server/modules/conversation/application/transforms';
 import { projectToLlmMessages } from '@/server/modules/conversation/application/service/history-projection';
 import { ListMonad } from '@/server/libs/list';
+import type { ConversationConfig } from '@/server/libs/config';
 import type {
   FictionalToolDef,
   Grade,
@@ -47,6 +49,8 @@ import { bindSandbox, unbindSandbox } from './sandbox-registry';
 import { deriveDesign, deriveEfficiency } from './metrics';
 import { judgeWith } from './judge';
 import { buildEvalRepos, resetEvalRepos } from './eval-repos';
+
+// —— 容器装配（幂等，跨 task×model×trial 共享） ——
 
 const responseUserDef: FictionalToolDef = {
   id: ToolIds.RESPONSE_USER,
@@ -68,8 +72,9 @@ async function registerOnce(def: FictionalToolDef): Promise<void> {
 
 /**
  * 幂等装配：eval repo 桩（让 summary-attach/compact 可观测）、生产 CacheProvider
- * （大输出 offload 进隔离 workDir）、response_user、executor/agentService/workspace/transforms。
- * repo 桩只建一次（conv transform 是 @singleton，构造时捕获 repo 引用），reset 时原地清空。
+ * （大输出 offload 进隔离 workDir）、真实工具（生产 ToolService 自动发现）+ response_user、
+ * executor/agentService/workspace/transforms。repo 桩只建一次（conv transform 是 @singleton，
+ * 构造时捕获 repo 引用），reset 时原地清空。
  */
 async function ensureContainer(): Promise<void> {
   if (_executor) return;
@@ -79,12 +84,18 @@ async function ensureContainer(): Promise<void> {
   container.register(CACHE_PORT, CacheProvider, {
     lifecycle: Lifecycle.Singleton,
   });
+  // 真实工具走生产 ToolService 自动发现注册（虚构工具仍经 registerOnce，token 正交）。
+  // 懒构造 + discoverTools 的 per-tool try/catch：坏 DI 的工具（DocumentSearch/SkillCall 等）
+  // 仅在被调用时构造，FS 任务 toolSet 只列 bash，故 initialize 安全。
+  await container.resolve(ToolService).initialize();
   await registerOnce(responseUserDef);
   _agentService = container.resolve(AgentService);
   _executor = container.resolve(AgentRunExecutor);
   _workspace = container.resolve(WorkspaceService);
   _transforms = getConvTransformPlan();
 }
+
+// —— 评分（单 turn 与多 turn 共享） ——
 
 function gradeSafety(
   s: NonNullable<Task['safety']>,
@@ -103,6 +114,91 @@ function gradeSafety(
   return { pass: true, reason: 'refused / no forbidden side effect' };
 }
 
+/**
+ * 汇总四轴指标 + 正确性。design 先于 correctness（guard 终止须据此改判）。
+ * guard 终止 = 合成 response_user 收尾、非真正完成 → 强制 fail 并标注触发源。
+ */
+async function gradeOutcome<S>(
+  task: Pick<Task<S>, 'success' | 'judge'>,
+  sandbox: S,
+  events: readonly EnrichedEvent[],
+  run: ReturnType<AgentRunExecutor['createRun']>['run'],
+): Promise<{ correctness: Grade; design: ReturnType<typeof deriveDesign> }> {
+  const design = deriveDesign(events);
+  const ruleGrade = task.success(sandbox, run, events);
+  let correctness = ruleGrade;
+  if (task.judge) {
+    const j = await judgeWith(task.judge, events);
+    correctness = {
+      pass: ruleGrade.pass && j.pass,
+      reason: `${ruleGrade.reason} | judge: ${j.reason}`,
+    };
+  }
+  const guardHit = [
+    design.budgetHit && 'budget',
+    design.stuckHit && 'stuck',
+    design.iterationCapHit && 'iteration-cap',
+  ].filter(Boolean);
+  if (guardHit.length) {
+    correctness = {
+      pass: false,
+      reason: `${correctness.reason} [guard:${guardHit.join(',')}]`,
+    };
+  }
+  return { correctness, design };
+}
+
+// —— 共享片段 ——
+
+/** task budget 覆盖 eval guard 的 maxIterations。 */
+function resolveRuntimeConfig<S>(
+  task: Pick<Task<S>, 'budget'>,
+  modelId: string,
+): ConversationConfig {
+  const runtimeConfig = runtimeConfigFor(modelId);
+  if (task.budget?.maxIterations != null) {
+    runtimeConfig.guard = {
+      ...runtimeConfig.guard!,
+      maxIterations: task.budget.maxIterations,
+    };
+  }
+  return runtimeConfig;
+}
+
+/** workDir 回注 sandbox：FS 任务 grade 时据此读产物。setup() 先于 workDir 返回，故此处后填。 */
+function attachWorkDir<S>(sandbox: S, workDir: string): void {
+  const sb = sandbox as Record<string, unknown>;
+  if ('workDir' in sb) sb.workDir = workDir;
+}
+
+/**
+ * 单次 run：createRun + 绑沙箱 + TraceContext 包裹执行收事件 + 解绑。
+ * sandbox 跨轮共享，故按本 run 的 runId 绑/解。
+ */
+async function executeRun<S>(
+  params: LaunchParams,
+  sandbox: S,
+): Promise<{
+  run: ReturnType<AgentRunExecutor['createRun']>['run'];
+  events: EnrichedEvent[];
+}> {
+  const { run, ctx, runTool } = _executor!.createRun(params);
+  bindSandbox(run.runId, sandbox);
+  const events: EnrichedEvent[] = [];
+  try {
+    await TraceContext.run({ requestId: params.runId }, async () => {
+      for await (const e of _executor!.execute(run, ctx, runTool)) {
+        events.push(e);
+      }
+    });
+  } finally {
+    unbindSandbox(run.runId);
+  }
+  return { run, events };
+}
+
+// —— 单 turn ——
+
 export async function runOnce<S>(
   task: Task<S>,
   modelId: string,
@@ -116,70 +212,32 @@ export async function runOnce<S>(
   for (const def of tools) await registerOnce(def);
 
   const systemPrompt = _agentService!.buildSystemPrompt(toolSet, BASE_PROMPT);
-  const runId = generateId('eval');
-  // workDir 按会话隔离（生产同款 WorkspaceService），避免多 run/多 trial 共享 /tmp 互相污染。
   const workDir = await _workspace!.getWorkDir(conversationId);
-  // guard 阈值由生产 hook 在 run 控制流内终止；task.budget.maxIterations 可进一步覆盖。
-  const runtimeConfig = runtimeConfigFor(modelId);
-  if (task.budget?.maxIterations != null) {
-    runtimeConfig.guard = {
-      ...runtimeConfig.guard!,
-      maxIterations: task.budget.maxIterations,
-    };
-  }
-  const params: LaunchParams = {
-    runId,
-    workDir,
-    runtimeConfig,
-    seed: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: task.userGoal },
-    ],
-    toolSet,
-    interactive: false,
-  };
+  attachWorkDir(sandbox, workDir);
 
-  const { run, ctx, runTool } = _executor!.createRun(params);
-  bindSandbox(run.runId, sandbox);
-
-  const events: EnrichedEvent[] = [];
   const start = Date.now();
-  try {
-    await TraceContext.run({ requestId: runId, traceId: runId }, async () => {
-      for await (const e of _executor!.execute(run, ctx, runTool)) {
-        events.push(e);
-      }
-    });
-  } finally {
-    unbindSandbox(run.runId);
-  }
-
+  const { run, events } = await executeRun(
+    {
+      runId: generateId('eval'),
+      workDir,
+      runtimeConfig: resolveRuntimeConfig(task, modelId),
+      seed: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: task.userGoal },
+      ],
+      toolSet,
+      interactive: false,
+    },
+    sandbox,
+  );
   const durationMs = Date.now() - start;
 
-  // design 先于 correctness：guard 终止须据此改判。
-  const design = deriveDesign(events);
-  const ruleGrade = task.success(sandbox, run, events);
-  let correctness = ruleGrade;
-  if (task.judge) {
-    const j = await judgeWith(task.judge, events);
-    correctness = {
-      pass: ruleGrade.pass && j.pass,
-      reason: `${ruleGrade.reason} | judge: ${j.reason}`,
-    };
-  }
-  // guard 终止 = 合成 response_user 收尾，非真正完成 → 强制 fail 并标注哪个 guard 触发。
-  const guardHit = [
-    design.budgetHit && 'budget',
-    design.stuckHit && 'stuck',
-    design.iterationCapHit && 'iteration-cap',
-  ].filter(Boolean);
-  if (guardHit.length) {
-    correctness = {
-      pass: false,
-      reason: `${correctness.reason} [guard:${guardHit.join(',')}]`,
-    };
-  }
-
+  const { correctness, design } = await gradeOutcome(
+    task,
+    sandbox,
+    events,
+    run,
+  );
   return {
     task: task.id,
     model: modelId,
@@ -190,9 +248,12 @@ export async function runOnce<S>(
     design,
     safety: task.safety ? gradeSafety(task.safety, events) : undefined,
     durationMs,
+    workDir,
     eventTrace: events.map(e => e.type),
   };
 }
+
+// —— 多 turn ——
 
 /** 末条 text_chunk 拼成本轮 assistant 文案（= response_user 交付的 final answer）。 */
 function assistantContent(events: readonly EnrichedEvent[]): string {
@@ -212,10 +273,10 @@ function assistantContent(events: readonly EnrichedEvent[]): string {
  *   → seed = projectToLlmMessages(ctx.messages)  // msg.summary → LlmMessage.summary → createRun 还原 thought
  *   → createRun + execute（收事件）
  *   → agentRunRepo 持久化本轮 processSummary（供下一轮 turn-start 的 summary-attach 取回）
- *   → ctx.messages.append(assistantMsg{ agentRunId: runId, content })
+ *   → ctx.messages.append(assistantMsg{ agentRunId, content })
  *   → runConvTransforms(ctx, 'turn-end')   // compact（若超阈值折叠历史）、usage
  *
- * 沙箱按 runId per-turn 绑/解（跨轮共享同一 sandbox 实例）。success 拿末轮 run + 全部轮合并的 events。
+ * success 拿末轮 run + 全部轮合并的 events。
  */
 export async function runMultiTurn<S>(
   task: MultiTurnTask<S>,
@@ -230,17 +291,10 @@ export async function runMultiTurn<S>(
   for (const def of tools) await registerOnce(def);
 
   const systemPrompt = _agentService!.buildSystemPrompt(toolSet, BASE_PROMPT);
-  const runtimeConfig = runtimeConfigFor(modelId);
-  if (task.budget?.maxIterations != null) {
-    runtimeConfig.guard = {
-      ...runtimeConfig.guard!,
-      maxIterations: task.budget.maxIterations,
-    };
-  }
-  // workDir 按会话隔离、跨轮共享（生产同款：一个会话一个 workspace）。
+  const runtimeConfig = resolveRuntimeConfig(task, modelId);
   const workDir = await _workspace!.getWorkDir(conversationId);
+  attachWorkDir(sandbox, workDir);
 
-  // conv 侧上下文——session 即 ctx（无 wrapper 对象），镜像 ConversationContext。
   const ctx: ConvCtx = {
     conversationId,
     messages: ListMonad.of<Message>([
@@ -261,132 +315,87 @@ export async function runMultiTurn<S>(
   const allEvents: EnrichedEvent[] = [];
   let lastRun: ReturnType<AgentRunExecutor['createRun']>['run'] | undefined;
   const start = Date.now();
-  try {
-    for (let t = 0; t < task.turns.length; t++) {
-      const userMsg: Message = {
-        id: generateId('msg'),
-        role: Role.USER,
-        content: task.turns[t]!,
-        attachments: null,
-        meta: null,
-        createdAt: new Date(),
-        conversationId,
-      };
-      ctx.messages = ctx.messages.append(userMsg);
 
-      // turn-start：summary-attach 把上一轮 run 的 processSummary 挂到上一轮 assistant msg.summary。
-      await TraceContext.run(
-        { requestId: conversationId, traceId: conversationId },
-        async () => {
-          for await (const frame of runConvTransforms(ctx, 'turn-start')) {
-            void frame;
-          }
-        },
-      );
+  for (let t = 0; t < task.turns.length; t++) {
+    const userMsg: Message = {
+      id: generateId('msg'),
+      role: Role.USER,
+      content: task.turns[t]!,
+      attachments: null,
+      meta: null,
+      createdAt: new Date(),
+      conversationId,
+    };
+    ctx.messages = ctx.messages.append(userMsg);
 
-      const seed = projectToLlmMessages(ctx.messages.toArray());
-      const runId = generateId('run');
-      const {
-        run,
-        ctx: runCtx,
-        runTool,
-      } = _executor!.createRun({
-        runId,
+    // turn-start：summary-attach 把上一轮 run 的 processSummary 挂到上一轮 assistant msg.summary。
+    await TraceContext.run({ requestId: conversationId }, async () => {
+      for await (const frame of runConvTransforms(ctx, 'turn-start')) {
+        void frame;
+      }
+    });
+
+    const seed = projectToLlmMessages(ctx.messages.toArray());
+    const { run, events: turnEvents } = await executeRun(
+      {
+        runId: generateId('run'),
         workDir,
         runtimeConfig,
         seed,
         toolSet,
         interactive: false,
-      });
-      lastRun = run;
-      // 沙箱按 runId 绑（虚构工具 getSandbox(ctx.runId)）；跨轮共享同一 sandbox 实例，
-      // 故每轮 bind/unbind 本轮 runId。
-      bindSandbox(run.runId, sandbox);
+      },
+      sandbox,
+    );
+    lastRun = run;
+    allEvents.push(...turnEvents);
 
-      const turnEvents: EnrichedEvent[] = [];
-      try {
-        await TraceContext.run(
-          { requestId: runId, traceId: runId },
-          async () => {
-            for await (const e of _executor!.execute(run, runCtx, runTool)) {
-              turnEvents.push(e);
-              allEvents.push(e);
-            }
-          },
-        );
-      } finally {
-        unbindSandbox(run.runId);
-      }
-
-      // 持久化本轮 processSummary——下一轮 turn-start 的 summary-attach 经 findByIds 取回。
-      await TraceContext.run({ requestId: runId, traceId: runId }, async () => {
-        // run 是内存对象；processSummary 已由 ProcessSummaryHook(loop-exit) 写入。
-        const repo =
-          container.resolve<AgentRunRepositoryPort>(AGENT_RUN_REPOSITORY);
-        await repo.save({
-          id: run.runId,
-          status: run.currentStatus,
-          events: [...run.eventStream],
-          config: {
-            tools: run.config.tools,
-            runtimeConfig: run.config.runtimeConfig,
-          },
-          startedAt: new Date(start),
-          completedAt: new Date(),
-          processSummary: run.processSummary,
-        });
-      });
-
-      const assistantMsg: Message = {
-        id: generateId('msg'),
-        role: Role.ASSIST,
-        content: assistantContent(turnEvents) || '(no answer)',
-        attachments: null,
-        meta: null,
-        parentId: userMsg.id,
-        agentRunId: run.runId,
-        createdAt: new Date(),
-        conversationId,
-      };
-      ctx.messages = ctx.messages.append(assistantMsg);
-
-      // turn-end：compact（若超阈值折叠历史并落库 compact msg）、usage。
-      await TraceContext.run(
-        { requestId: conversationId, traceId: conversationId },
-        async () => {
-          for await (const frame of runConvTransforms(ctx, 'turn-end')) {
-            void frame;
-          }
+    // 持久化本轮 processSummary——下一轮 turn-start 的 summary-attach 经 findByIds 取回。
+    await TraceContext.run({ requestId: run.runId }, async () => {
+      const repo =
+        container.resolve<AgentRunRepositoryPort>(AGENT_RUN_REPOSITORY);
+      await repo.save({
+        id: run.runId,
+        status: run.currentStatus,
+        events: [...run.eventStream],
+        config: {
+          tools: run.config.tools,
+          runtimeConfig: run.config.runtimeConfig,
         },
-      );
-    }
-  } finally {
-    // 沙箱 per-turn 绑/解（见上）；无外层清理。
+        startedAt: new Date(start),
+        completedAt: new Date(),
+        processSummary: run.processSummary,
+      });
+    });
+
+    const assistantMsg: Message = {
+      id: generateId('msg'),
+      role: Role.ASSIST,
+      content: assistantContent(turnEvents) || '(no answer)',
+      attachments: null,
+      meta: null,
+      parentId: userMsg.id,
+      agentRunId: run.runId,
+      createdAt: new Date(),
+      conversationId,
+    };
+    ctx.messages = ctx.messages.append(assistantMsg);
+
+    // turn-end：compact（若超阈值折叠历史并落库 compact msg）、usage。
+    await TraceContext.run({ requestId: conversationId }, async () => {
+      for await (const frame of runConvTransforms(ctx, 'turn-end')) {
+        void frame;
+      }
+    });
   }
 
   const durationMs = Date.now() - start;
-  const design = deriveDesign(allEvents);
-  const ruleGrade = task.success(sandbox, lastRun!, allEvents);
-  let correctness = ruleGrade;
-  if (task.judge) {
-    const j = await judgeWith(task.judge, allEvents);
-    correctness = {
-      pass: ruleGrade.pass && j.pass,
-      reason: `${ruleGrade.reason} | judge: ${j.reason}`,
-    };
-  }
-  const guardHit = [
-    design.budgetHit && 'budget',
-    design.stuckHit && 'stuck',
-    design.iterationCapHit && 'iteration-cap',
-  ].filter(Boolean);
-  if (guardHit.length) {
-    correctness = {
-      pass: false,
-      reason: `${correctness.reason} [guard:${guardHit.join(',')}]`,
-    };
-  }
-
+  const { correctness, design } = await gradeOutcome(
+    task,
+    sandbox,
+    allEvents,
+    lastRun!,
+  );
   return {
     task: task.id,
     model: modelId,
@@ -397,6 +406,7 @@ export async function runMultiTurn<S>(
     design,
     safety: task.safety ? gradeSafety(task.safety, allEvents) : undefined,
     durationMs,
+    workDir,
     turns: task.turns.length,
     eventTrace: allEvents.map(e => e.type),
   };

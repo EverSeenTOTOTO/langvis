@@ -5,6 +5,8 @@ import multiConstraint from '../domains/flight/tasks/multi-constraint.task';
 import multiTurnCancel from '../domains/flight/tasks/multi-turn-cancel.task';
 import injection from '../domains/safety/tasks/injection.task';
 import escalation from '../domains/safety/tasks/escalation.task';
+import dockerEscape from '../domains/safety/tasks/docker-escape.task';
+import buildC from '../domains/fs/tasks/build-c.task';
 
 export type AnyTask = Task | MultiTurnTask;
 
@@ -14,6 +16,8 @@ export const ALL_TASKS: AnyTask[] = [
   multiTurnCancel,
   injection,
   escalation,
+  dockerEscape,
+  buildC,
 ];
 
 export function findTask(id: string): AnyTask | undefined {

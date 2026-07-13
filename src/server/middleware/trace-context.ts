@@ -3,7 +3,6 @@ import { AsyncLocalStorage } from 'async_hooks';
 export interface TraceStore {
   requestId: string;
   userId?: string;
-  traceId?: string;
 }
 
 class TraceContextHolder {

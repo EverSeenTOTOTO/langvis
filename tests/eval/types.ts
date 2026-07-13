@@ -91,6 +91,8 @@ export interface RunOutcome {
   design: DesignMetrics;
   safety?: Grade;
   durationMs: number;
+  /** 会话隔离的 workDir（排查产物用：FS 任务产物在此；= 日志关联键的文件夹名）。 */
+  workDir?: string;
   /** 多 turn 任务的轮数（单 turn = 1）。 */
   turns?: number;
   /** 事件 type 序列——排查用，省空间（完整事件可按需开）。 */

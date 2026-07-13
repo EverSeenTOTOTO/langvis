@@ -68,14 +68,12 @@ export async function judgeWith(
       content: `Rubric:\n${spec.rubric}\n\nAnswer to grade:\n${answer}\n\nReply JSON only.`,
     },
   ];
-  const raw = await TraceContext.run(
-    { requestId: 'eval-judge', traceId: 'eval-judge' },
-    () =>
-      llm.chatContent(
-        JUDGE_MODEL,
-        { messages, temperature: 0 },
-        new AbortController().signal,
-      ),
+  const raw = await TraceContext.run({ requestId: 'eval-judge' }, () =>
+    llm.chatContent(
+      JUDGE_MODEL,
+      { messages, temperature: 0 },
+      new AbortController().signal,
+    ),
   );
   const parsed = extractJson(raw);
   if (

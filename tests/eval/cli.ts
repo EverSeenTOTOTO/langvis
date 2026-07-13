@@ -78,6 +78,9 @@ async function main(): Promise<void> {
         console.log(
           `  -> ${outcome.status} | pass=${outcome.correctness.pass} | iter=${outcome.efficiency.iterations} | ${outcome.correctness.reason}`,
         );
+        if (outcome.workDir) {
+          console.log(`     workDir ${outcome.workDir}`);
+        }
       }
     }
   }
