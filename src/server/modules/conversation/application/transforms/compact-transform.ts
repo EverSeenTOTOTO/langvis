@@ -74,6 +74,7 @@ export class CompactTransform implements ConvTransform {
       windowSize: compaction.windowSize,
       signal: new AbortController().signal,
       prompt: HISTORY_PROMPT,
+      modelId: compaction.compactModelId ?? ctx.runtimeConfig.model?.modelId,
     });
     if (!content) return;
 

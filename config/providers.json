@@ -63,6 +63,14 @@
         "contextSize": 1000000,
         "multimodal": true,
         "defaults": { "temperature": 0.7, "topP": 0.7 }
+      },
+      {
+        "id": "deepseek/deepseek-v4-pro",
+        "name": "DeepSeek v4 Pro",
+        "type": "chat",
+        "contextSize": 1000000,
+        "multimodal": true,
+        "defaults": { "temperature": 0.7, "topP": 0.7 }
       }
     ]
   },
@@ -75,7 +83,7 @@
       {
         "id": "qwen3.6-flash",
         "name": "Qwen 3.6 Flash",
-        "type": "compact",
+        "type": "chat",
         "contextSize": 262000,
         "multimodal": true,
         "defaults": { "temperature": 0.7, "topP": 0.7 }
@@ -87,6 +95,14 @@
         "contextSize": 1000000,
         "multimodal": true,
         "primary": true,
+        "defaults": { "temperature": 0.7, "topP": 0.7 }
+      },
+      {
+        "id": "deepseek-v4-pro",
+        "name": "DeepSeek v4 Pro",
+        "type": "chat",
+        "contextSize": 1000000,
+        "multimodal": true,
         "defaults": { "temperature": 0.7, "topP": 0.7 }
       },
       {

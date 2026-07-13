@@ -12,6 +12,8 @@ export interface FoldOptions {
   signal: AbortSignal;
   /** Prompt 模板：须含 "History" section，fold 逐块填充后 build。 */
   prompt: Prompt;
+  /** 压缩模型；调用方传片段 compactModelId（或回退本 run 模型），缺省内核兜底系统默认 chat。 */
+  modelId?: string;
 }
 
 /**
@@ -22,25 +24,27 @@ export interface FoldOptions {
  * 即"摘要的摘要"。续接场景（如历史压缩）的既有摘要在调用方作为 messages[0] 传入，
  * 随第 1 块一起折叠
  *
- * 无状态：从容器解析 LlmProvider 并自取 compact 模型（缺省回退对话模型）。
+ * 无状态：从容器解析 LlmProvider；压缩模型由调用方经 modelId 传入（片段 compactModelId 或本 run 模型），
+ * 缺省时内核兜底系统默认 chat 模型。
  */
 export async function fold({
   messages,
   windowSize,
   signal,
   prompt,
+  modelId,
 }: FoldOptions): Promise<string> {
   if (messages.length === 0) return '';
 
   const llm = container.resolve<LlmProvider>(LLM_PORT);
-  const modelId = llm.getDefaultModel('compact')?.id;
+  const resolved = modelId ?? llm.getDefaultModel('chat')?.id;
 
   let acc: string | null = null;
   for (let i = 0; i < messages.length; i += windowSize) {
     const chunk = messages.slice(i, i + windowSize);
     const history = formatHistory(acc, chunk);
     const content = await llm.chatContent(
-      modelId,
+      resolved,
       {
         messages: [
           { role: 'user', content: prompt.with('History', history).build() },

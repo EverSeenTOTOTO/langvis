@@ -1,4 +1,4 @@
-export type ModelType = 'chat' | 'embedding' | 'tts' | 'stt' | 'compact';
+export type ModelType = 'chat' | 'embedding' | 'tts' | 'stt';
 
 export interface ModelDefaults {
   temperature?: number;

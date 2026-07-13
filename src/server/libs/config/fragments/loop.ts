@@ -5,6 +5,8 @@ export interface LoopCompactionConfig {
   threshold: number;
   windowSize: number;
   keepRecent: number;
+  /** 压缩用的 chat 模型；缺省回退本 run 模型 → 系统默认 chat。 */
+  compactModelId?: string;
 }
 
 export const LOOP_FRAGMENT: ConfigFragment<'loop', LoopCompactionConfig> = {
@@ -37,6 +39,13 @@ export const LOOP_FRAGMENT: ConfigFragment<'loop', LoopCompactionConfig> = {
         minimum: 0,
         nullable: true,
         description: 'loop 内压缩时保留的近期消息数',
+      },
+      compactModelId: {
+        type: 'string',
+        format: 'model-select',
+        modelType: 'chat',
+        nullable: true,
+        description: '压缩用的 chat 模型（缺省回退本 run 模型）',
       },
     },
   } as unknown as JSONSchemaType<unknown>,
