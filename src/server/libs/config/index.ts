@@ -3,8 +3,14 @@ import type { ComposeConfig } from './config-fragment';
 import { MODEL_FRAGMENT } from './fragments/model';
 import { LOOP_FRAGMENT } from './fragments/loop';
 import { HISTORY_FRAGMENT } from './fragments/history';
+import { GUARD_FRAGMENT } from './fragments/guard';
 
-const FRAGMENTS = [MODEL_FRAGMENT, LOOP_FRAGMENT, HISTORY_FRAGMENT] as const;
+const FRAGMENTS = [
+  MODEL_FRAGMENT,
+  LOOP_FRAGMENT,
+  HISTORY_FRAGMENT,
+  GUARD_FRAGMENT,
+] as const;
 
 export type ConversationConfig = ComposeConfig<typeof FRAGMENTS>;
 

@@ -3,5 +3,7 @@ import './compaction-hook';
 import './process-summary-hook';
 import './loop-usage-hook';
 import './budget-hook';
+import './stuck-hook';
+import './max-iterations-hook';
 
 export { resolveAgentHooks, agentHook } from './registry';
