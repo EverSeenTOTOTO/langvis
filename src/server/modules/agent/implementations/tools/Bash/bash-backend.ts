@@ -10,7 +10,6 @@ import path from 'node:path';
 import { singleton } from 'tsyringe';
 import { generateId } from '@/shared/utils';
 import { createTimeoutController } from '@/server/utils/abort';
-import { isProd } from '@/server/utils/env';
 import {
   lifecycleHook,
   type LifecycleHook,
@@ -74,9 +73,6 @@ export interface ChildHandle {
 }
 
 export interface BashBackend {
-  /** true 时，非交互式 run 仍需 isReadonlyCommand 兜底（DirectBash 无沙箱）；
-   *  false 时沙箱即边界（DockerBash），allowlist 不再生效。 */
-  readonly requiresReadonlyGuard: boolean;
   spawn(command: string, workDir: string): ChildHandle;
 }
 
@@ -86,10 +82,9 @@ const COMMON_SPAWN_OPTS: SpawnOptions = {
   stdio: ['pipe', 'pipe', 'pipe'],
 };
 
-/** dev：直接在 host 上执行（shell 模式，cwd=workDir）。 */
+/** interactive 态：直接在 host 上执行（shell 模式，cwd=workDir）。
+ *  Bash 工具仅在 ctx.interactive 时选它——人工确认后才在 host 跑。 */
 export class DirectBash implements BashBackend {
-  readonly requiresReadonlyGuard = true;
-
   spawn(command: string, workDir: string): ChildHandle {
     const child = spawn(command, {
       ...COMMON_SPAWN_OPTS,
@@ -104,8 +99,6 @@ export class DirectBash implements BashBackend {
  *  `--network=none` 断网、资源上限防 DoS、`--user` 保证写出的文件属主为 host 用户。
  *  kill 走 `--cidfile` + `docker kill`——group-kill 在 SIGKILL 时会孤立容器。 */
 export class DockerBash implements BashBackend {
-  readonly requiresReadonlyGuard = false;
-
   spawn(command: string, workDir: string): ChildHandle {
     const cidFile = path.join(os.tmpdir(), `bash-cid-${generateId('')}`);
     const child = spawn(
@@ -255,18 +248,31 @@ export async function* runChild(
   return { exitCode, stdout, stderr, timedOut };
 }
 
-/** prod 启动期探测：docker 守护进程与沙箱镜像是否就绪。缺失仅警告——spawn 时会 fail-closed。
- *  经 @lifecycleHook 自注册，bootAll() 解析调用；随 bash-backend 被 agent.module 导入而生效。 */
+/** docker 守护进程是否可用（启动探测用，同步）。 */
+function dockerAvailable(): boolean {
+  try {
+    execFileSync('docker', ['info'], {
+      stdio: 'ignore',
+      timeout: 5000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 启动期探测：非交互式 Bash 以 Docker 沙箱为硬边界，docker 守护或沙箱镜像缺失时仅警告——
+ * spawn（`docker run`）会自然 fail-fast。dev 同样需要 docker（非交互 = 子 agent / eval）。
+ * 经 @lifecycleHook 自注册，bootAll() 解析调用；随 bash-backend 被 agent.module 导入而生效。
+ */
 @singleton()
 @lifecycleHook
 export class BashSandboxProbe implements LifecycleHook {
   onBoot(): void {
-    if (!isProd) return;
-    try {
-      execFileSync('docker', ['info'], { stdio: 'ignore' });
-    } catch {
+    if (!dockerAvailable()) {
       logger.warn(
-        'Docker daemon unavailable — prod bash will fail at spawn. Install/start docker.',
+        'Docker daemon unavailable — non-interactive Bash will fail at spawn. Install/start docker.',
       );
       return;
     }
