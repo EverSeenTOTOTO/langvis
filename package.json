@@ -23,6 +23,7 @@
     "better-auth": "^1.2.7",
     "body-parser": "^1.20.3",
     "browserslist": "^4.28.1",
+    "cac": "^7.0.0",
     "caniuse-lite": "^1.0.30001776",
     "chalk": "^5.4.1",
     "clsx": "^2.1.1",

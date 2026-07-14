@@ -18,6 +18,7 @@
  *
  *  resume：已写入 results.jsonl 的 (task×model×variant×trial) 自动跳过；中断后重跑即续。
  */
+import cac from 'cac';
 import { ALL_TASKS, type AnyTask } from './tasks';
 import { MODELS, TRIALS, VARIANTS, DEFAULT_VARIANT } from './configs';
 import { runOnce, runMultiTurn } from './runner';
@@ -32,29 +33,50 @@ interface Args {
   models?: string[];
   variants?: string[];
   trials: number;
+  help: boolean;
 }
 
-function parseArgs(argv: string[]): Args {
-  const get = (flag: string): string | undefined => {
-    const i = argv.indexOf(flag);
-    return i >= 0 ? argv[i + 1] : undefined;
-  };
-  const trialsRaw = get('--trials');
+function parseArgs(argv: string[]): {
+  cli: ReturnType<typeof cac>;
+  args: Args;
+} {
+  const cli = cac()
+    .option('--tasks <ids>', 'comma-separated task ids (default: all)')
+    .option('--models <ids>', 'comma-separated model ids (default: MODELS)')
+    .option(
+      '--variants <ids>',
+      'comma-separated variant ids (default: VARIANTS)',
+    )
+    .option('--trials <n>', 'trials per (task×model×variant)', {
+      default: TRIALS,
+    });
+  const { options } = cli.parse(['bun', 'eval', ...argv]);
+  const split = (v: unknown): string[] | undefined =>
+    typeof v === 'string' ? v.split(',').filter(Boolean) : undefined;
   return {
-    tasks: get('--tasks')?.split(',').filter(Boolean),
-    models: get('--models')?.split(',').filter(Boolean),
-    variants: get('--variants')?.split(',').filter(Boolean),
-    trials: trialsRaw ? Number(trialsRaw) : TRIALS,
+    cli,
+    args: {
+      tasks: split(options.tasks),
+      models: split(options.models),
+      variants: split(options.variants),
+      trials: Number(options.trials),
+      help: Boolean(options.help),
+    },
   };
 }
 
 async function main(): Promise<void> {
+  const { cli, args } = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    cli.outputHelp();
+    return;
+  }
   const {
     tasks: taskFilter,
     models: modelFilter,
     variants: variantFilter,
     trials,
-  } = parseArgs(process.argv.slice(2));
+  } = args;
   const tasks = ALL_TASKS.filter(t => !taskFilter || taskFilter.includes(t.id));
   const models = modelFilter ?? [...MODELS];
   const variants = variantFilter ?? VARIANTS.map(v => v.id);
