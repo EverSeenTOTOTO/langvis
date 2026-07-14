@@ -14,9 +14,9 @@ export const LOOP_FRAGMENT: ConfigFragment<'loop', LoopCompactionConfig> = {
   schema: {
     type: 'object',
     nullable: true,
-    default: {},
     title: 'Loop Iteration Compaction',
-    description: 'ReAct loop 内迭代压缩（超阈折叠较早步骤、保留近期）',
+    description:
+      'ReAct loop 内迭代压缩（超阈折叠较早步骤、保留近期）。省略即关。',
     properties: {
       threshold: {
         type: 'number',
