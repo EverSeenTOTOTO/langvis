@@ -78,21 +78,20 @@ export class CompactTransform implements ConvTransform {
     });
     if (!content) return;
 
-    const startRef = summary?.id ?? history[0]?.id ?? '';
     const [compactMessage] = await this.messageRepo.batchCreate(
       ctx.conversationId,
       [
         {
           role: Role.USER,
           content,
-          meta: { kind: 'compact', startRef },
+          meta: { kind: 'compact' },
           createdAt: new Date(),
         },
       ],
     );
     ctx.messages = ctx.messages.append(compactMessage);
     this.logger.info(
-      `compacted (conv ${ctx.conversationId}): ${history.length}→${ctx.messages.length} msgs`,
+      `compacted (conv ${ctx.conversationId}): folded ${tail.length} msgs → 1 summary`,
     );
   }
 }
