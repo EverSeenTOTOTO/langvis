@@ -16,9 +16,8 @@ export const HISTORY_FRAGMENT: ConfigFragment<
   schema: {
     type: 'object',
     nullable: true,
-    default: {},
     title: 'History Compaction',
-    description: '会话历史压缩（超阈折叠历史为摘要 C）',
+    description: '会话历史压缩（超阈折叠历史为摘要 C）。省略即关。',
     properties: {
       threshold: {
         type: 'number',

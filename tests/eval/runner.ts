@@ -44,7 +44,7 @@ import type {
   Task,
   MultiTurnTask,
 } from './types';
-import { runtimeConfigFor } from './configs';
+import { DEFAULT_VARIANT, runtimeConfigForVariant } from './configs';
 import { bindSandbox, unbindSandbox } from './sandbox-registry';
 import { deriveDesign, deriveEfficiency } from './metrics';
 import { judgeWith } from './judge';
@@ -150,12 +150,13 @@ async function gradeOutcome<S>(
 
 // —— 共享片段 ——
 
-/** task budget 覆盖 eval guard 的 maxIterations。 */
+/** task budget 覆盖 eval guard 的 maxIterations；base 取自 variant。 */
 function resolveRuntimeConfig<S>(
   task: Pick<Task<S>, 'budget'>,
   modelId: string,
+  variantId: string,
 ): ConversationConfig {
-  const runtimeConfig = runtimeConfigFor(modelId);
+  const runtimeConfig = runtimeConfigForVariant(modelId, variantId);
   if (task.budget?.maxIterations != null) {
     runtimeConfig.guard = {
       ...runtimeConfig.guard!,
@@ -203,6 +204,7 @@ export async function runOnce<S>(
   task: Task<S>,
   modelId: string,
   trial: number,
+  variantId: string = DEFAULT_VARIANT,
 ): Promise<RunOutcome> {
   await ensureContainer();
   const conversationId = generateId('conv');
@@ -220,7 +222,7 @@ export async function runOnce<S>(
     {
       runId: generateId('eval'),
       workDir,
-      runtimeConfig: resolveRuntimeConfig(task, modelId),
+      runtimeConfig: resolveRuntimeConfig(task, modelId, variantId),
       seed: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: task.userGoal },
@@ -242,6 +244,7 @@ export async function runOnce<S>(
     task: task.id,
     model: modelId,
     trial,
+    variant: variantId,
     status: run.currentStatus,
     correctness,
     efficiency: deriveEfficiency(events),
@@ -282,6 +285,7 @@ export async function runMultiTurn<S>(
   task: MultiTurnTask<S>,
   modelId: string,
   trial: number,
+  variantId: string = DEFAULT_VARIANT,
 ): Promise<RunOutcome> {
   await ensureContainer();
   const conversationId = generateId('conv');
@@ -291,7 +295,7 @@ export async function runMultiTurn<S>(
   for (const def of tools) await registerOnce(def);
 
   const systemPrompt = _agentService!.buildSystemPrompt(toolSet, BASE_PROMPT);
-  const runtimeConfig = resolveRuntimeConfig(task, modelId);
+  const runtimeConfig = resolveRuntimeConfig(task, modelId, variantId);
   const workDir = await _workspace!.getWorkDir(conversationId);
   attachWorkDir(sandbox, workDir);
 
@@ -400,6 +404,7 @@ export async function runMultiTurn<S>(
     task: task.id,
     model: modelId,
     trial,
+    variant: variantId,
     status: lastRun!.currentStatus,
     correctness,
     efficiency: deriveEfficiency(allEvents),

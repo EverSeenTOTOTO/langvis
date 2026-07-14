@@ -24,9 +24,16 @@ export async function append(outcome: RunOutcome): Promise<void> {
   await fs.appendFile(RESULTS, JSON.stringify(outcome) + '\n');
 }
 
-/** 已完成 (task×model×trial) 三元组集合——resume 据此跳过。 */
+/**
+ * 已完成 (task×model×variant×trial) 四元组集合——resume 据此跳过。
+ * 旧 jsonl 无 variant 字段，回填 'default'。
+ */
 export function completedKeys(existing: readonly RunOutcome[]): Set<string> {
-  return new Set(existing.map(o => `${o.task}|${o.model}|${o.trial}`));
+  return new Set(
+    existing.map(
+      o => `${o.task}|${o.model}|${o.variant ?? 'default'}|${o.trial}`,
+    ),
+  );
 }
 
 /** Wilson score 95% CI（二项 pass-rate）。 */
@@ -140,58 +147,164 @@ function mkTable(rows: readonly Record<string, string | number>[]): string {
   return `${head}\n${sep}\n${body}`;
 }
 
+/** pass 率（小数），无数据返回 NaN。 */
+function passRate(cell: CellAgg | undefined): number {
+  if (!cell || !cell.total) return NaN;
+  return cell.passes / cell.total;
+}
+
+/**
+ * headroom = 同 (model, task) 上最优 variant − baseline variant 的 pass 率差。
+ * baseline = 'no-compaction'（关压缩）；缺该 variant 数据则该格 headroom 不可算。
+ * >0 → driver 有贡献（baseline 过不了、调上来能过）；≈0 → 该场景不区分 driver（太易/太难）。
+ */
+const BASELINE_VARIANT = 'no-compaction';
+
+function headroomRows(
+  outcomes: readonly RunOutcome[],
+  tasks: readonly string[],
+  models: readonly string[],
+): Record<string, string | number>[] {
+  const byCellVar = aggregate(
+    outcomes,
+    o => `${o.task}|${o.model}|${o.variant ?? 'default'}`,
+  );
+  return models.map(m => {
+    const row: Record<string, string | number> = { model: m };
+    for (const t of tasks) {
+      const baseline = passRate(byCellVar.get(`${t}|${m}|${BASELINE_VARIANT}`));
+      let best = NaN;
+      for (const o of outcomes) {
+        if (o.task !== t || o.model !== m) continue;
+        const v = o.variant ?? 'default';
+        if (v === BASELINE_VARIANT) continue;
+        const r = passRate(byCellVar.get(`${t}|${m}|${v}`));
+        if (Number.isNaN(r)) continue;
+        if (Number.isNaN(best) || r > best) best = r;
+      }
+      if (Number.isNaN(baseline)) {
+        row[t] = '-';
+      } else if (Number.isNaN(best)) {
+        row[t] = `${pct(baseline)} (无对比变体)`;
+      } else {
+        row[t] =
+          `${pct(best - baseline)} (基线 ${pct(baseline)} → 最优 ${pct(best)})`;
+      }
+    }
+    return row;
+  });
+}
+
+/** task id 形如 `domain:task-name`——取冒号前缀作 domain，用于按域分表。 */
+function domainOf(taskId: string): string {
+  return taskId.includes(':') ? taskId.split(':')[0]! : '(other)';
+}
+
+/** 按 domain 分组 tasks（保持 domain 字典序、域内 task 序）。 */
+function groupTasksByDomain(tasks: readonly string[]): Map<string, string[]> {
+  const groups = new Map<string, string[]>();
+  for (const t of tasks) {
+    const d = domainOf(t);
+    const arr = groups.get(d) ?? [];
+    arr.push(t);
+    groups.set(d, arr);
+  }
+  return groups;
+}
+
 /** 打印 console 表 + 落 markdown 报告。 */
 export async function printReport(
   outcomes: readonly RunOutcome[],
 ): Promise<void> {
   const tasks = [...new Set(outcomes.map(o => o.task))].sort();
   const models = [...new Set(outcomes.map(o => o.model))].sort();
+  const variants = [
+    ...new Set(outcomes.map(o => o.variant ?? 'default')),
+  ].sort();
 
-  const byCell = aggregate(outcomes, o => `${o.task}|${o.model}`);
-  const byModel = aggregate(outcomes, o => o.model);
+  const byCellVar = aggregate(
+    outcomes,
+    o => `${o.task}|${o.model}|${o.variant ?? 'default'}`,
+  );
+  const byModelVar = aggregate(
+    outcomes,
+    o => `${o.model}|${o.variant ?? 'default'}`,
+  );
 
-  const correctnessRows = models.map(m => {
-    const row: Record<string, string | number> = { model: m };
-    for (const t of tasks) {
-      const c = byCell.get(`${t}|${m}`);
-      row[t] = c ? fmtRate(c.passes, c.total) : '-';
+  // 每个 variant 一组切片表（correctness 按 domain 分表 + design），避免横向溢出与跨 variant 混淆。
+  const domains = groupTasksByDomain(tasks);
+  const sections: string[] = ['# Eval report'];
+  for (const v of variants) {
+    // correctness：每个 domain 一张表（列 = 该域的 tasks），避免任务增多横向溢出。
+    for (const [d, dTasks] of domains) {
+      const correctnessRows = models.map(m => {
+        const row: Record<string, string | number> = { model: m };
+        for (const t of dTasks) {
+          const c = byCellVar.get(`${t}|${m}|${v}`);
+          row[t] = c ? fmtRate(c.passes, c.total) : '-';
+        }
+        const cm = byModelVar.get(`${m}|${v}`);
+        row['overall'] = cm ? fmtRate(cm.passes, cm.total) : '-';
+        return row;
+      });
+      console.log(
+        `\n=== [variant: ${v}] [${d}] Correctness (pass% [95% CI]) ===`,
+      );
+      console.table(correctnessRows);
+      sections.push(
+        `## [variant: ${v}] [${d}] Correctness (pass% [95% CI])\n`,
+        mkTable(correctnessRows),
+      );
     }
-    const cm = byModel.get(m)!;
-    row['overall'] = fmtRate(cm.passes, cm.total);
-    return row;
-  });
 
-  const designRows = models.map(m => {
-    const c = byModel.get(m)!;
-    const row: Record<string, string | number> = { model: m };
-    row['avg_iter'] = avg(c.eff.iterations, c.total).toFixed(1);
-    row['avg_calls'] = avg(c.eff.toolCalls, c.total).toFixed(1);
-    row['peak_ctx'] = c.eff.peakContext;
-    row['avg_cost'] = Math.round(avg(c.eff.cumulativeCostProxy, c.total));
-    row['tool_err'] = avg(c.design.toolErrors, c.total).toFixed(1);
-    row['compact'] = avg(c.design.compactionTriggers, c.total).toFixed(1);
-    row['budget_hit'] = c.design.budgetHit ? 'Y' : '-';
-    row['stuck_hit'] = c.design.stuckHit ? 'Y' : '-';
-    row['iter_cap'] = c.design.iterationCapHit ? 'Y' : '-';
-    row['max_redundant'] = c.design.redundantCalls;
-    row['safety'] = c.safetyTotal
-      ? fmtRate(c.safetyPasses, c.safetyTotal)
-      : '-';
-    return row;
-  });
+    const designRows = models
+      .map(m => {
+        const c = byModelVar.get(`${m}|${v}`);
+        if (!c) return null;
+        const row: Record<string, string | number> = { model: m };
+        row['avg_iter'] = avg(c.eff.iterations, c.total).toFixed(1);
+        row['avg_calls'] = avg(c.eff.toolCalls, c.total).toFixed(1);
+        row['peak_ctx'] = c.eff.peakContext;
+        row['avg_cost'] = Math.round(avg(c.eff.cumulativeCostProxy, c.total));
+        row['tool_err'] = avg(c.design.toolErrors, c.total).toFixed(1);
+        row['compact'] = avg(c.design.compactionTriggers, c.total).toFixed(1);
+        row['budget_hit'] = c.design.budgetHit ? 'Y' : '-';
+        row['stuck_hit'] = c.design.stuckHit ? 'Y' : '-';
+        row['iter_cap'] = c.design.iterationCapHit ? 'Y' : '-';
+        row['max_redundant'] = c.design.redundantCalls;
+        row['safety'] = c.safetyTotal
+          ? fmtRate(c.safetyPasses, c.safetyTotal)
+          : '-';
+        return row;
+      })
+      .filter((r): r is Record<string, string | number> => r !== null);
 
-  console.log('\n=== Correctness (pass% [95% CI]) ===');
-  console.table(correctnessRows);
-  console.log('\n=== Design exposure / efficiency ===');
-  console.table(designRows);
+    if (designRows.length) {
+      console.log(`\n=== [variant: ${v}] Design exposure / efficiency ===`);
+      console.table(designRows);
+      sections.push(
+        `\n## [variant: ${v}] Design exposure / efficiency\n`,
+        mkTable(designRows),
+      );
+    }
+  }
 
-  const md = [
-    '# Eval report',
-    '## Correctness (pass% [95% CI])\n',
-    mkTable(correctnessRows),
-    '\n## Design exposure / efficiency\n',
-    mkTable(designRows),
-  ].join('\n');
+  // headroom 表：仅多 variant 时才有意义；按 domain 分表（与 correctness 同理）。
+  if (variants.length > 1) {
+    for (const [d, dTasks] of domains) {
+      const hRows = headroomRows(outcomes, dTasks, models);
+      console.log(
+        `\n=== [${d}] Driver headroom (最优 variant − baseline/no-compaction) ===`,
+      );
+      console.table(hRows);
+      sections.push(
+        `\n## [${d}] Driver headroom (最优 variant − baseline/no-compaction)\n`,
+        mkTable(hRows),
+      );
+    }
+  }
+
+  const md = sections.join('\n');
   await fs.writeFile(REPORT, md, 'utf8');
   console.log(`\nreport -> ${REPORT}`);
 }
