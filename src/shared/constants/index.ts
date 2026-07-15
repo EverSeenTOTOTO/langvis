@@ -11,6 +11,7 @@ export enum ToolIds {
   LINKS_EXTRACT = 'links_extract',
   CACHED_READ = 'cached_read',
   FILE_EDIT = 'file_edit',
+  PDF_EXTRACT = 'pdf_extract',
   BASH = 'bash',
   LIST_TOOLS = 'list_tools',
   SKILL_CALL = 'skill_call',
