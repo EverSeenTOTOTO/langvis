@@ -38,6 +38,19 @@ export const CACHED_REF_STANDARD_SIZE =
 // 下限 = 2× 标准 ref 大小——只压缩明显大于 ref 本身的串，确保压缩总省上下文。
 export const MIN_ITEM_THRESHOLD = CACHED_REF_STANDARD_SIZE * 2;
 
+/**
+ * 把语义 hint（tool + 关键入参）规整为文件名安全段：小写、非 [a-z0-9] 替 -、
+ * 压连续分隔、去首尾分隔、截断。空/纯符号 → ''（调用方据此退 fc_<id>）。
+ */
+function sanitizeHint(hint?: string): string {
+  if (!hint) return '';
+  return hint
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+}
+
 @singleton()
 export class CacheProvider implements CachePort {
   constructor(
@@ -49,6 +62,7 @@ export class CacheProvider implements CachePort {
     workDir: string,
     value: unknown,
     strategy: CompressionStrategy = 'file',
+    hint?: string,
     parentThreshold = STRING_THRESHOLD,
   ): Promise<unknown> {
     if (strategy === 'skip') {
@@ -58,7 +72,7 @@ export class CacheProvider implements CachePort {
     const threshold = parentThreshold;
 
     if (typeof value === 'string' && value.length > threshold) {
-      return this.storeSerialized(workDir, value);
+      return this.storeSerialized(workDir, value, hint);
     }
 
     if (Array.isArray(value)) {
@@ -68,12 +82,12 @@ export class CacheProvider implements CachePort {
       );
       const result = await Promise.all(
         value.map(item =>
-          this.compress(workDir, item, strategy, childThreshold),
+          this.compress(workDir, item, strategy, hint, childThreshold),
         ),
       );
       const serialized = JSON.stringify(result);
       if (serialized.length > STRING_THRESHOLD) {
-        return this.storeSerialized(workDir, serialized);
+        return this.storeSerialized(workDir, serialized, hint);
       }
       return result;
     }
@@ -90,6 +104,7 @@ export class CacheProvider implements CachePort {
           workDir,
           val,
           strategy,
+          hint,
           childThreshold,
         );
       }
@@ -97,6 +112,16 @@ export class CacheProvider implements CachePort {
     }
 
     return value;
+  }
+
+  async offload(
+    workDir: string,
+    value: unknown,
+    hint?: string,
+  ): Promise<CachedReference> {
+    const serialized =
+      typeof value === 'string' ? value : JSON.stringify(value);
+    return this.storeSerialized(workDir, serialized, hint);
   }
 
   async resolve(workDir: string, value: unknown): Promise<unknown> {
@@ -160,8 +185,12 @@ export class CacheProvider implements CachePort {
   private async storeSerialized(
     workDir: string,
     serialized: string,
+    hint?: string,
   ): Promise<CachedReference> {
-    const filename = `fc_${generateId('')}`;
+    const sanitized = sanitizeHint(hint);
+    // 无 hint 退 fc_<id>（保 /­^fc_­/ 既有契约）；有 hint 前置语义段 + '__fc_' 分隔。
+    const id = generateId('fc');
+    const filename = sanitized ? `${sanitized}__${id}` : id;
     const filePath = path.join(workDir, filename);
     await fs.writeFile(filePath, serialized, 'utf-8');
 
@@ -169,6 +198,7 @@ export class CacheProvider implements CachePort {
       $cached: filename,
       $size: Buffer.byteLength(serialized, 'utf8'),
       $preview: serialized.slice(0, PREVIEW_LENGTH),
+      ...(sanitized ? { $label: sanitized } : {}),
     };
   }
 

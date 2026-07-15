@@ -4,10 +4,12 @@ import { MODEL_FRAGMENT } from './fragments/model';
 import { LOOP_FRAGMENT } from './fragments/loop';
 import { HISTORY_FRAGMENT } from './fragments/history';
 import { GUARD_FRAGMENT } from './fragments/guard';
+import { OFFLOAD_FRAGMENT } from './fragments/offload';
 
 const FRAGMENTS = [
   MODEL_FRAGMENT,
   LOOP_FRAGMENT,
+  OFFLOAD_FRAGMENT,
   HISTORY_FRAGMENT,
   GUARD_FRAGMENT,
 ] as const;

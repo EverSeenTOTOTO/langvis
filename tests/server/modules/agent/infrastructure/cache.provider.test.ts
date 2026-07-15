@@ -436,4 +436,60 @@ describe('CacheProvider', () => {
       ).rejects.toThrow('Cache miss: fc_missing');
     });
   });
+
+  describe('offload', () => {
+    it('always writes to disk and returns a CachedReference (even for small content)', async () => {
+      const result = (await cacheService.offload(
+        workDir,
+        'tiny',
+      )) as CachedReference;
+
+      expect(isCachedReference(result)).toBe(true);
+      expect(result.$cached).toMatch(/^fc_/);
+      expect(result.$size).toBe(4);
+      // offload 始终写盘，小内容也落文件
+      const reread = await cacheService.readFile(workDir, result.$cached);
+      expect(reread).toBe('tiny');
+    });
+
+    it('uses semantic filename + $label when hint given', async () => {
+      const result = (await cacheService.offload(
+        workDir,
+        'x'.repeat(500),
+        'search-flights 京→沪, 40 records',
+      )) as CachedReference;
+
+      // hint 规整为文件名安全段，前置语义 + '__' + fc_<id>
+      expect(result.$cached).toMatch(/^search-flights-40-records__fc_/);
+      expect(result.$label).toBe('search-flights-40-records');
+      expect(result.$size).toBe(500);
+    });
+
+    it('falls back to fc_<id> when hint absent or empty', async () => {
+      const noHint = (await cacheService.offload(
+        workDir,
+        'data',
+      )) as CachedReference;
+      expect(noHint.$cached).toMatch(/^fc_/);
+      expect(noHint.$label).toBeUndefined();
+
+      const emptyHint = (await cacheService.offload(
+        workDir,
+        'data',
+        '   ',
+      )) as CachedReference;
+      expect(emptyHint.$cached).toMatch(/^fc_/);
+      expect(emptyHint.$label).toBeUndefined();
+    });
+
+    it('offloads non-string value by JSON-stringifying', async () => {
+      const obj = { flights: [{ id: 'f1' }, { id: 'f2' }] };
+      const result = await cacheService.offload(workDir, obj, 'search-flights');
+      const reread = (await cacheService.readFile(
+        workDir,
+        (result as CachedReference).$cached,
+      )) as Record<string, unknown>;
+      expect(reread).toEqual(obj);
+    });
+  });
 });
