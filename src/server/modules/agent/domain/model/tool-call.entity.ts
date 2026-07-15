@@ -74,18 +74,14 @@ export class ToolCall extends Entity<string> {
       };
       const output = yield* this.tool.call(callCtx);
 
-      const compressed = await this.ctx.cache.compress(
-        this.workDir,
-        output,
-        this.tool.config?.compression as 'skip' | 'file' | undefined,
-      );
-
-      this.complete(compressed);
+      // #output 留全文：tool_result 事件/DB/前端/历史回放都看全文（事件真相）。
+      // 给 LLM 看的 messages 由 post-observation offload-hook 预算化桩化（无损落盘）。
+      this.complete(output);
       yield {
         type: 'tool_result',
         callId: this.id,
         toolName: this.toolName,
-        output: compressed,
+        output,
       };
     } catch (error) {
       const errMsg = (error as Error)?.message ?? String(error);

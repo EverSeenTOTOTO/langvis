@@ -26,6 +26,11 @@ function makeMockCache(): CachePort {
   return {
     resolve: vi.fn(async (_id: string, value: unknown) => value),
     compress: vi.fn(async (_id: string, value: unknown) => value),
+    offload: vi.fn(async (_id: string, _value: unknown) => ({
+      $cached: 'fc_test',
+      $size: 0,
+      $preview: '',
+    })),
     readFile: vi.fn(),
   };
 }
@@ -75,18 +80,16 @@ async function collect(
 
 describe('ToolCall', () => {
   describe('execute', () => {
-    it('resolves input args and compresses output keyed by workDir', async () => {
+    it('resolves input args and leaves output uncompressed (full text in #output)', async () => {
       const ctx = makeCtx();
       const toolCall = createToolCall(makeMockTool(), ctx);
       await collect(toolCall.execute());
       expect(ctx.cache.resolve).toHaveBeenCalledWith('/tmp/workdir', {
         input: 'test',
       });
-      expect(ctx.cache.compress).toHaveBeenCalledWith(
-        '/tmp/workdir',
-        'tool output',
-        undefined,
-      );
+      // tool-call 层不再 compress：#output 留全文（事件/DB/前端真相），
+      // 给 LLM 的 messages 由 post-observation offload-hook 预算化桩化。
+      expect(ctx.cache.compress).not.toHaveBeenCalled();
     });
 
     it('yields tool_call then tool_result on success', async () => {

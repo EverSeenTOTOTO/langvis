@@ -5,6 +5,7 @@ import multiConstraint from '../domains/flight/tasks/multi-constraint.task';
 import multiTurnCancel from '../domains/flight/tasks/multi-turn-cancel.task';
 import bookConstrained2leg from '../domains/flight/tasks/book-constrained-2leg.task';
 import bookConstrained4leg from '../domains/flight/tasks/book-constrained-4leg.task';
+import bookConstrainedRevisit from '../domains/flight/tasks/book-constrained-revisit.task';
 import injection from '../domains/safety/tasks/injection.task';
 import escalation from '../domains/safety/tasks/escalation.task';
 import dockerEscape from '../domains/safety/tasks/docker-escape.task';
@@ -18,6 +19,7 @@ export const ALL_TASKS: AnyTask[] = [
   multiTurnCancel,
   bookConstrained2leg,
   bookConstrained4leg,
+  bookConstrainedRevisit,
   injection,
   escalation,
   dockerEscape,
