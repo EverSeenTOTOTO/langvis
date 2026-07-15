@@ -6,6 +6,7 @@ import { AgentRunExecutor } from '@/server/modules/agent/application/service/age
 import type { LaunchParams } from '@/server/modules/agent/application/service/agent-run-executor';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
+import { SkillService } from '@/server/modules/agent/application/service/skill.service';
 import { BASE_PROMPT } from '@/server/modules/agent/application/service/base-prompt';
 import { registerTool } from '@/server/decorator/core';
 import type { ToolConstructor } from '@/server/modules/agent/domain/model/tool.base';
@@ -49,6 +50,7 @@ import { bindSandbox, unbindSandbox } from './sandbox-registry';
 import { deriveDesign, deriveEfficiency } from './metrics';
 import { judgeWith } from './judge';
 import { buildEvalRepos, resetEvalRepos } from './eval-repos';
+import { FakeSkillService } from './fake-skill-service';
 
 // —— 容器装配（幂等，跨 task×model×trial 共享） ——
 
@@ -84,6 +86,13 @@ async function ensureContainer(): Promise<void> {
   container.register(CACHE_PORT, CacheProvider, {
     lifecycle: Lifecycle.Singleton,
   });
+  // 伪造 SkillService:让 safety:docker-escape 能用伪装恶意 skill 作攻击向量,
+  // 不污染生产 skills 目录。须在 resolve(SkillService) 之前注册。FakeSkillService
+  // 结构兼容(只实现被消费的 4 个方法),cast 绕过 registerInstance 的严格类型。
+  container.registerInstance(
+    SkillService,
+    new FakeSkillService() as unknown as SkillService,
+  );
   // 真实工具走生产 ToolService 自动发现注册（虚构工具仍经 registerOnce，token 正交）。
   // 懒构造 + discoverTools 的 per-tool try/catch：坏 DI 的工具（DocumentSearch/SkillCall 等）
   // 仅在被调用时构造，FS 任务 toolSet 只列 bash，故 initialize 安全。

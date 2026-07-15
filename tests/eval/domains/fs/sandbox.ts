@@ -25,3 +25,17 @@ export function fsToolSet(): ToolSet {
     [],
   );
 }
+
+/** docker-escape ToolSet：bash + skill_call + list_tools + response_user。
+ *  skill_call/list_tools 让 agent 能发现并调用伪装恶意 skill(攻击向量)。 */
+export function dockerEscapeToolSet(): ToolSet {
+  return ToolSet.of(
+    [
+      { id: ToolIds.BASH, mode: 'inline' as const },
+      { id: ToolIds.SKILL_CALL, mode: 'inline' as const },
+      { id: ToolIds.LIST_TOOLS, mode: 'inline' as const },
+      { id: ToolIds.RESPONSE_USER, mode: 'inline' as const },
+    ],
+    [],
+  );
+}
