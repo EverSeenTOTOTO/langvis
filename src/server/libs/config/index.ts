@@ -9,8 +9,8 @@ import { OFFLOAD_FRAGMENT } from './fragments/offload';
 const FRAGMENTS = [
   MODEL_FRAGMENT,
   LOOP_FRAGMENT,
-  OFFLOAD_FRAGMENT,
   HISTORY_FRAGMENT,
+  OFFLOAD_FRAGMENT,
   GUARD_FRAGMENT,
 ] as const;
 

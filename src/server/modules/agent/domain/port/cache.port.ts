@@ -1,9 +1,6 @@
 /**
- * CachePort —— 工具 I/O 压缩/缓存契约（消费者拥有端口，agent 实现并经 CACHE_SERVICE 注入）。
+ * CachePort —— 工具 I/O 落盘/缓存契约（消费者拥有端口，agent 实现并经 CACHE_SERVICE 注入）。
  */
-
-/** 'file' 写入 workspace 临时文件；'skip' 原样返回。 */
-export type CompressionStrategy = 'skip' | 'file';
 
 /** 大内容被替换为此引用对象；cached_read 按 $cached 取回，整体传递时自动解析。 */
 export interface CachedReference {
@@ -26,12 +23,6 @@ export function isCachedReference(value: unknown): value is CachedReference {
 
 export interface CachePort {
   resolve(workDir: string, value: unknown): Promise<unknown>;
-  compress(
-    workDir: string,
-    value: unknown,
-    strategy?: CompressionStrategy,
-    hint?: string,
-  ): Promise<unknown>;
   readFile(
     workDir: string,
     filename: string,
@@ -39,9 +30,9 @@ export interface CachePort {
     limit?: number,
   ): Promise<string | Record<string, unknown>>;
   /**
-   * 始终写盘返桩（force），与 compress（按阈值/strategy 决定压不压）的区别在此。
-   * 预算化 offload（post-observation hook）用它把老 Observation 载荷无损落盘。
-   * hint 进文件名 + $label，让 LLM 凭桩即知内容、用 rg/cached_read 检索。
+   * 始终写盘返桩（force）。预算化 offload（pre-LLM hook）用它把大 user 消息载荷
+   * （Observation 或裸 user，如 email 正文）无损落盘。hint 进文件名 + $label，让 LLM
+   * 凭桩即知内容、用 rg/cached_read 检索。
    */
   offload(
     workDir: string,

@@ -34,19 +34,21 @@ async function collect(
   return { events, ret };
 }
 
-/** big body — 长于 MIN_BODY_TO_OFFLOAD(256) 才会被桩。 */
-const BIG_BODY = 'x'.repeat(600);
+/** big body — 长于 MIN_BODY_TO_OFFLOAD(512) 才会被桩。 */
+const BIG_BODY = 'x'.repeat(800);
 
 function makeCtx(
   messages: LlmMessage[],
-  opts: { offload: OffloadConfig | undefined },
+  opts: {
+    offload: OffloadConfig | undefined;
+    base?: number;
+  },
 ): AgentRunContext {
   const cache: CachePort = {
     resolve: vi.fn(async (_w: string, v: unknown) => v),
-    compress: vi.fn(async (_w: string, v: unknown) => v),
     readFile: vi.fn(),
     offload: vi.fn(async (_w: string, _v: unknown, hint?: string) => ({
-      $cached: hint ? 'sem__fc_test' : 'fc_test',
+      $cached: hint ? `sem__fc_test` : 'fc_test',
       $size: 600,
       $preview: '',
       ...(hint ? { $label: hint } : {}),
@@ -62,7 +64,7 @@ function makeCtx(
   return {
     runId: 'run_test',
     workDir: '/tmp/workdir',
-    base: 0,
+    base: opts.base ?? 0,
     messages: ListMonad.of<LlmMessage>(messages),
     config,
     cache,
@@ -78,11 +80,18 @@ function makeHook(contextSize: number): OffloadHook {
 function obs(body: string): LlmMessage {
   return { role: 'user', content: `Observation: ${body}` };
 }
+function userMsg(body: string): LlmMessage {
+  return { role: 'user', content: body };
+}
 function assistant(tool: string, input: Record<string, unknown>): LlmMessage {
   return { role: 'assistant', content: JSON.stringify({ tool, input }) };
 }
+/** seed 系统消息（只占位，不会被桩：role 非 user）。 */
+function sys(body: string): LlmMessage {
+  return { role: 'system', content: body };
+}
 
-describe('OffloadHook（预算化无损 LRU 桩化）', () => {
+describe('OffloadHook（pre-LLM 预算化两阶段无损桩化）', () => {
   it('offload fragment 缺失 → next，不动 messages', async () => {
     tokenSeq.values = [10_000];
     tokenSeq.n = 0;
@@ -104,13 +113,11 @@ describe('OffloadHook（预算化无损 LRU 桩化）', () => {
     const { events, ret } = await collect(makeHook(8192).apply(ctx));
     expect(ret).toBe('next');
     expect(events).toHaveLength(0);
-    const first = ctx.messages.get(0)!;
-    expect(first.content).toBe(`Observation: ${BIG_BODY}`);
+    expect(ctx.messages.get(0)!.content).toBe(`Observation: ${BIG_BODY}`);
   });
 
   it('超阈值 → 桩化最老 Observation，桩文本含文件名 + rg/cached_read 提示', async () => {
     // contextSize=8192, threshold 0.8 → 触发线 6553；hardCap=8192-512=7680
-    // 3 条消息、keepRecent=1 → upperBound=2，obs(index1) 可桩；index2(a) 保护。
     // token 序列：先超(8000)、桩后回到线下(5000)
     tokenSeq.values = [8000, 5000];
     tokenSeq.n = 0;
@@ -118,9 +125,8 @@ describe('OffloadHook（预算化无损 LRU 桩化）', () => {
       [
         assistant('search_flights', { origin: 'PEK', dest: 'SHA' }), // 0
         obs(BIG_BODY), // 1 — 可桩
-        assistant('book', { id: 'f1' }), // 2 — keepRecent 保护
       ],
-      { offload: { threshold: 0.8, keepRecent: 1, responseReserve: 512 } },
+      { offload: { threshold: 0.8, keepRecent: 4, responseReserve: 512 } },
     );
     const { events, ret } = await collect(makeHook(8192).apply(ctx));
     expect(ret).toBe('next');
@@ -128,39 +134,114 @@ describe('OffloadHook（预算化无损 LRU 桩化）', () => {
     expect(events[0]).toMatchObject({ type: 'hook', hookId: 'offload' });
     const offloaded = ctx.messages.get(1)!;
     expect(offloaded.content).toContain('[offloaded to file');
-    expect(offloaded.content).toContain('rg "<pattern>"');
-    expect(offloaded.content).toContain('cached_read(key=');
+    // 固化具体首块 offset/limit（非抽象占位）——根治裸读全文套娃
+    expect(offloaded.content).toContain(
+      'cached_read(key="sem__fc_test", offset=0, limit=2000)',
+    );
+    expect(offloaded.content).toContain('~1 chunks of 2000B'); // mock $size=600 → ceil=1
     expect(offloaded.content).toContain('search_flights'); // hint 含 tool
+    expect(offloaded.content).toMatch(/^Observation: /); // 前缀保留
     // assistant 消息未被桩
     expect(ctx.messages.get(0)!.content).toContain('search_flights');
-    expect(ctx.messages.get(2)!.content).toContain('"id":"f1"');
   });
 
-  it('LRU：最近 keepRecent 条消息不被桩（即使持续超阈）', async () => {
-    // base=0, keepRecent=2 → 可桩区 [0, length-2)=[0,4)：index1,3 可桩；
-    // index4(assistant)跳过、index5(obs)在保护段 ≥ upperBound=4 不桩。
-    // token 持续超阈，逼 hook 把可桩的全桩完后在保护边界停下。
-    tokenSeq.values = [8000, 8000, 8000, 5000];
+  it('桩固化块数随 $size 增长（大文件多块提示）', async () => {
+    tokenSeq.values = [9000, 5000];
+    tokenSeq.n = 0;
+    const ctx = makeCtx([obs(BIG_BODY)], {
+      offload: { threshold: 0.8, keepRecent: 4, responseReserve: 512 },
+    });
+    // 覆盖 mock：模拟 45230B 的大文件（如 PDF 提取）→ ceil(45230/2000)=23 块
+    (ctx.cache.offload as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      $cached: 'sem__fc_test',
+      $size: 45230,
+      $preview: '',
+      $label: 'pdf-extract',
+    });
+    await collect(makeHook(8192).apply(ctx));
+    const stub = ctx.messages.get(0)!.content;
+    expect(stub).toContain('~23 chunks of 2000B');
+    expect(stub).toContain('offset=0, limit=2000');
+  });
+
+  it('两阶段：阶段 A 只桩 [base,len)，seed [0,base) 字节不变（保前缀缓存）', async () => {
+    // base=1（seed 是 sys 在 index0），loop 区 [1,len) 有两条 obs。
+    // 持续超阈但可桩区够（两 obs 够桩），应在阶段 A 停下、不回溯 seed。
+    tokenSeq.values = [9000, 9000, 5000];
+    tokenSeq.n = 0;
+    const seed = sys('SEED PREFIX'); // index 0 — base
+    const ctx = makeCtx(
+      [seed, obs(BIG_BODY), obs(BIG_BODY)], // loop obs @ 1, 2
+      {
+        offload: { threshold: 0.8, keepRecent: 4, responseReserve: 512 },
+        base: 1,
+      },
+    );
+    const { events } = await collect(makeHook(8192).apply(ctx));
+    expect(events).toHaveLength(1);
+    // seed 完好（前缀缓存保护）
+    expect(ctx.messages.get(0)!.content).toBe('SEED PREFIX');
+    expect(ctx.messages.get(1)!.content).toContain('[offloaded to file');
+    expect(ctx.messages.get(2)!.content).toContain('[offloaded to file');
+  });
+
+  it('两阶段：阶段 A 耗尽仍超 hardCap → 回溯桩 seed（溢出兜底，email 场景）', async () => {
+    // 单条超长裸 user 消息（email 正文）在 seed 内（index0, base=1）。
+    // loop 区无可桩 → 阶段 A 不动 → 仍超 → 阶段 B 回溯桩 seed。
+    tokenSeq.values = [9000, 5000];
+    tokenSeq.n = 0;
+    const emailBody =
+      '/document_archive 归档邮件：标题\n\n发件人：a@b\n发件时间：2026\n\n内容：\n' +
+      'x'.repeat(2000);
+    const ctx = makeCtx([userMsg(emailBody)], {
+      offload: { threshold: 0.8, keepRecent: 4, responseReserve: 512 },
+      base: 1,
+    });
+    const { events } = await collect(makeHook(8192).apply(ctx));
+    expect(events).toHaveLength(1);
+    const stub = ctx.messages.get(0)!.content;
+    expect(stub).toContain('[offloaded to file');
+    expect(stub).toContain('offset=0, limit=2000'); // 固化具体首块
+    // HEAD_KEEP 保住 email 指令 + 元信息（skill 触发不丢）
+    expect(stub).toContain('/document_archive');
+    expect(stub).toContain('发件人');
+    // 原 2000+ 字正文已不在消息里
+    expect(stub).not.toContain('x'.repeat(1000));
+  });
+
+  it('裸 user 消息（无 Observation 前缀）超阈被桩', async () => {
+    tokenSeq.values = [9000, 5000];
+    tokenSeq.n = 0;
+    const ctx = makeCtx([userMsg(BIG_BODY)], {
+      offload: { threshold: 0.8, keepRecent: 4, responseReserve: 512 },
+    });
+    const { events } = await collect(makeHook(8192).apply(ctx));
+    expect(events).toHaveLength(1);
+    const stub = ctx.messages.get(0)!.content;
+    expect(stub).toContain('[offloaded to file');
+    // 裸 user 不带 Observation 前缀
+    expect(stub.startsWith('Observation: ')).toBe(false);
+    // hint 取正文首行（'x'.repeat(800) 整行）规整作 label
+    expect(ctx.cache.offload).toHaveBeenCalled();
+  });
+
+  it('keepRecent 软偏好：耗尽优选区仍超 → 突破 recent 桩保护段', async () => {
+    // 4 条 obs、keepRecent=2。token 持续超阈逼到全桩。
+    // oldest-first 先桩 0,1；耗尽仍超 → 推到 2,3（保护段）继续桩。
+    tokenSeq.values = [9000, 9000, 9000, 9000, 5000];
     tokenSeq.n = 0;
     const ctx = makeCtx(
-      [
-        assistant('search', { q: 'old' }), // 0
-        obs(BIG_BODY), // 1 — 可桩
-        assistant('search', { q: 'mid' }), // 2
-        obs(BIG_BODY), // 3 — 可桩
-        assistant('search', { q: 'new' }), // 4 — keepRecent 保护（≥upperBound）
-        obs(BIG_BODY), // 5 — keepRecent 保护（≥upperBound）
-      ],
+      [obs(BIG_BODY), obs(BIG_BODY), obs(BIG_BODY), obs(BIG_BODY)],
       { offload: { threshold: 0.8, keepRecent: 2, responseReserve: 512 } },
     );
     await collect(makeHook(8192).apply(ctx));
-    expect(ctx.messages.get(1)!.content).toContain('[offloaded to file'); // 老 obs 被桩
-    expect(ctx.messages.get(3)!.content).toContain('[offloaded to file'); // 中 obs 被桩
-    expect(ctx.messages.get(5)!.content).toBe(`Observation: ${BIG_BODY}`); // 保护段未桩
-    expect(ctx.messages.get(4)!.content).toContain('"q":"new"'); // assistant 未被碰
+    expect(ctx.messages.get(0)!.content).toContain('[offloaded to file');
+    expect(ctx.messages.get(1)!.content).toContain('[offloaded to file');
+    // keepRecent 保护段在耗尽优选区仍超时被突破（软偏好）
+    expect(ctx.messages.get(3)!.content).toContain('[offloaded to file');
   });
 
-  it('已桩化的 Observation 不重复桩（含 [offloaded to file 标记跳过）', async () => {
+  it('已桩化的消息不重复桩（含 [offloaded to file 标记跳过）', async () => {
     tokenSeq.values = [8000, 8000, 5000];
     tokenSeq.n = 0;
     const alreadyOffloaded = '[offloaded to file fc_old] size=600B.';
@@ -175,20 +256,15 @@ describe('OffloadHook（预算化无损 LRU 桩化）', () => {
     );
     const { events } = await collect(makeHook(8192).apply(ctx));
     expect(events).toHaveLength(1); // 只桩了 index3 一条
-    // index 1 仍是原已桩内容（未被再处理）
     expect(ctx.messages.get(1)!.content).toContain('fc_old');
     expect(ctx.messages.get(3)!.content).toContain('[offloaded to file');
   });
 
-  it('小正文不桩（短于阈值跳过，即使超阈且在可桩区）', async () => {
+  it('小正文不桩（短于 MIN 跳过，即使超阈且在可桩区）', async () => {
     tokenSeq.values = [8000];
     tokenSeq.n = 0;
     const ctx = makeCtx(
-      [
-        assistant('search', { q: 'tiny' }),
-        obs('small result'), // 在可桩区(index1)但正文太短 → 跳过
-        assistant('book', { id: 'f1' }),
-      ],
+      [assistant('search', { q: 'tiny' }), obs('small result')],
       { offload: { threshold: 0.8, keepRecent: 1, responseReserve: 512 } },
     );
     const { events, ret } = await collect(makeHook(8192).apply(ctx));

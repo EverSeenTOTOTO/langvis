@@ -7,36 +7,15 @@ import {
   isCachedReference,
   type CachePort,
   type CachedReference,
-  type CompressionStrategy,
 } from '@/server/modules/agent/domain/port/cache.port';
 
 /*
- * Keep LLM context under STRING_THRESHOLD while preserving array/object shape
- * (counts, indices, small metadata) for LLM reasoning without cache reads.
- *
- * Dynamic threshold: childThreshold = max(min(parentThreshold, STRING_THRESHOLD/N), MIN_ITEM_THRESHOLD)
- *   - STRING_THRESHOLD/N: per-item budget so N items × budget ≈ STRING_THRESHOLD
- *   - min(parentThreshold): child may tighten but never loosen the parent budget
- *   - MIN_ITEM_THRESHOLD floor (2× standard ref size) avoids compressing strings
- *     so short the CachedReference would be larger than the original
- *
- * Arrays have a whole-compress fallback when recursive compression still exceeds
- * STRING_THRESHOLD; objects do not (rarely exceed after field-level compression).
- * resolve() first expands the outer ref, then recursively resolves inner ones.
+ * CachePort 实现。落盘入口只有 offload（pre-LLM 预算化 hook 用）：始终写盘返 CachedReference，
+ * 文件名带语义 hint。resolve 把 $cached 引用（含嵌套）展开回原值；readFile 支持分页读。
  */
 
-export const STRING_THRESHOLD = 20000;
-
-// 同时决定 CachedReference 的 preview 长度：更短→更小 ref→更低 floor→更多 item 可见。
+// $preview 长度：桩里露的预览，供 LLM 不读正文即判断该不该 page-in。
 export const PREVIEW_LENGTH = 100;
-
-// CachedReference 固定 JSON 开销（{"$cached":"fc_16","$size":5位,"$preview":"..."}，不含 preview）。
-const CACHED_REF_FIXED_OVERHEAD = 55;
-export const CACHED_REF_STANDARD_SIZE =
-  CACHED_REF_FIXED_OVERHEAD + PREVIEW_LENGTH;
-
-// 下限 = 2× 标准 ref 大小——只压缩明显大于 ref 本身的串，确保压缩总省上下文。
-export const MIN_ITEM_THRESHOLD = CACHED_REF_STANDARD_SIZE * 2;
 
 /**
  * 把语义 hint（tool + 关键入参）规整为文件名安全段：小写、非 [a-z0-9] 替 -、
@@ -58,62 +37,6 @@ export class CacheProvider implements CachePort {
     private readonly workspaceService: WorkspaceService,
   ) {}
 
-  async compress(
-    workDir: string,
-    value: unknown,
-    strategy: CompressionStrategy = 'file',
-    hint?: string,
-    parentThreshold = STRING_THRESHOLD,
-  ): Promise<unknown> {
-    if (strategy === 'skip') {
-      return value;
-    }
-
-    const threshold = parentThreshold;
-
-    if (typeof value === 'string' && value.length > threshold) {
-      return this.storeSerialized(workDir, value, hint);
-    }
-
-    if (Array.isArray(value)) {
-      const childThreshold = this.computeChildThreshold(
-        value.length,
-        threshold,
-      );
-      const result = await Promise.all(
-        value.map(item =>
-          this.compress(workDir, item, strategy, hint, childThreshold),
-        ),
-      );
-      const serialized = JSON.stringify(result);
-      if (serialized.length > STRING_THRESHOLD) {
-        return this.storeSerialized(workDir, serialized, hint);
-      }
-      return result;
-    }
-
-    if (value && typeof value === 'object' && !isCachedReference(value)) {
-      const entries = Object.entries(value);
-      const childThreshold = this.computeChildThreshold(
-        entries.length,
-        threshold,
-      );
-      const result: Record<string, unknown> = {};
-      for (const [key, val] of entries) {
-        result[key] = await this.compress(
-          workDir,
-          val,
-          strategy,
-          hint,
-          childThreshold,
-        );
-      }
-      return result;
-    }
-
-    return value;
-  }
-
   async offload(
     workDir: string,
     value: unknown,
@@ -127,8 +50,8 @@ export class CacheProvider implements CachePort {
   async resolve(workDir: string, value: unknown): Promise<unknown> {
     if (isCachedReference(value)) {
       const expanded = await this.expandCached(workDir, value.$cached);
-      // Expanded result may contain nested CachedReferences (e.g. whole-compressed
-      // array whose items still have $cached fields) — resolve recursively
+      // Expanded result may contain nested CachedReferences (e.g. an array whole-
+      // cached whose items still have $cached fields) — resolve recursively.
       return this.resolve(workDir, expanded);
     }
 
@@ -172,23 +95,13 @@ export class CacheProvider implements CachePort {
     }
   }
 
-  private computeChildThreshold(
-    childCount: number,
-    parentThreshold: number,
-  ): number {
-    return Math.max(
-      Math.min(parentThreshold, STRING_THRESHOLD / childCount),
-      MIN_ITEM_THRESHOLD,
-    );
-  }
-
   private async storeSerialized(
     workDir: string,
     serialized: string,
     hint?: string,
   ): Promise<CachedReference> {
     const sanitized = sanitizeHint(hint);
-    // 无 hint 退 fc_<id>（保 /­^fc_­/ 既有契约）；有 hint 前置语义段 + '__fc_' 分隔。
+    // 无 hint 退 fc_<id>（保 /^fc_/ 既有契约）；有 hint 前置语义段 + '__fc_' 分隔。
     const id = generateId('fc');
     const filename = sanitized ? `${sanitized}__${id}` : id;
     const filePath = path.join(workDir, filename);
