@@ -30,13 +30,13 @@ export default class CachedReadTool extends Tool<CachedReadOutput> {
   async *call(
     ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, CachedReadOutput, void> {
-    const readCacheInput = ctx.input as unknown as CachedReadInput;
+    const { key, offset, limit } = ctx.input as unknown as CachedReadInput;
 
     const result = await this.cacheService.readFile(
       ctx.workDir,
-      readCacheInput.key,
-      readCacheInput.offset,
-      readCacheInput.limit,
+      key,
+      offset,
+      limit,
     );
 
     if (typeof result === 'string') {
@@ -51,6 +51,18 @@ export default class CachedReadTool extends Tool<CachedReadOutput> {
         callId: ctx.callId,
         data: { type: 'object' },
       };
+    }
+
+    // 分页读（带 limit）：尾追续读页脚，把下一块的具体 offset 喂给模型——线性推进而非重读首块。
+    // 裸读（无 limit）返全文，不追加（全文已在手）。防 offload↔cached_read 页抖动。
+    if (
+      typeof result === 'string' &&
+      typeof limit === 'number' &&
+      limit > 0 &&
+      result.length >= limit
+    ) {
+      const nextOffset = (offset ?? 0) + limit;
+      return `${result}\n\n[read offset=${offset ?? 0} limit=${limit}; continue with cached_read(key="${key}", offset=${nextOffset}, limit=${limit})]`;
     }
 
     return result;

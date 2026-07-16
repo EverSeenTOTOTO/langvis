@@ -32,7 +32,6 @@ export const config: ToolConfig<SkillCallInput, SkillCallOutput> = {
     },
     required: ['content'],
   },
-  compression: 'skip',
 };
 
 export const id = ToolIds.SKILL_CALL;

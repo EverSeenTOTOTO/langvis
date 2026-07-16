@@ -38,7 +38,6 @@ export const config: ToolConfig<ListToolsInput, ListToolsOutput> = {
     },
     required: ['tools'],
   } as any,
-  compression: 'skip',
 };
 
 export const id = ToolIds.LIST_TOOLS;

@@ -2,9 +2,11 @@ import type { JSONSchemaType } from 'ajv';
 import type { ConfigFragment } from '../config-fragment';
 
 /**
- * pre-LLM 预算化无损落盘（offload）。post-observation hook 读此 fragment：
- * 超阈值时把最老的未桩化 Observation 载荷写盘、消息正文换桩（无损，可 cached_read/rg 取回），
- * 与 loop（有损 fold）正交——offload 先跑（import 序在前），无损优先于有损。省略即关。
+ * pre-LLM 预算化无损落盘（offload）。每次 LLM 调用前测 token：
+ * 超阈值时把最老的 user 消息载荷（Observation 或裸 user，如 email 正文）写盘、换桩，
+ * 直到回 hardCap 内或无可桩。两阶段范围：A 阶段先桩 [base,len)（保供应商前缀缓存），
+ * 耗尽仍超才 B 阶段回溯 [0,base) seed（溢出兜底）。keepRecent 为软偏好（非硬地板）。
+ * 与 loop（有损 fold）相位分离：offload=pre-llm，compaction=post-observation。省略即关。
  */
 export interface OffloadConfig {
   threshold: number;
@@ -37,7 +39,8 @@ export const OFFLOAD_FRAGMENT: ConfigFragment<'offload', OffloadConfig> = {
         default: 4,
         minimum: 0,
         nullable: true,
-        description: '不桩化的近期 Observation 条数（LRU 保护最近）',
+        description:
+          '软偏好——耗尽优选区仍超 hardCap 才推到最近 N 条（非硬地板）',
       },
       responseReserve: {
         type: 'integer',

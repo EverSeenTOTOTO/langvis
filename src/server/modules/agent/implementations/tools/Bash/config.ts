@@ -17,7 +17,6 @@ export const config: ToolConfig<BashInput, BashOutput> = {
   name: 'bash',
   description:
     'Execute a shell command in the workspace directory. Requires user confirmation before execution. Prefer modern CLI tools: use `rg` instead of `grep`, `fd` instead of `find`, `lsd` instead of `ls`, `bat` instead of `cat`. In production, commands run inside an isolated Docker sandbox (no network, resource-limited); in development they execute directly on the host.',
-  compression: 'file',
   untrustedOutput: true,
   inputSchema: {
     type: 'object',

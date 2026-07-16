@@ -58,7 +58,7 @@ export const VARIANTS: readonly Variant[] = [
   {
     id: 'offload-only',
     description:
-      '关 fold（loop/history），开 offload：纯无损落盘（桩化老 obs 到盘，cached_read/rg 取回）',
+      '关 fold（loop/history），开 offload：纯无损落盘（pre-LLM 桩化大 user 消息到盘，cached_read/rg 取回）',
     apply: base => {
       const { loop: _l, history: _h, ...rest } = base;
       return {
@@ -70,7 +70,7 @@ export const VARIANTS: readonly Variant[] = [
   {
     id: 'hybrid',
     description:
-      'loop fold + offload 都开：有损摘要 + 无损落盘叠加（offload 先于 fold 跑）',
+      'loop fold + offload 都开：post-observation 有损摘要 + pre-LLM 无损落盘（相位分离，不再争序）',
     apply: base => ({
       ...base,
       offload: { threshold: 0.8, keepRecent: 4, responseReserve: 512 },
