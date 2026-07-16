@@ -1,4 +1,3 @@
-import { injectable } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type {
   Hook,
@@ -21,7 +20,6 @@ const ITER_CAP_MESSAGE =
  * 与 StuckHook 互补：StuckHook 抓"原地空转"（每 tick 便宜但无限），
  * MaxIterationsHook 抓"稳步推进但过长"（合法但超预算）。
  */
-@injectable()
 @agentHook
 export class MaxIterationsHook implements Hook {
   readonly id = 'max-iterations';

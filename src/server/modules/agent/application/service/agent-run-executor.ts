@@ -123,7 +123,6 @@ export class AgentRunExecutor {
       },
       startedAt: new Date(),
       completedAt: null,
-      processSummary: null,
     });
     this.activeRuns.set(run.runId, run);
 
@@ -135,7 +134,6 @@ export class AgentRunExecutor {
         events: [...run.eventStream],
         status: run.currentStatus,
         completedAt: new Date(),
-        processSummary: run.processSummary,
       });
     }
   }
@@ -194,7 +192,7 @@ export class AgentRunExecutor {
   }
 }
 
-/** assistant 文本 → response_user JSON；msg.summary 注入为 thought。 */
+/** assistant 文本 → response_user JSON；LlmMessage.summary（源自 message.meta.summary）注入为 thought。 */
 export function restoreReactMessage(m: LlmMessage): LlmMessage {
   return m.role === 'assistant'
     ? {

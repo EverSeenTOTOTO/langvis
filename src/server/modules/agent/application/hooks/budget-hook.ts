@@ -1,4 +1,3 @@
-import { injectable } from 'tsyringe';
 import { ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
@@ -25,7 +24,6 @@ const budgetMessage = (used: number, budget: number) =>
  * 状态内聚在实例字段而非 ctx：hook 为 per-run 实例（见 registry），consumed 天然随 run 生灭，
  * 不污染 ctx、且杜绝跨 run 共享可变字段的并发污染。
  */
-@injectable()
 @agentHook
 export class BudgetHook implements Hook {
   readonly id = 'token-budget';

@@ -41,7 +41,7 @@ export class AgentRunHandler {
     } = event.payload;
     const runId = generateId('run');
     const workDir = await this.workspaceService.getWorkDir(conversationId);
-    // effectiveHistory 即 agent 种子（ReAct 还原 + processSummary→thought 注入在 createRun）；取 conv 默认 ToolSet（全集）。
+    // effectiveHistory 即 agent 种子（ReAct 还原 + meta.summary→thought 注入在 createRun 的 restoreReactMessage）；取 conv 默认 ToolSet（全集）。
     const toolSet = this.agentService.buildToolSet();
 
     this.eventBus.dispatch(

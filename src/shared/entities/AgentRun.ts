@@ -34,8 +34,4 @@ export class AgentRunEntity implements AgentRunType {
 
   @Column({ type: 'timestamp', nullable: true })
   completedAt!: Date | null;
-
-  /** loop 退出折叠的过程摘要；挂 msg.summary 透传至 agent 种子作 thought。 */
-  @Column({ type: 'text', nullable: true })
-  processSummary!: string | null;
 }

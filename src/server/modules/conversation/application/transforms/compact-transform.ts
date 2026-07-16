@@ -1,4 +1,4 @@
-import { singleton, inject } from 'tsyringe';
+import { inject } from 'tsyringe';
 import { Role } from '@/shared/entities/Message';
 import { MESSAGE_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
@@ -30,7 +30,6 @@ const HISTORY_PROMPT = Prompt.empty()
     'Output the summary directly (no extra explanation, no Markdown headings).',
   );
 
-@singleton()
 @convTransform
 export class CompactTransform implements ConvTransform {
   readonly id = 'compact';

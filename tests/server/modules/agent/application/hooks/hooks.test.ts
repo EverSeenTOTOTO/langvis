@@ -2,7 +2,6 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { container } from 'tsyringe';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
 import { CompactionHook } from '@/server/modules/agent/application/hooks/compaction-hook';
-import { ProcessSummaryHook } from '@/server/modules/agent/application/hooks/process-summary-hook';
 import { LoopUsageHook } from '@/server/modules/agent/application/hooks/loop-usage-hook';
 import { BudgetHook } from '@/server/modules/agent/application/hooks/budget-hook';
 import { StuckHook } from '@/server/modules/agent/application/hooks/stuck-hook';
@@ -66,10 +65,9 @@ function makeCtx(opts: {
 }
 
 describe('agent hook registry（自动识别 + per-run 实例）', () => {
-  it('resolveAgentHooks 发现 @agentHook 标记的六个 hook', () => {
+  it('resolveAgentHooks 发现 @agentHook 标记的五个 hook', () => {
     const hooks = resolveAgentHooks();
     expect(hooks.some(h => h instanceof CompactionHook)).toBe(true);
-    expect(hooks.some(h => h instanceof ProcessSummaryHook)).toBe(true);
     expect(hooks.some(h => h instanceof LoopUsageHook)).toBe(true);
     expect(hooks.some(h => h instanceof BudgetHook)).toBe(true);
     expect(hooks.some(h => h instanceof StuckHook)).toBe(true);
@@ -157,57 +155,6 @@ describe('CompactionHook（自持压缩逻辑，经 ctx.messages 读写缝）', 
     );
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(before);
-  });
-});
-
-describe('ProcessSummaryHook（loop-exit 生产者：fold → run.processSummary）', () => {
-  afterEach(() => {
-    container.clearInstances();
-  });
-
-  it('loop 动作 ≤1 时跳过（trivial turn），不动 run.processSummary', async () => {
-    const llm = mockLlm('SHOULD NOT BE CALLED');
-    const { ctx } = makeCtx({
-      seed: [{ role: 'system', content: 'sys' }],
-      loopSteps: ['direct answer'], // 1 个 loop 动作
-      llm,
-    });
-    const events = await collect(new ProcessSummaryHook().apply(ctx));
-    expect(events).toHaveLength(0);
-    expect(ctx.run.processSummary).toBeNull();
-    expect(llm.chatContent).not.toHaveBeenCalled();
-  });
-
-  it('loop 动作 >1 时折叠并写 run.processSummary', async () => {
-    const { ctx } = makeCtx({
-      seed: [{ role: 'system', content: 'sys' }],
-      loopSteps: ['thought+action', 'observation', 'final'],
-      llm: mockLlm('THE SUMMARY'),
-    });
-    const events = await collect(new ProcessSummaryHook().apply(ctx));
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
-      type: 'hook',
-      hookId: 'process-summary',
-    });
-    expect(ctx.run.processSummary).toBe('THE SUMMARY');
-  });
-
-  it('折叠异常时无事件、不写 run.processSummary', async () => {
-    const llm = {
-      getDefaultModel: () => undefined,
-      chatContent: vi.fn(async () => {
-        throw new Error('boom');
-      }),
-    } as unknown as LlmProvider;
-    const { ctx } = makeCtx({
-      seed: [{ role: 'system', content: 'sys' }],
-      loopSteps: ['a', 'b'],
-      llm,
-    });
-    const events = await collect(new ProcessSummaryHook().apply(ctx));
-    expect(events).toHaveLength(0);
-    expect(ctx.run.processSummary).toBeNull();
   });
 });
 

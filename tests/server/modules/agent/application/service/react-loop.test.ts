@@ -331,8 +331,8 @@ describe('runReactLoop', () => {
       expect(calls).toHaveLength(1);
     });
 
-    it('a multi-step run (2 tools then response_user) folds a process_summary', async () => {
-      const { ctx, run, calls, runTool } = buildCtx({
+    it('a multi-step run (2 tools then response_user) terminates cleanly', async () => {
+      const { ctx, calls, runTool } = buildCtx({
         responses: [call('t1'), call('t2'), responseUser('done')],
         handler: okHandler,
       });
@@ -341,7 +341,6 @@ describe('runReactLoop', () => {
 
       expect(events.filter(e => e.type === 'tool_call')).toHaveLength(3);
       expect(events.filter(e => e.type === 'loop_usage')).toHaveLength(2);
-      expect(run.processSummary).toBe(SUMMARY_STUB);
       expect(calls).toHaveLength(3);
     });
   });
@@ -545,27 +544,9 @@ describe('runReactLoop', () => {
   });
 
   describe('ProcessSummary', () => {
-    it('folds a process summary on multi-step terminal (writes run.processSummary)', async () => {
-      const { ctx, run, runTool } = buildCtx({
-        responses: [call('t1'), call('t2'), responseUser('done')],
-        handler: okHandler,
-      });
-
-      await collect(runReactLoop(ctx, runTool));
-
-      expect(run.processSummary).toBe(SUMMARY_STUB);
-    });
-
-    it('does not fold a process summary on a single-action terminal', async () => {
-      const { ctx, run, runTool } = buildCtx({
-        responses: [responseUser('hi')],
-        handler: okHandler,
-      });
-
-      await collect(runReactLoop(ctx, runTool));
-
-      expect(run.processSummary).toBeNull();
-    });
+    // process-summary 折叠已迁至 conv 侧 ProcessSummaryTransform（turn-end）；
+    // react-loop 不再在 loop-exit 折叠 processSummary。相关断言见 conv transform 测试。
+    it.todo('（已迁出）process-summary 不再在 react-loop 内折叠');
   });
 
   describe('HookPipeline', () => {

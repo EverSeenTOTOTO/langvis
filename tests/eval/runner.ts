@@ -18,7 +18,6 @@ import {
   CACHE_PORT,
 } from '@/server/modules/agent/agent.di-tokens';
 import { CacheProvider } from '@/server/modules/agent/infrastructure/cache.provider';
-import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { generateId } from '@/shared/utils';
@@ -281,12 +280,12 @@ function assistantContent(events: readonly EnrichedEvent[]): string {
  *
  * 每轮：
  *   ctx.messages.append(userMsg)
- *   → runConvTransforms(ctx, 'turn-start')  // summary-attach 把上一轮 processSummary → msg.summary
- *   → seed = projectToLlmMessages(ctx.messages)  // msg.summary → LlmMessage.summary → createRun 还原 thought
+ *   → runConvTransforms(ctx, 'turn-start')   // 本相位当前无 transform（process-summary 在 turn-end）
+ *   → seed = projectToLlmMessages(ctx.messages)  // assistant 的 meta.summary → LlmMessage.summary → createRun 还原 thought
  *   → createRun + execute（收事件）
- *   → agentRunRepo 持久化本轮 processSummary（供下一轮 turn-start 的 summary-attach 取回）
  *   → ctx.messages.append(assistantMsg{ agentRunId, content })
- *   → runConvTransforms(ctx, 'turn-end')   // compact（若超阈值折叠历史）、usage
+ *   → runConvTransforms(ctx, 'turn-end', { messageId, runId })  // process-summary 烘 meta.summary → compact → usage
+ *     （process-summary 经 ctx.getRunEvents(messageId) 取本轮 events 折叠）
  *
  * success 拿末轮 run + 全部轮合并的 events。
  */
@@ -308,6 +307,9 @@ export async function runMultiTurn<S>(
   const workDir = await _workspace!.getWorkDir(conversationId);
   attachWorkDir(sandbox, workDir);
 
+  const allEvents: EnrichedEvent[] = [];
+  // messageId → 该轮 turn events（供 turn-end 的 process-summary transform 经 ctx.getRunEvents 取回折叠）。
+  const runEventsByMsg = new Map<string, EnrichedEvent[]>();
   const ctx: ConvCtx = {
     conversationId,
     messages: ListMonad.of<Message>([
@@ -323,9 +325,8 @@ export async function runMultiTurn<S>(
     ]),
     runtimeConfig,
     transforms: _transforms!,
+    getRunEvents: (messageId: string) => runEventsByMsg.get(messageId),
   };
-
-  const allEvents: EnrichedEvent[] = [];
   let lastRun: ReturnType<AgentRunExecutor['createRun']>['run'] | undefined;
   const start = Date.now();
 
@@ -341,7 +342,8 @@ export async function runMultiTurn<S>(
     };
     ctx.messages = ctx.messages.append(userMsg);
 
-    // turn-start：summary-attach 把上一轮 run 的 processSummary 挂到上一轮 assistant msg.summary。
+    // turn-start：本相位当前无 transform（process-summary 在 turn-end 烘 meta.summary）；
+    // seed 读 ctx.messages 中 assistant 的 meta.summary 还原 thought。
     await TraceContext.run({ requestId: conversationId }, async () => {
       for await (const frame of runConvTransforms(ctx, 'turn-start')) {
         void frame;
@@ -363,24 +365,6 @@ export async function runMultiTurn<S>(
     lastRun = run;
     allEvents.push(...turnEvents);
 
-    // 持久化本轮 processSummary——下一轮 turn-start 的 summary-attach 经 findByIds 取回。
-    await TraceContext.run({ requestId: run.runId }, async () => {
-      const repo =
-        container.resolve<AgentRunRepositoryPort>(AGENT_RUN_REPOSITORY);
-      await repo.save({
-        id: run.runId,
-        status: run.currentStatus,
-        events: [...run.eventStream],
-        config: {
-          tools: run.config.tools,
-          runtimeConfig: run.config.runtimeConfig,
-        },
-        startedAt: new Date(start),
-        completedAt: new Date(),
-        processSummary: run.processSummary,
-      });
-    });
-
     const assistantMsg: Message = {
       id: generateId('msg'),
       role: Role.ASSIST,
@@ -393,10 +377,15 @@ export async function runMultiTurn<S>(
       conversationId,
     };
     ctx.messages = ctx.messages.append(assistantMsg);
+    runEventsByMsg.set(assistantMsg.id, turnEvents);
 
-    // turn-end：compact（若超阈值折叠历史并落库 compact msg）、usage。
+    // turn-end：process-summary（烘 meta.summary → 供下一轮 seed thought）→ compact → usage。
+    // runCtx 透传本轮 assistant 的 messageId/runId，供 process-summary 经 ctx.getRunEvents 取 events。
     await TraceContext.run({ requestId: conversationId }, async () => {
-      for await (const frame of runConvTransforms(ctx, 'turn-end')) {
+      for await (const frame of runConvTransforms(ctx, 'turn-end', {
+        messageId: assistantMsg.id,
+        runId: run.runId,
+      })) {
         void frame;
       }
     });

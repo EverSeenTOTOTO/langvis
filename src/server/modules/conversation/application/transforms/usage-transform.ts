@@ -1,4 +1,4 @@
-import { singleton, inject } from 'tsyringe';
+import { inject } from 'tsyringe';
 import type { StreamFrame } from '@/shared/types/events';
 import type {
   ConversationContext,
@@ -29,7 +29,6 @@ function computeContextUsage(
   };
 }
 
-@singleton()
 @convTransform
 export class UsageTransform implements ConvTransform {
   readonly id = 'usage';

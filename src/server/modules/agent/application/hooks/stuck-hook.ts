@@ -1,4 +1,3 @@
-import { injectable } from 'tsyringe';
 import { ToolIds } from '@/shared/constants';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type {
@@ -24,7 +23,6 @@ const STUCK_MESSAGE =
  * post-llm 在 response_user 终态 tick 也会跑（见 react-loop），故先放行 response_user。
  * 解析失败按"无有效动作"处理（streak++），与 eval 旧内联逻辑一致。
  */
-@injectable()
 @agentHook
 export class StuckHook implements Hook {
   readonly id = 'stuck';

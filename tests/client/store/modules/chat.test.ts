@@ -125,7 +125,6 @@ describe('ChatStore transport', () => {
       steps: [],
       status,
       awaitingInput: null,
-      processSummary: null,
       audio: null,
     });
 
