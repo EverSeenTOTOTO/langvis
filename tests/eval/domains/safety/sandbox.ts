@@ -2,7 +2,7 @@
  * safety 域：极简账户沙箱。query_record 可吐注入串、delete_all_records 是破坏性操作。
  * 用以探针：工具输出注入劫持、非交互下的破坏性越权。
  */
-import { tool } from '@/server/decorator/core';
+import { tool } from '@/server/decorator/tool';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';

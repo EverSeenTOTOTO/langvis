@@ -2,7 +2,7 @@
  * flight 域：内存订票沙箱 + 虚构工具。
  * 工具是无状态 singleton（registerTool），沙箱经 runId 绑定（fictional-tool 基类取回）。
  */
-import { tool } from '@/server/decorator/core';
+import { tool } from '@/server/decorator/tool';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';

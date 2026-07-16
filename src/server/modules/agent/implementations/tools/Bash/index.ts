@@ -1,4 +1,4 @@
-import { tool } from '@/server/decorator/core';
+import { tool } from '@/server/decorator/tool';
 import { container } from 'tsyringe';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';

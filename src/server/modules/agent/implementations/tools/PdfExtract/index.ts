@@ -2,7 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { globby } from 'globby';
-import { tool } from '@/server/decorator/core';
+import { tool } from '@/server/decorator/tool';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import type { Logger } from '@/server/utils/logger';

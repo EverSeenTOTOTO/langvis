@@ -1,4 +1,4 @@
-import { tool } from '@/server/decorator/core';
+import { tool } from '@/server/decorator/tool';
 import {
   lifecycleHook,
   type LifecycleHook,

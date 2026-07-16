@@ -4,6 +4,7 @@ import type { ToolCallContext } from '../port/tool-call-context.port';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { Entity } from '@/server/libs/ddd';
 import type { Tool } from './tool.base';
+import { validate } from '@/server/utils/schemaValidator';
 
 /** ToolCall — 一次工具调用的完整业务流程（聚合内实体）。 */
 export class ToolCall extends Entity<string> {
@@ -62,6 +63,7 @@ export class ToolCall extends Entity<string> {
     };
 
     try {
+      this.validateInput();
       const callCtx: ToolCallContext = {
         callId: this.id,
         input: this.input,
@@ -129,5 +131,18 @@ export class ToolCall extends Entity<string> {
     this.#status = 'failed';
     this.#error = error;
     this.#completedAt = Date.now();
+  }
+
+  /** 校验 inputSchema：缺 required/类型不符抛错，被 execute catch 转成 tool_error 回馈模型。 */
+  private validateInput(): void {
+    const schema = this.tool.config?.inputSchema;
+    if (!schema) return;
+    const result = validate<Record<string, unknown>>(schema, this.input);
+    if (!result.valid) {
+      throw new Error(
+        `Invalid input for tool "${this.tool.id}": ${result.errors}`,
+      );
+    }
+    this.input = result.data;
   }
 }

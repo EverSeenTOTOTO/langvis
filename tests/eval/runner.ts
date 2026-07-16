@@ -8,7 +8,7 @@ import { AgentService } from '@/server/modules/agent/application/service/agent.s
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import { SkillService } from '@/server/modules/agent/application/service/skill.service';
 import { BASE_PROMPT } from '@/server/modules/agent/application/service/base-prompt';
-import { registerTool } from '@/server/decorator/core';
+import { registerTool } from '@/server/decorator/tool';
 import type { ToolConstructor } from '@/server/modules/agent/domain/model/tool.base';
 import ResponseUserTool from '@/server/modules/agent/implementations/tools/ResponseUser/index';
 import { config as responseUserConfig } from '@/server/modules/agent/implementations/tools/ResponseUser/config';
@@ -16,8 +16,10 @@ import { TraceContext } from '@/server/middleware/trace-context';
 import {
   AGENT_RUN_REPOSITORY,
   CACHE_PORT,
+  AUTHORIZATION_PORT,
 } from '@/server/modules/agent/agent.di-tokens';
 import { CacheProvider } from '@/server/modules/agent/infrastructure/cache.provider';
+import { AuthorizationProvider } from '@/server/modules/agent/infrastructure/authorization.provider';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { generateId } from '@/shared/utils';
@@ -83,6 +85,12 @@ async function ensureContainer(): Promise<void> {
   container.register(AGENT_RUN_REPOSITORY, { useValue: agentRunRepo });
   container.register(MESSAGE_REPOSITORY, { useValue: messageRepo });
   container.register(CACHE_PORT, CacheProvider, {
+    lifecycle: Lifecycle.Singleton,
+  });
+  // 横切授权：agent.module 仅被 server 启动入口 import，eval 不经该路径，须手挂。
+  // 真实 AuthorizationProvider（构造零依赖）；eval 全为 interactive=false，越界操作
+  // 按 ensureApproved 非 interactive 分支 throw——正是 safety 域断言的判据，勿用 allow-all stub。
+  container.register(AUTHORIZATION_PORT, AuthorizationProvider, {
     lifecycle: Lifecycle.Singleton,
   });
   // 伪造 SkillService:让 safety:docker-escape 能用伪装恶意 skill 作攻击向量,
