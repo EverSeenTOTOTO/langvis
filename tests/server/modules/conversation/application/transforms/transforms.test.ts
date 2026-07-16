@@ -2,21 +2,23 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { container } from 'tsyringe';
 import { resolveConvTransforms } from '@/server/modules/conversation/application/transforms';
 import { UsageTransform } from '@/server/modules/conversation/application/transforms/usage-transform';
-import { SummaryAttachTransform } from '@/server/modules/conversation/application/transforms/summary-attach-transform';
+import {
+  ProcessSummaryTransform,
+  eventsToTrajectory,
+} from '@/server/modules/conversation/application/transforms/process-summary-transform';
 import { CompactTransform } from '@/server/modules/conversation/application/transforms/compact-transform';
 import {
   ConvTransformPlan,
   type ConversationContext,
 } from '@/server/modules/conversation/domain/model/conv-transform';
 import { ListMonad } from '@/server/libs/list';
+import type { ConversationConfig } from '@/server/libs/config';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
-import type { StreamFrame } from '@/shared/types/events';
+import type { StreamFrame, EnrichedEvent } from '@/shared/types/events';
 import { MESSAGE_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
-import { AGENT_RUN_REPOSITORY } from '@/server/modules/agent/agent.di-tokens';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
-import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 
 const { foldMock } = vi.hoisted(() => ({ foldMock: vi.fn() }));
 vi.mock('@/server/libs/compaction/summarizer', () => ({ fold: foldMock }));
@@ -40,12 +42,16 @@ function makeMessage(
   };
 }
 
-function makeCtx(messages: Message[]): ConversationContext {
+function makeCtx(
+  messages: Message[],
+  runEvents: Record<string, readonly EnrichedEvent[]> = {},
+): ConversationContext {
   return {
     conversationId: 'conv_test',
     messages: ListMonad.of(messages),
     runtimeConfig: { history: COMPACTION },
     transforms: new ConvTransformPlan(),
+    getRunEvents: (messageId: string) => runEvents[messageId],
   };
 }
 
@@ -64,10 +70,10 @@ async function collect(gen: AsyncGenerator<StreamFrame | void>) {
 describe('conv transform registry（自动识别）', () => {
   beforeEach(() => {
     container.register(MESSAGE_REPOSITORY, {
-      useValue: { batchCreate: vi.fn() } as unknown as MessageRepositoryPort,
-    });
-    container.register(AGENT_RUN_REPOSITORY, {
-      useValue: { findByIds: vi.fn() } as unknown as AgentRunRepositoryPort,
+      useValue: {
+        batchCreate: vi.fn(),
+        update: vi.fn(),
+      } as unknown as MessageRepositoryPort,
     });
   });
   afterEach(() => container.clearInstances());
@@ -75,19 +81,23 @@ describe('conv transform registry（自动识别）', () => {
   it('resolveConvTransforms 发现 @convTransform 标记的三个 transform', () => {
     const transforms = resolveConvTransforms();
     expect(transforms.some(t => t instanceof UsageTransform)).toBe(true);
-    expect(transforms.some(t => t instanceof SummaryAttachTransform)).toBe(
+    expect(transforms.some(t => t instanceof ProcessSummaryTransform)).toBe(
       true,
     );
     expect(transforms.some(t => t instanceof CompactTransform)).toBe(true);
   });
 
-  it('相位分桶：summary-attach 进 turn-start，compact 进 turn-end，usage 进 activated+turn-end', () => {
+  it('相位分桶：process-summary+compact+usage 进 turn-end，usage 进 activated', () => {
     const plan = new ConvTransformPlan(resolveConvTransforms());
     const ids = (ts: readonly { id: string }[]) => ts.map(t => t.id);
     expect(ids(plan.forPhase('activated'))).toEqual(['usage']);
-    expect(ids(plan.forPhase('turn-start'))).toEqual(['summary-attach']);
-    // 导入序即运行序：折叠 → 量用量
-    expect(ids(plan.forPhase('turn-end'))).toEqual(['compact', 'usage']);
+    expect(ids(plan.forPhase('turn-start'))).toEqual([]);
+    // 导入序即运行序：烘 summary 列 → 折叠历史 → 量压缩后用量
+    expect(ids(plan.forPhase('turn-end'))).toEqual([
+      'process-summary',
+      'compact',
+      'usage',
+    ]);
   });
 });
 
@@ -108,45 +118,164 @@ describe('UsageTransform', () => {
   });
 });
 
-describe('SummaryAttachTransform', () => {
-  it('按 agentRunId 取 processSummary 并 attach 为 msg.summary（不改 content）', async () => {
-    const agentRunRepo = {
-      findByIds: vi.fn(async () => [
-        { id: 'run_1', processSummary: 'did X then Y' },
-      ]),
-    } as unknown as AgentRunRepositoryPort;
-    const ctx = makeCtx([
-      makeMessage(Role.USER, 'q'),
-      makeMessage(Role.ASSIST, 'a', { agentRunId: 'run_1' }),
-    ]);
-    await collect(new SummaryAttachTransform(agentRunRepo).apply(ctx));
-    const assist = ctx.messages.get(1)!;
-    expect(assist.summary).toBe('did X then Y');
-    expect(assist.content).toBe('a'); // content 不被 mutate
-    expect(agentRunRepo.findByIds).toHaveBeenCalledWith(['run_1']);
+const LOOP_COMPACTION = { threshold: 0.8, windowSize: 10, keepRecent: 4 };
+
+function ev(p: { type: string } & Record<string, unknown>): EnrichedEvent {
+  return { runId: 'run_1', seq: 0, at: 0, ...p } as EnrichedEvent;
+}
+
+function loopCtx(
+  messages: Message[],
+  runEvents: Record<string, readonly EnrichedEvent[]>,
+  runtimeConfig: ConversationConfig = { loop: LOOP_COMPACTION },
+): ConversationContext {
+  return {
+    conversationId: 'conv_test',
+    messages: ListMonad.of(messages),
+    runtimeConfig,
+    transforms: new ConvTransformPlan(),
+    getRunEvents: (messageId: string) => runEvents[messageId],
+  };
+}
+
+describe('ProcessSummaryTransform', () => {
+  beforeEach(() => {
+    foldMock.mockReset();
   });
 
-  it('幂等：已 attach 的不重复查 repo', async () => {
-    const agentRunRepo = {
-      findByIds: vi.fn(async () => [{ id: 'run_1', processSummary: 'PS' }]),
-    } as unknown as AgentRunRepositoryPort;
-    const t = new SummaryAttachTransform(agentRunRepo);
-    const ctx = makeCtx([
-      makeMessage(Role.ASSIST, 'a', { agentRunId: 'run_1' }),
+  it('eventsToTrajectory：thought/tool_call+args/tool_result/tool_error → ReAct 轨迹', () => {
+    const events = [
+      ev({ type: 'thought', content: 'plan' }),
+      ev({
+        type: 'tool_call',
+        callId: 'c1',
+        toolName: 'Bash',
+        toolArgs: { cmd: 'ls' },
+      }),
+      ev({
+        type: 'tool_result',
+        callId: 'c1',
+        toolName: 'Bash',
+        output: 'a b',
+      }),
+      ev({ type: 'tool_error', callId: 'c2', toolName: 'X', error: 'boom' }),
+      ev({ type: 'start' }),
+    ];
+    const traj = eventsToTrajectory(events as readonly EnrichedEvent[]);
+    expect(traj.map(m => m.role)).toEqual([
+      'assistant',
+      'assistant',
+      'user',
+      'user',
     ]);
-    await collect(t.apply(ctx));
-    await collect(t.apply(ctx)); // 第二次：msg.summary 已存在，跳过、不再查 repo
-    expect(agentRunRepo.findByIds).toHaveBeenCalledTimes(1);
-    expect(ctx.messages.get(0)!.summary).toBe('PS');
+    expect(traj[1].content).toContain('Bash');
+    expect(traj[2].content).toContain('Observation:');
+    expect(traj[3].content).toContain('Error: boom');
   });
 
-  it('无待 attach 的 assistant 时不动、不查 repo', async () => {
-    const agentRunRepo = {
-      findByIds: vi.fn(),
-    } as unknown as AgentRunRepositoryPort;
-    const ctx = makeCtx([makeMessage(Role.USER, 'q')]);
-    await collect(new SummaryAttachTransform(agentRunRepo).apply(ctx));
-    expect(agentRunRepo.findByIds).not.toHaveBeenCalled();
+  it('有 runCtx + events 时 fold → 写 meta.summary（不覆盖既有 meta 键）', async () => {
+    foldMock.mockResolvedValue('THE PS');
+    const update = vi.fn(async (_id: string, partial: any) => partial);
+    const messageRepo = { update } as unknown as MessageRepositoryPort;
+    const events = [
+      ev({ type: 'thought', content: 't1' }),
+      ev({ type: 'tool_call', callId: 'c1', toolName: 'Bash', toolArgs: {} }),
+      ev({ type: 'tool_result', callId: 'c1', toolName: 'Bash', output: 'o1' }),
+    ];
+    const ctx = loopCtx(
+      [makeMessage(Role.ASSIST, 'ans', { id: 'msg_1', meta: { foo: 'bar' } })],
+      { msg_1: events as readonly EnrichedEvent[] },
+    );
+    await collect(
+      new ProcessSummaryTransform(messageRepo).apply(ctx, {
+        messageId: 'msg_1',
+        runId: 'run_1',
+      }),
+    );
+    expect(foldMock).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith('msg_1', {
+      meta: { foo: 'bar', summary: 'THE PS' },
+    });
+  });
+
+  it('无 runCtx（非 turn-end）跳过', async () => {
+    foldMock.mockResolvedValue('PS');
+    const messageRepo = { update: vi.fn() } as unknown as MessageRepositoryPort;
+    const ctx = loopCtx([makeMessage(Role.ASSIST, 'a')], {});
+    await collect(new ProcessSummaryTransform(messageRepo).apply(ctx));
+    expect(foldMock).not.toHaveBeenCalled();
+    expect(messageRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('trivial turn（轨迹 ≤1）跳过', async () => {
+    foldMock.mockResolvedValue('PS');
+    const messageRepo = { update: vi.fn() } as unknown as MessageRepositoryPort;
+    const ctx = loopCtx([makeMessage(Role.ASSIST, 'a', { id: 'msg_1' })], {
+      msg_1: [
+        ev({ type: 'thought', content: 'only' }),
+      ] as readonly EnrichedEvent[],
+    });
+    await collect(
+      new ProcessSummaryTransform(messageRepo).apply(ctx, {
+        messageId: 'msg_1',
+        runId: 'run_1',
+      }),
+    );
+    expect(foldMock).not.toHaveBeenCalled();
+  });
+
+  it('缺 runtimeConfig.loop 跳过', async () => {
+    foldMock.mockResolvedValue('PS');
+    const messageRepo = { update: vi.fn() } as unknown as MessageRepositoryPort;
+    const ctx = loopCtx(
+      [makeMessage(Role.ASSIST, 'a', { id: 'msg_1' })],
+      {
+        msg_1: [
+          ev({ type: 'thought', content: 't' }),
+          ev({ type: 'tool_call', callId: 'c', toolName: 'B', toolArgs: {} }),
+        ] as readonly EnrichedEvent[],
+      },
+      {},
+    );
+    await collect(
+      new ProcessSummaryTransform(messageRepo).apply(ctx, {
+        messageId: 'msg_1',
+        runId: 'run_1',
+      }),
+    );
+    expect(foldMock).not.toHaveBeenCalled();
+  });
+
+  it('events 缺失（getRunEvents 返回 undefined）跳过', async () => {
+    foldMock.mockResolvedValue('PS');
+    const messageRepo = { update: vi.fn() } as unknown as MessageRepositoryPort;
+    const ctx = loopCtx([makeMessage(Role.ASSIST, 'a', { id: 'msg_1' })], {});
+    await collect(
+      new ProcessSummaryTransform(messageRepo).apply(ctx, {
+        messageId: 'msg_1',
+        runId: 'run_1',
+      }),
+    );
+    expect(foldMock).not.toHaveBeenCalled();
+  });
+
+  it('fold 返回空时不 persist', async () => {
+    foldMock.mockResolvedValue('');
+    const messageRepo = { update: vi.fn() } as unknown as MessageRepositoryPort;
+    const events = [
+      ev({ type: 'thought', content: 't' }),
+      ev({ type: 'tool_call', callId: 'c', toolName: 'B', toolArgs: {} }),
+    ];
+    const ctx = loopCtx([makeMessage(Role.ASSIST, 'a', { id: 'msg_1' })], {
+      msg_1: events as readonly EnrichedEvent[],
+    });
+    await collect(
+      new ProcessSummaryTransform(messageRepo).apply(ctx, {
+        messageId: 'msg_1',
+        runId: 'run_1',
+      }),
+    );
+    expect(messageRepo.update).not.toHaveBeenCalled();
   });
 });
 

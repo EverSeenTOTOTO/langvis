@@ -79,7 +79,7 @@ export function projectToLlmMessages(messages: Message[]): LlmMessage[] {
       out.push({
         role: msg.role as LlmMessage['role'],
         content: msg.content,
-        summary: msg.summary,
+        summary: msg.meta?.summary as string | undefined,
       });
     }
   }

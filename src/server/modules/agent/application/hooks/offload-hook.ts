@@ -1,4 +1,4 @@
-import { injectable, inject } from 'tsyringe';
+import { inject } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type {
   Hook,
@@ -43,7 +43,6 @@ const CHUNK_SIZE = 2000;
  * 保留 HEAD_KEEP 头部（保住 `/document_archive` skill 触发 + 元信息）。桩固化具体首块
  * offset/limit + 块数——根治"裸读全文→再 offload"页抖动。
  */
-@injectable()
 @agentHook
 export class OffloadHook implements Hook {
   readonly id = 'offload';

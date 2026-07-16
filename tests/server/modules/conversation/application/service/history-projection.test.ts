@@ -77,11 +77,15 @@ describe('history-projection', () => {
   });
 
   describe('projectToLlmMessages', () => {
-    it('透传 assistant 的 summary（processSummary），user/system 无 summary', () => {
+    it('透传 assistant 的 meta.summary（processSummary），user/system 无 summary', () => {
       const history: Message[] = [
         { ...makeMessage(Role.SYSTEM, 'sys'), id: 'm_sys' },
         { ...makeMessage(Role.USER, 'q'), id: 'm_u' },
-        { ...makeMessage(Role.ASSIST, 'a'), id: 'm_a', summary: 'did X' },
+        {
+          ...makeMessage(Role.ASSIST, 'a'),
+          id: 'm_a',
+          meta: { summary: 'did X' },
+        },
       ];
       const out = projectToLlmMessages(history);
       const sys = out.find(m => m.role === 'system')!;

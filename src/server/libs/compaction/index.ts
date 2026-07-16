@@ -5,3 +5,4 @@
  */
 export { fold } from './summarizer';
 export type { FoldOptions } from './summarizer';
+export { PROCESS_SUMMARY_PROMPT } from './prompts';

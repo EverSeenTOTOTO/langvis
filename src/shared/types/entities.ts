@@ -37,8 +37,6 @@ export type Message = {
   status?: RunStatus | null;
   /** Merged from agent_runs for assistant messages — re-derived from run events, not a Message DB column */
   audio?: { filePath: string; voice?: string } | null;
-  /** Merged from agent_runs.processSummary for assistant messages — not a Message DB column */
-  summary?: string;
   meta?: Record<string, unknown> | null;
   createdAt: Date;
   conversationId: string;
@@ -53,7 +51,6 @@ export type AgentRun = {
   config: RunConfigVOProps | null;
   startedAt: Date;
   completedAt: Date | null;
-  processSummary: string | null;
 };
 
 export type LlmMessage = {

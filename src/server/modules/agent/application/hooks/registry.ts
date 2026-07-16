@@ -1,4 +1,4 @@
-import { container } from 'tsyringe';
+import { container, injectable } from 'tsyringe';
 import type { Hook } from '@/server/modules/agent/domain/model/hook';
 
 /**
@@ -8,8 +8,8 @@ import type { Hook } from '@/server/modules/agent/domain/model/hook';
 export const AGENT_HOOK = Symbol('AGENT_HOOK');
 
 /**
- * 纯标记装饰器：把 Hook 类在 AGENT_HOOK token 下注册（useClass → 每次 resolve 构造新实例）。
- * 类自带 @injectable；本装饰器只登记，可叠加。
+ * 内置 @injectable() 的标记装饰器：把 Hook 类在 AGENT_HOOK token 下注册（useClass → 每次 resolve 新实例）。
+ * 类上只需挂这一个装饰器（镜像 decorator/controller.ts 的 controller 装饰器）。
  *
  * hook 非 singleton、per-run 实例化：executor 的 createRun 每次 run 调一次 resolveAgentHooks，
  * 故 hook 可把跨 tick 的私有状态内聚在实例字段（如 BudgetHook 的累计 token），既不污染 ctx，
@@ -18,6 +18,7 @@ export const AGENT_HOOK = Symbol('AGENT_HOOK');
 export function agentHook<T extends new (...args: any[]) => Hook>(
   target: T,
 ): T {
+  injectable()(target);
   container.register(AGENT_HOOK, { useClass: target });
   return target;
 }

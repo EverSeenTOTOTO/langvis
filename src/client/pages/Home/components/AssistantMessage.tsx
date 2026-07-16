@@ -30,19 +30,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
               Thinking...
             </Typography.Text>
           ) : (
-            <>
-              {content}
-              {node.isCompacting && (
-                <Typography.Paragraph
-                  type="secondary"
-                  italic
-                  style={{ marginBlock: 8 }}
-                >
-                  <LoadingOutlined style={{ marginInlineEnd: 4 }} />
-                  Compacting...
-                </Typography.Paragraph>
-              )}
-            </>
+            <>{content}</>
           )
         }
         footer={<MessageFooter content={node.content} />}

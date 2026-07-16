@@ -26,7 +26,7 @@ export class CompleteTurnHandler {
   ) {}
 
   async handle(event: DomainEvent<string, RunCompletedPayload>): Promise<void> {
-    const { conversationId, messageId } = event.payload;
+    const { conversationId, messageId, agentRunId } = event.payload;
     await this.sessionManager.awaitMaintenance(conversationId);
 
     const events = this.sessionManager.getRunEvents(conversationId, messageId);
@@ -48,8 +48,12 @@ export class CompleteTurnHandler {
       if (assistant) ctx.messages = ctx.messages.append(assistant);
 
       this.sessionManager.flushRunView(conversationId, messageId);
-      // turn-end transform 发用量帧（usage 跑在 summary-attach/compact 之后，量的是压缩后用量）。
-      for await (const frame of runConvTransforms(ctx, 'turn-end')) {
+      // turn-end transform（process-summary 烘焙 meta.summary → compact 折叠历史 → usage 量压缩后用量）。
+      // runCtx 透传本次 RunCompleted 的 run 标识，供 per-run transform（如 process-summary）取 events。
+      for await (const frame of runConvTransforms(ctx, 'turn-end', {
+        messageId,
+        runId: agentRunId,
+      })) {
         if (frame) this.sessionManager.sendFrame(conversationId, frame);
       }
     } catch (err) {
