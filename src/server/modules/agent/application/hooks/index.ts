@@ -2,6 +2,7 @@
 // import 序 = post-observation 内执行序（tsyringe resolveAll 保插入序）：
 // offload（无损落盘）须先于 compaction（有损 fold）——无损优先，且 fold 不该吃掉 $cached 句柄。
 // process-summary 已迁至 conv 侧 ProcessSummaryTransform（turn-end），此处不再注册 loop-exit hook。
+import './tool-hint-hook';
 import './offload-hook';
 import './compaction-hook';
 import './loop-usage-hook';

@@ -1,4 +1,4 @@
-import { tool } from '@/server/decorator/core';
+import { tool } from '@/server/decorator/tool';
 import { inject } from 'tsyringe';
 import { CACHE_PORT } from '@/server/modules/agent/agent.di-tokens';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';

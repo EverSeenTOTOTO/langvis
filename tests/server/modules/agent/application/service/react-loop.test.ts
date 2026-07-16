@@ -11,6 +11,8 @@ import { ListMonad } from '@/server/libs/list';
 import { HookPlan, type Hook } from '@/server/modules/agent/domain/model/hook';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
+import { ToolService } from '@/server/modules/agent/application/service/tool.service';
+import { SkillService } from '@/server/modules/agent/application/service/skill.service';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { ToolIds } from '@/shared/constants';
@@ -290,6 +292,18 @@ describe('runReactLoop', () => {
       resolveContextSize: () => 128_000,
       resolveChatModel: () => ({ id: undefined, contextSize: 128_000 }),
     } as unknown as ProviderService);
+    // ToolHintHook 经 resolveAgentHooks 拉入，注入空 ToolService/SkillService stub
+    // 使其检索命中空集、no-op（避免真实 initialize 扫文件系统、resolve 全量工具污染容器）。
+    container.registerInstance(ToolService, {
+      getAllToolInfo: async () => [],
+      getCachedToolIds: () => [],
+      initialize: async () => {},
+    } as unknown as ToolService);
+    container.registerInstance(SkillService, {
+      getAllSkillInfo: async () => [],
+      getCachedSkillIds: () => [],
+      initialize: async () => {},
+    } as unknown as SkillService);
   });
   afterEach(() => {
     container.clearInstances();

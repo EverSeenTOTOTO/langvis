@@ -3,7 +3,7 @@ import { container } from 'tsyringe';
 import { service } from '@/server/decorator/service';
 import Logger from '@/server/utils/logger';
 import path from 'path';
-import { registerTool } from '@/server/decorator/core';
+import { registerTool } from '@/server/decorator/tool';
 import { ToolConfig } from '@/shared/types';
 import type { ToolConstructor } from '../../domain/model/tool.base';
 import { isProd } from '@/server/utils/env';
