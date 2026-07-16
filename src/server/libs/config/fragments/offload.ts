@@ -2,15 +2,18 @@ import type { JSONSchemaType } from 'ajv';
 import type { ConfigFragment } from '../config-fragment';
 
 /**
- * pre-LLM 预算化无损落盘（offload）。每次 LLM 调用前测 token：
- * 超阈值时把最老的 user 消息载荷（Observation 或裸 user，如 email 正文）写盘、换桩，
- * 直到回 hardCap 内或无可桩。两阶段范围：A 阶段先桩 [base,len)（保供应商前缀缓存），
- * 耗尽仍超才 B 阶段回溯 [0,base) seed（溢出兜底）。keepRecent 为软偏好（非硬地板）。
- * 与 loop（有损 fold）相位分离：offload=pre-llm，compaction=post-observation。省略即关。
+ * pre-LLM 体积护栏（offload）——纯 per-call 安全网，**不缩历史**。两条独立触发：
+ *   1. goal#1 不爆窗：total×factor > hardCap(=contextSize−responseReserve) 时，最胖优先桩化到 hardCap 内。
+ *   2. goal#2 单 query 不被单条巨消息主导：任一 user/observation 正文 > contextSize×maxMessageSize
+ *      即桩它自己（与总量无关）——大 observation 一进来就拆 chunk，单次调用不被一条主导，
+ *      亦不触发"缩老历史→cached_read 取回→再桩"的页抖动。
+ * 两阶段：[base,len) 优先（保供应商前缀缓存），耗尽仍超才回溯 [0,base) seed。keepRecent 为
+ * goal#1 路径软偏好（per-message 路径不受约束——单条过大必须页）。省略即关。
+ * 与 loop（有损 fold）相位分离：offload=pre-llm，compaction=post-observation。
  */
 export interface OffloadConfig {
-  threshold: number;
-  keepRecent: number;
+  /** 单条正文超过 contextSize × maxMessageSize 即桩（goal#2）。缺省 0.4。 */
+  maxMessageSize: number;
   /** 给模型输出预留的 token（hardCap = contextSize − responseReserve）。 */
   responseReserve: number;
   /** estimateTokens 低估补偿系数（实测 cl100k 对中文/JSON 低估 ~8%）；桩化判断 tokens×factor。缺省 1.1。 */
@@ -24,23 +27,16 @@ export const OFFLOAD_FRAGMENT: ConfigFragment<'offload', OffloadConfig> = {
     nullable: true,
     title: 'Pre-LLM Offload',
     description:
-      '上下文预算化无损落盘：超阈值时桩化最老 Observation 到盘（cached_read/rg 取回）。省略即关。',
+      'pre-LLM 体积护栏：单条巨消息(>maxMessageSize)或总量逼近窗口(hardCap)时桩化到盘（cached_read/rg 分块取回）。省略即关。',
     properties: {
-      threshold: {
+      maxMessageSize: {
         type: 'number',
-        default: 0.8,
+        default: 0.4,
         minimum: 0.1,
         maximum: 0.95,
         nullable: true,
-        description: '触发桩化的上下文用量比例',
-      },
-      keepRecent: {
-        type: 'integer',
-        default: 4,
-        minimum: 0,
-        nullable: true,
         description:
-          '软偏好——耗尽优选区仍超 hardCap 才推到最近 N 条（非硬地板）',
+          '单条正文占上下文比例上限（goal#2：单 query 不被单条主导）',
       },
       responseReserve: {
         type: 'integer',

@@ -16,32 +16,19 @@ import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
 
 const OBSERVATION_PREFIX = 'Observation: ';
-/** 已桩化的正文含此标记 → 跳过，避免重复桩化。 */
-const OFFLOADED_MARK = '[offloaded to file';
-/** 裸 user 消息桩化时保留的正文头部（保住 email 指令 / 元信息 / skill 触发 token）。 */
-const HEAD_KEEP = 256;
-/** 正文短于此不桩：桩文本（head 256 + 标记 ~150）须明显小于原文才省 token。 */
-const MIN_BODY_TO_OFFLOAD = 512;
-/** cached_read 建议块大小（字符）。桩里固化首块 offset=0/limit=CHUNK，小模型照抄即可，
- *  无需自算数值——根治"裸读全文→再 offload"套娃。读回的续读 offset 由 cached_read 页脚给。 */
-const CHUNK_SIZE = 2000;
+const OFFLOADED_MARK = '[offloaded to file'; // 已桩标记 → 跳过重复桩
+const READ_SLICE_MARK = '[read offset='; // cached_read 页脚 → 跳过（防 offload↔read 死环）
+const HEAD_KEEP = 256; // 裸 user 桩化保留头部（保 skill 触发 / 元信息）
+const MIN_BODY_TO_OFFLOAD = 512; // 桩文本须明显小于原文才省
+const CHUNK_SIZE = 2000; // cached_read 块大小；桩里固化首块 offset/limit，小模型照抄
 
 /**
- * pre-LLM 预算化无损落盘（offload）。每次 LLM 调用前测 token，超 contextSize×threshold 时
- * 把 user 消息载荷（Observation 或裸 user，如 email 正文）写盘、正文换桩，直到回 hardCap 内或无可桩。
- *
- * 两阶段范围（保供应商前缀缓存）：
- *   A 阶段 [base, len)：loop 内 oldest-first 桩。seed [0, base) 不动 → 跨 turn 字节前缀缓存有效。
- *   B 阶段 [0, base)：仅当 A 耗尽仍超 hardCap（seed 自身溢出，如 email 大正文）才回溯进 seed 桩。
- * 阈值门控保底：未超阈直接 return，两阶段都不进 → 常见情况零开销、缓存无损。
- *
- * keepRecent 软偏好：不硬截断最近 N 条。oldest-first 自然优先吃老的；耗尽优选区仍超 hardCap
- * 才推到保护段（warn 标记）。recent Observations 优先于 seed 被桩（seed 是跨 turn 缓存前缀，更值钱）。
- *
- * 谓词：任意 user-role 消息（Observation 去 `Observation: ` 前缀、裸 user 取全文）、正文 ≥ MIN、
- * 未含 OFFLOADED_MARK。assistant/system 不桩。Observation 桩全替（hint 已含 tool）；裸 user 桩
- * 保留 HEAD_KEEP 头部（保住 `/document_archive` skill 触发 + 元信息）。桩固化具体首块
- * offset/limit + 块数——根治"裸读全文→再 offload"页抖动。
+ * pre-LLM 体积护栏：per-call 安全网，不缩历史。只在 [base,len) 桩化，**永不碰 [0,base) seed**
+ * （稳定前缀，动则破缓存、逼重读主指令）。两条独立触发：
+ *   - per-message：单条正文 > contextSize×maxMessageSize → 桩它自己（单 query 不被一条主导）。
+ *   - hard-cap：total×factor > contextSize−responseReserve → 最胖优先桩到窗内。
+ * read-slice（含 READ_SLICE_MARK）不桩——断 offload→桩slice→重读→offload 环；最坏溢出失败（有限）。
+ * 省略 fragment 即关。
  */
 @agentHook
 export class OffloadHook implements Hook {
@@ -63,49 +50,65 @@ export class OffloadHook implements Hook {
     );
     if (!contextSize) return 'next';
 
-    // estimateTokens(cl100k) 对中文/JSON 系统性低估（实测 8K 模型低估 ~8%），
-    // 直接用于预算判断会桩化不足、真实爆窗。乘 safetyFactor 放大估算，让桩化更激进、
-    // 吸收低估。仅本 hook 内用——peak_ctx/loop-usage 仍报原 estimateTokens（语义不变）。
+    // factor 放大估算，吸收 estimateTokens 对中文/JSON 的系统性低估（防桩化不足→真实爆窗）。
     const factor = cfg.estimateSafetyFactor ?? 1.1;
     const hardCap = contextSize - (cfg.responseReserve ?? 512);
-    const beforeTokens = estimateTokens(ctx.messages.toArray());
-    if (beforeTokens * factor <= contextSize * cfg.threshold) return 'next';
+    const maxMsg = contextSize * (cfg.maxMessageSize ?? 0.4);
 
     const messages = ctx.messages.toArray();
     const len = messages.length;
     const base = ctx.base;
-    const keepRecent = cfg.keepRecent ?? 4;
+    const beforeTokens = estimateTokens(messages);
 
-    // 桩化顺序：A 阶段 [base,len) oldest-first → B 阶段 [0,base) oldest-first（seed 兜底）。
-    // keepRecent 保护段（≥ len-keepRecent）在 A 阶段尾部自然靠后；软化 = 不停在那里。
-    const order: number[] = [];
-    for (let i = base; i < len; i++) order.push(i);
-    for (let i = 0; i < base; i++) order.push(i);
+    // 候选：仅 [base,len)。已桩 / read-slice / 短于 MIN 跳过。最胖优先（tokens 降序）。
+    const candByIndex = new Map<
+      number,
+      { body: string; isObservation: boolean; tokens: number }
+    >();
+    const ordered: number[] = [];
+    for (let i = base; i < len; i++) {
+      const cand = candidateBody(messages[i]!);
+      if (!cand) continue;
+      if (cand.body.includes(OFFLOADED_MARK)) continue;
+      if (cand.body.includes(READ_SLICE_MARK)) continue;
+      if (cand.body.length < MIN_BODY_TO_OFFLOAD) continue;
+      candByIndex.set(i, { ...cand, tokens: estimateTokens([messages[i]!]) });
+      ordered.push(i);
+    }
+    ordered.sort(
+      (a, b) => candByIndex.get(b)!.tokens - candByIndex.get(a)!.tokens,
+    );
 
     let stubbed = 0;
-    let seedStubbed = 0;
-    let protectedStubbed = 0;
-    let tokens = beforeTokens;
 
-    for (const i of order) {
-      if (tokens * factor <= hardCap) break;
+    const stubIndex = async (i: number) => {
+      const c = candByIndex.get(i);
+      if (!c) return;
       const msg = messages[i]!;
-      const candidate = candidateBody(msg);
-      if (!candidate) continue; // 非 user
-      if (candidate.body.includes(OFFLOADED_MARK)) continue; // 已桩
-      if (candidate.body.length < MIN_BODY_TO_OFFLOAD) continue; // 太小不值
-
-      const hint = candidate.isObservation
+      const hint = c.isObservation
         ? hintForObservation(messages, i)
-        : hintForUser(candidate.body);
-      const stub = await ctx.cache.offload(ctx.workDir, candidate.body, hint);
-      messages[i] = {
-        ...msg,
-        content: stubContent(candidate, stub, hint),
-      };
+        : hintForUser(c.body);
+      const stub = await ctx.cache.offload(ctx.workDir, c.body, hint);
+      messages[i] = { ...msg, content: stubContent(c, stub, hint) };
       stubbed++;
-      if (i < base) seedStubbed++;
-      if (i >= len - keepRecent) protectedStubbed++;
+      candByIndex.delete(i);
+    };
+
+    // per-message：单条 > maxMsg 即桩，不论总量。
+    for (const i of ordered) {
+      const c = candByIndex.get(i);
+      if (!c) continue;
+      if (c.tokens * factor <= maxMsg) continue;
+      await stubIndex(i);
+    }
+
+    // hard-cap：总量逼近窗口时最胖优先桩到 hardCap 内。
+    let tokens = estimateTokens(messages);
+    for (const i of ordered) {
+      if (tokens * factor <= hardCap) break;
+      const c = candByIndex.get(i);
+      if (!c) continue;
+      await stubIndex(i);
       tokens = estimateTokens(messages);
     }
 
@@ -114,13 +117,8 @@ export class OffloadHook implements Hook {
     ctx.messages = ListMonad.of(messages);
     const afterTokens = estimateTokens(ctx.messages.toArray());
     this.logger.info(
-      `offloaded (run ${ctx.runId}): ${stubbed} msg${seedStubbed ? ` (${seedStubbed} seed-backtrack)` : ''}, ${beforeTokens}→${afterTokens} tokens`,
+      `offloaded (run ${ctx.runId}): ${stubbed} msg, ${beforeTokens}→${afterTokens} tokens`,
     );
-    if (protectedStubbed > 0) {
-      this.logger.warn(
-        `offload breached keepRecent (run ${ctx.runId}): stubbed ${protectedStubbed} protected msg(s) — consider cached_read next round`,
-      );
-    }
 
     yield {
       type: 'hook',
@@ -135,8 +133,7 @@ export class OffloadHook implements Hook {
   }
 }
 
-/** 构造桩正文：Observation 全替（保前缀 + hint 含 tool）；裸 user 保 HEAD_KEEP 头部。
- *  固化具体首块 offset/limit + 块数——小模型照抄即拿第一块，根治裸读全文套娃。 */
+/** 桩正文：Observation 全替（保前缀 + hint 含 tool）；裸 user 保 HEAD_KEEP 头部。固化首块 offset/limit。 */
 function stubContent(
   candidate: { body: string; isObservation: boolean },
   stub: { $cached: string; $size: number },
@@ -154,7 +151,7 @@ function stubContent(
   return `${candidate.body.slice(0, HEAD_KEEP)}\n${marker}`;
 }
 
-/** 取 user-role 桩化候选正文：Observation 去 `Observation: ` 前缀；裸 user 取全文。非 user → null。 */
+/** user-role 候选正文：Observation 去前缀；裸 user 取全文。非 user → null。 */
 function candidateBody(
   msg: LlmMessage,
 ): { body: string; isObservation: boolean } | null {
@@ -168,10 +165,7 @@ function candidateBody(
   return { body: msg.content, isObservation: false };
 }
 
-/**
- * Observation 的 hint：从配对 assistant 消息（紧前那条）parseResponse 取 tool + 第一个 scalar
- * 入参。parseResponse 抛 / 无 assistant → 退 ''。
- */
+/** Observation 的 hint：配对 assistant 的 tool + 首个 scalar 入参。失败 → ''。 */
 function hintForObservation(messages: LlmMessage[], obsIndex: number): string {
   const assistant = messages[obsIndex - 1];
   if (!assistant || assistant.role !== 'assistant') return '';
@@ -184,7 +178,7 @@ function hintForObservation(messages: LlmMessage[], obsIndex: number): string {
   }
 }
 
-/** 裸 user 消息（无配对 assistant）的 hint：取正文首行规整作 label（如 /document_archive）。 */
+/** 裸 user 的 hint：正文首行作 label。 */
 function hintForUser(body: string): string {
   const firstLine = body.split('\n')[0]?.trim() ?? '';
   return firstLine.slice(0, 32);
