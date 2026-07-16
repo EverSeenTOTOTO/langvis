@@ -26,7 +26,9 @@ import chalk from 'chalk';
 import {
   AGENT_RUN_REPOSITORY,
   CACHE_PORT,
+  AUTHORIZATION_PORT,
 } from '@/server/modules/agent/agent.di-tokens';
+import type { AuthorizationPort } from '@/server/modules/agent/domain/port/authorization.port';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 
 /** 对话无关的 run 启动参数——conv 与子 agent 都用它驱动 Launcher。 */
@@ -54,6 +56,7 @@ export class AgentRunExecutor {
   constructor(
     @inject(LLM_PORT) private readonly llm: LlmPort,
     @inject(CACHE_PORT) private readonly cache: CachePort,
+    @inject(AUTHORIZATION_PORT) private readonly auth: AuthorizationPort,
     @inject(AGENT_RUN_REPOSITORY)
     private readonly agentRunRepo: AgentRunRepositoryPort,
     @inject(AgentService) private readonly agentService: AgentService,
@@ -83,6 +86,7 @@ export class AgentRunExecutor {
       signal: run.signal,
       llm: this.llm,
       cache: this.cache,
+      auth: this.auth,
       messages: ListMonad.of(params.seed).map(restoreReactMessage),
       base: params.seed.length,
       hooks: new HookPlan(resolveAgentHooks()),

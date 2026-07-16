@@ -3,15 +3,12 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { globby } from 'globby';
 import { tool } from '@/server/decorator/core';
-import { inject } from 'tsyringe';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import type { Logger } from '@/server/utils/logger';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
-import { AUTHORIZATION_PORT } from '@/server/modules/agent/agent.di-tokens';
-import type { AuthorizationPort } from '@/server/modules/agent/domain/port/authorization.port';
 import {
   normalizeRoot,
   shortenHome,
@@ -32,13 +29,6 @@ export default class PdfExtractTool extends Tool<PdfExtractOutput> {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  constructor(
-    @inject(AUTHORIZATION_PORT)
-    private readonly auth: AuthorizationPort,
-  ) {
-    super();
-  }
-
   async *call(
     ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, PdfExtractOutput, void> {
@@ -54,7 +44,7 @@ export default class PdfExtractTool extends Tool<PdfExtractOutput> {
     const isOutside = isOutsideWorkspace(expanded, ctx.workDir);
 
     if (isOutside) {
-      yield* this.auth.ensureApproved(
+      yield* ctx.auth.ensureApproved(
         ctx,
         'read-path',
         normalizeRoot(expanded),

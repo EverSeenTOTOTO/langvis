@@ -20,6 +20,7 @@ import type {
   ToolExecutor,
 } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
+import type { AuthorizationPort } from '@/server/modules/agent/domain/port/authorization.port';
 import type { RunEvent } from '@/shared/types/events';
 import type { LlmMessage } from '@/shared/types/entities';
 
@@ -185,13 +186,20 @@ function summaryStubLlm(): LlmPort {
 function makeMockCache(): CachePort {
   return {
     resolve: vi.fn(async (_id: string, value: unknown) => value),
-    compress: vi.fn(async (_id: string, value: unknown) => value),
     offload: vi.fn(async (_id: string, _value: unknown) => ({
       $cached: 'fc_test',
       $size: 0,
       $preview: '',
     })),
     readFile: vi.fn(),
+  };
+}
+
+function noopAuth(): AuthorizationPort {
+  return {
+    ensureApproved: async function* () {
+      /* test 不验证授权 */
+    },
   };
 }
 
@@ -255,6 +263,7 @@ function buildCtx(opts: BuildCtxOptions): BuiltCtx {
     signal: opts.controller?.signal ?? run.signal,
     llm,
     cache: makeMockCache(),
+    auth: noopAuth(),
     messages: ListMonad.of(seed),
     base: seed.length,
     hooks: opts.hooks ?? new HookPlan(resolveAgentHooks()),
