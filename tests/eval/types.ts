@@ -93,10 +93,13 @@ export interface RunOutcome {
   durationMs: number;
   /** 会话隔离的 workDir（排查产物用：FS 任务产物在此；= 日志关联键的文件夹名）。 */
   workDir?: string;
-  /** driver 配置变体名（配置轴）；缺省（含旧 jsonl）= 'default'。 */
+  /** driver 配置变体名（配置轴）；缺省（含旧 jsonl）= compact-only。 */
   variant?: string;
   /** 多 turn 任务的轮数（单 turn = 1）。 */
   turns?: number;
+  /** turn-end CompactTransform 触发次数（= ctx.messages 中 meta.kind='compact' 条数）。
+   *  会话级压缩"触发与否"的核心读数；单 turn 任务恒 0。 */
+  historyCompactions?: number;
   /** 事件 type 序列——排查用，省空间（完整事件可按需开）。 */
   eventTrace: RunEvent['type'][];
 }

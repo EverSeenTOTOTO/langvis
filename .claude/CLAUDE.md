@@ -9,6 +9,10 @@
 | Build System    | `make`   | Use instead of npm scripts            |
 | Test Framework  | `vitest` | Run specific tests: `bunx vitest run` |
 
+## Shell
+
+The user's shell aliases `rm`/`mv`/`cp`/`ln` with `-i` (interactive confirm) via `~/.alias`. In a non-interactive Claude shell these prompt for input and then hang or no-op (the file is **not** removed). Always pass `-f` for destructive ops (e.g. `rm -f <path>`) or bypass the alias with the absolute binary (e.g. `/usr/bin/rm`). Don't rely on the plain `rm`/`mv` form — it has bitten merges before.
+
 ## Code Style
 
 - **Template Strings**: Always use backticks for multi-line strings or interpolation, never `+` concatenation.

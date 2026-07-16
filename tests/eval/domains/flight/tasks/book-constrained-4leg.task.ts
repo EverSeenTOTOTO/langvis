@@ -2,7 +2,7 @@
  * G4.3 Task B — 4 程多约束交叉验证(测压缩贡献)。
  *
  * 在 3leg 基础上加第 4 程 京→广。估算累积峰值 ~9400 tok,爆 8192 全窗:
- *   - baseline(no-compaction)不折叠,4 次大 search 累积爆窗 → 失败(provider 截断/信息丢失)
+ *   - baseline(bare)不折叠,4 次大 search 累积爆窗 → 失败(provider 截断/信息丢失)
  *   - default(压缩)过阈后折叠掉早期 search → 回到窗内 → 能完成
  *   → headroom 应为正(default 救活 baseline 必挂的 run),即 driver 贡献的正面证据。
  *

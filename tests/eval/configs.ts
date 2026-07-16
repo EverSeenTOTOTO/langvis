@@ -34,22 +34,20 @@ export type Variant = {
   readonly apply: (base: ConversationConfig) => ConversationConfig;
 };
 
-export const DEFAULT_VARIANT = 'default';
+/** 默认变体 = compact-only。四变体 = 现有两轴（fold 压缩 × offload 护栏）的组合；
+ *  新增机制时按同一思路扩，描述只点意图、不枚举 on/off。 */
+export const DEFAULT_VARIANT = 'compact-only';
 
-/**
- * G2 先立维度 + baseline。阈值/策略变体等（G4.3 压缩触发场景、G2.5 搜索法）再加。
- * no-compaction 省 loop/history fragment——eval 不经 AJV，故 fragment 缺省即真关
- * （CompactionHook/CompactTransform 各 if(!loop/history) return）。两层压缩都关。
- */
+/** bare = 裸 loop（baseline，无任何压缩/护栏）。新机制默认在此变体关闭。 */
 export const VARIANTS: readonly Variant[] = [
   {
     id: DEFAULT_VARIANT,
-    description: '现状默认压缩（loop/history 开，阈值 0.8）',
+    description: '现状默认压缩（fold）',
     apply: base => base,
   },
   {
-    id: 'no-compaction',
-    description: 'baseline：loop/history fragment 省略 = 两层压缩全关',
+    id: 'bare',
+    description: '裸 loop，无压缩无护栏（baseline）',
     apply: base => {
       const { loop: _l, history: _h, ...rest } = base;
       return rest as ConversationConfig;
@@ -57,23 +55,21 @@ export const VARIANTS: readonly Variant[] = [
   },
   {
     id: 'offload-only',
-    description:
-      '关 fold（loop/history），开 offload：纯无损落盘（pre-LLM 桩化大 user 消息到盘，cached_read/rg 取回）',
+    description: '仅 offload 体积护栏，不压缩',
     apply: base => {
       const { loop: _l, history: _h, ...rest } = base;
       return {
         ...rest,
-        offload: { threshold: 0.8, keepRecent: 4, responseReserve: 512 },
+        offload: { maxMessageSize: 0.4, responseReserve: 512 },
       } as ConversationConfig;
     },
   },
   {
     id: 'hybrid',
-    description:
-      'loop fold + offload 都开：post-observation 有损摘要 + pre-LLM 无损落盘（相位分离，不再争序）',
+    description: '压缩 + offload 护栏都开',
     apply: base => ({
       ...base,
-      offload: { threshold: 0.8, keepRecent: 4, responseReserve: 512 },
+      offload: { maxMessageSize: 0.4, responseReserve: 512 },
     }),
   },
 ];

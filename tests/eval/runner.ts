@@ -406,6 +406,10 @@ export async function runMultiTurn<S>(
     allEvents,
     lastRun!,
   );
+  // 会话级压缩读数：turn-end CompactTransform 产出的 meta.kind='compact' 消息条数。
+  const historyCompactions = ctx.messages
+    .toArray()
+    .filter(m => m.meta?.kind === 'compact').length;
   return {
     task: task.id,
     model: modelId,
@@ -419,6 +423,7 @@ export async function runMultiTurn<S>(
     durationMs,
     workDir,
     turns: task.turns.length,
+    historyCompactions,
     eventTrace: allEvents.map(e => e.type),
   };
 }

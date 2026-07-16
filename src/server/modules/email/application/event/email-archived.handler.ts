@@ -7,16 +7,16 @@ import {
 } from '@/server/modules/conversation/contracts';
 import { Role } from '@/shared/entities/Message';
 import { EmailArchived, type EmailArchivedPayload } from '../../contracts';
-import { EmailArchivePromptService } from '../service/email-archive-prompt.service';
+import { EmailService } from '../service/email.service';
 
 /** Reaction to EmailArchived: hand the archived email to the summarization run.
  *  Stays a thin dispatcher — prompt building + body caching live in
- *  EmailArchivePromptService; this only sequences compose → activate → start. */
+ *  EmailService.composeArchivePrompt; this only sequences compose → activate → start. */
 @eventHandler(EmailArchived)
 export class EmailArchivedHandler {
   constructor(
-    @inject(EmailArchivePromptService)
-    private readonly promptService: EmailArchivePromptService,
+    @inject(EmailService)
+    private readonly emailService: EmailService,
     @inject(CommandBus)
     private readonly commandBus: CommandBus,
   ) {}
@@ -32,7 +32,7 @@ export class EmailArchivedHandler {
       emailSentAt,
     } = event.payload;
 
-    const userContent = await this.promptService.compose({
+    const userContent = await this.emailService.composeArchivePrompt({
       conversationId,
       subject: emailSubject,
       from: emailFrom,

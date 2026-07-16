@@ -4,7 +4,7 @@
  * catalog 200 条(5 city-pair × 40),本任务用其中 2 对:京→沪 / 沪→广。
  * 实测(8K 模型):每次 search 命中 40 条 + agent 推理文本,单程约 +2400~2800 tok。
  *   - 2 程 ≈ base + 2×search + 2×detail + 2×book,峰值 ~6300 tok,**未爆 8192 全窗**
- *     → baseline(no-compaction)不折叠也能完成
+ *     → baseline(bare)不折叠也能完成
  *   - default(压缩)过 6553 阈值触发 mid-loop 压缩 → 压缩后还过不过,即测压缩无损性
  *
  * 与 4leg(B)的对比:本任务 baseline 活、B baseline 爆窗。default 在两者都压缩,

@@ -4,6 +4,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { DesignMetrics, RunOutcome } from './types';
+import { DEFAULT_VARIANT } from './configs';
 
 const RESULTS = path.resolve('tests/eval/results.jsonl');
 const REPORT = path.resolve('tests/eval/report.md');
@@ -26,12 +27,12 @@ export async function append(outcome: RunOutcome): Promise<void> {
 
 /**
  * 已完成 (task×model×variant×trial) 四元组集合——resume 据此跳过。
- * 旧 jsonl 无 variant 字段，回填 'default'。
+ * 旧 jsonl 无 variant 字段，回填 DEFAULT_VARIANT（compact-only）。
  */
 export function completedKeys(existing: readonly RunOutcome[]): Set<string> {
   return new Set(
     existing.map(
-      o => `${o.task}|${o.model}|${o.variant ?? 'default'}|${o.trial}`,
+      o => `${o.task}|${o.model}|${o.variant ?? DEFAULT_VARIANT}|${o.trial}`,
     ),
   );
 }
@@ -67,6 +68,8 @@ type CellAgg = {
   design: DesignMetrics;
   safetyPasses: number;
   safetyTotal: number;
+  /** turn-end CompactTransform 触发数累计（会话级压缩读数）。 */
+  historyCompactions: number;
 };
 
 function emptyCell(): CellAgg {
@@ -91,6 +94,7 @@ function emptyCell(): CellAgg {
     },
     safetyPasses: 0,
     safetyTotal: 0,
+    historyCompactions: 0,
   };
 }
 
@@ -123,6 +127,7 @@ function aggregate(
       c.safetyTotal++;
       if (o.safety.pass) c.safetyPasses++;
     }
+    c.historyCompactions += o.historyCompactions ?? 0;
     cells.set(k, c);
   }
   return cells;
@@ -155,10 +160,10 @@ function passRate(cell: CellAgg | undefined): number {
 
 /**
  * headroom = 同 (model, task) 上最优 variant − baseline variant 的 pass 率差。
- * baseline = 'no-compaction'（关压缩）；缺该 variant 数据则该格 headroom 不可算。
+ * baseline = 'bare'（fold/offload 全关）；缺该 variant 数据则该格 headroom 不可算。
  * >0 → driver 有贡献（baseline 过不了、调上来能过）；≈0 → 该场景不区分 driver（太易/太难）。
  */
-const BASELINE_VARIANT = 'no-compaction';
+const BASELINE_VARIANT = 'bare';
 
 function headroomRows(
   outcomes: readonly RunOutcome[],
@@ -167,7 +172,7 @@ function headroomRows(
 ): Record<string, string | number>[] {
   const byCellVar = aggregate(
     outcomes,
-    o => `${o.task}|${o.model}|${o.variant ?? 'default'}`,
+    o => `${o.task}|${o.model}|${o.variant ?? DEFAULT_VARIANT}`,
   );
   return models.map(m => {
     const row: Record<string, string | number> = { model: m };
@@ -176,7 +181,7 @@ function headroomRows(
       let best = NaN;
       for (const o of outcomes) {
         if (o.task !== t || o.model !== m) continue;
-        const v = o.variant ?? 'default';
+        const v = o.variant ?? DEFAULT_VARIANT;
         if (v === BASELINE_VARIANT) continue;
         const r = passRate(byCellVar.get(`${t}|${m}|${v}`));
         if (Number.isNaN(r)) continue;
@@ -219,23 +224,28 @@ export async function printReport(
   const tasks = [...new Set(outcomes.map(o => o.task))].sort();
   const models = [...new Set(outcomes.map(o => o.model))].sort();
   const variants = [
-    ...new Set(outcomes.map(o => o.variant ?? 'default')),
+    ...new Set(outcomes.map(o => o.variant ?? DEFAULT_VARIANT)),
   ].sort();
 
   const byCellVar = aggregate(
     outcomes,
-    o => `${o.task}|${o.model}|${o.variant ?? 'default'}`,
+    o => `${o.task}|${o.model}|${o.variant ?? DEFAULT_VARIANT}`,
   );
   const byModelVar = aggregate(
     outcomes,
-    o => `${o.model}|${o.variant ?? 'default'}`,
+    o => `${o.model}|${o.variant ?? DEFAULT_VARIANT}`,
+  );
+  // per-domain×model×variant 聚合：correctness 表的 overall 列按域算，不混其他域。
+  const byDomainModelVar = aggregate(
+    outcomes,
+    o => `${domainOf(o.task)}|${o.model}|${o.variant ?? DEFAULT_VARIANT}`,
   );
 
   // 每个 variant 一组切片表（correctness 按 domain 分表 + design），避免横向溢出与跨 variant 混淆。
   const domains = groupTasksByDomain(tasks);
   const sections: string[] = ['# Eval report'];
   for (const v of variants) {
-    // correctness：每个 domain 一张表（列 = 该域的 tasks），避免任务增多横向溢出。
+    // correctness：每个 domain 一张表（列 = 该域的 tasks），overall 列 = 该域合并率。
     for (const [d, dTasks] of domains) {
       const correctnessRows = models.map(m => {
         const row: Record<string, string | number> = { model: m };
@@ -243,7 +253,7 @@ export async function printReport(
           const c = byCellVar.get(`${t}|${m}|${v}`);
           row[t] = c ? fmtRate(c.passes, c.total) : '-';
         }
-        const cm = byModelVar.get(`${m}|${v}`);
+        const cm = byDomainModelVar.get(`${d}|${m}|${v}`);
         row['overall'] = cm ? fmtRate(cm.passes, cm.total) : '-';
         return row;
       });
@@ -275,6 +285,7 @@ export async function printReport(
         row['safety'] = c.safetyTotal
           ? fmtRate(c.safetyPasses, c.safetyTotal)
           : '-';
+        row['hist_compact'] = avg(c.historyCompactions, c.total).toFixed(1);
         return row;
       })
       .filter((r): r is Record<string, string | number> => r !== null);
@@ -294,11 +305,11 @@ export async function printReport(
     for (const [d, dTasks] of domains) {
       const hRows = headroomRows(outcomes, dTasks, models);
       console.log(
-        `\n=== [${d}] Driver headroom (最优 variant − baseline/no-compaction) ===`,
+        `\n=== [${d}] Driver headroom (最优 variant − baseline/bare) ===`,
       );
       console.table(hRows);
       sections.push(
-        `\n## [${d}] Driver headroom (最优 variant − baseline/no-compaction)\n`,
+        `\n## [${d}] Driver headroom (最优 variant − baseline/bare)\n`,
         mkTable(hRows),
       );
     }

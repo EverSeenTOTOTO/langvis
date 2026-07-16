@@ -30,7 +30,10 @@ export class BookingBackend {
   readonly flights: Flight[];
   readonly bookings: Booking[] = [];
   constructor(flights: Flight[]) {
-    this.flights = flights;
+    // 深拷贝：book_flight 原地 flight.seats--，若按引用共享调用方数组
+    // （task 模块级 const FLIGHTS 跨 trial 复用），座位会被前序 run 扣光、
+    // 后序 run 收到 seats=0 → 误判。每 run 拷一份，扣减仅本 run 可见。
+    this.flights = flights.map(f => ({ ...f }));
   }
 }
 
