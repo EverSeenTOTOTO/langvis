@@ -3,6 +3,7 @@ import type { AgentRun } from '../model/agent-run.entity';
 import type { RunEvent } from '@/shared/types/events';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type { CachePort } from './cache.port';
+import type { AuthorizationPort } from './authorization.port';
 import type { HookPlan } from '../model/hook';
 import type { ListMonad } from '@/server/libs/list';
 import type { LlmMessage } from '@/shared/types/entities';
@@ -21,6 +22,8 @@ export interface AgentRunContext {
   readonly signal: AbortSignal;
   readonly llm: LlmPort;
   readonly cache: CachePort;
+  /** 横切授权能力（Principal(runId)×Action×Resource，per-run 缓存 + HITL）。 */
+  readonly auth: AuthorizationPort;
   messages: ListMonad<LlmMessage>;
   readonly base: number;
   readonly hooks?: HookPlan;

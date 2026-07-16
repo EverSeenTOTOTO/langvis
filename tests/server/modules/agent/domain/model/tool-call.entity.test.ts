@@ -5,14 +5,12 @@ import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
+import type { AuthorizationPort } from '@/server/modules/agent/domain/port/authorization.port';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { ListMonad } from '@/server/libs/list';
 import type { RunEvent } from '@/shared/types/events';
 
-function makeMockTool(config?: {
-  untrustedOutput?: boolean;
-  compression?: 'skip' | 'file';
-}): Tool {
+function makeMockTool(config?: { untrustedOutput?: boolean }): Tool {
   return {
     id: 'mock-tool',
     config: config ?? {},
@@ -25,13 +23,20 @@ function makeMockTool(config?: {
 function makeMockCache(): CachePort {
   return {
     resolve: vi.fn(async (_id: string, value: unknown) => value),
-    compress: vi.fn(async (_id: string, value: unknown) => value),
     offload: vi.fn(async (_id: string, _value: unknown) => ({
       $cached: 'fc_test',
       $size: 0,
       $preview: '',
     })),
     readFile: vi.fn(),
+  };
+}
+
+function noopAuth(): AuthorizationPort {
+  return {
+    ensureApproved: async function* () {
+      /* test 不验证授权 */
+    },
   };
 }
 
@@ -55,6 +60,7 @@ function makeCtx(): AgentRunContext {
     signal: new AbortController().signal,
     llm: makeMockLlm(),
     cache: makeMockCache(),
+    auth: noopAuth(),
     messages: ListMonad.of([]),
     base: 0,
     interactive: true,
@@ -87,9 +93,9 @@ describe('ToolCall', () => {
       expect(ctx.cache.resolve).toHaveBeenCalledWith('/tmp/workdir', {
         input: 'test',
       });
-      // tool-call 层不再 compress：#output 留全文（事件/DB/前端真相），
-      // 给 LLM 的 messages 由 post-observation offload-hook 预算化桩化。
-      expect(ctx.cache.compress).not.toHaveBeenCalled();
+      // tool-call 层不落盘：#output 留全文（事件/DB/前端真相），
+      // 给 LLM 的 messages 由 pre-LLM offload-hook 预算化桩化。
+      expect(ctx.cache.offload).not.toHaveBeenCalled();
     });
 
     it('yields tool_call then tool_result on success', async () => {

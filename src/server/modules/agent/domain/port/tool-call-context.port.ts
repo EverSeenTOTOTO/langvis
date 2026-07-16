@@ -1,5 +1,6 @@
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type { ConversationConfig } from '@/server/libs/config';
+import type { AuthorizationPort } from './authorization.port';
 
 /**
  * ToolCallContext —— 与 AgentRunContext 对称
@@ -12,6 +13,8 @@ export interface ToolCallContext {
   readonly signal: AbortSignal;
   readonly workDir: string;
   readonly llm: LlmPort;
+  /** 横切授权能力：越界工具经此过授权门（per-run 缓存 + HITL）。 */
+  readonly auth: AuthorizationPort;
   /** HITL 关联键（AskUser 写 human_input:<runId>），不进入 AgentRunContext。 */
   readonly runId: string;
   /** 是否允许 HITL。conv run = true；子 agent = false（无 HTTP 提交入口，AskUser 会 fail-fast）。 */

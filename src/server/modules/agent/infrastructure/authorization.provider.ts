@@ -81,17 +81,35 @@ export class AuthorizationProvider implements AuthorizationPort {
   }
 }
 
-/** 把任意绝对路径规范化为用户可直观判断的授权根目录。 */
+/**
+ * 授权根 = 用户直观判断的目录：
+ * - 单文件 → 直接父目录：~/a/b/c.pdf → ~/a/b；/etc/foo.pdf → /etc。
+ * - glob → 通配符前的稳定前缀目录（即 glob 锚定的那层）：~/a/b/*.pdf → ~/a/b。
+ * 两者统一用 dirname：单文件 dirname 取父目录；glob 前缀形如 "…/b/" 的 dirname 正是 "…/b"。
+ * 最窄粒度，避免授权到含敏感子目录的大范围。
+ */
+/**
+ * 授权根 = 用户直观判断的目录：
+ * - 单文件（无通配符）→ 直接父目录：~/a/b/c.pdf → ~/a/b；/etc/foo.pdf → /etc。
+ * - glob（含通配符）→ 通配符前的稳定前缀目录（即 glob 锚定的那层）：~/a/b/*.pdf → ~/a/b。
+ *   单文件与 glob 必须分开：Node 的 path.dirname 不认尾部斜杠，对 glob 前缀 "…/b/" 会错剥一层。
+ * 最窄粒度，避免授权到含敏感子目录的大范围。
+ */
 export function normalizeRoot(absPath: string): string {
-  const deglobbed = absPath.split(/[*?[\]{}]/)[0]!;
-  const norm = path.normalize(deglobbed);
   const home = os.homedir();
-  if (norm === home || norm === path.dirname(home)) return home;
-  if (norm.startsWith(home + path.sep)) {
-    return path.join(home, norm.slice(home.length + 1).split(path.sep)[0]!);
+  if (absPath === home || absPath === path.dirname(home)) return home;
+
+  if (/[*?[\]{}]/.test(absPath)) {
+    // glob：稳定前缀去尾部分隔符即目标目录（"/a/b/" → "/a/b"；根 "/" 保持）。
+    const prefix = absPath.split(/[*?[\]{}]/)[0]!;
+    const stripped = path.normalize(prefix).replace(/\/+$/, '');
+    return stripped === '' ? path.sep : stripped;
   }
-  const parts = norm.split(path.sep).filter(Boolean);
-  return `/${parts[0] ?? ''}`;
+
+  // 单文件：取父目录；dirname 在根目录自环（/etc → /etc）时退到自身。
+  const norm = path.normalize(absPath);
+  const dir = path.dirname(norm);
+  return dir === norm ? norm : dir;
 }
 
 export function shortenHome(p: string): string {
