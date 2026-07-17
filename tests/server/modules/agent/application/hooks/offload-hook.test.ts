@@ -201,6 +201,48 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     expect(ctx.messages.get(3)!.content).toContain('[offloaded to file'); // 普通那条被桩
   });
 
+  it('bash 纯倾倒已 offload 句柄的 observation 跳过（防 bash cat fc→fc 别名）', async () => {
+    // agent cat 一个 offload 句柄文件 → 输出是盘上内容的副本 → 再 offload 只会别名 fc→fc。
+    // 动词∈白名单(cat) ∧ 命令含 fc 句柄 → 跳过；旁边一条普通大 bash obs 仍被桩。
+    const ctx = makeCtx(
+      [
+        assistant('bash', { command: 'cat pdf-extract-geely__fc_8a4e9674' }),
+        obs(body(4000)),
+        assistant('bash', { command: 'echo done' }),
+        obs(body(4000)),
+      ],
+      { offload: CFG() },
+    );
+    await collect(makeHook(8192).apply(ctx));
+    expect(ctx.messages.get(1)!.content).toBe(`Observation: ${body(4000)}`); // cat 句柄 → 未桩
+    expect(ctx.messages.get(3)!.content).toContain('[offloaded to file'); // 普通 bash → 被桩
+  });
+
+  it('bash 派生过滤(rg)读 fc 句柄不跳过：输出是派生视图，仍可桩', async () => {
+    // rg 命中 fc 句柄但动词不在纯倾倒白名单 → 不跳过（输出是过滤子集，按体积正常 offload）。
+    const ctx = makeCtx(
+      [
+        assistant('bash', {
+          command: 'rg 收益 pdf-extract-geely__fc_8a4e9674',
+        }),
+        obs(body(8000)),
+      ],
+      { offload: CFG() },
+    );
+    await collect(makeHook(8192).apply(ctx));
+    expect(ctx.messages.get(1)!.content).toContain('[offloaded to file'); // rg → 仍被桩
+  });
+
+  it('bash cat 非 offload 文件不跳过：操作数不含 fc 句柄 → 正常桩', async () => {
+    // cat 自己的 notes.txt（非 fc 句柄）→ 输出是真内容 → 正常桩。
+    const ctx = makeCtx(
+      [assistant('bash', { command: 'cat notes.txt' }), obs(body(8000))],
+      { offload: CFG() },
+    );
+    await collect(makeHook(8192).apply(ctx));
+    expect(ctx.messages.get(1)!.content).toContain('[offloaded to file'); // 非 fc 操作数 → 被桩
+  });
+
   it('裸 user 消息（无 Observation 前缀）超阈被桩', async () => {
     const ctx = makeCtx([userMsg(body(8000))], { offload: CFG() });
     const { events } = await collect(makeHook(8192).apply(ctx));
