@@ -18,7 +18,6 @@ import { agentHook } from './registry';
 
 const OBSERVATION_PREFIX = 'Observation: ';
 const OFFLOADED_MARK = '[offloaded to file'; // 已桩标记 → 跳过重复桩
-const READ_SLICE_MARK = '[read offset='; // cached_read 页脚 → 跳过（防 offload↔read 死环）
 const HEAD_KEEP = 256; // 裸 user 桩化保留头部（保 skill 触发 / 元信息）
 const MIN_BODY_TO_OFFLOAD = 512; // 桩文本须明显小于原文才省
 const CHUNK_SIZE = 2000; // cached_read 块大小；桩里固化首块 offset/limit
@@ -70,7 +69,7 @@ export class OffloadHook implements Hook {
       const cand = candidateBody(messages[i]!);
       if (!cand) continue;
       if (cand.body.includes(OFFLOADED_MARK)) continue;
-      if (cand.body.includes(READ_SLICE_MARK)) continue;
+      if (cand.isObservation && isCachedReadObservation(messages, i)) continue;
       if (cand.body.length < MIN_BODY_TO_OFFLOAD) continue;
       candByIndex.set(i, { ...cand, tokens: estimateTokens([messages[i]!]) });
       ordered.push(i);
@@ -157,6 +156,20 @@ function candidateBody(
     };
   }
   return { body: msg.content, isObservation: false };
+}
+
+/** 这条 observation 是否 cached_read 产物：查配对 assistant 的 tool。cached_read 结果已是盘上句柄的回取，再 offload 只会别名 fc→fc 嵌套，跳过。 */
+function isCachedReadObservation(
+  messages: LlmMessage[],
+  obsIndex: number,
+): boolean {
+  const assistant = messages[obsIndex - 1];
+  if (!assistant || assistant.role !== 'assistant') return false;
+  try {
+    return parseResponse(assistant.content).tool === ToolIds.CACHED_READ;
+  } catch {
+    return false;
+  }
 }
 
 /** Observation 的 hint：配对 assistant 的 tool + 首个 scalar 入参。bash 取命令动词（不带参数，防文件名嵌套）。失败 → ''。 */

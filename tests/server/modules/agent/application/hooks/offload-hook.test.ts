@@ -180,16 +180,25 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     expect(ctx.cache.offload).not.toHaveBeenCalled();
   });
 
-  it('read-slice 跳过（READ_SLICE_MARK）——断 offload↔cached_read 死环', async () => {
-    // 两条 obs：一条 cached_read 取回的 slice（含页脚 `[read offset=`），一条普通大 obs。
-    // 总量超 cap → 候选含两者；但 slice 含 READ_SLICE_MARK → 跳过，只桩普通那条。
+  it('cached_read 产物的 observation 跳过（防 offload↔cached_read 死环）', async () => {
+    // 两条 obs：cached_read 取回的 slice（带配对 assistant）、普通大 obs。
+    // 总量超 cap → 候选含两者；但 cached_read 结果已是盘上句柄回取，再 offload 只会别名 fc→fc 嵌套 → 跳过，只桩普通那条。
+    // 检测靠配对 assistant 的 tool，不扫内容（slice 里的页脚只是给 agent 续读 offset，不再承担 offload 契约）。
     const slice =
       body(4000) +
       `\n\n[read offset=0 limit=2000; continue with cached_read(key="fc_test", offset=2000, limit=2000)]`;
-    const ctx = makeCtx([obs(slice), obs(body(4000))], { offload: CFG() });
+    const ctx = makeCtx(
+      [
+        assistant('cached_read', { key: 'fc_test', offset: 0, limit: 2000 }),
+        obs(slice),
+        assistant('search', { q: 'a' }),
+        obs(body(4000)),
+      ],
+      { offload: CFG() },
+    );
     await collect(makeHook(8192).apply(ctx));
-    expect(ctx.messages.get(0)!.content).toBe(`Observation: ${slice}`); // slice 原样未桩
-    expect(ctx.messages.get(1)!.content).toContain('[offloaded to file'); // 普通那条被桩
+    expect(ctx.messages.get(1)!.content).toBe(`Observation: ${slice}`); // slice 原样未桩
+    expect(ctx.messages.get(3)!.content).toContain('[offloaded to file'); // 普通那条被桩
   });
 
   it('裸 user 消息（无 Observation 前缀）超阈被桩', async () => {
