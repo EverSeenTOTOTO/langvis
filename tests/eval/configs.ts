@@ -60,7 +60,7 @@ export const VARIANTS: readonly Variant[] = [
       const { loop: _l, history: _h, ...rest } = base;
       return {
         ...rest,
-        offload: { maxMessageSize: 0.4, responseReserve: 512 },
+        offload: {},
       } as ConversationConfig;
     },
   },
@@ -69,7 +69,7 @@ export const VARIANTS: readonly Variant[] = [
     description: '压缩 + offload 护栏都开',
     apply: base => ({
       ...base,
-      offload: { maxMessageSize: 0.4, responseReserve: 512 },
+      offload: {},
     }),
   },
 ];

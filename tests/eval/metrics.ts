@@ -53,7 +53,7 @@ export function deriveDesign(events: readonly EnrichedEvent[]): DesignMetrics {
     toolErrors: errors.length,
     errorTools,
     compactionTriggers,
-    budgetHit: hookIds.has('token-budget'),
+    budgetHit: hookIds.has('cumulative-budget'),
     stuckHit: hookIds.has('stuck'),
     iterationCapHit: hookIds.has('max-iterations'),
     redundantCalls,

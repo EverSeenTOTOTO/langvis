@@ -232,6 +232,7 @@ export async function runOnce<S>(
   const systemPrompt = _agentService!.buildSystemPrompt(toolSet, BASE_PROMPT);
   const workDir = await _workspace!.getWorkDir(conversationId);
   attachWorkDir(sandbox, workDir);
+  await task.seedWorkDir?.(workDir);
 
   const start = Date.now();
   const { run, events } = await executeRun(
@@ -314,6 +315,7 @@ export async function runMultiTurn<S>(
   const runtimeConfig = resolveRuntimeConfig(task, modelId, variantId);
   const workDir = await _workspace!.getWorkDir(conversationId);
   attachWorkDir(sandbox, workDir);
+  await task.seedWorkDir?.(workDir);
 
   const allEvents: EnrichedEvent[] = [];
   // messageId → 该轮 turn events（供 turn-end 的 process-summary transform 经 ctx.getRunEvents 取回折叠）。

@@ -3,7 +3,7 @@ import { container } from 'tsyringe';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
 import { CompactionHook } from '@/server/modules/agent/application/hooks/compaction-hook';
 import { LoopUsageHook } from '@/server/modules/agent/application/hooks/loop-usage-hook';
-import { BudgetHook } from '@/server/modules/agent/application/hooks/budget-hook';
+import { CumulativeBudgetHook } from '@/server/modules/agent/application/hooks/budget-hook';
 import { StuckHook } from '@/server/modules/agent/application/hooks/stuck-hook';
 import { MaxIterationsHook } from '@/server/modules/agent/application/hooks/max-iterations-hook';
 import { ListMonad } from '@/server/libs/list';
@@ -69,7 +69,7 @@ describe('agent hook registry（自动识别 + per-run 实例）', () => {
     const hooks = resolveAgentHooks();
     expect(hooks.some(h => h instanceof CompactionHook)).toBe(true);
     expect(hooks.some(h => h instanceof LoopUsageHook)).toBe(true);
-    expect(hooks.some(h => h instanceof BudgetHook)).toBe(true);
+    expect(hooks.some(h => h instanceof CumulativeBudgetHook)).toBe(true);
     expect(hooks.some(h => h instanceof StuckHook)).toBe(true);
     expect(hooks.some(h => h instanceof MaxIterationsHook)).toBe(true);
   });
@@ -79,8 +79,8 @@ describe('agent hook registry（自动识别 + per-run 实例）', () => {
     const b = resolveAgentHooks();
     expect(a).not.toBe(b);
     const find = (hs: typeof a, id: string) => hs.find(h => h.id === id)!;
-    // BudgetHook 持可变 consumed，必须 per-run——两次解析不得同实例
-    expect(find(a, 'token-budget')).not.toBe(find(b, 'token-budget'));
+    // CumulativeBudgetHook 持可变 consumed，必须 per-run——两次解析不得同实例
+    expect(find(a, 'cumulative-budget')).not.toBe(find(b, 'cumulative-budget'));
     expect(find(a, 'compaction')).not.toBe(find(b, 'compaction'));
   });
 });

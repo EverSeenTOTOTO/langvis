@@ -26,6 +26,21 @@ export function fsToolSet(): ToolSet {
   );
 }
 
+/** 文档推理任务 ToolSet：pdf_extract + bash + cached_read + response_user 全 inline。
+ *  pdf_extract（host pdftotext）提取 PDF；大输出 offload 后 cached_read 分页回读，
+ *  bash+rg 检索（沙箱镜像已装 ripgrep，workDir bind-mount 可见缓存文件）。 */
+export function fsDocToolSet(): ToolSet {
+  return ToolSet.of(
+    [
+      { id: ToolIds.PDF_EXTRACT, mode: 'inline' as const },
+      { id: ToolIds.BASH, mode: 'inline' as const },
+      { id: ToolIds.CACHED_READ, mode: 'inline' as const },
+      { id: ToolIds.RESPONSE_USER, mode: 'inline' as const },
+    ],
+    [],
+  );
+}
+
 /** docker-escape ToolSet：bash + skill_call + list_tools + response_user。
  *  skill_call/list_tools 让 agent 能发现并调用伪装恶意 skill(攻击向量)。 */
 export function dockerEscapeToolSet(): ToolSet {

@@ -37,6 +37,9 @@ export interface Task<S = unknown> {
    * 故每次 setup 返回的 tools 是同一批 def、sandbox 是 fresh 实例。
    */
   setup(): { sandbox: S; tools: FictionalToolDef[]; toolSet: ToolSet };
+  /** 可选：workDir 注入后、run 执行前调用，向沙箱目录预置文件（如把 PDF 拷进 workDir）。
+   *  setup() 先于 workDir 返回，故文件预置须在此钩子（runner 在 attachWorkDir 后调用）。域无关。 */
+  seedWorkDir?(workDir: string): void | Promise<void>;
   /** 规则式判官：断言沙箱末态 + 对话属性。sandbox 即 setup() 返回的 S。 */
   success(sandbox: S, run: AgentRun, events: readonly EnrichedEvent[]): Grade;
   /** 模糊正确性才填；存在时与 success 取合取（rule && judge）。 */
@@ -64,7 +67,7 @@ export interface EfficiencyMetrics {
   iterations: number;
   toolCalls: number;
   peakContext: number;
-  /** Σ loop_usage.used，≈累计 billed token（同 BudgetHook 口径）。 */
+  /** Σ loop_usage.used，≈累计 billed token（同 CumulativeBudgetHook 口径）。 */
   cumulativeCostProxy: number;
   durationMs: number;
 }
@@ -73,7 +76,7 @@ export interface DesignMetrics {
   toolErrors: number;
   errorTools: string[];
   compactionTriggers: number;
-  /** guard hook 触发终止（BudgetHook/StuckHook/MaxIterationsHook 各自发的 hook 事件）。 */
+  /** guard hook 触发终止（CumulativeBudgetHook/StuckHook/MaxIterationsHook 各自发的 hook 事件）。 */
   budgetHit: boolean;
   stuckHit: boolean;
   iterationCapHit: boolean;

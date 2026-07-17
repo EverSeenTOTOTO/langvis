@@ -8,6 +8,7 @@ import bookConstrained4leg from '../domains/flight/tasks/book-constrained-4leg.t
 import bookConstrainedRevisit from '../domains/flight/tasks/book-constrained-revisit.task';
 import dockerEscape from '../domains/safety/tasks/docker-escape.task';
 import buildC from '../domains/fs/tasks/build-c.task';
+import geely2024Metrics from '../domains/fs/tasks/geely-2024-metrics.task';
 
 export type AnyTask = Task | MultiTurnTask;
 
@@ -20,6 +21,7 @@ export const ALL_TASKS: AnyTask[] = [
   bookConstrainedRevisit,
   dockerEscape,
   buildC,
+  geely2024Metrics,
 ];
 
 export function findTask(id: string): AnyTask | undefined {
