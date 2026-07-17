@@ -18,6 +18,18 @@ import { agentHook } from './registry';
 
 const OBSERVATION_PREFIX = 'Observation: ';
 const OFFLOADED_MARK = '[offloaded to file'; // 已桩标记 → 跳过重复桩
+/** offload 落盘文件名约定：fc_ + 恰好 8 hex（裸 fc_<hex> 或 <hint>__fc_<hex>）。识别 bash 命令是否在读已 offload 的盘上句柄，只认操作数。 */
+const OFFLOAD_FILE_RE = /(?:^|[^a-z0-9])fc_[0-9a-f]{8}(?![0-9a-f])/i;
+/** 把文件原样倾倒到 stdout 的 bash 动词（再 offload 即 fc→fc 别名）。只列纯倾倒族，不含 rg/grep/awk/sed 等派生过滤。 */
+const BASH_DUMP_VERBS = new Set([
+  'cat',
+  'head',
+  'tail',
+  'more',
+  'less',
+  'tac',
+  'nl',
+]);
 const HEAD_KEEP = 256; // 裸 user 桩化保留头部（保 skill 触发 / 元信息）
 const MIN_BODY_TO_OFFLOAD = 512; // 桩文本须明显小于原文才省
 const CHUNK_SIZE = 2000; // cached_read 块大小；桩里固化首块 offset/limit
@@ -59,7 +71,7 @@ export class OffloadHook implements Hook {
     let tokens = estimateTokens(messages);
     if (tokens * factor <= cap) return 'next';
 
-    // 候选：仅 [base,len)。已桩 / read-slice / 短于 MIN 跳过。最胖优先（tokens 降序）。
+    // 候选：仅 [base,len)。已桩 / 盘上句柄回取 / 短于 MIN 跳过。最胖优先（tokens 降序）。
     const candByIndex = new Map<
       number,
       { body: string; isObservation: boolean; tokens: number }
@@ -69,7 +81,7 @@ export class OffloadHook implements Hook {
       const cand = candidateBody(messages[i]!);
       if (!cand) continue;
       if (cand.body.includes(OFFLOADED_MARK)) continue;
-      if (cand.isObservation && isCachedReadObservation(messages, i)) continue;
+      if (cand.isObservation && isOffloadedRecall(messages, i)) continue;
       if (cand.body.length < MIN_BODY_TO_OFFLOAD) continue;
       candByIndex.set(i, { ...cand, tokens: estimateTokens([messages[i]!]) });
       ordered.push(i);
@@ -158,15 +170,21 @@ function candidateBody(
   return { body: msg.content, isObservation: false };
 }
 
-/** 这条 observation 是否 cached_read 产物：查配对 assistant 的 tool。cached_read 结果已是盘上句柄的回取，再 offload 只会别名 fc→fc 嵌套，跳过。 */
-function isCachedReadObservation(
-  messages: LlmMessage[],
-  obsIndex: number,
-): boolean {
+/** 这条 observation 是否盘上 offload 句柄的回取/视图：再 offload 只会 fc→fc 别名，跳过。
+ *  两条路径：① 配对 assistant 的 tool === CACHED_READ；② tool === BASH 且动词∈纯倾倒白名单 ∧ 命令 token 命中 fc 句柄（cat fc_x / head fc_x 这类，动词无关的操作数检测见 OFFLOAD_FILE_RE）。rg/grep/awk/sed 等派生过滤不在白名单，输出是派生视图，按体积正常 offload。 */
+function isOffloadedRecall(messages: LlmMessage[], obsIndex: number): boolean {
   const assistant = messages[obsIndex - 1];
   if (!assistant || assistant.role !== 'assistant') return false;
   try {
-    return parseResponse(assistant.content).tool === ToolIds.CACHED_READ;
+    const { tool, input } = parseResponse(assistant.content);
+    if (tool === ToolIds.CACHED_READ) return true;
+    if (tool === ToolIds.BASH) {
+      const cmd = (input as { command?: unknown }).command;
+      if (typeof cmd !== 'string') return false;
+      const verb = cmd.trim().split(/\s+/)[0] ?? '';
+      return BASH_DUMP_VERBS.has(verb) && OFFLOAD_FILE_RE.test(cmd);
+    }
+    return false;
   } catch {
     return false;
   }
