@@ -7,18 +7,13 @@ import type {
 import type { RunEvent } from '@/shared/types/events';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
-import { responseUser } from './budget-hook';
+import { responseUser } from './cumulative-budget-hook';
 
 const ITER_CAP_MESSAGE =
   'This turn reached its iteration limit without finishing. Stopping here — please continue in a new turn if needed.';
 
 /**
  * 迭代上限兜底（length 闸）。阈值取自 guard.maxIterations（生产默认 1000，eval 调小）。
- * 每次 post-observation 自增实例计数 ticks（post-observation 每 tick 跑一次、终态 tick 不跑），
- * 到上限即发 hook 事件 + 强制答复并 break。
- *
- * 与 StuckHook 互补：StuckHook 抓"原地空转"（每 tick 便宜但无限），
- * MaxIterationsHook 抓"稳步推进但过长"（合法但超预算）。
  */
 @agentHook
 export class MaxIterationsHook implements Hook {

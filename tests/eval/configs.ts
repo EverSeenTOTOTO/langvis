@@ -17,9 +17,15 @@ export const TRIALS = 10;
 export function runtimeConfigFor(modelId: string): ConversationConfig {
   return {
     model: { modelId, temperature: 0 },
-    loop: { threshold: 0.8, windowSize: 10, keepRecent: 4 },
+    loop: { threshold: 0.95, windowSize: 10, keepRecent: 4 },
     history: { threshold: 0.8, windowSize: 10 },
-    guard: { maxIterations: 50, maxTokenUsage: 1_000_000, stuckThreshold: 5 },
+    guard: {
+      maxIterations: 50,
+      maxTokenUsage: 1_000_000,
+      stuckThreshold: 5,
+      maxQuerySize: 0.4,
+      maxQueryTokens: 10_000,
+    },
   } satisfies ConversationConfig;
 }
 

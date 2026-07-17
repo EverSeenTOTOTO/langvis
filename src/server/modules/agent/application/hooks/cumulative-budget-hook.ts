@@ -17,13 +17,6 @@ const budgetMessage = (used: number, budget: number) =>
 
 /**
  * 累计 token 用量兜底（cost 闸）。阈值取自 guard.maxTokenUsage（默认 1M，eval 调小）。
- * 与 QueryBudgetHook（单次 query 体积口径）对照：本 hook 是**累计**口径——每次 post-llm 把
- * "本 tick 的 input+output 估算"（此刻全量 messages）累加进实例字段 consumed。这是已花费成本：
- * 压缩只缩后续前缀、不抵消历史花费，故用累加而非当前上下文大小。
- * 超额时若模型已正当 response_user 则放行（不覆盖收尾），否则发 hook 事件 + 强制答复并 break。
- *
- * 状态内聚在实例字段而非 ctx：hook 为 per-run 实例（见 registry），consumed 天然随 run 生灭，
- * 不污染 ctx、且杜绝跨 run 共享可变字段的并发污染。
  */
 @agentHook
 export class CumulativeBudgetHook implements Hook {

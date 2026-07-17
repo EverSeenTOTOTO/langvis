@@ -3,7 +3,7 @@ import { container } from 'tsyringe';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
 import { CompactionHook } from '@/server/modules/agent/application/hooks/compaction-hook';
 import { LoopUsageHook } from '@/server/modules/agent/application/hooks/loop-usage-hook';
-import { CumulativeBudgetHook } from '@/server/modules/agent/application/hooks/budget-hook';
+import { CumulativeBudgetHook } from '@/server/modules/agent/application/hooks/cumulative-budget-hook';
 import { StuckHook } from '@/server/modules/agent/application/hooks/stuck-hook';
 import { MaxIterationsHook } from '@/server/modules/agent/application/hooks/max-iterations-hook';
 import { ListMonad } from '@/server/libs/list';

@@ -9,7 +9,7 @@ import type { RunEvent } from '@/shared/types/events';
 import { parseResponse } from '@/server/modules/agent/application/service/react-loop';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
-import { responseUser } from './budget-hook';
+import { responseUser } from './cumulative-budget-hook';
 
 const STUCK_MESSAGE =
   'I seem to be stuck repeating the same step without making progress. Stopping here — please rephrase or give me more to go on.';

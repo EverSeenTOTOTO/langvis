@@ -9,29 +9,13 @@ import type { RunEvent } from '@/shared/types/events';
 import { ListMonad } from '@/server/libs/list';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
-import { queryTokenCap } from './query-cap';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
 
 const OBSERVATION_PREFIX = 'Observation: ';
 
 /**
- * pre-LLM **per-latest** 体积护栏：OffloadHook（无损落盘，总量口径）之后的末道有损防线。
- * 与 OffloadHook 无关——offload 是总量/窗口口径（阈值 offload.windowRatio，offload 最胖历史），
- * 本 hook 是 per-latest 单条口径（阈值 guard.maxQuerySize，drop 最新一条）。两 hook 维度不同、阈值不同。
- *
- * 口径是**最新一条**消息：offload 跳过 read-slice（cached_read 结果带 [read offset= 页脚）以断
- * offload↔read 环，一个胖 cached_read 切片会被原样留在消息里，顶过窗的正是它。故本 hook 测算最新一条
- * 是否塞得进"留给它的余量"：
- *   budget   = min(guard.maxQueryTokens, contextWindow×guard.maxQuerySize)（per-latest 单条预算，默认 0.4/10k）
- *   remaining = contextWindow − estimateTokens(最新一条之前的所有消息)（留给最新一条的可用窗口）
- *   cap      = min(budget, remaining)
- * 最新一条 tokens > cap → 只 drop 它 + 收缩提示 + 'continue'（跳过本次 LLM、重入下一轮）。
- * budget 项管"单条不该独占窗口"（小窗防爆 400、10k 拦病态胖取）；
- * remaining 项管"prefix 已占了大半窗时，最新一条只剩那么多余量"——大 seed + 中等 latest 实际爆窗的兜底。
- *
- * 不可恢复 → break：① 最新一条落在 [0,base) seed 内（last < base，无可 drop）；② prefix 自身 ≥ 窗口
- * （remaining ≤ 0，offload/compaction 未能缩进窗口）。两者发事件 + break，避免 'continue' 死循环。
+ * 最新消息体积护栏
  */
 @agentHook
 export class QueryBudgetHook implements Hook {
@@ -51,8 +35,11 @@ export class QueryBudgetHook implements Hook {
       ctx.config.runtimeConfig,
     );
     if (!contextSize) return 'next';
-    // per-latest 单条预算（guard.maxQuerySize / maxQueryTokens）；与 offload（总量口径）无关。
-    const budget = queryTokenCap(contextSize, guard);
+    // per-latest 单条预算 = min(maxQueryTokens, contextWindow×maxQuerySize)。阈值在 guard fragment。
+    const budget = Math.min(
+      guard.maxQueryTokens!,
+      Math.floor(contextSize * guard.maxQuerySize!),
+    );
 
     const messages = ctx.messages.toArray();
     const last = messages.length - 1;

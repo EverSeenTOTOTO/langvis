@@ -212,6 +212,21 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     expect(ctx.messages.get(1)!.content).toContain('[offloaded to file');
   });
 
+  it('bash hint 取命令动词不带参数（防文件名嵌套）', async () => {
+    const ctx = makeCtx(
+      [
+        assistant('bash', { command: 'cat geely-2024-annual-report.pdf' }),
+        obs(body(8000)),
+      ],
+      { offload: CFG() },
+    );
+    const { events } = await collect(makeHook(8192).apply(ctx));
+    expect(events).toHaveLength(1);
+    const offloaded = ctx.messages.get(1)!.content;
+    expect(offloaded).toContain('(bash-cat)'); // hint = tool + 动词
+    expect(offloaded).not.toContain('geely'); // 参数不入文件名 → 不嵌套
+  });
+
   it('已桩化的消息不重复桩（OFFLOADED_MARK 跳过）', async () => {
     const alreadyOffloaded = '[offloaded to file fc_old] size=600B.';
     const ctx = makeCtx(

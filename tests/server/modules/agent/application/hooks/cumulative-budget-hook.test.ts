@@ -5,7 +5,7 @@ import type { LlmMessage } from '@/shared/types/entities';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
-import { CumulativeBudgetHook } from '@/server/modules/agent/application/hooks/budget-hook';
+import { CumulativeBudgetHook } from '@/server/modules/agent/application/hooks/cumulative-budget-hook';
 
 // 控制 estimateTokens 返回值——CumulativeBudgetHook 用它累加 consumed。per-test 设值。
 const mockTokens = vi.hoisted(() => ({ value: 0 }));
