@@ -30,6 +30,44 @@ function sanitizeHint(hint?: string): string {
     .slice(0, 48);
 }
 
+/** 折行宽度上限：rg 命中后单行回显不致失控（8k 上下文模型也吃得下）。 */
+const MAX_GREP_LINE = 2000;
+
+/**
+ * 把 offload 落盘的内容 reflow 成 rg 友好形，治"一整行 JSON 不好 rg"：
+ *  - JSON 形（{/[ 开头）：把字符串字面量里转义的换行/制表符解回真实字符——text 字段全转义 \n 时，
+ *    整条 JSON 是一巨行，rg 一命中就回整块；解码后裂成多行，rg 只回匹配所在行。仅 JSON 形解码，
+ *    避免误伤普通文本里的字面反斜杠（Windows 路径、正则等）。解码后文件不再是合法 JSON，
+ *    但 offload 落盘件只供 cached_read（按 char 偏移取原始切片）与 rg 用，不会被 JSON.parse 回对象。
+ *  - 非 JSON 形：仍可能是一整条无换行的长文本，按空白处折到 MAX_GREP_LINE，rg 命中也只回 bounded 片段。
+ */
+function reflowForGrep(s: string): string {
+  if (/^\s*[{[]/.test(s)) {
+    return s
+      .replace(/\\r\\n/g, '\n')
+      .replace(/\\r/g, '\n')
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t');
+  }
+  return wrapLongLines(s, MAX_GREP_LINE);
+}
+
+/** 把超过 width 的行在最近空白处折行（无空白则硬折），保证每行 ≤ width。 */
+function wrapLongLines(text: string, width: number): string {
+  const out: string[] = [];
+  for (const line of text.split('\n')) {
+    let remaining = line;
+    while (remaining.length > width) {
+      let cut = remaining.lastIndexOf(' ', width);
+      if (cut <= 0) cut = width;
+      out.push(remaining.slice(0, cut));
+      remaining = remaining.slice(cut).replace(/^ /, '');
+    }
+    out.push(remaining);
+  }
+  return out.join('\n');
+}
+
 @singleton()
 export class CacheProvider implements CachePort {
   constructor(
@@ -105,12 +143,14 @@ export class CacheProvider implements CachePort {
     const id = generateId('fc');
     const filename = sanitized ? `${sanitized}__${id}` : id;
     const filePath = path.join(workDir, filename);
-    await fs.writeFile(filePath, serialized, 'utf-8');
+    // 落盘前 reflow：把一整行 JSON（text 字段全转义 \n）裂成多行，否则 rg 一命中就回整条 885KB 巨行。
+    const stored = reflowForGrep(serialized);
+    await fs.writeFile(filePath, stored, 'utf-8');
 
     return {
       $cached: filename,
-      $size: Buffer.byteLength(serialized, 'utf8'),
-      $preview: serialized.slice(0, PREVIEW_LENGTH),
+      $size: Buffer.byteLength(stored, 'utf8'),
+      $preview: stored.slice(0, PREVIEW_LENGTH),
       ...(sanitized ? { $label: sanitized } : {}),
     };
   }

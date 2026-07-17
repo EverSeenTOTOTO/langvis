@@ -12,7 +12,7 @@ export const AGENT_HOOK = Symbol('AGENT_HOOK');
  * 类上只需挂这一个装饰器（镜像 decorator/controller.ts 的 controller 装饰器）。
  *
  * hook 非 singleton、per-run 实例化：executor 的 createRun 每次 run 调一次 resolveAgentHooks，
- * 故 hook 可把跨 tick 的私有状态内聚在实例字段（如 BudgetHook 的累计 token），既不污染 ctx，
+ * 故 hook 可把跨 tick 的私有状态内聚在实例字段（如 CumulativeBudgetHook 的累计 token），既不污染 ctx，
  * 又从构造上杜绝跨 run 共享可变状态的并发污染。跨 run 的持久状态仍走 repo，不进实例字段。
  */
 export function agentHook<T extends new (...args: any[]) => Hook>(

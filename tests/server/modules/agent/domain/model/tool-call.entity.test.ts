@@ -86,13 +86,12 @@ async function collect(
 
 describe('ToolCall', () => {
   describe('execute', () => {
-    it('resolves input args and leaves output uncompressed (full text in #output)', async () => {
+    it('passes input args through and leaves output uncompressed (full text in #output)', async () => {
       const ctx = makeCtx();
       const toolCall = createToolCall(makeMockTool(), ctx);
       await collect(toolCall.execute());
-      expect(ctx.cache.resolve).toHaveBeenCalledWith('/tmp/workdir', {
-        input: 'test',
-      });
+      // 不存在自动 resolve：入参原样直用。
+      expect(ctx.cache.resolve).not.toHaveBeenCalled();
       // tool-call 层不落盘：#output 留全文（事件/DB/前端真相），
       // 给 LLM 的 messages 由 pre-LLM offload-hook 预算化桩化。
       expect(ctx.cache.offload).not.toHaveBeenCalled();

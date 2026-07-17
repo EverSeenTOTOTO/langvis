@@ -50,10 +50,10 @@ export class ToolCall extends Entity<string> {
   }
 
   async *execute(): AsyncGenerator<RunEvent, string, void> {
-    this.input = (await this.ctx.cache.resolve(
-      this.workDir,
-      this.toolArgs,
-    )) as Record<string, unknown>;
+    // 工具入参即 LLM 产出的 JSON，原样直用——不存在自动 resolve。
+    // 大工具输出经 post-observation offload-hook 落盘桩化（见 observation 注释），
+    // 落盘件只供 cached_read/rg 检索，不会被自动解析回对象。
+    this.input = this.toolArgs;
 
     yield {
       type: 'tool_call',
