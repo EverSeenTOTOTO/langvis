@@ -12,9 +12,7 @@ import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
 
-/** loop 内压缩：折叠 turn 动作轨迹为过程摘要（仅记工作，不复述最终答案）；Prompt 与 conv turn-end 的
- *  ProcessSummaryTransform 复用 PROCESS_SUMMARY_PROMPT（lib 共享模板）。 */
-
+/** loop 内压缩：折叠 turn 动作轨迹为过程摘要（仅记工作，不复述最终答案） */
 @agentHook
 export class CompactionHook implements Hook {
   readonly id = 'compaction';

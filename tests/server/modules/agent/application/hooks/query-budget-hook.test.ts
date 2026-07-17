@@ -50,13 +50,9 @@ function makeCtx(
         maxIterations: 1000,
         maxTokenUsage: 1_000_000,
         stuckThreshold: 5,
-        // per-latest 单条 cap 配置在 guard（与 offload 无关）；省略即默认 0.4 / 10k。
-        ...(opts.maxQuerySize != null
-          ? { maxQuerySize: opts.maxQuerySize }
-          : {}),
-        ...(opts.maxQueryTokens != null
-          ? { maxQueryTokens: opts.maxQueryTokens }
-          : {}),
+        // per-latest 单条 cap 配置在 guard（与 offload 无关）。测试自给默认值（对齐 fragment）。
+        maxQuerySize: opts.maxQuerySize ?? 0.4,
+        maxQueryTokens: opts.maxQueryTokens ?? 10_000,
       },
     },
   });

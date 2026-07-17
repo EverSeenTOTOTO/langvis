@@ -226,5 +226,46 @@ describe('CacheProvider', () => {
       )) as Record<string, unknown>;
       expect(reread).toEqual(obj);
     });
+
+    it('reflow 解码 untrusted 包裹内 JSON 转义（\\n/\\"），盘上存真字符', async () => {
+      // 模拟 observation getter 对 bash 对象 stringify 后再 wrapUntrusted 的产物（含字面 \n / \"）。
+      const obs =
+        '<untrusted_content>\n' +
+        '{"exitCode":0,"stdout":"line1\\nline2 \\"q\\""}' +
+        '\n</untrusted_content>';
+      const ref = await cacheService.offload(workDir, obs, 'bash-cat');
+      const disk = await fs.readFile(path.join(workDir, ref.$cached), 'utf-8');
+      expect(disk).not.toContain('\\'); // 转义全解回真字符，无残留反斜杠
+      expect(disk).toContain('line1\nline2'); // \n 解为真换行
+      expect(disk).toContain('"q"'); // \" 解为真引号
+    });
+
+    it('cat 循环不滚雪球：二代 offload 转义层数不翻倍', async () => {
+      // 一代：offload stringified bash 结果。
+      const obs0 =
+        '<untrusted_content>\n' +
+        '{"exitCode":0,"stdout":"line1\\nline2 \\"q\\""}' +
+        '\n</untrusted_content>';
+      const ref0 = await cacheService.offload(workDir, obs0, 'bash-cat');
+      const disk0 = await fs.readFile(
+        path.join(workDir, ref0.$cached),
+        'utf-8',
+      );
+
+      // 二代：模拟 agent cat 一代文件 → bash 返回 {stdout: 一代盘内容} → stringify → 新 observation。
+      const obs1 =
+        '<untrusted_content>\n' +
+        JSON.stringify({ exitCode: 0, stdout: disk0 }) +
+        '\n</untrusted_content>';
+      const ref1 = await cacheService.offload(workDir, obs1, 'bash-cat');
+      const disk1 = await fs.readFile(
+        path.join(workDir, ref1.$cached),
+        'utf-8',
+      );
+
+      expect(disk1).not.toContain('\\\\'); // 无翻倍反斜杠（雪球标志）
+      expect(disk1).not.toContain('\\"'); // 无残留 \"
+      expect(disk1).toContain('line1\nline2'); // 真换行保留
+    });
   });
 });

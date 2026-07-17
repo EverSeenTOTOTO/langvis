@@ -1,6 +1,7 @@
 import type { JSONSchemaType } from 'ajv';
 import type { ConfigFragment } from '../config-fragment';
 
+/** ReAct loop 内有损压缩（fold）：超 threshold 时折较早步骤为过程摘要，保留 keepRecent 条尾。 */
 export interface LoopCompactionConfig {
   threshold: number;
   windowSize: number;
@@ -20,11 +21,12 @@ export const LOOP_FRAGMENT: ConfigFragment<'loop', LoopCompactionConfig> = {
     properties: {
       threshold: {
         type: 'number',
-        default: 0.8,
+        default: 0.95,
         minimum: 0.1,
-        maximum: 0.95,
+        maximum: 0.99,
         nullable: true,
-        description: '触发压缩的上下文用量比例',
+        description:
+          '触发有损压缩的上下文用量比例（默认 0.95，退为 offload 之后的兜底）',
       },
       windowSize: {
         type: 'integer',

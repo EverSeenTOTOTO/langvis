@@ -11,6 +11,7 @@ import { ListMonad } from '@/server/libs/list';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { parseResponse } from '@/server/modules/agent/application/service/react-loop';
+import { ToolIds } from '@/shared/constants';
 import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
@@ -20,22 +21,14 @@ const OFFLOADED_MARK = '[offloaded to file'; // 已桩标记 → 跳过重复桩
 const READ_SLICE_MARK = '[read offset='; // cached_read 页脚 → 跳过（防 offload↔read 死环）
 const HEAD_KEEP = 256; // 裸 user 桩化保留头部（保 skill 触发 / 元信息）
 const MIN_BODY_TO_OFFLOAD = 512; // 桩文本须明显小于原文才省
-const CHUNK_SIZE = 2000; // cached_read 块大小；桩里固化首块 offset/limit，小模型照抄
+const CHUNK_SIZE = 2000; // cached_read 块大小；桩里固化首块 offset/limit
 /** estimateTokens 对中文/JSON 系统性低估 ~8% 的固定补偿（非旋钮）——防桩化不足→真实爆窗。 */
 const ESTIMATE_SAFETY_FACTOR = 1.1;
 /** 总量触发比例缺省：total×factor > contextWindow×此值即 offload 最胖。 */
-const DEFAULT_WINDOW_RATIO = 0.9;
+const DEFAULT_WINDOW_RATIO = 0.8;
 
 /**
- * pre-LLM **无损**体积护栏：per-call 安全网，不缩历史，**总量/窗口空间口径**（与 QueryBudgetHook 无关）。
- * 当本次 query 的 token×factor > contextWindow×windowRatio（剩余空间不足）时，最胖优先桩化 [base,len)
- * 内候选到盘（cached_read/rg 句柄），直到缩进阈值内。QueryBudgetHook 是 per-latest 单条口径
- * （阈值在 guard.maxQuerySize，drop 最新一条）——两 hook 维度不同、阈值不同、各自独立。
- *
- * 总量逼近窗口主要由 compaction（post-observation fold，阈值 0.8）缩；本 hook 是 compaction 之后的
- * 无损兜底——compaction 缩不下（read-slice 被 skip、base 自身超窗）时才大量介入。
- * read-slice（含 READ_SLICE_MARK）不桩——断 offload→桩slice→重读→offload 环；最坏溢出失败（有限）。
- * 永不碰 [0,base) seed（稳定前缀，动则破缓存、逼重读主指令）。省略 offload fragment 即关。
+ * 当本次 query 的 token×factor > contextWindow×windowRatio（剩余空间不足）时，最胖优先桩化 [base,len) 内候选到盘（cached_read/rg 句柄），直到缩进阈值内。
  */
 @agentHook
 export class OffloadHook implements Hook {
@@ -166,12 +159,17 @@ function candidateBody(
   return { body: msg.content, isObservation: false };
 }
 
-/** Observation 的 hint：配对 assistant 的 tool + 首个 scalar 入参。失败 → ''。 */
+/** Observation 的 hint：配对 assistant 的 tool + 首个 scalar 入参。bash 取命令动词（不带参数，防文件名嵌套）。失败 → ''。 */
 function hintForObservation(messages: LlmMessage[], obsIndex: number): string {
   const assistant = messages[obsIndex - 1];
   if (!assistant || assistant.role !== 'assistant') return '';
   try {
     const { tool, input } = parseResponse(assistant.content);
+    if (tool === ToolIds.BASH) {
+      const cmd = (input as { command?: unknown }).command;
+      const verb = typeof cmd === 'string' ? cmd.trim().split(/\s+/)[0]! : '';
+      return verb ? `${tool}-${verb}` : tool;
+    }
     const scalar = firstScalar(input);
     return scalar ? `${tool}-${scalar}` : tool;
   } catch {
