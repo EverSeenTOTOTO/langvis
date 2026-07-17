@@ -2,6 +2,7 @@ import { ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { RunEvent } from '@/shared/types/events';
 import { stripThinking } from '@/server/libs/llm-text';
+import { extractJsonObject } from '@/shared/utils';
 import type {
   AgentRunContext,
   ToolExecutor,
@@ -133,42 +134,4 @@ export function parseResponse(content: string): ReActAction {
   throw new Error(
     'Invalid response: missing or invalid top-level `tool`/`input`',
   );
-}
-
-/**
- * Pull the first balanced `{…}` out of the response so leading reasoning
- * residue, prose, or stray ```json fences can't break parsing. String-aware
- * (braces inside `"…"` don't affect depth) and free of regex on the JSON
- * hierarchy; deliberately does NOT strip fences globally, since a string value
- * may legitimately contain triple backticks.
- */
-function extractJsonObject(text: string): string {
-  const start = text.indexOf('{');
-  if (start === -1) {
-    throw new Error('no JSON object in response');
-  }
-
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i];
-
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (ch === '\\') escaped = true;
-      else if (ch === '"') inString = false;
-      continue;
-    }
-
-    if (ch === '"') inString = true;
-    else if (ch === '{') depth++;
-    else if (ch === '}') {
-      depth--;
-      if (depth === 0) return text.slice(start, i + 1);
-    }
-  }
-
-  throw new Error('unbalanced braces in response');
 }

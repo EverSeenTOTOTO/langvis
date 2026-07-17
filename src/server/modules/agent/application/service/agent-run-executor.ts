@@ -18,7 +18,7 @@ import type { LlmMessage } from '@/shared/types/entities';
 import type { ConversationConfig } from '@/server/libs/config';
 import { ListMonad } from '@/server/libs/list';
 import { HookPlan } from '@/server/modules/agent/domain/model/hook';
-import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
+import { resolveAgentHooks } from '@/server/modules/agent/application/hooks/registry';
 import { AgentService } from './agent.service';
 import { runReactLoop } from './react-loop';
 import Logger from '@/server/utils/logger';
