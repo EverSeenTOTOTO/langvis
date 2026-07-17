@@ -13,6 +13,8 @@ import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import { SkillService } from '@/server/modules/agent/application/service/skill.service';
+import { AgentRunExecutor } from '@/server/modules/agent/application/service/agent-run-executor';
+import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { ToolIds } from '@/shared/constants';
@@ -304,6 +306,14 @@ describe('runReactLoop', () => {
       getCachedSkillIds: () => [],
       initialize: async () => {},
     } as unknown as SkillService);
+    // AuditResponseHook（resolveAgentHooks 拉入）注入 AgentRunExecutor + AgentService；
+    // 此处 runtimeConfig 无 audit.enabled，hook apply 首行即 'next' return，stub 不被调用，
+    // 只须让 DI 解析过得去（不拉 AgentRunExecutor 的真依赖树）。
+    container.registerInstance(
+      AgentRunExecutor,
+      {} as unknown as AgentRunExecutor,
+    );
+    container.registerInstance(AgentService, {} as unknown as AgentService);
   });
   afterEach(() => {
     container.clearInstances();

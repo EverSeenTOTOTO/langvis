@@ -78,6 +78,14 @@ export const VARIANTS: readonly Variant[] = [
       offload: {},
     }),
   },
+  {
+    id: 'audit-on',
+    description: '默认压缩 + post-LLM 答复审计（反幻觉独立子 run 校验）',
+    apply: base => ({
+      ...base,
+      audit: { enabled: true, maxRejections: 2 },
+    }),
+  },
 ];
 
 export function findVariant(id: string): Variant | undefined {

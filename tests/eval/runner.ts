@@ -8,6 +8,8 @@ import { AgentService } from '@/server/modules/agent/application/service/agent.s
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import { SkillService } from '@/server/modules/agent/application/service/skill.service';
 import { BASE_PROMPT } from '@/server/modules/agent/application/service/base-prompt';
+// side-effect：触发各 @agentHook 自注册（eval 不经 agent.module，须手挂，与生产 agent.module 对称）。
+import '@/server/modules/agent/application/hooks';
 import { registerTool } from '@/server/decorator/tool';
 import type { ToolConstructor } from '@/server/modules/agent/domain/model/tool.base';
 import ResponseUserTool from '@/server/modules/agent/implementations/tools/ResponseUser/index';
@@ -339,6 +341,22 @@ export async function runMultiTurn<S>(
   };
   let lastRun: ReturnType<AgentRunExecutor['createRun']>['run'] | undefined;
   const start = Date.now();
+
+  // 注入错误示范等预置历史（system 之后、turns 之前）：作为 in-context-learning 投毒源，
+  // 测审计 hook 能否阻止 agent 沿坏示范瞎答。审计侧只读 goal+reply，看不到这段历史。
+  if (task.seedHistory) {
+    for (const m of task.seedHistory) {
+      ctx.messages = ctx.messages.append({
+        id: generateId('msg'),
+        role: m.role,
+        content: m.content,
+        attachments: null,
+        meta: null,
+        createdAt: new Date(),
+        conversationId,
+      });
+    }
+  }
 
   for (let t = 0; t < task.turns.length; t++) {
     const userMsg: Message = {

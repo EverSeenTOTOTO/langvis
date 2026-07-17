@@ -24,5 +24,6 @@ container.register(AUTHORIZATION_PORT, AuthorizationProvider, {
 
 // Bash 执行后端不再经 DI 装配——BashTool 按 ctx.interactive 在 DirectBash（interactive）/ DockerBash（非 interactive）间 new。
 
+import './application/hooks'; // side-effect：触发各 @agentHook 自注册（resolveAgentHooks 从 registry 取）
 import './application/event/agent-run.handler';
 import './application/event/cancel-run.handler';

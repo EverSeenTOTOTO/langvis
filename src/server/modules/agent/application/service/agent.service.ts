@@ -116,11 +116,9 @@ export class AgentService {
     const inlineTools = toolSet
       .inlineIds()
       .map(id => container.resolve<Tool>(id));
-    const other = [...toolSet.listedIds(), ...toolSet.skillIds()];
 
     return base
       .insertBefore('Skills', 'Tools', formatToolsToMarkdown(inlineTools))
-      .insertAfter('Skills', 'Other Tool and Skills', other.join(', '))
       .build();
   }
 }

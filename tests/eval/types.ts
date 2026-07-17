@@ -8,6 +8,7 @@ import type { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';
 import type { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 import type { RunStatus } from '@/shared/types/agent';
+import type { Role } from '@/shared/types/entities';
 
 export interface Grade {
   pass: boolean;
@@ -60,6 +61,8 @@ export interface Task<S = unknown> {
  */
 export interface MultiTurnTask<S = unknown> extends Omit<Task<S>, 'userGoal'> {
   readonly turns: string[];
+  /** 可选：注入 system 之后、turns 之前的会话历史（如"错误示范"坏 demo，测抗 in-context-learning 投毒 / 审计反幻觉）。runner 填 id/conversationId/createdAt。域无关。 */
+  readonly seedHistory?: ReadonlyArray<{ role: Role; content: string }>;
 }
 
 export interface EfficiencyMetrics {
