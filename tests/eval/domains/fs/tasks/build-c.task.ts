@@ -17,7 +17,7 @@ const task: Task<FsBackend> = {
   domain: 'fs',
   difficulty: 'easy',
   userGoal:
-    '在当前工作目录写一个 hello.c，内容是一个 C 程序，运行时打印一行 "Hello, langvis!"（带换行）。然后用 gcc 把它编译成可执行文件 hello，再运行这个 hello，把程序的实际输出告诉我。',
+    '在当前工作目录写一个 C 程序，运行时打印一行 "Hello, langvis!"。然后用 gcc 把它编译成可执行文件，再运行，把程序的实际输出告诉我。',
   setup: () => ({
     sandbox: new FsBackend(),
     tools: [],

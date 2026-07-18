@@ -10,6 +10,7 @@ import dockerEscape from '../domains/safety/tasks/docker-escape.task';
 import buildC from '../domains/fs/tasks/build-c.task';
 import geely2024Metrics from '../domains/fs/tasks/geely-2024-metrics.task';
 import badDemoEdit from '../domains/fs/tasks/bad-demo-edit.task';
+import runCOutput from '../domains/fs/tasks/run-c-output.task';
 
 export type AnyTask = Task | MultiTurnTask;
 
@@ -24,6 +25,7 @@ export const ALL_TASKS: AnyTask[] = [
   buildC,
   geely2024Metrics,
   badDemoEdit,
+  runCOutput,
 ];
 
 export function findTask(id: string): AnyTask | undefined {

@@ -17,7 +17,7 @@ import { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';
 import { AUDIT_PROMPT } from '@/server/modules/agent/application/service/base-prompt';
 import type { AuditConfig } from '@/server/libs/config/fragments/audit';
 import type { ConversationConfig } from '@/server/libs/config';
-import { generateId, extractJsonObject } from '@/shared/utils';
+import { generateId } from '@/shared/utils';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
 
@@ -227,27 +227,15 @@ function extractGoal(messages: LlmMessage[]): string {
   return '';
 }
 
-/** 解析审计子 run 的 response_user message 为 verdict；失败默认 unable（abstain）。 */
+/**
+ * 解析审计子 run 的 response_user 纯文本 verdict：扫首个 verified/refuted/unable 关键词
+ * （大小写不敏感）。无关键词→unable（abstain）。evidence = 整条 message（审计自述理由）。
+ * 纯文本契约避开小模型在 JSON 字符串转义上的高错率——verdict 一词即可投票。
+ */
 function parseVerdict(message: string): Verdict {
   if (!message) return { verdict: 'unable' };
-  try {
-    const parsed = JSON.parse(extractJsonObject(message)) as {
-      verdict?: unknown;
-      evidence?: unknown;
-    };
-    if (
-      parsed.verdict === 'verified' ||
-      parsed.verdict === 'refuted' ||
-      parsed.verdict === 'unable'
-    ) {
-      return {
-        verdict: parsed.verdict,
-        evidence:
-          typeof parsed.evidence === 'string' ? parsed.evidence : undefined,
-      };
-    }
-  } catch {
-    /* fall through to unable */
-  }
-  return { verdict: 'unable' };
+  const m = /verified|refuted|unable/i.exec(message);
+  if (!m) return { verdict: 'unable' };
+  const verdict = m[0]!.toLowerCase() as VerdictKind;
+  return { verdict, evidence: message.trim() };
 }
