@@ -15,6 +15,23 @@ const CJK = /[一-鿿㐀-䶿]/;
 // 按脚本边界切段：CJK 连续段、拉丁/数字段分别成 token；纯空白切分会让 "pdf" 埋在路径里命不中。
 const SEGMENT_RE = /[一-鿿㐀-䶿]+|[A-Za-z0-9]+/g;
 
+const zhSegmenter = (() => {
+  try {
+    return new Intl.Segmenter('zh', { granularity: 'word' });
+  } catch (e) {
+    throw new Error(
+      `Intl.Segmenter('zh') unavailable — CJK tokenization requires Node built with full-icu: ${(e as Error)?.message ?? e}`,
+    );
+  }
+})();
+
+/** CJK 连续段 → Segmenter 真词(length≥2，丢单字虚词“我/的”以免过匹配)。 */
+function cjkKeywords(seg: string, out: string[]): void {
+  for (const { segment, isWordLike } of zhSegmenter.segment(seg)) {
+    if (isWordLike && segment.length >= 2) out.push(segment);
+  }
+}
+
 export function tokenizeQuery(query: string): string[] {
   const keywords: string[] = [];
 
@@ -24,13 +41,7 @@ export function tokenizeQuery(query: string): string[] {
     for (const match of token.matchAll(SEGMENT_RE)) {
       const seg = match[0];
       if (CJK.test(seg[0])) {
-        if (seg.length >= 2) {
-          for (let i = 0; i + 2 <= seg.length; i++) {
-            keywords.push(seg.slice(i, i + 2));
-          }
-        } else {
-          keywords.push(seg);
-        }
+        cjkKeywords(seg, keywords);
       } else {
         keywords.push(seg);
       }
