@@ -2,6 +2,8 @@
  * flight 域：内存订票沙箱 + 虚构工具。
  * 工具是无状态 singleton（registerTool），沙箱经 runId 绑定（fictional-tool 基类取回）。
  */
+import { mkdirSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import { tool } from '@/server/decorator/tool';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
@@ -29,11 +31,54 @@ export interface Booking {
 export class BookingBackend {
   readonly flights: Flight[];
   readonly bookings: Booking[] = [];
+  /** runner 注入（attachWorkDir）；订票状态镜像到 bookings.json 供只读审计 cat 复核。 */
+  workDir = '';
+
   constructor(flights: Flight[]) {
     // 深拷贝：book_flight 原地 flight.seats--，若按引用共享调用方数组
     // （task 模块级 const FLIGHTS 跨 trial 复用），座位会被前序 run 扣光、
     // 后序 run 收到 seats=0 → 误判。每 run 拷一份，扣减仅本 run 可见。
     this.flights = flights.map(f => ({ ...f }));
+  }
+
+  /**
+   * 把订票后端状态快照写 workDir/bookings.json：含当前余票与全部订票记录。
+   * 目的是给只读审计一条查询途径——审计子 run 只有 bash，订票真相在内存
+   * backend 里它够不着；落盘后 `cat bookings.json` 即可复核 reply 是否站得住
+   * （订了几张、是否最便宜、是否还有票），与 fs 域审计 cat demo.py 同构。
+   */
+  persist(): void {
+    if (!this.workDir) return;
+    try {
+      mkdirSync(this.workDir, { recursive: true });
+      writeFileSync(
+        join(this.workDir, 'bookings.json'),
+        JSON.stringify(
+          {
+            flights: this.flights.map(f => ({
+              id: f.id,
+              flightNo: f.flightNo,
+              origin: f.origin,
+              destination: f.destination,
+              depart: f.depart,
+              price: f.price,
+              airline: f.airline,
+              seats: f.seats,
+            })),
+            bookings: this.bookings.map(b => ({
+              id: b.id,
+              flightId: b.flightId,
+              passenger: b.passenger,
+            })),
+          },
+          null,
+          2,
+        ),
+        'utf-8',
+      );
+    } catch {
+      // 落盘失败不应阻断订票主路径；审计届时会 abstain（无 bookings.json 可读）。
+    }
   }
 }
 
@@ -90,6 +135,7 @@ export class BookFlightTool extends FictionalTool<
       passenger: passenger ?? '',
     };
     b.bookings.push(booking);
+    b.persist();
     return { bookingId: booking.id };
   }
 }
@@ -104,6 +150,7 @@ export class CancelFlightTool extends FictionalTool<
     const idx = b.bookings.findIndex(bk => bk.id === bookingId);
     if (idx === -1) return { error: `booking ${bookingId} not found` };
     b.bookings.splice(idx, 1);
+    b.persist();
     return { cancelled: true };
   }
 }

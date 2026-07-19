@@ -53,6 +53,21 @@ export function wilson(
   return { lo: Math.max(0, center - half), hi: Math.min(1, center + half) };
 }
 
+/**
+ * 非确定性两轴（指南 §5）。二者都只是单次成功率 p 的函数——p 已由上方 Wilson 估出，
+ * 此处用点估计 p̂=passes/total 推算；区间仍读 correctness 表的 p̂ CI，不重复传播（免增列宽）。
+ *
+ * - pass@k = 1-(1-p)^k  ：k 次里至少 1 次成功（有人把关、峰值性能）。
+ * - pass^k = p^k        ：k 次全成功（无人把关、稳定性）。
+ *
+ * p=0.75 时 pass@10≈99.99% 而 pass^10≈5.6%——同一 agent 两种叙事，差距触目惊心。
+ */
+const passAtK = (p: number, k: number): number => 1 - (1 - p) ** k;
+const passPowK = (p: number, k: number): number => p ** k;
+
+/** 报告用的 k 档：3（快速验证量级）与 10（= TRIALS 默认，正式评估量级）。 */
+const K_VALUES = [3, 10];
+
 const pct = (x: number) => `${(x * 100).toFixed(0)}%`;
 
 type CellAgg = {
@@ -296,6 +311,34 @@ export async function printReport(
       sections.push(
         `\n## [variant: ${v}] Design exposure / efficiency\n`,
         mkTable(designRows),
+      );
+    }
+
+    // 非确定性剖面（指南 §5 pass@k / pass^k）。按 domain 分表，行=model，
+    // 列=各 k 档的 pass@k（有人把关/峰值）与 pass^k（无人把关/稳定）。
+    // pass@1=p̂ 已在 correctness 表 overall 列，不重复。仅点估计，p̂ 的 CI 读 correctness 表。
+    for (const [d] of domains) {
+      const detRows = models
+        .map(m => {
+          const c = byDomainModelVar.get(`${d}|${m}|${v}`);
+          if (!c || !c.total) return null;
+          const p = c.passes / c.total;
+          const row: Record<string, string | number> = { model: m };
+          for (const k of K_VALUES) {
+            row[`pass@${k}`] = pct(passAtK(p, k));
+            row[`pass^${k}`] = pct(passPowK(p, k));
+          }
+          return row;
+        })
+        .filter((r): r is Record<string, string | number> => r !== null);
+      if (!detRows.length) continue;
+      console.log(
+        `\n=== [variant: ${v}] [${d}] Non-determinism (pass@k 有人把关 / pass^k 无人把关) ===`,
+      );
+      console.table(detRows);
+      sections.push(
+        `\n## [variant: ${v}] [${d}] Non-determinism (pass@k / pass^k)\n`,
+        mkTable(detRows),
       );
     }
   }

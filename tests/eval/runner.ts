@@ -184,10 +184,13 @@ function resolveRuntimeConfig<S>(
   return runtimeConfig;
 }
 
-/** workDir 回注 sandbox：FS 任务 grade 时据此读产物。setup() 先于 workDir 返回，故此处后填。 */
+/** workDir 回注 sandbox：FS 任务 grade 时据此读产物。setup() 先于 workDir 返回，故此处后填。
+ *  若 sandbox 自带 persist()（如 flight BookingBackend），趁此处把初始状态落盘——
+ *  让只读审计在 agent 跑任何工具前就能 cat 到沙箱真相（如航班余票表）。 */
 function attachWorkDir<S>(sandbox: S, workDir: string): void {
   const sb = sandbox as Record<string, unknown>;
   if ('workDir' in sb) sb.workDir = workDir;
+  if (typeof sb.persist === 'function') sb.persist();
 }
 
 /**
