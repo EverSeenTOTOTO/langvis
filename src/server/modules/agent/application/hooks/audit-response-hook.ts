@@ -159,20 +159,25 @@ export class AuditResponseHook implements Hook {
 
     let verdictMessage = '';
     let ranCheck = false;
+    // 审计子 run 的实际 tool_result 输出——RESULT 须在此重定位，不信 LLM 自述。
+    // 9B 会把 reply 当 tool 输出回读 / confabulate 证据，须拿事件流原文复核。
+    const toolOutputs: string[] = [];
     try {
       for await (const event of this.executor.launch(
         params,
       ) as AsyncIterable<EnrichedEvent>) {
-        if (event.type !== 'tool_call') continue;
-        // 审计是否**真的跑过**校验工具（非 response_user）。9B 会跳过工具直接 confabulate
-        // verdict（甚至 JSON verdict 与自身 evidence 自相矛盾）→ 须用这个确定性信号 gate
-        // LLM verdict：没跑过工具即 abstain，不信 confabulated verdict（反幻觉策略契约）。
-        if (event.toolName !== ToolIds.RESPONSE_USER) {
-          ranCheck = true;
-        } else {
-          verdictMessage = String(
-            (event.toolArgs as { message?: unknown }).message ?? '',
-          );
+        if (event.type === 'tool_call') {
+          // ranCheck：是否真跑过校验工具（非 response_user）。确定性信号 gate LLM verdict。
+          if (event.toolName !== ToolIds.RESPONSE_USER) {
+            ranCheck = true;
+          } else {
+            verdictMessage = String(
+              (event.toolArgs as { message?: unknown }).message ?? '',
+            );
+          }
+        } else if (event.type === 'tool_result') {
+          const out = event.output;
+          toolOutputs.push(typeof out === 'string' ? out : JSON.stringify(out));
         }
       }
     } catch (err) {
@@ -188,7 +193,7 @@ export class AuditResponseHook implements Hook {
       );
       return { verdict: 'unable' };
     }
-    return parseVerdict(verdictMessage);
+    return deriveVerdict(verdictMessage, toolOutputs);
   }
 }
 
@@ -228,14 +233,33 @@ function extractGoal(messages: LlmMessage[]): string {
 }
 
 /**
- * 解析审计子 run 的 response_user 纯文本 verdict：扫首个 verified/refuted/unable 关键词
- * （大小写不敏感）。无关键词→unable（abstain）。evidence = 整条 message（审计自述理由）。
- * 纯文本契约避开小模型在 JSON 字符串转义上的高错率——verdict 一词即可投票。
+ * 从审计子 run 的 response_user 文本 + 实际 tool_result 输出，重定位出可验的矛盾证据。
+ *
+ * 协议（plain text，非 JSON——小模型转义差）：
+ *   `UNKNOWN`                          → abstain（grounded / inconclusive / 无可核证据）
+ *   `RESULT: <某条 tool 输出原样子串>`   → 仅当 RESULT 真与 reply 矛盾时才发
+ *
+ * sound-gate（只门控 RESULT）：RESULT 须能在某条实际 tool_result 输出重定位——防审计
+ * confabulate 证据（9B 会把 reply 当 tool 输出回读 / 把空结果总结成"工作目录为空"的散文，
+ * 后者自然过不了重定位 → abstain）。CLAIM 不门控：reply 是 harness 已知的，审计点错 claim
+ * 至多误判（单向安全残余）；而 RESULT 必须真——这才是反幻觉契约里"veto 需正证据"的机械实现，
+ * 也避开要求小模型逐字复述 claim（它会改述 → 真 veto 被误杀）。
+ *
+ * 残余 unsoundness：审计把一个 real observation 误判为与 reply 矛盾（misjudgment）仍会
+ * 假 veto——但比旧"扫 refuted 关键词"窄得多：证据是真的，编不出来了。
  */
-function parseVerdict(message: string): Verdict {
-  if (!message) return { verdict: 'unable' };
-  const m = /verified|refuted|unable/i.exec(message);
-  if (!m) return { verdict: 'unable' };
-  const verdict = m[0]!.toLowerCase() as VerdictKind;
-  return { verdict, evidence: message.trim() };
+export function deriveVerdict(
+  message: string,
+  toolOutputs: readonly string[],
+): Verdict {
+  const msg = message.trim();
+  if (!msg) return { verdict: 'unable' };
+  const resultIdx = msg.indexOf('RESULT:');
+  if (resultIdx === -1) return { verdict: 'unable' };
+  const result = msg.slice(resultIdx + 'RESULT:'.length).trim();
+  if (!result) return { verdict: 'unable' };
+  const norm = (s: string): string => s.replace(/\s+/g, ' ').trim();
+  const grounded = toolOutputs.some(o => norm(o).includes(norm(result)));
+  if (!grounded) return { verdict: 'unable' };
+  return { verdict: 'refuted', evidence: result };
 }
