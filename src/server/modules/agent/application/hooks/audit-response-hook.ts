@@ -9,7 +9,6 @@ import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 import type { LlmMessage } from '@/shared/types/entities';
 import { Role } from '@/shared/entities/Message';
 import { ToolIds } from '@/shared/constants';
-import { parseResponse } from '@/server/modules/agent/application/service/react-loop';
 import { AgentRunExecutor } from '@/server/modules/agent/application/service/agent-run-executor';
 import type { LaunchParams } from '@/server/modules/agent/application/service/agent-run-executor';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
@@ -31,18 +30,19 @@ interface Verdict {
 }
 
 /**
- * post-LLM 答复审计：agent 调 response_user 时，另起一个独立上下文的审计子 run
+ * pre-action 答复审计：agent 调 response_user 时，另起一个独立上下文的审计子 run
  * （AgentRunExecutor.launch，只读 verifier toolset，剥 audit fragment 防递归），
  * 自己复算校验答复是否站得住。三态：verified/unable→放行；refuted-w-evidence→
  * 追加 Observation 让主 agent 重跑 + 'continue'。per-run 否决计数兜底防无限循环。
  *
- * 独立上下文：审计子 run 只见 goal+reply，看不到主 agent 推理史，故不被其带偏；
+ * 动作由 loop 权威解析挂 ctx.pendingAction，此处直读（判 tool=response_user + 抽 reply），
+ * 不再 re-parse。独立上下文：审计子 run 只见 goal+reply，看不到主 agent 推理史，故不被其带偏；
  * 审计自身也可能幻觉，故默认 abstain-not-veto（无正证据不否决），仅 refuted-with-evidence 否决。
  */
 @agentHook
 export class AuditResponseHook implements Hook {
   readonly id = 'audit-response';
-  readonly phase: HookPhase = 'post-llm';
+  readonly phase: HookPhase = 'pre-action';
   private readonly logger = Logger.child({ source: 'AuditResponseHook' });
   private rejections = 0;
 
@@ -55,18 +55,10 @@ export class AuditResponseHook implements Hook {
     const cfg = ctx.config.runtimeConfig.audit as AuditConfig | undefined;
     if (!cfg?.enabled) return 'next';
 
-    const last = ctx.messages.get(ctx.messages.length - 1);
-    if (!last || last.role !== 'assistant') return 'next';
+    const action = ctx.pendingAction;
+    if (!action || action.tool !== ToolIds.RESPONSE_USER) return 'next';
 
-    let parsed: ReturnType<typeof parseResponse>;
-    try {
-      parsed = parseResponse(last.content);
-    } catch {
-      return 'next';
-    }
-    if (parsed.tool !== ToolIds.RESPONSE_USER) return 'next';
-
-    const reply = String((parsed.input as { message?: unknown }).message ?? '');
+    const reply = String((action.input as { message?: unknown }).message ?? '');
     const goal = extractGoal(ctx.messages.toArray());
     if (!reply || !goal) return 'next';
 

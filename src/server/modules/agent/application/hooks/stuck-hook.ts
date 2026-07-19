@@ -6,7 +6,6 @@ import type {
   HookPhase,
 } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
-import { parseResponse } from '@/server/modules/agent/application/service/react-loop';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
 import { responseUser } from './cumulative-budget-hook';
@@ -16,17 +15,17 @@ const STUCK_MESSAGE =
 
 /**
  * 卡死兜底（liveness 闸）。阈值取自 guard.stuckThreshold（默认 5）。
- * 每次 post-llm 取模型刚吐出的动作签名（tool+input），与本 run 已见签名集比对：
- * 新签名 → 清零 streak；重复签名或解析失败 → streak++。连续无新动作到阈值即判卡死，
- * 发 hook 事件 + 强制答复并 break。
+ * 每次 pre-action 取模型刚吐出的动作签名（tool+input，由 loop 解析挂 ctx.pendingAction），
+ * 与本 run 已见签名集比对：新签名 → 清零 streak；重复签名 → streak++。连续无新动作到阈值即
+ * 判卡死，发 hook 事件 + 强制答复并 break。
  *
- * post-llm 在 response_user 终态 tick 也会跑（见 react-loop），故先放行 response_user。
- * 解析失败按"无有效动作"处理（streak++），与 eval 旧内联逻辑一致。
+ * pre-action 在 response_user 终态 tick 也会跑（见 react-loop），故先放行 response_user。
+ * parse 失败的 tick 不进 pre-action（loop 已兜底 error obs + continue），故此 hook 不再处理 parse-fail。
  */
 @agentHook
 export class StuckHook implements Hook {
   readonly id = 'stuck';
-  readonly phase: HookPhase = 'post-llm';
+  readonly phase: HookPhase = 'pre-action';
   private readonly logger = Logger.child({ source: 'StuckHook' });
   private readonly seen = new Set<string>();
   private streak = 0;
@@ -35,15 +34,9 @@ export class StuckHook implements Hook {
     const guard = ctx.config.runtimeConfig.guard;
     if (!guard) return 'next';
 
-    const last = ctx.messages.get(ctx.messages.length - 1);
-    let sig: string;
-    try {
-      const { tool, input } = parseResponse(last?.content ?? '');
-      if (tool === ToolIds.RESPONSE_USER) return 'next';
-      sig = `${tool}:${JSON.stringify(input)}`;
-    } catch {
-      sig = '<parse-fail>';
-    }
+    const action = ctx.pendingAction;
+    if (!action || action.tool === ToolIds.RESPONSE_USER) return 'next';
+    const sig = `${action.tool}:${JSON.stringify(action.input)}`;
 
     if (this.seen.has(sig)) this.streak++;
     else {

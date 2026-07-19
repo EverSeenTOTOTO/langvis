@@ -14,6 +14,13 @@ export type ToolExecutor = (
   args: Record<string, unknown>,
 ) => AsyncGenerator<RunEvent, string, void>;
 
+/** 解析出的 ReAct 动作。loop 权威解析一次后挂到 ctx.pendingAction，pre-action hook 直接读、不再各自 parse。 */
+export interface ParsedAction {
+  thought?: string;
+  tool: string;
+  input: Record<string, unknown>;
+}
+
 export interface AgentRunContext {
   readonly run: AgentRun;
   readonly config: RunConfigVO;
@@ -27,6 +34,13 @@ export interface AgentRunContext {
   messages: ListMonad<LlmMessage>;
   readonly base: number;
   readonly hooks?: HookPlan;
+  /**
+   * 本 tick 权威解析出的动作：loop 在 LLM 产出后、pre-action hook 前解析并赋值，
+   * hook 据此拦截/审计而不各自 re-parse（cumulative-budget/stuck/audit 共用）。
+   * parse 失败时本 tick 不进 pre-action、此字段为上一 tick 残值——hook 不应在
+   * parse 失败路径被调用，故无须清空。
+   */
+  pendingAction?: ParsedAction;
   /** 是否允许 HITL。conv run = true；子 agent = false。ToolCall 经 ToolCallContext 透传给工具。 */
   readonly interactive: boolean;
 }

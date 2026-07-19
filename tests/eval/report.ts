@@ -315,8 +315,8 @@ export async function printReport(
     }
 
     // 非确定性剖面（指南 §5 pass@k / pass^k）。按 domain 分表，行=model，
-    // 列=各 k 档的 pass@k（有人把关/峰值）与 pass^k（无人把关/稳定）。
-    // pass@1=p̂ 已在 correctness 表 overall 列，不重复。仅点估计，p̂ 的 CI 读 correctness 表。
+    // 列=pass@1(=p̂ 点估计)及各 k 档的 pass@k（有人把关/峰值）与 pass^k（无人把关/稳定）。
+    // pass@1 即单次成功率 p̂，与 correctness 表 overall 同值；此表统一给点估计，p̂ 的 CI 读 correctness 表。
     for (const [d] of domains) {
       const detRows = models
         .map(m => {
@@ -324,6 +324,7 @@ export async function printReport(
           if (!c || !c.total) return null;
           const p = c.passes / c.total;
           const row: Record<string, string | number> = { model: m };
+          row['pass@1'] = pct(p);
           for (const k of K_VALUES) {
             row[`pass@${k}`] = pct(passAtK(p, k));
             row[`pass^${k}`] = pct(passPowK(p, k));
