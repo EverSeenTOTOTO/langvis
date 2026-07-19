@@ -2,7 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { ToolIds } from '@/shared/constants';
 import { ListMonad } from '@/server/libs/list';
 import type { LlmMessage } from '@/shared/types/entities';
-import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
+import type {
+  AgentRunContext,
+  ParsedAction,
+} from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { CumulativeBudgetHook } from '@/server/modules/agent/application/hooks/cumulative-budget-hook';
@@ -32,6 +35,7 @@ async function collect(
 function ctxWith(
   messages: LlmMessage[],
   guard: { maxTokenUsage: number },
+  pendingAction?: ParsedAction,
 ): AgentRunContext {
   const config = RunConfigVO.of({
     tools: [],
@@ -48,6 +52,7 @@ function ctxWith(
     runId: 'run_test',
     messages: ListMonad.of<LlmMessage>(messages),
     config,
+    pendingAction,
   } as unknown as AgentRunContext;
 }
 
@@ -77,6 +82,7 @@ describe('CumulativeBudgetHook（累计 token 用量兜底，阈值取自 guard.
         },
       ],
       { maxTokenUsage: 1_000_000 },
+      { tool: 'search', input: { q: 'x' } },
     );
     const before = ctx.messages.length;
     const { events, ret } = await collect(
@@ -107,6 +113,7 @@ describe('CumulativeBudgetHook（累计 token 用量兜底，阈值取自 guard.
         },
       ],
       { maxTokenUsage: 1_000_000 },
+      { tool: ToolIds.RESPONSE_USER, input: { message: 'done' } },
     );
     const before = ctx.messages.length;
     const { events, ret } = await collect(

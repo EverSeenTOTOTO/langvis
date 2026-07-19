@@ -3,7 +3,7 @@ import type { RunEvent } from '@/shared/types/events';
 
 export type HookPhase =
   | 'pre-llm'
-  | 'post-llm'
+  | 'pre-action'
   | 'post-observation'
   | 'loop-exit';
 
@@ -41,7 +41,7 @@ export class HookPlan {
   constructor(hooks: readonly Hook[] = []) {
     this.byPhase = {
       'pre-llm': hooks.filter(h => h.phase === 'pre-llm'),
-      'post-llm': hooks.filter(h => h.phase === 'post-llm'),
+      'pre-action': hooks.filter(h => h.phase === 'pre-action'),
       'post-observation': hooks.filter(h => h.phase === 'post-observation'),
       'loop-exit': hooks.filter(h => h.phase === 'loop-exit'),
     };

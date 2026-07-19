@@ -5,6 +5,7 @@ import { stripThinking } from '@/server/libs/llm-text';
 import { extractJsonObject } from '@/shared/utils';
 import type {
   AgentRunContext,
+  ParsedAction,
   ToolExecutor,
 } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type {
@@ -14,12 +15,6 @@ import type {
 import { winstonLogger } from '@/server/utils/logger';
 
 const logger = winstonLogger.child({ source: 'ReactLoop' });
-
-type ReActAction = {
-  thought?: string;
-  tool: string;
-  input: Record<string, unknown>;
-};
 
 async function* applyHooks(
   ctx: AgentRunContext,
@@ -70,11 +65,9 @@ export async function* runReactLoop(
 
     ctx.messages = ctx.messages.append({ role: Role.ASSIST, content });
 
-    d = yield* applyHooks(ctx, 'post-llm');
-    if (d === 'break') return yield* exitLoop(ctx);
-    if (d === 'continue') continue;
-
-    let parsed: ReActAction;
+    // 权威解析一次：parse 失败由 loop 统一兜底（error obs + continue），pre-action hook
+    // 不再各自 parse + catch。解析成功挂到 ctx.pendingAction 供 pre-action hook 直读。
+    let parsed: ParsedAction;
     try {
       parsed = parseResponse(content);
     } catch (error) {
@@ -87,8 +80,12 @@ export async function* runReactLoop(
       if (d === 'break') return yield* exitLoop(ctx);
       continue;
     }
-
+    ctx.pendingAction = parsed;
     logger.info('ReAct parsed response: ', parsed);
+
+    d = yield* applyHooks(ctx, 'pre-action');
+    if (d === 'break') return yield* exitLoop(ctx);
+    if (d === 'continue') continue;
 
     const { tool, input } = parsed;
 
@@ -111,7 +108,7 @@ export async function* runReactLoop(
   }
 }
 
-export function parseResponse(content: string): ReActAction {
+export function parseResponse(content: string): ParsedAction {
   const parsed = JSON.parse(extractJsonObject(stripThinking(content))) as {
     tool?: unknown;
     input?: unknown;
