@@ -26,15 +26,14 @@ export function fsToolSet(): ToolSet {
   );
 }
 
-/** 文档推理任务 ToolSet：pdf_extract + bash + cached_read + response_user 全 inline。
- *  pdf_extract（host pdftotext）提取 PDF；大输出 offload 后 cached_read 分页回读，
- *  bash+rg 检索（沙箱镜像已装 ripgrep，workDir bind-mount 可见缓存文件）。 */
+/** 文档推理任务 ToolSet：pdf_extract + bash + response_user 全 inline。
+ *  pdf_extract（host pdftotext）提取 PDF；大输出 offload 落盘后用 bash（rg/sed-n/head-n）检索回读
+ *  （沙箱镜像已装 ripgrep，workDir bind-mount 可见缓存文件）。cached_read 已移除：始终走 bash。 */
 export function fsDocToolSet(): ToolSet {
   return ToolSet.of(
     [
       { id: ToolIds.PDF_EXTRACT, mode: 'inline' as const },
       { id: ToolIds.BASH, mode: 'inline' as const },
-      { id: ToolIds.CACHED_READ, mode: 'inline' as const },
       { id: ToolIds.RESPONSE_USER, mode: 'inline' as const },
     ],
     [],
