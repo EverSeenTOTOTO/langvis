@@ -115,9 +115,10 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     expect(events).toHaveLength(1);
     const offloaded = ctx.messages.get(1)!;
     expect(offloaded.content).toContain('[offloaded to file');
-    expect(offloaded.content).toContain(
-      'cached_read(key="sem__fc_test", offset=0, limit=2000)',
-    );
+    expect(offloaded.content).toContain('rg -n'); // 小文件劝 rg/sed-n/head-n，不再提 cached_read
+    expect(offloaded.content).toContain('sed -n');
+    expect(offloaded.content).toContain('head -n');
+    expect(offloaded.content).not.toContain('cached_read');
     expect(offloaded.content).toContain('~1 chunks of 2000B'); // mock $size=600 → ceil=1
     expect(offloaded.content).toContain('search_flights'); // hint 含 tool
     expect(offloaded.content).toMatch(/^Observation: /); // 前缀保留
@@ -218,19 +219,23 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     expect(ctx.messages.get(3)!.content).toContain('[offloaded to file'); // 普通 bash → 被桩
   });
 
-  it('bash 派生过滤(rg)读 fc 句柄不跳过：输出是派生视图，仍可桩', async () => {
-    // rg 命中 fc 句柄但动词不在纯倾倒白名单 → 不跳过（输出是过滤子集，按体积正常 offload）。
+  it('bash rg 读 fc 句柄跳过（防 rg-on-fc fc→fc 螺旋）', async () => {
+    // rg 对已 offload 句柄再检索同关键词 → 输出≈原句柄的过滤子集，再 offload 必 fc→fc 别名链到 iter 上限 → 跳过。
+    // 旁边一条普通大 bash obs 仍被桩。
     const ctx = makeCtx(
       [
         assistant('bash', {
           command: 'rg 收益 pdf-extract-geely__fc_8a4e9674',
         }),
         obs(body(8000)),
+        assistant('bash', { command: 'echo done' }),
+        obs(body(8000)),
       ],
       { offload: CFG() },
     );
     await collect(makeHook(8192).apply(ctx));
-    expect(ctx.messages.get(1)!.content).toContain('[offloaded to file'); // rg → 仍被桩
+    expect(ctx.messages.get(1)!.content).toBe(`Observation: ${body(8000)}`); // rg 读句柄 → 未桩
+    expect(ctx.messages.get(3)!.content).toContain('[offloaded to file'); // 普通 bash → 被桩
   });
 
   it('bash cat 非 offload 文件不跳过：操作数不含 fc 句柄 → 正常桩', async () => {
@@ -327,7 +332,7 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     expect(over.messages.get(0)!.content).toContain('[offloaded to file');
   });
 
-  it('桩固化块数随 $size 增长（大文件多块提示）', async () => {
+  it('大文件（chunks>LARGE_CHUNK_THRESHOLD）桩只劝 rg、不劝分页', async () => {
     const ctx = makeCtx([obs(body(8000))], { offload: CFG() });
     (ctx.cache.offload as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       $cached: 'sem__fc_test',
@@ -338,6 +343,9 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     await collect(makeHook(8192).apply(ctx));
     const stub = ctx.messages.get(0)!.content;
     expect(stub).toContain('~23 chunks of 2000B'); // ceil(45230/2000)=23
-    expect(stub).toContain('offset=0, limit=2000');
+    expect(stub).toContain('large file');
+    expect(stub).toContain('rg -n');
+    expect(stub).toContain('do NOT cat or page'); // 大文件禁整读（整读必爆窗）
+    expect(stub).not.toContain('cached_read'); // 已移除 cached_read：只劝 bash rg
   });
 });

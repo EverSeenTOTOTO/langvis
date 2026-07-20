@@ -15,24 +15,14 @@ import { ToolIds } from '@/shared/constants';
 import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
+import { classifyRecall } from './offload-recall';
 
 const OBSERVATION_PREFIX = 'Observation: ';
 const OFFLOADED_MARK = '[offloaded to file'; // 已桩标记 → 跳过重复桩
-/** offload 落盘文件名约定：fc_ + 恰好 8 hex（裸 fc_<hex> 或 <hint>__fc_<hex>）。识别 bash 命令是否在读已 offload 的盘上句柄，只认操作数。 */
-const OFFLOAD_FILE_RE = /(?:^|[^a-z0-9])fc_[0-9a-f]{8}(?![0-9a-f])/i;
-/** 把文件原样倾倒到 stdout 的 bash 动词（再 offload 即 fc→fc 别名）。只列纯倾倒族，不含 rg/grep/awk/sed 等派生过滤。 */
-const BASH_DUMP_VERBS = new Set([
-  'cat',
-  'head',
-  'tail',
-  'more',
-  'less',
-  'tac',
-  'nl',
-]);
 const HEAD_KEEP = 256; // 裸 user 桩化保留头部（保 skill 触发 / 元信息）
 const MIN_BODY_TO_OFFLOAD = 512; // 桩文本须明显小于原文才省
 const CHUNK_SIZE = 2000; // cached_read 块大小；桩里固化首块 offset/limit
+const LARGE_CHUNK_THRESHOLD = 10; // 超此块数 → 大文件，只劝 rg 不劝分页
 /** estimateTokens 对中文/JSON 系统性低估 ~8% 的固定补偿（非旋钮）——防桩化不足→真实爆窗。 */
 const ESTIMATE_SAFETY_FACTOR = 1.1;
 /** 总量触发比例缺省：total×factor > contextWindow×此值即 offload 最胖。 */
@@ -81,7 +71,7 @@ export class OffloadHook implements Hook {
       const cand = candidateBody(messages[i]!);
       if (!cand) continue;
       if (cand.body.includes(OFFLOADED_MARK)) continue;
-      if (cand.isObservation && isOffloadedRecall(messages, i)) continue;
+      if (cand.isObservation && classifyRecall(messages, i) !== null) continue;
       if (cand.body.length < MIN_BODY_TO_OFFLOAD) continue;
       candByIndex.set(i, { ...cand, tokens: estimateTokens([messages[i]!]) });
       ordered.push(i);
@@ -134,9 +124,8 @@ export class OffloadHook implements Hook {
   }
 }
 
-/** 桩正文：Observation 全替（保前缀 + hint 含 tool）；裸 user 保 HEAD_KEEP 头部。固化首块 offset/limit。
- *  访问指引自门控：有 bash 则优先 rg 按需检索（落盘文件即 workDir 下 filename，bash cwd=workDir 可直读），
- *  否则退回 cached_read 线性分页——agent 据 system prompt 自知有无 bash，无须 hook 探测 toolSet。 */
+/** 桩正文：Observation 全替（保前缀 + hint 含 tool）；裸 user 保 HEAD_KEEP 头部。
+ *  访问指引按量级分叉：大文件只劝 rg（分页/整读必爆窗）；小文件才劝 sed -n / head -n 顺序分页或 cached_read 线性分页。 */
 function stubContent(
   candidate: { body: string; isObservation: boolean },
   stub: { $cached: string; $size: number },
@@ -144,12 +133,13 @@ function stubContent(
 ): string {
   const chunks = Math.ceil(stub.$size / CHUNK_SIZE) || 1;
   const fn = stub.$cached;
+  const large = chunks > LARGE_CHUNK_THRESHOLD;
+  const strategy = large
+    ? `large file (~${chunks} chunks): via the bash tool, search on demand, e.g. rg -n "<keyword>" -C3 ${fn} (or grep); do NOT cat or page the whole file (it would overflow the window).`
+    : `small file (~${chunks} chunks): via the bash tool, search with rg -n "<keyword>" -C3 ${fn} or page with sed -n "<range>" ${fn} / head -n <N> ${fn}.`;
   const marker =
     `${OFFLOADED_MARK} ${fn}] ${hint ? `(${hint}) ` : ''}size=${stub.$size}B` +
-    ` (~${chunks} chunks of ${CHUNK_SIZE}B). The full content is saved as file ${fn} in your workDir;` +
-    ` if bash is available, search on demand, e.g. rg -n "<keyword>" -C 3 ${fn} (or grep/sed),` +
-    ` instead of loading the whole file; otherwise page sequentially via` +
-    ` cached_read(key="${fn}", offset=0, limit=${CHUNK_SIZE}) — next chunk: offset=${CHUNK_SIZE}`;
+    ` (~${chunks} chunks of ${CHUNK_SIZE}B). The full content is saved as file ${fn} in your workDir (bash cwd=workDir). ${strategy}`;
   if (candidate.isObservation) {
     return `${OBSERVATION_PREFIX}${marker}`;
   }
@@ -168,26 +158,6 @@ function candidateBody(
     };
   }
   return { body: msg.content, isObservation: false };
-}
-
-/** 这条 observation 是否盘上 offload 句柄的回取/视图：再 offload 只会 fc→fc 别名，跳过。
- *  两条路径：① 配对 assistant 的 tool === CACHED_READ；② tool === BASH 且动词∈纯倾倒白名单 ∧ 命令 token 命中 fc 句柄（cat fc_x / head fc_x 这类，动词无关的操作数检测见 OFFLOAD_FILE_RE）。rg/grep/awk/sed 等派生过滤不在白名单，输出是派生视图，按体积正常 offload。 */
-function isOffloadedRecall(messages: LlmMessage[], obsIndex: number): boolean {
-  const assistant = messages[obsIndex - 1];
-  if (!assistant || assistant.role !== 'assistant') return false;
-  try {
-    const { tool, input } = parseResponse(assistant.content);
-    if (tool === ToolIds.CACHED_READ) return true;
-    if (tool === ToolIds.BASH) {
-      const cmd = (input as { command?: unknown }).command;
-      if (typeof cmd !== 'string') return false;
-      const verb = cmd.trim().split(/\s+/)[0] ?? '';
-      return BASH_DUMP_VERBS.has(verb) && OFFLOAD_FILE_RE.test(cmd);
-    }
-    return false;
-  } catch {
-    return false;
-  }
 }
 
 /** Observation 的 hint：配对 assistant 的 tool + 首个 scalar 入参。bash 取命令动词（不带参数，防文件名嵌套）。失败 → ''。 */
