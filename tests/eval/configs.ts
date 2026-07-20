@@ -1,4 +1,4 @@
-/** 跨模型配置（可编辑）+ 固定 runtimeConfig（只换 model.modelId）。 */
+/** 跨模型配置（可编辑）+ 组合式 variant（feature toggle，无固定 preset）。 */
 import type { ConversationConfig } from '@/server/libs/config';
 
 /**
@@ -14,89 +14,110 @@ export const MODELS = [
 
 export const TRIALS = 10;
 
-export function runtimeConfigFor(modelId: string): ConversationConfig {
-  return {
-    model: { modelId, temperature: 0 },
-    loop: { threshold: 0.95, windowSize: 10, keepRecent: 4 },
-    history: { threshold: 0.8, windowSize: 10 },
-    guard: {
-      maxIterations: 50,
-      maxTokenUsage: 1_000_000,
-      stuckThreshold: 5,
-      maxQuerySize: 0.4,
-      maxQueryTokens: 10_000,
-    },
-  } satisfies ConversationConfig;
-}
-
 /**
- * 配置轴变体：对 base ConversationConfig 的纯函数 patch。模型固定、换 variant，
- * 结果差异归因于 driver——这是"测 driver 而非模型"的主战场（见 eval plan §0）。
- * headroom = 同 (model, task) 最优 variant − baseline variant。
+ * 组合式 variant：一个 variant = 一组 feature 的子集（无固定 preset）。
+ * base = 最小 `{ model }` + **guard 基线**（guard 始终开，是安全基线而非被测 driver 旋钮）；
+ * 每个开启的 feature 往上叠一个 config fragment。
+ * variant id = feature 排序后 `+` 拼接；空集记作 `bare`（= 仅 guard 基线）。
+ *   compact / compact+offload / audit / compact+offload+audit / bare / *
+ * CLI: --variants compact+offload,audit,compact+offload+audit,bare,*
+ *   `*`|`all` = 全 feature；`bare` = 空 feature（仅 guard 基线）。省略 --variants = compact。
+ *
+ * guard 不可关（2026-07-20 决策）：测的是 compact/offload/audit driver，guard 是
+ * "失败 run 不挂死"的 harness 保底，归 agent driver 管（maxIter/stuck/budget 三闸）。
+ * 故无 guard-off 挂死风险，runner 不再需要硬上限收口。
  */
-export type Variant = {
-  readonly id: string;
-  readonly description: string;
-  readonly apply: (base: ConversationConfig) => ConversationConfig;
+export type Feature = 'compact' | 'offload' | 'audit';
+
+export const ALL_FEATURES: readonly Feature[] = ['compact', 'offload', 'audit'];
+
+const COMPACT_FRAGMENT = (b: ConversationConfig): ConversationConfig => ({
+  ...b,
+  loop: { threshold: 0.95, windowSize: 10, keepRecent: 4 },
+  history: { threshold: 0.8, windowSize: 10 },
+});
+const OFFLOAD_FRAGMENT = (b: ConversationConfig): ConversationConfig => ({
+  ...b,
+  offload: {},
+});
+const AUDIT_FRAGMENT = (b: ConversationConfig): ConversationConfig => ({
+  ...b,
+  audit: { enabled: true, maxRejections: 2 },
+});
+/** guard 基线：始终注入（非 feature、不可关）。 */
+const GUARD_BASELINE = (b: ConversationConfig): ConversationConfig => ({
+  ...b,
+  guard: {
+    maxIterations: 50,
+    maxTokenUsage: 1_000_000,
+    stuckThreshold: 5,
+    maxQuerySize: 0.4,
+    maxQueryTokens: 10_000,
+  },
+});
+
+const FRAGMENTS: Record<
+  Feature,
+  (b: ConversationConfig) => ConversationConfig
+> = {
+  compact: COMPACT_FRAGMENT,
+  offload: OFFLOAD_FRAGMENT,
+  audit: AUDIT_FRAGMENT,
 };
 
-/** 默认变体 = compact-only。四变体 = 现有两轴（fold 压缩 × offload 护栏）的组合；
- *  新增机制时按同一思路扩，描述只点意图、不枚举 on/off。 */
-export const DEFAULT_VARIANT = 'compact-only';
+export type Variant = ReadonlySet<Feature>;
 
-/** bare = 裸 loop（baseline，无任何压缩/护栏）。新机制默认在此变体关闭。 */
-export const VARIANTS: readonly Variant[] = [
-  {
-    id: DEFAULT_VARIANT,
-    description: '现状默认压缩（fold）',
-    apply: base => base,
-  },
-  {
-    id: 'bare',
-    description: '裸 loop，无压缩无护栏（baseline）',
-    apply: base => {
-      const { loop: _l, history: _h, ...rest } = base;
-      return rest as ConversationConfig;
-    },
-  },
-  {
-    id: 'offload-only',
-    description: '仅 offload 体积护栏，不压缩',
-    apply: base => {
-      const { loop: _l, history: _h, ...rest } = base;
-      return {
-        ...rest,
-        offload: {},
-      } as ConversationConfig;
-    },
-  },
-  {
-    id: 'hybrid',
-    description: '压缩 + offload 护栏都开',
-    apply: base => ({
-      ...base,
-      offload: {},
-    }),
-  },
-  {
-    id: 'audit-on',
-    description: '默认压缩 + post-LLM 答复审计（反幻觉独立子 run 校验）',
-    apply: base => ({
-      ...base,
-      audit: { enabled: true, maxRejections: 2 },
-    }),
-  },
-];
+/** 默认 variant = compact（guard 基线隐含）。 */
+export const DEFAULT_VARIANT = variantId(new Set<Feature>(['compact']));
 
-export function findVariant(id: string): Variant | undefined {
-  return VARIANTS.find(v => v.id === id);
+const ALIASES: Record<string, Variant> = {
+  bare: new Set<Feature>(),
+  '*': new Set<Feature>(ALL_FEATURES),
+  all: new Set<Feature>(ALL_FEATURES),
+};
+
+/** variant → 规范 id（排序 `+` 拼；空集 = `bare`）。作为 results.jsonl 的 variant 键。 */
+export function variantId(v: Variant): string {
+  if (v.size === 0) return 'bare';
+  return [...v].sort().join('+');
 }
 
-/** base runtimeConfig 经 variant patch 后的本 run 配置。 */
+/** 单个 variant token → Variant。支持别名与 `+` 拼 feature；未知 feature 抛错。 */
+export function parseVariant(token: string): Variant {
+  const t = token.trim();
+  if (ALIASES[t]) return ALIASES[t];
+  if (!t) return new Set<Feature>();
+  const feats = t
+    .split('+')
+    .map(f => f.trim())
+    .filter(Boolean) as Feature[];
+  for (const f of feats) {
+    if (!(f in FRAGMENTS)) {
+      throw new Error(
+        `unknown feature "${f}" (known: ${ALL_FEATURES.join(', ')})`,
+      );
+    }
+  }
+  return new Set<Feature>(feats);
+}
+
+/** variant token → 规范 id（别名/`+`集 都归一为排序 id）。 */
+export function canonicalVariantId(token: string): string {
+  return variantId(parseVariant(token));
+}
+
+/** base = 最小 `{ model }` + guard 基线；variant 内每个开启 feature 叠其 fragment。 */
 export function runtimeConfigForVariant(
   modelId: string,
-  variantId: string = DEFAULT_VARIANT,
+  variantIdOrToken: string = DEFAULT_VARIANT,
 ): ConversationConfig {
-  const variant = findVariant(variantId) ?? findVariant(DEFAULT_VARIANT)!;
-  return variant.apply(runtimeConfigFor(modelId));
+  const variant =
+    variantIdOrToken in ALIASES
+      ? ALIASES[variantIdOrToken]!
+      : parseVariant(variantIdOrToken);
+  let cfg: ConversationConfig = GUARD_BASELINE({
+    model: { modelId, temperature: 0 },
+  });
+  for (const f of ALL_FEATURES) if (variant.has(f)) cfg = FRAGMENTS[f](cfg);
+  return cfg;
 }

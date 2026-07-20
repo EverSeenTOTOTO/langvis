@@ -1,6 +1,5 @@
 /** 任务注册表。加任务 = 加 domains/<x>/tasks/<y>.task.ts + 在此 import 一行。 */
 import type { Task, MultiTurnTask } from '../types';
-import bookCheapest from '../domains/flight/tasks/book-cheapest.task';
 import multiConstraint from '../domains/flight/tasks/multi-constraint.task';
 import multiTurnConstrained from '../domains/flight/tasks/multi-turn-constrained.task';
 import bookConstrained2leg from '../domains/flight/tasks/book-constrained-2leg.task';
@@ -15,7 +14,6 @@ import runCOutput from '../domains/fs/tasks/run-c-output.task';
 export type AnyTask = Task | MultiTurnTask;
 
 export const ALL_TASKS: AnyTask[] = [
-  bookCheapest,
   multiConstraint,
   multiTurnConstrained,
   bookConstrained2leg,

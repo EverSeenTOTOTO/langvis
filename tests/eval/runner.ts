@@ -168,7 +168,7 @@ async function gradeOutcome<S>(
 
 // —— 共享片段 ——
 
-/** task budget 覆盖 eval guard 的 maxIterations；base 取自 variant。 */
+/** task budget 覆盖 eval guard 的 maxIterations；guard 始终开（基线），故总可注入。 */
 function resolveRuntimeConfig<S>(
   task: Pick<Task<S>, 'budget'>,
   modelId: string,
@@ -195,7 +195,8 @@ function attachWorkDir<S>(sandbox: S, workDir: string): void {
 
 /**
  * 单次 run：createRun + 绑沙箱 + TraceContext 包裹执行收事件 + 解绑。
- * sandbox 跨轮共享，故按本 run 的 runId 绑/解。
+ * sandbox 跨轮共享，故按本 run 的 runId 绑/解。guard 始终开（基线），失败 run 由
+ * guard 三闸（maxIter/stuck/budget）在 run 控制流内终止，runner 只 events.push。
  */
 async function executeRun<S>(
   params: LaunchParams,

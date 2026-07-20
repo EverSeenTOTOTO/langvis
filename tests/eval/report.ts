@@ -27,7 +27,8 @@ export async function append(outcome: RunOutcome): Promise<void> {
 
 /**
  * 已完成 (task×model×variant×trial) 四元组集合——resume 据此跳过。
- * 旧 jsonl 无 variant 字段，回填 DEFAULT_VARIANT（compact-only）。
+ * 旧 jsonl 无 variant 字段，回填 DEFAULT_VARIANT（compact+guard）。
+ * 旧 jsonl 用 preset 名（compact-only/bare/hybrid/audit-on）的行不归一——须 purge 重跑。
  */
 export function completedKeys(existing: readonly RunOutcome[]): Set<string> {
   return new Set(
@@ -175,7 +176,7 @@ function passRate(cell: CellAgg | undefined): number {
 
 /**
  * headroom = 同 (model, task) 上最优 variant − baseline variant 的 pass 率差。
- * baseline = 'bare'（fold/offload 全关）；缺该 variant 数据则该格 headroom 不可算。
+ * baseline = 'bare'（空 feature，仅 guard 基线）；缺该 variant 数据则该格 headroom 不可算。
  * >0 → driver 有贡献（baseline 过不了、调上来能过）；≈0 → 该场景不区分 driver（太易/太难）。
  */
 const BASELINE_VARIANT = 'bare';
@@ -242,46 +243,20 @@ export async function printReport(
     ...new Set(outcomes.map(o => o.variant ?? DEFAULT_VARIANT)),
   ].sort();
 
-  const byCellVar = aggregate(
-    outcomes,
-    o => `${o.task}|${o.model}|${o.variant ?? DEFAULT_VARIANT}`,
-  );
   const byModelVar = aggregate(
     outcomes,
     o => `${o.model}|${o.variant ?? DEFAULT_VARIANT}`,
   );
-  // per-domain×model×variant 聚合：correctness 表的 overall 列按域算，不混其他域。
+  // per-domain×model×variant 聚合：非确定性表的 pass@1 按域算，不混其他域。
   const byDomainModelVar = aggregate(
     outcomes,
     o => `${domainOf(o.task)}|${o.model}|${o.variant ?? DEFAULT_VARIANT}`,
   );
 
-  // 每个 variant 一组切片表（correctness 按 domain 分表 + design），避免横向溢出与跨 variant 混淆。
+  // 每个 variant 一组切片表（design + non-determinism），避免横向溢出与跨 variant 混淆。
   const domains = groupTasksByDomain(tasks);
   const sections: string[] = ['# Eval report'];
   for (const v of variants) {
-    // correctness：每个 domain 一张表（列 = 该域的 tasks），overall 列 = 该域合并率。
-    for (const [d, dTasks] of domains) {
-      const correctnessRows = models.map(m => {
-        const row: Record<string, string | number> = { model: m };
-        for (const t of dTasks) {
-          const c = byCellVar.get(`${t}|${m}|${v}`);
-          row[t] = c ? fmtRate(c.passes, c.total) : '-';
-        }
-        const cm = byDomainModelVar.get(`${d}|${m}|${v}`);
-        row['overall'] = cm ? fmtRate(cm.passes, cm.total) : '-';
-        return row;
-      });
-      console.log(
-        `\n=== [variant: ${v}] [${d}] Correctness (pass% [95% CI]) ===`,
-      );
-      console.table(correctnessRows);
-      sections.push(
-        `## [variant: ${v}] [${d}] Correctness (pass% [95% CI])\n`,
-        mkTable(correctnessRows),
-      );
-    }
-
     const designRows = models
       .map(m => {
         const c = byModelVar.get(`${m}|${v}`);
@@ -316,7 +291,7 @@ export async function printReport(
 
     // 非确定性剖面（指南 §5 pass@k / pass^k）。按 domain 分表，行=model，
     // 列=pass@1(=p̂ 点估计)及各 k 档的 pass@k（有人把关/峰值）与 pass^k（无人把关/稳定）。
-    // pass@1 即单次成功率 p̂，与 correctness 表 overall 同值；此表统一给点估计，p̂ 的 CI 读 correctness 表。
+    // pass@1 即单次成功率 p̂——本表取代旧 correctness 表，只给点估计，不再单独列 CI。
     for (const [d] of domains) {
       const detRows = models
         .map(m => {

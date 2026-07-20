@@ -3,10 +3,13 @@
  *
  * 单模型 × 单任务
  *
- * bun tests/eval/cli.ts --tasks flight:book-cheapest --models localhost:qwen3.5-9b --trials 1
+ * bun tests/eval/cli.ts --tasks fs:geely-2024-metrics --models openrouter:z-ai/glm-5.2 --trials 1
  *
- * 配置轴（单模型换 driver 变体，测 driver 而非模型）：
- * bun tests/eval/cli.ts --tasks flight:book-cheapest --models localhost:qwen3.5-9b --variants default,bare --trials 3
+ * 配置轴（单模型换 driver 变体，测 driver 而非模型）——组合式，无固定 preset：
+ * bun tests/eval/cli.ts --tasks fs:geely-2024-metrics --models openrouter:z-ai/glm-5.2 --variants bare,offload,compact+offload --trials 3
+ *
+ * variant = feature 子集，`+` 拼；`*`=全 feature，`bare`=空集；省略 --variants = compact+guard：
+ * bun tests/eval/cli.ts --variants 'compact+offload,audit+guard,compact+offload+audit,bare,*'
  *
  * 跑批
  *
@@ -14,13 +17,13 @@
  * bun tests/eval/cli.ts
  *
  * 子集批（自选任务×模型×变体×试次）：
- * bun tests/eval/cli.ts --tasks flight:book-cheapest,flight:multi-constraint --models openrouter:z-ai/glm-5.2,302:qwen3.7-max --variants default,bare --trials 5
+ * bun tests/eval/cli.ts --tasks fs:geely-2024-metrics,fs:bad-demo-edit --models openrouter:z-ai/glm-5.2,302:qwen3.7-max --variants compact,bare --trials 5
  *
  *  resume：已写入 results.jsonl 的 (task×model×variant×trial) 自动跳过；中断后重跑即续。
  */
 import cac from 'cac';
 import { ALL_TASKS, type AnyTask } from './tasks';
-import { MODELS, TRIALS, VARIANTS, DEFAULT_VARIANT } from './configs';
+import { MODELS, TRIALS, DEFAULT_VARIANT, canonicalVariantId } from './configs';
 import { runOnce, runMultiTurn } from './runner';
 import { append, completedKeys, loadExisting, printReport } from './report';
 import type { MultiTurnTask, RunOutcome } from './types';
@@ -45,7 +48,7 @@ function parseArgs(argv: string[]): {
     .option('--models <ids>', 'comma-separated model ids (default: MODELS)')
     .option(
       '--variants <ids>',
-      'comma-separated variant ids (default: VARIANTS)',
+      'comma-separated variant tokens; each = `+`-joined features or alias `*`|`bare` (omitted: compact+guard)',
     )
     .option('--trials <n>', 'trials per (task×model×variant)', {
       default: TRIALS,
@@ -79,7 +82,7 @@ async function main(): Promise<void> {
   } = args;
   const tasks = ALL_TASKS.filter(t => !taskFilter || taskFilter.includes(t.id));
   const models = modelFilter ?? [...MODELS];
-  const variants = variantFilter ?? VARIANTS.map(v => v.id);
+  const variants = (variantFilter ?? [DEFAULT_VARIANT]).map(canonicalVariantId);
   if (!tasks.length) throw new Error('no tasks selected');
 
   const existing = await loadExisting();
