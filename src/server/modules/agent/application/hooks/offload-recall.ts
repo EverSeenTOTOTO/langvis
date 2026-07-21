@@ -7,13 +7,11 @@ const FC_FILE_RE = /[A-Za-z0-9._-]*fc_[0-9a-f]{8}(?![0-9a-f])/;
 
 /** 一条 observation 是否"盘上 offload 句柄的回取/视图"：再 offload 只会 fc→fc 别名。
  *  含 rg-on-fc 螺旋：对已过滤句柄再 rg 同关键词，输出≈原句柄，逐轮 alias 链可一路到 iter 上限。
- *  cached_read key 与 bash file 供 query-budget 写收窄指引；offload 只用 `!== null` 决定跳过。 */
-export type RecallKind =
-  | { type: 'cached_read'; key: string }
-  | { type: 'bash'; file: string };
+ *  bash file 供 query-budget 写收窄指引；offload 只用 `!== null` 决定跳过。 */
+export type RecallKind = { type: 'bash'; file: string };
 
-/** 配对 assistant 的 tool === CACHED_READ → cached_read 回取；
- *  tool === BASH ∧ 命令含 fc 句柄 → 在盘上句柄上的任意操作（cat/rg/sed/head/...）均回取/派生视图，再 offload 必 fc→fc 别名 → 跳过。 */
+/** 配对 assistant 的 tool === BASH ∧ 命令含 fc 句柄 → 在盘上句柄上的任意操作
+ *  （cat/rg/sed/head/...）均回取/派生视图，再 offload 必 fc→fc 别名 → 跳过。 */
 export function classifyRecall(
   messages: LlmMessage[],
   obsIndex: number,
@@ -22,10 +20,6 @@ export function classifyRecall(
   if (!assistant || assistant.role !== 'assistant') return null;
   try {
     const { tool, input } = parseResponse(assistant.content);
-    if (tool === ToolIds.CACHED_READ) {
-      const key = (input as { key?: unknown }).key;
-      return { type: 'cached_read', key: typeof key === 'string' ? key : '' };
-    }
     if (tool === ToolIds.BASH) {
       const cmd = (input as { command?: unknown }).command;
       if (typeof cmd !== 'string') return null;

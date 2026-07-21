@@ -41,7 +41,6 @@ function makeCtx(
 ): AgentRunContext {
   const cache: CachePort = {
     resolve: vi.fn(async (_w: string, v: unknown) => v),
-    readFile: vi.fn(),
     offload: vi.fn(async (_w: string, _v: unknown, hint?: string) => ({
       $cached: hint ? `sem__fc_test` : 'fc_test',
       $size: 600,
@@ -179,27 +178,6 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     expect(events).toHaveLength(0); // seed 不桩 → 无桩
     expect(ctx.messages.get(0)!.content).toBe(emailBody); // 原样未动
     expect(ctx.cache.offload).not.toHaveBeenCalled();
-  });
-
-  it('cached_read 产物的 observation 跳过（防 offload↔cached_read 死环）', async () => {
-    // 两条 obs：cached_read 取回的 slice（带配对 assistant）、普通大 obs。
-    // 总量超 cap → 候选含两者；但 cached_read 结果已是盘上句柄回取，再 offload 只会别名 fc→fc 嵌套 → 跳过，只桩普通那条。
-    // 检测靠配对 assistant 的 tool，不扫内容（slice 里的页脚只是给 agent 续读 offset，不再承担 offload 契约）。
-    const slice =
-      body(4000) +
-      `\n\n[read offset=0 limit=2000; continue with cached_read(key="fc_test", offset=2000, limit=2000)]`;
-    const ctx = makeCtx(
-      [
-        assistant('cached_read', { key: 'fc_test', offset: 0, limit: 2000 }),
-        obs(slice),
-        assistant('search', { q: 'a' }),
-        obs(body(4000)),
-      ],
-      { offload: CFG() },
-    );
-    await collect(makeHook(8192).apply(ctx));
-    expect(ctx.messages.get(1)!.content).toBe(`Observation: ${slice}`); // slice 原样未桩
-    expect(ctx.messages.get(3)!.content).toContain('[offloaded to file'); // 普通那条被桩
   });
 
   it('bash 纯倾倒已 offload 句柄的 observation 跳过（防 bash cat fc→fc 别名）', async () => {

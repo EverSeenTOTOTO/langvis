@@ -18,7 +18,7 @@ import { SkillService } from '@/server/modules/agent/application/service/skill.s
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
 
-const MAX_ITEMS = 8;
+const MAX_ITEMS = 3;
 
 /**
  * pre-llm 首 tick：用 user query 检索命中工具/skill，把「建议式前缀 + 全量 schema」

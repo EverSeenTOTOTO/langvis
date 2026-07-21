@@ -28,7 +28,6 @@ function makeMockCache(): CachePort {
       $size: 0,
       $preview: '',
     })),
-    readFile: vi.fn(),
   };
 }
 

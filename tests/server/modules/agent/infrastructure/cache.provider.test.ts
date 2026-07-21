@@ -146,35 +146,6 @@ describe('CacheProvider', () => {
     });
   });
 
-  describe('readFile', () => {
-    it('should read file with offset and limit', async () => {
-      const content = '0123456789abcdef';
-      await fs.writeFile(path.join(workDir, 'fc_test'), content, 'utf-8');
-
-      const result = await cacheService.readFile(workDir, 'fc_test', 4, 8);
-      expect(result).toBe('456789ab');
-    });
-
-    it('should read file from beginning when offset is omitted', async () => {
-      const content = 'hello world';
-      await fs.writeFile(path.join(workDir, 'fc_test2'), content, 'utf-8');
-
-      const result = await cacheService.readFile(
-        workDir,
-        'fc_test2',
-        undefined,
-        5,
-      );
-      expect(result).toBe('hello');
-    });
-
-    it('should throw error when file not found', async () => {
-      await expect(
-        cacheService.readFile(workDir, 'fc_missing'),
-      ).rejects.toThrow('Cache miss: fc_missing');
-    });
-  });
-
   describe('offload', () => {
     it('always writes to disk and returns a CachedReference (even for small content)', async () => {
       const result = await cacheService.offload(workDir, 'tiny');
@@ -184,7 +155,10 @@ describe('CacheProvider', () => {
       expect(result.$size).toBe(4);
       expect(result.$preview).toBe('tiny');
       // offload 始终写盘，小内容也落文件
-      const reread = await cacheService.readFile(workDir, result.$cached);
+      const reread = await fs.readFile(
+        path.join(workDir, result.$cached),
+        'utf-8',
+      );
       expect(reread).toBe('tiny');
     });
 
@@ -220,10 +194,9 @@ describe('CacheProvider', () => {
     it('offloads non-string value by JSON-stringifying', async () => {
       const obj = { flights: [{ id: 'f1' }, { id: 'f2' }] };
       const result = await cacheService.offload(workDir, obj, 'search-flights');
-      const reread = (await cacheService.readFile(
-        workDir,
-        result.$cached,
-      )) as Record<string, unknown>;
+      const reread = JSON.parse(
+        await fs.readFile(path.join(workDir, result.$cached), 'utf-8'),
+      ) as Record<string, unknown>;
       expect(reread).toEqual(obj);
     });
 

@@ -87,7 +87,7 @@ export class QueryBudgetHook implements Hook {
 
     // 超限但可恢复：截断保留前 ~cap token 真实内容 + 收窄指引，放行 LLM（agent 据指引收窄重取，
     // 而非销毁内容只留空泛 note → 9B 不知如何收窄 → 重取大块 → drop 螺旋）。recall（盘上已落盘内容）
-    // 指明 rg/sed-n/cached_read(limit) 收窄；非 recall 指明收窄发起方工具。
+    // 指明 rg/sed-n/head-n 收窄；非 recall 指明收窄发起方工具。
     const msg = messages[last]!;
     const raw = msg.content;
     const isObservation = raw.startsWith(OBSERVATION_PREFIX);
@@ -138,12 +138,7 @@ function truncatedObservation(
   }
   const kept = estimateTokens([{ role: 'user', content: head }]);
   const omitted = Math.max(0, used - kept);
-  const recallTarget =
-    recall?.type === 'cached_read'
-      ? recall.key
-      : recall?.type === 'bash'
-        ? recall.file
-        : null;
+  const recallTarget = recall?.type === 'bash' ? recall.file : null;
   const directive = recallTarget
     ? `[query over budget: ~${used} tokens > ~${cap} cap. Above is the truncated head (~${omitted} tokens omitted); the full content remains on disk. Narrow: via the bash tool run rg -n "<keyword>" -C3 ${recallTarget} (tighter pattern / smaller -C) or sed -n "<range>" ${recallTarget} or head -n <N> ${recallTarget}; do NOT re-read the whole file or re-run the same broad search; then continue.]`
     : `[query over budget: ~${used} tokens > ~${cap} cap. Above is the truncated head (~${omitted} tokens omitted). Narrow the originating call (tighter pattern / smaller page range / smaller limit) and re-issue so the result fits, then continue.]`;
