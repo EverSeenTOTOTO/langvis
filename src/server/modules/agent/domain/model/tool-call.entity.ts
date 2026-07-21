@@ -69,6 +69,7 @@ export class ToolCall extends Entity<string> {
         input: this.input,
         signal: this.ctx.signal,
         workDir: this.ctx.workDir,
+        conversationId: this.ctx.conversationId,
         llm: this.ctx.llm,
         auth: this.ctx.auth,
         runId: this.ctx.runId,

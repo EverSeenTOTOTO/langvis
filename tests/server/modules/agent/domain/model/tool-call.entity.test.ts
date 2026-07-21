@@ -57,6 +57,7 @@ function makeCtx(): AgentRunContext {
     config,
     runId: 'run_1',
     workDir: '/tmp/workdir',
+    conversationId: 'conv_1',
     signal: new AbortController().signal,
     llm: makeMockLlm(),
     cache: makeMockCache(),

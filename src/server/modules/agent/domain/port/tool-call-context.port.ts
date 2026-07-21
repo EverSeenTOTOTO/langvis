@@ -12,8 +12,10 @@ export interface ToolCallContext {
   readonly input: Record<string, unknown>;
   readonly signal: AbortSignal;
   readonly workDir: string;
+  /** 会话句柄：授权 grant 按 conversationId 持久（workDir 文件），跨 run 复用。 */
+  readonly conversationId: string;
   readonly llm: LlmPort;
-  /** 横切授权能力：越界工具经此过授权门（per-run 缓存 + HITL）。 */
+  /** 横切授权能力：越界工具经此过授权门（session 持久 + HITL）。 */
   readonly auth: AuthorizationPort;
   /** HITL 关联键（AskUser 写 human_input:<runId>），不进入 AgentRunContext。 */
   readonly runId: string;

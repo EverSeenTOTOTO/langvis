@@ -39,6 +39,7 @@ function makeCtx(
     input,
     signal: new AbortController().signal,
     workDir,
+    conversationId: 'conv_1',
     llm: {} as never,
     auth: noopAuth(),
     runId: 'run_1',

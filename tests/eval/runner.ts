@@ -236,6 +236,7 @@ export async function runOnce<S>(
     {
       runId: generateId('eval'),
       workDir,
+      conversationId,
       runtimeConfig: resolveRuntimeConfig(task, modelId, variantId),
       seed: [
         { role: 'system', content: systemPrompt },
@@ -378,6 +379,7 @@ export async function runMultiTurn<S>(
       {
         runId: generateId('run'),
         workDir,
+        conversationId,
         runtimeConfig,
         seed,
         toolSet,

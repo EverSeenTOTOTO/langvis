@@ -35,6 +35,8 @@ import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 export interface LaunchParams {
   runId: string;
   workDir: string;
+  /** 会话句柄：授权 grant 按 conversationId 持久（workDir 文件），跨 run 复用。 */
+  conversationId: string;
   /** conv 侧一次性 parse 的运行时配置（agent 直接复用，不再二次 parse）。contextSize 按需派生，不在此处。 */
   runtimeConfig: ConversationConfig;
   /** run 初始消息；conv 直传 effectiveHistory（ReAct 还原在 createRun），子 agent 由 brief+query 派生。 */
@@ -83,6 +85,7 @@ export class AgentRunExecutor {
       config,
       runId: run.runId,
       workDir: params.workDir,
+      conversationId: params.conversationId,
       signal: run.signal,
       llm: this.llm,
       cache: this.cache,
