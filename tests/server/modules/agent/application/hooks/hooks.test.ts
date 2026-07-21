@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { container } from 'tsyringe';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
 import { CompactionHook } from '@/server/modules/agent/application/hooks/compaction-hook';
@@ -6,8 +6,6 @@ import { LoopUsageHook } from '@/server/modules/agent/application/hooks/loop-usa
 import { CumulativeBudgetHook } from '@/server/modules/agent/application/hooks/cumulative-budget-hook';
 import { StuckHook } from '@/server/modules/agent/application/hooks/stuck-hook';
 import { MaxIterationsHook } from '@/server/modules/agent/application/hooks/max-iterations-hook';
-import { AgentRunExecutor } from '@/server/modules/agent/application/service/agent-run-executor';
-import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { ListMonad } from '@/server/libs/list';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
@@ -67,15 +65,6 @@ function makeCtx(opts: {
 }
 
 describe('agent hook registry（自动识别 + per-run 实例）', () => {
-  beforeEach(() => {
-    // AuditResponseHook 注入 AgentRunExecutor + AgentService；此处 runtimeConfig 无
-    // audit.enabled，hook apply 首行即 'next' return，stub 不被调用，只须让 DI 解析过得去。
-    container.registerInstance(
-      AgentRunExecutor,
-      {} as unknown as AgentRunExecutor,
-    );
-    container.registerInstance(AgentService, {} as unknown as AgentService);
-  });
   afterEach(() => {
     container.clearInstances();
   });
