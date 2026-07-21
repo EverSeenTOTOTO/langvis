@@ -19,17 +19,17 @@ export const TRIALS = 10;
  * base = 最小 `{ model }` + **guard 基线**（guard 始终开，是安全基线而非被测 driver 旋钮）；
  * 每个开启的 feature 往上叠一个 config fragment。
  * variant id = feature 排序后 `+` 拼接；空集记作 `bare`（= 仅 guard 基线）。
- *   compact / compact+offload / audit / compact+offload+audit / bare / *
- * CLI: --variants compact+offload,audit,compact+offload+audit,bare,*
+ *   compact / compact+offload / bare / *
+ * CLI: --variants compact+offload,bare,*
  *   `*`|`all` = 全 feature；`bare` = 空 feature（仅 guard 基线）。省略 --variants = compact。
  *
- * guard 不可关（2026-07-20 决策）：测的是 compact/offload/audit driver，guard 是
+ * guard 不可关（2026-07-20 决策）：测的是 compact/offload driver，guard 是
  * "失败 run 不挂死"的 harness 保底，归 agent driver 管（maxIter/stuck/budget 三闸）。
  * 故无 guard-off 挂死风险，runner 不再需要硬上限收口。
  */
-export type Feature = 'compact' | 'offload' | 'audit';
+export type Feature = 'compact' | 'offload';
 
-export const ALL_FEATURES: readonly Feature[] = ['compact', 'offload', 'audit'];
+export const ALL_FEATURES: readonly Feature[] = ['compact', 'offload'];
 
 const COMPACT_FRAGMENT = (b: ConversationConfig): ConversationConfig => ({
   ...b,
@@ -39,10 +39,6 @@ const COMPACT_FRAGMENT = (b: ConversationConfig): ConversationConfig => ({
 const OFFLOAD_FRAGMENT = (b: ConversationConfig): ConversationConfig => ({
   ...b,
   offload: {},
-});
-const AUDIT_FRAGMENT = (b: ConversationConfig): ConversationConfig => ({
-  ...b,
-  audit: { enabled: true, maxRejections: 2 },
 });
 /** guard 基线：始终注入（非 feature、不可关）。 */
 const GUARD_BASELINE = (b: ConversationConfig): ConversationConfig => ({
@@ -62,7 +58,6 @@ const FRAGMENTS: Record<
 > = {
   compact: COMPACT_FRAGMENT,
   offload: OFFLOAD_FRAGMENT,
-  audit: AUDIT_FRAGMENT,
 };
 
 export type Variant = ReadonlySet<Feature>;

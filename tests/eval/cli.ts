@@ -9,7 +9,7 @@
  * bun tests/eval/cli.ts --tasks fs:geely-2024-metrics --models openrouter:z-ai/glm-5.2 --variants bare,offload,compact+offload --trials 3
  *
  * variant = feature 子集，`+` 拼；`*`=全 feature，`bare`=空集；省略 --variants = compact+guard：
- * bun tests/eval/cli.ts --variants 'compact+offload,audit+guard,compact+offload+audit,bare,*'
+ * bun tests/eval/cli.ts --variants 'compact+offload,bare,*'
  *
  * 跑批
  *

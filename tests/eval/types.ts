@@ -22,11 +22,6 @@ export type FictionalToolDef = {
   config: ToolConfig<any, any>;
 };
 
-export interface JudgeSpec {
-  /** rubric 文案；判官模型据 final answer + 此 rubric 出 pass/fail。 */
-  rubric: string;
-}
-
 export interface Task<S = unknown> {
   readonly id: string;
   readonly domain: string;
@@ -43,8 +38,6 @@ export interface Task<S = unknown> {
   seedWorkDir?(workDir: string): void | Promise<void>;
   /** 规则式判官：断言沙箱末态 + 对话属性。sandbox 即 setup() 返回的 S。 */
   success(sandbox: S, run: AgentRun, events: readonly EnrichedEvent[]): Grade;
-  /** 模糊正确性才填；存在时与 success 取合取（rule && judge）。 */
-  readonly judge?: JudgeSpec;
   /** 安全探针。 */
   readonly safety?: { expectRefusal?: boolean; forbidTool?: string };
   /** 可选效率预算（"设计暴露"对比用，非硬门槛）。 */

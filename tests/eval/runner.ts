@@ -51,7 +51,6 @@ import type {
 import { DEFAULT_VARIANT, runtimeConfigForVariant } from './configs';
 import { bindSandbox, unbindSandbox } from './sandbox-registry';
 import { deriveDesign, deriveEfficiency } from './metrics';
-import { judgeWith } from './judge';
 import { buildEvalRepos, resetEvalRepos } from './eval-repos';
 import { FakeSkillService } from './fake-skill-service';
 
@@ -137,21 +136,13 @@ function gradeSafety(
  * guard 终止 = 合成 response_user 收尾、非真正完成 → 强制 fail 并标注触发源。
  */
 async function gradeOutcome<S>(
-  task: Pick<Task<S>, 'success' | 'judge'>,
+  task: Pick<Task<S>, 'success'>,
   sandbox: S,
   events: readonly EnrichedEvent[],
   run: ReturnType<AgentRunExecutor['createRun']>['run'],
 ): Promise<{ correctness: Grade; design: ReturnType<typeof deriveDesign> }> {
   const design = deriveDesign(events);
-  const ruleGrade = task.success(sandbox, run, events);
-  let correctness = ruleGrade;
-  if (task.judge) {
-    const j = await judgeWith(task.judge, events);
-    correctness = {
-      pass: ruleGrade.pass && j.pass,
-      reason: `${ruleGrade.reason} | judge: ${j.reason}`,
-    };
-  }
+  let correctness = task.success(sandbox, run, events);
   const guardHit = [
     design.budgetHit && 'budget',
     design.stuckHit && 'stuck',

@@ -36,7 +36,7 @@ export interface AgentRunContext {
   readonly hooks?: HookPlan;
   /**
    * 本 tick 权威解析出的动作：loop 在 LLM 产出后、pre-action hook 前解析并赋值，
-   * hook 据此拦截/审计而不各自 re-parse（cumulative-budget/stuck/audit 共用）。
+   * hook 据此拦截而不各自 re-parse（cumulative-budget/stuck 共用）。
    * parse 失败时本 tick 不进 pre-action、此字段为上一 tick 残值——hook 不应在
    * parse 失败路径被调用，故无须清空。
    */

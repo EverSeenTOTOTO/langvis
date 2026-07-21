@@ -18,6 +18,18 @@
         }
       },
       {
+        "id": "qwen3.6-27b",
+        "name": "Qwen 3.6 27B",
+        "type": "chat",
+        "contextSize": 262000,
+        "multimodal": true,
+        "defaults": {
+          "temperature": 0.7,
+          "topP": 0.7,
+          "extraBody": { "chat_template_kwargs": { "enable_thinking": false } }
+        }
+      },
+      {
         "id": "faster-whisper-large-v3",
         "name": "Faster Whisper Large V3",
         "type": "stt",
@@ -44,7 +56,7 @@
         "id": "z-ai/glm-5.2",
         "name": "Glm-5.2",
         "type": "chat",
-        "contextSize": 80000,
+        "contextSize": 1000000,
         "multimodal": false,
         "defaults": { "temperature": 0.7 }
       },
@@ -109,7 +121,7 @@
         "id": "glm-5.2",
         "name": "Glm-5.2",
         "type": "chat",
-        "contextSize": 80000,
+        "contextSize": 1000000,
         "multimodal": false,
         "defaults": { "temperature": 0.7 }
       },
