@@ -1,10 +1,11 @@
 import os from 'node:os';
 import path from 'node:path';
-import { injectable, container } from 'tsyringe';
+import { injectable, inject, container } from 'tsyringe';
 import { ToolIds } from '@/shared/constants';
 import type { RunEvent } from '@/shared/types/events';
 import type { ToolCallContext } from '../domain/port/tool-call-context.port';
 import AskUserTool from '../implementations/tools/AskUser';
+import { AuthorizationService } from '@/server/libs/infrastructure/authorization.service';
 import {
   AUTHORIZATION_PORT,
   type AuthAction,
@@ -13,30 +14,29 @@ import {
 } from '../domain/port/authorization.port';
 
 /**
- * 横切授权实现：per-run 缓存 (action, resource) 决策。
- * 命中缓存直接放行；未命中且 interactive → 弹一次 AskUser；非 interactive → 抛。
- * deny 不缓存（允许重试改主意）；allow 缓存到本 run。
+ * 横切授权实现：session 持久 (action, resource) 决策。
+ * 命中 workDir 文件授予直接放行；未命中且 interactive → 弹一次 AskUser，allow 追加写文件；
+ * 非 interactive → 抛。deny 不写文件（允许重试改主意）。
  *
- * 生命周期：per-run 条目按 runId 累积；为防泄漏设 run 数上限（LRU 兜底）。
- * 真正的 per-run 清理可后续挂在 RunCompleted 事件，本实现先用上限兜底，
- * 避免引入事件订阅耦合——条目本身极小（一个 Set<string>）。
+ * 真相源是 AuthorizationService 读写的工作区文件（跨 run、跨会话激活/失活持久）；
+ * 本 provider 不再持内存缓存。grant 检查低频，v1 stateless 现读现写够用。
  */
-const MAX_RUNS = 64;
-
 @injectable()
 export class AuthorizationProvider implements AuthorizationPort {
-  private readonly grants = new Map<string, Set<string>>();
+  constructor(
+    @inject(AuthorizationService)
+    private readonly authService: AuthorizationService,
+  ) {}
 
   async *ensureApproved(
     ctx: ToolCallContext,
     action: AuthAction,
     resource: string,
     opts: EnsureApprovedOptions,
-  ): AsyncGenerator<RunEvent, void, void> {
+  ): AsyncGenerator<RunEvent, Record<string, unknown> | void, void> {
     const key = `${action}:${resource}`;
 
-    const granted = this.grants.get(ctx.runId);
-    if (granted?.has(key)) return;
+    if (await this.authService.hasGrant(ctx.conversationId, key)) return;
 
     if (!ctx.interactive) {
       throw new Error(
@@ -50,8 +50,9 @@ export class AuthorizationProvider implements AuthorizationPort {
       input: { message: opts.prompt, formSchema: opts.formSchema as never },
     });
 
-    if (!submitted || !(data as Record<string, unknown>)?.confirmed) {
-      const remark = (data as Record<string, unknown>)?.remark;
+    const record = data as Record<string, unknown> | undefined;
+    if (!submitted || !record?.confirmed) {
+      const remark = record?.remark;
       throw new Error(
         remark
           ? `用户拒绝授权 ${action} 于 "${resource}": ${remark}`
@@ -59,25 +60,8 @@ export class AuthorizationProvider implements AuthorizationPort {
       );
     }
 
-    this.touch(ctx.runId).add(key);
-  }
-
-  /** 取本 run 的授予集，顺带做 LRU 兜底：超 MAX_RUNS 删最旧。 */
-  private touch(runId: string): Set<string> {
-    const existing = this.grants.get(runId);
-    if (existing) {
-      this.grants.delete(runId);
-      this.grants.set(runId, existing);
-      return existing;
-    }
-    while (this.grants.size >= MAX_RUNS) {
-      const oldest = this.grants.keys().next().value;
-      if (oldest === undefined) break;
-      this.grants.delete(oldest);
-    }
-    const fresh = new Set<string>();
-    this.grants.set(runId, fresh);
-    return fresh;
+    await this.authService.addGrant(ctx.conversationId, key);
+    return record;
   }
 }
 

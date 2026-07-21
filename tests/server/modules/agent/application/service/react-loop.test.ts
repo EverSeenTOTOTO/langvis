@@ -262,6 +262,7 @@ function buildCtx(opts: BuildCtxOptions): BuiltCtx {
     config,
     runId: run.runId,
     workDir: '/tmp/workdir',
+    conversationId: 'conv_1',
     signal: opts.controller?.signal ?? run.signal,
     llm,
     cache: makeMockCache(),

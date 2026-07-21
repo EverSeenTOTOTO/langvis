@@ -104,7 +104,7 @@ export default class PdfExtractTool extends Tool<PdfExtractOutput> {
     return { files, totalFiles: files.length, skipped };
   }
 
-  /** 越界读取的 HITL 文案与表单。作用域 per-run，故承诺“本次运行内不再询问”。 */
+  /** 越界读取的 HITL 文案与表单。grant 按 session 持久（workDir 文件），故承诺“本次会话内不再询问”。 */
   private approvalForm(expanded: string): {
     prompt: string;
     formSchema: object;
@@ -114,7 +114,7 @@ export default class PdfExtractTool extends Tool<PdfExtractOutput> {
       `### 授权读取 PDF\n\n` +
       `PDF 工具请求读取工作区之外的文件，根目录：\n\n` +
       `\`${root}\`\n\n` +
-      `本次授权后，本次运行内该目录下的 PDF 读取将不再逐次询问。`;
+      `本次授权后，本次会话内该目录下的 PDF 读取将不再逐次询问。`;
     const formSchema = {
       type: 'object' as const,
       properties: {

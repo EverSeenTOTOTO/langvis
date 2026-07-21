@@ -1,5 +1,4 @@
 import { tool } from '@/server/decorator/tool';
-import { container } from 'tsyringe';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
@@ -7,16 +6,44 @@ import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-ca
 import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { BashInput, BashOutput } from './config';
-import AskUserTool from '../AskUser';
 import {
   DirectBash,
   DockerBash,
   runChild,
   type BashBackend,
 } from './bash-backend';
+import { classifyBashCommand } from './classifier';
 
 const DEFAULT_TIMEOUT = 60;
 const MAX_TIMEOUT = 600;
+
+/** bash HITL 表单：超时可调 + 确认 + 备注（沿用原 schema）。 */
+function bashFormSchema(suggestedTimeout: number) {
+  return {
+    type: 'object' as const,
+    properties: {
+      timeout: {
+        type: 'number' as const,
+        title: '超时时间（秒）',
+        description: `最大 ${MAX_TIMEOUT}s`,
+        default: suggestedTimeout,
+        minimum: 1,
+        maximum: MAX_TIMEOUT,
+      },
+      confirmed: {
+        type: 'boolean' as const,
+        title: '确认执行？',
+        default: true,
+      },
+      remark: {
+        type: 'string' as const,
+        title: '备注',
+        description: '可选，补充说明或拒绝原因',
+      },
+    },
+    required: ['timeout', 'confirmed'],
+  };
+}
 
 @tool(ToolIds.BASH)
 export default class BashTool extends Tool<BashOutput> {
@@ -44,56 +71,27 @@ export default class BashTool extends Tool<BashOutput> {
 
     let userTimeout: number;
     if (ctx.interactive) {
-      const hitl = container.resolve<AskUserTool>(ToolIds.ASK_USER);
-      const message =
-        `### 执行命令\n\n` +
-        `\`\`\`bash\n${command}\`\`\`\n\n` +
-        `**工作目录:** \`${workDir}\``;
-
-      const formSchema = {
-        type: 'object' as const,
-        properties: {
-          timeout: {
-            type: 'number' as const,
-            title: '超时时间（秒）',
-            description: `最大 ${MAX_TIMEOUT}s`,
-            default: suggestedTimeout,
-            minimum: 1,
-            maximum: MAX_TIMEOUT,
+      // 工具侧 pwd-containment 判定：只读 + 全在 workDir 子树内 → safe 放行、不调 auth；
+      // 越界 / 写 / exec / 含元字符 / 未知 → sensitive 走统一授权门（session 复用）。
+      const perm = classifyBashCommand(command, workDir);
+      if (perm.kind === 'safe') {
+        userTimeout = suggestedTimeout;
+      } else {
+        const data = (yield* ctx.auth.ensureApproved(
+          ctx,
+          perm.action,
+          perm.resource,
+          {
+            prompt: perm.prompt,
+            formSchema: bashFormSchema(suggestedTimeout),
           },
-          confirmed: {
-            type: 'boolean' as const,
-            title: '确认执行？',
-            default: true,
-          },
-          remark: {
-            type: 'string' as const,
-            title: '备注',
-            description: '可选，补充说明或拒绝原因',
-          },
-        },
-        required: ['timeout', 'confirmed'],
-      };
+        )) as Record<string, unknown> | undefined;
 
-      const { submitted, data } = yield* hitl.call({
-        ...ctx,
-        input: { message, formSchema: formSchema as any },
-      });
-
-      if (!submitted || !(data as Record<string, unknown>)?.confirmed) {
-        const remark = (data as Record<string, unknown>)?.remark;
-        throw new Error(
-          remark ? `用户取消了命令执行: ${remark}` : '用户取消了命令执行',
+        userTimeout = Math.min(
+          Math.max(Number(data?.timeout) || suggestedTimeout, 1),
+          MAX_TIMEOUT,
         );
       }
-
-      userTimeout = Math.min(
-        Math.max(
-          Number((data as Record<string, unknown>).timeout) || suggestedTimeout,
-          1,
-        ),
-        MAX_TIMEOUT,
-      );
     } else {
       userTimeout = suggestedTimeout;
     }
