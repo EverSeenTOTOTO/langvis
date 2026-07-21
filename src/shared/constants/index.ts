@@ -9,7 +9,6 @@ export enum ToolIds {
   RESPONSE_USER = 'response_user',
   DOCUMENT_SEARCH = 'document_search',
   LINKS_EXTRACT = 'links_extract',
-  CACHED_READ = 'cached_read',
   FILE_EDIT = 'file_edit',
   PDF_EXTRACT = 'pdf_extract',
   BASH = 'bash',

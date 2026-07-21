@@ -21,7 +21,7 @@ const OBSERVATION_PREFIX = 'Observation: ';
 const OFFLOADED_MARK = '[offloaded to file'; // 已桩标记 → 跳过重复桩
 const HEAD_KEEP = 256; // 裸 user 桩化保留头部（保 skill 触发 / 元信息）
 const MIN_BODY_TO_OFFLOAD = 512; // 桩文本须明显小于原文才省
-const CHUNK_SIZE = 2000; // cached_read 块大小；桩里固化首块 offset/limit
+const CHUNK_SIZE = 2000; // 桩化指引的块大小单位（估 chunks 数分叉大小文件策略）
 const LARGE_CHUNK_THRESHOLD = 10; // 超此块数 → 大文件，只劝 rg 不劝分页
 /** estimateTokens 对中文/JSON 系统性低估 ~8% 的固定补偿（非旋钮）——防桩化不足→真实爆窗。 */
 const ESTIMATE_SAFETY_FACTOR = 1.1;
@@ -29,7 +29,7 @@ const ESTIMATE_SAFETY_FACTOR = 1.1;
 const DEFAULT_WINDOW_RATIO = 0.8;
 
 /**
- * 当本次 query 的 token×factor > contextWindow×windowRatio（剩余空间不足）时，最胖优先桩化 [base,len) 内候选到盘（cached_read/rg 句柄），直到缩进阈值内。
+ * 当本次 query 的 token×factor > contextWindow×windowRatio（剩余空间不足）时，最胖优先桩化 [base,len) 内候选到盘（bash rg/sed/head 句柄），直到缩进阈值内。
  */
 @agentHook
 export class OffloadHook implements Hook {
@@ -125,7 +125,7 @@ export class OffloadHook implements Hook {
 }
 
 /** 桩正文：Observation 全替（保前缀 + hint 含 tool）；裸 user 保 HEAD_KEEP 头部。
- *  访问指引按量级分叉：大文件只劝 rg（分页/整读必爆窗）；小文件才劝 sed -n / head -n 顺序分页或 cached_read 线性分页。 */
+ *  访问指引按量级分叉：大文件只劝 rg（分页/整读必爆窗）；小文件才劝 sed -n / head -n 顺序分页。 */
 function stubContent(
   candidate: { body: string; isObservation: boolean },
   stub: { $cached: string; $size: number },

@@ -32,9 +32,7 @@ describe('AgentService', () => {
         model: { modelId: 'gpt-4' },
       });
 
-      expect(cfg.tools).toEqual(
-        expect.arrayContaining(['response_user', 'cached_read']),
-      );
+      expect(cfg.tools).toEqual(expect.arrayContaining(['response_user']));
       expect(cfg.runtimeConfig).toMatchObject({ model: { modelId: 'gpt-4' } });
       expect(Object.isFrozen(cfg)).toBe(true);
     });

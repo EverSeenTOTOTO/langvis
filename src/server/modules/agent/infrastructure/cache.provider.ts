@@ -11,7 +11,7 @@ import {
 
 /*
  * CachePort 实现。落盘入口只有 offload（pre-LLM 预算化 hook 用）：始终写盘返 CachedReference，
- * 文件名带语义 hint。resolve 把 $cached 引用（含嵌套）展开回原值；readFile 支持分页读。
+ * 文件名带语义 hint。resolve 把 $cached 引用（含嵌套）展开回原值；agent 经 bash rg/sed/head 检索盘上件。
  */
 
 // $preview 长度：桩里露的预览，供 LLM 不读正文即判断该不该 page-in。
@@ -35,7 +35,7 @@ const MAX_GREP_LINE = 2000;
 
 /** offload 落盘内容 reflow 成 rg 友好形：剥 untrusted 包裹后递归；JSON 形单遍解 JSON 字符串转义
  *  （\\ 作整体消费，不误伤字面反斜杠）；非 JSON 形按空白折到 MAX_GREP_LINE。
- *  落盘件只供 cached_read（按 char 偏移切片）与 rg，不 JSON.parse。 */
+ *  落盘件只供 bash rg/sed/head 检索，不 JSON.parse。 */
 const JSON_ESCAPES: Record<string, string> = {
   '\\': '\\',
   '"': '"',
@@ -120,29 +120,6 @@ export class CacheProvider implements CachePort {
     }
 
     return value;
-  }
-
-  async readFile(
-    workDir: string,
-    filename: string,
-    offset?: number,
-    limit?: number,
-  ): Promise<string | Record<string, unknown>> {
-    const fileResult = await this.workspaceService.readFile(filename, workDir);
-    if (!fileResult) {
-      throw new Error(`Cache miss: ${filename}`);
-    }
-
-    const content = fileResult.content;
-    const sliced = limit
-      ? content.slice(offset ?? 0, (offset ?? 0) + limit)
-      : content.slice(offset ?? 0);
-
-    try {
-      return JSON.parse(sliced);
-    } catch {
-      return sliced;
-    }
   }
 
   private async storeSerialized(

@@ -18,7 +18,6 @@ export class AgentService {
   private readonly inlineTools = [
     ToolIds.ASK_USER,
     ToolIds.RESPONSE_USER,
-    ToolIds.CACHED_READ,
     ToolIds.SKILL_CALL,
     ToolIds.LIST_TOOLS,
     ToolIds.CALL_SUBAGENTS,

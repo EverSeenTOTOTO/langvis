@@ -149,30 +149,6 @@ describe('QueryBudgetHook（pre-LLM 超限兜底：latest > min(budget, remainin
     expect(r2).toBe('next');
   });
 
-  it('recall（cached_read slice）超 cap：截断头部 + 指向盘上原句柄的 bash 收窄指引（非销毁）', async () => {
-    // offload 跳过 cached_read 回取（防 fc→fc 别名）；本 hook 接住：截断 + 指 rg/sed-n 收窄（不再提 cached_read）。
-    const slice =
-      body(7900) +
-      `\n\n[read offset=0 limit=10000; continue with cached_read(key="fc_recall", offset=10000, limit=10000)]`;
-    const ctx = makeCtx(
-      [
-        assistant('cached_read', { key: 'fc_recall', offset: 0, limit: 10000 }),
-        obs(slice),
-      ],
-      {},
-    );
-    const { ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('next');
-    const replaced = ctx.messages.get(1)!.content;
-    expect(replaced).toContain('[query over budget');
-    expect(replaced).toContain('truncated head');
-    expect(replaced).toContain('fc_recall'); // 指向盘上原句柄
-    expect(replaced).toContain('rg -n');
-    expect(replaced).toContain('sed -n');
-    expect(replaced).not.toContain('cached_read'); // 已移除 cached_read：只劝 bash
-    expect(replaced).toMatch(/^Observation: x/); // 保留头部
-  });
-
   it('recall（bash cat 整个 offload 文件）超 cap：截断头部 + 劝 rg/sed-n，勿再整读', async () => {
     const ctx = makeCtx(
       [

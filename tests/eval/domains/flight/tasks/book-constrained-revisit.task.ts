@@ -3,7 +3,7 @@
  *
  * 模型须 search 两个 pair（京沪 + 京广），比较各自约束最便宜价，按条件选订其一。
  * - 2 次 search × ~40 条 ≈ 累积过 8K 模型阈值（6553）→ offload-only/hybrid 变体下老 search obs 被桩化。
- * - 模型要么在 thought 里记下两价（单次消化，offload 无损），要么 cached_read/rg 回查被桩 obs。
+ * - 模型要么在 thought 里记下两价（单次消化，offload 无损），要么 bash rg 回查被桩 obs。
  *   offload 设计目标正是"无损、可按需回取"——本任务端到端验证：桩化后模型仍能正确比价订票。
  *
  * 与 2leg/4leg 区别：那两个测累积爆窗（压缩救不救命）；本任务累积较轻（2 search），
