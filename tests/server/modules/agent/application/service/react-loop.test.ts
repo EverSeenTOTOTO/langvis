@@ -187,7 +187,6 @@ function summaryStubLlm(): LlmPort {
 
 function makeMockCache(): CachePort {
   return {
-    resolve: vi.fn(async (_id: string, value: unknown) => value),
     offload: vi.fn(async (_id: string, _value: unknown) => ({
       $cached: 'fc_test',
       $size: 0,

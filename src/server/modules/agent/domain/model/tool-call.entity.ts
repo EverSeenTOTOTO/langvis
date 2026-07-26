@@ -51,8 +51,8 @@ export class ToolCall extends Entity<string> {
 
   async *execute(): AsyncGenerator<RunEvent, string, void> {
     // 工具入参即 LLM 产出的 JSON，原样直用——不存在自动 resolve。
-    // 大工具输出经 post-observation offload-hook 落盘桩化（见 observation 注释），
-    // 落盘件只供 bash rg/sed/head 检索，不会被自动解析回对象。
+    // 大工具输出经 post-observation OutputOffloadHook 按大小桩化（见 observation 注释），
+    // 落盘件只供 bash rg/sed/head 检索或归档工具 rawFile 读取，不会被自动解析回对象。
     this.input = this.toolArgs;
 
     yield {
@@ -79,7 +79,7 @@ export class ToolCall extends Entity<string> {
       const output = yield* this.tool.call(callCtx);
 
       // #output 留全文：tool_result 事件/DB/前端/历史回放都看全文（事件真相）。
-      // 给 LLM 看的 messages 由 post-observation offload-hook 预算化桩化（无损落盘）。
+      // 给 LLM 看的 messages 由 post-observation OutputOffloadHook 按大小桩化（产出即桩，无损落盘）。
       this.complete(output);
       yield {
         type: 'tool_result',

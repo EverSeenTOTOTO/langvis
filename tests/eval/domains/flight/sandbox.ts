@@ -223,11 +223,15 @@ export const flightToolDefs: FictionalToolDef[] = [
 
 const FLIGHT_TOOL_IDS = flightToolDefs.map(d => d.id);
 
-/** flight 域 ToolSet：4 工具 + response_user 全 inline（模型见全 schema）。 */
+/** flight 域 ToolSet：4 业务工具 + bash + response_user 全 inline（模型见全 schema）。
+ *  bash 非"业务工具"而是 offload 读端：search_flights 大结果被 OutputOffloadHook 落盘成
+ *  search-flights__fc_xxxx 句柄后，桩统一指引用 bash（rg/grep/head）检索回读——无 bash 则模型
+ *  被引向不存在的工具必死。同构 fs 域：fsDocToolSet 也为同因挂 bash。 */
 export function flightToolSet(): ToolSet {
   return ToolSet.of(
     [
       ...FLIGHT_TOOL_IDS.map(id => ({ id, mode: 'inline' as const })),
+      { id: ToolIds.BASH, mode: 'inline' as const },
       { id: ToolIds.RESPONSE_USER, mode: 'inline' as const },
     ],
     [],

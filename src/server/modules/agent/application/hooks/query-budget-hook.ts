@@ -11,7 +11,10 @@ import { estimateTokens } from '@/server/utils/estimateTokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
-import { classifyRecall, type RecallKind } from './offload-recall';
+import {
+  classifyRecall,
+  type RecallKind,
+} from '@/server/modules/agent/domain/offload/offload-recall';
 
 const OBSERVATION_PREFIX = 'Observation: ';
 /** 截断保留头部目标比例（留余量吸收 estimateTokens 低估，防截断后仍触窗）。 */

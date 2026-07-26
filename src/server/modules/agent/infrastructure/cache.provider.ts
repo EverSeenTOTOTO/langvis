@@ -1,17 +1,15 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { singleton, inject } from 'tsyringe';
+import { singleton } from 'tsyringe';
 import { generateId } from '@/shared/utils';
-import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import {
-  isCachedReference,
   type CachePort,
   type CachedReference,
 } from '@/server/modules/agent/domain/port/cache.port';
 
 /*
- * CachePort 实现。落盘入口只有 offload（pre-LLM 预算化 hook 用）：始终写盘返 CachedReference，
- * 文件名带语义 hint。resolve 把 $cached 引用（含嵌套）展开回原值；agent 经 bash rg/sed/head 检索盘上件。
+ * CachePort 实现。落盘入口只有 offload（pre-LLM / post-observation hook 用）：始终写盘返 CachedReference，
+ * 文件名带语义 hint。读端不再自动 resolve——agent 经 bash rg/sed/head 检索盘上件。
  */
 
 // $preview 长度：桩里露的预览，供 LLM 不读正文即判断该不该 page-in。
@@ -33,9 +31,12 @@ function sanitizeHint(hint?: string): string {
 /** 折行宽度上限：rg 命中后单行回显不致失控（8k 上下文模型也吃得下）。 */
 const MAX_GREP_LINE = 2000;
 
-/** offload 落盘内容 reflow 成 rg 友好形：剥 untrusted 包裹后递归；JSON 形单遍解 JSON 字符串转义
- *  （\\ 作整体消费，不误伤字面反斜杠）；非 JSON 形按空白折到 MAX_GREP_LINE。
- *  落盘件只供 bash rg/sed/head 检索，不 JSON.parse。 */
+/** offload 落盘内容 reflow 成 rg 友好形：剥 untrusted 包裹后递归；JSON 形先解转义再按需结构化裂行。
+ *  - 紧凑 JSON（如 search_flights 的 {"flights":[...]}，无转义）：unescape 是 no-op → 仍单行巨 JSON
+ *    → JSON.parse + 缩进 stringify 裂成每字段/每元素一行，rg -C3 才能切出片段而非回整条。
+ *  - bash 形（{exitCode, stdout:"line1\nline2"}）：unespace 把 \n 真换行 → 字符串内夹真换行 → 非法 JSON
+ *    → 落 wrapLongLines（stdout 已多行，仅兜底超宽行）。
+ *  落盘件只供 bash rg/sed/head 检索，resolve 路径 JSON.parse 缩进形仍等价原值。 */
 const JSON_ESCAPES: Record<string, string> = {
   '\\': '\\',
   '"': '"',
@@ -53,13 +54,21 @@ function reflowForGrep(s: string): string {
     return `<untrusted_content>\n${reflowForGrep(untrusted[1]!)}\n</untrusted_content>`;
   }
   if (/^\s*[{[]/.test(s)) {
-    return s.replace(
+    const unescaped = s.replace(
       /\\(\\|"|\/|n|r|t|b|f|u([0-9a-fA-F]{4}))/g,
       (m, c: string, hex?: string) =>
         c === 'u'
           ? String.fromCharCode(parseInt(hex!, 16))
           : (JSON_ESCAPES[c] ?? m),
     );
+    // 紧凑 JSON 无转义 → unescape no-op → 仍单行；结构化裂行（bash 形此处 parse 失败 → 落兜底）。
+    try {
+      const pretty = JSON.stringify(JSON.parse(unescaped), null, 2);
+      if (pretty.includes('\n')) return pretty;
+    } catch {
+      // 非法 JSON（bash 真换行情形）→ wrapLongLines 兜底。
+    }
+    return wrapLongLines(unescaped, MAX_GREP_LINE);
   }
   return wrapLongLines(s, MAX_GREP_LINE);
 }
@@ -82,11 +91,6 @@ function wrapLongLines(text: string, width: number): string {
 
 @singleton()
 export class CacheProvider implements CachePort {
-  constructor(
-    @inject(WorkspaceService)
-    private readonly workspaceService: WorkspaceService,
-  ) {}
-
   async offload(
     workDir: string,
     value: unknown,
@@ -95,31 +99,6 @@ export class CacheProvider implements CachePort {
     const serialized =
       typeof value === 'string' ? value : JSON.stringify(value);
     return this.storeSerialized(workDir, serialized, hint);
-  }
-
-  async resolve(workDir: string, value: unknown): Promise<unknown> {
-    if (isCachedReference(value)) {
-      const expanded = await this.expandCached(workDir, value.$cached);
-      // Expanded result may contain nested CachedReferences (e.g. an array whole-
-      // cached whose items still have $cached fields) — resolve recursively.
-      return this.resolve(workDir, expanded);
-    }
-
-    if (Array.isArray(value)) {
-      return Promise.all(value.map(item => this.resolve(workDir, item)));
-    }
-
-    if (value && typeof value === 'object') {
-      const result: Record<string, unknown> = {};
-      for (const [key, val] of Object.entries(
-        value as Record<string, unknown>,
-      )) {
-        result[key] = await this.resolve(workDir, val);
-      }
-      return result;
-    }
-
-    return value;
   }
 
   private async storeSerialized(
@@ -142,20 +121,5 @@ export class CacheProvider implements CachePort {
       $preview: stored.slice(0, PREVIEW_LENGTH),
       ...(sanitized ? { $label: sanitized } : {}),
     };
-  }
-
-  private async expandCached(
-    workDir: string,
-    filename: string,
-  ): Promise<unknown> {
-    const fileResult = await this.workspaceService.readFile(filename, workDir);
-    if (!fileResult) {
-      throw new Error(`Cache miss: ${filename}`);
-    }
-    try {
-      return JSON.parse(fileResult.content);
-    } catch {
-      return fileResult.content;
-    }
   }
 }

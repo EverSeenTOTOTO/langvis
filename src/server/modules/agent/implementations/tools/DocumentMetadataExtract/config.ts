@@ -2,6 +2,7 @@ import { ToolConfig } from '@/shared/types';
 
 export interface DocumentMetadataExtractInput {
   content: string;
+  rawFile?: string;
   sourceUrl?: string;
   sourceType?: string;
 }
@@ -27,6 +28,12 @@ export const config: ToolConfig<
       content: {
         type: 'string',
         description: 'The document content to analyze',
+      },
+      rawFile: {
+        type: 'string',
+        nullable: true,
+        description:
+          'Filename in workDir holding the full content (e.g. an offloaded web_fetch/email result). If provided, takes precedence over content — the tool reads the file itself, avoiding loading the full text into context.',
       },
       sourceUrl: {
         type: 'string',

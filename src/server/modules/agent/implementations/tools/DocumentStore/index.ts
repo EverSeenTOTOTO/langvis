@@ -9,6 +9,7 @@ import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { DatabaseService } from '@/server/libs/infrastructure/database.service';
+import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import type EmbeddingGenerateTool from '../EmbeddingGenerate';
 import type ContentChunkTool from '../ContentChunk';
 import type { DocumentStoreInput, DocumentStoreOutput } from './config';
@@ -20,7 +21,11 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {
+  constructor(
+    @inject(DatabaseService) private readonly db: DatabaseService,
+    @inject(WorkspaceService)
+    private readonly workspace: WorkspaceService,
+  ) {
     super();
   }
 
@@ -28,17 +33,22 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
     ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, DocumentStoreOutput, void> {
     const data = ctx.input as unknown as DocumentStoreInput;
-    const { document } = data;
 
-    // 分块:复用 content_chunk 工具(与 embedding 同样内部 resolve 调用)。
-    // 分块策略/参数是存储层的内部细节,用 content_chunk 的默认值(paragraph/1000),
-    // 不暴露给调用方。
+    // rawFile（盘上 offload 件）优先于 rawContent：DocumentStore 自读全文，
+    // 下游 ContentChunk/EmbeddingGenerate 收到的已是解析后的字符串，二者无需感知文件。
+    const rawContent = data.document.rawFile
+      ? await this.readWorkFile(ctx.workDir, data.document.rawFile)
+      : (data.document.rawContent ?? '');
+    const document = { ...data.document, rawContent };
+
+    // 分块:复用 content_chunk 工具。分块策略/参数是存储层的内部细节,
+    // 用 content_chunk 的默认值(paragraph/1000),不暴露给调用方。
     const chunkTool = container.resolve<ContentChunkTool>(
       ToolIds.CONTENT_CHUNK,
     );
     const chunkResult = yield* chunkTool.call({
       ...ctx,
-      input: { content: document.rawContent },
+      input: { content: rawContent },
     });
     const chunks = chunkResult.chunks;
 
@@ -115,6 +125,17 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
     const output: DocumentStoreOutput = result;
 
     return output;
+  }
+
+  private async readWorkFile(
+    workDir: string,
+    filename: string,
+  ): Promise<string> {
+    const result = await this.workspace.readFile(filename, workDir);
+    if (!result) {
+      throw new Error(`rawFile not found in workDir: ${filename}`);
+    }
+    return result.content;
   }
 }
 

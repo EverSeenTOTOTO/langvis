@@ -86,6 +86,25 @@ function toOpenAIMessages(
   });
 }
 
+/** 调试日志：request 头一行（含 messageCount），随后每条消息各占一行，避免整坨 JSON 挤一行。 */
+function logLLMRequest(
+  resolved: string,
+  data: Partial<ChatCompletionCreateParams>,
+  defaultTemp: number | undefined,
+  messages: ChatCompletionMessageParam[],
+): void {
+  const visible = messages.filter(msg => msg.role !== Role.SYSTEM);
+  logger.debug('LLM call request', {
+    model: resolved,
+    temperature: data.temperature ?? defaultTemp,
+    stop: data.stop,
+    messageCount: visible.length,
+  });
+  for (const msg of visible) {
+    logger.debug('LLM call message', msg);
+  }
+}
+
 @singleton()
 export class LlmProvider implements LlmPort {
   private clientCache = new Map<string, OpenAI>();
@@ -157,12 +176,7 @@ export class LlmProvider implements LlmPort {
     const rawMessages = data.messages ?? [];
     const messages = toOpenAIMessages(rawMessages as LlmMessage[]);
 
-    logger.debug('LLM call request', {
-      model: resolved,
-      temperature: data.temperature ?? defaultParams.temperature,
-      stop: data.stop,
-      messages: messages.filter(msg => msg.role !== Role.SYSTEM),
-    });
+    logLLMRequest(resolved, data, defaultParams.temperature, messages);
 
     let response;
     try {
@@ -234,12 +248,7 @@ export class LlmProvider implements LlmPort {
     const rawMessages = data.messages ?? [];
     const messages = toOpenAIMessages(rawMessages as LlmMessage[]);
 
-    logger.debug('LLM call request', {
-      model: resolved,
-      temperature: data.temperature ?? defaultParams.temperature,
-      stop: data.stop,
-      messages: messages.filter(msg => msg.role !== Role.SYSTEM),
-    });
+    logLLMRequest(resolved, data, defaultParams.temperature, messages);
 
     try {
       const response = await client.chat.completions.create(

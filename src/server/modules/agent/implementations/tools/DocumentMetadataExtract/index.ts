@@ -3,9 +3,11 @@ import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { wrapUntrusted } from '@/shared/utils';
+import { inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
+import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import { Prompt } from '@/server/libs/prompt';
 import type {
   DocumentMetadataExtractInput,
@@ -48,11 +50,23 @@ export default class DocumentMetadataExtractTool extends Tool<DocumentMetadataEx
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
+  constructor(
+    @inject(WorkspaceService)
+    private readonly workspace: WorkspaceService,
+  ) {
+    super();
+  }
+
   async *call(
     ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, DocumentMetadataExtractOutput, void> {
     const data = ctx.input as unknown as DocumentMetadataExtractInput;
-    const { content, sourceUrl, sourceType } = data;
+    const { sourceUrl, sourceType } = data;
+
+    // rawFile（盘上 offload 件）优先于 content：工具自读全文，避免大块原文回流上下文。
+    const content = data.rawFile
+      ? await this.readWorkFile(ctx.workDir, data.rawFile)
+      : data.content;
 
     const truncatedContent =
       content.length > 8000 ? content.slice(0, 8000) : content;
@@ -130,6 +144,17 @@ ${wrapUntrusted(truncatedContent)}`;
     };
 
     return output;
+  }
+
+  private async readWorkFile(
+    workDir: string,
+    filename: string,
+  ): Promise<string> {
+    const result = await this.workspace.readFile(filename, workDir);
+    if (!result) {
+      throw new Error(`rawFile not found in workDir: ${filename}`);
+    }
+    return result.content;
   }
 }
 

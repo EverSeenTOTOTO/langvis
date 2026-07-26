@@ -22,7 +22,6 @@ function makeMockTool(config?: { untrustedOutput?: boolean }): Tool {
 
 function makeMockCache(): CachePort {
   return {
-    resolve: vi.fn(async (_id: string, value: unknown) => value),
     offload: vi.fn(async (_id: string, _value: unknown) => ({
       $cached: 'fc_test',
       $size: 0,
@@ -90,8 +89,6 @@ describe('ToolCall', () => {
       const ctx = makeCtx();
       const toolCall = createToolCall(makeMockTool(), ctx);
       await collect(toolCall.execute());
-      // 不存在自动 resolve：入参原样直用。
-      expect(ctx.cache.resolve).not.toHaveBeenCalled();
       // tool-call 层不落盘：#output 留全文（事件/DB/前端真相），
       // 给 LLM 的 messages 由 pre-LLM offload-hook 预算化桩化。
       expect(ctx.cache.offload).not.toHaveBeenCalled();

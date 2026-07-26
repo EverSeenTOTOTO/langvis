@@ -1,7 +1,5 @@
 /**
  * 投影值对象 — 从 Agent 领域事件实时沉淀到 Message 的结构化记录。
- *
- * @see docs/plans/2026-05-30-ddd-refactor/03-conversation.md
  */
 
 /**
