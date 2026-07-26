@@ -6,23 +6,26 @@ import type {
   HookPhase,
 } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
-import type { LlmMessage } from '@/shared/types/entities';
 import { ListMonad } from '@/server/libs/list';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
-import { parseResponse } from '@/server/modules/agent/application/service/react-loop';
-import { ToolIds } from '@/shared/constants';
 import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
-import { classifyRecall } from './offload-recall';
+import { classifyRecallParsed } from '@/server/modules/agent/domain/offload/offload-recall';
+import {
+  candidateBody,
+  stubContent,
+  hintFromAction,
+  hintForObservation,
+  hintForUser,
+  parseAssistantAt,
+  OFFLOADED_MARK,
+  CHUNK_SIZE,
+  type Candidate,
+} from '@/server/modules/agent/domain/offload/offload-stub';
+import type { ParsedAction } from '@/server/modules/agent/domain/port/agent-run-context.port';
 
-const OBSERVATION_PREFIX = 'Observation: ';
-const OFFLOADED_MARK = '[offloaded to file'; // 已桩标记 → 跳过重复桩
-const HEAD_KEEP = 256; // 裸 user 桩化保留头部（保 skill 触发 / 元信息）
-const MIN_BODY_TO_OFFLOAD = 512; // 桩文本须明显小于原文才省
-const CHUNK_SIZE = 2000; // 桩化指引的块大小单位（估 chunks 数分叉大小文件策略）
-const LARGE_CHUNK_THRESHOLD = 10; // 超此块数 → 大文件，只劝 rg 不劝分页
 /** estimateTokens 对中文/JSON 系统性低估 ~8% 的固定补偿（非旋钮）——防桩化不足→真实爆窗。 */
 const ESTIMATE_SAFETY_FACTOR = 1.1;
 /** 总量触发比例缺省：total×factor > contextWindow×此值即 offload 最胖。 */
@@ -62,18 +65,32 @@ export class OffloadHook implements Hook {
     if (tokens * factor <= cap) return 'next';
 
     // 候选：仅 [base,len)。已桩 / 盘上句柄回取 / 短于 MIN 跳过。最胖优先（tokens 降序）。
-    const candByIndex = new Map<
-      number,
-      { body: string; isObservation: boolean; tokens: number }
-    >();
+    // assistant 的 ParsedAction 单一索引：candidateBody 解析后寄存于此，供该 assistant 作为
+    // 候选自身的 hint/stub、以及作为下一条 observation 的配对源（recall + hint）共用——免重复 parse。
+    const parsedByIndex = new Map<number, ParsedAction | null>();
+    const parsedAt = (i: number): ParsedAction | null => {
+      if (!parsedByIndex.has(i)) {
+        parsedByIndex.set(i, parseAssistantAt(messages, i));
+      }
+      return parsedByIndex.get(i)!;
+    };
+    const candByIndex = new Map<number, { cand: Candidate; tokens: number }>();
     const ordered: number[] = [];
     for (let i = base; i < len; i++) {
       const cand = candidateBody(messages[i]!);
       if (!cand) continue;
+      // assistant 候选已由 candidateBody 解析——寄存进单一索引，供下游 observation 复用，免再 parse。
+      if (cand.kind === 'assistant') parsedByIndex.set(i, cand.parsed);
       if (cand.body.includes(OFFLOADED_MARK)) continue;
-      if (cand.isObservation && classifyRecall(messages, i) !== null) continue;
-      if (cand.body.length < MIN_BODY_TO_OFFLOAD) continue;
-      candByIndex.set(i, { ...cand, tokens: estimateTokens([messages[i]!]) });
+      // 仅 observation 有 fc→fc 别名风险（assistant 桩重建为 {_offloaded}，无回取螺旋）。
+      if (
+        cand.kind === 'observation' &&
+        classifyRecallParsed(parsedAt(i - 1)) !== null
+      )
+        continue;
+      // 原文短于一个 chunk → 桩文本不会明显小于原文，不桩。
+      if (cand.body.length < CHUNK_SIZE) continue;
+      candByIndex.set(i, { cand, tokens: estimateTokens([messages[i]!]) });
       ordered.push(i);
     }
     ordered.sort(
@@ -84,14 +101,18 @@ export class OffloadHook implements Hook {
     const beforeTokens = tokens;
 
     const stubIndex = async (i: number) => {
-      const c = candByIndex.get(i);
-      if (!c) return;
+      const entry = candByIndex.get(i);
+      if (!entry) return;
+      const { cand } = entry;
       const msg = messages[i]!;
-      const hint = c.isObservation
-        ? hintForObservation(messages, i)
-        : hintForUser(c.body);
-      const stub = await ctx.cache.offload(ctx.workDir, c.body, hint);
-      messages[i] = { ...msg, content: stubContent(c, stub, hint) };
+      const hint =
+        cand.kind === 'observation'
+          ? hintForObservation(messages, i, parsedAt(i - 1))
+          : cand.kind === 'assistant'
+            ? hintFromAction(cand.parsed)
+            : hintForUser(cand.body);
+      const stub = await ctx.cache.offload(ctx.workDir, cand.body, hint);
+      messages[i] = { ...msg, content: stubContent(cand, stub, hint) };
       stubbed++;
       candByIndex.delete(i);
       tokens = estimateTokens(messages);
@@ -122,72 +143,4 @@ export class OffloadHook implements Hook {
     };
     return 'next';
   }
-}
-
-/** 桩正文：Observation 全替（保前缀 + hint 含 tool）；裸 user 保 HEAD_KEEP 头部。
- *  访问指引按量级分叉：大文件只劝 rg（分页/整读必爆窗）；小文件才劝 sed -n / head -n 顺序分页。 */
-function stubContent(
-  candidate: { body: string; isObservation: boolean },
-  stub: { $cached: string; $size: number },
-  hint: string,
-): string {
-  const chunks = Math.ceil(stub.$size / CHUNK_SIZE) || 1;
-  const fn = stub.$cached;
-  const large = chunks > LARGE_CHUNK_THRESHOLD;
-  const strategy = large
-    ? `large file (~${chunks} chunks): via the bash tool, search on demand, e.g. rg -n "<keyword>" -C3 ${fn} (or grep); do NOT cat or page the whole file (it would overflow the window).`
-    : `small file (~${chunks} chunks): via the bash tool, search with rg -n "<keyword>" -C3 ${fn} or page with sed -n "<range>" ${fn} / head -n <N> ${fn}.`;
-  const marker =
-    `${OFFLOADED_MARK} ${fn}] ${hint ? `(${hint}) ` : ''}size=${stub.$size}B` +
-    ` (~${chunks} chunks of ${CHUNK_SIZE}B). The full content is saved as file ${fn} in your workDir (bash cwd=workDir). ${strategy}`;
-  if (candidate.isObservation) {
-    return `${OBSERVATION_PREFIX}${marker}`;
-  }
-  return `${candidate.body.slice(0, HEAD_KEEP)}\n${marker}`;
-}
-
-/** user-role 候选正文：Observation 去前缀；裸 user 取全文。非 user → null。 */
-function candidateBody(
-  msg: LlmMessage,
-): { body: string; isObservation: boolean } | null {
-  if (msg.role !== 'user') return null;
-  if (msg.content.startsWith(OBSERVATION_PREFIX)) {
-    return {
-      body: msg.content.slice(OBSERVATION_PREFIX.length),
-      isObservation: true,
-    };
-  }
-  return { body: msg.content, isObservation: false };
-}
-
-/** Observation 的 hint：配对 assistant 的 tool + 首个 scalar 入参。bash 取命令动词（不带参数，防文件名嵌套）。失败 → ''。 */
-function hintForObservation(messages: LlmMessage[], obsIndex: number): string {
-  const assistant = messages[obsIndex - 1];
-  if (!assistant || assistant.role !== 'assistant') return '';
-  try {
-    const { tool, input } = parseResponse(assistant.content);
-    if (tool === ToolIds.BASH) {
-      const cmd = (input as { command?: unknown }).command;
-      const verb = typeof cmd === 'string' ? cmd.trim().split(/\s+/)[0]! : '';
-      return verb ? `${tool}-${verb}` : tool;
-    }
-    const scalar = firstScalar(input);
-    return scalar ? `${tool}-${scalar}` : tool;
-  } catch {
-    return '';
-  }
-}
-
-/** 裸 user 的 hint：正文首行作 label。 */
-function hintForUser(body: string): string {
-  const firstLine = body.split('\n')[0]?.trim() ?? '';
-  return firstLine.slice(0, 32);
-}
-
-function firstScalar(input: Record<string, unknown>): string | null {
-  for (const v of Object.values(input)) {
-    if (typeof v === 'string' && v.length > 0) return v.slice(0, 32);
-    if (typeof v === 'number') return String(v);
-  }
-  return null;
 }

@@ -7,10 +7,7 @@ import {
   CacheProvider,
   PREVIEW_LENGTH,
 } from '@/server/modules/agent/infrastructure/cache.provider';
-import {
-  isCachedReference,
-  type CachedReference,
-} from '@/server/modules/agent/domain/port/cache.port';
+import type { CachedReference } from '@/server/modules/agent/domain/port/cache.port';
 import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 
 let testDir: string;
@@ -22,15 +19,6 @@ const mockWorkspaceService = {
     }
     return testDir;
   }),
-  readFile: vi
-    .fn()
-    .mockImplementation(async (filename: string, workDir: string) => {
-      const filePath = path.join(workDir, filename);
-      const stat = await fs.stat(filePath).catch(() => null);
-      if (!stat) return null;
-      const content = await fs.readFile(filePath, 'utf-8');
-      return { content, size: stat.size };
-    }),
 };
 
 describe('CacheProvider', () => {
@@ -52,105 +40,10 @@ describe('CacheProvider', () => {
     workDir = await mockWorkspaceService.getWorkDir();
   });
 
-  describe('resolve', () => {
-    it('should resolve CachedReference by reading file', async () => {
-      const longString = 'a'.repeat(500);
-
-      const ref = await cacheService.offload(workDir, longString);
-      const result = await cacheService.resolve(workDir, ref);
-
-      expect(result).toBe(longString);
-    });
-
-    it('should resolve CachedReference containing JSON object', async () => {
-      const jsonObject = { key: 'value', count: 42 };
-
-      const filename = 'fc_testjson';
-      await fs.writeFile(
-        path.join(workDir, filename),
-        JSON.stringify(jsonObject),
-        'utf-8',
-      );
-
-      const result = await cacheService.resolve(workDir, {
-        $cached: filename,
-      });
-
-      expect(result).toEqual(jsonObject);
-    });
-
-    it('should resolve CachedReference in array context', async () => {
-      const content = 'a'.repeat(500);
-      const ref = await cacheService.offload(workDir, content);
-
-      const input = { items: [ref] };
-      const result = (await cacheService.resolve(workDir, input)) as Record<
-        string,
-        unknown
-      >;
-
-      expect((result.items as unknown[])[0]).toBe(content);
-    });
-
-    it('should resolve $cached property in object back to original value', async () => {
-      const value = {
-        content: 'x'.repeat(500),
-        url: 'https://example.com',
-        status: 200,
-      };
-
-      const offloaded = await cacheService.offload(workDir, value);
-      const resolved = (await cacheService.resolve(
-        workDir,
-        offloaded,
-      )) as Record<string, unknown>;
-
-      expect(resolved).toEqual(value);
-    });
-
-    it('should not modify non-CachedReference objects', async () => {
-      const input = { name: 'test', count: 42, flag: true };
-
-      const result = await cacheService.resolve(workDir, input);
-
-      expect(result).toEqual(input);
-    });
-
-    it('should throw error when cache miss', async () => {
-      await expect(
-        cacheService.resolve(workDir, {
-          $cached: 'fc_nonexistent',
-          $size: 100,
-        }),
-      ).rejects.toThrow('Cache miss: fc_nonexistent');
-    });
-
-    it('should roundtrip offload-resolve for string', async () => {
-      const value = 'x'.repeat(500);
-      const ref = await cacheService.offload(workDir, value);
-      const resolved = await cacheService.resolve(workDir, ref);
-      expect(resolved).toBe(value);
-    });
-
-    it('should roundtrip offload-resolve for object', async () => {
-      const value = {
-        title: 'Test Doc',
-        chunks: Array.from({ length: 25 }, (_, i) => ({
-          content: `chunk-${i}-`.repeat(200),
-          index: i,
-        })),
-      };
-      const ref = await cacheService.offload(workDir, value);
-      const resolved = await cacheService.resolve(workDir, ref);
-      expect(resolved).toEqual(value);
-    });
-  });
-
   describe('offload', () => {
     it('always writes to disk and returns a CachedReference (even for small content)', async () => {
       const result = await cacheService.offload(workDir, 'tiny');
 
-      expect(isCachedReference(result)).toBe(true);
       expect(result.$cached).toMatch(/^fc_/);
       expect(result.$size).toBe(4);
       expect(result.$preview).toBe('tiny');
@@ -211,6 +104,24 @@ describe('CacheProvider', () => {
       expect(disk).not.toContain('\\'); // 转义全解回真字符，无残留反斜杠
       expect(disk).toContain('line1\nline2'); // \n 解为真换行
       expect(disk).toContain('"q"'); // \" 解为真引号
+    });
+
+    it('紧凑 JSON 裂行：search_flights 单行 {"flights":[...]} → 多行，rg -C3 可切片', async () => {
+      // 无转义的紧凑 JSON（真实 search_flights Observation 形）——unescape no-op，
+      // 靠结构化 pretty-print 裂行：每字段/每元素一行，否则 rg 一命中回整条。
+      const obj = {
+        flights: [
+          { id: 'f1', flightNo: 'CA1000', price: 800 },
+          { id: 'f2', flightNo: 'MU1001', price: 837 },
+        ],
+      };
+      const ref = await cacheService.offload(workDir, obj, 'search-flights');
+      const disk = await fs.readFile(path.join(workDir, ref.$cached), 'utf-8');
+      expect(disk).toContain('\n'); // 已裂多行
+      expect(disk).toContain('"flights":');
+      expect(disk).toContain('"flightNo": "CA1000"'); // 元素单独成行
+      // resolve 回路仍等价（缩进 JSON.parse 还原原值）
+      expect(JSON.parse(disk)).toEqual(obj);
     });
 
     it('cat 循环不滚雪球：二代 offload 转义层数不翻倍', async () => {

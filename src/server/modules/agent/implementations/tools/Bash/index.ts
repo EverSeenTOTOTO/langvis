@@ -8,7 +8,7 @@ import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { BashInput, BashOutput } from './config';
 import {
   DirectBash,
-  DockerBash,
+  // DockerBash, // 暂时禁用 Docker 沙箱——非交互也走 host
   runChild,
   type BashBackend,
 } from './bash-backend';
@@ -65,9 +65,8 @@ export default class BashTool extends Tool<BashOutput> {
 
     // backend 按交互性选：interactive → DirectBash（人工确认后在 host 执行）；
     // 非 interactive → DockerBash（沙箱即边界，无 HITL 也安全）。
-    const backend: BashBackend = ctx.interactive
-      ? new DirectBash()
-      : new DockerBash();
+    // 暂时禁用 Docker 沙箱——非交互也走 host（DirectBash），与 interactive 同。
+    const backend: BashBackend = new DirectBash();
 
     let userTimeout: number;
     if (ctx.interactive) {

@@ -15,6 +15,7 @@ export interface DocumentStoreInput {
     sourceUrl?: string;
     sourceType: DocumentSourceType;
     rawContent: string;
+    rawFile?: string;
   };
 }
 
@@ -26,7 +27,7 @@ export interface DocumentStoreOutput {
 export const config: ToolConfig<DocumentStoreInput, DocumentStoreOutput> = {
   name: 'DocumentStore Tool',
   description:
-    'Store a document to the database. Chunking and embeddings are both handled internally — the caller only passes the document (with rawContent).',
+    'Store a document to the database. Chunking and embeddings are both handled internally — the caller passes the document with either rawContent (full text) or rawFile (filename in workDir of an offloaded large fetch).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -45,7 +46,17 @@ export const config: ToolConfig<DocumentStoreInput, DocumentStoreOutput> = {
           metadata: { type: 'object' },
           sourceUrl: { type: 'string', nullable: true },
           sourceType: { type: 'string' },
-          rawContent: { type: 'string' },
+          rawContent: {
+            type: 'string',
+            nullable: true,
+            description: 'Full document text. Omit if passing rawFile instead.',
+          },
+          rawFile: {
+            type: 'string',
+            nullable: true,
+            description:
+              'Filename in workDir holding the full content (e.g. an offloaded web_fetch/email result). Takes precedence over rawContent — the tool reads the file itself, avoiding loading the full text into context.',
+          },
         },
         required: [
           'title',
@@ -54,7 +65,6 @@ export const config: ToolConfig<DocumentStoreInput, DocumentStoreOutput> = {
           'category',
           'metadata',
           'sourceType',
-          'rawContent',
         ],
       },
     },

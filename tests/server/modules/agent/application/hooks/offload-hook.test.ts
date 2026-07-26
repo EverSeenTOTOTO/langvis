@@ -6,6 +6,7 @@ import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { OffloadHook } from '@/server/modules/agent/application/hooks/offload-hook';
+import { parseResponse } from '@/server/modules/agent/application/service/react-loop';
 import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
 
 // estimateTokens 用内容字符数代理（确定性、可控），不再用盲序列。hook 内对单条 / 全量都生效。
@@ -30,7 +31,7 @@ async function collect(
   return { events, ret };
 }
 
-/** big body — 长于 MIN_BODY_TO_OFFLOAD(512) 才会被桩。 */
+/** big body — 长于 CHUNK_SIZE(2000) 才会被桩（桩须明显小于原文）。 */
 function body(n: number): string {
   return 'x'.repeat(n);
 }
@@ -40,7 +41,6 @@ function makeCtx(
   opts: { offload: OffloadConfig | undefined; base?: number },
 ): AgentRunContext {
   const cache: CachePort = {
-    resolve: vi.fn(async (_w: string, v: unknown) => v),
     offload: vi.fn(async (_w: string, _v: unknown, hint?: string) => ({
       $cached: hint ? `sem__fc_test` : 'fc_test',
       $size: 600,
@@ -114,9 +114,9 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     expect(events).toHaveLength(1);
     const offloaded = ctx.messages.get(1)!;
     expect(offloaded.content).toContain('[offloaded to file');
-    expect(offloaded.content).toContain('rg -n'); // 小文件劝 rg/sed-n/head-n，不再提 cached_read
-    expect(offloaded.content).toContain('sed -n');
-    expect(offloaded.content).toContain('head -n');
+    expect(offloaded.content).toContain('rg -n'); // 小文件优先 rg 检索
+    expect(offloaded.content).toContain('sed -n'); // 限行顺序看仍可用
+    expect(offloaded.content).toContain('never cat or head'); // 禁整读（防 cat 回上下文爆窗）
     expect(offloaded.content).not.toContain('cached_read');
     expect(offloaded.content).toContain('~1 chunks of 2000B'); // mock $size=600 → ceil=1
     expect(offloaded.content).toContain('search_flights'); // hint 含 tool
@@ -125,17 +125,17 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
   });
 
   it('总量超 cap、多条小消息 → 最胖优先桩到 cap 内', async () => {
-    // 10 条 obs 各 800 chars（总 ~8120 > 6702）；单条 800 < cap → 仅靠总量触发。
-    const msgs = Array.from({ length: 10 }, () => obs(body(800)));
+    // 4 条 obs 各 3000 chars（总 12000 > 6702）；单条 3000 > CHUNK_SIZE(2000) 故可桩，但 < cap → 仅靠总量触发。
+    // 每桩 −~2700；两桩后总 ~6600 ≤ 6702 停 → 桩 2 条，不桩全部。
+    const msgs = Array.from({ length: 4 }, () => obs(body(3000)));
     const ctx = makeCtx(msgs, { offload: CFG() });
     const { events } = await collect(makeHook(8192).apply(ctx));
     expect(events).toHaveLength(1);
     const stubbedCount = msgs.filter((_, i) =>
       ctx.messages.get(i)!.content.includes('[offloaded to file'),
     ).length;
-    // 每桩约 −520；3 条即可降到 ≤6702；不应桩全部。
     expect(stubbedCount).toBeGreaterThanOrEqual(1);
-    expect(stubbedCount).toBeLessThan(10);
+    expect(stubbedCount).toBeLessThan(4);
   });
 
   it('最胖优先：多条候选时先桩最大那条', async () => {
@@ -278,8 +278,8 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     expect(ctx.messages.get(3)!.content).toContain('[offloaded to file');
   });
 
-  it('小正文不桩（短于 MIN 跳过，即便总量逻辑上超 cap）', async () => {
-    // 'small result' 远短于 MIN_BODY_TO_OFFLOAD(512) → 不可桩候选；总量也低 → next。
+  it('小正文不桩（短于一个 chunk 跳过，即便总量逻辑上超 cap）', async () => {
+    // 'small result' 远短于 CHUNK_SIZE(2000) → 不可桩候选；总量也低 → next。
     const ctx = makeCtx(
       [assistant('search', { q: 'tiny' }), obs('small result')],
       {
@@ -325,5 +325,82 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     expect(stub).toContain('rg -n');
     expect(stub).toContain('do NOT cat or page'); // 大文件禁整读（整读必爆窗）
     expect(stub).not.toContain('cached_read'); // 已移除 cached_read：只劝 bash rg
+  });
+});
+
+describe('OffloadHook（assistant 桩：模型长输出整条 dump，保留 {tool,input:{_offloaded},thought} 结构）', () => {
+  /** 长 thought 驱动 assistant 报文体超 MIN + 总量超 cap。 */
+  function bigAssistant(
+    tool: string,
+    input: Record<string, unknown>,
+  ): LlmMessage {
+    return {
+      role: 'assistant',
+      content: JSON.stringify({
+        thought: 'x'.repeat(8000),
+        tool,
+        input,
+      }),
+    };
+  }
+
+  it('assistant 长输出超 cap → 整条 dump 桩，结构可被 parseResponse 解析', async () => {
+    const ctx = makeCtx(
+      [bigAssistant('document_store', { document: { rawContent: 'big' } })],
+      {
+        offload: CFG(),
+      },
+    );
+    const { events } = await collect(makeHook(8192).apply(ctx));
+    expect(events).toHaveLength(1);
+    expect(ctx.cache.offload).toHaveBeenCalledTimes(1);
+
+    // 桩化后仍是合法 {tool, input, thought} JSON——parseResponse 能解析。
+    const stub = ctx.messages.get(0)!.content;
+    const parsed = parseResponse(stub);
+    expect(parsed.tool).toBe('document_store'); // tool 原样保留
+    // mock offload 带 hint → $cached = 'sem__fc_test'；input 一次性桩为该句柄。
+    expect(parsed.input).toEqual({ _offloaded: 'sem__fc_test' });
+    expect(parsed.thought).toContain('[offloaded to file'); // thought 注明同一文件
+    expect(parsed.thought).toContain('rg -n'); // 读端指引保留
+  });
+
+  it('整条原报文一次 dump：offload 收到完整 JSON 字符串、单文件承载 thought+input', async () => {
+    const orig = bigAssistant('search', { q: 'x' });
+    const ctx = makeCtx([orig], { offload: CFG() });
+    await collect(makeHook(8192).apply(ctx));
+    const [workDir, value, hint] = (
+      ctx.cache.offload as ReturnType<typeof vi.fn>
+    ).mock.calls[0]!;
+    expect(workDir).toBe('/tmp/workdir');
+    expect(value).toBe(orig.content); // 整条原报文，未拆分
+    expect(hint).toBe('search-x'); // tool + 首个 scalar 入参（q='x'）
+  });
+
+  it('不可解析的 assistant（自由文本）→ 不桩（candidateBody 非 ReAct 候选）', async () => {
+    const ctx = makeCtx(
+      [{ role: 'assistant', content: 'just prose, no json here' + body(8000) }],
+      { offload: CFG() },
+    );
+    const { events } = await collect(makeHook(8192).apply(ctx));
+    expect(events).toHaveLength(0);
+    expect(ctx.cache.offload).not.toHaveBeenCalled();
+  });
+
+  it('已桩 assistant 不重复桩（thought 内 OFFLOADED_MARK 跳过）', async () => {
+    const stubbed = JSON.stringify({
+      thought: '[offloaded to file fc_old] size=600B.',
+      tool: 'search',
+      input: { _offloaded: 'fc_old' },
+    });
+    const ctx = makeCtx(
+      // stubbed @0（已桩跳过）；@1 普通 obs 超阈仍桩——证明循环扫描未被 stubbed 阻塞。
+      [{ role: 'assistant', content: stubbed }, obs(body(8000))],
+      { offload: CFG() },
+    );
+    const { events } = await collect(makeHook(8192).apply(ctx));
+    expect(events).toHaveLength(1); // 只桩 obs @1
+    expect(ctx.messages.get(0)!.content).toBe(stubbed); // assistant 桩原样
+    expect(ctx.messages.get(1)!.content).toContain('[offloaded to file');
   });
 });

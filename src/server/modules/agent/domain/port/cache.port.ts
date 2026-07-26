@@ -1,8 +1,9 @@
 /**
- * CachePort —— 工具 I/O 落盘/缓存契约（消费者拥有端口，agent 实现并经 CACHE_SERVICE 注入）。
+ * CachePort —— 大内容无损落盘契约（写端）。消费者拥有端口，agent 实现并经 CACHE_PORT 注入。
+ * 读端不再自动 resolve（cached_read 已删）：落盘件只供 bash rg/sed/head 检索或归档工具 rawFile 读。
  */
 
-/** 大内容被替换为此引用对象；bash/resolve 按 $cached 取回，整体传递时自动解析。 */
+/** offload 产出的桩引用对象；读端按 $cached 文件名经 bash 检索盘上件。 */
 export interface CachedReference {
   $cached: string;
   $size: number;
@@ -11,20 +12,9 @@ export interface CachedReference {
   $label?: string;
 }
 
-export function isCachedReference(value: unknown): value is CachedReference {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    '$cached' in value &&
-    typeof (value as CachedReference).$cached === 'string'
-  );
-}
-
 export interface CachePort {
-  resolve(workDir: string, value: unknown): Promise<unknown>;
   /**
-   * 始终写盘返桩（force）。预算化 offload（pre-LLM hook）用它把大 user 消息载荷
+   * 始终写盘返桩（force）。预算化 offload（pre-LLM / post-observation hook）用它把大 user 消息载荷
    * （Observation 或裸 user，如 email 正文）无损落盘。hint 进文件名 + $label，让 LLM
    * 凭桩即知内容、用 bash rg/sed/head 检索。
    */
