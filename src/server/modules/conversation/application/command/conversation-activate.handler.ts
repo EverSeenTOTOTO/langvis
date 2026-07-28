@@ -5,6 +5,7 @@ import { SessionManager } from '../service/session-manager';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { ConversationActivateCommand } from '../../contracts';
 import { runConvTransforms } from '../transforms';
+import { TraceContext } from '@/server/middleware/trace-context';
 
 @commandHandler(ConversationActivateCommand)
 export class ConversationActivateHandler {
@@ -19,6 +20,7 @@ export class ConversationActivateHandler {
 
   async execute(command: ConversationActivateCommand): Promise<void> {
     const { conversationId, userId } = command;
+    if (TraceContext.get()) TraceContext.update({ conversationId });
 
     // ensure
     await this.chatService.requireConversation(conversationId, userId);

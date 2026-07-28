@@ -2,10 +2,13 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { singleton } from 'tsyringe';
 import { generateId } from '@/shared/utils';
+import Logger from '@/server/utils/logger';
 import {
   type CachePort,
   type CachedReference,
 } from '@/server/modules/agent/domain/port/cache.port';
+
+const logger = Logger.child({ source: 'CacheProvider' });
 
 /*
  * CachePort 实现。落盘入口只有 offload（pre-LLM / post-observation hook 用）：始终写盘返 CachedReference，
@@ -114,6 +117,10 @@ export class CacheProvider implements CachePort {
     // 落盘前 reflow：把一整行 JSON（text 字段全转义 \n）裂成多行，否则 rg 一命中就回整条 885KB 巨行。
     const stored = reflowForGrep(serialized);
     await fs.writeFile(filePath, stored, 'utf-8');
+    logger.debug('offloaded to file', {
+      filename,
+      size: Buffer.byteLength(stored, 'utf8'),
+    });
 
     return {
       $cached: filename,

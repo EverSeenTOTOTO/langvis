@@ -91,6 +91,10 @@ export class CompactTransform implements ConvTransform {
     ctx.messages = ctx.messages.append(compactMessage);
     this.logger.info(
       `compacted (conv ${ctx.conversationId}): folded ${tail.length} msgs → 1 summary`,
+      {
+        folded: tail.length,
+        summaryTokens: estimateTokens(toLlmMessages([compactMessage])),
+      },
     );
   }
 }

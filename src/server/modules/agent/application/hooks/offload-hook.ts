@@ -98,6 +98,7 @@ export class OffloadHook implements Hook {
     );
 
     let stubbed = 0;
+    let totalBytes = 0;
     const beforeTokens = tokens;
 
     const stubIndex = async (i: number) => {
@@ -114,6 +115,7 @@ export class OffloadHook implements Hook {
       const stub = await ctx.cache.offload(ctx.workDir, cand.body, hint);
       messages[i] = { ...msg, content: stubContent(cand, stub, hint) };
       stubbed++;
+      totalBytes += stub.$size;
       candByIndex.delete(i);
       tokens = estimateTokens(messages);
     };
@@ -130,6 +132,7 @@ export class OffloadHook implements Hook {
     const afterTokens = estimateTokens(ctx.messages.toArray());
     this.logger.info(
       `offloaded (run ${ctx.runId}): ${stubbed} msg, ${beforeTokens}→${afterTokens} tokens (window cap ${cap})`,
+      { stubbed, totalBytes, beforeTokens, afterTokens, cap },
     );
 
     yield {

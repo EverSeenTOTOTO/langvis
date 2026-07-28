@@ -86,7 +86,20 @@ function toOpenAIMessages(
   });
 }
 
-/** 调试日志：request 头一行（含 messageCount），随后每条消息各占一行，避免整坨 JSON 挤一行。 */
+/** content 可能是 string / 多模态数组 / null；日志取可读文本（非文本 part 标类型占位）。 */
+function messageText(content: ChatCompletionMessageParam['content']): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map(part =>
+        part.type === 'text' ? (part.text ?? '') : `[${part.type}]`,
+      )
+      .join('');
+  }
+  return '';
+}
+
+/** 调试日志：request 头一行（含 messageCount），随后每条消息以 `Role: Msg` 直出，避免整坨 JSON。 */
 function logLLMRequest(
   resolved: string,
   data: Partial<ChatCompletionCreateParams>,
@@ -101,7 +114,7 @@ function logLLMRequest(
     messageCount: visible.length,
   });
   for (const msg of visible) {
-    logger.debug('LLM call message', msg);
+    logger.debug(`${msg.role}: ${messageText(msg.content)}`);
   }
 }
 
@@ -250,6 +263,7 @@ export class LlmProvider implements LlmPort {
 
     logLLMRequest(resolved, data, defaultParams.temperature, messages);
 
+    const startedAt = Date.now();
     try {
       const response = await client.chat.completions.create(
         {
@@ -272,6 +286,10 @@ export class LlmProvider implements LlmPort {
         logger.warn('LLM response truncated: max_tokens limit reached');
       }
 
+      logger.info('LLM call done', {
+        model: resolved,
+        durationMs: Date.now() - startedAt,
+      });
       return stripThinking(content);
     } catch (err) {
       const apiError = err as APIError;
@@ -279,6 +297,7 @@ export class LlmProvider implements LlmPort {
         model: resolved,
         provider: providerId,
         status: apiError?.status ?? 'unknown',
+        durationMs: Date.now() - startedAt,
         error: apiError?.error ?? apiError?.message ?? String(err),
       });
       throw err;
