@@ -106,7 +106,7 @@ async function main(): Promise<void> {
           await append(outcome);
           fresh.push(outcome);
           console.log(
-            `  -> ${outcome.status} | pass=${outcome.correctness.pass} | iter=${outcome.efficiency.iterations} | ${outcome.correctness.reason}`,
+            `  -> ${outcome.status} | pass=${outcome.correctness.pass} | iter=${outcome.efficiency.iterations} | parse_fail=${outcome.parseFailures?.length ?? 0} | ${outcome.correctness.reason}`,
           );
           if (outcome.workDir) {
             console.log(`     workDir ${outcome.workDir}`);

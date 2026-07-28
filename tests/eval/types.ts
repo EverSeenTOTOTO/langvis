@@ -15,6 +15,31 @@ export interface Grade {
   reason: string;
 }
 
+/**
+ * 单次 parse 失败的归类。mode 由 react-loop 回灌给模型的 error.message + 模型那段坏输出原文
+ * 共同判定（见 metrics.ts classifyMode）。
+ *
+ * - split-object：模型把 thought 与 tool/input 裂成两个 JSON 对象（`{thought}``{tool,input}`）
+ * - missing-tool / missing-input：单对象但缺字段
+ * - no-json / unbalanced / malformed-json：JSON 形态本身坏掉（无对象 / 括号不平 / 语法非法）
+ */
+export type ParseFailureMode =
+  | 'split-object'
+  | 'missing-tool'
+  | 'missing-input'
+  | 'no-json'
+  | 'unbalanced'
+  | 'malformed-json'
+  | 'other';
+
+export interface ParseFailure {
+  mode: ParseFailureMode;
+  /** 模型那段未能解析的原始输出（= parse 失败时紧邻前一条 assistant content）。 */
+  raw: string;
+  /** react-loop 回灌给模型的 error.message（"Observation: Error parsing response: " 之后部分）。 */
+  reason: string;
+}
+
 /** 虚构工具定义：runner 经 registerTool 注册（idempotent），id 即容器 token。 */
 export type FictionalToolDef = {
   id: string;
@@ -101,4 +126,6 @@ export interface RunOutcome {
   historyCompactions?: number;
   /** 事件 type 序列——排查用，省空间（完整事件可按需开）。 */
   eventTrace: RunEvent['type'][];
+  /** 本次 run 的 parse 失败（扫 ctx.messages；raw 即坏输出原文，作 XML 抽取器的 bad-case 语料）。 */
+  parseFailures?: ParseFailure[];
 }

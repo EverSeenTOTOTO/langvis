@@ -44,13 +44,18 @@ import type { ConversationConfig } from '@/server/libs/config';
 import type {
   FictionalToolDef,
   Grade,
+  ParseFailure,
   RunOutcome,
   Task,
   MultiTurnTask,
 } from './types';
 import { DEFAULT_VARIANT, runtimeConfigForVariant } from './configs';
 import { bindSandbox, unbindSandbox } from './sandbox-registry';
-import { deriveDesign, deriveEfficiency } from './metrics';
+import {
+  deriveDesign,
+  deriveEfficiency,
+  extractParseFailures,
+} from './metrics';
 import { buildEvalRepos, resetEvalRepos } from './eval-repos';
 import { FakeSkillService } from './fake-skill-service';
 
@@ -195,6 +200,7 @@ async function executeRun<S>(
 ): Promise<{
   run: ReturnType<AgentRunExecutor['createRun']>['run'];
   events: EnrichedEvent[];
+  parseFailures: ParseFailure[];
 }> {
   const { run, ctx, runTool } = _executor!.createRun(params);
   bindSandbox(run.runId, sandbox);
@@ -208,7 +214,10 @@ async function executeRun<S>(
   } finally {
     unbindSandbox(run.runId);
   }
-  return { run, events };
+  // ctx.messages 是事实源：react-loop catch 已把每次 parse 失败回灌为 "Observation:
+  // Error parsing response: …" user 消息，紧邻前一条 assistant 即坏输出原文。
+  const parseFailures = extractParseFailures(ctx.messages.toArray());
+  return { run, events, parseFailures };
 }
 
 // —— 单 turn ——
@@ -232,7 +241,7 @@ export async function runOnce<S>(
   await task.seedWorkDir?.(workDir);
 
   const start = Date.now();
-  const { run, events } = await executeRun(
+  const { run, events, parseFailures } = await executeRun(
     {
       runId: generateId('eval'),
       workDir,
@@ -268,6 +277,7 @@ export async function runOnce<S>(
     durationMs,
     workDir,
     eventTrace: events.map(e => e.type),
+    parseFailures,
   };
 }
 
@@ -316,6 +326,7 @@ export async function runMultiTurn<S>(
   await task.seedWorkDir?.(workDir);
 
   const allEvents: EnrichedEvent[] = [];
+  const allParseFailures: ParseFailure[] = [];
   // messageId → 该轮 turn events（供 turn-end 的 process-summary transform 经 ctx.getRunEvents 取回折叠）。
   const runEventsByMsg = new Map<string, EnrichedEvent[]>();
   const ctx: ConvCtx = {
@@ -375,7 +386,11 @@ export async function runMultiTurn<S>(
     });
 
     const seed = projectToLlmMessages(ctx.messages.toArray());
-    const { run, events: turnEvents } = await executeRun(
+    const {
+      run,
+      events: turnEvents,
+      parseFailures: turnParseFailures,
+    } = await executeRun(
       {
         runId: generateId('run'),
         workDir,
@@ -389,6 +404,7 @@ export async function runMultiTurn<S>(
     );
     lastRun = run;
     allEvents.push(...turnEvents);
+    allParseFailures.push(...turnParseFailures);
 
     const assistantMsg: Message = {
       id: generateId('msg'),
@@ -442,5 +458,6 @@ export async function runMultiTurn<S>(
     turns: task.turns.length,
     historyCompactions,
     eventTrace: allEvents.map(e => e.type),
+    parseFailures: allParseFailures,
   };
 }

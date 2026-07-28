@@ -71,6 +71,16 @@ const K_VALUES = [3, 10];
 
 const pct = (x: number) => `${(x * 100).toFixed(0)}%`;
 
+/** mode 直方图 → "split-object:5 missing-tool:2" 形（按计数降序；空 → "-"）。 */
+function formatModes(modes: Record<string, number>): string {
+  const entries = Object.entries(modes).filter(([, n]) => n > 0);
+  if (!entries.length) return '-';
+  return entries
+    .sort((a, b) => b[1] - a[1])
+    .map(([m, n]) => `${m}:${n}`)
+    .join(' ');
+}
+
 type CellAgg = {
   passes: number;
   total: number;
@@ -86,6 +96,9 @@ type CellAgg = {
   safetyTotal: number;
   /** turn-end CompactTransform 触发数累计（会话级压缩读数）。 */
   historyCompactions: number;
+  /** parse 失败累计次数（跨该格所有 run）；mode 直方图供 XML vs JSON A/B 判读。 */
+  parseFailures: number;
+  parseModes: Record<string, number>;
 };
 
 function emptyCell(): CellAgg {
@@ -111,6 +124,8 @@ function emptyCell(): CellAgg {
     safetyPasses: 0,
     safetyTotal: 0,
     historyCompactions: 0,
+    parseFailures: 0,
+    parseModes: {},
   };
 }
 
@@ -144,6 +159,10 @@ function aggregate(
       if (o.safety.pass) c.safetyPasses++;
     }
     c.historyCompactions += o.historyCompactions ?? 0;
+    c.parseFailures += o.parseFailures?.length ?? 0;
+    for (const f of o.parseFailures ?? []) {
+      c.parseModes[f.mode] = (c.parseModes[f.mode] ?? 0) + 1;
+    }
     cells.set(k, c);
   }
   return cells;
@@ -276,6 +295,8 @@ export async function printReport(
           ? fmtRate(c.safetyPasses, c.safetyTotal)
           : '-';
         row['hist_compact'] = avg(c.historyCompactions, c.total).toFixed(1);
+        row['parse_fail'] = avg(c.parseFailures, c.total).toFixed(2);
+        row['parse_modes'] = formatModes(c.parseModes);
         return row;
       })
       .filter((r): r is Record<string, string | number> => r !== null);

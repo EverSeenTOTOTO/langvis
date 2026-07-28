@@ -7,6 +7,7 @@ import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { OffloadHook } from '@/server/modules/agent/application/hooks/offload-hook';
 import { OutputOffloadHook } from '@/server/modules/agent/application/hooks/output-offload-hook';
+import { serializeAction } from '@/server/modules/agent/application/service/react-loop';
 import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
 
 // 计数 parseResponse 调用——验证「每候选一次」契约（candidateBody 一次性解析，
@@ -85,10 +86,10 @@ describe('offload parseResponse 调用计数（每候选一次：candidateBody �
       [
         {
           role: 'assistant',
-          content: JSON.stringify({
+          content: serializeAction({
             thought: body(8000),
             tool: 'document_store',
-            input: { document: { rawContent: 'big' } },
+            input: { document: 'big' },
           }),
         },
       ],
@@ -105,7 +106,7 @@ describe('offload parseResponse 调用计数（每候选一次：candidateBody �
       [
         {
           role: 'assistant',
-          content: JSON.stringify({ tool: 'search', input: { q: 'a' } }),
+          content: serializeAction({ tool: 'search', input: { q: 'a' } }),
         },
         { role: 'user', content: `Observation: ${body(8000)}` },
       ],
@@ -122,7 +123,7 @@ describe('offload parseResponse 调用计数（每候选一次：candidateBody �
       [
         {
           role: 'assistant',
-          content: JSON.stringify({
+          content: serializeAction({
             tool: 'bash',
             input: { command: 'echo x' },
           }),

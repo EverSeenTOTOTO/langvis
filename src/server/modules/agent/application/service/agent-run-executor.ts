@@ -14,6 +14,7 @@ import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { generateId } from '@/shared/utils';
 import { ToolIds } from '@/shared/constants';
+import { serializeAction } from '@/server/modules/agent/application/service/react-loop';
 import type { LlmMessage } from '@/shared/types/entities';
 import type { ConversationConfig } from '@/server/libs/config';
 import { ListMonad } from '@/server/libs/list';
@@ -195,12 +196,12 @@ export class AgentRunExecutor {
   }
 }
 
-/** assistant 文本 → response_user JSON；LlmMessage.summary（源自 message.meta.summary）注入为 thought。 */
+/** assistant 文本 → response_user XML；LlmMessage.summary（源自 message.meta.summary）注入为 thought。 */
 export function restoreReactMessage(m: LlmMessage): LlmMessage {
   return m.role === 'assistant'
     ? {
         role: 'assistant' as const,
-        content: JSON.stringify({
+        content: serializeAction({
           ...(m.summary ? { thought: m.summary } : {}),
           tool: ToolIds.RESPONSE_USER,
           input: { message: m.content },
