@@ -1,7 +1,10 @@
 import { tool } from '@/server/decorator/tool';
 import { inject } from 'tsyringe';
 import type { Logger } from '@/server/utils/logger';
+import rootLogger from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
+
+const logger = rootLogger.child({ source: 'CallSubagentsTool' });
 import type { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
@@ -47,6 +50,7 @@ export default class CallSubagentsTool extends Tool<CallSubagentsOutput> {
     ctx.signal.throwIfAborted();
 
     const { children } = ctx.input as unknown as CallSubagentsInput;
+    logger.info(`subagents fan-out: ${children.length} child run(s)`);
 
     const childToolSet = this.agentService.buildToolSet([
       ToolIds.CALL_SUBAGENTS,
@@ -121,6 +125,15 @@ export default class CallSubagentsTool extends Tool<CallSubagentsOutput> {
         ensure(event.runId).status = 'cancelled';
       }
     }
+
+    const byStatus = [...results.values()].reduce(
+      (acc, r) => {
+        acc[r.status] = (acc[r.status] ?? 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+    logger.info(`subagents done: ${results.size} child run(s)`, byStatus);
 
     return { results: [...results.values()] };
   }

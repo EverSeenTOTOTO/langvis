@@ -15,6 +15,7 @@ import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { generateId } from '@/shared/utils';
 import { ToolIds } from '@/shared/constants';
 import { serializeAction } from '@/server/modules/agent/application/service/react-loop';
+import { TraceContext } from '@/server/middleware/trace-context';
 import type { LlmMessage } from '@/shared/types/entities';
 import type { ConversationConfig } from '@/server/libs/config';
 import { ListMonad } from '@/server/libs/list';
@@ -147,13 +148,59 @@ export class AgentRunExecutor {
     ctx: AgentRunContext,
     runTool: ToolExecutor,
   ): AsyncGenerator<EnrichedEvent> {
+    // 把 runId 绑进当前 trace 上下文——下游 loop/hook/LLM 调用日志自动带 runId 关联。
+    // 无上下文（如离线 reconcile）则跳过。
+    if (TraceContext.get()) TraceContext.update({ runId: run.runId });
+    const startedAt = Date.now();
+    const toolStart = new Map<string, number>(); // callId → 起始 at(ms)，算 tool 延迟
+    let iterations = 0;
     this.logger.debug(`Execute run ${chalk.cyan(run.runId)}`);
     if (!run.isTerminated) yield run.start();
+
+    const toolDone = (
+      callId: string,
+      toolName: string,
+      at: number,
+      error?: unknown,
+    ): void => {
+      const beganAt = toolStart.get(callId);
+      const durationMs = beganAt != null ? at - beganAt : undefined;
+      toolStart.delete(callId);
+      if (error !== undefined) {
+        this.logger.warn(`Tool ${toolName} failed`, {
+          toolName,
+          callId,
+          error,
+          durationMs,
+        });
+      } else {
+        this.logger.debug(`Tool ${toolName} completed`, {
+          toolName,
+          durationMs,
+        });
+      }
+    };
 
     try {
       for await (const event of runReactLoop(ctx, runTool)) {
         const enriched = run.append(event);
-        if (enriched) yield enriched;
+        if (!enriched) continue;
+
+        if (enriched.type === 'tool_call') {
+          iterations++;
+          toolStart.set(enriched.callId, enriched.at);
+        } else if (enriched.type === 'tool_result') {
+          toolDone(enriched.callId, enriched.toolName, enriched.at);
+        } else if (enriched.type === 'tool_error') {
+          toolDone(
+            enriched.callId,
+            enriched.toolName,
+            enriched.at,
+            enriched.error,
+          );
+        }
+
+        yield enriched;
       }
 
       if (!run.isTerminated) {
@@ -163,6 +210,13 @@ export class AgentRunExecutor {
       if (ctx.signal.aborted || run.isTerminated) return;
       this.logger.error(`Run ${chalk.cyan(run.runId)} failed: ${err}`);
       yield run.fail((err as Error)?.message ?? String(err));
+    } finally {
+      this.logger.info(`Run ${chalk.cyan(run.runId)} → ${run.currentStatus}`, {
+        status: run.currentStatus,
+        iterations,
+        durationMs: Date.now() - startedAt,
+        model: ctx.config.runtimeConfig.model?.modelId,
+      });
     }
   }
 

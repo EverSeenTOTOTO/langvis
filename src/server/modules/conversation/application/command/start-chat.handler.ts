@@ -6,9 +6,13 @@ import { SessionManager } from '../service/session-manager';
 import { StartChatCommand, TurnInitiated } from '../../contracts';
 import { projectToLlmMessages } from '../service/history-projection';
 import { runConvTransforms } from '../transforms';
+import { TraceContext } from '@/server/middleware/trace-context';
+import Logger from '@/server/utils/logger';
 
 @commandHandler(StartChatCommand)
 export class StartChatHandler {
+  private readonly logger = Logger.child({ source: 'StartChatHandler' });
+
   constructor(
     @inject(ChatService)
     private chatService: ChatService,
@@ -20,6 +24,7 @@ export class StartChatHandler {
 
   async execute(command: StartChatCommand): Promise<{ assistantId: string }> {
     const { conversationId, userMessage, userId, assistantId } = command;
+    if (TraceContext.get()) TraceContext.update({ conversationId });
 
     // 持久化 + 归属校验 在 ChatService.startTurn。
     const turn = await this.chatService.startTurn({
@@ -31,7 +36,14 @@ export class StartChatHandler {
 
     // 屏障：等上一个 turn-end 维护（compact 等）完成后再动 ctx.messages——
     // 否则 compact 的 C 会落在本次 userMessage 之后、被位置投影丢掉。
+    const maintStart = Date.now();
     await this.sessionManager.awaitMaintenance(conversationId);
+    const maintWaitMs = Date.now() - maintStart;
+    if (maintWaitMs > 0) {
+      this.logger.info(`Turn waited for prior turn-end maintenance`, {
+        maintWaitMs,
+      });
+    }
 
     const ctx = this.sessionManager.getCtx(conversationId);
     ctx.messages = ctx.messages.append(turn.userMessage);

@@ -8,7 +8,7 @@ import { TraceContext } from '@/server/middleware/trace-context';
 
 export type Logger = winston.Logger;
 
-const { combine, timestamp, printf } = winston.format;
+const { timestamp, printf } = winston.format;
 
 const levelColors: Record<string, typeof chalk.red> = {
   error: chalk.red,
@@ -46,6 +46,10 @@ const consoleFormat = printf(({ timestamp: time, level, ...meta }) => {
     result += ` ${chalk.gray(`[convId: ${meta.conversationId}]`)}`;
     delete meta.conversationId;
   }
+  if (meta.runId) {
+    result += ` ${chalk.gray(`[runId: ${meta.runId}]`)}`;
+    delete meta.runId;
+  }
 
   if (isObject(meta.message)) {
     const extra = { ...(meta.message as Record<string, any>) };
@@ -76,14 +80,19 @@ const consoleFormat = printf(({ timestamp: time, level, ...meta }) => {
   return result;
 });
 
+/** 生产文件 transport：单行 JSON（机器可解析/聚合）。dev 文件 + 控制台仍用 consoleFormat 人眼读。 */
+const jsonFormat = printf(info => {
+  const { timestamp: ts, level, message, ...rest } = info;
+  return JSON.stringify({ timestamp: ts, level, message, ...rest });
+});
+
+const fileFormat = isProd ? jsonFormat : consoleFormat;
+
 const logger = winston.createLogger({
   level: isProd ? 'info' : 'debug',
-  format: combine(
-    timestamp({
-      format: 'YYYY-MM-DD HH:mm:ss',
-    }),
-    consoleFormat,
-  ),
+  format: timestamp({
+    format: 'YYYY-MM-DD HH:mm:ss',
+  }),
   transports: isTest()
     ? [new winston.transports.Console({ silent: true })]
     : [
@@ -93,6 +102,7 @@ const logger = winston.createLogger({
           zippedArchive: true,
           maxSize: '20m',
           maxFiles: '14d',
+          format: fileFormat,
         }),
         new winston.transports.DailyRotateFile({
           level: 'error',
@@ -101,6 +111,7 @@ const logger = winston.createLogger({
           zippedArchive: true,
           maxSize: '20m',
           maxFiles: '14d',
+          format: fileFormat,
         }),
       ],
 });
@@ -109,6 +120,7 @@ if (!isProd) {
   logger.add(
     new winston.transports.Console({
       level: 'debug',
+      format: consoleFormat,
     }),
   );
 }
@@ -166,6 +178,8 @@ const createSafeLogger = (winstonLogger: winston.Logger) => {
       const traceMeta: Record<string, any> = {};
       if (trace.requestId) traceMeta.requestId = trace.requestId;
       if (trace.userId) traceMeta.userId = trace.userId;
+      if (trace.runId) traceMeta.runId = trace.runId;
+      if (trace.conversationId) traceMeta.conversationId = trace.conversationId;
 
       // Merge trace meta with first meta object if it exists
       if (safeMeta.length > 0 && typeof safeMeta[0] === 'object') {

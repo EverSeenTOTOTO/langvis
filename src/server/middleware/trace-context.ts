@@ -3,6 +3,10 @@ import { AsyncLocalStorage } from 'async_hooks';
 export interface TraceStore {
   requestId: string;
   userId?: string;
+  /** agent run id（executor 绑定）——关联 loop/hook/LLM 调用日志到一次 run。 */
+  runId?: string;
+  /** 会话 id（conv 命令绑定）——关联 turn/transform/agent 日志到一次会话。 */
+  conversationId?: string;
 }
 
 class TraceContextHolder {

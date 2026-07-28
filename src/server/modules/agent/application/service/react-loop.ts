@@ -68,7 +68,7 @@ export async function* runReactLoop(
       throw new Error('No response from model');
     }
 
-    logger.info(`ReAct origin response: ${content}`);
+    logger.debug(`ReAct origin response: ${content}`);
 
     ctx.messages = ctx.messages.append({ role: Role.ASSIST, content });
 
