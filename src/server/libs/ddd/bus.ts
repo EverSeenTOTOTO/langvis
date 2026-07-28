@@ -12,7 +12,7 @@ export class CommandBus {
     const type = command.constructor.name;
     const id = command.id;
 
-    busLog.info(`Dispatching ${type}`, { id });
+    busLog.debug(`Dispatching ${type}`, { id });
 
     const HandlerClass = getHandlerFor(
       command.constructor as abstract new (...args: any[]) => any,
@@ -45,7 +45,7 @@ export class QueryBus {
     const type = query.constructor.name;
     const id = query.id;
 
-    busLog.info(`Dispatching ${type}`, { id });
+    busLog.debug(`Dispatching ${type}`, { id });
 
     const HandlerClass = getHandlerFor(
       query.constructor as abstract new (...args: any[]) => any,
