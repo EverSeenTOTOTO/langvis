@@ -89,6 +89,26 @@ describe('ConversationSession —— 会话上下文（messages/config/transform
     s.dispose();
     expect(() => s.getCtx()).toThrow();
   });
+
+  // 回归：已激活会话配置变更后，updateRuntimeConfig 热更缓存——下一轮 getCtx 取到新配置
+  // （模型/contextSize/contextUsage 跟着刷新）。修前：改配置后下一轮仍用旧 runtimeConfig。
+  it('updateRuntimeConfig：已激活会话热更缓存（下一轮 getCtx 取到新配置）', () => {
+    const s = makeSession();
+    s.activateContext(
+      [msg(Role.SYSTEM, 'sys')],
+      CONFIG,
+      new ConvTransformPlan(),
+    );
+    const next = { model: { modelId: 'm2' } };
+    s.updateRuntimeConfig(next);
+    expect(s.getCtx().runtimeConfig).toBe(next);
+  });
+
+  it('updateRuntimeConfig：未激活会话 no-op（不凭空激活）', () => {
+    const s = makeSession();
+    s.updateRuntimeConfig({ model: { modelId: 'm2' } });
+    expect(() => s.getCtx()).toThrow();
+  });
 });
 
 describe('ConversationSession —— handleRunEvent → run_view 投影帧', () => {

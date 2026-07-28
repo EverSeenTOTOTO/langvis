@@ -202,6 +202,14 @@ export class SessionManager implements LifecycleHook {
     );
   }
 
+  /** 配置变更后刷新已激活会话的 runtimeConfig 缓存；未激活会话 no-op。 */
+  refreshRuntimeConfig(
+    conversationId: string,
+    runtimeConfig: ConversationConfig,
+  ): void {
+    this.sessions.get(conversationId)?.updateRuntimeConfig(runtimeConfig);
+  }
+
   hasCtx(conversationId: string): boolean {
     return this.sessions.get(conversationId)?.hasCtx() ?? false;
   }

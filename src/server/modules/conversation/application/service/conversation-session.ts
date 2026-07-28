@@ -137,6 +137,11 @@ export class ConversationSession {
     this.transforms = transforms;
   }
 
+  updateRuntimeConfig(runtimeConfig: ConversationConfig): void {
+    if (!this.runtimeConfig) return;
+    this.runtimeConfig = runtimeConfig;
+  }
+
   hasCtx(): boolean {
     return this.runtimeConfig !== undefined;
   }
