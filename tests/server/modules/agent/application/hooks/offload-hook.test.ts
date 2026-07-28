@@ -6,7 +6,10 @@ import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { OffloadHook } from '@/server/modules/agent/application/hooks/offload-hook';
-import { parseResponse } from '@/server/modules/agent/application/service/react-loop';
+import {
+  parseResponse,
+  serializeAction,
+} from '@/server/modules/agent/application/service/react-loop';
 import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
 
 // estimateTokens 用内容字符数代理（确定性、可控），不再用盲序列。hook 内对单条 / 全量都生效。
@@ -76,7 +79,7 @@ function userMsg(b: string): LlmMessage {
   return { role: 'user', content: b };
 }
 function assistant(tool: string, input: Record<string, unknown>): LlmMessage {
-  return { role: 'assistant', content: JSON.stringify({ tool, input }) };
+  return { role: 'assistant', content: serializeAction({ tool, input }) };
 }
 function sys(b: string): LlmMessage {
   return { role: 'system', content: b };
@@ -336,7 +339,7 @@ describe('OffloadHook（assistant 桩：模型长输出整条 dump，保留 {too
   ): LlmMessage {
     return {
       role: 'assistant',
-      content: JSON.stringify({
+      content: serializeAction({
         thought: 'x'.repeat(8000),
         tool,
         input,
@@ -388,7 +391,7 @@ describe('OffloadHook（assistant 桩：模型长输出整条 dump，保留 {too
   });
 
   it('已桩 assistant 不重复桩（thought 内 OFFLOADED_MARK 跳过）', async () => {
-    const stubbed = JSON.stringify({
+    const stubbed = serializeAction({
       thought: '[offloaded to file fc_old] size=600B.',
       tool: 'search',
       input: { _offloaded: 'fc_old' },

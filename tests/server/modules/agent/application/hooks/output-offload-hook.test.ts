@@ -6,6 +6,7 @@ import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { OutputOffloadHook } from '@/server/modules/agent/application/hooks/output-offload-hook';
+import { serializeAction } from '@/server/modules/agent/application/service/react-loop';
 import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
 
 // estimateTokens 用内容字符数代理（确定性、可控），与 offload-hook.test 同手法。
@@ -71,7 +72,7 @@ function userMsg(b: string): LlmMessage {
   return { role: 'user', content: b };
 }
 function assistant(tool: string, input: Record<string, unknown>): LlmMessage {
-  return { role: 'assistant', content: JSON.stringify({ tool, input }) };
+  return { role: 'assistant', content: serializeAction({ tool, input }) };
 }
 
 describe('OutputOffloadHook（post-observation 产出即桩：单条超 outputTokenThreshold → 落盘）', () => {

@@ -4,6 +4,7 @@ import { container } from 'tsyringe';
 import {
   parseResponse,
   runReactLoop,
+  serializeAction,
 } from '@/server/modules/agent/application/service/react-loop';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
@@ -29,89 +30,69 @@ import type { LlmMessage } from '@/shared/types/entities';
 // ─── parseResponse ──────────────────────────────────────────────────────────
 
 describe('parseResponse', () => {
-  it('parses a clean bare JSON object', () => {
-    expect(parseResponse('{ "tool": "datetime_get", "input": {} }')).toEqual({
-      thought: undefined,
-      tool: 'datetime_get',
-      input: {},
-    });
+  it('parses a clean XML tool call', () => {
+    expect(
+      parseResponse(
+        '<tool_call><tool>datetime_get</tool><input></input></tool_call>',
+      ),
+    ).toEqual({ thought: undefined, tool: 'datetime_get', input: {} });
   });
 
-  it('parses a fenced ```json block', () => {
+  it('parses a fenced ```xml block', () => {
     expect(
-      parseResponse('```json\n{ "tool": "datetime_get", "input": {} }\n```'),
-    ).toEqual({
-      thought: undefined,
-      tool: 'datetime_get',
-      input: {},
-    });
+      parseResponse(
+        '```xml\n<tool_call><tool>datetime_get</tool><input></input></tool_call>\n```',
+      ),
+    ).toEqual({ thought: undefined, tool: 'datetime_get', input: {} });
   });
 
-  it('preserves an optional thought field', () => {
+  it('preserves an optional thought + params', () => {
     expect(
-      parseResponse('{"thought":"let me check","tool":"x","input":{}}'),
+      parseResponse(
+        '<tool_call><thought>let me check</thought><tool>book</tool><input><id>f4</id><pax>Bob</pax></input></tool_call>',
+      ),
     ).toEqual({
       thought: 'let me check',
-      tool: 'x',
-      input: {},
+      tool: 'book',
+      input: { id: 'f4', pax: 'Bob' },
     });
   });
 
-  // Regression: GLM-5.2 (thinking model) leakage seen in production logs —
-  // leading reasoning fragments and <think> remnants before the tool-call JSON.
-  it.each([
-    ['bare prefix token "me."', 'me.{ "tool": "datetime_get", "input": {} }'],
-    [
-      'bare prefix token "ON."',
-      'ON.{"tool":"response_user","input":{"message":"hi"}}',
-    ],
-    [
-      'bare prefix token "it."',
-      'it.{"tool":"response_user","input":{"message":"hi"}}',
-    ],
-    [
-      'think remnant + fence',
-      'ally afternoon.</think>```json\n{ "tool": "response_user", "input": { "message": "Good morning" } }\n```',
-    ],
-    [
-      'think remnant + raw JSON',
-      'me.{"tool":"response_user","input":{"message":"Good morning"}}',
-    ],
-  ])('tolerates %s', (_label, content) => {
-    const parsed = parseResponse(content);
-    expect(parsed.tool).toMatch(/^(datetime_get|response_user)$/);
-    expect(parsed.input).toBeTypeOf('object');
-  });
-
-  it('does not let braces inside a <think> block hijack extraction', () => {
+  it('takes quotes / backslashes in values literally (no escaping needed)', () => {
     const parsed = parseResponse(
-      '<think>maybe {"tool":"wrong"} here</think>{"tool":"response_user","input":{"message":"ok"}}',
-    );
-    expect(parsed.tool).toBe('response_user');
-  });
-
-  it('does not corrupt a string value containing triple backticks', () => {
-    const parsed = parseResponse(
-      '{"tool":"response_user","input":{"code":"```python"}}',
-    );
-    expect((parsed.input as { code: string }).code).toBe('```python');
-  });
-
-  it('preserves a literal </think> inside a JSON string value', () => {
-    const parsed = parseResponse(
-      '{"tool":"response_user","input":{"message":"use </think> here"}}',
+      '<tool_call><tool>response_user</tool><input><message>He said "hi" \\d</message></input></tool_call>',
     );
     expect((parsed.input as { message: string }).message).toBe(
-      'use </think> here',
+      'He said "hi" \\d',
     );
   });
 
-  it('throws when there is no JSON object', () => {
-    expect(() => parseResponse('just prose, no json here')).toThrow();
+  it('decodes XML entities & CDATA in values', () => {
+    const parsed = parseResponse(
+      '<tool_call><tool>bash</tool><input><command><![CDATA[a < b && c > d]]></command></input></tool_call>',
+    );
+    expect((parsed.input as { command: string }).command).toBe(
+      'a < b && c > d',
+    );
+  });
+
+  // Regression: thinking models leak <think>…</think> / leading prose before the tool call.
+  it('tolerates <think> remnants and prose before the tool call', () => {
+    const parsed = parseResponse(
+      'me.<think>reasoning…</think><tool_call><tool>response_user</tool><input><message>hi</message></input></tool_call>',
+    );
+    expect(parsed.tool).toBe('response_user');
+    expect((parsed.input as { message: string }).message).toBe('hi');
+  });
+
+  it('throws when there is no tool call', () => {
+    expect(() => parseResponse('just prose, no tags here')).toThrow();
   });
 
   it('throws when tool/input is missing', () => {
-    expect(() => parseResponse('{"foo":"bar"}')).toThrow();
+    expect(() =>
+      parseResponse('<tool_call><tool>x</tool></tool_call>'),
+    ).toThrow();
   });
 });
 
@@ -120,12 +101,13 @@ describe('parseResponse', () => {
 /** Canned text the summary-stub LLM returns for any compaction/process-summary fold. */
 const SUMMARY_STUB = '<summarized turn>';
 
-/** Build a single ReAct tool-call JSON string the scripted LLM will "reply" with. */
+/** Build a single ReAct tool-call XML string the scripted LLM will "reply" with. */
 const call = (
   tool: string,
   input: Record<string, unknown> = {},
   thought?: string,
-): string => JSON.stringify({ ...(thought ? { thought } : {}), tool, input });
+): string =>
+  serializeAction(thought ? { thought, tool, input } : { tool, input });
 
 const responseUser = (message: string): string =>
   call(ToolIds.RESPONSE_USER, { message });

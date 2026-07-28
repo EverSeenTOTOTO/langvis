@@ -15,17 +15,23 @@ export const BASE_PROMPT = Prompt.empty()
   )
   .with(
     'Output format',
-    `Every response is a flat tool call. The JSON object must conform to this single structure:
+    `Every response is a flat tool call emitted as XML. Use exactly this structure:
 
-\`\`\`typescript
-interface Response {
-  thought?: string; // Optional: Reasoning about this step.
-  tool: string; // The name of the tool to call.
-  input: Record<string, any>; // The input parameters for the tool.
-}
+\`\`\`xml
+<tool_call>
+  <thought>optional: reasoning about this step</thought>
+  <tool>the tool name</tool>
+  <input>
+    <param-name>param value</param-name>
+  </input>
+</tool_call>
 \`\`\`
 
-There is no separate "final answer" shape — to answer the user you call the \`response_user\` tool.
+Rules:
+- \`<tool>\` and \`<input>\` are required; \`<thought>\` is optional.
+- Each input parameter is a child element of \`<input>\` (e.g. \`<message>…</message>\`, \`<command>…</command>\`).
+- Text content is taken literally: you do NOT need to escape quotes or backslashes in values. Only escape \`<\` as \`&lt;\` and \`&\` as \`&amp;\` when they appear in text (or wrap raw text in \`<![CDATA[ … ]]>\`).
+- There is no separate "final answer" shape — to answer the user you call the \`response_user\` tool with the reply in \`<message>\`.
 `,
   )
   .with(
@@ -41,24 +47,34 @@ There is no separate "final answer" shape — to answer the user you call the \`
     'Examples',
     `<example:straight-to-final>
 User: Hi.
-Assistant: { "tool": "response_user", "input": { "message": "你好！有什么我可以帮你的吗？" } }
+Assistant:
+<tool_call>
+  <tool>response_user</tool>
+  <input>
+    <message>你好！有什么我可以帮你的吗？</message>
+  </input>
+</tool_call>
 </example:straight-to-final>
 
 <example:call-skill>
 User: 帮我处理这个PDF文件
 Assistant:
-{
-  "thought": "用户需要处理PDF文件，先加载PDF处理技能获取工作流指导",
-  "tool": "skill_call",
-  "input": { "skillId": "pdf" }
-}
+<tool_call>
+  <thought>用户需要处理PDF文件，先加载PDF处理技能获取工作流指导</thought>
+  <tool>skill_call</tool>
+  <input>
+    <skillId>pdf</skillId>
+  </input>
+</tool_call>
 (Observation: {"content": "## PDF处理技能\\n\\n### 步骤\\n1. 先用 bash 检查文件..."})
 Assistant:
-{
-  "thought": "已获取PDF处理工作流指导，按照步骤先检查文件是否存在",
-  "tool": "bash",
-  "input": { "command": "ls -la /uploads/file.pdf" }
-}
+<tool_call>
+  <thought>已获取PDF处理工作流指导，按照步骤先检查文件是否存在</thought>
+  <tool>bash</tool>
+  <input>
+    <command>ls -la /uploads/file.pdf</command>
+  </input>
+</tool_call>
 </example:call-skill>`,
   );
 

@@ -5,6 +5,7 @@ import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-r
 import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { QueryBudgetHook } from '@/server/modules/agent/application/hooks/query-budget-hook';
+import { serializeAction } from '@/server/modules/agent/application/service/react-loop';
 
 // estimateTokens 用内容字符数代理（与 offload-hook 测试一致，确定性可控）。
 vi.mock('@/server/utils/estimateTokens', () => ({
@@ -38,7 +39,7 @@ function sys(b: string): LlmMessage {
   return { role: 'system', content: b };
 }
 function assistant(tool: string, input: Record<string, unknown>): LlmMessage {
-  return { role: 'assistant', content: JSON.stringify({ tool, input }) };
+  return { role: 'assistant', content: serializeAction({ tool, input }) };
 }
 
 function makeCtx(

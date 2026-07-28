@@ -1,5 +1,8 @@
 import type { LlmMessage } from '@/shared/types/entities';
-import { parseResponse } from '@/server/modules/agent/application/service/react-loop';
+import {
+  parseResponse,
+  serializeAction,
+} from '@/server/modules/agent/application/service/react-loop';
 import { ToolIds } from '@/shared/constants';
 import type { ParsedAction } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { CachedReference } from '@/server/modules/agent/domain/port/cache.port';
@@ -73,7 +76,7 @@ export function stubContent(
     return `${candidate.body.slice(0, HEAD_KEEP)}\n${marker}`;
   }
   // assistant：整条报文一次性落盘，thought+input 同注一文件，tool 取已解析的 parsed.tool 原样保留。
-  return JSON.stringify({
+  return serializeAction({
     thought: marker,
     tool: candidate.parsed.tool,
     input: { _offloaded: fn },

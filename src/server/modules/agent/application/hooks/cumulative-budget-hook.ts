@@ -9,6 +9,7 @@ import type {
 import type { RunEvent } from '@/shared/types/events';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import Logger from '@/server/utils/logger';
+import { serializeAction } from '@/server/modules/agent/application/service/react-loop';
 import { agentHook } from './registry';
 
 const budgetMessage = (used: number, budget: number) =>
@@ -52,7 +53,7 @@ export class CumulativeBudgetHook implements Hook {
   }
 }
 
-/** 复刻 response_user 工具的可观测效果：yield text_chunk + append 一条 response_user ReAct JSON。 */
+/** 复刻 response_user 工具的可观测效果：yield text_chunk + append 一条 response_user ReAct XML。 */
 export async function* responseUser(
   ctx: AgentRunContext,
   message: string,
@@ -60,7 +61,7 @@ export async function* responseUser(
   yield { type: 'text_chunk', content: message };
   ctx.messages = ctx.messages.append({
     role: Role.ASSIST,
-    content: JSON.stringify({
+    content: serializeAction({
       tool: ToolIds.RESPONSE_USER,
       input: { message },
     }),
