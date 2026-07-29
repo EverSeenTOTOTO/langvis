@@ -11,7 +11,6 @@ import {
 import { ConversationNotFoundError } from '@/server/modules/conversation/domain/errors';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
-import { ListMonad } from '@/server/libs/list';
 import { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
 
 const stubEventBus = { dispatch: vi.fn() } as unknown as EventBus;
@@ -19,7 +18,7 @@ const stubEventBus = { dispatch: vi.fn() } as unknown as EventBus;
 function makeSessionManager(seed: Message[] = []) {
   const ctx = {
     conversationId: 'conv_1',
-    messages: ListMonad.of(seed),
+    messages: seed,
     config: { contextSize: 8000, runtimeConfig: {} },
     transforms: new ConvTransformPlan(),
   };
@@ -81,10 +80,7 @@ describe('StartChatHandler', () => {
     expect(sm.awaitMaintenance).toHaveBeenCalledWith('conv_1');
     expect(sm.getCtx).toHaveBeenCalledWith('conv_1');
     // userMessage appended after the barrier
-    expect(sm.ctx.messages.toArray().map(m => m.id)).toEqual([
-      'msg_s',
-      'msg_u',
-    ]);
+    expect(sm.ctx.messages.map(m => m.id)).toEqual(['msg_s', 'msg_u']);
     expect(stubEventBus.dispatch).toHaveBeenCalledWith(
       TurnInitiated,
       expect.objectContaining({

@@ -11,7 +11,6 @@ import {
   ConvTransformPlan,
   type ConversationContext,
 } from '@/server/modules/conversation/domain/model/conv-transform';
-import { ListMonad } from '@/server/libs/list';
 import type { ConversationConfig } from '@/server/libs/config';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { Role } from '@/shared/entities/Message';
@@ -48,7 +47,7 @@ function makeCtx(
 ): ConversationContext {
   return {
     conversationId: 'conv_test',
-    messages: ListMonad.of(messages),
+    messages: messages,
     runtimeConfig: { history: COMPACTION },
     transforms: new ConvTransformPlan(),
     getRunEvents: (messageId: string) => runEvents[messageId],
@@ -131,7 +130,7 @@ function loopCtx(
 ): ConversationContext {
   return {
     conversationId: 'conv_test',
-    messages: ListMonad.of(messages),
+    messages: messages,
     runtimeConfig,
     transforms: new ConvTransformPlan(),
     getRunEvents: (messageId: string) => runEvents[messageId],
@@ -328,7 +327,7 @@ describe('CompactTransform', () => {
     expect(foldMock).toHaveBeenCalledTimes(1);
     expect(messageRepo.batchCreate).toHaveBeenCalledTimes(1);
     expect(ctx.messages.length).toBe(5); // 4 + C
-    const compactMsg = ctx.messages.get(4)!;
+    const compactMsg = ctx.messages[4]!;
     expect(compactMsg.role).toBe(Role.USER);
     expect(compactMsg.meta?.kind).toBe('compact');
     expect(compactMsg.content).toBe('THE RECAP');

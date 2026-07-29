@@ -1,10 +1,6 @@
 import { inject } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type {
-  Hook,
-  HookDirective,
-  HookPhase,
-} from '@/server/modules/agent/domain/model/hook';
+import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import { fold, PROCESS_SUMMARY_PROMPT } from '@/server/libs/compaction';
 import { estimateTokens } from '@/server/utils/estimateTokens';
@@ -24,45 +20,47 @@ export class CompactionHook implements Hook {
     private readonly providerService: ProviderService,
   ) {}
 
-  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, HookDirective> {
+  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const compaction = ctx.config.runtimeConfig.loop;
-    if (!compaction) return 'next';
+    if (!compaction) return;
     const contextSize = this.providerService.resolveContextSize(
       ctx.config.runtimeConfig,
     );
-    if (!contextSize) return 'next';
+    if (!contextSize) return;
 
     const list = ctx.messages;
     const base = ctx.base;
-    const loopActions = list.drop(base);
-    if (loopActions.length <= compaction.keepRecent) return 'next';
+    const loopActions = list.slice(base);
+    if (loopActions.length <= compaction.keepRecent) return;
 
-    const beforeTokens = estimateTokens(list.toArray());
-    if (beforeTokens <= contextSize * compaction.threshold) return 'next';
+    const beforeTokens = estimateTokens(list);
+    if (beforeTokens <= contextSize * compaction.threshold) return;
 
-    const recent = loopActions.takeLast(compaction.keepRecent);
-    const older = loopActions.dropLast(compaction.keepRecent);
+    const keep = compaction.keepRecent;
+    const recent = loopActions.slice(-keep);
+    const older = loopActions.slice(0, -keep);
 
     try {
       const recap = await fold({
-        messages: older.toArray(),
+        messages: older,
         windowSize: compaction.windowSize,
         signal: ctx.signal,
         prompt: PROCESS_SUMMARY_PROMPT,
         modelId:
           compaction.compactModelId ?? ctx.config.runtimeConfig.model?.modelId,
       });
-      if (!recap) return 'next';
+      if (!recap) return;
 
-      ctx.messages = list
-        .take(base)
-        .append({
+      ctx.messages = [
+        ...list.slice(0, base),
+        {
           role: 'user',
           content: `Observation: [earlier steps in this turn — summarized]\n${recap}`,
-        })
-        .concat(recent);
+        },
+        ...recent,
+      ];
 
-      const afterTokens = estimateTokens(ctx.messages.toArray());
+      const afterTokens = estimateTokens(ctx.messages);
       this.logger.info(
         `compacted (run ${ctx.runId}): ${list.length}→${ctx.messages.length} msgs, ${beforeTokens}→${afterTokens} tokens`,
       );
@@ -83,6 +81,6 @@ export class CompactionHook implements Hook {
         `Iteration compaction failed: ${(err as Error)?.message ?? err}`,
       );
     }
-    return 'next';
+    return;
   }
 }

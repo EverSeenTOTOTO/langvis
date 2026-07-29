@@ -2,11 +2,7 @@ import { inject } from 'tsyringe';
 import { Role } from '@/shared/entities/Message';
 import { ToolIds } from '@/shared/constants';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type {
-  Hook,
-  HookDirective,
-  HookPhase,
-} from '@/server/modules/agent/domain/model/hook';
+import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import { retrieveRelevantTools } from '@/server/utils/tool-retrieval';
 import {
@@ -19,6 +15,7 @@ import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
 
 const MAX_ITEMS = 3;
+const TOOL_HINT_THRESHOLD = 12;
 
 /**
  * pre-llm 首 tick：用 user query 检索命中工具/skill，把「建议式前缀 + 全量 schema」
@@ -37,11 +34,12 @@ export class ToolHintHook implements Hook {
     @inject(SkillService) private readonly skillService: SkillService,
   ) {}
 
-  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, HookDirective> {
-    if (!ctx.interactive || this.done) return 'next';
+  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
+    if (!ctx.interactive || this.done) return;
     this.done = true;
 
     const query = lastUserContent(ctx.messages);
+    if (!query || query.length <= TOOL_HINT_THRESHOLD) return;
     const { tools, skills } = await retrieveRelevantTools(
       this.toolService,
       this.skillService,
@@ -49,7 +47,7 @@ export class ToolHintHook implements Hook {
       { excludeToolIds: [ToolIds.LIST_TOOLS] },
     );
     const total = tools.length + skills.length;
-    if (total === 0) return 'next';
+    if (total === 0) return;
 
     const capTools = tools.slice(0, MAX_ITEMS);
     const remaining = MAX_ITEMS - capTools.length;
@@ -65,14 +63,14 @@ export class ToolHintHook implements Hook {
       parts.push(`…（共 ${total} 项，已显示前 ${shown}；其余调 list_tools）`);
     }
 
-    ctx.messages = ctx.messages.append({
+    ctx.messages.push({
       role: Role.USER,
       content: parts.filter(Boolean).join('\n---\n'),
     });
     this.logger.debug(
       `tool-hint injected (run ${ctx.runId}): ${tools.length}t/${skills.length}s`,
     );
-    return 'next';
+    return;
   }
 }
 
@@ -80,7 +78,7 @@ function lastUserContent(
   messages: AgentRunContext['messages'],
 ): string | undefined {
   for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages.get(i);
+    const m = messages[i];
     if (m?.role === Role.USER) return m.content;
   }
   return undefined;

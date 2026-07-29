@@ -8,7 +8,6 @@ import {
 } from '@/server/modules/agent/application/service/react-loop';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
-import { ListMonad } from '@/server/libs/list';
 import { HookPlan, type Hook } from '@/server/modules/agent/domain/model/hook';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
@@ -247,7 +246,7 @@ function buildCtx(opts: BuildCtxOptions): BuiltCtx {
     llm,
     cache: makeMockCache(),
     auth: noopAuth(),
-    messages: ListMonad.of(seed),
+    messages: seed,
     base: seed.length,
     hooks: opts.hooks ?? new HookPlan(resolveAgentHooks()),
     interactive: true,
@@ -552,7 +551,7 @@ describe('runReactLoop', () => {
         phase: 'post-observation',
         apply: async function* (_ctx: AgentRunContext) {
           spyCalls++;
-          return 'next';
+          return;
         },
       };
       const { ctx, runTool } = buildCtx({
@@ -582,7 +581,7 @@ describe('runReactLoop', () => {
                 summary: 'did something',
                 data: { x: 1 },
               };
-              return 'next';
+              return;
             },
           },
         ]),

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import { LoopSignal, StopLoop } from '@/server/modules/agent/domain/model/hook';
 import { ToolIds } from '@/shared/constants';
-import { ListMonad } from '@/server/libs/list';
 import type { LlmMessage } from '@/shared/types/entities';
 import type {
   AgentRunContext,
@@ -17,17 +17,19 @@ vi.mock('@/server/utils/estimateTokens', () => ({
 }));
 
 async function collect(
-  gen: AsyncGenerator<RunEvent, string>,
-): Promise<{ events: RunEvent[]; ret: string }> {
+  gen: AsyncGenerator<RunEvent, void>,
+): Promise<{ events: RunEvent[]; ret: LoopSignal | undefined }> {
   const events: RunEvent[] = [];
-  let ret = '';
-  for (;;) {
-    const r = await gen.next();
-    if (r.done) {
-      ret = r.value;
-      break;
+  let ret: LoopSignal | undefined;
+  try {
+    for (;;) {
+      const r = await gen.next();
+      if (r.done) break;
+      events.push(r.value);
     }
-    events.push(r.value);
+  } catch (e) {
+    if (!(e instanceof LoopSignal)) throw e;
+    ret = e;
   }
   return { events, ret };
 }
@@ -50,7 +52,7 @@ function ctxWith(
   });
   return {
     runId: 'run_test',
-    messages: ListMonad.of<LlmMessage>(messages),
+    messages: messages,
     config,
     pendingAction,
   } as unknown as AgentRunContext;
@@ -67,7 +69,7 @@ describe('CumulativeBudgetHook（累计 token 用量兜底，阈值取自 guard.
     const { events, ret } = await collect(
       new CumulativeBudgetHook().apply(ctx),
     );
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(before);
   });
@@ -88,7 +90,7 @@ describe('CumulativeBudgetHook（累计 token 用量兜底，阈值取自 guard.
     const { events, ret } = await collect(
       new CumulativeBudgetHook().apply(ctx),
     );
-    expect(ret).toBe('break');
+    expect(ret).toBeInstanceOf(StopLoop);
     expect(events).toHaveLength(2);
     expect(events[0]).toMatchObject({
       type: 'hook',
@@ -96,7 +98,7 @@ describe('CumulativeBudgetHook（累计 token 用量兜底，阈值取自 guard.
     });
     expect(events[1]).toMatchObject({ type: 'text_chunk' });
     expect(ctx.messages.length).toBe(before + 1);
-    const appended = ctx.messages.get(ctx.messages.length - 1)!;
+    const appended = ctx.messages[ctx.messages.length - 1]!;
     expect(appended.content).toContain(ToolIds.RESPONSE_USER);
   });
 
@@ -119,7 +121,7 @@ describe('CumulativeBudgetHook（累计 token 用量兜底，阈值取自 guard.
     const { events, ret } = await collect(
       new CumulativeBudgetHook().apply(ctx),
     );
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(before);
   });
@@ -129,15 +131,15 @@ describe('CumulativeBudgetHook（累计 token 用量兜底，阈值取自 guard.
     const config = RunConfigVO.of({ tools: [], runtimeConfig: { model: {} } });
     const ctx = {
       runId: 'run_test',
-      messages: ListMonad.of<LlmMessage>([
+      messages: [
         { role: 'assistant', content: '{"tool":"search","input":{}}' },
-      ]),
+      ],
       config,
     } as unknown as AgentRunContext;
     const { events, ret } = await collect(
       new CumulativeBudgetHook().apply(ctx),
     );
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
   });
 });

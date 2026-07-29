@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ListMonad } from '@/server/libs/list';
+import { LoopSignal } from '@/server/modules/agent/domain/model/hook';
 import type { LlmMessage } from '@/shared/types/entities';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
@@ -19,17 +19,19 @@ vi.mock('@/server/utils/estimateTokens', () => ({
 }));
 
 async function collect(
-  gen: AsyncGenerator<RunEvent, string>,
-): Promise<{ events: RunEvent[]; ret: string }> {
+  gen: AsyncGenerator<RunEvent, void>,
+): Promise<{ events: RunEvent[]; ret: LoopSignal | undefined }> {
   const events: RunEvent[] = [];
-  let ret = '';
-  for (;;) {
-    const r = await gen.next();
-    if (r.done) {
-      ret = r.value;
-      break;
+  let ret: LoopSignal | undefined;
+  try {
+    for (;;) {
+      const r = await gen.next();
+      if (r.done) break;
+      events.push(r.value);
     }
-    events.push(r.value);
+  } catch (e) {
+    if (!(e instanceof LoopSignal)) throw e;
+    ret = e;
   }
   return { events, ret };
 }
@@ -59,7 +61,7 @@ function makeCtx(
     runId: 'run_test',
     workDir: '/tmp/workdir',
     base: opts.base ?? 0,
-    messages: ListMonad.of<LlmMessage>(messages),
+    messages: messages,
     config,
     cache,
   } as unknown as AgentRunContext;
@@ -90,7 +92,7 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     const ctx = makeCtx([obs(body(800))], { offload: undefined });
     const before = ctx.messages.length;
     const { events, ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(before);
   });
@@ -98,9 +100,9 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
   it('总量未超 cap → next，不桩', async () => {
     const ctx = makeCtx([obs(body(800))], { offload: CFG() });
     const { events, ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
-    expect(ctx.messages.get(0)!.content).toBe(`Observation: ${body(800)}`);
+    expect(ctx.messages[0]!.content).toBe(`Observation: ${body(800)}`);
   });
 
   it('总量超 cap → 最胖优先桩（单条巨消息即触发）', async () => {
@@ -113,9 +115,9 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
       { offload: CFG() },
     );
     const { events, ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(1);
-    const offloaded = ctx.messages.get(1)!;
+    const offloaded = ctx.messages[1]!;
     expect(offloaded.content).toContain('[offloaded to file');
     expect(offloaded.content).toContain('rg -n'); // 小文件优先 rg 检索
     expect(offloaded.content).toContain('sed -n'); // 限行顺序看仍可用
@@ -124,7 +126,7 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     expect(offloaded.content).toContain('~1 chunks of 2000B'); // mock $size=600 → ceil=1
     expect(offloaded.content).toContain('search_flights'); // hint 含 tool
     expect(offloaded.content).toMatch(/^Observation: /); // 前缀保留
-    expect(ctx.messages.get(0)!.content).toContain('search_flights'); // assistant 未桩
+    expect(ctx.messages[0]!.content).toContain('search_flights'); // assistant 未桩
   });
 
   it('总量超 cap、多条小消息 → 最胖优先桩到 cap 内', async () => {
@@ -135,7 +137,7 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     const { events } = await collect(makeHook(8192).apply(ctx));
     expect(events).toHaveLength(1);
     const stubbedCount = msgs.filter((_, i) =>
-      ctx.messages.get(i)!.content.includes('[offloaded to file'),
+      ctx.messages[i]!.content.includes('[offloaded to file'),
     ).length;
     expect(stubbedCount).toBeGreaterThanOrEqual(1);
     expect(stubbedCount).toBeLessThan(4);
@@ -148,9 +150,9 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
       offload: CFG(),
     });
     await collect(makeHook(8192).apply(ctx));
-    expect(ctx.messages.get(0)!.content).toContain('[offloaded to file'); // 最大那条
-    expect(ctx.messages.get(1)!.content).not.toContain('[offloaded to file');
-    expect(ctx.messages.get(2)!.content).not.toContain('[offloaded to file');
+    expect(ctx.messages[0]!.content).toContain('[offloaded to file'); // 最大那条
+    expect(ctx.messages[1]!.content).not.toContain('[offloaded to file');
+    expect(ctx.messages[2]!.content).not.toContain('[offloaded to file');
   });
 
   it('只桩 [base,len)，seed [0,base) 字节不变（保前缀缓存）', async () => {
@@ -164,9 +166,9 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     );
     const { events } = await collect(makeHook(8192).apply(ctx));
     expect(events).toHaveLength(1);
-    expect(ctx.messages.get(0)!.content).toBe('SEED PREFIX'); // seed 完好
-    expect(ctx.messages.get(1)!.content).toContain('[offloaded to file');
-    expect(ctx.messages.get(2)!.content).toContain('[offloaded to file');
+    expect(ctx.messages[0]!.content).toBe('SEED PREFIX'); // seed 完好
+    expect(ctx.messages[1]!.content).toContain('[offloaded to file');
+    expect(ctx.messages[2]!.content).toContain('[offloaded to file');
   });
 
   it('seed 永不桩：[0,base) 即使会爆窗也不动（大正文应走 Observation 而非 seed）', async () => {
@@ -177,9 +179,9 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
       body(8000);
     const ctx = makeCtx([userMsg(emailBody)], { offload: CFG(), base: 1 });
     const { events, ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0); // seed 不桩 → 无桩
-    expect(ctx.messages.get(0)!.content).toBe(emailBody); // 原样未动
+    expect(ctx.messages[0]!.content).toBe(emailBody); // 原样未动
     expect(ctx.cache.offload).not.toHaveBeenCalled();
   });
 
@@ -196,8 +198,8 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
       { offload: CFG() },
     );
     await collect(makeHook(8192).apply(ctx));
-    expect(ctx.messages.get(1)!.content).toBe(`Observation: ${body(4000)}`); // cat 句柄 → 未桩
-    expect(ctx.messages.get(3)!.content).toContain('[offloaded to file'); // 普通 bash → 被桩
+    expect(ctx.messages[1]!.content).toBe(`Observation: ${body(4000)}`); // cat 句柄 → 未桩
+    expect(ctx.messages[3]!.content).toContain('[offloaded to file'); // 普通 bash → 被桩
   });
 
   it('bash rg 读 fc 句柄跳过（防 rg-on-fc fc→fc 螺旋）', async () => {
@@ -215,8 +217,8 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
       { offload: CFG() },
     );
     await collect(makeHook(8192).apply(ctx));
-    expect(ctx.messages.get(1)!.content).toBe(`Observation: ${body(8000)}`); // rg 读句柄 → 未桩
-    expect(ctx.messages.get(3)!.content).toContain('[offloaded to file'); // 普通 bash → 被桩
+    expect(ctx.messages[1]!.content).toBe(`Observation: ${body(8000)}`); // rg 读句柄 → 未桩
+    expect(ctx.messages[3]!.content).toContain('[offloaded to file'); // 普通 bash → 被桩
   });
 
   it('bash cat 非 offload 文件不跳过：操作数不含 fc 句柄 → 正常桩', async () => {
@@ -226,14 +228,14 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
       { offload: CFG() },
     );
     await collect(makeHook(8192).apply(ctx));
-    expect(ctx.messages.get(1)!.content).toContain('[offloaded to file'); // 非 fc 操作数 → 被桩
+    expect(ctx.messages[1]!.content).toContain('[offloaded to file'); // 非 fc 操作数 → 被桩
   });
 
   it('裸 user 消息（无 Observation 前缀）超阈被桩', async () => {
     const ctx = makeCtx([userMsg(body(8000))], { offload: CFG() });
     const { events } = await collect(makeHook(8192).apply(ctx));
     expect(events).toHaveLength(1);
-    const stub = ctx.messages.get(0)!.content;
+    const stub = ctx.messages[0]!.content;
     expect(stub).toContain('[offloaded to file');
     expect(stub.startsWith('Observation: ')).toBe(false); // 裸 user 不带前缀
     expect(ctx.cache.offload).toHaveBeenCalled();
@@ -246,7 +248,7 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     });
     const { events } = await collect(makeHook(8192).apply(ctx));
     expect(events).toHaveLength(1);
-    expect(ctx.messages.get(1)!.content).toContain('[offloaded to file');
+    expect(ctx.messages[1]!.content).toContain('[offloaded to file');
   });
 
   it('bash hint 取命令动词不带参数（防文件名嵌套）', async () => {
@@ -259,7 +261,7 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     );
     const { events } = await collect(makeHook(8192).apply(ctx));
     expect(events).toHaveLength(1);
-    const offloaded = ctx.messages.get(1)!.content;
+    const offloaded = ctx.messages[1]!.content;
     expect(offloaded).toContain('(bash-cat)'); // hint = tool + 动词
     expect(offloaded).not.toContain('geely'); // 参数不入文件名 → 不嵌套
   });
@@ -277,8 +279,8 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     );
     const { events } = await collect(makeHook(8192).apply(ctx));
     expect(events).toHaveLength(1); // 只桩 index3
-    expect(ctx.messages.get(1)!.content).toContain('fc_old');
-    expect(ctx.messages.get(3)!.content).toContain('[offloaded to file');
+    expect(ctx.messages[1]!.content).toContain('fc_old');
+    expect(ctx.messages[3]!.content).toContain('[offloaded to file');
   });
 
   it('小正文不桩（短于一个 chunk 跳过，即便总量逻辑上超 cap）', async () => {
@@ -290,19 +292,19 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
       },
     );
     const { events, ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
-    expect(ctx.messages.get(1)!.content).toBe('Observation: small result');
+    expect(ctx.messages[1]!.content).toBe('Observation: small result');
   });
 
   it('windowRatio 可调：0.5 → cap=4096，3000 chars 放行、7000 触发', async () => {
     const ok = makeCtx([obs(body(3000))], { offload: { windowRatio: 0.5 } });
     const { ret: r1 } = await collect(makeHook(8192).apply(ok));
-    expect(r1).toBe('next'); // 3012 < 4096/1.1=3723 → 不桩
+    expect(r1).toBeUndefined(); // 3012 < 4096/1.1=3723 → 不桩
     const over = makeCtx([obs(body(7000))], { offload: { windowRatio: 0.5 } });
     const { events } = await collect(makeHook(8192).apply(over));
     expect(events).toHaveLength(1);
-    expect(over.messages.get(0)!.content).toContain('[offloaded to file');
+    expect(over.messages[0]!.content).toContain('[offloaded to file');
   });
 
   it('windowRatio 跨 contextSize 自适应：大 ctx 上低 ratio 也能触发', async () => {
@@ -310,7 +312,7 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     const over = makeCtx([obs(body(2000))], { offload: { windowRatio: 0.01 } });
     const { events } = await collect(makeHook(128000).apply(over));
     expect(events).toHaveLength(1);
-    expect(over.messages.get(0)!.content).toContain('[offloaded to file');
+    expect(over.messages[0]!.content).toContain('[offloaded to file');
   });
 
   it('大文件（chunks>LARGE_CHUNK_THRESHOLD）桩只劝 rg、不劝分页', async () => {
@@ -322,7 +324,7 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
       $label: 'pdf-extract',
     });
     await collect(makeHook(8192).apply(ctx));
-    const stub = ctx.messages.get(0)!.content;
+    const stub = ctx.messages[0]!.content;
     expect(stub).toContain('~23 chunks of 2000B'); // ceil(45230/2000)=23
     expect(stub).toContain('large file');
     expect(stub).toContain('rg -n');
@@ -359,7 +361,7 @@ describe('OffloadHook（assistant 桩：模型长输出整条 dump，保留 {too
     expect(ctx.cache.offload).toHaveBeenCalledTimes(1);
 
     // 桩化后仍是合法 {tool, input, thought} JSON——parseResponse 能解析。
-    const stub = ctx.messages.get(0)!.content;
+    const stub = ctx.messages[0]!.content;
     const parsed = parseResponse(stub);
     expect(parsed.tool).toBe('document_store'); // tool 原样保留
     // mock offload 带 hint → $cached = 'sem__fc_test'；input 一次性桩为该句柄。
@@ -403,7 +405,7 @@ describe('OffloadHook（assistant 桩：模型长输出整条 dump，保留 {too
     );
     const { events } = await collect(makeHook(8192).apply(ctx));
     expect(events).toHaveLength(1); // 只桩 obs @1
-    expect(ctx.messages.get(0)!.content).toBe(stubbed); // assistant 桩原样
-    expect(ctx.messages.get(1)!.content).toContain('[offloaded to file');
+    expect(ctx.messages[0]!.content).toBe(stubbed); // assistant 桩原样
+    expect(ctx.messages[1]!.content).toContain('[offloaded to file');
   });
 });

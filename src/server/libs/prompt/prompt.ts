@@ -1,23 +1,21 @@
-import { ListMonad } from '@/server/libs/list';
-
 export interface Section {
   name: string;
   content: string;
 }
 
 export class Prompt {
-  private constructor(private readonly sections: ListMonad<Section>) {}
+  private constructor(private readonly sections: readonly Section[]) {}
 
   static empty(): Prompt {
-    return new Prompt(ListMonad.of([]));
+    return new Prompt([]);
   }
 
-  static of(sections: Section[]): Prompt {
-    return new Prompt(ListMonad.of(sections));
+  static of(sections: readonly Section[]): Prompt {
+    return new Prompt([...sections]);
   }
 
   concat(other: Prompt): Prompt {
-    return new Prompt(this.sections.concat(other.sections));
+    return new Prompt([...this.sections, ...other.sections]);
   }
 
   map(f: (s: Section) => Section): Prompt {
@@ -25,11 +23,11 @@ export class Prompt {
   }
 
   chain(f: (sections: readonly Section[]) => Prompt): Prompt {
-    return f(this.sections.toArray());
+    return f(this.sections);
   }
 
   reduce<T>(f: (acc: T, s: Section) => T, initial: T): T {
-    return this.sections.fold(initial, f);
+    return this.sections.reduce(f, initial);
   }
 
   with(name: string, content: string): Prompt {
@@ -47,9 +45,7 @@ export class Prompt {
     if (!this.has(after)) return this.with(name, content);
     return new Prompt(
       this.sections.flatMap(s =>
-        s.name === after
-          ? ListMonad.of<Section>([s, { name, content }])
-          : ListMonad.of([s]),
+        s.name === after ? [s, { name, content }] : [s],
       ),
     );
   }
@@ -58,19 +54,17 @@ export class Prompt {
     if (!this.has(before)) return this.with(name, content);
     return new Prompt(
       this.sections.flatMap(s =>
-        s.name === before
-          ? ListMonad.of<Section>([{ name, content }, s])
-          : ListMonad.of([s]),
+        s.name === before ? [{ name, content }, s] : [s],
       ),
     );
   }
 
   get(name: string): Section | undefined {
-    return this.sections.toArray().find(s => s.name === name);
+    return this.sections.find(s => s.name === name);
   }
 
   has(name: string): boolean {
-    return this.sections.toArray().some(s => s.name === name);
+    return this.sections.some(s => s.name === name);
   }
 
   build(): string {

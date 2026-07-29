@@ -5,7 +5,7 @@ import { RunEvent } from '@/server/modules/agent/contracts';
 import type { RunEventPayload } from '@/server/modules/agent/contracts';
 import { SessionManager } from '../service/session-manager';
 
-/** 会话收到 agent 的每条富化事件，缓冲 + SSE 桥接（取代此前 agent 直接调 sessionManager 的硬耦合）。 */
+/** 会话收到 agent 的每条富化事件，缓冲 + SSE 桥接。 */
 @eventHandler(RunEvent)
 export class RunEventHandler {
   constructor(@inject(SessionManager) private sessionManager: SessionManager) {}

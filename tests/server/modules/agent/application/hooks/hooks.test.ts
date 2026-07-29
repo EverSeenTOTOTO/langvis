@@ -6,7 +6,6 @@ import { LoopUsageHook } from '@/server/modules/agent/application/hooks/loop-usa
 import { CumulativeBudgetHook } from '@/server/modules/agent/application/hooks/cumulative-budget-hook';
 import { StuckHook } from '@/server/modules/agent/application/hooks/stuck-hook';
 import { MaxIterationsHook } from '@/server/modules/agent/application/hooks/max-iterations-hook';
-import { ListMonad } from '@/server/libs/list';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
@@ -49,9 +48,9 @@ function makeCtx(opts: {
     resolveContextSize: () => contextSize,
   } as unknown as ProviderService;
   const seed = opts.seed;
-  let messages = ListMonad.of<LlmMessage>(seed);
+  let messages = seed;
   for (const step of opts.loopSteps)
-    messages = messages.append({ role: 'user', content: step });
+    messages = [...messages, { role: 'user', content: step }];
   return {
     ctx: {
       run: new AgentRun('run_test', config),
@@ -141,8 +140,8 @@ describe('CompactionHook（自持压缩逻辑，经 ctx.messages 读写缝）', 
     const msgs = ctx.messages;
     // seed(1) + recap(1) + keepRecent(4) = 6
     expect(msgs.length).toBe(1 + 1 + COMPACTION.keepRecent);
-    expect(msgs.get(1)!.content).toContain('THE RECAP');
-    expect(msgs.get(2)!.content).toContain('observation step 2'); // 保留的近期首条
+    expect(msgs[1]!.content).toContain('THE RECAP');
+    expect(msgs[2]!.content).toContain('observation step 2'); // 保留的近期首条
     expect(ctx.base).toBe(1); // seed 不变
   });
 

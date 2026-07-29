@@ -77,7 +77,7 @@ export class ProcessSummaryTransform implements ConvTransform {
     ctx: ConversationContext,
     messageId: string,
   ): Promise<Record<string, unknown>> {
-    const msg = ctx.messages.toArray().find(m => m.id === messageId);
+    const msg = ctx.messages.find(m => m.id === messageId);
     return { ...(msg?.meta ?? {}) };
   }
 }

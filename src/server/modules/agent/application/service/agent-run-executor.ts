@@ -18,7 +18,6 @@ import { serializeAction } from '@/server/modules/agent/application/service/reac
 import { TraceContext } from '@/server/middleware/trace-context';
 import type { LlmMessage } from '@/shared/types/entities';
 import type { ConversationConfig } from '@/server/libs/config';
-import { ListMonad } from '@/server/libs/list';
 import { HookPlan } from '@/server/modules/agent/domain/model/hook';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks/registry';
 import { AgentService } from './agent.service';
@@ -92,7 +91,7 @@ export class AgentRunExecutor {
       llm: this.llm,
       cache: this.cache,
       auth: this.auth,
-      messages: ListMonad.of(params.seed).map(restoreReactMessage),
+      messages: params.seed.map(restoreReactMessage),
       base: params.seed.length,
       hooks: new HookPlan(resolveAgentHooks()),
       interactive: params.interactive,

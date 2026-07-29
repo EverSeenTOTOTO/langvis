@@ -45,7 +45,7 @@ export class CompleteTurnHandler {
         messageId,
         content,
       );
-      if (assistant) ctx.messages = ctx.messages.append(assistant);
+      if (assistant) ctx.messages.push(assistant);
 
       this.sessionManager.flushRunView(conversationId, messageId);
       // turn-end transform（process-summary 烘焙 meta.summary → compact 折叠历史 → usage 量压缩后用量）。

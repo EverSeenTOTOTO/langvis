@@ -1,6 +1,6 @@
 /**
  * CachePort —— 大内容无损落盘契约（写端）。消费者拥有端口，agent 实现并经 CACHE_PORT 注入。
- * 读端不再自动 resolve（cached_read 已删）：落盘件只供 bash rg/sed/head 检索或归档工具 rawFile 读。
+ * 落盘件只供 bash rg/sed/head 检索或归档工具 rawFile 读。
  */
 
 /** offload 产出的桩引用对象；读端按 $cached 文件名经 bash 检索盘上件。 */
