@@ -6,7 +6,6 @@ import type { DomainEvent } from '@/server/libs/ddd';
 import type { EnrichedEvent } from '@/shared/types/events';
 import type { RunCompletedPayload } from '@/server/modules/agent/contracts';
 import type { Message } from '@/shared/types/entities';
-import { ListMonad } from '@/server/libs/list';
 import { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
 
 function ev(p: { type: string } & Record<string, unknown>): EnrichedEvent {
@@ -22,7 +21,7 @@ const assistantMsg = {
 function makeCtx() {
   return {
     conversationId: 'conv_1',
-    messages: ListMonad.of([]),
+    messages: [],
     config: { contextSize: 4096, runtimeConfig: {} },
     transforms: new ConvTransformPlan(),
   };

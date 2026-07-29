@@ -8,31 +8,41 @@ export type HookPhase =
   | 'loop-exit';
 
 /**
- * HookDirective — hook 如何影响 loop 流控
+ * Loop 流控信号——hook 经 throw 表态，loop 在 tick 外层 catch。替代旧字符串 directive。
  *
- * 不采用洋葱圈/中间件模型重构整个 loop，只在现有相位 hook 上加一个扁平 directive
- * 返回值。理由：
- * 1. ReAct loop （llm→parse→tool）是带直接变量依赖的数据链。把 loop 改造成
- *    run composed steps，变量依赖就被迫走 stringly-typed 值（类似 ctx.getResult('some prev step key') as T），
- *    丢了局部变量的类型安全，把可见变量依赖变成隐式的步骤排序约定，损害可读性和可维护性。
- * 2. 唯一想要的额外能力——在昂贵操作（call llm）之前短路——扁平 directive 已
- *    足够达成（pre-llm hook 返回 'break' 即跳过本次 LLM 调用）。
- * 故 loop 保留过程式，hook 经 directive 表态；数据走 yield event / ctx member、
- * 控制走 directive，两条通道分开。
+ * 不采用洋葱圈/中间件模型重构整个 loop：ReAct loop（llm→parse→tool）是带直接变量依赖的
+ * 数据链，改成 composed steps 会让变量依赖走 stringly-typed 值，丢类型安全。故 loop 保留
+ * 过程式，hook 仅在相位边界表态；数据走 yield event / ctx member，控制走 sentinel throw。
  *
- * 语义（对 runReactLoop 的外层 for）：
- * - 'next'     继续跑同 tick 下一个 hook / loop 下一步（默认表态，每个 hook 必须显式返回）。
- * - 'continue' 丢弃本 tick 剩余步骤，进入下一轮迭代。返回者自负留下的 messages 对
- *               下一轮 / 投影是 ReAct 合法的（如该补 observation 就自己 append）。
- * - 'break'    退出 loop。loop 会自动接 'loop-exit' 相位（ProcessSummary 横切）。
- *               返回者自负已 yield 终态事件（如答案走 text_chunk）。
+ * - StopLoop：退出 loop。loop 自动接 loop-exit 相位。throw 者自负已 yield 终态事件（如 text_chunk）。
+ * - ContinueTick：丢弃本 tick 剩余，进下一轮。throw 者自负留下的 messages 对下一轮/投影合法。
+ * - （不 throw = 继续：跑同相位下一个 hook / loop 下一步，默认表态。）
+ *
+ * sentinel 是控制流、非错误：base 类便于 `instanceof` 区分，勿在 hook 的 catch 里吞掉。
  */
-export type HookDirective = 'next' | 'continue' | 'break';
+export class LoopSignal extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = new.target.name;
+  }
+}
+
+export class StopLoop extends LoopSignal {
+  constructor(reason?: string) {
+    super(reason ?? 'stop loop');
+  }
+}
+
+export class ContinueTick extends LoopSignal {
+  constructor(reason?: string) {
+    super(reason ?? 'continue to next tick');
+  }
+}
 
 export interface Hook {
   readonly id: string;
   readonly phase: HookPhase;
-  apply: (ctx: AgentRunContext) => AsyncGenerator<RunEvent, HookDirective>;
+  apply: (ctx: AgentRunContext) => AsyncGenerator<RunEvent, void>;
 }
 
 export class HookPlan {

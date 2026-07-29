@@ -1,9 +1,9 @@
 import { ToolIds } from '@/shared/constants';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type {
-  Hook,
-  HookDirective,
-  HookPhase,
+import {
+  StopLoop,
+  type Hook,
+  type HookPhase,
 } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import Logger from '@/server/utils/logger';
@@ -30,12 +30,12 @@ export class StuckHook implements Hook {
   private readonly seen = new Set<string>();
   private streak = 0;
 
-  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, HookDirective> {
+  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const guard = ctx.config.runtimeConfig.guard;
-    if (!guard) return 'next';
+    if (!guard) return;
 
     const action = ctx.pendingAction;
-    if (!action || action.tool === ToolIds.RESPONSE_USER) return 'next';
+    if (!action || action.tool === ToolIds.RESPONSE_USER) return;
     const sig = `${action.tool}:${JSON.stringify(action.input)}`;
 
     if (this.seen.has(sig)) this.streak++;
@@ -43,7 +43,7 @@ export class StuckHook implements Hook {
       this.seen.add(sig);
       this.streak = 0;
     }
-    if (this.streak < guard.stuckThreshold) return 'next';
+    if (this.streak < guard.stuckThreshold) return;
 
     this.logger.warn(
       `stuck (run ${ctx.runId}): ${this.streak} consecutive no-progress ticks (last sig=${sig})`,
@@ -54,6 +54,6 @@ export class StuckHook implements Hook {
       summary: `stuck: ${this.streak} consecutive no-progress ticks`,
     };
     yield* responseUser(ctx, STUCK_MESSAGE);
-    return 'break';
+    throw new StopLoop();
   }
 }

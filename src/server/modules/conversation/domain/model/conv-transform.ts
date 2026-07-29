@@ -2,7 +2,6 @@ import type { StreamFrame } from '@/shared/types/events';
 import type { EnrichedEvent } from '@/shared/types/events';
 import type { Message } from '@/shared/types/entities';
 import type { ConversationConfig } from '@/server/libs/config';
-import { ListMonad } from '@/server/libs/list';
 
 export type ConvPhase = 'activated' | 'turn-start' | 'turn-end';
 
@@ -22,7 +21,7 @@ export interface RunCtx {
  */
 export interface ConversationContext {
   readonly conversationId: string;
-  messages: ListMonad<Message>;
+  messages: Message[];
   readonly runtimeConfig: ConversationConfig;
   readonly transforms: ConvTransformPlan;
   getRunEvents(messageId: string): readonly EnrichedEvent[] | undefined;

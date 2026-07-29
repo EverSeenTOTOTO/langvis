@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ListMonad } from '@/server/libs/list';
 import type { LlmMessage } from '@/shared/types/entities';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
@@ -33,7 +32,7 @@ vi.mock('@/server/utils/estimateTokens', () => ({
 }));
 
 async function collect(
-  gen: AsyncGenerator<RunEvent, string>,
+  gen: AsyncGenerator<RunEvent, void>,
 ): Promise<{ events: RunEvent[] }> {
   const events: RunEvent[] = [];
   for (;;) {
@@ -68,7 +67,7 @@ function makeCtx(
     runId: 'run_test',
     workDir: '/tmp/workdir',
     base: 0,
-    messages: ListMonad.of<LlmMessage>(messages),
+    messages,
     config,
     cache,
   } as unknown as AgentRunContext;

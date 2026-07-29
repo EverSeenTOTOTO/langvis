@@ -1,12 +1,11 @@
 import { inject } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type {
-  Hook,
-  HookDirective,
-  HookPhase,
+import {
+  StopLoop,
+  type Hook,
+  type HookPhase,
 } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
-import { ListMonad } from '@/server/libs/list';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
@@ -36,20 +35,20 @@ export class QueryBudgetHook implements Hook {
     private readonly providerService: ProviderService,
   ) {}
 
-  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, HookDirective> {
+  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const guard = ctx.config.runtimeConfig.guard;
-    if (!guard) return 'next';
+    if (!guard) return;
     const contextSize = this.providerService.resolveContextSize(
       ctx.config.runtimeConfig,
     );
-    if (!contextSize) return 'next';
+    if (!contextSize) return;
     // per-latest 单条预算 = min(maxQueryTokens, contextWindow×maxQuerySize)。阈值在 guard fragment。
     const budget = Math.min(
       guard.maxQueryTokens!,
       Math.floor(contextSize * guard.maxQuerySize!),
     );
 
-    const messages = ctx.messages.toArray();
+    const messages = ctx.messages;
     const last = messages.length - 1;
     // 留给最新一条的可用窗口 = 窗口 − 最新一条之前已占用的 token。
     const prefixTokens = estimateTokens(messages.slice(0, last));
@@ -58,7 +57,7 @@ export class QueryBudgetHook implements Hook {
 
     // 最新一条塞得进留给它的余量 → 放行。须先判，否则 seed 末条（last<base）会被误判不可恢复。
     const latestTokens = estimateTokens([messages[last]!]);
-    if (latestTokens <= cap) return 'next';
+    if (latestTokens <= cap) return;
 
     // 超限但无可 drop：
     // ① 最新一条落在 [0,base) seed 内 → 无可 drop（base 自身超窗）。
@@ -72,7 +71,7 @@ export class QueryBudgetHook implements Hook {
         summary: 'unrecoverable overflow (base too large)',
         data: { usage: { used: latestTokens, total: contextSize } },
       };
-      return 'break';
+      throw new StopLoop();
     }
     // ② prefix 自身 ≥ 窗口（remaining ≤ 0）→ offload/compaction 未能缩进窗口，drop 最新无济于事。
     if (remaining <= 0) {
@@ -85,7 +84,7 @@ export class QueryBudgetHook implements Hook {
         summary: 'unrecoverable overflow (prefix fills window)',
         data: { usage: { used: prefixTokens, total: contextSize } },
       };
-      return 'break';
+      throw new StopLoop();
     }
 
     // 超限但可恢复：截断保留前 ~cap token 真实内容 + 收窄指引，放行 LLM（agent 据指引收窄重取，
@@ -106,7 +105,7 @@ export class QueryBudgetHook implements Hook {
         recall,
       ),
     };
-    ctx.messages = ListMonad.of(messages);
+    ctx.messages = messages;
     this.logger.warn(
       `query over budget (run ${ctx.runId}): latest ${latestTokens} > ${cap} cap (prefix ${prefixTokens}, window ${contextSize}); truncated latest + narrowing directive`,
     );
@@ -116,7 +115,7 @@ export class QueryBudgetHook implements Hook {
       summary: 'query over budget, truncated latest + narrowing directive',
       data: { usage: { used: latestTokens, total: contextSize } },
     };
-    return 'next';
+    return;
   }
 }
 

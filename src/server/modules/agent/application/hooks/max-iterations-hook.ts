@@ -1,8 +1,8 @@
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type {
-  Hook,
-  HookDirective,
-  HookPhase,
+import {
+  StopLoop,
+  type Hook,
+  type HookPhase,
 } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import Logger from '@/server/utils/logger';
@@ -22,11 +22,11 @@ export class MaxIterationsHook implements Hook {
   private readonly logger = Logger.child({ source: 'MaxIterationsHook' });
   private ticks = 0;
 
-  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, HookDirective> {
+  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const guard = ctx.config.runtimeConfig.guard;
-    if (!guard) return 'next';
+    if (!guard) return;
     this.ticks++;
-    if (this.ticks < guard.maxIterations) return 'next';
+    if (this.ticks < guard.maxIterations) return;
 
     this.logger.warn(
       `iteration cap reached (run ${ctx.runId}): ${this.ticks} >= ${guard.maxIterations}`,
@@ -37,6 +37,6 @@ export class MaxIterationsHook implements Hook {
       summary: `iteration cap reached (${this.ticks} ticks)`,
     };
     yield* responseUser(ctx, ITER_CAP_MESSAGE);
-    return 'break';
+    throw new StopLoop();
   }
 }

@@ -40,8 +40,8 @@ describe('restoreReactMessage', () => {
     });
   });
 
-  it('作为 ListMonad.map 的逐项函数：整条种子链式还原', () => {
-    // 镜像 createRun 的用法：ListMonad.of(seed).map(restoreReactMessage)
+  it('作为 Array.map 的逐项函数：整条种子链式还原', () => {
+    // 镜像 createRun 的用法：params.seed.map(restoreReactMessage)
     const seed: LlmMessage[] = [
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'q' },

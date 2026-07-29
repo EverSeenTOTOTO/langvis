@@ -1,23 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { ListMonad } from '@/server/libs/list';
-import type { LlmMessage } from '@/shared/types/entities';
+import { LoopSignal, StopLoop } from '@/server/modules/agent/domain/model/hook';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { MaxIterationsHook } from '@/server/modules/agent/application/hooks/max-iterations-hook';
 
 async function collect(
-  gen: AsyncGenerator<RunEvent, string>,
-): Promise<{ events: RunEvent[]; ret: string }> {
+  gen: AsyncGenerator<RunEvent, void>,
+): Promise<{ events: RunEvent[]; ret: LoopSignal | undefined }> {
   const events: RunEvent[] = [];
-  let ret = '';
-  for (;;) {
-    const r = await gen.next();
-    if (r.done) {
-      ret = r.value;
-      break;
+  let ret: LoopSignal | undefined;
+  try {
+    for (;;) {
+      const r = await gen.next();
+      if (r.done) break;
+      events.push(r.value);
     }
-    events.push(r.value);
+  } catch (e) {
+    if (!(e instanceof LoopSignal)) throw e;
+    ret = e;
   }
   return { events, ret };
 }
@@ -33,7 +34,7 @@ function ctxWith(maxIterations: number): AgentRunContext {
   });
   return {
     runId: 'run_test',
-    messages: ListMonad.of<LlmMessage>([{ role: 'user', content: 'obs' }]),
+    messages: [{ role: 'user', content: 'obs' }],
     config,
   } as unknown as AgentRunContext;
 }
@@ -43,7 +44,7 @@ describe('MaxIterationsHook（迭代上限兜底，阈值取自 guard.maxIterati
     const hook = new MaxIterationsHook();
     for (let i = 0; i < 2; i++) {
       const { events, ret } = await collect(hook.apply(ctxWith(3)));
-      expect(ret).toBe('next');
+      expect(ret).toBeUndefined();
       expect(events).toHaveLength(0);
     }
   });
@@ -53,7 +54,7 @@ describe('MaxIterationsHook（迭代上限兜底，阈值取自 guard.maxIterati
     const cap = 3;
     for (let i = 0; i < cap - 1; i++) await collect(hook.apply(ctxWith(cap)));
     const { events, ret } = await collect(hook.apply(ctxWith(cap)));
-    expect(ret).toBe('break');
+    expect(ret).toBeInstanceOf(StopLoop);
     expect(events).toHaveLength(2);
     expect(events[0]).toMatchObject({ type: 'hook', hookId: 'max-iterations' });
     expect(events[1]).toMatchObject({ type: 'text_chunk' });
@@ -63,11 +64,11 @@ describe('MaxIterationsHook（迭代上限兜底，阈值取自 guard.maxIterati
     const config = RunConfigVO.of({ tools: [], runtimeConfig: { model: {} } });
     const ctx = {
       runId: 'run_test',
-      messages: ListMonad.of<LlmMessage>([{ role: 'user', content: 'obs' }]),
+      messages: [{ role: 'user', content: 'obs' }],
       config,
     } as unknown as AgentRunContext;
     const { events, ret } = await collect(new MaxIterationsHook().apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
   });
 });

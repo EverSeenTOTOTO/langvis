@@ -51,7 +51,7 @@ export class CompactTransform implements ConvTransform {
     const compaction = ctx.runtimeConfig.history;
     if (!compaction) return;
 
-    const history = ctx.messages.toArray();
+    const history = ctx.messages;
     const { summary, index } = findLatestCompactionSummary(history);
     const tail = summary ? history.slice(index + 1) : history;
     if (tail.length === 0) return;
@@ -88,7 +88,7 @@ export class CompactTransform implements ConvTransform {
         },
       ],
     );
-    ctx.messages = ctx.messages.append(compactMessage);
+    ctx.messages.push(compactMessage);
     this.logger.info(
       `compacted (conv ${ctx.conversationId}): folded ${tail.length} msgs → 1 summary`,
       {

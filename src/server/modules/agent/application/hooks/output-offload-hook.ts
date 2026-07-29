@@ -1,12 +1,7 @@
 import { inject } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type {
-  Hook,
-  HookDirective,
-  HookPhase,
-} from '@/server/modules/agent/domain/model/hook';
+import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
-import { ListMonad } from '@/server/libs/list';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
@@ -44,9 +39,9 @@ export class OutputOffloadHook implements Hook {
     private readonly providerService: ProviderService,
   ) {}
 
-  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, HookDirective> {
+  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const cfg = ctx.config.runtimeConfig.offload as OffloadConfig | undefined;
-    if (!cfg) return 'next';
+    if (!cfg) return;
 
     // 动态阈值：outputTokenThreshold 绝对覆盖，否则 contextSize×outputSizeRatio（与 query-budget 同构）。
     const threshold =
@@ -55,24 +50,24 @@ export class OutputOffloadHook implements Hook {
         (this.providerService.resolveContextSize(ctx.config.runtimeConfig) ??
           0) * (cfg.outputSizeRatio ?? DEFAULT_OUTPUT_SIZE_RATIO),
       );
-    if (threshold <= 0) return 'next';
+    if (threshold <= 0) return;
 
-    const messages = ctx.messages.toArray();
+    const messages = ctx.messages;
     const last = messages.length - 1;
-    if (last < 0) return 'next';
+    if (last < 0) return;
 
     const cand = candidateBody(messages[last]!);
-    if (!cand) return 'next';
-    if (cand.body.includes(OFFLOADED_MARK)) return 'next';
+    if (!cand) return;
+    if (cand.body.includes(OFFLOADED_MARK)) return;
 
     // 配对 assistant 一次性解析：recall 判定 + hint 共用，免双重 parse。
     const paired = parseAssistantAt(messages, last - 1);
     // recall 回取（cat/rg 已 offload 句柄）→ 再落盘只 fc→fc 别名 → 跳过（仅 observation 有此风险）。
     if (cand.kind === 'observation' && classifyRecallParsed(paired) !== null)
-      return 'next';
+      return;
 
     const bodyTokens = estimateTokens([messages[last]!]);
-    if (bodyTokens <= threshold) return 'next';
+    if (bodyTokens <= threshold) return;
 
     const hint =
       cand.kind === 'observation'
@@ -85,7 +80,7 @@ export class OutputOffloadHook implements Hook {
       ...messages[last]!,
       content: stubContent(cand, stub, hint),
     };
-    ctx.messages = ListMonad.of(messages);
+    ctx.messages = messages;
 
     this.logger.info(
       `output offloaded (run ${ctx.runId}): ~${bodyTokens} tokens > ${threshold} threshold → filed ${stub.$cached}`,
@@ -96,6 +91,6 @@ export class OutputOffloadHook implements Hook {
       summary: `filed large output (~${bodyTokens} tokens) to disk`,
       data: { filename: stub.$cached, size: stub.$size },
     };
-    return 'next';
+    return;
   }
 }

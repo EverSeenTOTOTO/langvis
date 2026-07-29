@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ListMonad } from '@/server/libs/list';
+import { LoopSignal } from '@/server/modules/agent/domain/model/hook';
 import type { LlmMessage } from '@/shared/types/entities';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
@@ -16,17 +16,19 @@ vi.mock('@/server/utils/estimateTokens', () => ({
 }));
 
 async function collect(
-  gen: AsyncGenerator<RunEvent, string>,
-): Promise<{ events: RunEvent[]; ret: string }> {
+  gen: AsyncGenerator<RunEvent, void>,
+): Promise<{ events: RunEvent[]; ret: LoopSignal | undefined }> {
   const events: RunEvent[] = [];
-  let ret = '';
-  for (;;) {
-    const r = await gen.next();
-    if (r.done) {
-      ret = r.value;
-      break;
+  let ret: LoopSignal | undefined;
+  try {
+    for (;;) {
+      const r = await gen.next();
+      if (r.done) break;
+      events.push(r.value);
     }
-    events.push(r.value);
+  } catch (e) {
+    if (!(e instanceof LoopSignal)) throw e;
+    ret = e;
   }
   return { events, ret };
 }
@@ -55,7 +57,7 @@ function makeCtx(
     runId: 'run_test',
     workDir: '/tmp/workdir',
     base: 0,
-    messages: ListMonad.of<LlmMessage>(messages),
+    messages: messages,
     config,
     cache,
   } as unknown as AgentRunContext;
@@ -80,7 +82,7 @@ describe('OutputOffloadHook（post-observation 产出即桩：单条超 outputTo
     const ctx = makeCtx([obs(body(800))], { offload: undefined });
     const before = ctx.messages.length;
     const { events, ret } = await collect(hook().apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
     expect(ctx.cache.offload).not.toHaveBeenCalled();
     expect(ctx.messages.length).toBe(before);
@@ -93,10 +95,10 @@ describe('OutputOffloadHook（post-observation 产出即桩：单条超 outputTo
       { offload: {} },
     );
     const { events, ret } = await collect(hook().apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(1);
     expect(ctx.cache.offload).toHaveBeenCalledTimes(1);
-    const offloaded = ctx.messages.get(1)!;
+    const offloaded = ctx.messages[1]!;
     expect(offloaded.content).toContain('[offloaded to file');
     expect(offloaded.content).toContain('rg -n'); // 小文件策略（mock $size=600 → 1 chunk）
     expect(offloaded.content).toContain('web_fetch'); // hint 含 tool
@@ -106,10 +108,10 @@ describe('OutputOffloadHook（post-observation 产出即桩：单条超 outputTo
   it('末条低于阈值 → 不桩', async () => {
     const ctx = makeCtx([obs(body(500))], { offload: {} }); // 500 < 1600 阈值
     const { events, ret } = await collect(hook().apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
     expect(ctx.cache.offload).not.toHaveBeenCalled();
-    expect(ctx.messages.get(0)!.content).toBe(`Observation: ${body(500)}`);
+    expect(ctx.messages[0]!.content).toBe(`Observation: ${body(500)}`);
   });
 
   it('outputTokenThreshold 可调：阈值=2000，1800 放行、3000 触发', async () => {
@@ -128,7 +130,7 @@ describe('OutputOffloadHook（post-observation 产出即桩：单条超 outputTo
       offload: { outputTokenThreshold: 0 },
     });
     const { events, ret } = await collect(hook().apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
     expect(ctx.cache.offload).not.toHaveBeenCalled();
   });
@@ -137,7 +139,7 @@ describe('OutputOffloadHook（post-observation 产出即桩：单条超 outputTo
     const ctx = makeCtx([obs(body(8000)), obs(body(300))], { offload: {} });
     const { events } = await collect(hook().apply(ctx));
     expect(events).toHaveLength(0); // 末条 300 < 阈值，不动；不回溯桩 index0
-    expect(ctx.messages.get(0)!.content).toBe(`Observation: ${body(8000)}`);
+    expect(ctx.messages[0]!.content).toBe(`Observation: ${body(8000)}`);
   });
 
   it('已桩化的末条不重复桩（OFFLOADED_MARK 跳过）', async () => {
@@ -160,14 +162,14 @@ describe('OutputOffloadHook（post-observation 产出即桩：单条超 outputTo
     const { events } = await collect(hook().apply(ctx));
     expect(events).toHaveLength(0);
     expect(ctx.cache.offload).not.toHaveBeenCalled();
-    expect(ctx.messages.get(1)!.content).toBe(`Observation: ${body(8000)}`);
+    expect(ctx.messages[1]!.content).toBe(`Observation: ${body(8000)}`);
   });
 
   it('裸 user（非 Observation）超阈值也桩', async () => {
     const ctx = makeCtx([userMsg(body(8000))], { offload: {} });
     const { events } = await collect(hook().apply(ctx));
     expect(events).toHaveLength(1);
-    const stub = ctx.messages.get(0)!.content;
+    const stub = ctx.messages[0]!.content;
     expect(stub).toContain('[offloaded to file');
     expect(stub.startsWith('Observation: ')).toBe(false); // 裸 user 不带前缀
   });
@@ -181,7 +183,7 @@ describe('OutputOffloadHook（post-observation 产出即桩：单条超 outputTo
       $label: 'pdf-extract',
     });
     await collect(hook().apply(ctx));
-    const stub = ctx.messages.get(0)!.content;
+    const stub = ctx.messages[0]!.content;
     expect(stub).toContain('large file');
     expect(stub).toContain('rg -n');
     expect(stub).toContain('do NOT cat or page');

@@ -7,7 +7,6 @@ import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-r
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { AuthorizationPort } from '@/server/modules/agent/domain/port/authorization.port';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
-import { ListMonad } from '@/server/libs/list';
 import type { RunEvent } from '@/shared/types/events';
 
 function makeMockTool(config?: { untrustedOutput?: boolean }): Tool {
@@ -60,7 +59,7 @@ function makeCtx(): AgentRunContext {
     llm: makeMockLlm(),
     cache: makeMockCache(),
     auth: noopAuth(),
-    messages: ListMonad.of([]),
+    messages: [],
     base: 0,
     interactive: true,
   };

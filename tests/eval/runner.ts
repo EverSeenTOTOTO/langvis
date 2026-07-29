@@ -39,7 +39,6 @@ import {
   runConvTransforms,
 } from '@/server/modules/conversation/application/transforms';
 import { projectToLlmMessages } from '@/server/modules/conversation/application/service/history-projection';
-import { ListMonad } from '@/server/libs/list';
 import type { ConversationConfig } from '@/server/libs/config';
 import type {
   FictionalToolDef,
@@ -216,7 +215,7 @@ async function executeRun<S>(
   }
   // ctx.messages 是事实源：react-loop catch 已把每次 parse 失败回灌为 "Observation:
   // Error parsing response: …" user 消息，紧邻前一条 assistant 即坏输出原文。
-  const parseFailures = extractParseFailures(ctx.messages.toArray());
+  const parseFailures = extractParseFailures(ctx.messages);
   return { run, events, parseFailures };
 }
 
@@ -331,7 +330,7 @@ export async function runMultiTurn<S>(
   const runEventsByMsg = new Map<string, EnrichedEvent[]>();
   const ctx: ConvCtx = {
     conversationId,
-    messages: ListMonad.of<Message>([
+    messages: [
       {
         id: generateId('msg'),
         role: Role.SYSTEM,
@@ -341,7 +340,7 @@ export async function runMultiTurn<S>(
         createdAt: new Date(),
         conversationId,
       },
-    ]),
+    ],
     runtimeConfig,
     transforms: _transforms!,
     getRunEvents: (messageId: string) => runEventsByMsg.get(messageId),
@@ -353,7 +352,7 @@ export async function runMultiTurn<S>(
   // 测审计 hook 能否阻止 agent 沿坏示范瞎答。审计侧只读 goal+reply，看不到这段历史。
   if (task.seedHistory) {
     for (const m of task.seedHistory) {
-      ctx.messages = ctx.messages.append({
+      ctx.messages.push({
         id: generateId('msg'),
         role: m.role,
         content: m.content,
@@ -375,7 +374,7 @@ export async function runMultiTurn<S>(
       createdAt: new Date(),
       conversationId,
     };
-    ctx.messages = ctx.messages.append(userMsg);
+    ctx.messages.push(userMsg);
 
     // turn-start：本相位当前无 transform（process-summary 在 turn-end 烘 meta.summary）；
     // seed 读 ctx.messages 中 assistant 的 meta.summary 还原 thought。
@@ -385,7 +384,7 @@ export async function runMultiTurn<S>(
       }
     });
 
-    const seed = projectToLlmMessages(ctx.messages.toArray());
+    const seed = projectToLlmMessages(ctx.messages);
     const {
       run,
       events: turnEvents,
@@ -417,7 +416,7 @@ export async function runMultiTurn<S>(
       createdAt: new Date(),
       conversationId,
     };
-    ctx.messages = ctx.messages.append(assistantMsg);
+    ctx.messages.push(assistantMsg);
     runEventsByMsg.set(assistantMsg.id, turnEvents);
 
     // turn-end：process-summary（烘 meta.summary → 供下一轮 seed thought）→ compact → usage。
@@ -440,9 +439,9 @@ export async function runMultiTurn<S>(
     lastRun!,
   );
   // 会话级压缩读数：turn-end CompactTransform 产出的 meta.kind='compact' 消息条数。
-  const historyCompactions = ctx.messages
-    .toArray()
-    .filter(m => m.meta?.kind === 'compact').length;
+  const historyCompactions = ctx.messages.filter(
+    m => m.meta?.kind === 'compact',
+  ).length;
   return {
     task: task.id,
     model: modelId,

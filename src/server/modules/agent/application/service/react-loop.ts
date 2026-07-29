@@ -7,9 +7,10 @@ import type {
   ParsedAction,
   ToolExecutor,
 } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type {
-  HookDirective,
-  HookPhase,
+import type { HookPhase } from '@/server/modules/agent/domain/model/hook';
+import {
+  ContinueTick,
+  StopLoop,
 } from '@/server/modules/agent/domain/model/hook';
 import { winstonLogger } from '@/server/utils/logger';
 
@@ -24,15 +25,12 @@ export const PARSE_ERROR_OBSERVATION_PREFIX =
 async function* applyHooks(
   ctx: AgentRunContext,
   phase: HookPhase,
-): AsyncGenerator<RunEvent, HookDirective, void> {
+): AsyncGenerator<RunEvent, void, void> {
   const hooks = ctx.hooks?.forPhase(phase);
-  if (!hooks) return 'next';
+  if (!hooks) return;
   for (const hook of hooks) {
-    logger.debug(`hook ${hook.id} @ ${phase} (run ${ctx.runId})`);
-    const d = yield* hook.apply(ctx); // yield* 透出 generator 的 return
-    if (d !== 'next') return d; // continue/break 短路本相位余下 hook，原样冒泡给 loop
+    yield* hook.apply(ctx);
   }
-  return 'next';
 }
 
 async function* exitLoop(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
@@ -47,72 +45,57 @@ export async function* runReactLoop(
 
   for (;;) {
     ctx.signal.throwIfAborted();
-
-    let d = yield* applyHooks(ctx, 'pre-llm');
-    if (d === 'break') return yield* exitLoop(ctx);
-    if (d === 'continue') continue;
-
-    const iterMessages = ctx.messages.toArray();
-
-    const content = await ctx.llm.chatContent(
-      model.modelId,
-      {
-        messages: iterMessages,
-        temperature: model.temperature,
-        stop: ['Observation:', 'Observation：'],
-      },
-      ctx.signal,
-    );
-
-    if (!content) {
-      throw new Error('No response from model');
-    }
-
-    logger.debug(`ReAct origin response: ${content}`);
-
-    ctx.messages = ctx.messages.append({ role: Role.ASSIST, content });
-
-    // 权威解析一次：parse 失败由 loop 统一兜底（error obs + continue），pre-action hook
-    // 不再各自 parse + catch。解析成功挂到 ctx.pendingAction 供 pre-action hook 直读。
-    let parsed: ParsedAction;
     try {
-      parsed = parseResponse(content);
-    } catch (error) {
-      ctx.messages = ctx.messages.append({
+      yield* applyHooks(ctx, 'pre-llm');
+
+      const content = await ctx.llm.chatContent(
+        model.modelId,
+        {
+          messages: ctx.messages,
+          temperature: model.temperature,
+          stop: ['Observation:', 'Observation：'],
+        },
+        ctx.signal,
+      );
+      if (!content) throw new Error('No response from model');
+      logger.debug(`ReAct origin response: ${content}`);
+      ctx.messages.push({ role: Role.ASSIST, content });
+
+      // 解析成功挂到 ctx.pendingAction 供 pre-action hook 直读。
+      let parsed: ParsedAction;
+      try {
+        parsed = parseResponse(content);
+      } catch (error) {
+        ctx.messages.push({
+          role: Role.USER,
+          content:
+            PARSE_ERROR_OBSERVATION_PREFIX +
+            ((error as Error)?.message ?? String(error)),
+        });
+        yield* applyHooks(ctx, 'post-observation');
+        continue;
+      }
+      ctx.pendingAction = parsed;
+
+      yield* applyHooks(ctx, 'pre-action');
+
+      const { tool, input } = parsed;
+      if (parsed.thought) yield { type: 'thought', content: parsed.thought };
+
+      const observation = yield* runTool(tool, input);
+      if (tool === ToolIds.RESPONSE_USER) return yield* exitLoop(ctx);
+
+      ctx.messages.push({
         role: Role.USER,
-        content:
-          PARSE_ERROR_OBSERVATION_PREFIX +
-          ((error as Error)?.message ?? String(error)),
+        content: `Observation: ${observation}\n`,
       });
-
-      d = yield* applyHooks(ctx, 'post-observation');
-      if (d === 'break') return yield* exitLoop(ctx);
-      continue;
+      yield* applyHooks(ctx, 'post-observation');
+    } catch (e) {
+      // hook 经 sentinel 表态：ContinueTick→下一轮，StopLoop→退出（接 loop-exit）；其余上抛。
+      if (e instanceof ContinueTick) continue;
+      if (e instanceof StopLoop) return yield* exitLoop(ctx);
+      throw e;
     }
-    ctx.pendingAction = parsed;
-
-    d = yield* applyHooks(ctx, 'pre-action');
-    if (d === 'break') return yield* exitLoop(ctx);
-    if (d === 'continue') continue;
-
-    const { tool, input } = parsed;
-
-    if (parsed.thought) {
-      yield { type: 'thought', content: parsed.thought };
-    }
-
-    const observation = yield* runTool(tool, input);
-
-    if (tool === ToolIds.RESPONSE_USER) return yield* exitLoop(ctx);
-
-    ctx.messages = ctx.messages.append({
-      role: Role.USER,
-      content: `Observation: ${observation}\n`,
-    });
-
-    d = yield* applyHooks(ctx, 'post-observation');
-    if (d === 'break') return yield* exitLoop(ctx);
-    // 'next' | 'continue' → 自然进入下一轮迭代
   }
 }
 

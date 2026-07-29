@@ -1,12 +1,7 @@
 import { inject } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type {
-  Hook,
-  HookDirective,
-  HookPhase,
-} from '@/server/modules/agent/domain/model/hook';
+import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
-import { ListMonad } from '@/server/libs/list';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
@@ -45,24 +40,24 @@ export class OffloadHook implements Hook {
     private readonly providerService: ProviderService,
   ) {}
 
-  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, HookDirective> {
+  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const cfg = ctx.config.runtimeConfig.offload as OffloadConfig | undefined;
-    if (!cfg) return 'next';
+    if (!cfg) return;
 
     const contextSize = this.providerService.resolveContextSize(
       ctx.config.runtimeConfig,
     );
-    if (!contextSize) return 'next';
+    if (!contextSize) return;
 
     // factor 放大估算，吸收 estimateTokens 对中文/JSON 的系统性低估（防桩化不足→真实爆窗）。
     const factor = ESTIMATE_SAFETY_FACTOR;
     const cap = contextSize * (cfg.windowRatio ?? DEFAULT_WINDOW_RATIO);
 
-    const messages = ctx.messages.toArray();
+    const messages = ctx.messages;
     const len = messages.length;
     const base = ctx.base;
     let tokens = estimateTokens(messages);
-    if (tokens * factor <= cap) return 'next';
+    if (tokens * factor <= cap) return;
 
     // 候选：仅 [base,len)。已桩 / 盘上句柄回取 / 短于 MIN 跳过。最胖优先（tokens 降序）。
     // assistant 的 ParsedAction 单一索引：candidateBody 解析后寄存于此，供该 assistant 作为
@@ -126,10 +121,10 @@ export class OffloadHook implements Hook {
       await stubIndex(i);
     }
 
-    if (stubbed === 0) return 'next';
+    if (stubbed === 0) return;
 
-    ctx.messages = ListMonad.of(messages);
-    const afterTokens = estimateTokens(ctx.messages.toArray());
+    ctx.messages = messages;
+    const afterTokens = estimateTokens(ctx.messages);
     this.logger.info(
       `offloaded (run ${ctx.runId}): ${stubbed} msg, ${beforeTokens}→${afterTokens} tokens (window cap ${cap})`,
       { stubbed, totalBytes, beforeTokens, afterTokens, cap },
@@ -144,6 +139,6 @@ export class OffloadHook implements Hook {
         offloaded: stubbed,
       },
     };
-    return 'next';
+    return;
   }
 }

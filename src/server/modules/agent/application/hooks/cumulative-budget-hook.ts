@@ -1,10 +1,10 @@
 import { ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type {
-  Hook,
-  HookDirective,
-  HookPhase,
+import {
+  StopLoop,
+  type Hook,
+  type HookPhase,
 } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import { estimateTokens } from '@/server/utils/estimateTokens';
@@ -26,18 +26,18 @@ export class CumulativeBudgetHook implements Hook {
   private readonly logger = Logger.child({ source: 'CumulativeBudgetHook' });
   private consumed = 0;
 
-  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, HookDirective> {
+  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const guard = ctx.config.runtimeConfig.guard;
-    if (!guard) return 'next';
+    if (!guard) return;
     const budget = guard.maxTokenUsage;
-    this.consumed += estimateTokens(ctx.messages.toArray());
-    if (this.consumed <= budget) return 'next';
+    this.consumed += estimateTokens(ctx.messages);
+    if (this.consumed <= budget) return;
 
     if (ctx.pendingAction?.tool === ToolIds.RESPONSE_USER) {
       this.logger.info(
         `cumulative budget exceeded but model answered (run ${ctx.runId}): consumed=${this.consumed}; letting through`,
       );
-      return 'next';
+      return;
     }
 
     this.logger.warn(
@@ -49,7 +49,7 @@ export class CumulativeBudgetHook implements Hook {
       summary: `cumulative budget exceeded (consumed=${this.consumed} > ${budget})`,
     };
     yield* responseUser(ctx, budgetMessage(this.consumed, budget));
-    return 'break';
+    throw new StopLoop();
   }
 }
 
@@ -59,7 +59,7 @@ export async function* responseUser(
   message: string,
 ): AsyncGenerator<RunEvent, void> {
   yield { type: 'text_chunk', content: message };
-  ctx.messages = ctx.messages.append({
+  ctx.messages.push({
     role: Role.ASSIST,
     content: serializeAction({
       tool: ToolIds.RESPONSE_USER,

@@ -1,10 +1,6 @@
 import { inject } from 'tsyringe';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type {
-  Hook,
-  HookDirective,
-  HookPhase,
-} from '@/server/modules/agent/domain/model/hook';
+import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
@@ -22,8 +18,8 @@ export class LoopUsageHook implements Hook {
     private readonly providerService: ProviderService,
   ) {}
 
-  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, HookDirective> {
-    const used = estimateTokens(ctx.messages.toArray());
+  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
+    const used = estimateTokens(ctx.messages);
     const total = this.providerService.resolveContextSize(
       ctx.config.runtimeConfig,
     );
@@ -31,6 +27,6 @@ export class LoopUsageHook implements Hook {
       `loop_usage (run ${ctx.runId}): used=${used} total=${total}`,
     );
     yield { type: 'loop_usage', used, total };
-    return 'next';
+    return;
   }
 }

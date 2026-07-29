@@ -4,7 +4,6 @@ import { Connection } from './connection';
 import { ActiveRun } from './active-run';
 import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
-import { ListMonad } from '@/server/libs/list';
 import type { ConversationConfig } from '@/server/libs/config';
 import {
   ConvTransformPlan,
@@ -16,7 +15,7 @@ const logger = Logger.child({ source: 'ConversationSession' });
 export class ConversationSession {
   private connection: Connection | undefined;
   private readonly activeRuns = new Map<string, ActiveRun>();
-  private messages: ListMonad<Message> | undefined;
+  private messages: Message[] | undefined;
   private runtimeConfig: ConversationConfig | undefined;
   private transforms: ConvTransformPlan | undefined;
   private maintenance:
@@ -132,7 +131,7 @@ export class ConversationSession {
     runtimeConfig: ConversationConfig,
     transforms: ConvTransformPlan,
   ): void {
-    this.messages = ListMonad.of(messages);
+    this.messages = messages;
     this.runtimeConfig = runtimeConfig;
     this.transforms = transforms;
   }

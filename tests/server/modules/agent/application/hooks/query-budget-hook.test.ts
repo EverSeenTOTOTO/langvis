@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ListMonad } from '@/server/libs/list';
+import { LoopSignal, StopLoop } from '@/server/modules/agent/domain/model/hook';
 import type { LlmMessage } from '@/shared/types/entities';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { RunEvent } from '@/shared/types/events';
@@ -14,17 +14,19 @@ vi.mock('@/server/utils/estimateTokens', () => ({
 }));
 
 async function collect(
-  gen: AsyncGenerator<RunEvent, string>,
-): Promise<{ events: RunEvent[]; ret: string }> {
+  gen: AsyncGenerator<RunEvent, void>,
+): Promise<{ events: RunEvent[]; ret: LoopSignal | undefined }> {
   const events: RunEvent[] = [];
-  let ret = '';
-  for (;;) {
-    const r = await gen.next();
-    if (r.done) {
-      ret = r.value;
-      break;
+  let ret: LoopSignal | undefined;
+  try {
+    for (;;) {
+      const r = await gen.next();
+      if (r.done) break;
+      events.push(r.value);
     }
-    events.push(r.value);
+  } catch (e) {
+    if (!(e instanceof LoopSignal)) throw e;
+    ret = e;
   }
   return { events, ret };
 }
@@ -64,7 +66,7 @@ function makeCtx(
     runId: 'run_test',
     workDir: '/tmp/workdir',
     base: opts.base ?? 0,
-    messages: ListMonad.of<LlmMessage>(messages),
+    messages: messages,
     config,
   } as unknown as AgentRunContext;
 }
@@ -79,21 +81,21 @@ describe('QueryBudgetHook（pre-LLM 超限兜底：latest > min(budget, remainin
   it('最新一条未超 cap → next，不动 messages', async () => {
     const ctx = makeCtx([obs(body(1000))], {});
     const { events, ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
-    expect(ctx.messages.get(0)!.content).toBe(`Observation: ${body(1000)}`);
+    expect(ctx.messages[0]!.content).toBe(`Observation: ${body(1000)}`);
   });
 
   it('超 cap：截断保留头部 + 收窄指引 + next（放行 LLM 让 agent 收窄，非销毁）', async () => {
     // 最新一条 8000 chars（prefix=0 → remaining=8192 → cap=min(3276,8192)=3276；8000 > 3276）。
     const ctx = makeCtx([obs(body(8000))], {});
     const { events, ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(1);
     expect(events[0]!.type).toBe('hook');
     if (events[0]!.type === 'hook')
       expect(events[0]!.hookId).toBe('query-budget');
-    const replaced = ctx.messages.get(0)!.content;
+    const replaced = ctx.messages[0]!.content;
     expect(replaced).toContain('[query over budget');
     expect(replaced).toContain('truncated head');
     expect(replaced).toContain('Narrow the originating call'); // 非 recall → 收窄发起方
@@ -105,49 +107,49 @@ describe('QueryBudgetHook（pre-LLM 超限兜底：latest > min(budget, remainin
     // 两条：旧 2000、最新 8000。prefix=2012 → remaining=6180 → cap=min(3276,6180)=3276；8000 > 3276 → 截断最新，旧条不变。
     const ctx = makeCtx([obs(body(2000)), obs(body(8000))], {});
     const { ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('next');
-    expect(ctx.messages.get(0)!.content).toBe(`Observation: ${body(2000)}`); // 次新不变
-    expect(ctx.messages.get(1)!.content).toContain('[query over budget'); // 最新被截断
+    expect(ret).toBeUndefined();
+    expect(ctx.messages[0]!.content).toBe(`Observation: ${body(2000)}`); // 次新不变
+    expect(ctx.messages[1]!.content).toContain('[query over budget'); // 最新被截断
   });
 
   it('大 prefix + 中等 latest 实际装得下 → 不截断（旧 total 口径会误杀）', async () => {
     // 旧 6500、最新 1000。prefix=6512 → remaining=1680 → cap=min(3276,1680)=1680；latest 1012 ≤ 1680 → next。
     const ctx = makeCtx([obs(body(6500)), obs(body(1000))], {});
     const { events, ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
-    expect(ctx.messages.get(1)!.content).toBe(`Observation: ${body(1000)}`); // 未动
+    expect(ctx.messages[1]!.content).toBe(`Observation: ${body(1000)}`); // 未动
   });
 
   it('大 prefix + latest 超余量 → 截断（正是大 seed 爆窗的兜底）', async () => {
     // 旧 6500、最新 3000。prefix=6512 → remaining=1680 → cap=1680；latest 3012 > 1680 → 截断。
     const ctx = makeCtx([obs(body(6500)), obs(body(3000))], {});
     const { events, ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(1);
-    expect(ctx.messages.get(0)!.content).toBe(`Observation: ${body(6500)}`); // prefix 不动
-    expect(ctx.messages.get(1)!.content).toContain('[query over budget'); // 最新被截断
+    expect(ctx.messages[0]!.content).toBe(`Observation: ${body(6500)}`); // prefix 不动
+    expect(ctx.messages[1]!.content).toContain('[query over budget'); // 最新被截断
   });
 
   it('prefix 自身填满窗口 → 不可恢复 break（避免死循环）', async () => {
     // 旧 8200（≥ 窗口 8192）、最新 10。prefix=8212 → remaining=-20 ≤ 0 → break（截断最新无济于事，prefix 自身爆窗）。
     const ctx = makeCtx([obs(body(8200)), obs(body(10))], {});
     const { events, ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('break');
+    expect(ret).toBeInstanceOf(StopLoop);
     expect(events[0]!.type).toBe('hook');
     if (events[0]!.type === 'hook')
       expect(events[0]!.summary).toContain('prefix fills window');
-    expect(ctx.messages.get(0)!.content).toBe(`Observation: ${body(8200)}`); // 未动
-    expect(ctx.messages.get(1)!.content).toBe(`Observation: ${body(10)}`); // 未动
+    expect(ctx.messages[0]!.content).toBe(`Observation: ${body(8200)}`); // 未动
+    expect(ctx.messages[1]!.content).toBe(`Observation: ${body(10)}`); // 未动
   });
 
   it('maxQuerySize 可调：0.5 → budget=4096，4000 chars 放行、5000 触发截断', async () => {
     const ok = makeCtx([obs(body(4000))], { maxQuerySize: 0.5 });
     const { ret: r1 } = await collect(makeHook(8192).apply(ok));
-    expect(r1).toBe('next');
+    expect(r1).toBeUndefined();
     const over = makeCtx([obs(body(5000))], { maxQuerySize: 0.5 });
     const { ret: r2 } = await collect(makeHook(8192).apply(over));
-    expect(r2).toBe('next');
+    expect(r2).toBeUndefined();
   });
 
   it('recall（bash cat 整个 offload 文件）超 cap：截断头部 + 劝 rg/sed-n，勿再整读', async () => {
@@ -159,8 +161,8 @@ describe('QueryBudgetHook（pre-LLM 超限兜底：latest > min(budget, remainin
       {},
     );
     const { ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('next');
-    const replaced = ctx.messages.get(1)!.content;
+    expect(ret).toBeUndefined();
+    const replaced = ctx.messages[1]!.content;
     expect(replaced).toContain('pdf-extract-geely__fc_8a4e9674'); // 指向原句柄整文件名
     expect(replaced).toContain('do NOT re-read the whole file');
     expect(replaced).toMatch(/^Observation: x/);
@@ -178,8 +180,8 @@ describe('QueryBudgetHook（pre-LLM 超限兜底：latest > min(budget, remainin
       {},
     );
     const { ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('next');
-    const replaced = ctx.messages.get(1)!.content;
+    expect(ret).toBeUndefined();
+    const replaced = ctx.messages[1]!.content;
     expect(replaced).toContain('pdf-extract-geely__fc_8a4e9674');
     expect(replaced).toContain('rg -n');
     expect(replaced).toContain('re-run the same broad search');
@@ -191,20 +193,20 @@ describe('QueryBudgetHook（pre-LLM 超限兜底：latest > min(budget, remainin
     // 不能因 last<base 就 break（否则首 tick 直接 fail，run 0 iter 收尾）。
     const ctx = makeCtx([sys('SEED PREFIX'), obs(body(100))], { base: 2 });
     const { events, ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
-    expect(ctx.messages.get(1)!.content).toBe(`Observation: ${body(100)}`); // 未动
+    expect(ctx.messages[1]!.content).toBe(`Observation: ${body(100)}`); // 未动
   });
 
   it('base（[0,base) seed）不动：最新落在 seed 内 → break', async () => {
     // seed sys 8000 chars @ index0，base=1 → last=0 < base → 无可截断 → break。
     const ctx = makeCtx([sys(body(8000))], { base: 1 });
     const { events, ret } = await collect(makeHook(8192).apply(ctx));
-    expect(ret).toBe('break');
+    expect(ret).toBeInstanceOf(StopLoop);
     expect(events[0]!.type).toBe('hook');
     if (events[0]!.type === 'hook')
       expect(events[0]!.summary).toContain('unrecoverable');
-    expect(ctx.messages.get(0)!.content).toBe(body(8000)); // seed 未动
+    expect(ctx.messages[0]!.content).toBe(body(8000)); // seed 未动
   });
 
   it('大 context 上 10k 绝对值生效：min(10k, 128k×0.4)=10k', async () => {
@@ -212,10 +214,10 @@ describe('QueryBudgetHook（pre-LLM 超限兜底：latest > min(budget, remainin
     // 9000 chars 放行（≤10000）；11000 触发截断（>10000），即便远未到 128k 窗口。
     const ok = makeCtx([obs(body(9000))], {});
     const { ret: r1 } = await collect(makeHook(128000).apply(ok));
-    expect(r1).toBe('next');
+    expect(r1).toBeUndefined();
     const over = makeCtx([obs(body(11000))], {});
     const { ret: r2 } = await collect(makeHook(128000).apply(over));
-    expect(r2).toBe('next');
-    expect(over.messages.get(0)!.content).toContain('[query over budget');
+    expect(r2).toBeUndefined();
+    expect(over.messages[0]!.content).toContain('[query over budget');
   });
 });

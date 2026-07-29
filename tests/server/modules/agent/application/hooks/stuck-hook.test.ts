@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { LoopSignal, StopLoop } from '@/server/modules/agent/domain/model/hook';
 import { ToolIds } from '@/shared/constants';
-import { ListMonad } from '@/server/libs/list';
-import type { LlmMessage } from '@/shared/types/entities';
 import type {
   AgentRunContext,
   ParsedAction,
@@ -11,17 +10,19 @@ import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { StuckHook } from '@/server/modules/agent/application/hooks/stuck-hook';
 
 async function collect(
-  gen: AsyncGenerator<RunEvent, string>,
-): Promise<{ events: RunEvent[]; ret: string }> {
+  gen: AsyncGenerator<RunEvent, void>,
+): Promise<{ events: RunEvent[]; ret: LoopSignal | undefined }> {
   const events: RunEvent[] = [];
-  let ret = '';
-  for (;;) {
-    const r = await gen.next();
-    if (r.done) {
-      ret = r.value;
-      break;
+  let ret: LoopSignal | undefined;
+  try {
+    for (;;) {
+      const r = await gen.next();
+      if (r.done) break;
+      events.push(r.value);
     }
-    events.push(r.value);
+  } catch (e) {
+    if (!(e instanceof LoopSignal)) throw e;
+    ret = e;
   }
   return { events, ret };
 }
@@ -44,7 +45,7 @@ function ctxWith(
   });
   return {
     runId: 'run_test',
-    messages: ListMonad.of<LlmMessage>([]),
+    messages: [],
     config,
     pendingAction: action,
   } as unknown as AgentRunContext;
@@ -63,7 +64,7 @@ describe('StuckHook（卡死兜底，阈值取自 guard.stuckThreshold）', () =
     const hook = new StuckHook();
     for (const a of [act('a'), act('b'), act('c')]) {
       const { events, ret } = await collect(hook.apply(ctxWith(a, 3)));
-      expect(ret).toBe('next');
+      expect(ret).toBeUndefined();
       expect(events).toHaveLength(0);
     }
   });
@@ -74,7 +75,7 @@ describe('StuckHook（卡死兜底，阈值取自 guard.stuckThreshold）', () =
         ctxWith(act(ToolIds.RESPONSE_USER, { message: 'done' }), 3),
       ),
     );
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
   });
 
@@ -84,11 +85,11 @@ describe('StuckHook（卡死兜底，阈值取自 guard.stuckThreshold）', () =
     // threshold=3：tick1 新(streak0) → tick2 streak1 → tick3 streak2 → tick4 streak3 触发
     for (let i = 0; i < 3; i++) {
       const { events, ret } = await collect(hook.apply(ctxWith(action, 3)));
-      expect(ret).toBe('next');
+      expect(ret).toBeUndefined();
       expect(events).toHaveLength(0);
     }
     const { events, ret } = await collect(hook.apply(ctxWith(action, 3)));
-    expect(ret).toBe('break');
+    expect(ret).toBeInstanceOf(StopLoop);
     expect(events).toHaveLength(2);
     expect(events[0]).toMatchObject({ type: 'hook', hookId: 'stuck' });
     expect(events[1]).toMatchObject({ type: 'text_chunk' });
@@ -100,7 +101,7 @@ describe('StuckHook（卡死兜底，阈值取自 guard.stuckThreshold）', () =
     await collect(hook.apply(ctxWith(act('a'), 3))); // streak1
     await collect(hook.apply(ctxWith(act('b'), 3))); // 新 → streak0
     const { events, ret } = await collect(hook.apply(ctxWith(act('b'), 3))); // streak1 → next
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
   });
 
@@ -108,7 +109,7 @@ describe('StuckHook（卡死兜底，阈值取自 guard.stuckThreshold）', () =
     const { events, ret } = await collect(
       new StuckHook().apply(ctxWith(undefined, 2)),
     );
-    expect(ret).toBe('next');
+    expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
   });
 });

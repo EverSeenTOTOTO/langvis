@@ -5,7 +5,6 @@ import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type { CachePort } from './cache.port';
 import type { AuthorizationPort } from './authorization.port';
 import type { HookPlan } from '../model/hook';
-import type { ListMonad } from '@/server/libs/list';
 import type { LlmMessage } from '@/shared/types/entities';
 
 /** 工具执行能力；executor 持有，显式注入 loop。 */
@@ -33,7 +32,7 @@ export interface AgentRunContext {
   readonly cache: CachePort;
   /** 横切授权能力（Principal(conversationId)×Action×Resource，session 持久 + HITL）。 */
   readonly auth: AuthorizationPort;
-  messages: ListMonad<LlmMessage>;
+  messages: LlmMessage[];
   readonly base: number;
   readonly hooks?: HookPlan;
   /**

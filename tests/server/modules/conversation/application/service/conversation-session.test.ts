@@ -58,7 +58,7 @@ describe('ConversationSession —— 会话上下文（messages/config/transform
       new ConvTransformPlan(),
     );
     const ctx = s.getCtx();
-    expect(ctx.messages.toArray().some(m => m.content === 'q1')).toBe(true);
+    expect(ctx.messages.some(m => m.content === 'q1')).toBe(true);
     expect(ctx.runtimeConfig).toEqual(CONFIG);
   });
 
@@ -70,8 +70,8 @@ describe('ConversationSession —— 会话上下文（messages/config/transform
       new ConvTransformPlan(),
     );
     const ctx = s.getCtx();
-    ctx.messages = ctx.messages.append(msg(Role.USER, 'q2'));
-    expect(ctx.messages.toArray().some(m => m.content === 'q2')).toBe(true);
+    ctx.messages.push(msg(Role.USER, 'q2'));
+    expect(ctx.messages.some(m => m.content === 'q2')).toBe(true);
   });
 
   it('未 activateContext 时 getCtx 抛错（fail loud）', () => {
