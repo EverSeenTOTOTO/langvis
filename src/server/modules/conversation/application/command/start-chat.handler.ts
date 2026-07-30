@@ -54,6 +54,10 @@ export class StartChatHandler {
       if (frame) this.sessionManager.sendFrame(conversationId, frame);
     }
     const effectiveHistory = projectToLlmMessages(ctx.messages);
+    const workDir = await this.chatService.resolveWorkDir(
+      conversationId,
+      userId,
+    );
 
     this.eventBus.dispatch(
       TurnInitiated,
@@ -62,6 +66,7 @@ export class StartChatHandler {
         assistantMessage: turn.assistantMessage,
         runtimeConfig: ctx.runtimeConfig,
         effectiveHistory,
+        workDir,
       }),
     );
 

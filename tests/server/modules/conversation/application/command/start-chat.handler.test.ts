@@ -66,6 +66,7 @@ describe('StartChatHandler', () => {
         assistantMessage: { id: 'msg_a', role: 'assistant', content: '' },
         userConfig: { model: { modelId: 'm1' } },
       }),
+      resolveWorkDir: vi.fn().mockResolvedValue('/tmp/workdir'),
     } as unknown as ChatService;
     const handler = new StartChatHandler(chatService, sm, stubEventBus);
 

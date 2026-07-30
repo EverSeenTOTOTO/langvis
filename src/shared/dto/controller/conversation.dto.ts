@@ -9,6 +9,7 @@ export interface CreateConversationRequest {
   };
   groupId?: string | null;
   groupName?: string; // 新分组名称，若提供则自动创建分组
+  workspacePath?: string | null; // CLI 传 cwd;web 不传→后端生成临时 /tmp
 }
 
 export type ConversationConfig = CreateConversationRequest['config'];
@@ -24,6 +25,7 @@ export type ConversationConfig = CreateConversationRequest['config'];
     },
     groupId: { type: 'string', nullable: true },
     groupName: { type: 'string' },
+    workspacePath: { type: 'string', nullable: true },
   },
   required: ['name', 'config'],
   additionalProperties: false,
@@ -36,6 +38,7 @@ export class CreateConversationRequestDto
   config!: CreateConversationRequest['config'];
   groupId?: string | null;
   groupName?: string;
+  workspacePath?: string | null;
 }
 
 export interface GetAllConversationsRequest {}
@@ -47,6 +50,25 @@ export interface GetAllConversationsRequest {}
 export class GetAllConversationsRequestDto
   extends BaseDto
   implements GetAllConversationsRequest {}
+
+export interface GetConversationsByWorkspaceRequest {
+  workspacePath: string;
+}
+
+@dto<GetConversationsByWorkspaceRequest>({
+  type: 'object',
+  properties: {
+    workspacePath: { type: 'string', minLength: 1 },
+  },
+  required: ['workspacePath'],
+  additionalProperties: false,
+})
+export class GetConversationsByWorkspaceRequestDto
+  extends BaseDto
+  implements GetConversationsByWorkspaceRequest
+{
+  workspacePath!: string;
+}
 
 export interface GetAllConversationsResponse {
   conversations: Conversation[];

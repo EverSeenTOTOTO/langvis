@@ -5,7 +5,7 @@ import { ToolIds } from '@/shared/constants';
 import type { RunEvent } from '@/shared/types/events';
 import type { ToolCallContext } from '../domain/port/tool-call-context.port';
 import AskUserTool from '../implementations/tools/AskUser';
-import { AuthorizationService } from '@/server/libs/infrastructure/authorization.service';
+import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import {
   AUTHORIZATION_PORT,
   type AuthAction,
@@ -18,14 +18,14 @@ import {
  * 命中 workDir 文件授予直接放行；未命中且 interactive → 弹一次 AskUser，allow 追加写文件；
  * 非 interactive → 抛。deny 不写文件（允许重试改主意）。
  *
- * 真相源是 AuthorizationService 读写的工作区文件（跨 run、跨会话激活/失活持久）；
- * 本 provider 不再持内存缓存。grant 检查低频，v1 stateless 现读现写够用。
+ * grants 真相源是 workDir 的 `.langvis/config.json` 的 grants 段（经 WorkspaceService 整对象读写，
+ * 跨 run、跨会话激活/失活持久）。本 provider 不持内存缓存，现读现写够用。
  */
 @injectable()
 export class AuthorizationProvider implements AuthorizationPort {
   constructor(
-    @inject(AuthorizationService)
-    private readonly authService: AuthorizationService,
+    @inject(WorkspaceService)
+    private readonly workspace: WorkspaceService,
   ) {}
 
   async *ensureApproved(
@@ -36,7 +36,7 @@ export class AuthorizationProvider implements AuthorizationPort {
   ): AsyncGenerator<RunEvent, Record<string, unknown> | void, void> {
     const key = `${action}:${resource}`;
 
-    if (await this.authService.hasGrant(ctx.conversationId, key)) return;
+    if (await this.hasGrant(ctx.workDir, key)) return;
 
     if (!ctx.interactive) {
       throw new Error(
@@ -60,24 +60,31 @@ export class AuthorizationProvider implements AuthorizationPort {
       );
     }
 
-    await this.authService.addGrant(ctx.conversationId, key);
+    await this.addGrant(ctx.workDir, key);
     return record;
+  }
+
+  private async hasGrant(workDir: string, key: string): Promise<boolean> {
+    const grants = (await this.workspace.readConfig(workDir))?.grants;
+    return Array.isArray(grants) && grants.includes(key);
+  }
+
+  private async addGrant(workDir: string, key: string): Promise<void> {
+    const cfg = (await this.workspace.readConfig(workDir)) ?? {};
+    const prev = cfg.grants;
+    const grants: string[] = Array.isArray(prev)
+      ? prev.filter((k): k is string => typeof k === 'string')
+      : [];
+    if (grants.includes(key)) return;
+    grants.push(key);
+    cfg.grants = grants;
+    await this.workspace.writeConfig(workDir, cfg);
   }
 }
 
 /**
- * 授权根 = 用户直观判断的目录：
- * - 单文件 → 直接父目录：~/a/b/c.pdf → ~/a/b；/etc/foo.pdf → /etc。
- * - glob → 通配符前的稳定前缀目录（即 glob 锚定的那层）：~/a/b/*.pdf → ~/a/b。
- * 两者统一用 dirname：单文件 dirname 取父目录；glob 前缀形如 "…/b/" 的 dirname 正是 "…/b"。
- * 最窄粒度，避免授权到含敏感子目录的大范围。
- */
-/**
- * 授权根 = 用户直观判断的目录：
  * - 单文件（无通配符）→ 直接父目录：~/a/b/c.pdf → ~/a/b；/etc/foo.pdf → /etc。
  * - glob（含通配符）→ 通配符前的稳定前缀目录（即 glob 锚定的那层）：~/a/b/*.pdf → ~/a/b。
- *   单文件与 glob 必须分开：Node 的 path.dirname 不认尾部斜杠，对 glob 前缀 "…/b/" 会错剥一层。
- * 最窄粒度，避免授权到含敏感子目录的大范围。
  */
 export function normalizeRoot(absPath: string): string {
   const home = os.homedir();

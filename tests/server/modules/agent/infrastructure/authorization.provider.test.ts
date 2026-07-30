@@ -1,17 +1,23 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { container } from 'tsyringe';
+import { promises as fs } from 'fs';
+import path from 'path';
+import os from 'os';
 import { ToolIds } from '@/shared/constants';
-import type { AuthorizationService } from '@/server/libs/infrastructure/authorization.service';
+import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import { AuthorizationProvider } from '@/server/modules/agent/infrastructure/authorization.provider';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 
-function makeCtx(overrides: Partial<ToolCallContext> = {}): ToolCallContext {
+function makeCtx(
+  workDir: string,
+  overrides: Partial<ToolCallContext> = {},
+): ToolCallContext {
   return {
     callId: 'tc_1',
     input: {},
     signal: new AbortController().signal,
-    workDir: '/tmp/workdir',
+    workDir,
     conversationId: 'conv_1',
     llm: {} as never,
     auth: {} as never,
@@ -22,36 +28,23 @@ function makeCtx(overrides: Partial<ToolCallContext> = {}): ToolCallContext {
   } as unknown as ToolCallContext;
 }
 
-function stubAuthService(): {
-  service: Pick<AuthorizationService, 'hasGrant' | 'addGrant' | 'loadGrants'>;
-  addGrant: ReturnType<typeof vi.fn>;
-  hasGrant: ReturnType<typeof vi.fn>;
-} {
-  const hasGrant = vi.fn(async () => false);
-  const addGrant = vi.fn(async () => undefined);
-  const service = {
-    hasGrant,
-    addGrant,
-    loadGrants: vi.fn(async () => new Set<string>()),
-  };
-  return { service: service as never, hasGrant, addGrant };
-}
-
-/** 注册一个伪 AskUser：yield 无事件、返回 { submitted, data }。 */
 function registerFakeAskUser(result: {
   submitted: boolean;
   data: Record<string, unknown>;
-}): void {
+}): { calls: number } {
+  const tracker = { calls: 0 };
   const fake = {
     call: async function* (): AsyncGenerator<
       RunEvent,
       { submitted: boolean; data: Record<string, unknown> },
       void
     > {
+      tracker.calls++;
       return result;
     },
   };
   container.registerInstance(ToolIds.ASK_USER, fake as never);
+  return tracker;
 }
 
 async function collect<R>(gen: AsyncGenerator<RunEvent, R, void>): Promise<R> {
@@ -63,67 +56,117 @@ async function collect<R>(gen: AsyncGenerator<RunEvent, R, void>): Promise<R> {
 }
 
 describe('AuthorizationProvider', () => {
-  beforeEach(() => {
+  let workDir: string;
+  let workspace: WorkspaceService;
+  let provider: AuthorizationProvider;
+
+  beforeEach(async () => {
     container.reset();
+    workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'authprov-'));
+    workspace = new WorkspaceService();
+    provider = new AuthorizationProvider(workspace);
   });
 
-  it('hasGrant 命中 → 直接 return（不调 AskUser、不 addGrant）', async () => {
-    const { service, hasGrant, addGrant } = stubAuthService();
-    hasGrant.mockResolvedValue(true);
-    const provider = new AuthorizationProvider(service as never);
-
-    const gen = provider.ensureApproved(makeCtx(), 'read-path', '/etc', {
-      prompt: 'p',
-      formSchema: {},
-    });
-    const ret = await collect(gen);
-    expect(ret).toBeUndefined();
-    expect(addGrant).not.toHaveBeenCalled();
+  afterEach(async () => {
+    await fs.rm(workDir, { recursive: true, force: true });
   });
 
-  it('非 interactive → 抛（不调 AskUser）', async () => {
-    const { service } = stubAuthService();
-    const provider = new AuthorizationProvider(service as never);
-
-    const gen = provider.ensureApproved(
-      makeCtx({ interactive: false }),
-      'exec-cmd',
-      'bash:abc',
-      { prompt: 'p', formSchema: {} },
-    );
-    await expect(collect(gen)).rejects.toThrow(/non-interactive/);
-  });
-
-  it('allow → addGrant 被调 + 返 AskUser data', async () => {
-    const { service, addGrant } = stubAuthService();
+  it('hasGrant 未命中 + allow → grants 写入 <workDir>/.langvis/config.json', async () => {
     registerFakeAskUser({
       submitted: true,
       data: { confirmed: true, timeout: 30 },
     });
-    const provider = new AuthorizationProvider(service as never);
 
-    const gen = provider.ensureApproved(makeCtx(), 'exec-cmd', 'bash:abc', {
-      prompt: 'p',
-      formSchema: {},
-    });
-    const ret = (await collect(gen)) as Record<string, unknown> | undefined;
-    expect(addGrant).toHaveBeenCalledWith('conv_1', 'exec-cmd:bash:abc');
+    const ret = (await collect(
+      provider.ensureApproved(makeCtx(workDir), 'read-path', '/etc', {
+        prompt: 'p',
+        formSchema: {},
+      }),
+    )) as Record<string, unknown> | undefined;
+
     expect(ret?.timeout).toBe(30);
+    const cfg = await workspace.readConfig(workDir);
+    expect(cfg?.grants).toContain('read-path:/etc');
   });
 
-  it('deny → 抛（不 addGrant）', async () => {
-    const { service, addGrant } = stubAuthService();
+  it('hasGrant 命中 → 直接 return（不调 AskUser、不改文件）', async () => {
+    await workspace.writeConfig(workDir, { grants: ['read-path:/etc'] });
+    const tracker = registerFakeAskUser({
+      submitted: true,
+      data: { confirmed: true },
+    });
+
+    const ret = await collect(
+      provider.ensureApproved(makeCtx(workDir), 'read-path', '/etc', {
+        prompt: 'p',
+        formSchema: {},
+      }),
+    );
+
+    expect(ret).toBeUndefined();
+    expect(tracker.calls).toBe(0);
+    const cfg = await workspace.readConfig(workDir);
+    expect(cfg?.grants).toEqual(['read-path:/etc']);
+  });
+
+  it('非 interactive → 抛（不调 AskUser）', async () => {
+    const tracker = registerFakeAskUser({
+      submitted: true,
+      data: { confirmed: true },
+    });
+
+    await expect(
+      collect(
+        provider.ensureApproved(
+          makeCtx(workDir, { interactive: false }),
+          'exec-cmd',
+          'bash:abc',
+          { prompt: 'p', formSchema: {} },
+        ),
+      ),
+    ).rejects.toThrow(/non-interactive/);
+    expect(tracker.calls).toBe(0);
+  });
+
+  it('deny → 抛（不写 grants）', async () => {
     registerFakeAskUser({
       submitted: true,
       data: { confirmed: false, remark: 'nope' },
     });
-    const provider = new AuthorizationProvider(service as never);
 
-    const gen = provider.ensureApproved(makeCtx(), 'exec-cmd', 'bash:abc', {
-      prompt: 'p',
-      formSchema: {},
+    await expect(
+      collect(
+        provider.ensureApproved(makeCtx(workDir), 'exec-cmd', 'bash:abc', {
+          prompt: 'p',
+          formSchema: {},
+        }),
+      ),
+    ).rejects.toThrow(/拒绝授权/);
+    expect(await workspace.readConfig(workDir)).toBeNull();
+  });
+
+  it('grants 跨实例持久（文件即真相）', async () => {
+    registerFakeAskUser({ submitted: true, data: { confirmed: true } });
+    await collect(
+      provider.ensureApproved(makeCtx(workDir), 'read-path', '/etc', {
+        prompt: 'p',
+        formSchema: {},
+      }),
+    );
+
+    // 新 provider 实例应命中已落盘的 grant
+    const tracker = registerFakeAskUser({
+      submitted: true,
+      data: { confirmed: true },
     });
-    await expect(collect(gen)).rejects.toThrow(/拒绝授权/);
-    expect(addGrant).not.toHaveBeenCalled();
+    const fresh = new AuthorizationProvider(new WorkspaceService());
+    const ret = await collect(
+      fresh.ensureApproved(makeCtx(workDir), 'read-path', '/etc', {
+        prompt: 'p',
+        formSchema: {},
+      }),
+    );
+    expect(ret).toBeUndefined();
+    expect(tracker.calls).toBe(0);
   });
 });

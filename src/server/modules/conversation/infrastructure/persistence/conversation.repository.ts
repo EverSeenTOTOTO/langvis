@@ -18,6 +18,7 @@ export class ConversationRepository implements ConversationRepositoryPort {
     config?: Record<string, any> | null,
     groupId?: string | null,
     groupName?: string,
+    workspacePath?: string | null,
   ): Promise<Conversation> {
     const finalConfig = config ?? {};
 
@@ -53,6 +54,7 @@ export class ConversationRepository implements ConversationRepositoryPort {
       userId,
       groupId: resolvedGroupId,
       order,
+      workspacePath: workspacePath ?? null,
     });
     return await conversationRepository.save(conversation);
   }
@@ -64,6 +66,17 @@ export class ConversationRepository implements ConversationRepositoryPort {
       where.userId = userId;
     }
     return await conversationRepository.findOneBy(where);
+  }
+
+  async findByWorkspacePath(
+    workspacePath: string,
+    userId: string,
+  ): Promise<Conversation[]> {
+    const conversationRepository = this.db.getRepository(ConversationEntity);
+    return await conversationRepository.find({
+      where: { workspacePath, userId },
+      order: { createdAt: 'DESC' },
+    });
   }
 
   async update(

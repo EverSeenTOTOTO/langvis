@@ -157,4 +157,32 @@ describe('WorkspaceService', () => {
       ).rejects.toThrow('Invalid filename');
     });
   });
+
+  describe('generateEphemeralPath', () => {
+    it('返回 rootDir 下唯一路径（每次不同）', () => {
+      const p = service.generateEphemeralPath();
+      expect(p.startsWith(testDir)).toBe(true);
+      expect(p).not.toBe(service.generateEphemeralPath());
+    });
+  });
+
+  describe('readConfig / writeConfig', () => {
+    it('缺失 → null；写入后可读回', async () => {
+      const workDir = await service.getWorkDir('conv-cfg');
+      expect(await service.readConfig(workDir)).toBeNull();
+      await service.writeConfig(workDir, { grants: ['read-path:/etc'] });
+      const cfg = await service.readConfig(workDir);
+      expect(cfg?.grants).toEqual(['read-path:/etc']);
+    });
+
+    it('落到 .langvis/config.json', async () => {
+      const workDir = await service.getWorkDir('conv-cfg2');
+      await service.writeConfig(workDir, { foo: 1 });
+      const raw = await fs.readFile(
+        path.join(workDir, '.langvis', 'config.json'),
+        'utf-8',
+      );
+      expect(JSON.parse(raw)).toEqual({ foo: 1 });
+    });
+  });
 });

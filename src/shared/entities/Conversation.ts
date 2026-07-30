@@ -42,6 +42,9 @@ export class ConversationEntity implements Conversation {
   @Column({ type: 'uuid' })
   userId!: string;
 
+  @Column({ type: 'varchar', length: 1024, nullable: true })
+  workspacePath!: string | null;
+
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;
 
