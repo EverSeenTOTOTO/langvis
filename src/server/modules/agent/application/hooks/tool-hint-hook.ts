@@ -18,8 +18,9 @@ const MAX_ITEMS = 3;
 const TOOL_HINT_THRESHOLD = 12;
 
 /**
- * pre-llm 首 tick：用 user query 检索命中工具/skill，把「建议式前缀 + 全量 schema」
- * 作为 user note 注入，启发 agent 用对工具（小模型只给 id+描述会瞎猜参数）。
+ * pre-llm 首 tick：用 user query 检索命中工具/skill，把「建议式前缀 + 精简概要」
+ * 作为 user note 注入，启发 agent 关注相关工具；完整参数定义由 agent 按需调
+ * list_tools(tool=<id>) 获取。
  * 仅 conv（interactive）注入一次；subagent/eval 跳过（其受限 ToolSet 不在 ctx 上）。
  */
 @agentHook
@@ -55,8 +56,8 @@ export class ToolHintHook implements Hook {
     const shown = capTools.length + capSkills.length;
 
     const parts: string[] = [
-      '[tool-hint] 以下工具/技能或许对处理你的请求有帮助（仅供参考，非必选；如需重新检索或查看其余请调用 list_tools）：',
-      formatToolsToMarkdown(capTools, { detail: true }),
+      '[tool-hint] 以下工具/技能或许对处理你的请求有帮助（仅供参考，非必选；查阅完整参数请调 list_tools 传 tool=<id>）：',
+      formatToolsToMarkdown(capTools, { detail: false }),
       formatSkillsToMarkdown(capSkills),
     ];
     if (total > shown) {

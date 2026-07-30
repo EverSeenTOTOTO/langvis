@@ -56,30 +56,30 @@ function makeTool(overrides: Record<string, unknown> = {}): Tool {
 describe('formatToolsToMarkdown', () => {
   const tool = makeTool();
 
-  describe('默认（简洁）模式', () => {
+  describe('默认（id+desc）模式', () => {
     const md = formatToolsToMarkdown([tool]);
 
-    it('保留三列表与 description', () => {
+    it('只有 id 与 description', () => {
       expect(md).toContain('### demo_tool');
-      expect(md).toContain('| Parameter | Required | Description |');
-      expect(md).toContain('| color | Yes | Pick a color. |');
+      expect(md).toContain('A demo tool for testing.');
     });
 
-    it('不暴露任何 schema 约束（enum/default/range/maxLength）', () => {
+    it('不渲染任何 schema（表格/约束全不出现）', () => {
+      expect(md).not.toContain('| Parameter | Required | Description |');
+      expect(md).not.toContain('**Input:**');
+      expect(md).not.toContain('**Output:**');
       expect(md).not.toContain('one of');
       expect(md).not.toContain('range [');
       expect(md).not.toContain('default ');
-      expect(md).not.toContain('max 100 chars');
-      // 枚举值只应在 detail 模式出现（用反引号包裹形式，避免误匹配 "Required"）
       expect(md).not.toContain('`red`');
       expect(md).not.toContain('- **');
     });
   });
 
-  describe('detail 模式', () => {
+  describe('detail 模式（id+desc+完整 schema）', () => {
     const md = formatToolsToMarkdown([tool], { detail: true });
 
-    it('表格仍在（两种模式共用）', () => {
+    it('渲染 Input/Output 三列表', () => {
       expect(md).toContain('| Parameter | Required | Description |');
       expect(md).toContain('| color | Yes | Pick a color. |');
     });

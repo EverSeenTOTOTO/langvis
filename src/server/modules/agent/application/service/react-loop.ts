@@ -12,9 +12,9 @@ import {
   ContinueTick,
   StopLoop,
 } from '@/server/modules/agent/domain/model/hook';
-import { winstonLogger } from '@/server/utils/logger';
+import Logger from '@/server/utils/logger';
 
-const logger = winstonLogger.child({ source: 'ReactLoop' });
+const logger = Logger.child({ source: 'ReactLoop' });
 
 /**
  * parse 失败时回灌给模型的 Observation 前缀。eval 的 extractParseFailures 据此扫描统计

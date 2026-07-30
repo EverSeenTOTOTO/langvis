@@ -32,18 +32,45 @@ export default class ListToolsTool extends Tool<ListToolsOutput> {
   ): AsyncGenerator<never, ListToolsOutput, void> {
     ctx.signal.throwIfAborted();
 
-    const { query } = ctx.input as ListToolsInput;
+    const { keywords, tool: toolArg } = ctx.input as ListToolsInput;
 
+    // 完整模式：指定具体 tool，展开其完整参数定义
+    const toolId = toolArg?.trim();
+    if (toolId) {
+      const resolved = await this.resolveToolById(toolId);
+      return {
+        tools: resolved
+          ? formatToolsToMarkdown([resolved], { detail: true })
+          : `Tool not found: \`${toolId}\`.`,
+      };
+    }
+
+    // 精简模式：按 keywords 过滤
     const { tools, skills } = await retrieveRelevantTools(
       this.toolService,
       this.skillService,
-      query,
+      keywords,
       { excludeToolIds: [ToolIds.LIST_TOOLS] },
     );
 
     return {
-      tools: formatToolsToMarkdown(tools, { detail: true }),
+      tools: formatToolsToMarkdown(tools, { detail: false }),
       skills: formatSkillsToMarkdown(skills),
     };
+  }
+
+  /** 精确 id 优先，回退到 id/name 子串包含。 */
+  private async resolveToolById(id: string): Promise<Tool | undefined> {
+    const term = id.toLowerCase();
+    const all = await this.toolService.getAllToolInfo();
+    const match =
+      all.find(t => t.id.toLowerCase() === term) ??
+      all.find(
+        t =>
+          t.id.toLowerCase().includes(term) ||
+          (t.name ?? '').toLowerCase().includes(term),
+      );
+    if (!match) return undefined;
+    return this.toolService.resolve(match.id);
   }
 }

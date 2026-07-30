@@ -5,7 +5,7 @@ import Logger from '@/server/utils/logger';
 import path from 'path';
 import { registerTool } from '@/server/decorator/tool';
 import { ToolConfig } from '@/shared/types';
-import type { ToolConstructor } from '../../domain/model/tool.base';
+import type { Tool, ToolConstructor } from '../../domain/model/tool.base';
 import { isProd } from '@/server/utils/env';
 
 @service()
@@ -19,8 +19,17 @@ export class ToolService {
     await this.initialize();
     return this.tools.map(tool => ({
       id: tool,
-      ...container.resolve<any>(tool)?.config,
+      ...this.resolve(tool)?.config,
     }));
+  }
+
+  /** 按 id 解析工具实例；未注册返回 undefined（动态注册表查询，非静态依赖）。 */
+  resolve(id: string): Tool | undefined {
+    try {
+      return container.resolve<Tool>(id);
+    } catch {
+      return undefined;
+    }
   }
 
   getCachedToolIds(): string[] {

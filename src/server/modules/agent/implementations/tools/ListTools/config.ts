@@ -2,7 +2,8 @@ import { ToolConfig } from '@/shared/types';
 import { ToolIds } from '@/shared/constants';
 
 export interface ListToolsInput {
-  query?: string;
+  keywords?: string;
+  tool?: string;
 }
 
 export interface ListToolsOutput {
@@ -13,13 +14,18 @@ export interface ListToolsOutput {
 export const config: ToolConfig<ListToolsInput, ListToolsOutput> = {
   name: 'list_tools',
   description:
-    '查看所有可用工具和技能。每个工具展开完整 input schema（含枚举值/默认值/取值范围）。当你需要执行某个操作但不确定有什么工具、或需要查阅某工具的完整参数定义时调用。',
+    '查看可用工具和技能。两种输出模式：提供 keywords 过滤列表时为精简模式（仅 id/描述概要）；提供具体 tool（工具 id）时为完整模式，展开该工具的完整 input schema（含枚举值/默认值/取值范围）。两者同给时以 tool 为准（完整模式）。',
   inputSchema: {
     type: 'object',
     properties: {
-      query: {
+      keywords: {
         type: 'string',
-        description: '可选关键词，用于过滤列表',
+        description: '可选关键词，用于过滤工具/技能列表；提供时为精简模式',
+      },
+      tool: {
+        type: 'string',
+        description:
+          '指定工具 id，查阅其完整参数定义（完整模式）；覆盖 keywords',
       },
     },
   } as any,

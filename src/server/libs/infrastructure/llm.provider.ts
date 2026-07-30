@@ -32,6 +32,18 @@ const LLM_REQUEST_TIMEOUT_MS =
 /** 重试上限——timeout 会触发 SDK 重试，压低到 1 以免单次挂死的墙钟等待被翻倍。 */
 const LLM_MAX_RETRIES = 1;
 
+/**
+ * 设了 WEB_FETCH_PROXY（与 WebFetch 工具共用同一变量）则所有 LLM 出站请求默认走代理。
+ * `proxy` 是 Bun fetch 的非标准选项，故 cast 回 RequestInit。
+ */
+function withProxy(init: RequestInit = {}): RequestInit {
+  const proxy = process.env.WEB_FETCH_PROXY;
+  if (proxy) {
+    return { ...init, proxy } as RequestInit;
+  }
+  return init;
+}
+
 function toMultimodalContent(
   content: string,
   attachments?: Message['attachments'],
@@ -140,6 +152,9 @@ export class LlmProvider implements LlmPort {
       apiKey: provider.apiKey,
       timeout: LLM_REQUEST_TIMEOUT_MS,
       maxRetries: LLM_MAX_RETRIES,
+      ...(process.env.WEB_FETCH_PROXY && {
+        fetch: (url, init) => fetch(url, withProxy(init)),
+      }),
     });
 
     this.clientCache.set(providerId, client);
@@ -327,12 +342,15 @@ export class LlmProvider implements LlmPort {
     const out: { embedding: number[] }[] = [];
     for (let i = 0; i < texts.length; i += EMBED_BATCH_SIZE) {
       const batch = texts.slice(i, i + EMBED_BATCH_SIZE);
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ model: modelCode, texts: batch }),
-        signal,
-      });
+      const response = await fetch(
+        url,
+        withProxy({
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ model: modelCode, texts: batch }),
+          signal,
+        }),
+      );
 
       if (!response.ok) {
         const text = await response.text();
@@ -373,15 +391,18 @@ export class LlmProvider implements LlmPort {
       },
     };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${provider.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-      signal,
-    });
+    const response = await fetch(
+      url,
+      withProxy({
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${provider.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal,
+      }),
+    );
 
     if (!response.ok) {
       const text = await response.text();
@@ -445,14 +466,17 @@ export class LlmProvider implements LlmPort {
     formData.append('timestamp_granularities[]', 'word');
     formData.append('diarize', String(params.diarize ?? true));
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${provider.apiKey}`,
-      },
-      body: formData,
-      signal,
-    });
+    const response = await fetch(
+      url,
+      withProxy({
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${provider.apiKey}`,
+        },
+        body: formData,
+        signal,
+      }),
+    );
 
     if (!response.ok) {
       const text = await response.text();

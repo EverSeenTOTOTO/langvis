@@ -48,6 +48,9 @@ export function formatToolsToMarkdown(
       sections.push(`### ${tool.id}`);
       sections.push('');
       sections.push(config.description);
+
+      if (!detail) return sections.join('\n');
+
       sections.push('');
 
       const inputSchema = config.inputSchema as JSONSchemaObject;
@@ -60,7 +63,6 @@ export function formatToolsToMarkdown(
           formatSchemaAsTable(
             inputSchema.properties,
             inputSchema.required as string[],
-            detail,
           ),
         );
         sections.push('');
@@ -73,7 +75,6 @@ export function formatToolsToMarkdown(
           formatSchemaAsTable(
             outputSchema.properties,
             outputSchema.required as string[],
-            detail,
           ),
         );
         sections.push('');
@@ -87,7 +88,6 @@ export function formatToolsToMarkdown(
 function formatSchemaAsTable(
   properties: JSONSchemaObject['properties'],
   required?: readonly string[],
-  detail = false,
 ): string {
   const rows: string[] = [];
   const requiredSet = new Set(required ?? []);
@@ -107,23 +107,21 @@ function formatSchemaAsTable(
     rows.push(`| ${key} | ${isRequired} | ${description} |`);
   });
 
-  if (detail) {
-    const bullets = entries
-      .map(([key, prop]) =>
-        formatConstraints(key, prop as SchemaProp, requiredSet.has(key)),
-      )
-      .filter((b): b is string => b !== null);
-    if (bullets.length > 0) {
-      return `${rows.join('\n')}\n\n${bullets.join('\n')}`;
-    }
+  const bullets = entries
+    .map(([key, prop]) =>
+      formatConstraints(key, prop as SchemaProp, requiredSet.has(key)),
+    )
+    .filter((b): b is string => b !== null);
+  if (bullets.length > 0) {
+    return `${rows.join('\n')}\n\n${bullets.join('\n')}`;
   }
 
   return rows.join('\n');
 }
 
 /**
- * detail 模式下，为带约束的属性补一条子弹（无约束的属性不出现，保持紧凑）。
- * 枚举列出全部合法值（不截断）——这正是 detail 模式存在的意义。
+ * 为带约束的属性补一条子弹（无约束的属性不出现，保持紧凑）。
+ * 枚举列出全部合法值（不截断）。
  */
 function formatConstraints(
   key: string,

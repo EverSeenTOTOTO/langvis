@@ -147,8 +147,6 @@ export class AgentRunExecutor {
     ctx: AgentRunContext,
     runTool: ToolExecutor,
   ): AsyncGenerator<EnrichedEvent> {
-    // 把 runId 绑进当前 trace 上下文——下游 loop/hook/LLM 调用日志自动带 runId 关联。
-    // 无上下文（如离线 reconcile）则跳过。
     if (TraceContext.get()) TraceContext.update({ runId: run.runId });
     const startedAt = Date.now();
     const toolStart = new Map<string, number>(); // callId → 起始 at(ms)，算 tool 延迟

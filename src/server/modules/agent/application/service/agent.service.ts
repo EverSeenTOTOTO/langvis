@@ -1,4 +1,4 @@
-import { container, inject, singleton } from 'tsyringe';
+import { inject, singleton } from 'tsyringe';
 import type { JSONSchemaType } from 'ajv';
 import { ToolIds } from '@/shared/constants';
 import { parse } from '@/server/utils/schemaValidator';
@@ -114,10 +114,15 @@ export class AgentService {
   buildSystemPrompt(toolSet: ToolSet, base = BASE_PROMPT): string {
     const inlineTools = toolSet
       .inlineIds()
-      .map(id => container.resolve<Tool>(id));
+      .map(id => this.toolService.resolve(id))
+      .filter((t): t is Tool => t !== undefined);
 
     return base
-      .insertBefore('Skills', 'Tools', formatToolsToMarkdown(inlineTools))
+      .insertBefore(
+        'Skills',
+        'Tools',
+        formatToolsToMarkdown(inlineTools, { detail: true }),
+      )
       .build();
   }
 }
