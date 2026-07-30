@@ -1,4 +1,3 @@
-import { container } from 'tsyringe';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import type { SkillService } from '@/server/modules/agent/application/service/skill.service';
@@ -76,14 +75,8 @@ export async function retrieveRelevantTools(
     .filter(t =>
       matchFilter(keywords, `${t.id} ${t.name} ${t.description ?? ''}`),
     )
-    .map(t => {
-      try {
-        return container.resolve<Tool>(t.id);
-      } catch {
-        return null;
-      }
-    })
-    .filter((t): t is Tool => t !== null);
+    .map(t => toolService.resolve(t.id))
+    .filter((t): t is Tool => t !== undefined);
 
   const allSkills = await skillService.getAllSkillInfo();
   const skills = allSkills.filter(s =>

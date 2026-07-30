@@ -4,7 +4,10 @@ import type { ToolCallContext } from '../port/tool-call-context.port';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { Entity } from '@/server/libs/ddd';
 import type { Tool } from './tool.base';
-import { validate } from '@/server/utils/schemaValidator';
+import {
+  validate,
+  coerceJsonStringFields,
+} from '@/server/utils/schemaValidator';
 
 /** ToolCall — 一次工具调用的完整业务流程（聚合内实体）。 */
 export class ToolCall extends Entity<string> {
@@ -138,7 +141,13 @@ export class ToolCall extends Entity<string> {
   private validateInput(): void {
     const schema = this.tool.config?.inputSchema;
     if (!schema) return;
-    const result = validate<Record<string, unknown>>(schema, this.input);
+    let result = validate<Record<string, unknown>>(schema, this.input);
+    // object/array 参数被模型当字符串传（引号/```围栏/双重编码）时，按声明类型宽松还原后再校验。
+    if (!result.valid) {
+      const recovered = coerceJsonStringFields(schema, this.input);
+      if (recovered)
+        result = validate<Record<string, unknown>>(schema, recovered);
+    }
     if (!result.valid) {
       throw new Error(
         `Invalid input for tool "${this.tool.id}": ${result.errors}`,
