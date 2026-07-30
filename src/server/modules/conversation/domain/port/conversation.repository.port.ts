@@ -8,9 +8,15 @@ export interface ConversationRepositoryPort {
     config?: Record<string, any> | null,
     groupId?: string | null,
     groupName?: string,
+    workspacePath?: string | null,
   ): Promise<Conversation>;
 
   findById(id: string, userId?: string): Promise<Conversation | null>;
+
+  findByWorkspacePath(
+    workspacePath: string,
+    userId: string,
+  ): Promise<Conversation[]>;
 
   update(
     id: string,

@@ -19,6 +19,7 @@ export class CreateConversationCommand extends Command {
     readonly config?: Record<string, any> | null,
     readonly groupId?: string | null,
     readonly groupName?: string,
+    readonly workspacePath?: string | null,
   ) {
     super();
   }
@@ -75,6 +76,15 @@ export class GetMessagesQuery extends Query {
   }
 }
 
+export class GetConversationsByWorkspaceQuery extends Query {
+  constructor(
+    readonly workspacePath: string,
+    readonly userId: string,
+  ) {
+    super();
+  }
+}
+
 /** 取任意 run（含子 agent run）的投影视图——live（父 session 缓冲）优先、repo 回落。 */
 export class GetRunViewQuery extends Query {
   constructor(readonly runId: string) {
@@ -94,6 +104,8 @@ export interface TurnInitiatedPayload {
   runtimeConfig: ConversationConfig;
   /** 会话有效历史（LLM-ready，conv turn-start transform/projection 产物）—— agent 直接作种子，不再回调 conv。 */
   effectiveHistory: LlmMessage[];
+  /** 本 turn 的 workDir（= conversation.workspacePath，CLI cwd / web 临时 /tmp）；conv 解析一次，agent 直接用，不再回调。 */
+  workDir: string;
 }
 
 // Run* 领域事件契约（RunStarted / RunEvent / CancelRun / RunCompleted）归 agent 模块所有，

@@ -69,6 +69,7 @@ export type Conversation = {
   order: number;
   userId: string;
   createdAt: Date;
+  workspacePath?: string | null;
   messages?: Message[];
   group?: ConversationGroup;
 };

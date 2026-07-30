@@ -1,3 +1,4 @@
+import { promises as fs } from 'fs';
 import type {
   Conversation,
   Message,
@@ -49,11 +50,25 @@ export class ChatService {
     );
     if (existing.length > 0) return;
 
-    const workDir = await this.workspaceService.getWorkDir(
+    const workDir = await this.resolveWorkDir(
       params.conversationId,
+      params.userId,
     );
     const messages = createActivationMessages({ ...params, workDir });
     await this.messageRepo.batchCreate(params.conversationId, messages);
+  }
+
+  /** workDir = conversation.workspacePath(CLI cwd / web 临时路径);null 老会话回退 /tmp 现算。 */
+  async resolveWorkDir(
+    conversationId: string,
+    userId: string,
+  ): Promise<string> {
+    const conv = await this.convRepo.findById(conversationId, userId);
+    if (conv?.workspacePath) {
+      await fs.mkdir(conv.workspacePath, { recursive: true });
+      return conv.workspacePath;
+    }
+    return this.workspaceService.getWorkDir(conversationId);
   }
 
   /**

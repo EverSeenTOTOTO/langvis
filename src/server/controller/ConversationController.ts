@@ -2,13 +2,14 @@ import {
   AddMessageToConversationRequestDto,
   BatchDeleteMessagesInConversationRequestDto,
   CreateConversationRequestDto,
+  GetConversationsByWorkspaceRequestDto,
   UpdateConversationRequestDto,
 } from '@/shared/dto/controller';
 import type { Request, Response } from 'express';
 import { inject } from 'tsyringe';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
-import { body, param, request, response } from '../decorator/param';
+import { body, param, query, request, response } from '../decorator/param';
 import {
   MESSAGE_REPOSITORY,
   CONVERSATION_REPOSITORY,
@@ -19,6 +20,7 @@ import { CommandBus, QueryBus } from '@/server/libs/ddd';
 import {
   ConversationUpdateCommand,
   CreateConversationCommand,
+  GetConversationsByWorkspaceQuery,
   GetMessagesQuery,
 } from '../modules/conversation/contracts';
 
@@ -53,10 +55,29 @@ export default class ConversationController {
         dto.config,
         dto.groupId,
         dto.groupName,
+        dto.workspacePath,
       ),
     );
 
     return res.status(201).json(conversation);
+  }
+
+  @api('/workspace', { method: 'get' })
+  async listByWorkspace(
+    @query() dto: GetConversationsByWorkspaceRequestDto,
+    @request() req: Request,
+    @response() res: Response,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversations = await this.queryBus.execute(
+      new GetConversationsByWorkspaceQuery(dto.workspacePath, userId),
+    );
+
+    return res.json({ conversations });
   }
 
   @api('/:id', { method: 'get' })

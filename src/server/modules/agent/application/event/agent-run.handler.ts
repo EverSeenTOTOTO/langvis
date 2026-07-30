@@ -14,7 +14,6 @@ import { AgentRunExecutor } from '../service/agent-run-executor';
 import { AgentService } from '../service/agent.service';
 import { eventHandler } from '@/server/decorator/handler';
 import Logger from '@/server/utils/logger';
-import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 
 /**
  * AgentRunHandler —— TurnInitiated 的订阅者，**只驱动 agent 执行**，不感知会话。
@@ -26,7 +25,6 @@ export class AgentRunHandler {
   constructor(
     @inject(AgentRunExecutor) private executor: AgentRunExecutor,
     @inject(AgentService) private agentService: AgentService,
-    @inject(WorkspaceService) private workspaceService: WorkspaceService,
     @inject(EventBus) private eventBus: EventBus,
   ) {}
 
@@ -38,9 +36,9 @@ export class AgentRunHandler {
       assistantMessage,
       runtimeConfig,
       effectiveHistory,
+      workDir,
     } = event.payload;
     const runId = generateId('run');
-    const workDir = await this.workspaceService.getWorkDir(conversationId);
     // effectiveHistory 即 agent 种子（ReAct 还原 + meta.summary→thought 注入在 createRun 的 restoreReactMessage）；取 conv 默认 ToolSet（全集）。
     const toolSet = this.agentService.buildToolSet();
 
