@@ -20,8 +20,7 @@ export const config: ToolConfig<
   DocumentMetadataExtractOutput
 > = {
   name: 'Meta Extract Tool',
-  description:
-    'Extract metadata from document content including title, summary, keywords, category, and dynamic metadata.',
+  description: 'Extract structured metadata from document content.',
   inputSchema: {
     type: 'object',
     properties: {

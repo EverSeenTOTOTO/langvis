@@ -11,7 +11,7 @@ export const config: ToolConfig<
 > = {
   name: 'DateTime Tool',
   description:
-    'A tool to get the current date and time. You can specify a timezone (e.g., "America/New_York") and a format (e.g., "YYYY-MM-DD HH:mm:ss"). If no timezone is provided, it defaults to UTC. If no format is provided, it returns the ISO 8601 format.',
+    'Get the current date and time, optionally in a given timezone and format.',
   inputSchema: {
     type: 'object',
     properties: {
