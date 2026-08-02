@@ -11,6 +11,7 @@
         "type": "chat",
         "contextSize": 8192,
         "multimodal": true,
+        "primary": true,
         "defaults": {
           "temperature": 0.7,
           "topP": 0.7,
@@ -77,8 +78,8 @@
         "defaults": { "temperature": 0.7, "topP": 0.7 }
       },
       {
-        "id": "deepseek/deepseek-v4-pro",
-        "name": "DeepSeek v4 Pro",
+        "id": "~deepseek/deepseek-v4-flash-latest",
+        "name": "DeepSeek v4 Flash Latest",
         "type": "chat",
         "contextSize": 1000000,
         "multimodal": true,
@@ -106,12 +107,11 @@
         "type": "chat",
         "contextSize": 1000000,
         "multimodal": true,
-        "primary": true,
         "defaults": { "temperature": 0.7, "topP": 0.7 }
       },
       {
-        "id": "deepseek-v4-pro",
-        "name": "DeepSeek v4 Pro",
+        "id": "deepseek-v4-flash",
+        "name": "DeepSeek v4 Flash",
         "type": "chat",
         "contextSize": 1000000,
         "multimodal": true,

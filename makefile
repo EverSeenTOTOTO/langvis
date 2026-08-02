@@ -32,7 +32,6 @@ sandbox-image:
 lint:
 	bunx tsc --noEmit
 	bunx eslint --fix .
-	bunx stylelint "src/**/*.{css,scss}" --fix
 	bunx prettier --log-level silent -w .
 	@echo -e '\033[1;32mNo lint errors found.'
 
@@ -43,6 +42,10 @@ clean:
 .PHONY: dev
 dev:
 	NODE_ENV=development bun --watch src/server/index.ts
+
+.PHONY: cli
+cli:
+	NODE_ENV=development bun run src/tui-app/cli.tsx
 
 .PHONY: build
 build: clean

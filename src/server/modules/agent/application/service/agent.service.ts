@@ -16,8 +16,8 @@ import { formatToolsToMarkdown } from '@/server/utils/formatTools';
 @singleton()
 export class AgentService {
   private readonly inlineTools = [
-    ToolIds.ASK_USER,
     ToolIds.RESPONSE_USER,
+    ToolIds.ASK_USER,
     ToolIds.SKILL_CALL,
     ToolIds.LIST_TOOLS,
     ToolIds.CALL_SUBAGENTS,

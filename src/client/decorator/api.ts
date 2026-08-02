@@ -1,11 +1,9 @@
 import { getOwnPropertyNames, isClient, isTest } from '@/shared/utils';
-import { message } from 'antd';
+import { notifier as message } from '../notifier';
 import { merge } from 'lodash-es';
 import { compile } from 'path-to-regexp';
 
 const metaDataKey = Symbol.for('client_api');
-
-console.info(`Prefetch origin: http://localhost:${import.meta.env.VITE_PORT}`);
 
 export const getPrefetchPath = (path: string) =>
   `http://localhost:${import.meta.env.VITE_PORT}${path}`;

@@ -54,7 +54,11 @@ export const createServer = async (): Promise<Express> => {
   return app;
 };
 
-const port = process.env.PORT || 3000;
+const port = parseInt(process.env.PORT || '', 10);
+
+if (Number.isNaN(port)) {
+  throw new Error(`Invalid port: ${port}`);
+}
 
 createServer()
   .then(async app => {

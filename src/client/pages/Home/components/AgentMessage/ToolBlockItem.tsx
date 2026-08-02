@@ -8,7 +8,10 @@ import dayjs from 'dayjs';
 import { isEmpty } from 'lodash-es';
 import { observer } from 'mobx-react-lite';
 import type React from 'react';
-import type { UIToolCall } from '@/client/store/modules/message-node';
+import {
+  streamChunks,
+  type UIToolCall,
+} from '@/client/store/modules/message-node';
 import { useStore } from '@/client/store';
 import './index.scss';
 
@@ -59,14 +62,7 @@ export const ToolBlockItem = observer(function ToolBlockItem({
   const color = getToolColor(toolCall.toolName);
   const isPending = toolCall.status === 'pending';
 
-  const streamingChunks: { type: 'stdout' | 'stderr'; text: string }[] = [];
-  for (const p of toolCall.progress) {
-    const d = p as { type?: string; text?: string } | undefined;
-    if (d?.type === 'stdout' && d.text)
-      streamingChunks.push({ type: 'stdout', text: d.text });
-    else if (d?.type === 'stderr' && d.text)
-      streamingChunks.push({ type: 'stderr', text: d.text });
-  }
+  const streamingChunks = streamChunks(toolCall.progress);
 
   const latestProgress = toolCall.progress.at(-1) as
     | { status?: string; message?: string }

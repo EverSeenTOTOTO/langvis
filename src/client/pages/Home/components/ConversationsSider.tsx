@@ -186,8 +186,7 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
             .sort((a, b) => a.order - b.order)
             .map(conv => {
               const convTitle =
-                conv.name ||
-                `${settingStore.tr('Conversation')} ${conv.id.substring(0, 8)}`;
+                conv.name || `${settingStore.tr('Conversation')}`;
               const modelId = conv.config?.model?.modelId;
 
               const convMenuItems: MenuProps['items'] = [
@@ -195,20 +194,29 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
                   key: 'open-in-new-tab',
                   icon: <SelectOutlined />,
                   label: settingStore.tr('Open in new tab'),
-                  onClick: () => handleOpenInNewTab(conv.id),
+                  onClick: i => {
+                    handleOpenInNewTab(conv.id);
+                    i.domEvent.stopPropagation();
+                  },
                 },
                 {
                   key: 'edit',
                   icon: <EditOutlined />,
                   label: settingStore.tr('Edit'),
-                  onClick: () => setEditingConversationId(conv.id),
+                  onClick: i => {
+                    setEditingConversationId(conv.id);
+                    i.domEvent.stopPropagation();
+                  },
                 },
                 {
                   key: 'delete',
                   icon: <DeleteOutlined />,
                   label: settingStore.tr('Delete'),
                   danger: true,
-                  onClick: () => handleDeleteConversation(conv.id),
+                  onClick: i => {
+                    handleDeleteConversation(conv.id);
+                    i.domEvent.stopPropagation();
+                  },
                 },
               ];
 
@@ -220,7 +228,17 @@ const ConversationSider: React.FC<{ onConversationChange?: () => void }> = ({
                       <span>{convTitle}</span>
                       {hasMeta && (
                         <Flex gap={4} wrap>
-                          {modelId && <Tag color="purple">{modelId}</Tag>}
+                          {modelId && (
+                            <Tag
+                              color="purple"
+                              style={{
+                                maxWidth: 200,
+                                whiteSpace: 'normal',
+                              }}
+                            >
+                              {modelId}
+                            </Tag>
+                          )}
                         </Flex>
                       )}
                     </Flex>

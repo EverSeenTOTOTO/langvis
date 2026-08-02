@@ -117,11 +117,17 @@ export class ConversationStore {
   }
 
   @api('/api/conversation/:id/messages')
-  async getMessagesByConversationId(
-    params: { id: string },
+  async fetchMessages(
+    _params: { id: string },
     req?: ApiRequest<{ id: string }>,
-  ): Promise<Message[] | undefined> {
-    const messages = (await req!.send()) as Message[];
+  ): Promise<Message[]> {
+    return (await req!.send()) as Message[];
+  }
+
+  async getMessagesByConversationId(params: {
+    id: string;
+  }): Promise<Message[] | undefined> {
+    const messages = await this.fetchMessages(params);
     this.messages[params.id] = messages;
     return messages;
   }

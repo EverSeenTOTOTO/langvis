@@ -10,8 +10,8 @@ import type {
 } from '@/shared/dto/controller';
 import { Role } from '@/shared/types/entities';
 import { generateId } from '@/shared/utils';
-import { message as antMessage } from 'antd';
-import { makeAutoObservable, reaction } from 'mobx';
+import { notifier as antMessage } from '../../notifier';
+import { makeAutoObservable, reaction, runInAction } from 'mobx';
 import { inject } from 'tsyringe';
 import { MessageNode } from './message-node';
 import { SSEClientTransport } from './transport/SSEClientTransport';
@@ -41,7 +41,7 @@ export class ChatStore {
 
         if (!newId) return;
 
-        await this.conversationStore.getMessagesByConversationId({ id: newId });
+        await this.loadMessages(newId);
         await this.activateConversation(newId);
       },
     );
@@ -109,13 +109,7 @@ export class ChatStore {
   // ════════════════════════════════════════
 
   async activateConversation(conversationId: string): Promise<void> {
-    const messages = this.conversationStore.messages[conversationId] ?? [];
-
-    // Create MessageNodes for all assistant messages
-    for (const msg of messages) {
-      if (msg.role !== Role.ASSIST) continue;
-      this.getOrCreateMessageNode(conversationId, msg);
-    }
+    this.ensureAssistantNodes(conversationId);
 
     try {
       await this.ensureConnected(conversationId);
@@ -256,30 +250,30 @@ export class ChatStore {
       return;
     }
 
-    // 发送前确保会话已激活：长 idle 后 SSE 静默断开、服务端 session 已被 idle 回收，
-    // 此处重连 /activate 重新激活 memory（已连则 no-op）。连不上则 fail-clean，不盲发。
+    // Echo the user's message before activation, so a slow activate/replay
+    // doesn't make the submit look like a no-op.
+    this.addOptimisticUserMessage(conversationId, params.content!);
+
+    // Ensure the session is active before sending: after long idle the SSE
+    // channel drops and the server reclaims the session — reconnect /activate
+    // (no-op if already connected). On failure, refresh reconciles the
+    // optimistic message away.
     try {
       await this.ensureConnected(conversationId);
-    } catch {
-      antMessage.error(this.settingStore.tr('Failed to connect to SSE'));
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      antMessage.error(
+        `${this.settingStore.tr('Failed to connect to SSE')} (${reason})`,
+      );
       this.refreshMessages(conversationId);
       return;
     }
-
-    // Add optimistic user message for immediate UI feedback
-    this.addOptimisticUserMessage(conversationId, params.content!);
 
     try {
       const res = (await req!.send()) as StartChatResponse;
 
       if (res.messageId) {
         this.addAssistantMessage(conversationId, res.messageId);
-
-        const messages = this.conversationStore.messages[conversationId];
-        const assistantMessage = messages?.find(m => m.id === res.messageId);
-        if (assistantMessage) {
-          this.getOrCreateMessageNode(conversationId, assistantMessage);
-        }
       }
     } catch {
       this.refreshMessages(conversationId);
@@ -291,7 +285,31 @@ export class ChatStore {
   // ════════════════════════════════════════
 
   private refreshMessages(conversationId: string): void {
-    this.conversationStore.getMessagesByConversationId({ id: conversationId });
+    void this.loadMessages(conversationId);
+  }
+
+  /** Fetch messages and, in one synchronous transaction, publish them to the
+   * store alongside their assistant nodes — so the view never observes an
+   * assistant message whose projection lags behind it (a node-less turn that
+   * would crash AssistantView). Used by both conversation switch and refresh. */
+  private async loadMessages(conversationId: string): Promise<void> {
+    const messages = await this.conversationStore.fetchMessages({
+      id: conversationId,
+    });
+    runInAction(() => {
+      this.conversationStore.messages[conversationId] = messages;
+      this.ensureAssistantNodes(conversationId);
+    });
+  }
+
+  /** Ensure a MessageNode exists for every assistant message in the
+   * conversation. Idempotent — skips messages that already have a node. */
+  private ensureAssistantNodes(conversationId: string): void {
+    const messages = this.conversationStore.messages[conversationId] ?? [];
+    for (const msg of messages) {
+      if (msg.role !== Role.ASSIST) continue;
+      this.getOrCreateMessageNode(conversationId, msg);
+    }
   }
 
   private addOptimisticUserMessage(
@@ -320,17 +338,25 @@ export class ChatStore {
     const existingMessages =
       this.conversationStore.messages[conversationId] ?? [];
 
+    const msg: Message = {
+      id: assistantId,
+      conversationId,
+      role: Role.ASSIST,
+      content: '',
+      status: 'initialized',
+      createdAt: new Date(),
+    };
+
     this.conversationStore.messages[conversationId] = [
       ...existingMessages,
-      {
-        id: assistantId,
-        conversationId,
-        role: Role.ASSIST,
-        content: '',
-        status: 'initialized',
-        createdAt: new Date(),
-      },
+      msg,
     ];
+
+    // Create the node in the same action as the message append. startChat is
+    // async, so by the time we get here we're outside the original action
+    // batch; this method is itself an action, keeping the two mutations in one
+    // batch so the view never renders the assistant message before its node.
+    this.getOrCreateMessageNode(conversationId, msg);
   }
 
   private cleanupConversation(oldId: string): void {

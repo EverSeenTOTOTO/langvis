@@ -1,9 +1,6 @@
 import { api, ApiRequest } from '@/client/decorator/api';
 import { hydrate } from '@/client/decorator/hydrate';
 import { store } from '@/client/decorator/store';
-import { Locale } from 'antd/es/locale';
-import enUS from 'antd/locale/en_US';
-import zhCN from 'antd/locale/zh_CN';
 import i18next from 'i18next';
 import { makeAutoObservable, reaction } from 'mobx';
 
@@ -25,7 +22,8 @@ export class SettingStore {
   @hydrate()
   translations: Record<string, string> = {};
 
-  locale: Locale = zhCN;
+  /** antd ConfigProvider locale — unused in the TUI (no DOM), kept as a stub. */
+  locale: unknown = null;
 
   constructor() {
     makeAutoObservable(this);
@@ -66,10 +64,8 @@ export class SettingStore {
 
       if (lang === 'en_US') {
         import('dayjs/locale/en');
-        this.locale = enUS;
       } else {
         import('dayjs/locale/zh-cn');
-        this.locale = zhCN;
       }
     });
   }
