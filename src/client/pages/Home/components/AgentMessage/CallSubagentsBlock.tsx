@@ -1,25 +1,15 @@
 import { CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { Button, Flex, Tag, Typography } from 'antd';
 import { observer } from 'mobx-react-lite';
-import type { UIToolCall } from '@/client/store/modules/message-node';
+import {
+  aggregateSubagentChildren,
+  type SubagentChildState,
+  type UIToolCall,
+} from '@/client/store/modules/message-node';
 import Modal from '@/client/components/Modal';
 import { useStore } from '@/client/store';
 import { getToolColor } from './ToolBlockItem';
 import { RunDetailView } from './RunDetailView';
-
-interface ChildState {
-  runId: string;
-  status: string;
-  query?: string;
-  brief?: string;
-}
-
-type SubagentProgress = {
-  childRunId?: string;
-  brief?: string;
-  query?: string;
-  event?: { type?: string };
-};
 
 function statusIcon(status: string): React.ReactNode {
   if (status === 'running') {
@@ -45,31 +35,9 @@ export const CallSubagentsBlock = observer(function CallSubagentsBlock({
 }): React.ReactElement {
   const settingStore = useStore('setting');
 
-  const children: ChildState[] = (() => {
-    const map = new Map<string, ChildState>();
-    const ensure = (id: string): ChildState => {
-      let c = map.get(id);
-      if (!c) {
-        c = { runId: id, status: 'running' };
-        map.set(id, c);
-      }
-      return c;
-    };
-    for (const p of toolCall.progress) {
-      const d = p as SubagentProgress | undefined;
-      const id = d?.childRunId;
-      if (!id) continue;
-      const c = ensure(id);
-      if (d.brief !== undefined) c.brief = d.brief;
-      if (d.query !== undefined) c.query = d.query;
-      const ev = d.event;
-      if (!ev) continue;
-      if (ev.type === 'final') c.status = 'completed';
-      else if (ev.type === 'error') c.status = 'failed';
-      else if (ev.type === 'cancelled') c.status = 'cancelled';
-    }
-    return [...map.values()];
-  })();
+  const children: SubagentChildState[] = aggregateSubagentChildren(
+    toolCall.progress,
+  );
 
   const Icon = statusIcon(
     toolCall.status === 'pending' ? 'running' : toolCall.status,

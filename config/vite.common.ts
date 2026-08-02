@@ -52,8 +52,18 @@ export default ({ mode }) => ({
   build: {
     sourcemap: true,
     emptyOutDir: false,
+    target: 'esnext',
+  },
+  esbuild: {
+    target: 'esnext',
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: 'esnext',
+    },
   },
   resolve: {
+    dedupe: ['react'],
     alias: {
       '@': paths.src,
     },

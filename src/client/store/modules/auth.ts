@@ -1,4 +1,6 @@
+import { getPrefetchPath, serverFetch } from '@/client/decorator/api';
 import { store } from '@/client/decorator/store';
+import { isClient } from '@/shared/utils';
 import { createAuthClient } from 'better-auth/react';
 import { inject } from 'tsyringe';
 import { UserStore } from './user';
@@ -18,7 +20,26 @@ type GetSessionParams = Parameters<
 
 @store()
 export class AuthStore {
-  private client = createAuthClient({});
+  // In the browser the default client uses same-origin fetch + browser cookies.
+  // In the CLI (bun, no cookie jar) route through the shared fetch-cookie jar
+  // (serverFetch) so the session cookie is shared with the API + SSE layers,
+  // and point at the backend origin.
+  private client = createAuthClient(
+    isClient()
+      ? {}
+      : {
+          baseURL: getPrefetchPath(''),
+          fetchOptions: {
+            customFetchImpl: (async (
+              input: string | URL | Request,
+              init?: RequestInit,
+            ) => {
+              const fetchFn = await serverFetch.init();
+              return fetchFn(input, init);
+            }) as typeof fetch,
+          },
+        },
+  );
 
   constructor(@inject(UserStore) private user?: UserStore) {}
 

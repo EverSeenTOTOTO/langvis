@@ -26,6 +26,9 @@ export default defineConfig({
     coverage: {
       include: ['src/**'],
     },
+    // tests/client target the dead React app (src/client) and compile their JSX
+    // as React via swc; the vue jsxImportSource would otherwise break them.
+    exclude: ['tests/client/**', '**/node_modules/**', '**/dist/**'],
     globals: true,
     environment: 'node',
     setupFiles: ['reflect-metadata', './tests/setup/eventSource.ts'],

@@ -11,8 +11,8 @@ function replaceFetchCookie(): Plugin {
     name: 'replace-fetch-cookie',
     enforce: 'pre',
     transform(code, id) {
-      // Only transform the api.ts file during client build (not SSR)
-      if (id.includes('decorator/api.ts') && !this.meta.watchMode) {
+      // Only transform the api decorator during client build (not SSR/dev)
+      if (id.includes('client/decorator/api.ts') && !this.meta.watchMode) {
         // Replace dynamic import of fetch-cookie with stub
         return code.replace(
           /const fetchCookie = \(await import\('fetch-cookie'\)\)\.default;/g,

@@ -16,6 +16,83 @@ export type UIToolCall = {
   completedAt?: number;
 };
 
+// `progress` is an untyped `unknown[]` on the wire — its element shapes are
+// determined by each tool (Bash emits stdout/stderr chunks, call_subagents
+// emits child-run records). These typed extractors are the single place that
+// narrows them, so renderers (TUI + antd) consume parsed progress instead of
+// each re-parsing the raw array.
+
+/** stdout/stderr chunk emitted by streaming tools (Bash). */
+export type ToolStreamChunk = { type: 'stdout' | 'stderr'; text: string };
+
+/** A raw child-run record emitted by call_subagents in the progress stream. */
+export type SubagentChild = {
+  childRunId?: string;
+  query?: string;
+  brief?: string;
+  event?: { type?: string };
+};
+
+/** A child run aggregated from its progress records (one per childRunId). */
+export type SubagentChildState = {
+  runId: string;
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  query?: string;
+  brief?: string;
+};
+
+const isStreamChunk = (c: unknown): c is ToolStreamChunk =>
+  !!c &&
+  typeof c === 'object' &&
+  ((c as ToolStreamChunk).type === 'stdout' ||
+    (c as ToolStreamChunk).type === 'stderr') &&
+  typeof (c as ToolStreamChunk).text === 'string' &&
+  (c as ToolStreamChunk).text.length > 0;
+
+/** Non-empty stdout/stderr chunks from a tool's progress stream (Bash etc.),
+ * in order. */
+export const streamChunks = (progress: unknown[]): ToolStreamChunk[] =>
+  progress.filter(isStreamChunk);
+
+/** Last stdout/stderr line, or '' if none — a compact "what's happening now"
+ * hint while a tool runs. */
+export const lastStreamLine = (progress: unknown[]): string => {
+  const chunks = streamChunks(progress);
+  return chunks.length
+    ? chunks[chunks.length - 1].text.replace(/\n+$/, '')
+    : '';
+};
+
+/** Aggregate call_subagents progress into one state per child run — merging
+ * query/brief updates across records and deriving status from the terminal
+ * event. */
+export const aggregateSubagentChildren = (
+  progress: unknown[],
+): SubagentChildState[] => {
+  const map = new Map<string, SubagentChildState>();
+  const ensure = (id: string): SubagentChildState => {
+    let c = map.get(id);
+    if (!c) {
+      c = { runId: id, status: 'running' };
+      map.set(id, c);
+    }
+    return c;
+  };
+  for (const p of progress) {
+    if (!p || typeof p !== 'object') continue;
+    const d = p as SubagentChild;
+    if (!d.childRunId) continue;
+    const c = ensure(d.childRunId);
+    if (d.brief !== undefined) c.brief = d.brief;
+    if (d.query !== undefined) c.query = d.query;
+    const ev = d.event?.type;
+    if (ev === 'final') c.status = 'completed';
+    else if (ev === 'error') c.status = 'failed';
+    else if (ev === 'cancelled') c.status = 'cancelled';
+  }
+  return [...map.values()];
+};
+
 export type AwaitingInputData = {
   /** callId of the awaiting tool_progress — used as React key so a new ask_user
    * in the same turn remounts HumanInputForm (re-running its status check),

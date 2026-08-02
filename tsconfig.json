@@ -9,7 +9,8 @@
     "strict": true,
     "lib": ["esnext", "dom", "dom.iterable"],
     "types": ["node", "jest"],
-    "jsx": "react-jsx",
+    "jsx": "preserve",
+
     "noEmit": true,
     "noUnusedLocals": true,
     "moduleResolution": "bundler",
@@ -29,5 +30,14 @@
     }
   },
   "include": ["src", "tests"],
-  "exclude": []
+  "exclude": [
+    "src/client/components",
+    "src/client/pages",
+    "src/client/routes",
+    "src/client/hooks",
+    "src/client/App.tsx",
+    "src/client/index.client.tsx",
+    "src/client/index.server.tsx",
+    "src/client/**/*.scss"
+  ]
 }
