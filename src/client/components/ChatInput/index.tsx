@@ -178,9 +178,8 @@ const InnerEditor = forwardRef<
 
     const handleChange = useCallback(
       (editorState: EditorState) => {
-        // 当外部 value prop 变化时，编辑器会同步更新内容，这会触发 OnChangePlugin。
-        // 使用 isExternalChange 标记跳过此次 onChange 回调，避免无限循环：
-        // 外部 value 变化 → 编辑器更新 → OnChangePlugin 触发 → onChange 回调 → 父组件 setState → value 变化 → ...
+        // 外部 value 变化会让编辑器同步内容并触发 OnChangePlugin；用 isExternalChange 标记跳过此次回调避免无限循环。
+        // 外部 value → 编辑器更新 → OnChangePlugin → onChange → 父 setState → value 变化 → ...
         if (isExternalChange.current) {
           isExternalChange.current = false;
           return;

@@ -6,11 +6,7 @@ import type {
   SpeechToTextOutput,
 } from './llm.types';
 
-/**
- * LlmPort — LLM 能力的单一内核契约（无绑定形态）。LlmProvider 的对外表面。
- *
- * 所有方法 per-call 传 `modelId`（缺省由实现回退该 type 的默认模型），调用方无需各自绑定。
- */
+// LlmPort — LLM 单一内核契约（LlmProvider 对外表面）。各方法 per-call 传 modelId，缺省由实现回退该 type 默认模型。
 export interface LlmPort {
   chat(
     modelId: string | undefined,

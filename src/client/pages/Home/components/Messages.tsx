@@ -66,8 +66,7 @@ const Messages = forwardRef<MessagesRef>((_props, ref) => {
   }, []);
 
   // Keep the bottom in view while pinned as content grows — covers streaming
-  // tokens and expanding tool/thought blocks, which re-render without changing
-  // the message list (so the layout effect below doesn't fire).
+  // tokens and expanding blocks that re-render without changing the list.
   useEffect(() => {
     const el = containerRef.current;
     const content = contentRef.current;

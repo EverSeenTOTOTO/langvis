@@ -8,10 +8,7 @@ import {
 
 const RUN_VIEW_FLUSH_MS = 30;
 
-/**
- * 活跃 run 的会话内追踪——自持事件缓冲 + 增量投影视图 + 合并 flush。
- * session 只登记/查找/转发事件，run 的投影与下发逻辑内聚于此。
- */
+// 活跃 run 的会话内追踪——自持事件缓冲 + 增量投影视图 + 合并 flush。 session 只登记/查找/转发事件，run 的投影与下发逻辑内聚于此。
 export class ActiveRun {
   private events: EnrichedEvent[] = [];
   private view: RunView = emptyRunView();
@@ -68,8 +65,7 @@ export class ActiveRun {
     };
   }
 
-  /** Coalesce run_view emission — first event in a quiet window arms a timer,
-   * subsequent ones keep folding into view; the timer flushes the latest. */
+  // Coalesce run_view emission: first event arms a timer, later ones keep folding into view.
   private scheduleFlush(): void {
     if (this.flushTimer) return;
     this.flushTimer = setTimeout(() => {

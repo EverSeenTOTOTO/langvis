@@ -1,7 +1,4 @@
-/**
- * RunConfigVO — 运行时配置不可变快照（AgentService.createRunConfig 校验后产出）。
- * contextSize 不在此——模型派生值，由消费者经 providerService.resolveChatModel 按需取。
- */
+// RunConfigVO — 运行时配置不可变快照（createRunConfig 校验后产出）。contextSize 由消费者按需派生。
 
 import type { ConversationConfig } from '@/server/libs/config';
 

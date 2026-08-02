@@ -14,23 +14,15 @@ export interface UniversalEventRendererProps {
   customToolRender?: (toolCall: UIToolCall) => React.ReactNode;
 }
 
-/**
- * Universal event renderer that supports recursive rendering of nested agent calls.
- * Can be used by any Agent renderer that needs event timeline visualization.
- */
-// observer(): this component reads node observables (toolCalls, timeline,
-// shouldExpandDetails, and crucially `awaitingInput`) that AssistantMessage
-// does NOT read — so it must subscribe independently, or changes to
-// `_awaitingInputData` (set on a tool_progress frame) won't re-render it.
+// Universal event renderer for recursive rendering of nested agent calls.
+// observer(): must subscribe independently (reads awaitingInput etc. that AssistantMessage doesn't).
 export const UniversalEventRenderer = observer(function UniversalEventRenderer({
   node,
   customToolRender,
 }: UniversalEventRendererProps): React.ReactElement | null {
   const timeline = node.timeline;
-  // Resolve each timeline tool item to its live UIToolCall. Built per render
-  // (cheap) so it never goes stale as new tool_calls are appended — mobx
-  // observable arrays mutate in place, so a useMemo keyed on the array ref
-  // would miss pushes.
+  // Resolve each timeline item to its live UIToolCall per render — mobx arrays
+  // mutate in place, so a useMemo keyed on the array ref would miss pushes.
   const toolByCallId = new Map(node.toolCalls.map(tc => [tc.callId, tc]));
   const awaiting = node.awaitingInput;
   const [activeKey, setActiveKey] = useState<string[]>([]);
@@ -69,7 +61,7 @@ export const UniversalEventRenderer = observer(function UniversalEventRenderer({
                 }
 
                 const tc = toolByCallId.get(item.callId);
-                if (!tc) return null;
+                if (!tc || tc.toolName === 'response_user') return null;
 
                 const toolEl =
                   tc.toolName === 'skill_call' ? (

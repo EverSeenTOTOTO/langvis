@@ -344,9 +344,8 @@ describe('projectRun', () => {
   });
 
   it('reconstructs call_subagents child progress onto the step action', () => {
-    // Parent folds its own tool_progress (child blobs) onto the call_subagents
-    // step's action.progress — so historical read-back / snapshot replay show
-    // children from the same shape the live SSE path accumulates.
+    // Parent folds child tool_progress blobs onto the call_subagents step's action
+    // so read-back / replay show the same shape the live SSE path accumulates.
     const view = projectRun([
       ev({
         type: 'tool_call',

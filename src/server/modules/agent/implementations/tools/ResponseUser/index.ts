@@ -17,14 +17,7 @@ export interface ResponseUserOutput {
   delivered: boolean;
 }
 
-/**
- * ResponseUser — 与 AskUser 对称的人机边界工具。
- * AskUser 向用户索取输入（暂停等待），ResponseUser 向用户交付最终结果（流式输出 + 终止本轮）。
- * message 经 text_chunk 事件流出，成为 assistant 消息内容。
- *
- * 可选 tts：当 input.tts.enabled 时，在交付文本后再合成语音，yield audio 事件；
- * 合成失败仅告警、不影响已交付的文本回复。是否启用由调用方（如语音 persona skill）决定。
- */
+// ResponseUser — 人机边界交付工具：message 经 text_chunk 流出并终止本轮。可选 tts 在交付后合成语音，失败仅告警。
 @tool(ToolIds.RESPONSE_USER)
 export default class ResponseUserTool extends Tool<ResponseUserOutput> {
   readonly id!: string;
@@ -49,10 +42,7 @@ export default class ResponseUserTool extends Tool<ResponseUserOutput> {
     return { delivered: true };
   }
 
-  /**
-   * 合成语音并流出 audio 事件。voice 缺失或合成失败时仅告警、返回——
-   * 文本回复已交付，音频是附加产物，其失败不应让本轮报错。
-   */
+  // 合成语音并流出 audio 事件。voice 缺失或合成失败时仅告警、返回—— 文本回复已交付，音频是附加产物，其失败不应让本轮报错。
   private async *synthesizeAudio(
     ctx: ToolCallContext,
     message: string,

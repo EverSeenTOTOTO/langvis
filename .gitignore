@@ -16,3 +16,6 @@ secret.txt
 # eval harness run artifacts
 tests/eval/results.jsonl
 tests/eval/report.md
+
+# Local workspace auth grants (contains machine-specific bash allow-tokens)
+.langvis/

@@ -47,9 +47,7 @@ export class ChatStore {
     );
   }
 
-  // ════════════════════════════════════════
-  // Computed
-  // ════════════════════════════════════════
+  // ═══ Computed ═══
 
   get currentSessionActive(): boolean {
     const id = this.conversationStore.currentConversationId;
@@ -63,9 +61,14 @@ export class ChatStore {
     return connecting || hasRunning;
   }
 
-  // ════════════════════════════════════════
-  // MessageNode access
-  // ════════════════════════════════════════
+  // SSE (re)connecting = transport-liveness activation; a leftover running node doesn't count.
+  get isTransportConnecting(): boolean {
+    const id = this.conversationStore.currentConversationId;
+    if (!id) return false;
+    return this.transports.get(id)?.isConnecting ?? false;
+  }
+
+  // ═══ MessageNode access ═══
 
   getMessageNode(
     conversationId: string,
@@ -81,10 +84,8 @@ export class ChatStore {
     if (!this.messageNodes.has(conversationId)) {
       this.messageNodes.set(conversationId, new Map());
     }
-    // Re-read from the observable map: makeAutoObservable deep-converts the
-    // nested Map on insert, so the stored value is a proxy distinct from the
-    // `new Map()` we just created. All reads/writes must target that proxy,
-    // or getMessageNode (which reads via this.messageNodes.get) won't see them.
+    // makeAutoObservable deep-converts the nested Map on insert, so the stored
+    // proxy differs from the `new Map()`; all reads/writes must target it.
     const nodes = this.messageNodes.get(conversationId)!;
 
     let node = nodes.get(msg.id);
@@ -104,9 +105,7 @@ export class ChatStore {
     return node;
   }
 
-  // ════════════════════════════════════════
-  // Conversation lifecycle
-  // ════════════════════════════════════════
+  // ═══ Conversation lifecycle ═══
 
   async activateConversation(conversationId: string): Promise<void> {
     this.ensureAssistantNodes(conversationId);
@@ -118,12 +117,9 @@ export class ChatStore {
     }
   }
 
-  // ════════════════════════════════════════
-  // SSE Transport
-  // ════════════════════════════════════════
+  // ═══ SSE Transport ═══
 
-  /** 确保会话 SSE 信道在线：已连则 no-op，否则（重连 /activate）重新激活 memory。
-   *  即“激活状态”的无感检查——transport 活性 ⟺ session 活着 ⟺ memory 在位。 */
+  // 已连则 no-op，否则重连 /activate 重新激活 memory（transport 活性 ⟺ session 活着）。
   async ensureConnected(conversationId: string): Promise<void> {
     if (this.transports.get(conversationId)?.isConnected) return;
     // 切换 currentConversationId 的 reaction、发送前、标签页重新可见时都可能并发进入；
@@ -194,9 +190,7 @@ export class ChatStore {
     });
   }
 
-  // ════════════════════════════════════════
-  // API methods
-  // ════════════════════════════════════════
+  // ═══ API methods ═══
 
   @api('/api/chat/session/:conversationId')
   async getSessionState(
@@ -254,10 +248,8 @@ export class ChatStore {
     // doesn't make the submit look like a no-op.
     this.addOptimisticUserMessage(conversationId, params.content!);
 
-    // Ensure the session is active before sending: after long idle the SSE
-    // channel drops and the server reclaims the session — reconnect /activate
-    // (no-op if already connected). On failure, refresh reconciles the
-    // optimistic message away.
+    // After long idle the SSE channel drops and the server reclaims the
+    // session — reconnect /activate (no-op if connected) before sending.
     try {
       await this.ensureConnected(conversationId);
     } catch (e) {
@@ -280,18 +272,13 @@ export class ChatStore {
     }
   }
 
-  // ════════════════════════════════════════
-  // Private helpers
-  // ════════════════════════════════════════
+  // ═══ Private helpers ═══
 
   private refreshMessages(conversationId: string): void {
     void this.loadMessages(conversationId);
   }
 
-  /** Fetch messages and, in one synchronous transaction, publish them to the
-   * store alongside their assistant nodes — so the view never observes an
-   * assistant message whose projection lags behind it (a node-less turn that
-   * would crash AssistantView). Used by both conversation switch and refresh. */
+  // Publish messages + assistant nodes atomically; the view must never see a node-less assistant.
   private async loadMessages(conversationId: string): Promise<void> {
     const messages = await this.conversationStore.fetchMessages({
       id: conversationId,
@@ -302,8 +289,7 @@ export class ChatStore {
     });
   }
 
-  /** Ensure a MessageNode exists for every assistant message in the
-   * conversation. Idempotent — skips messages that already have a node. */
+  // Ensure a MessageNode exists for each assistant message. Idempotent — skips existing.
   private ensureAssistantNodes(conversationId: string): void {
     const messages = this.conversationStore.messages[conversationId] ?? [];
     for (const msg of messages) {
@@ -352,10 +338,8 @@ export class ChatStore {
       msg,
     ];
 
-    // Create the node in the same action as the message append. startChat is
-    // async, so by the time we get here we're outside the original action
-    // batch; this method is itself an action, keeping the two mutations in one
-    // batch so the view never renders the assistant message before its node.
+    // Create the node in the same action as the message append (we're outside
+    // the original action batch), so the view never renders a node-less message.
     this.getOrCreateMessageNode(conversationId, msg);
   }
 

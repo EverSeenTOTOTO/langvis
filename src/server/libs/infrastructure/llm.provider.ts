@@ -22,20 +22,14 @@ import { Role, type LlmMessage, type Message } from '@/shared/types/entities';
 /** Embedding API 单次批量上限——超过则自动分批串行拼接，对调用方透明。 */
 const EMBED_BATCH_SIZE = Number(process.env.EMBED_BATCH_SIZE) || 32;
 
-/**
- * 单请求超时（ms）。覆盖 SDK 默认 10min——供应商挂死时按此超时，避免用户在 SSE 端无限等待。
- * 可经 LLM_REQUEST_TIMEOUT_MS 按供应商/模型微调（建议 60_000~180_000）。
- */
+// 单请求超时（ms），覆盖 SDK 默认 10min——供应商挂死按此超时，避免 SSE 端无限等待；可经 LLM_REQUEST_TIMEOUT_MS 微调。
 const LLM_REQUEST_TIMEOUT_MS =
   Number(process.env.LLM_REQUEST_TIMEOUT_MS) || 120_000;
 
 /** 重试上限——timeout 会触发 SDK 重试，压低到 1 以免单次挂死的墙钟等待被翻倍。 */
 const LLM_MAX_RETRIES = 1;
 
-/**
- * 设了 WEB_FETCH_PROXY（与 WebFetch 工具共用同一变量）则所有 LLM 出站请求默认走代理。
- * `proxy` 是 Bun fetch 的非标准选项，故 cast 回 RequestInit。
- */
+// WEB_FETCH_PROXY 与 WebFetch 工具共用：设了则 LLM 出站请求走代理。proxy 是 Bun 非标准选项，故 cast 回 RequestInit。
 function withProxy(init: RequestInit = {}): RequestInit {
   const proxy = process.env.WEB_FETCH_PROXY;
   if (proxy) {

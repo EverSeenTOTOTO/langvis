@@ -44,11 +44,7 @@ const reducer = (state: RendererMap, action: Action): RendererMap => {
   }
 };
 
-/**
- * Holds the consumer-provided renderers (one per plugin `name`/kind) and makes them
- * available to every InlineControlNode via context. Rendered inside LexicalComposer
- * so decorator output (which lives in the composer subtree) can read it.
- */
+// Consumer-provided renderers per `name`/kind, exposed via context inside the composer.
 export const InlineControlRegistryProvider: React.FC<{
   children: ReactNode;
 }> = ({ children }) => {
@@ -91,11 +87,7 @@ const useRegistry = (): RegistryValue => {
   return ctx;
 };
 
-/**
- * Register a renderer under `kind` for the lifetime of the plugin. `comp` is read
- * through a ref so an unstable identity (e.g. inline arrow) does not thrash the
- * registry on every parent render; pass a stable component for best results.
- */
+// Register a renderer by `kind`; the ref keeps unstable component identities from thrashing.
 export const useRegisterRenderer = (kind: string, comp: Renderer): void => {
   const { register, unregister } = useRegistry();
   const compRef = useRef<Renderer>(comp);

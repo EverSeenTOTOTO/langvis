@@ -29,20 +29,7 @@ const readCaretCoords = (fallback: CaretCoords): CaretCoords => {
   return fallback;
 };
 
-/**
- * Opens a popover anchored to the caret when a trigger character is typed.
- *
- * Rendering reuses antd `Popover` (rc-popover) for styling and automatic
- * flip/shift near viewport edges. The anchor element's caret rect is snapshotted
- * at open time and kept stable for the session — rc-trigger does not track a
- * moving trigger, so a stable anchor (captured where `/` was typed) is required;
- * rc-trigger still re-aligns when the popup body changes size (list filtering).
- *
- * - swallow=false (default): the trigger is inserted; text typed after it is
- *   tracked and passed to `popoverRender` as `query`.
- * - swallow=true: the trigger character is intercepted (not inserted) and the
- *   popover opens with an empty query.
- */
+// Caret popover on a trigger char; anchor snapped at open (rc-trigger won't track a moving trigger)
 export const PopoverPlugin: React.FC<PopoverPluginProps> = ({
   trigger,
   popoverRender,
@@ -171,8 +158,7 @@ export const PopoverPlugin: React.FC<PopoverPluginProps> = ({
       }}
       getPopupContainer={() => document.body}
     >
-      {/* Invisible stable anchor at the snapshot caret rect. rc-trigger aligns
-          the popup to this element; antd autoAdjustOverflow flips it on overflow. */}
+      {/* Anchor at the caret rect; rc-trigger aligns the popup to it and flips on overflow. */}
       <span
         aria-hidden
         style={{

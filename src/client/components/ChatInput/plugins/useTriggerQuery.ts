@@ -16,25 +16,14 @@ export interface TriggerQueryOptions {
   minLength?: number;
   /** Maximum query length. Default 75. */
   maxLength?: number;
-  /**
-   * Only match when the trigger sits at the start of the text or right after
-   * whitespace — prevents firing inside paths/URLs like `a/b` or `http://x/`.
-   * Default false.
-   */
+  // Require a leading boundary so the trigger won't fire inside paths like `a/b`.
   requireBoundary?: boolean;
 }
 
 const escapeForCharacterClass = (value: string) =>
   value.replace(/[[\]\\^-]/g, '\\$&');
 
-/**
- * Build a predicate that scans text *ending at the caret* for an active trigger.
- * Adapted from dify's useBasicTypeaheadTriggerMatch; supports multiple triggers
- * and an optional leading-boundary requirement.
- *
- * Pass it the text from the start of the caret's text node up to the caret offset;
- * it returns the match closest to the caret, or null.
- */
+// Predicate scanning caret-ending text for an active trigger; returns closest match or null.
 export function useTriggerQuery(
   trigger: string | string[],
   {

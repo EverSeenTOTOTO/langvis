@@ -71,10 +71,7 @@ export class ChatService {
     return this.workspaceService.getWorkDir(conversationId);
   }
 
-  /**
-   * 加载并校验会话归属:repo 按 (id, userId) 过滤,不存在/非本人统一 NotFound
-   * (不泄露存在性)。所有需要 ownership 的用例走这里,取代各 handler 各凭良心。
-   */
+  // 加载并校验会话归属:repo 按 (id, userId) 过滤,不存在/非本人统一 NotFound (不泄露存在性)。所有需要 ownership 的用例走这里,取代各 handler 各凭良心。
   async requireConversation(
     conversationId: string,
     userId: string,
@@ -122,11 +119,7 @@ export class ChatService {
     };
   }
 
-  /**
-   * 开 turn 的应用编排:校验归属 → 追加 user/assistant 消息。
-   * memory 与事件派发留给 handler(session 作用域 + I/O 边界);此方法只做持久化与领域事实推导。
-   * 激活(SYSTEM 消息)由客户端 /activate 保证先行落地,此处不再 DB 探针校验。
-   */
+  // 开 turn 编排：校验归属 → 追加 user/assistant 消息。激活由客户端 /activate 保证先行，此处不再探针校验。
   async startTurn(params: {
     conversationId: string;
     userId: string;
@@ -181,10 +174,7 @@ export class ChatService {
     }
   }
 
-  /**
-   * Application-layer composition: find assistant messages with active agent runs.
-   * Uses both repos (Message + AgentRun) — not a domain query crossing BC boundaries.
-   */
+  // Find assistant messages with active agent runs (Message + AgentRun repos).
   async findActiveAssistantMessages(
     conversationId: string,
   ): Promise<Message[]> {
@@ -201,11 +191,7 @@ export class ChatService {
     return assistantMsgs.filter(m => activeIds.includes(m.agentRunId!));
   }
 
-  /**
-   * 终止活跃的 assistant 消息——更新 Message content 与 AgentRun status。
-   * events 事实流不动（保留原貌），终态与文案由调用方决定：
-   * 服务重启残留 → failed + 'Generation interrupted'；用户取消孤儿 → cancelled + reason。
-   */
+  // 终止活跃 assistant 消息：更新 content 与 status。终态与文案由调用方决定（failed + 原因 / cancelled + reason）。
   async markMessagesTerminated(
     messages: Message[],
     status: RunStatus,
@@ -231,11 +217,7 @@ export class ChatService {
     }
   }
 
-  /**
-   * 全局清扫（启动用例）：把所有非终态 run（重启残留）批量标记 failed，并更新其 assistant 消息文案。
-   * run 为权威——每个非终态 run 都落终态；消息可能缺失（崩溃早于落 agentRunId）则只更 run。
-   * 不再补发 SSE 帧：DB 在接客前即修好，前端重连/重拉自然拿到终态。
-   */
+  // 全局清扫（启动用例）：把重启残留的非终态 run 批量标记 failed，并更新其 assistant 消息文案。
   async markInterruptedRuns(reason: string): Promise<number> {
     const runs = await this.agentRunRepo.findNonTerminal();
     if (runs.length === 0) return 0;
@@ -256,12 +238,7 @@ export class ChatService {
     return runs.length;
   }
 
-  /**
-   * 收 turn 的持久化接缝：落库 assistant 消息文案。content 由调用方取自 live view
-   * （ActiveRun 增量 fold 维护的终态文案）——与实时流/历史读回字面同源，无需在此重 fold。
-   * audio 不入 meta——它是 run 事件的派生量，重载时由 GetMessagesHandler 经
-   * projectRun(run.events) 复算（与 steps/status 同源）。
-   */
+  // 收 turn 持久化接缝：落库 assistant 消息文案。content 取自 live view，与实时流/历史读回同源，audio 由 GetMessagesHandler 复算。
   async persistAssistantContent(
     messageId: string,
     content: string,

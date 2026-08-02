@@ -23,11 +23,7 @@ function statusIcon(status: string): React.ReactNode {
   return <span style={{ color: 'var(--ant-color-error)' }}>✕</span>;
 }
 
-/**
- * CallSubagentsBlock —— 主 agent 的 call_subagents 工具进度块。
- * 从 toolCall.progress 聚合每个子 run 的状态（边跑边更新），渲染子 run 卡片；
- * 点 View 经 CRUD 拉取该子 run 的投影详情（RunDetailView，同一渲染机制）。
- */
+// call_subagents 工具进度块：从 toolCall.progress 聚合各子 run 状态，渲染子 run 卡片；点 View 拉取该子 run 投影详情。
 export const CallSubagentsBlock = observer(function CallSubagentsBlock({
   toolCall,
 }: {

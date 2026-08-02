@@ -9,11 +9,7 @@ import type { Message } from '@/shared/types/entities';
 import { projectRun } from '@/server/modules/conversation/application/service/run-projection';
 import { GetMessagesQuery } from '../../contracts';
 
-/**
- * GetMessagesHandler — 读模型组装：取会话消息 + 跨 BC 取 agent_runs，
- * 对 assistant 消息用 projectRun(run.events) 派生 steps/status/audio（events 唯一事实，
- * 不物化派生结果），content 取 msg.content 兜底 view.content。
- */
+// 读模型组装：assistant 消息用 projectRun(run.events) 派生 steps/status/audio，不物化派生结果。
 @queryHandler(GetMessagesQuery)
 export class GetMessagesHandler {
   constructor(

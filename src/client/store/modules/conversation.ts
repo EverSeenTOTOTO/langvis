@@ -20,6 +20,10 @@ export class ConversationStore {
   messages: Record<string, Message[]> = {};
 
   conversationUsage: { used: number; total: number } | null = null;
+  /** True while a config update (e.g. /model) is in flight. */
+  isConfigUpdating = false;
+  /** True while a conversation is being created (/new). */
+  isCreating = false;
   /** per-run loop 用量（runId→值）；活跃 run 实时自增，终态后清除。 */
   loopUsage: Map<string, { used: number; total: number }> = new Map();
 
@@ -64,12 +68,26 @@ export class ConversationStore {
     _params: CreateConversationRequest,
     req?: ApiRequest<CreateConversationRequest>,
   ): Promise<Conversation | undefined> {
-    const result = await req!.send();
-    if (result) {
-      await this.conversationGroupStore.getAllGroups();
-      return result as Conversation;
+    this.isCreating = true;
+    try {
+      const result = await req!.send();
+      if (result) {
+        await this.conversationGroupStore.getAllGroups();
+        return result as Conversation;
+      }
+      return undefined;
+    } finally {
+      this.isCreating = false;
     }
-    return undefined;
+  }
+
+  @api('/api/conversation/workspace')
+  async listByWorkspace(
+    _params: { workspacePath: string },
+    req?: ApiRequest<{ workspacePath: string }>,
+  ): Promise<Conversation[]> {
+    const result = await req!.send();
+    return (result as { conversations: Conversation[] }).conversations;
   }
 
   @api('/api/conversation/:id', {
@@ -79,9 +97,14 @@ export class ConversationStore {
     _params: UpdateConversationRequest,
     req?: ApiRequest<UpdateConversationRequest>,
   ): Promise<Conversation | undefined> {
-    const result = await req!.send();
-    await this.conversationGroupStore.getAllGroups();
-    return result as Conversation;
+    this.isConfigUpdating = true;
+    try {
+      const result = await req!.send();
+      await this.conversationGroupStore.getAllGroups();
+      return result as Conversation;
+    } finally {
+      this.isConfigUpdating = false;
+    }
   }
 
   @api('/api/conversation/:id', {

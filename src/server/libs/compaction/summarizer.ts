@@ -16,17 +16,7 @@ export interface FoldOptions {
   modelId?: string;
 }
 
-/**
- * fold 原语：把 messages 按 windowSize 滚动折叠成一条摘要。prompt 由调用方注入
- * （lib 不认识任何域），只需含一个 "History" section——fold 每块填入历史后 build。
- *
- * 滚动：第 1 块直接折叠；之后每块前置上一块的摘要（[previous summary]）继续折叠，
- * 即"摘要的摘要"。续接场景（如历史压缩）的既有摘要在调用方作为 messages[0] 传入，
- * 随第 1 块一起折叠
- *
- * 无状态：从容器解析 LlmProvider；压缩模型由调用方经 modelId 传入（片段 compactModelId 或本 run 模型），
- * 缺省时内核兜底系统默认 chat 模型。
- */
+// fold 原语：按 windowSize 滚动折叠 messages 成一条摘要；后续每块前置上块摘要。prompt/modelId 调用方注入，缺省兜底默认 chat。
 export async function fold({
   messages,
   windowSize,

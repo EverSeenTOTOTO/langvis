@@ -11,10 +11,7 @@ export interface RunDetailViewProps {
   runId: string;
 }
 
-/**
- * RunDetailView —— 子 agent（或任意 run）的进度详情，CRUD 一次性读取（非实时）。
- * 数据来源与历史消息同一投影（projectRun → RunView），由 RunSteps 复用既有步骤渲染。
- */
+// 任意 run 的进度详情，CRUD 一次性读取（非实时）；数据来源与历史消息同一投影（RunView），由 RunSteps 复用步骤渲染。
 export function RunDetailView({
   runId,
 }: RunDetailViewProps): React.ReactElement {

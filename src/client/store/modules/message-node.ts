@@ -16,11 +16,8 @@ export type UIToolCall = {
   completedAt?: number;
 };
 
-// `progress` is an untyped `unknown[]` on the wire — its element shapes are
-// determined by each tool (Bash emits stdout/stderr chunks, call_subagents
-// emits child-run records). These typed extractors are the single place that
-// narrows them, so renderers (TUI + antd) consume parsed progress instead of
-// each re-parsing the raw array.
+// `progress` is an untyped `unknown[]` on the wire; each tool defines its
+// element shape. These extractors narrow it once for all renderers.
 
 /** stdout/stderr chunk emitted by streaming tools (Bash). */
 export type ToolStreamChunk = { type: 'stdout' | 'stderr'; text: string };
@@ -49,13 +46,11 @@ const isStreamChunk = (c: unknown): c is ToolStreamChunk =>
   typeof (c as ToolStreamChunk).text === 'string' &&
   (c as ToolStreamChunk).text.length > 0;
 
-/** Non-empty stdout/stderr chunks from a tool's progress stream (Bash etc.),
- * in order. */
+// Non-empty stdout/stderr chunks from a tool's progress stream (Bash etc.), in order.
 export const streamChunks = (progress: unknown[]): ToolStreamChunk[] =>
   progress.filter(isStreamChunk);
 
-/** Last stdout/stderr line, or '' if none — a compact "what's happening now"
- * hint while a tool runs. */
+// Last stdout/stderr line, or '' if none — a compact "what's happening now" hint while a tool runs.
 export const lastStreamLine = (progress: unknown[]): string => {
   const chunks = streamChunks(progress);
   return chunks.length
@@ -63,9 +58,7 @@ export const lastStreamLine = (progress: unknown[]): string => {
     : '';
 };
 
-/** Aggregate call_subagents progress into one state per child run — merging
- * query/brief updates across records and deriving status from the terminal
- * event. */
+// Merge call_subagents progress into one state per child run, deriving status from the terminal event.
 export const aggregateSubagentChildren = (
   progress: unknown[],
 ): SubagentChildState[] => {
@@ -94,21 +87,13 @@ export const aggregateSubagentChildren = (
 };
 
 export type AwaitingInputData = {
-  /** callId of the awaiting tool_progress — used as React key so a new ask_user
-   * in the same turn remounts HumanInputForm (re-running its status check),
-   * instead of reusing the stale submitted=true state of the prior prompt. */
+  // React key for HumanInputForm — a new ask_user in one turn remounts it to re-check status.
   callId: string;
   message: string;
   schema: Record<string, unknown>;
 };
 
-/**
- * Ordered item in the agent's process timeline — the single source of truth
- * for how thoughts and tool actions are displayed.
- *
- * Tool items reference a `UIToolCall` by callId; toolCalls/timeline are derived
- * from the projected `steps` on every view (live, reconnect, historical alike).
- */
+// Item in the agent's process timeline — how thoughts and tool actions are displayed.
 export type TimelineItem =
   | { kind: 'thought'; key: string; content: string }
   | { kind: 'tool'; key: string; callId: string };
@@ -150,14 +135,7 @@ export function stepsToTimeline(steps: ReActStep[]): TimelineItem[] {
   return items;
 }
 
-/**
- * MessageNode — 客户端消息节点。
- *
- * 纯渲染者：状态由服务端投影（run_view 帧）整体替换，客户端不再自行 reduce
- * 原始事件。实时流、断线重连、历史读回共用同一条 applyView 入口与同一 `steps`
- * 形状——消除「实时对象 / 回放字符串」式的双路径分叉。MobX observable 属性变更
- * 直接驱动 UI。
- */
+// MessageNode — 纯渲染者：状态由 run_view 帧整体替换，实时/重连/历史共用 applyView 入口；MobX 属性驱动 UI。
 export class MessageNode {
   readonly id: string;
   readonly conversationId: string;
@@ -202,15 +180,10 @@ export class MessageNode {
     makeAutoObservable(this);
   }
 
-  // ════════════════════════════════════════
-  // 状态应用（实时 run_view / 重连 / 历史共用）
-  // ════════════════════════════════════════
+  // ═══ 状态应用（实时 run_view / 重连 / 历史共用）═══
 
-  /**
-   * 整体替换为服务端投影的 RunView。每帧覆盖 content/steps/status/audio/
-   * awaitingInput，并重新派生 toolCalls/timeline。终态后忽略迟到的投影帧
-   * （合并定时器可能与终态同步帧竞态——避免把已终态的节点回退）。
-   */
+  // 整体替换为服务端投影的 RunView：覆盖 content/steps/status/audio/awaitingInput
+  // 并重派生 toolCalls/timeline；终态后忽略迟到的帧（同步竞态防回退）。
   applyView(view: {
     content: string;
     steps: ReActStep[];
@@ -228,9 +201,7 @@ export class MessageNode {
     this.timeline = stepsToTimeline(this.steps);
   }
 
-  // ════════════════════════════════════════
-  // 派生 UI 状态
-  // ════════════════════════════════════════
+  // ═══ 派生 UI 状态 ═══
 
   get isStreaming(): boolean {
     return this.status === 'running' && this.content.length > 0;

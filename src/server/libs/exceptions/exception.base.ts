@@ -1,8 +1,4 @@
-/**
- * 领域异常基类；每个限界上下文定义自己的错误类型。
- *
- * @see docs/plans/2026-05-30-ddd-refactor/01-architecture-overview.md
- */
+// 领域异常基类；每个限界上下文定义自己的错误类型。 @see docs/plans/2026-05-30-ddd-refactor/01-architecture-overview.md
 
 export abstract class ExceptionBase extends Error {
   abstract readonly code: string;

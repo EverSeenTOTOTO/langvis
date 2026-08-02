@@ -21,13 +21,8 @@ import {
 /** 产出即桩比例缺省：单条产出超 contextSize×此值 即落盘（与 query-budget maxQuerySize 同构，动态跟随窗口）。 */
 const DEFAULT_OUTPUT_SIZE_RATIO = 0.2;
 
-/**
- * post-observation 逐条桩：最后一条 Observation（或裸 user / assistant，实际此相位末条恒为 Observation）超阈值即落盘。
- * 阈值动态——contextSize×outputSizeRatio（大窗口放宽、小窗口收紧，与 query-budget 同源推导）；
- * outputTokenThreshold 若设则绝对覆盖。与 pre-LLM OffloadHook 划界——此 hook 按「单条大小」桩（大就卸），OffloadHook 按「整窗压力」桩（满了卸）。
- * 已桩（OFFLOADED_MARK）/ recall 回取（fc→fc 别名风险，仅 observation）→ 不动。
- * 读端 hint 复用 offload-stub.stubContent，与 OffloadHook 一致。
- */
+// post-observation 逐条桩：单条产出超阈值（contextSize×outputSizeRatio，或 outputTokenThreshold 绝对覆盖）即落盘。
+// 与 pre-LLM OffloadHook 划界：此 hook 按单条大小桩，OffloadHook 按整窗压力桩；已桩 / recall 回取跳过。
 @agentHook
 export class OutputOffloadHook implements Hook {
   readonly id = 'output-offload';

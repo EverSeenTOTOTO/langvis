@@ -32,10 +32,7 @@ export class ConversationSession {
     return this.connection !== undefined;
   }
 
-  /**
-   * attach 传输（多标签可重复 attach）。首次 attach 建 Connection；
-   * attach 后对缓冲的活跃 run 补发 run_view（重连同一进程的活跃 run）。
-   */
+  // attach 传输（多标签可重复 attach）。首次 attach 建 Connection； attach 后对缓冲的活跃 run 补发 run_view（重连同一进程的活跃 run）。
   attachTransport(transport: Transport<StreamFrame>): void {
     if (!this.connection) {
       this.connection = new Connection(
@@ -53,6 +50,9 @@ export class ConversationSession {
     }
     this.connection.attach(transport);
 
+    // `connected` is the first frame; the client resolves its connect on it.
+    this.connection.send({ type: 'connected' });
+
     for (const run of this.activeRuns.values()) {
       this.connection.send(run.buildFrame());
       logger.info(`Replayed run_view (run ${run.runId})`, {
@@ -61,7 +61,6 @@ export class ConversationSession {
       });
     }
 
-    // 会话用量基线由 activated-phase 的 usage transform 下发（激活先于 attach），此处不再内联发送。
     logger.info(`Transport attached`, { chatId: this.conversationId });
   }
 
@@ -155,8 +154,7 @@ export class ConversationSession {
     return this as unknown as ConversationContext;
   }
 
-  /** turn-end 维护屏障：begin 在终态帧前、end 在维护完成后；
-   *  awaitMaintenance 供 turn-start 等待在飞维护（永不 reject）。 */
+  // turn-end 维护屏障：begin 在终态帧前、end 在维护完成后； awaitMaintenance 供 turn-start 等待在飞维护（永不 reject）。
   beginMaintenance(): void {
     let resolve!: () => void;
     const promise = new Promise<void>(r => {

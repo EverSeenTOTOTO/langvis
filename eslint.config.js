@@ -3,10 +3,14 @@ import ESLintConfigPrettier from 'eslint-config-prettier';
 import pluginReact from 'eslint-plugin-react';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import langvis from './eslint-plugin-langvis.js';
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
-  { files: ['**/*.{js,mjs,cjs,ts,jsx,tsx}'] },
+  {
+    files: ['**/*.{js,mjs,cjs,ts,jsx,tsx}'],
+    plugins: { langvis },
+  },
   {
     ignores: [
       'dist',
@@ -42,6 +46,9 @@ export default [
         },
       ],
       '@typescript-eslint/no-shadow': 'error',
+      'langvis/comment-one-line': 'error',
+      'langvis/no-comment-runs': 'error',
+      'langvis/comment-max-len': ['error', { maxLen: 100 }],
     },
   },
 ];

@@ -118,8 +118,7 @@ export class SessionManager implements LifecycleHook {
     return this.sessions.get(conversationId)?.getFinalContent(messageId);
   }
 
-  /** 取某子 run（call_subagents 的 child）的事件流——扫描活跃 session 的父 run 缓冲，
-   *  从父的 tool_progress { childRunId, event } 块中提取。未找到返回 undefined（调用方回落到 repo）。 */
+  // 取子 run 事件流：扫描活跃 session 父 run 缓冲，从 tool_progress { childRunId, event } 中提取。
   getChildRunEvents(childRunId: string): readonly EnrichedEvent[] | undefined {
     for (const session of this.sessions.values()) {
       const child = session.getChildRunEvents(childRunId);
@@ -240,11 +239,7 @@ export class SessionManager implements LifecycleHook {
     );
   }
 
-  /**
-   * 孤儿 run 对账（运行期取消用例）：扫描本会话 status 仍为 initialized/running、
-   * 但本进程 activeRuns 已无对应记录的 run，统一在 DB 里驱动到终态。
-   * 重启残留由 OrphanRunReconciler 在启动期清扫；此处只动 DB，不补发帧——前端经重连/重拉拿到终态。
-   */
+  // 孤儿 run 对账：扫描已无活跃记录的 run，统一在 DB 驱动到终态（重启残留由 OrphanRunReconciler 清扫）。
   private async reconcileOrphanedRuns(
     conversationId: string,
     status: 'failed' | 'cancelled',

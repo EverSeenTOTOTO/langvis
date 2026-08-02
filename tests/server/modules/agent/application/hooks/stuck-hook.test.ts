@@ -27,7 +27,7 @@ async function collect(
   return { events, ret };
 }
 
-/** 每次 apply = 一个 tick；本 tick 动作由 loop 权威解析后挂 ctx.pendingAction（hook 直读，不再 re-parse）。guard 仅 stuckThreshold 生效。 */
+/** 每次 apply = 一个 tick；hook 直读 loop 挂的 ctx.pendingAction，guard 仅 stuckThreshold 生效。 */
 function ctxWith(
   action: ParsedAction | undefined,
   stuckThreshold: number,

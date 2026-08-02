@@ -9,7 +9,6 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, request, response } from '../decorator/param';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
-import { SessionManager } from '../modules/conversation/application/service/session-manager';
 import { CommandBus, QueryBus } from '@/server/libs/ddd';
 import {
   ConversationActivateCommand,
@@ -25,8 +24,6 @@ export default class ChatController {
     private commandBus: CommandBus,
     @inject(QueryBus)
     private queryBus: QueryBus,
-    @inject(SessionManager)
-    private sessionManager: SessionManager,
     @inject(AuthService)
     private authService: AuthService,
   ) {}
@@ -39,16 +36,13 @@ export default class ChatController {
   ) {
     const userId = await this.authService.getUserId(req);
 
-    // Activate (idempotent — creates system messages if none exist).
-    // Existence + ownership validated in handler (→ 404 / 403).
+    // Activate and attach the SSE transport, both inside the command.
     await this.commandBus.execute(
-      new ConversationActivateCommand(conversationId, userId),
-    );
-
-    // SSE setup
-    await this.sessionManager.initSession(
-      conversationId,
-      new SSEServerTransport(req, res),
+      new ConversationActivateCommand(
+        conversationId,
+        userId,
+        new SSEServerTransport(req, res),
+      ),
     );
 
     req.log.info('SSE session established', {

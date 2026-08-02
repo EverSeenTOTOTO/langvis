@@ -10,10 +10,7 @@ export function isCompactionSummary(message: Message): boolean {
   return (message.meta?.kind as MessageKind | undefined) === 'compact';
 }
 
-/**
- * 找最后一个压缩摘要 C（滚动折叠模型下，只有"最新且 end≤当前"的那个有效）。
- * 位置即覆盖终点——C 排在被它总结的消息之后，projectToLlmMessages 原样发出 C 作为有效历史前缀。
- */
+// 找最后一个压缩摘要 C（滚动折叠下仅"最新且 end≤当前"有效），位置即覆盖终点。
 export function findLatestCompactionSummary(messages: Message[]): {
   summary: Message | null;
   index: number;
@@ -50,10 +47,7 @@ export function groupIntoTurns(messages: Message[]): Message[][] {
   return turns;
 }
 
-/**
- * 投影有效历史为 LLM 上下文：system + 会话上下文 → 最新 C 作前缀 → 其后 turn。
- * assistant 的 summary 透传给 agent 种子作 thought。
- */
+// 投影有效历史为 LLM 上下文：system + 会话上下文 → 最新 C 作前缀 → 其后 turn。 assistant 的 summary 透传给 agent 种子作 thought。
 export function projectToLlmMessages(messages: Message[]): LlmMessage[] {
   const out: LlmMessage[] = [];
 

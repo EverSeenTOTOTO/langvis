@@ -15,10 +15,7 @@ import { agentHook } from './registry';
 const budgetMessage = (used: number, budget: number) =>
   `This turn exceeded its token budget (≈${used} / ${budget}). Stopping here — please rephrase or continue in a new turn.`;
 
-/**
- * 累计 token 用量兜底（cost 闸）。阈值取自 guard.maxTokenUsage（默认 1M，eval 调小）。
- * 本 tick 的动作由 loop 权威解析后挂在 ctx.pendingAction，此处直读、不再 re-parse。
- */
+// 累计 token 用量兜底（cost 闸）。阈值 guard.maxTokenUsage；pendingAction 由 loop 解析，此处直读。
 @agentHook
 export class CumulativeBudgetHook implements Hook {
   readonly id = 'cumulative-budget';

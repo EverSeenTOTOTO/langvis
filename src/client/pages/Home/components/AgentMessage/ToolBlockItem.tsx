@@ -49,10 +49,7 @@ export interface ToolBlockItemProps {
   customRender?: (toolCall: UIToolCall) => React.ReactNode;
 }
 
-/**
- * Renders a single tool call with status, progress, and output.
- * Used by both top-level renderers and nested agent call blocks.
- */
+// Render one tool call (status, progress, output); used by top-level and nested agent renderers.
 export const ToolBlockItem = observer(function ToolBlockItem({
   toolCall,
   depth = 0,

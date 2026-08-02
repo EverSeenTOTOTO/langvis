@@ -4,18 +4,8 @@ import crypto from 'node:crypto';
 import { shortenHome } from '@/server/modules/agent/infrastructure/authorization.provider';
 import type { AuthAction } from '@/server/modules/agent/domain/port/authorization.port';
 
-/**
- * Bash 命令分类器（工具侧 pwd-containment 判定）。
- *
- * 设计约束：auth 层对 workDir 一无所知——"命令是否落在 pwd 子树内"由本分类器
- * 在工具侧判定。safe（只读 + 全在 workDir 子树内）→ 工具直接放行、**不调 auth**；
- * sensitive（越界 / 写 / exec / 含元字符 / 未知）→ 走 ensureApproved。
- *
- * v1 保守：含 shell 元字符一律 sensitive（不做"管道内全只读可否 safe"的细语义）。
- * 越界 read-path 的 resource = 解析后的绝对路径本身（不归一化到父目录）：
- * 避免对目录路径（如 /etc）错剥到根（过宽授权）；grant 按精确路径，同路径跨 run 复用即满足
- * "辅助阅读 workDir 外文件"的会话复用诉求。
- */
+// Bash 命令分类器（工具侧 pwd-containment 判定）：auth 层对 workDir 一无所知。
+// safe（只读+在子树内）直放行不调 auth；sensitive（越界/写/exec/元字符/未知）走 ensureApproved。
 
 export type BashPermission =
   | { kind: 'safe' }
@@ -61,10 +51,7 @@ interface Token {
   quoted: boolean;
 }
 
-/**
- * 保守 argv 拆分：尊重单/双引号，引号未闭合 → 返回 null（判 sensitive）。
- * 不做变量展开 / glob 展开（交给 shell）；此处只需识别结构。
- */
+// 保守 argv 拆分：尊重单/双引号，引号未闭合 → 返回 null（判 sensitive）。 不做变量展开 / glob 展开（交给 shell）；此处只需识别结构。
 function tokenize(command: string): Token[] | null {
   const tokens: Token[] = [];
   let cur = '';
@@ -118,10 +105,7 @@ function isWithin(child: string, parent: string): boolean {
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
-/**
- * 解析单个路径 token 到绝对路径。先展开 `~`/`~/`（shell 会展开 `~` 到 home，
- * 不展开则会被 path.resolve 当成 workDir 子路径误判为 safe——安全漏洞），再按 workDir 解析。
- */
+// 解析路径 token 到绝对路径。先展开 `~`/`~/`（不展开会误判 safe——安全漏洞）。
 function resolveArgPath(token: string, workDir: string): string {
   if (token === '~') return os.homedir();
   if (token.startsWith('~/')) return path.resolve(os.homedir(), token.slice(2));
@@ -143,15 +127,8 @@ function hashCommand(command: string): string {
   return crypto.createHash('sha1').update(command).digest('hex').slice(0, 16);
 }
 
-/**
- * 分类一条 bash 命令。
- *
- * - 含元字符 → sensitive(exec-cmd, resource=hash)：保守不拆管道语义。
- * - 命令名在只读白名单：逐个非 flag token resolve 到 workDir，全在子树内 → safe；
- *   任一越界 → sensitive(read-path, resource=normalizeRoot(越界路径))。
- * - 写/可执行命令 → sensitive(edit-path|exec-cmd, resource=hash)。
- * - 未知命令 → sensitive(exec-cmd, resource=hash, review 语义)。
- */
+// 分类 bash 命令：含元字符 → sensitive(exec-cmd, hash)；只读白名单 → 全 token 在子树内 safe，越界 sensitive(read-path)。
+// 写/可执行/未知 → sensitive(edit-path|exec-cmd, hash)。
 export function classifyBashCommand(
   command: string,
   workDir: string,

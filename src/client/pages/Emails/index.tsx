@@ -146,13 +146,6 @@ const Emails: React.FC = () => {
         </Tooltip>
       ),
     },
-    // {
-    //   title: settingStore.tr('To'),
-    //   dataIndex: 'to',
-    //   key: 'to',
-    //   width: 180,
-    //   ellipsis: true,
-    // },
     {
       title: settingStore.tr('Subject'),
       dataIndex: 'subject',

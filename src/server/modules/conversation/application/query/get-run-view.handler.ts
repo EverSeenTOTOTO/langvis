@@ -6,16 +6,7 @@ import { SessionManager } from '../service/session-manager';
 import { projectRun, type RunViewResult } from '../service/run-projection';
 import { GetRunViewQuery } from '../../contracts';
 
-/**
- * GetRunViewHandler —— conv 的读模型查询（任意 run，含子 agent）。
- *
- * 子 run 的事件由 CallSubagents 转发进父 run（tool_progress { childRunId, event }），
- * 故 live 子 run 的详情从父 run 的 session 缓冲派生（不读 agent 的 executor）；
- * 历史子 run 走其自身的持久化事件行（executor 在 finalization 时 flush）。
- * 父 run 自身的详情走持久化行（它是顶层 run，有自己的行）。
- *
- * 归属：这是 conv 对 agent 事件的读模型投影 + 前端展示，agent 模块不感知 view。
- */
+// conv 读模型查询：live 子 run 从父 run 的 session 缓冲派生；历史 run 走自身持久化事件行。
 @queryHandler(GetRunViewQuery)
 export class GetRunViewHandler {
   constructor(

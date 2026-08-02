@@ -46,6 +46,12 @@ export class ConversationActivateHandler {
       runtimeConfig,
     );
 
+    // Attach the transport before the activated-phase transforms (absent for
+    // background re-activations with no client).
+    if (command.transport) {
+      await this.sessionManager.initSession(conversationId, command.transport);
+    }
+
     // activated-phase transform（usage 基线等）。激活先于任何 turn，无需屏障。
     const ctx = this.sessionManager.getCtx(conversationId);
     for await (const frame of runConvTransforms(ctx, 'activated')) {

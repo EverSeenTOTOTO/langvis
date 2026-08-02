@@ -13,13 +13,7 @@ import { fold, PROCESS_SUMMARY_PROMPT } from '@/server/libs/compaction';
 import Logger from '@/server/utils/logger';
 import { convTransform } from './registry';
 
-/**
- * turn-end 折叠本 run 的事件轨迹为过程摘要（仅记工作，不复述最终答案），写入 assistant 消息的
- * `meta.summary`，供下一轮 turn-start 的 projectToLlmMessages 透传为 seed thought。
- *
- * 后台化：跑在 RunCompleted 订阅里，终态帧（flushRunView）已在其之前发出，用户不感知折叠延迟。
- * 屏障：turn-end 维护屏障保证下一次 turn-start 在压缩完成后才 append userMessage。
- */
+// turn-end 折叠本 run 事件为过程摘要，写入 assistant 消息 meta.summary，供下轮透传为 seed thought。
 @convTransform
 export class ProcessSummaryTransform implements ConvTransform {
   readonly id = 'process-summary';
@@ -82,20 +76,13 @@ export class ProcessSummaryTransform implements ConvTransform {
   }
 }
 
-/**
- * 把 run 事件流折叠为 ReAct 轨迹（LlmMessage[]），供 process-summary fold 消费。
- * thought→assistant；tool_call+args→assistant（Action）；tool_result/tool_error→user（Observation）。
- * 线性 reduce（events 已按到达序）；跳过 start/loop_usage/final/audio 等非动作事实。
- */
+// 把 run 事件流折叠为 ReAct 轨迹（LlmMessage[]），供 process-summary fold 消费。
 export function eventsToTrajectory(
   events: readonly EnrichedEvent[],
 ): LlmMessage[] {
   const out: LlmMessage[] = [];
   for (const e of events) {
     switch (e.type) {
-      case 'thought':
-        out.push({ role: 'assistant', content: e.content ?? '' });
-        break;
       case 'tool_call':
         out.push({
           role: 'assistant',

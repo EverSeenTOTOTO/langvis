@@ -13,7 +13,7 @@ export interface InlineControlProps {
   kind: string;
   /** The exact matched source text, e.g. `/web-search`. Also the node's text content. */
   text: string;
-  /** Optional payload produced by `createData(match)` (ReplacePlugin) or `insert({ data })` (VariablePlugin). */
+  /** Optional payload from createData(match) or insert({ data }). */
   data?: unknown;
   /** The DecoratorNode key. */
   nodeKey: string;
@@ -74,7 +74,7 @@ export interface VariablePopoverRenderArgs extends PopoverRenderArgs {
 export interface VariablePluginProps {
   name: string;
   trigger: string | string[];
-  /** Pattern for paste/typed replacement into chips. Pair with a trailing boundary for delimiter-less tokens. */
+  /** Pattern replaced into chips; pair with a trailing boundary for delimiter-less tokens. */
   pattern: RegExp;
   popoverRender: (args: VariablePopoverRenderArgs) => ReactNode;
   contentRender: ComponentType<InlineControlProps>;

@@ -67,8 +67,7 @@ function makeCtx(
   } as unknown as AgentRunContext;
 }
 
-/** contextSize=8192，CFG() 取 windowRatio=0.9 → cap=8192×0.9=7372.8；
- *  factor 固定 1.1 → 桩化判断 tokens×1.1 > 7372.8，即 tokens > 6702 才触发（总量口径）。 */
+// contextSize=8192 × windowRatio 0.9 → cap=7372.8；factor 1.1 → tokens>6702 才桩化（总量口径）。
 const CFG = (): OffloadConfig => ({ windowRatio: 0.9 });
 function makeHook(contextSize: number): OffloadHook {
   const provider = { resolveContextSize: () => contextSize };

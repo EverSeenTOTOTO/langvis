@@ -17,12 +17,8 @@ import { agentHook } from './registry';
 const MAX_ITEMS = 3;
 const TOOL_HINT_THRESHOLD = 12;
 
-/**
- * pre-llm 首 tick：用 user query 检索命中工具/skill，把「建议式前缀 + 精简概要」
- * 作为 user note 注入，启发 agent 关注相关工具；完整参数定义由 agent 按需调
- * list_tools(tool=<id>) 获取。
- * 仅 conv（interactive）注入一次；subagent/eval 跳过（其受限 ToolSet 不在 ctx 上）。
- */
+// pre-llm 首 tick：按 user query 检索命中工具/skill，注入精简概要 note；完整参数由 list_tools(tool=<id>) 获取。
+// 仅 conv（interactive）注入一次；subagent/eval 跳过（受限 ToolSet 不在 ctx 上）。
 @agentHook
 export class ToolHintHook implements Hook {
   readonly id = 'tool-hint';

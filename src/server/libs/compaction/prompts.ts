@@ -1,8 +1,6 @@
 import { Prompt } from '@/server/libs/prompt';
 
-/** 折叠 turn 动作轨迹为过程摘要（仅记工作，不复述最终答案）的共享 Prompt 模板。
- *  被 loop 内 compaction（agent 侧，post-observation）与 turn process-summary（conv 侧，turn-end）复用——
- *  两者都是「把动作轨迹压成工作摘要」，表述一致。lib 不认识任何域，仅提供模板文本。 */
+// 共享 Prompt 模板：把 turn 动作轨迹折叠成过程摘要（仅记工作，不复述答案）。compaction 与 process-summary 复用；lib 不认识任何域。
 export const PROCESS_SUMMARY_PROMPT = Prompt.empty()
   .with('Role', 'You compact an agent turn into a concise process summary.')
   .with(

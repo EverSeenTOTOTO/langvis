@@ -5,9 +5,7 @@ import type { ConfigFragment } from '../config-fragment';
 export interface OffloadConfig {
   /** 总量触发比例，默认 0.8。pre-LLM OffloadHook 用。 */
   windowRatio?: number;
-  /** 产出即桩比例，默认 0.2。post-observation OutputOffloadHook 用：单条 Observation 超 contextSize×此值 即落盘。
-   *  动态跟随模型窗口（与 query-budget 的 maxQuerySize 同构）——大窗口阈值放宽（小结构化输出不必落盘），
-   *  小窗口收紧保护。8192×0.2≈1638，262k×0.2≈52k。outputTokenThreshold 若设则绝对覆盖此动态值。 */
+  // 产出即桩比例，默认 0.2：单条 Observation 超 contextSize×此值即落盘。大窗口放宽（小结构化输出不落盘），outputTokenThreshold 可绝对覆盖。
   outputSizeRatio?: number;
   /** 产出即桩绝对阈值覆盖（token 估算）。设则忽略 outputSizeRatio，用此写死值；省略走动态比例。 */
   outputTokenThreshold?: number;

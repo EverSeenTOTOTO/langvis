@@ -1,10 +1,6 @@
-/**
- * Agent 上下文领域类型。
- */
+// Agent 上下文领域类型。
 
-/**
- * AgentRun 生命周期状态。
- */
+// AgentRun 生命周期状态。
 export type RunStatus =
   | 'initialized'
   | 'running'
@@ -12,9 +8,7 @@ export type RunStatus =
   | 'failed'
   | 'cancelled';
 
-/**
- * 技能元信息。来自 `skills/<id>/skill.md` 的 front matter；客户端技能选择器消费。
- */
+// 技能元信息。来自 `skills/<id>/skill.md` 的 front matter；客户端技能选择器消费。
 export interface SkillInfo {
   id: string;
   name: string;

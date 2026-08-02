@@ -2,10 +2,7 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import { defineConfig, Plugin } from 'vite';
 import base from './vite.common';
 
-/**
- * Plugin to replace fetch-cookie dynamic import with stub in client build.
- * This prevents tough-cookie/tldts from being bundled into client.
- */
+// Stub fetch-cookie's dynamic import so tough-cookie/tldts never reach the client bundle.
 function replaceFetchCookie(): Plugin {
   return {
     name: 'replace-fetch-cookie',

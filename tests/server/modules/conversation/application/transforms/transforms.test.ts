@@ -161,15 +161,10 @@ describe('ProcessSummaryTransform', () => {
       ev({ type: 'start' }),
     ];
     const traj = eventsToTrajectory(events as readonly EnrichedEvent[]);
-    expect(traj.map(m => m.role)).toEqual([
-      'assistant',
-      'assistant',
-      'user',
-      'user',
-    ]);
-    expect(traj[1].content).toContain('Bash');
-    expect(traj[2].content).toContain('Observation:');
-    expect(traj[3].content).toContain('Error: boom');
+    expect(traj.map(m => m.role)).toEqual(['assistant', 'user', 'user']);
+    expect(traj[0].content).toContain('Bash');
+    expect(traj[1].content).toContain('Observation:');
+    expect(traj[2].content).toContain('Error: boom');
   });
 
   it('有 runCtx + events 时 fold → 写 meta.summary（不覆盖既有 meta 键）', async () => {

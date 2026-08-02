@@ -82,8 +82,7 @@ const COMMON_SPAWN_OPTS: SpawnOptions = {
   stdio: ['pipe', 'pipe', 'pipe'],
 };
 
-/** interactive 态：直接在 host 上执行（shell 模式，cwd=workDir）。
- *  Bash 工具仅在 ctx.interactive 时选它——人工确认后才在 host 跑。 */
+// interactive 态：直接在 host 上执行（shell 模式，cwd=workDir）。 Bash 工具仅在 ctx.interactive 时选它——人工确认后才在 host 跑。
 export class DirectBash implements BashBackend {
   spawn(command: string, workDir: string): ChildHandle {
     const child = spawn(command, {
@@ -95,9 +94,8 @@ export class DirectBash implements BashBackend {
   }
 }
 
-/** prod：在 Docker 沙箱内执行。host workDir 以同路径 bind-mount，与 host 工具共享 scratch 目录；
- *  `--network=none` 断网、资源上限防 DoS、`--user` 保证写出的文件属主为 host 用户。
- *  kill 走 `--cidfile` + `docker kill`——group-kill 在 SIGKILL 时会孤立容器。 */
+// prod：Docker 沙箱内执行。workDir 同路径 bind-mount，`--network=none` 断网，资源上限防 DoS。
+// kill 走 `--cidfile` + `docker kill`——group-kill 在 SIGKILL 时会孤立容器。
 export class DockerBash implements BashBackend {
   spawn(command: string, workDir: string): ChildHandle {
     const cidFile = path.join(os.tmpdir(), `bash-cid-${generateId('')}`);
@@ -152,10 +150,7 @@ interface RunChildOpts {
   callId: string;
 }
 
-/**
- * 共享执行核：流式收集 stdout/stderr（按 PROGRESS_LIMIT 截断式 flush 为 tool_progress）、
- * 超时/abort 即 kill、退出后汇总。DirectBash / DockerBash 仅 spawn + kill 不同，此处复用。
- */
+// 共享执行核：流式收集 stdout/stderr，超时/abort 即 kill，退出后汇总；Direct/Docker 仅 spawn+kill 不同。
 export async function* runChild(
   handle: ChildHandle,
   opts: RunChildOpts,
@@ -261,11 +256,7 @@ function dockerAvailable(): boolean {
   }
 }
 
-/**
- * 启动期探测：非交互式 Bash 以 Docker 沙箱为硬边界，docker 守护或沙箱镜像缺失时仅警告——
- * spawn（`docker run`）会自然 fail-fast。dev 同样需要 docker（非交互 = 子 agent / eval）。
- * 经 @lifecycleHook 自注册，bootAll() 解析调用；随 bash-backend 被 agent.module 导入而生效。
- */
+// 启动期探测：docker 守护或沙箱镜像缺失时仅警告（spawn 会自然 fail-fast）；经 @lifecycleHook 自注册。
 @singleton()
 @lifecycleHook
 export class BashSandboxProbe implements LifecycleHook {

@@ -9,10 +9,7 @@ export interface RunStepsProps {
   steps: ReActStep[];
 }
 
-/**
- * 任意 run 的步骤渲染——把 ReActStep[] 转成 UIToolCall/timeline 后复用
- * ToolBlockItem / StandaloneThoughtBlock（与消息实时路径同一渲染机制，无子 agent 专属渲染）。
- */
+// 任意 run 的步骤渲染：ReActStep[] 转 UIToolCall/timeline 后复用 ToolBlockItem 等，无子 agent 专属渲染。
 export function RunSteps({ steps }: RunStepsProps): React.ReactElement | null {
   if (steps.length === 0) return null;
   const toolCalls = stepsToToolCalls(steps);

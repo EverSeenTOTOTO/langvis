@@ -16,9 +16,7 @@ import Logger from '@/server/utils/logger';
 
 const logger = Logger.child({ source: 'ReactLoop' });
 
-/**
- * parse 失败时回灌给模型的 Observation 前缀。eval 的 extractParseFailures 据此扫描统计
- */
+// parse 失败时回灌给模型的 Observation 前缀。eval 的 extractParseFailures 据此扫描统计
 export const PARSE_ERROR_OBSERVATION_PREFIX =
   'Observation: Error parsing response: ';
 
@@ -121,9 +119,8 @@ export function parseResponse(content: string): ParsedAction {
   };
 }
 
-// ─── XML 工具调用信封的序列化/反序列化 ───
-// parse 与 serialize 同源，集中维护 wire format：参数值走 XML 文本内容，引号/反斜杠/花括号
-// 取字面、无需转义（只有 < & > 需），把 escape 压力从 JSON 字符串值挪走（见 base-prompt XML 段）。
+// XML 工具调用信封的序列化/反序列化——parse 与 serialize 同源维护 wire format。
+// 参数值走 XML 文本内容，引号/反斜杠/花括号取字面、无需转义（只有 < & > 需），escape 压力从 JSON 挪走。
 
 function decodeXml(text: string): string {
   return text
@@ -147,8 +144,8 @@ function tagContent(text: string, tag: string): string | null {
   return m ? m[1]! : null;
 }
 
-/** <input> 子标签 → {key: 值}。值优先按 JSON 字面量取（number/bool/null/数组/对象），失败则作字面
- *  字符串（引号/反斜杠原样，无需转义）。无子标签则回退 JSON 对象串；空 input（无参工具）→ {}。 */
+// <input> 子标签 → {key: 值}：值优先按 JSON 字面量取（number/bool/null/数组/对象），失败作字面字符串。
+// 无子标签回退 JSON 对象串；空 input（无参工具）→ {}。
 function parseInput(inner: string): Record<string, unknown> {
   const obj: Record<string, unknown> = {};
   const re = /<([a-zA-Z_][\w-]*)>([\s\S]*?)<\/\1>/g;

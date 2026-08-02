@@ -26,9 +26,7 @@ const ESTIMATE_SAFETY_FACTOR = 1.1;
 /** 总量触发比例缺省：total×factor > contextWindow×此值即 offload 最胖。 */
 const DEFAULT_WINDOW_RATIO = 0.8;
 
-/**
- * 当本次 query 的 token×factor > contextWindow×windowRatio（剩余空间不足）时，最胖优先桩化 [base,len) 内候选到盘（bash rg/sed/head 句柄），直到缩进阈值内。
- */
+// 剩余空间不足（token×factor > 窗口×ratio）时，最胖优先桩化 [base,len) 候选到盘，直到压进阈值。
 @agentHook
 export class OffloadHook implements Hook {
   readonly id = 'offload';
@@ -59,9 +57,8 @@ export class OffloadHook implements Hook {
     let tokens = estimateTokens(messages);
     if (tokens * factor <= cap) return;
 
-    // 候选：仅 [base,len)。已桩 / 盘上句柄回取 / 短于 MIN 跳过。最胖优先（tokens 降序）。
-    // assistant 的 ParsedAction 单一索引：candidateBody 解析后寄存于此，供该 assistant 作为
-    // 候选自身的 hint/stub、以及作为下一条 observation 的配对源（recall + hint）共用——免重复 parse。
+    // 候选：仅 [base,len)；已桩 / 盘上句柄回取 / 短于 MIN 跳过；最胖优先（tokens 降序）。
+    // assistant 的 ParsedAction 由 candidateBody 解析后寄存单一索引，hint/stub 与下条 observation 配对源共用，免重复 parse。
     const parsedByIndex = new Map<number, ParsedAction | null>();
     const parsedAt = (i: number): ParsedAction | null => {
       if (!parsedByIndex.has(i)) {

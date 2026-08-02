@@ -1,10 +1,4 @@
-/**
- * DomainEvent — 领域事件基接口。
- *
- * 不引入 EventEmitter 依赖——聚合根只收集，发布时机由调用方控制（见 aggregate-root）。
- *
- * @see docs/plans/2026-05-30-ddd-refactor/ for DDD phase context
- */
+// 领域事件基接口。不依赖 EventEmitter——聚合根只收集，发布时机由调用方控制（见 aggregate-root）。
 export interface DomainEvent<
   TType extends string = string,
   TPayload = unknown,

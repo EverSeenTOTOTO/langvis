@@ -58,9 +58,7 @@ describe('ChatService', () => {
     service = new ChatService(messageRepo, convRepo, agentRunRepo, workspace);
   });
 
-  // ════════════════════════════════════════
-  // 消息构建
-  // ════════════════════════════════════════
+  // ═══ 消息构建 ═══
 
   describe('activate', () => {
     it('creates activation messages when no existing messages', async () => {
@@ -136,9 +134,7 @@ describe('ChatService', () => {
     });
   });
 
-  // ════════════════════════════════════════
-  // BC 跨边界组合查询
-  // ════════════════════════════════════════
+  // ═══ BC 跨边界组合查询 ═══
 
   describe('findActiveAssistantMessages', () => {
     it('composes query across Message + AgentRun repos', async () => {
@@ -317,9 +313,7 @@ describe('ChatService', () => {
     });
   });
 
-  // ════════════════════════════════════════
-  // 其他
-  // ════════════════════════════════════════
+  // ═══ 其他 ═══
 
   describe('persistAgentRunId', () => {
     it('writes agentRunId to Message (fire-and-forget)', () => {
@@ -330,9 +324,7 @@ describe('ChatService', () => {
     });
   });
 
-  // ════════════════════════════════════════
-  // 归属校验 / turn 编排(从 handler 下沉至此)
-  // ════════════════════════════════════════
+  // ═══ 归属校验 / turn 编排 (从 handler 下沉至此) ═══
 
   describe('requireConversation', () => {
     it('returns conversation when found for owner', async () => {
