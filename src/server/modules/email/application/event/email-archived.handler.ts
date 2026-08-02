@@ -9,9 +9,7 @@ import { Role } from '@/shared/entities/Message';
 import { EmailArchived, type EmailArchivedPayload } from '../../contracts';
 import { EmailService } from '../service/email.service';
 
-/** Reaction to EmailArchived: hand the archived email to the summarization run.
- *  Stays a thin dispatcher — prompt building + body caching live in
- *  EmailService.composeArchivePrompt; this only sequences compose → activate → start. */
+// EmailArchived 的薄调度器：仅编排 compose → activate → start，提示词与 body 缓存留在 EmailService。
 @eventHandler(EmailArchived)
 export class EmailArchivedHandler {
   constructor(

@@ -13,8 +13,7 @@ const LANGVIS_DIR = join(homedir(), '.langvis');
 const CONV_FILE = join(LANGVIS_DIR, 'cli-conv-id');
 const COOKIE_FILE = join(LANGVIS_DIR, 'cookies.json');
 
-/** Persist the CLI's conversation id under ~/.langvis so reruns resume the same
- * conversation. */
+// Persist the CLI's conversation id under ~/.langvis so reruns resume the same conversation.
 const fileConv: ConvStorage = {
   getConvId: () => {
     try {
@@ -33,8 +32,7 @@ const fileConv: ConvStorage = {
   },
 };
 
-/** Ctrl-D quits (preserves the old CLI quit key). Ctrl-C is left as a normal
- * key so screens can cancel a running stream on '\x03'. */
+// Ctrl-D quits; Ctrl-C stays a normal key so screens cancel a running stream on '\x03'.
 function QuitOnCtrlD() {
   useKeyboard(data => {
     if (data === '\x04') process.exit(0);
@@ -42,11 +40,8 @@ function QuitOnCtrlD() {
   return null;
 }
 
-// ── CLI session persistence (one login per machine) ─────────────────────────
-// The cookie jar is api.ts's serverFetch singleton (in-memory by default).
-// Mirror it to ~/.langvis/cookies.json: restore on startup — before the auth
-// probe, so getSession sees the cookie and skips sign-in — and persist on
-// login. Kept in the CLI entry so node:fs never reaches the browser bundle.
+// Mirror the serverFetch cookie jar to ~/.langvis/cookies.json — restore
+// before the auth probe, persist on login. Kept here so node:fs stays out of bundle.
 
 const readJson = <T,>(file: string): T | null => {
   try {
@@ -98,11 +93,8 @@ async function main() {
     { exitOnCtrlC: false },
   );
 
-  // On login: persist the session cookie and clear the screen so the chat
-  // starts on a fresh surface (wipes boot output + the sign-in form). The
-  // mobx reaction runs synchronously on the currentUser change, before
-  // React's async re-render draws Chat — so the clear lands first. On
-  // logout: drop the persisted cookie.
+  // On login persist the cookie and clear the screen (reaction runs before
+  // React re-renders Chat, so the clear lands first); on logout drop it.
   const userStore = useStore('user');
   reaction(
     () => userStore.currentUser,
@@ -117,6 +109,16 @@ async function main() {
           /* already gone */
         }
       }
+    },
+  );
+
+  // Mirror the active conversation id to ~/.langvis/cli-conv-id on every change
+  // so /conv, /new, and post-delete reassignment persist without picker access.
+  const conversationStore = useStore('conversation');
+  reaction(
+    () => conversationStore.currentConversationId,
+    id => {
+      if (id) fileConv.setConvId(id);
     },
   );
 }

@@ -1,6 +1,7 @@
 /** @jsxImportSource react */
 import { observer } from 'mobx-react-lite';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Spinner } from '@/tui/components/Spinner';
 import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
 import { Input } from '@/tui/components/Input';
@@ -11,6 +12,17 @@ import { useStore } from '@/client/store';
 import { Role, type Message } from '@/shared/types/entities';
 import { AssistantView, UserView } from '../components/MessageView';
 import { AskUserForm } from '../components/AskUserForm';
+import { ModelPicker } from '../components/ModelPicker';
+import { ConvPicker } from '../components/ConvPicker';
+
+// Bottom panel is in exactly one of these modes at a time. `busy` covers every
+// non-functional state (input disabled); sources live in their natural layers.
+type BottomMode =
+  | { kind: 'ask' }
+  | { kind: 'model' }
+  | { kind: 'conv' }
+  | { kind: 'busy'; label: string }
+  | { kind: 'input' };
 
 function isVisible(m: Message): boolean {
   if (m.role === Role.SYSTEM) return false;
@@ -27,11 +39,7 @@ function HRule({ cols }: { cols: number }) {
   );
 }
 
-const StatusBar = observer(function StatusBar({
-  status,
-}: {
-  status: 'idle' | 'activating' | 'streaming';
-}) {
+const StatusBar = observer(function StatusBar() {
   const conversation = useStore('conversation');
   const usage = conversation.conversationUsage;
   const model =
@@ -40,17 +48,27 @@ const StatusBar = observer(function StatusBar({
         model?: { modelId?: string };
       } | null
     )?.model?.modelId ?? '?';
+  const name =
+    conversation.currentConversation?.name ||
+    conversation.currentConversationId ||
+    '';
   return (
     <Box height={1}>
-      <Text fg="cyan">langvis</Text>
-      <Text fg="gray">{` · ${model} · ctx `}</Text>
+      <Text fg="cyan" bold>
+        langvis
+      </Text>
+      <Text fg="gray">{' · '}</Text>
+      <Text fg="magenta">{model}</Text>
+      <Text fg="gray">{' · ctx '}</Text>
       {usage ? (
         <Progress value={usage.used} max={usage.total} width={16} />
       ) : (
         <Text fg="gray">—</Text>
       )}
-      <Text fg={status === 'idle' ? 'gray' : 'yellow'}>{` · ${status}`}</Text>
-      <Text fg="gray">{` · ${conversation.currentConversation?.name || conversation.currentConversationId}`}</Text>
+      <Text fg="gray">{' · '}</Text>
+      <Text fg="yellow" bold>
+        {name}
+      </Text>
     </Box>
   );
 });
@@ -58,9 +76,11 @@ const StatusBar = observer(function StatusBar({
 const ChatInput = observer(function ChatInput({
   convId,
   streamingId,
+  onCommand,
 }: {
   convId: string;
   streamingId: string | null;
+  onCommand: (raw: string) => void;
 }) {
   const chat = useStore('chat');
   const [v, setV] = useState('');
@@ -79,14 +99,17 @@ const ChatInput = observer(function ChatInput({
         onChange={setV}
         fg={streamingId ? 'gray' : 'white'}
         onSubmit={s => {
-          if (s.trim()) {
+          const trimmed = s.trim();
+          if (!trimmed) return;
+          if (trimmed.startsWith('/')) onCommand(s);
+          else {
             void chat.startChat({
               conversationId: convId,
               role: Role.USER,
               content: s,
             });
-            setV('');
           }
+          setV('');
         }}
       />
     </Box>
@@ -96,19 +119,65 @@ const ChatInput = observer(function ChatInput({
 export const Chat = observer(function Chat() {
   const conversation = useStore('conversation');
   const chat = useStore('chat');
+  const model = useStore('model');
   const { cols } = useTerminalSize();
   const convId = conversation.currentConversationId;
+  const [picker, setPicker] = useState<null | 'model' | 'conv'>(null);
+  const [notice, setNotice] = useState('');
+  const [expanded, setExpanded] = useState(false);
+
+  async function createNew() {
+    try {
+      const groups = (await model.getModels()) as Array<{
+        models: Array<{ id: string }>;
+      }>;
+      const modelId = groups[0]?.models[0]?.id ?? 'localhost:default';
+      const conv = await conversation.createConversation({
+        name: 'New Conversation',
+        config: { model: { modelId } },
+        workspacePath: process.cwd(),
+      });
+      if (!conv?.id) {
+        setNotice('new failed: no conversation returned');
+      } else {
+        conversation.currentConversationId = conv.id;
+      }
+    } catch (e) {
+      setNotice(`new failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  function handleCommand(raw: string) {
+    const cmd = raw.trim().toLowerCase();
+    setNotice('');
+    if (cmd === '/model') setPicker('model');
+    else if (cmd === '/conv') setPicker('conv');
+    else if (cmd === '/new') void createNew();
+    else if (cmd === '/' || cmd === '/help') {
+      setNotice('commands: /model  /conv  /new');
+    } else {
+      setNotice(`unknown command: ${raw.trim()}`);
+    }
+  }
+
+  // Ctrl+O toggles full tool detail for the current (streaming) turn.
+  useKeyboard(data => {
+    if (data === '\x0f') setExpanded(v => !v);
+  });
 
   if (!convId) return null;
 
   const all = (conversation.messages[convId] ?? []).filter(isVisible);
 
-  // The streaming node = the last assistant message whose run isn't terminal.
+  // The streaming turn = the last assistant message still in flight; only the
+  // final entry qualifies so a stale previous node is never latched onto.
   let streamingId: string | null = null;
   for (let i = all.length - 1; i >= 0; i--) {
     if (all[i].role !== Role.ASSIST) continue;
     const node = chat.getMessageNode(convId, all[i].id);
-    if (node && !node.isTerminal) streamingId = all[i].id;
+    if (node && !node.isTerminal && i === all.length - 1) {
+      streamingId = all[i].id;
+    }
     break;
   }
 
@@ -116,49 +185,78 @@ export const Chat = observer(function Chat() {
   const streamingNode = streamingId
     ? chat.getMessageNode(convId, streamingId)
     : null;
+  const activating = chat.isTransportConnecting && !streamingId;
 
-  // `currentSessionActive` covers both connecting (activation/replay) and a
-  // running turn; `streamingId` disambiguates — no node yet means activating.
-  const activating = chat.currentSessionActive && !streamingId;
-  const status: 'idle' | 'activating' | 'streaming' = streamingId
-    ? 'streaming'
-    : activating
-      ? 'activating'
-      : 'idle';
+  // Keep the most recent assistant turn live (not Static) so Ctrl+O works after
+  // completion; promotion is gated on the assistant staying the final message.
+  const lastAssistIdx = streamingId
+    ? -1
+    : (() => {
+        for (let i = committed.length - 1; i >= 0; i--) {
+          if (committed[i].role === Role.ASSIST) return i;
+        }
+        return -1;
+      })();
+  const lastTurnNode =
+    lastAssistIdx >= 0 && lastAssistIdx === committed.length - 1
+      ? (chat.getMessageNode(convId, committed[lastAssistIdx].id) ?? null)
+      : null;
+  const staticItems =
+    lastAssistIdx >= 0 && lastTurnNode
+      ? committed.filter((_, i) => i !== lastAssistIdx)
+      : committed;
+  const liveNode = streamingNode ?? lastTurnNode;
 
-  // While awaiting user input, paint as a full frame (absolute positioning +
-  // clear, like the sign-in screen) instead of the streaming live region. The
-  // streaming erase is a *relative* cursor-up that desyncs once the tall panel
-  // scrolls the terminal, stacking duplicate panels. Full-frame shows recent
-  // messages (context) on top and pins the panel at the bottom via a spacer.
-  if (streamingNode?.awaitingInput) {
-    return (
-      <>
-        {committed.slice(-3).map(m => (
-          <Box key={m.id} flexDirection="column">
-            {m.role === Role.ASSIST ? (
-              <AssistantView node={chat.getMessageNode(convId, m.id)!} />
-            ) : (
-              <UserView content={m.content} />
-            )}
-            <Text> </Text>
-          </Box>
-        ))}
-        <AssistantView node={streamingNode} />
-        <Box flexGrow={1}>
-          <Text> </Text>
-        </Box>
-        <HRule cols={cols} />
-        <AskUserForm node={streamingNode} cols={cols} />
-        <HRule cols={cols} />
-        <StatusBar status={status} />
-      </>
-    );
+  // Bottom-panel mode — one discriminated value, priority ask > picker > busy
+  // > input; busy sources read from their own layers and merged only here.
+  const mode: BottomMode = (() => {
+    if (liveNode?.awaitingInput) return { kind: 'ask' };
+    if (picker === 'model') return { kind: 'model' };
+    if (picker === 'conv') return { kind: 'conv' };
+    if (conversation.isCreating) {
+      return { kind: 'busy', label: 'creating new conversation…' };
+    }
+    if (conversation.isConfigUpdating) {
+      return { kind: 'busy', label: 'switching model…' };
+    }
+    if (activating) return { kind: 'busy', label: 'activating conversation…' };
+    if (liveNode?.isThinking) return { kind: 'busy', label: 'thinking…' };
+    return { kind: 'input' };
+  })();
+
+  const closePanel = () => setPicker(null);
+
+  let bottomPanel: ReactNode;
+  switch (mode.kind) {
+    case 'ask':
+      bottomPanel = <AskUserForm node={liveNode!} cols={cols} />;
+      break;
+    case 'model':
+      bottomPanel = <ModelPicker onClose={closePanel} />;
+      break;
+    case 'conv':
+      bottomPanel = <ConvPicker onClose={closePanel} />;
+      break;
+    case 'busy':
+      bottomPanel = <Spinner label={mode.label} />;
+      break;
+    case 'input':
+      bottomPanel = (
+        <>
+          {notice !== '' && <Text fg="red">{notice}</Text>}
+          <ChatInput
+            convId={convId}
+            streamingId={streamingId}
+            onCommand={handleCommand}
+          />
+        </>
+      );
+      break;
   }
 
   return (
     <>
-      <Static items={committed}>
+      <Static items={staticItems}>
         {m => (
           <Box key={m.id} flexDirection="column">
             {m.role === Role.ASSIST ? (
@@ -170,16 +268,12 @@ export const Chat = observer(function Chat() {
           </Box>
         )}
       </Static>
-      {streamingNode && <AssistantView node={streamingNode} />}
+      {liveNode && <AssistantView node={liveNode} expanded={expanded} />}
       <HRule cols={cols} />
-      {streamingNode?.awaitingInput ? (
-        <AskUserForm node={streamingNode} cols={cols} />
-      ) : (
-        <ChatInput convId={convId} streamingId={streamingId} />
-      )}
+      {bottomPanel}
       <HRule cols={cols} />
       <Text> </Text>
-      <StatusBar status={status} />
+      <StatusBar />
     </>
   );
 });

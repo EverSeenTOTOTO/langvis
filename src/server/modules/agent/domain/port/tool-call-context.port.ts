@@ -2,9 +2,7 @@ import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type { ConversationConfig } from '@/server/libs/config';
 import type { AuthorizationPort } from './authorization.port';
 
-/**
- * ToolCallContext —— 与 AgentRunContext 对称
- */
+// ToolCallContext —— 与 AgentRunContext 对称
 export interface ToolCallContext {
   /** 用于 tool_progress 等事件的 callId */
   readonly callId: string;

@@ -15,9 +15,7 @@ import { AgentService } from '../service/agent.service';
 import { eventHandler } from '@/server/decorator/handler';
 import Logger from '@/server/utils/logger';
 
-/**
- * AgentRunHandler —— TurnInitiated 的订阅者，**只驱动 agent 执行**，不感知会话。
- */
+// AgentRunHandler —— TurnInitiated 的订阅者，**只驱动 agent 执行**，不感知会话。
 @eventHandler(TurnInitiated)
 export class AgentRunHandler {
   private readonly logger = Logger.child({ source: 'AgentRunHandler' });
@@ -39,7 +37,7 @@ export class AgentRunHandler {
       workDir,
     } = event.payload;
     const runId = generateId('run');
-    // effectiveHistory 即 agent 种子（ReAct 还原 + meta.summary→thought 注入在 createRun 的 restoreReactMessage）；取 conv 默认 ToolSet（全集）。
+    // effectiveHistory 即 agent 种子（createRun 经 restoreReactMessage 还原）；取 conv 默认 ToolSet（全集）。
     const toolSet = this.agentService.buildToolSet();
 
     this.eventBus.dispatch(

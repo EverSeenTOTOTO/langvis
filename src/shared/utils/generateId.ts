@@ -1,13 +1,5 @@
-/**
- * Generate a prefixed ID with 8 random hex characters.
- *
- * Uses `crypto.randomUUID` when available (secure browser context / Node ≥19);
- * otherwise falls back to a `Math.random`-based hex string (e.g. a browser over
- * plain HTTP, where `crypto.randomUUID` is undefined). Safe to call from both
- * server and client code in any environment.
- *
- * @example generateId('conv') => 'conv_a1b2c3d4'
- */
+// Prefixed ID with 8 random hex chars: crypto.randomUUID when available, else Math.random fallback.
+// Safe from server and client code. Example: generateId('conv') => 'conv_a1b2c3d4'
 export function generateId(prefix: string): string {
   return `${prefix}_${randomHex(8)}`;
 }

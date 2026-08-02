@@ -7,18 +7,8 @@ import { extractJsonObject } from '@/shared/utils';
 import type { Task } from '../../../types';
 import { FsBackend, fsToolSet } from '../sandbox';
 
-/**
- * md-code-strings：压 parser 的转义边界。要求模型**自行推导转义**——只给"字符清单"（值的语义
- * 构成），不给目标字节；模型得自己把"值里含双引号/反斜杠"翻成 JSON 转义（" → \"、\ → \\），
- * 再写进一段 Python 脚本、放进 response_user 的 ```python 代码块交付。于是 response_user 的
- * message 成了含三反引号围栏 + 引号 + 反斜杠的 JSON 字符串值——正是 extractJsonObject 注释里
- * "字符串值可能合法地含三反引号/引号"的尖刺场景。
- *
- * grade 取终答里最后一个 ``` 代码块落盘运行，JSON.parse 其输出，按"字符清单"校验**值**（不比
- * 字节，避免惩罚键序/空格差异）。确定性，无 LLM。parse 失败由 eval 仪表盘另行统计（parse_fail）。
- *
- * 期望值用 fromCharCode 构造，杜绝源码层转义歧义：msg = h i " x；r = \ d。
- */
+// md-code-strings：压 parser 转义边界——模型自行推导转义，把含引号/反斜杠的值翻成
+// JSON 转义写进 python 脚本、经 ```python 代码块交付。grade 落盘运行、JSON.parse 校验值。
 const DQUOTE = String.fromCharCode(34);
 const BACKSLASH = String.fromCharCode(92);
 const MSG_EXPECTED = `hi${DQUOTE}x`;

@@ -1,7 +1,4 @@
-/**
- * flight 域：内存订票沙箱 + 虚构工具。
- * 工具是无状态 singleton（registerTool），沙箱经 runId 绑定（fictional-tool 基类取回）。
- */
+// flight 域：内存订票沙箱 + 虚构工具。 工具是无状态 singleton（registerTool），沙箱经 runId 绑定（fictional-tool 基类取回）。
 import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tool } from '@/server/decorator/tool';
@@ -35,18 +32,12 @@ export class BookingBackend {
   workDir = '';
 
   constructor(flights: Flight[]) {
-    // 深拷贝：book_flight 原地 flight.seats--，若按引用共享调用方数组
-    // （task 模块级 const FLIGHTS 跨 trial 复用），座位会被前序 run 扣光、
-    // 后序 run 收到 seats=0 → 误判。每 run 拷一份，扣减仅本 run 可见。
+    // 深拷贝：book_flight 原地扣 seats，按引用共享会被前序 run 扣光误判。
+    // 每 run 拷一份，扣减仅本 run 可见。
     this.flights = flights.map(f => ({ ...f }));
   }
 
-  /**
-   * 把订票后端状态快照写 workDir/bookings.json：含当前余票与全部订票记录。
-   * 目的是给只读审计一条查询途径——审计子 run 只有 bash，订票真相在内存
-   * backend 里它够不着；落盘后 `cat bookings.json` 即可复核 reply 是否站得住
-   * （订了几张、是否最便宜、是否还有票），与 fs 域审计 cat demo.py 同构。
-   */
+  // 快照订票状态到 workDir/bookings.json，供只读审计子 run 用 bash cat 复核。
   persist(): void {
     if (!this.workDir) return;
     try {
@@ -223,10 +214,7 @@ export const flightToolDefs: FictionalToolDef[] = [
 
 const FLIGHT_TOOL_IDS = flightToolDefs.map(d => d.id);
 
-/** flight 域 ToolSet：4 业务工具 + bash + response_user 全 inline（模型见全 schema）。
- *  bash 非"业务工具"而是 offload 读端：search_flights 大结果被 OutputOffloadHook 落盘成
- *  search-flights__fc_xxxx 句柄后，桩统一指引用 bash（rg/grep/head）检索回读——无 bash 则模型
- *  被引向不存在的工具必死。同构 fs 域：fsDocToolSet 也为同因挂 bash。 */
+// flight 域 ToolSet：业务工具 + bash + response_user 全 inline；bash 是 offload 结果回读端。
 export function flightToolSet(): ToolSet {
   return ToolSet.of(
     [

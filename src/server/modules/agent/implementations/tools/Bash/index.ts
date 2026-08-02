@@ -63,9 +63,8 @@ export default class BashTool extends Tool<BashOutput> {
       MAX_TIMEOUT,
     );
 
-    // backend 按交互性选：interactive → DirectBash（人工确认后在 host 执行）；
-    // 非 interactive → DockerBash（沙箱即边界，无 HITL 也安全）。
-    // 暂时禁用 Docker 沙箱——非交互也走 host（DirectBash），与 interactive 同。
+    // backend 按交互性选：interactive → DirectBash；非 interactive → DockerBash。
+    // 暂时禁用 Docker 沙箱——非交互也走 host（DirectBash）。
     const backend: BashBackend = new DirectBash();
 
     let userTimeout: number;

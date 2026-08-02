@@ -1,21 +1,5 @@
-/**
- * G4.4 检索压力任务 — 跨 city-pair 比价条件订票（测 offload 无损性 / 回查链）。
- *
- * 模型须 search 两个 pair（京沪 + 京广），比较各自约束最便宜价，按条件选订其一。
- * - 2 次 search × ~40 条 ≈ 累积过 8K 模型阈值（6553）→ offload-only/hybrid 变体下老 search obs 被桩化。
- * - 模型要么在 thought 里记下两价（单次消化，offload 无损），要么 bash rg 回查被桩 obs。
- *   offload 设计目标正是"无损、可按需回取"——本任务端到端验证：桩化后模型仍能正确比价订票。
- *
- * 与 2leg/4leg 区别：那两个测累积爆窗（压缩救不救命）；本任务累积较轻（2 search），
- * 重点看 offload/hybrid 变体下桩化是否丢信息（default 不桩、照样过；offload 桩了也须照样过）。
- *
- * grader：京广约束最便宜价 < PRICE_GATE(850) 则订京广 target，否则订京沪 target。
- *   实测 fresh-catalog：京沪 f34@821、京广 f150@913 → 913≥850 → target = 京沪 f34。
- *   若 catalog 调整使 gate 跨越，target 自动重算（fresh-catalog，模块加载时算一次）。
- *
- * 风险：信息能被单次消化进 thought 时，offload 不强制回查——本任务对"回查链"的诊断力有限，
- * 是 offload 无损性的端到端冒烟；强回查任务（须多次精确引用原文细节）待 offload 行为实测后精调。
- */
+// G4.4 跨 city-pair 比价订票，测 offload 无损性/回查链：2 次 search 累积过 8K 阈值，
+// offload 变体下老 obs 被桩化，模型仍须正确比价订票（offload 应可回取、不丢信息）。
 import type { Task } from '../../../types';
 import {
   createBookingBackend,

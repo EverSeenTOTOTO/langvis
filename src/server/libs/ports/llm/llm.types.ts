@@ -1,7 +1,4 @@
-/**
- * TTS/STT I/O 契约——LlmPort 与 agent 工具（TextToSpeech / SpeechToText）共用。
- * 置于内核，避免 LLM 端口（被 memory 实现）反向依赖 agent 工具层。
- */
+// TTS/STT I/O 契约——LlmPort 与 agent 工具共用。置于内核，避免 LLM 端口反向依赖 agent 工具层。
 export interface TextToSpeechInput {
   modelId?: string;
   text: string;

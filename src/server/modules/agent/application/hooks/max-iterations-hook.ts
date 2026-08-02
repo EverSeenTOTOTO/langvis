@@ -12,9 +12,7 @@ import { responseUser } from './cumulative-budget-hook';
 const ITER_CAP_MESSAGE =
   'This turn reached its iteration limit without finishing. Stopping here — please continue in a new turn if needed.';
 
-/**
- * 迭代上限兜底（length 闸）。阈值取自 guard.maxIterations（生产默认 1000，eval 调小）。
- */
+// 迭代上限兜底（length 闸）。阈值取自 guard.maxIterations（生产默认 1000，eval 调小）。
 @agentHook
 export class MaxIterationsHook implements Hook {
   readonly id = 'max-iterations';

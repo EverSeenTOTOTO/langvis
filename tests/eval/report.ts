@@ -1,6 +1,4 @@
-/**
- * 结果落盘（JSONL）+ resume-by-counting + Wilson 95% CI + 多维聚合打表。
- */
+// 结果落盘（JSONL）+ resume-by-counting + Wilson 95% CI + 多维聚合打表。
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { DesignMetrics, RunOutcome } from './types';
@@ -25,11 +23,8 @@ export async function append(outcome: RunOutcome): Promise<void> {
   await fs.appendFile(RESULTS, JSON.stringify(outcome) + '\n');
 }
 
-/**
- * 已完成 (task×model×variant×trial) 四元组集合——resume 据此跳过。
- * 旧 jsonl 无 variant 字段，回填 DEFAULT_VARIANT（compact+guard）。
- * 旧 jsonl 用 preset 名（compact-only/bare/hybrid/audit-on）的行不归一——须 purge 重跑。
- */
+// 已完成 (task×model×variant×trial) 四元组集合——resume 据此跳过。
+// 旧 jsonl 无 variant 回填 DEFAULT_VARIANT；用旧 preset 名的行不归一，须 purge。
 export function completedKeys(existing: readonly RunOutcome[]): Set<string> {
   return new Set(
     existing.map(
@@ -54,15 +49,8 @@ export function wilson(
   return { lo: Math.max(0, center - half), hi: Math.min(1, center + half) };
 }
 
-/**
- * 非确定性两轴（指南 §5）。二者都只是单次成功率 p 的函数——p 已由上方 Wilson 估出，
- * 此处用点估计 p̂=passes/total 推算；区间仍读 correctness 表的 p̂ CI，不重复传播（免增列宽）。
- *
- * - pass@k = 1-(1-p)^k  ：k 次里至少 1 次成功（有人把关、峰值性能）。
- * - pass^k = p^k        ：k 次全成功（无人把关、稳定性）。
- *
- * p=0.75 时 pass@10≈99.99% 而 pass^10≈5.6%——同一 agent 两种叙事，差距触目惊心。
- */
+// 非确定性两轴：pass@k = 1-(1-p)^k（至少 1 次成功），pass^k = p^k（全成功）。
+// p=0.75 时 pass@10≈99.99% vs pass^10≈5.6%；区间读 correctness 的 p̂ CI，不重复传。
 const passAtK = (p: number, k: number): number => 1 - (1 - p) ** k;
 const passPowK = (p: number, k: number): number => p ** k;
 
@@ -193,11 +181,8 @@ function passRate(cell: CellAgg | undefined): number {
   return cell.passes / cell.total;
 }
 
-/**
- * headroom = 同 (model, task) 上最优 variant − baseline variant 的 pass 率差。
- * baseline = 'bare'（空 feature，仅 guard 基线）；缺该 variant 数据则该格 headroom 不可算。
- * >0 → driver 有贡献（baseline 过不了、调上来能过）；≈0 → 该场景不区分 driver（太易/太难）。
- */
+// headroom = 同 (model,task) 上最优 variant − baseline('bare') 的 pass 率差。
+// >0 → driver 有贡献（baseline 过不了、调上能过）；≈0 → 场景不区分 driver。
 const BASELINE_VARIANT = 'bare';
 
 function headroomRows(
@@ -310,9 +295,8 @@ export async function printReport(
       );
     }
 
-    // 非确定性剖面（指南 §5 pass@k / pass^k）。按 domain 分表，行=model，
-    // 列=pass@1(=p̂ 点估计)及各 k 档的 pass@k（有人把关/峰值）与 pass^k（无人把关/稳定）。
-    // pass@1 即单次成功率 p̂——本表取代旧 correctness 表，只给点估计，不再单独列 CI。
+    // 非确定性剖面（§5 pass@k / pass^k）：按 domain 分表，行=model；pass@1 即 p̂ 点估计。
+    // 取代旧 correctness 表，不再单独列 CI。
     for (const [d] of domains) {
       const detRows = models
         .map(m => {

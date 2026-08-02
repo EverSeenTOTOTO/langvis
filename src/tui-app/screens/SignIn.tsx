@@ -8,10 +8,8 @@ import { BorderedBox } from '@/tui/components/BorderedBox';
 import { useKeyboard, useTerminalSize } from '@/tui/hooks';
 import { useStore } from '@/client/store';
 
-/** Email/password sign-in. Each Input owns its own Enter via onSubmit
- * (email → advance to password, password → submit) — the same proven path
- * ChatInput uses; a separate global key handler only does ↑/↓ field switch.
- * The form is anchored to the bottom half to keep focus on the input area. */
+// Email/password sign-in; each Input owns its Enter via onSubmit (advance or
+// submit), a global handler only switches fields. Form anchored to the bottom half.
 export const SignIn = observer(function SignIn() {
   const auth = useStore('auth');
   const { rows } = useTerminalSize();

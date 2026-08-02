@@ -8,21 +8,20 @@ import { useStore } from '@/client/store';
 import { SignIn } from './screens/SignIn';
 import { Chat } from './screens/Chat';
 
-/** Surface-supplied conversation-id persistence: localStorage on the web, a
- * file in the CLI. Injected so this shell stays free of platform I/O deps. */
+// Conv-id persistence: localStorage (web) or a file (CLI); injected to keep shell free of I/O.
 export type ConvStorage = {
   getConvId: () => string | null;
   setConvId: (id: string) => void;
 };
 
-/** Create-or-reuse one conversation and point the store at it (the chat store
- * auto-activates the SSE channel via its reaction on currentConversationId). */
+// Create-or-reuse a conversation and point the store at it (chat store auto-activates SSE).
 function useBootstrap(storage: ConvStorage): {
   phase: 'boot' | 'ready' | 'error';
   error?: string;
 } {
   const conversation = useStore('conversation');
   const model = useStore('model');
+  const conversationGroup = useStore('conversationGroup');
   const [state, setState] = useState<{
     phase: 'boot' | 'ready' | 'error';
     error?: string;
@@ -56,14 +55,17 @@ function useBootstrap(storage: ConvStorage): {
           }>;
           const modelId = groups[0]?.models[0]?.id ?? 'localhost:default';
           const conv = await conversation.createConversation({
-            name: 'chat',
+            name: 'New Conversation',
             config: { model: { modelId } },
+            workspacePath: process.cwd(),
           });
           if (conv?.id) {
-            storage.setConvId(conv.id);
             conversation.currentConversationId = conv.id;
           }
         }
+        // Load conversations in the background so the boot screen isn't held on
+        // that roundtrip — the /conv list and StatusBar refresh when it lands.
+        void conversationGroup.getAllGroups().catch(() => {});
         if (!cancelled) setState({ phase: 'ready' });
       } catch (e) {
         if (!cancelled) {

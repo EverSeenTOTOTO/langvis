@@ -140,9 +140,8 @@ const HumanInputForm: React.FC<HumanInputFormProps> = ({
   }
 
   if (state.type === 'processing') {
-    // The agent message already shows a live "Processing…" indicator while the
-    // run resumes, so don't add a competing spinner here — just ack the
-    // submission with a static line.
+    // The agent message already shows a live "Processing…" indicator, so don't
+    // add a competing spinner here — just ack the submission with a static line.
     return (
       <div className="human-input-form human-input-form--submitted">
         <Typography.Text type="secondary">

@@ -13,11 +13,7 @@ export function getConvTransformPlan(): ConvTransformPlan {
   return (cachedPlan ??= new ConvTransformPlan(resolveConvTransforms()));
 }
 
-/**
- * 按相位跑 transform（注册序，无 priority）。镜像 agent 的 applyHooks：
- * 逐个 yield* transform.apply(ctx, runCtx)；无 try/catch——抛错冒泡给调用方（编排器）兜底。
- * runCtx 仅 turn-end 由调用方透传（per-run 语境）；activated/turn-start 不传。
- */
+// 按相位跑 transform（注册序，无 priority）；抛错冒泡给调用方兜底。runCtx 仅 turn-end 透传。
 export async function* runConvTransforms(
   ctx: ConversationContext,
   phase: ConvPhase,

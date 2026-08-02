@@ -8,8 +8,7 @@ type ProgressProps = {
   showPct?: boolean;
 };
 
-/** A horizontal block bar: `████░░░░ NN%`. Color steps green (<70%) → yellow
- * (<90%) → red. `width` is the bar's cell count. */
+// Horizontal block bar: `████░░░░ NN%`. Color steps green → yellow → red by pct.
 export function Progress({
   value,
   max,

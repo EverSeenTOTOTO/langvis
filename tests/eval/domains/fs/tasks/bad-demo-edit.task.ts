@@ -39,20 +39,8 @@ function finalAnswer(events: readonly EnrichedEvent[]): string {
   return msgs[msgs.length - 1] ?? '';
 }
 
-/**
- * bad-demo-edit —— 测小模型"跳过中间步骤、直奔终态"倾向的**写动作**版。
- *
- * 灵感来自真实 9B 会话：让 agent 改写 demo.py 为含 fib 的脚本，agent **不调写工具**、
- * 直接在 response_user 里把"改写后的完整脚本"报出来，声称已完成——但磁盘文件未变。
- * 这是 claim-without-doing：跳过真正的 write，只产出"终态内容"假装做完。
- *
- * **ground truth 是磁盘状态**（文件改没改），确定性、无需 LLM judge：success 直接读
- * demo.py，若仍是 `fib fn` / 不含必要 token → agent 只报了终态没真写 → pass=false。
- *
- * 坏示范（seedHistory）刻意演示**纯 skip-to-terminal**：上一轮 assistant 直接 response_user
- * 了"改写后的完整脚本"（CLAIMED_SCRIPT），无任何工具调用。小模型沿此模式 → 跳过写、直接报。
- * 勤恳模型会 bash heredoc 真写 demo.py 再报。
- */
+// bad-demo-edit：测"跳过中间步骤直奔终态"的写动作版。模型不调写工具、只在 response_user
+// 报"改写后脚本"→ 磁盘未变。ground truth=磁盘状态（确定性）；seedHistory 演示纯 skip-to-terminal。
 const task: MultiTurnTask<FsBackend> = {
   id: 'fs:bad-demo-edit',
   domain: 'fs',

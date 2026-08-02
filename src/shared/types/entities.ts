@@ -16,12 +16,7 @@ export interface MessageAttachment {
   size?: number;
 }
 
-/**
- * 消息子类别判别键（meta.kind）。带 kind 的消息是脚手架（非对话 turn、前端时间线隐藏）：
- * - 'context' —— 会话上下文注入（system 之外的固定脚手架）。
- * - 'compact' —— 历史压缩摘要 C（位置即覆盖终点）。
- * 无 kind 即普通对话消息。
- */
+// 消息子类别判别键（meta.kind）：'context' 注入 / 'compact' 压缩摘要；带 kind 即脚手架，隐藏出时间线。
 export type MessageKind = 'context' | 'compact';
 
 export type Message = {
@@ -35,7 +30,7 @@ export type Message = {
   steps?: ReActStep[] | null;
   /** Merged from agent_runs for assistant messages — not a Message DB column */
   status?: RunStatus | null;
-  /** Merged from agent_runs for assistant messages — re-derived from run events, not a Message DB column */
+  /** Re-derived from run events, not a Message DB column */
   audio?: { filePath: string; voice?: string } | null;
   meta?: Record<string, unknown> | null;
   createdAt: Date;

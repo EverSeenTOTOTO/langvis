@@ -2,11 +2,14 @@ import type { MessageAttachment } from '@/shared/types/entities';
 import type { ConversationConfig } from '@/server/libs/config';
 import { Role } from '@/shared/entities/Message';
 import { Command, Query } from '@/server/libs/ddd';
+import type { Transport } from '@/shared/transport';
+import type { StreamFrame } from '@/shared/types/events';
 
 export class ConversationActivateCommand extends Command {
   constructor(
     readonly conversationId: string,
     readonly userId: string,
+    readonly transport?: Transport<StreamFrame>,
   ) {
     super();
   }
@@ -99,8 +102,7 @@ export const TurnInitiated = 'turn_initiated';
 export interface TurnInitiatedPayload {
   conversationId: string;
   assistantMessage: Message;
-  /** 会话解析后的运行时配置（conv 侧 resolveConversationConfig 一次性 parse，agent 直接复用——不再二次 parse）。
-   *  contextSize 不在此处：模型派生值，由各消费者经 providerService.resolveChatModel 按需取，避免层层透传。 */
+  // 会话解析后的运行时配置，agent 直接复用。contextSize 由各消费者按需派生，不透传。
   runtimeConfig: ConversationConfig;
   /** 会话有效历史（LLM-ready，conv turn-start transform/projection 产物）—— agent 直接作种子，不再回调 conv。 */
   effectiveHistory: LlmMessage[];

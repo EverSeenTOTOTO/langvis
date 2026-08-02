@@ -13,14 +13,8 @@ import {
   type EnsureApprovedOptions,
 } from '../domain/port/authorization.port';
 
-/**
- * 横切授权实现：session 持久 (action, resource) 决策。
- * 命中 workDir 文件授予直接放行；未命中且 interactive → 弹一次 AskUser，allow 追加写文件；
- * 非 interactive → 抛。deny 不写文件（允许重试改主意）。
- *
- * grants 真相源是 workDir 的 `.langvis/config.json` 的 grants 段（经 WorkspaceService 整对象读写，
- * 跨 run、跨会话激活/失活持久）。本 provider 不持内存缓存，现读现写够用。
- */
+// 横切授权实现：session 持久 (action, resource) 决策。命中 grants 直放行；interactive 弹 AskUser，allow 追加写文件。
+// grants 真相源 = workDir 的 `.langvis/config.json` 的 grants 段，经 WorkspaceService 整对象读写，跨 run 持久。
 @injectable()
 export class AuthorizationProvider implements AuthorizationPort {
   constructor(
@@ -82,10 +76,7 @@ export class AuthorizationProvider implements AuthorizationPort {
   }
 }
 
-/**
- * - 单文件（无通配符）→ 直接父目录：~/a/b/c.pdf → ~/a/b；/etc/foo.pdf → /etc。
- * - glob（含通配符）→ 通配符前的稳定前缀目录（即 glob 锚定的那层）：~/a/b/*.pdf → ~/a/b。
- */
+// 单文件 → 直接父目录；glob → 通配符前的稳定前缀目录。
 export function normalizeRoot(absPath: string): string {
   const home = os.homedir();
   if (absPath === home || absPath === path.dirname(home)) return home;

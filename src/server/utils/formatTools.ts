@@ -119,10 +119,7 @@ function formatSchemaAsTable(
   return rows.join('\n');
 }
 
-/**
- * 为带约束的属性补一条子弹（无约束的属性不出现，保持紧凑）。
- * 枚举列出全部合法值（不截断）。
- */
+// 为带约束的属性补一条子弹（无约束的属性不出现，保持紧凑）。 枚举列出全部合法值（不截断）。
 function formatConstraints(
   key: string,
   prop: SchemaProp,

@@ -1,18 +1,15 @@
 import chalk from 'chalk';
 import { render as renderMd } from 'streammark';
 
-// chalk decides color support at module load from process.stdout — level 0 (no
-// color) in the browser, where there's no TTY. streammark styles through this
-// same chalk singleton, so force truecolor: its chalk.hex(...) then emits SGR.
+// chalk decides color support at module load (level 0 in the browser); streammark
+// uses the same chalk singleton, so force truecolor so its hex(...) emits SGR.
 chalk.level = 3;
 
 type StdoutLike = { columns?: number };
 type ProcLike = { stdout?: StdoutLike };
 
-/** Render markdown to styled ANSI via streammark, wrapped to `width` columns.
- * streammark reads `process.stdout.columns` for wrapping (undefined/80 without
- * a real TTY), so shim it for the synchronous render call. Trailing newlines
- * are trimmed so the region measures the right line count. */
+// Render markdown to styled ANSI via streammark, wrapped to `width`. streammark
+// reads process.stdout.columns, so shim it; trailing newlines are trimmed.
 export function renderMarkdown(
   md: string,
   width: number,
@@ -26,10 +23,8 @@ export function renderMarkdown(
   }
 }
 
-/** Make streammark's `process.stdout.columns || 80` read `width` for the
- * duration of a render, then restore. Handles: real Node stdout (columns lives
- * on the stream, sometimes as a getter → redefine via defineProperty), a
- * process shim with no stdout (browser polyfill → assign), and no process. */
+// Make streammark's process.stdout.columns read `width` for a render, then
+// restore. Handles real Node stdout, a shim with no stdout, and no process.
 function shimColumns(width: number): () => void {
   const g = globalThis as unknown as { process?: ProcLike };
   const proc = g.process;

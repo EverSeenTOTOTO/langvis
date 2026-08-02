@@ -36,11 +36,7 @@ export class ArchiveEmailHandler {
 
     await this.emailService.markArchived(emailId);
 
-    // Create the conversation synchronously so its id can be returned to the
-    // caller (the client opens a new tab straight to this conversation). The
-    // heavier work — caching the body and starting the agent run — is fired via
-    // the EmailArchived event after we return. 建会话走 conversation 的命令(公开 API),
-    // 不再跨 BC 直连 conversation 的 repository。
+    // 同步建会话以返回 id 给调用方；重活（缓存 body + 起 run）经 EmailArchived 事件异步做。
     const defaultModel = this.providerService.getDefaultModel('chat');
     const conversation = await this.commandBus.execute<Conversation>(
       new CreateConversationCommand(

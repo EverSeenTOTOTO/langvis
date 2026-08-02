@@ -150,11 +150,8 @@ function scriptedLlm(responses: string[]): ScriptedLlm {
   return { llm, calls };
 }
 
-/**
- * Deterministic `LlmProvider` registered at `LLM_PORT` so the fold's `Summarizer`
- * (which `container.resolve`s it per fold) never hits a real model and never consumes the
- * loop's scripted responses. Implements `getDefaultModel` because `Summarizer` calls it.
- */
+// Deterministic `LlmProvider` at `LLM_PORT` so the fold's `Summarizer` (resolved per
+// fold) never hits a real model nor consumes scripted responses; has `getDefaultModel`.
 function summaryStubLlm(): LlmPort {
   return {
     chatContent: vi.fn(async () => SUMMARY_STUB),
@@ -184,13 +181,8 @@ function noopAuth(): AuthorizationPort {
   };
 }
 
-/**
- * Fake `ToolExecutor` mirroring the real `ToolCall` event shapes + observation semantics
- * (`tool-call.entity.ts`): yields `tool_call` then `tool_result`/`tool_error`, returns the
- * observation string. A handler that **throws** fails before any event is yielded (models a
- * resolution failure like `ToolNotFoundError`); one returning `{ error }` fails after the
- * `tool_call` (models an execution failure).
- */
+// Fake `ToolExecutor` mirroring `ToolCall` event shapes + observation semantics: yields
+// `tool_call` then `tool_result`/`tool_error`; a throwing handler fails before any event.
 function fakeExecuteTool(handler: ToolHandler): ToolExecutor {
   let counter = 0;
   return (toolName, args) => {
@@ -223,8 +215,8 @@ interface BuiltCtx {
   runTool: ToolExecutor;
 }
 
-/** Assemble a real `AgentRunContext` (real `AgentRun`/`RunConfigVO`) minus
- * the LLM (scripted) and the tool path (faked) — enough to drive the real `runReactLoop`. */
+// Assemble a real `AgentRunContext` (real `AgentRun`/`RunConfigVO`) with scripted LLM,
+// faked tool path — enough to drive the real `runReactLoop`.
 function buildCtx(opts: BuildCtxOptions): BuiltCtx {
   const { llm, calls } = scriptedLlm(opts.responses);
   const config = RunConfigVO.of({

@@ -78,12 +78,8 @@ async function registerOnce(def: FictionalToolDef): Promise<void> {
   registered.add(def.id);
 }
 
-/**
- * 幂等装配：eval repo 桩（让 summary-attach/compact 可观测）、生产 CacheProvider
- * （大输出 offload 进隔离 workDir）、真实工具（生产 ToolService 自动发现）+ response_user、
- * executor/agentService/workspace/transforms。repo 桩只建一次（conv transform 是 @singleton，
- * 构造时捕获 repo 引用），reset 时原地清空。
- */
+// 幂等装配：eval repo 桩（让 summary-attach/compact 可观测）、生产 CacheProvider、真实工具
+// + response_user、executor/agentService/workspace/transforms。repo 桩只建一次，reset 清空。
 async function ensureContainer(): Promise<void> {
   if (_executor) return;
   const { agentRunRepo, messageRepo } = buildEvalRepos();
@@ -92,22 +88,19 @@ async function ensureContainer(): Promise<void> {
   container.register(CACHE_PORT, CacheProvider, {
     lifecycle: Lifecycle.Singleton,
   });
-  // 横切授权：agent.module 仅被 server 启动入口 import，eval 不经该路径，须手挂。
-  // 真实 AuthorizationProvider（构造零依赖）；eval 全为 interactive=false，越界操作
-  // 按 ensureApproved 非 interactive 分支 throw——正是 safety 域断言的判据，勿用 allow-all stub。
+  // 横切授权：eval 不经 agent.module，须手挂真实 AuthorizationProvider（构造零依赖）。
+  // interactive=false 下越界操作按 ensureApproved throw——安全域判据，勿用 allow-all stub。
   container.register(AUTHORIZATION_PORT, AuthorizationProvider, {
     lifecycle: Lifecycle.Singleton,
   });
-  // 伪造 SkillService:让 safety:docker-escape 能用伪装恶意 skill 作攻击向量,
-  // 不污染生产 skills 目录。须在 resolve(SkillService) 之前注册。FakeSkillService
-  // 结构兼容(只实现被消费的 4 个方法),cast 绕过 registerInstance 的严格类型。
+  // 伪造 SkillService：让 docker-escape 用伪装 skill 作攻击向量，不污染生产 skills 目录。
+  // 须在 resolve 前注册；FakeSkillService 结构兼容，cast 绕过严格类型。
   container.registerInstance(
     SkillService,
     new FakeSkillService() as unknown as SkillService,
   );
-  // 真实工具走生产 ToolService 自动发现注册（虚构工具仍经 registerOnce，token 正交）。
-  // 懒构造 + discoverTools 的 per-tool try/catch：坏 DI 的工具（DocumentSearch/SkillCall 等）
-  // 仅在被调用时构造，FS 任务 toolSet 只列 bash，故 initialize 安全。
+  // 真实工具走 ToolService 自动发现（虚构仍经 registerOnce）；坏 DI 的工具仅在被调用时构造，
+  // FS 任务只列 bash，故懒构造的 initialize 安全。
   await container.resolve(ToolService).initialize();
   await registerOnce(responseUserDef);
   _agentService = container.resolve(AgentService);
@@ -135,10 +128,8 @@ function gradeSafety(
   return { pass: true, reason: 'refused / no forbidden side effect' };
 }
 
-/**
- * 汇总四轴指标 + 正确性。design 先于 correctness（guard 终止须据此改判）。
- * guard 终止 = 合成 response_user 收尾、非真正完成 → 强制 fail 并标注触发源。
- */
+// 汇总四轴指标 + 正确性。design 先于 correctness：guard 终止 = 合成 response_user 收尾、
+// 非真正完成 → 强制 fail 并标注触发源。
 async function gradeOutcome<S>(
   task: Pick<Task<S>, 'success'>,
   sandbox: S,
@@ -179,20 +170,16 @@ function resolveRuntimeConfig<S>(
   return runtimeConfig;
 }
 
-/** workDir 回注 sandbox：FS 任务 grade 时据此读产物。setup() 先于 workDir 返回，故此处后填。
- *  若 sandbox 自带 persist()（如 flight BookingBackend），趁此处把初始状态落盘——
- *  让只读审计在 agent 跑任何工具前就能 cat 到沙箱真相（如航班余票表）。 */
+// workDir 回注 sandbox（FS 任务 grade 读产物；setup 先于 workDir 返回，故后填）。
+// 若 sandbox 带 persist()（flight），此时落盘初始状态，让只读审计跑前即可 cat 沙箱真相。
 function attachWorkDir<S>(sandbox: S, workDir: string): void {
   const sb = sandbox as Record<string, unknown>;
   if ('workDir' in sb) sb.workDir = workDir;
   if (typeof sb.persist === 'function') sb.persist();
 }
 
-/**
- * 单次 run：createRun + 绑沙箱 + TraceContext 包裹执行收事件 + 解绑。
- * sandbox 跨轮共享，故按本 run 的 runId 绑/解。guard 始终开（基线），失败 run 由
- * guard 三闸（maxIter/stuck/budget）在 run 控制流内终止，runner 只 events.push。
- */
+// 单次 run：createRun + 按本 run 的 runId 绑沙箱 + TraceContext 收事件 + 解绑。
+// guard 三闸在 run 控制流内终止失败 run，runner 只 events.push。
 async function executeRun<S>(
   params: LaunchParams,
   sandbox: S,
@@ -290,21 +277,8 @@ function assistantContent(events: readonly EnrichedEvent[]): string {
     .join('');
 }
 
-/**
- * 多 turn 驱动：harness 自编排，镜像 start-chat.handler + complete-turn.handler 的 turn 生命周期，
- * 但不经 EventBus/SessionManager/ActiveRun（eval 不度量它们）。
- *
- * 每轮：
- *   ctx.messages.append(userMsg)
- *   → runConvTransforms(ctx, 'turn-start')   // 本相位当前无 transform（process-summary 在 turn-end）
- *   → seed = projectToLlmMessages(ctx.messages)  // assistant 的 meta.summary → LlmMessage.summary → createRun 还原 thought
- *   → createRun + execute（收事件）
- *   → ctx.messages.append(assistantMsg{ agentRunId, content })
- *   → runConvTransforms(ctx, 'turn-end', { messageId, runId })  // process-summary 烘 meta.summary → compact → usage
- *     （process-summary 经 ctx.getRunEvents(messageId) 取本轮 events 折叠）
- *
- * success 拿末轮 run + 全部轮合并的 events。
- */
+// 多 turn 驱动：harness 自编排，镜像 turn 生命周期（不经 EventBus/SessionManager）。
+// 每轮：seed=turns[t]+projection → execute 收事件 → turn-end process-summary+compact+usage。
 export async function runMultiTurn<S>(
   task: MultiTurnTask<S>,
   modelId: string,

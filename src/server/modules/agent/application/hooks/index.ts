@@ -1,8 +1,5 @@
-// Barrel：import 触发 @agentHook 自注册。import 序 = 相位内执行序（resolveAll 保插入序）。
-// pre-llm: tool-hint → offload → query-budget
-// post-observation: output-offload → compaction → loop-usage（output-offload 先桩，loop-usage 报桩后用量）
-// pre-action: cumulative-budget → stuck（loop 权威解析后挂 ctx.pendingAction，直读不 re-parse）
-// process-summary 在 conv 侧 ProcessSummaryTransform（turn-end），此处不注册 loop-exit hook。
+// Barrel：import 触发 @agentHook 自注册，import 序 = 相位执行序。pre-llm：tool-hint → offload → query-budget。
+// post-observation：output-offload → compaction → loop-usage；pre-action：cumulative-budget → stuck。
 import './tool-hint-hook';
 import './offload-hook';
 import './query-budget-hook';

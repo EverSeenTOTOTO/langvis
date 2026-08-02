@@ -9,9 +9,7 @@ import type {
 import { AgentRunExecutor } from '../service/agent-run-executor';
 import { eventHandler } from '@/server/decorator/handler';
 
-/**
- * CancelRunHandler —— conv 请求取消某 run（事件驱动，取代会话直接调 executor.cancel）。
- */
+// CancelRunHandler —— conv 请求取消某 run（事件驱动，取代会话直接调 executor.cancel）。
 @eventHandler(CancelRun)
 export class CancelRunHandler {
   constructor(

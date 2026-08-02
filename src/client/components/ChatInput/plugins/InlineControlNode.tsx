@@ -21,14 +21,7 @@ export interface InlineControlNodeOptions {
   key?: NodeKey;
 }
 
-/**
- * A single generic inline control node shared by every ReplacePlugin/VariablePlugin.
- * It carries its registry `kind` plus the matched `text` and optional `data`; the
- * actual React rendering is delegated to the renderer registered under `kind`.
- *
- * DecoratorNode (not TextNode) is required because we host arbitrary React via
- * `decorate()`. Registered once in ChatInput's initialConfig.nodes.
- */
+// One DecoratorNode shared by every inline-control plugin; rendering defers to the registry `kind`.
 export class InlineControlNode extends DecoratorNode<ReactNode> {
   __kind: string;
   __text: string;

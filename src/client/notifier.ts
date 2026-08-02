@@ -1,6 +1,4 @@
-/** Headless stand-in for the antd `message` toasts. The original client used
- * antd for error popups; the TUI has no DOM, so this sinks to the console until
- * a TUI status/toast surface is wired. Drop-in: `notifier.error(msg)`. */
+// Stand-in for antd toasts: TUI has no DOM, so sinks to console. Drop-in: notifier.error(msg).
 type Msg = unknown;
 
 const fmt = (msg: Msg): string =>

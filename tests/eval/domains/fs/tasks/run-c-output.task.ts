@@ -5,12 +5,8 @@ import type { EnrichedEvent } from '@/shared/types/events';
 import type { MultiTurnTask } from '../../../types';
 import { FsBackend, fsToolSet } from '../sandbox';
 
-/**
- * run-c-output：预置 demo.c 的 `printf` 后接 `_exit`（不 flush stdio），故源码形似打印
- * `Hello, langvis!` 而实际 stdout 为空。task 只要求"编译运行并报实际输出"，不揭示 hack。
- * 读源码者报那行（幻觉）、真跑者报空。grader 自行编译运行取真实 stdout 作 ground truth
- * （确定性，不靠 LLM）。
- */
+// run-c-output：demo.c 的 printf 后接 _exit（不 flush stdio）→ 实际 stdout 空。
+// 读源码者报那行（幻觉）、真跑者报空；grader 自取真实 stdout 作 ground truth。
 const SOURCE = [
   '#include <stdio.h>',
   '#include <unistd.h>',

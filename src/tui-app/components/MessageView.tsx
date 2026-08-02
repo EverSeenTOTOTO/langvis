@@ -11,8 +11,7 @@ import { useFrameSequence, useTerminalSize } from '@/tui/hooks';
 /** Avatar glyph + spaces; the body column is `cols - AVATAR_GAP` wide. */
 const AVATAR_GAP = 3;
 
-/** A user turn — avatar `❯` inline with the content (content column to its
- * right), rendered from raw message content. */
+// A user turn — avatar `❯` inline with the content column, from raw message content.
 export function UserView({ content }: { content: string }) {
   const { cols } = useTerminalSize();
   const w = Math.max(1, cols - AVATAR_GAP);
@@ -28,24 +27,22 @@ export function UserView({ content }: { content: string }) {
   );
 }
 
-/** An assistant turn — observable MessageNode. Avatar `✦` inline with the body
- * (flashes while thinking). Body = thinking dots / tool blocks / markdown
- * content / awaiting-input / status. Re-renders on each streamed token. */
+// An assistant turn — observable MessageNode. Avatar `◆` inline (flashes while
+// thinking); body = thought/tool cards / markdown / status; re-renders on stream.
 export const AssistantView = observer(function AssistantView({
   node,
+  expanded = false,
 }: {
   node: MessageNode;
+  expanded?: boolean;
 }) {
   const { cols } = useTerminalSize();
   const w = Math.max(1, cols - AVATAR_GAP);
-  const thinking = node.isThinking;
-  const diamond = useFrameSequence(thinking, ['◆', '◇'], 450);
-  const dots = useFrameSequence(thinking, ['', '.', '..', '...'], 350);
+  const diamond = useFrameSequence(node.isThinking, ['◆', '◇'], 450);
   return (
     <Box alignItems="flex-start">
-      <Text fg="magenta" bold>{`${thinking ? diamond : '◆'}  `}</Text>
+      <Text fg="magenta" bold>{`${diamond}  `}</Text>
       <Box flexDirection="column" width={w}>
-        {thinking && <Text fg="gray">{`thinking${dots}`}</Text>}
         {node.timeline.map(item => {
           if (item.kind === 'thought') {
             return (
@@ -58,13 +55,17 @@ export const AssistantView = observer(function AssistantView({
             );
           }
           const call = node.toolCalls.find(tc => tc.callId === item.callId);
-          return call ? (
+          // response_user is the agent's final reply — rendered as content, so
+          // don't show it as a tool block.
+          if (!call || call.toolName === 'response_user') return null;
+          return (
             <ToolCallView
               key={item.key}
               call={call}
-              paused={node.isAwaitingInput}
+              paused={node.isAwaitingInput || node.isTerminal}
+              expanded={expanded}
             />
-          ) : null;
+          );
         })}
         {node.hasContent && <Markdown text={node.content} width={w} />}
         {node.status === 'failed' && <Text fg="red">{'✗ run failed'}</Text>}

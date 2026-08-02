@@ -8,11 +8,7 @@ import { ChatService } from '../service/chat.service';
 import { runConvTransforms } from '../transforms';
 import Logger from '@/server/utils/logger';
 
-/**
- * RunCompleted 订阅者：turn-end 触发适配器。线性编排——
- * 开屏障 → 投影+持久化+append assistant → 发终态 run_view + 「涨」用量 → runConvTransforms(turn-end)
- * → finally 关屏障 + finalizeRun（恒执行，任何抛错都不漏 run）。
- */
+// RunCompleted 订阅者，线性编排 turn-end；finalizeRun 恒执行，抛错也不漏 run。
 @singleton()
 @eventHandler(RunCompleted)
 export class CompleteTurnHandler {

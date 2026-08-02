@@ -1,9 +1,8 @@
 /** @jsxImportSource react */
 import { useInput, useStdout } from 'ink';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-/** Map an Ink `(input, key)` event to the raw data string the screen handlers
- * expect ('\r', '\x1b', '\x1b[A', '\x03', '\x7f', '\t', printable chars). */
+// Map Ink's (input, key) event to the raw data string screen handlers expect.
 function inkToRawData(
   input: string,
   key: {
@@ -31,16 +30,18 @@ function inkToRawData(
   return input || null;
 }
 
-/** Subscribe to keyboard input. The handler is read fresh each commit, so it
- * always sees current state — do not memoize. `enabled=false` yields focus. */
+// Subscribe to keyboard input; the handler is held in a ref so useInput always
+// invokes the latest closure (ink's useEffectEvent can freeze on a transient flag).
 export function useKeyboard(
   handler: (data: string) => void,
   enabled = true,
 ): void {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
   useInput(
     (input, key) => {
       const data = inkToRawData(input, key);
-      if (data !== null) handler(data);
+      if (data !== null) handlerRef.current(data);
     },
     { isActive: enabled },
   );
@@ -55,7 +56,7 @@ export function useTerminalSize(): { cols: number; rows: number } {
   };
 }
 
-/** Cycle through `frames` while `active`, ticking on an interval; '' when idle. */
+// Cycle frames while active; idle returns frames[0] so callers embed without a branch.
 export function useFrameSequence(
   active: boolean,
   frames: readonly string[],
@@ -70,5 +71,6 @@ export function useFrameSequence(
     );
     return () => clearInterval(id);
   }, [active, intervalMs, frames.length]);
-  return active ? (frames[i] ?? '') : '';
+  if (frames.length === 0) return '';
+  return active ? (frames[i] ?? frames[0]) : frames[0];
 }

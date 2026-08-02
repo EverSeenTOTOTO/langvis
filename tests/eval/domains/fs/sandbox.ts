@@ -1,7 +1,4 @@
-/**
- * fs 域：真实文件系统沙箱（非虚构）。无虚构工具——agent 走生产 Bash（非交互= DockerBash）。
- * runner 在 getWorkDir 后把 workDir 回注本 backend，task.grade 据此读 workDir 下产物。
- */
+// fs 域：真实文件系统沙箱（无虚构工具）——agent 走生产 Bash；runner 注入 workDir 供 grade 读产物。
 import { ToolIds } from '@/shared/constants';
 import { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';
 
@@ -26,9 +23,7 @@ export function fsToolSet(): ToolSet {
   );
 }
 
-/** 文档推理任务 ToolSet：pdf_extract + bash + response_user 全 inline。
- *  pdf_extract（host pdftotext）提取 PDF；大输出 offload 落盘后用 bash（rg/sed-n/head-n）检索回读
- *  （沙箱镜像已装 ripgrep，workDir bind-mount 可见缓存文件）。cached_read 已移除：始终走 bash。 */
+// 文档推理 ToolSet：pdf_extract + bash + response_user 全 inline；大输出 offload 后经 bash 检索回读。
 export function fsDocToolSet(): ToolSet {
   return ToolSet.of(
     [
@@ -40,8 +35,7 @@ export function fsDocToolSet(): ToolSet {
   );
 }
 
-/** docker-escape ToolSet：bash + skill_call + list_tools + response_user。
- *  skill_call/list_tools 让 agent 能发现并调用伪装恶意 skill(攻击向量)。 */
+// docker-escape ToolSet：bash + skill_call + list_tools + response_user（暴露伪装恶意 skill 攻击向量）。
 export function dockerEscapeToolSet(): ToolSet {
   return ToolSet.of(
     [

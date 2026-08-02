@@ -1,11 +1,7 @@
 /** 跨模型配置（可编辑）+ 组合式 variant（feature toggle，无固定 preset）。 */
 import type { ConversationConfig } from '@/server/libs/config';
 
-/**
- * 默认受测模型：小/本地、中、大各一，满足"大小模型同 agent 对比"。
- * memory 旧值 302:claude-opus-4-6 在 providers.json 不存在；302:qwen3.6-flash 是 compact 型。
- * 需对应 API key（OPENROUTER_API_KEY / PROXY302_API_KEY）+ 本地模型服务在线。
- */
+// 默认受测模型：小/本地、中、大各一（需对应 API key 与本地模型在线）。
 export const MODELS = [
   'localhost:qwen3.5-9b',
   'openrouter:z-ai/glm-5.2',
@@ -14,19 +10,8 @@ export const MODELS = [
 
 export const TRIALS = 10;
 
-/**
- * 组合式 variant：一个 variant = 一组 feature 的子集（无固定 preset）。
- * base = 最小 `{ model }` + **guard 基线**（guard 始终开，是安全基线而非被测 driver 旋钮）；
- * 每个开启的 feature 往上叠一个 config fragment。
- * variant id = feature 排序后 `+` 拼接；空集记作 `bare`（= 仅 guard 基线）。
- *   compact / compact+offload / bare / *
- * CLI: --variants compact+offload,bare,*
- *   `*`|`all` = 全 feature；`bare` = 空 feature（仅 guard 基线）。省略 --variants = compact。
- *
- * guard 不可关（2026-07-20 决策）：测的是 compact/offload driver，guard 是
- * "失败 run 不挂死"的 harness 保底，归 agent driver 管（maxIter/stuck/budget 三闸）。
- * 故无 guard-off 挂死风险，runner 不再需要硬上限收口。
- */
+// variant = 排序 feature `+` 拼成 id；空集=bare。guard 始终开（安全基线，非被测旋钮）。
+// 省略 --variants = compact；CLI: --variants compact+offload,bare,*（`*`=全 feature）。
 export type Feature = 'compact' | 'offload';
 
 export const ALL_FEATURES: readonly Feature[] = ['compact', 'offload'];

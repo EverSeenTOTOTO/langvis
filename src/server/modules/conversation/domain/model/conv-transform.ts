@@ -5,20 +5,13 @@ import type { ConversationConfig } from '@/server/libs/config';
 
 export type ConvPhase = 'activated' | 'turn-start' | 'turn-end';
 
-/** turn-end per-call run 语境：本次 RunCompleted 的 run/message 标识。
- *  不入 ctx（ctx 是 conversation 级，多 run 并发会互相覆盖）——作 runConvTransforms 第三参透传。 */
+// turn-end per-call run 语境（不入 ctx，多 run 并发会互相覆盖），作第三参透传。
 export interface RunCtx {
   messageId: string;
   runId: string;
 }
 
-/**
- * 会话运行时上下文——ConversationSession 满足此接口（session 即 ctx，无 wrapper 对象）。
- * 转换（transform）只经此窄接口访问会话状态，够不到 connection/dispose/flush 等 run 机器零件。
- * messages 可变（转换替换整个值=改）；runtimeConfig/transforms 为激活时灌入的只读快照。
- * getRunEvents 只读暴露活跃 run 事件流（process-summary 折叠用），不暴露 run 内部状态。
- * contextSize 不在此——按需 providerService.resolveChatModel(runtimeConfig.model) 派生。
- */
+// 会话运行时上下文——ConversationSession 即 ctx（无 wrapper）。仅经此窄接口暴露会话状态，process-summary 折叠用。
 export interface ConversationContext {
   readonly conversationId: string;
   messages: Message[];

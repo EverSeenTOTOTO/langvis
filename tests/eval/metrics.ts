@@ -109,13 +109,8 @@ function classifyMode(raw: string, reason: string): ParseFailureMode {
   return 'other';
 }
 
-/**
- * 扫 run 末态 messages：每条以 PARSE_ERROR_OBSERVATION_PREFIX 开头的 user 消息 = 一次 parse
- * 失败；其紧邻前一条 assistant content = 模型那段坏输出原文。mode 由 reason + raw 共同判定。
- *
- * 直接读 ctx.messages（事实源）——parse 失败已在 react-loop catch 里回灌为这条 Observation，
- * 无需新增 RunEvent，也无需 loopUsage 算术代理。
- */
+// 扫 run 末态 messages：以 PARSE_ERROR_OBSERVATION_PREFIX 开头的 user 消息 = 一次 parse 失败，
+// 其紧邻前一条 assistant content = 坏输出原文。直读 ctx.messages（事实源），无需新增事件。
 export function extractParseFailures(
   messages: readonly LlmMessage[],
 ): ParseFailure[] {

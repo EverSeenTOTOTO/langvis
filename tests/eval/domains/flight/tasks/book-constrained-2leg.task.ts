@@ -1,18 +1,5 @@
-/**
- * G4.3 Task A — 2 程多约束交叉验证(测压缩安全)。
- *
- * catalog 200 条(5 city-pair × 40),本任务用其中 2 对:京→沪 / 沪→广。
- * 实测(8K 模型):每次 search 命中 40 条 + agent 推理文本,单程约 +2400~2800 tok。
- *   - 2 程 ≈ base + 2×search + 2×detail + 2×book,峰值 ~6300 tok,**未爆 8192 全窗**
- *     → baseline(bare)不折叠也能完成
- *   - default(压缩)过 6553 阈值触发 mid-loop 压缩 → 压缩后还过不过,即测压缩无损性
- *
- * 与 4leg(B)的对比:本任务 baseline 活、B baseline 爆窗。default 在两者都压缩,
- * 本任务测「压缩丢不丢信息」(default 须照样过),B 测「压缩救不救命」(headroom 正)。
- *
- * seats=1 陷阱(占 1/4)让"座位>1"约束必须从 search 结果读准——压缩若丢 target 的
- * seats/价格 → 误订 → 挂。这正是 §0 要测的"信息丢失"。
- */
+// G4.3 Task A：2 程多约束，测压缩无损性——baseline 不折叠可过，default
+// 触发 mid-loop 压缩仍须过；target 的 seats/价格若被压缩丢即误订。
 import type { Task } from '../../../types';
 import {
   createBookingBackend,
@@ -28,12 +15,8 @@ const LEGS: ReadonlyArray<readonly [string, string]> = [
   ['上海', '广州'],
 ];
 
-/**
- * 每程正确答案:在 **fresh catalog(预订前)** 上满足全约束的最便宜 flight。
- * 须在 setup 预订前算——book_flight 会改座位(seats--),若在 success 里用
- * 已被订过的 b.flights 重算,target 会被座位扣减挤掉、误判。
- * catalog 确定性,故模块加载时算一次即每 run 恒同。
- */
+// 正确答案须在 setup 预订前于 fresh catalog 上算：book_flight 会扣 seats，
+// 若用订后 b.flights 重算，target 会被扣减挤掉。确定性，加载时算一次即可。
 const TARGETS = new Map(
   LEGS.map(([o, d]) => [
     `${o}|${d}`,

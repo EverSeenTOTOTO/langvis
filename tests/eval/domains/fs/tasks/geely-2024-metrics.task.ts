@@ -20,8 +20,7 @@ function finalReply(events: readonly EnrichedEvent[]): string {
   return msgs[msgs.length - 1] ?? '';
 }
 
-/** 从答复里按标签抽数值。两遍：先要"标签…: <数值>"模板形（强约束），再退到含标签行首个数值。
- *  模板形优先 → 即便答复里有"归属母公司净利润 166.3"散文干扰，只要模板行在，仍取模板行的 168.0。 */
+// 按标签抽数值：先"标签…: <数值>"模板形（强约束），再退到含标签行首个数值。
 function extractMetric(reply: string, label: string): number | null {
   const lines = reply.split('\n');
   for (const line of lines) {
@@ -39,12 +38,8 @@ function extractMetric(reply: string, label: string): number | null {
   return null;
 }
 
-/**
- * 判分全静态、无 LLM：completed + pdf_extract 硬门槛（反幻觉：非凭空造数）+ 四项数值落紧容差。
- * 模板锁死单位（亿元/%），故容差可紧。营收真值 240,194,270 千元 = 2401.9 亿（报告五年概要页
- * 的"240.2"是十億元口径=2402 亿）；把 240.2 当亿填、或误报 24019，均越界判 fail。
- * 净利润下界 167 > 归属母公司溢利 166.3 亿，故排除常见误取"歸屬本公司股權持有人溢利"。
- */
+// 判分全静态无 LLM：completed + pdf_extract 硬门槛 + 四项数值落紧容差。
+// 模板锁死单位（亿元/%）故容差紧；真值 2401.9 亿（240.2 十亿口径，防误取）。
 const task: Task<FsBackend> = {
   id: 'fs:geely-2024-metrics',
   domain: 'fs',

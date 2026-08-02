@@ -31,6 +31,16 @@ type BoxProps = {
   marginBottom?: number;
   marginLeft?: number;
   marginRight?: number;
+  borderStyle?:
+    | 'single'
+    | 'double'
+    | 'round'
+    | 'bold'
+    | 'singleDouble'
+    | 'doubleSingle'
+    | 'classic'
+    | 'arrow';
+  borderColor?: string;
 };
 
 /** Flex container over Ink's Box. Defaults to row (flexbox/Ink convention). */

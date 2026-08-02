@@ -1,20 +1,12 @@
 import type { ReActStep, AwaitingInputProjection } from '@/shared/types/render';
 import type { EnrichedEvent, HookRecord } from '@/shared/types/events';
 
-/**
- * 纯投影函数：把 agent run 的事实流 fold 成读模型 RunView。conv 的读模型——
- * 实时 run_view 合并下发、回回完成持久化、历史读回共用此同一投影，保证实时流
- * 与历史读回一致。无状态、无副作用、可对任意子流重算。
- *
- * 归属：这是 conv 对 agent 事件流的读模型投影（agent 只存/外发 RunEvent，
- * 不感知 view）。
- */
+// 纯投影函数：把 agent run 事件流 fold 成读模型 RunView。实时下发、持久化、历史读回共用同一投影，保证一致。
 export interface RunView {
   content: string;
   steps: ReActStep[];
   status: 'running' | 'completed' | 'failed' | 'cancelled';
-  /** Non-null while the run is blocked on an ask_user / awaiting_input prompt
-   * (the last awaiting tool_progress not yet resolved by a tool_result). */
+  // Non-null while blocked on an ask_user / awaiting_input prompt.
   awaitingInput: AwaitingInputProjection | null;
   audio: { filePath: string; voice?: string } | null;
   /** 本次 run 中生效过的 hook 事实（按到达序累积）。 */
@@ -39,15 +31,7 @@ export function emptyRunView(): RunView {
   };
 }
 
-/**
- * The currently-open step — the one still accumulating thought / tool progress
- * / result. It is `steps[last]` without a `completedAt`; null once the last step
- * is finalized (or before any step exists). Deriving it from `completedAt` lets
- * the reducer be a pure fold over RunView with no extra cursor state, and makes
- * an in-flight step (e.g. a tool_call whose result hasn't arrived, or one blocked
- * on awaiting_input) appear in `steps` the instant it starts — so a running
- * run's snapshot exposes its pending tool.
- */
+// 当前未完成的 step（无 completedAt）；派生自 completedAt 使 reducer 保持纯 fold。
 function openStep(view: RunView): ReActStep | null {
   const last = view.steps[view.steps.length - 1];
   return last && last.completedAt === undefined ? last : null;
@@ -67,12 +51,7 @@ function finalizeOpenStep(view: RunView, at: number): void {
   if (step) step.completedAt = at;
 }
 
-/**
- * Fold one event into the view (mutates and returns `view`). Stateless per call
- * beyond the passed accumulator — `projectRun` is `events.reduce` over this, and
- * ConversationSession folds one event at a time into a per-run view. Behaviour
- * is identical to the previous full-array fold for every prefix.
- */
+// 把单个事件 fold 进 view（原地变更并返回）；projectRun 即 reduce 到它。
 export function applyEventToView(view: RunView, event: EnrichedEvent): RunView {
   switch (event.type) {
     case 'thought': {
@@ -81,9 +60,7 @@ export function applyEventToView(view: RunView, event: EnrichedEvent): RunView {
     }
 
     case 'tool_call': {
-      // thought is optional in the flat ReAct format ({ thought?, tool, input }),
-      // so a tool_call may arrive without a preceding thought — ensureStep opens
-      // a new step here so the action/observation isn't dropped from the projection.
+      // thought 可选——tool_call 可能无前置 thought，这里开 step 防投影丢弃。
       const step = ensureStep(view, event.at);
       step.action = {
         callId: event.callId!,
@@ -147,9 +124,7 @@ export function applyEventToView(view: RunView, event: EnrichedEvent): RunView {
           schema: data.schema,
         };
       }
-      // Retain ALL tool progress (call_subagents child blobs, Bash stdout/stderr
-      // chunks, status messages, …) — the live renderers read these from the
-      // projected view now, so nothing can be dropped here.
+      // 保留全部 tool progress——live 渲染器直接读投影视图，此处不可丢弃。
       const step = openStep(view);
       if (step?.action) (step.action.progress ??= []).push(event.data);
       break;
@@ -196,12 +171,7 @@ export function projectRun(events: readonly EnrichedEvent[]): RunView {
   return events.reduce(applyEventToView, emptyRunView());
 }
 
-/**
- * 提取某子 run（call_subagents 的 child）的事件流——CallSubagents 把每个 child 事件
- * 以 tool_progress { childRunId, event } 转发进父 run；这里按 childRunId 过滤、解包。
- * 仅取带 `event` 的 per-event 块（跳过 { childRunId, brief, query } 的 started 块）。
- * 顺序保留（父按 child 事件到达序转发）。
- */
+// 提取子 run 事件流：CallSubagents 以 tool_progress { childRunId, event } 转发，这里过滤解包。
 export function extractChildEvents(
   events: readonly EnrichedEvent[],
   childRunId: string,

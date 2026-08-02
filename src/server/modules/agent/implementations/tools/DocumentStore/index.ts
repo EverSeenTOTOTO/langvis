@@ -61,8 +61,7 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
     const embeddings = embedResult.embeddings;
 
     // Coerce keywords: LLM may pass comma-separated string(s).
-    // Ajv coerceTypes wraps a bare string as single-element array,
-    // so flatMap splits any comma-separated elements.
+    // Ajv wraps a bare string as single-element array, so flatMap splits comma-separated elements.
     const keywords =
       typeof document.keywords === 'string'
         ? document.keywords

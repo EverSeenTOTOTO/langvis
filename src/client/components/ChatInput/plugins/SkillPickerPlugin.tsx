@@ -15,8 +15,7 @@ import type { SkillInfo } from '@/shared/types';
 import { VariablePlugin } from './VariablePlugin';
 import type { InlineControlProps, VariablePopoverRenderArgs } from './types';
 
-/** Trailing boundary required so a token only chips once a space/punct follows —
- *  this keeps the popover usable while the user is still typing the query. */
+// Trailing boundary — a token only chips once a space/punct follows.
 const BOUNDARY = `[\\s.,;:!?)>]`;
 
 const buildSkillPattern = (skills: SkillInfo[]): RegExp => {
@@ -133,12 +132,7 @@ const SkillList: React.FC<{
   );
 };
 
-/**
- * Concrete demo wiring `/` to an agent-skill picker:
- * type `/` → popover lists skills (filtered as you type); pick one (click or
- * ↑↓+Enter) → a highlighted `/skill-id` chip is inserted. Paste/type of a known
- * `/skill-id` followed by a boundary also becomes a chip via ReplacePlugin.
- */
+// Demo `/` wiring: `/` → picker, pick → `/skill-id` chip (pasted matches chip via ReplacePlugin).
 export const SkillPickerPlugin: React.FC = () => {
   const agentStore = useStore('agent');
   const [skillState, fetchSkills] = useAsyncFn(() => agentStore.listSkills());

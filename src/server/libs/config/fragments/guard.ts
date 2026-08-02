@@ -1,13 +1,7 @@
 import type { JSONSchemaType } from 'ajv';
 import type { ConfigFragment } from '../config-fragment';
 
-/**
- * 运行期兜底阈值（liveness + cost + per-message 闸）。生产默认宽；eval 经 runtimeConfig 调小。
- * 旋钮各被一个 guard hook 消费：maxIterations→MaxIterationsHook、
- * maxTokenUsage→CumulativeBudgetHook（累计口径）、stuckThreshold→StuckHook、
- * maxQuerySize/maxQueryTokens→QueryBudgetHook（per-latest 单条口径，与 offload 无关）。
- * offload 的总量/窗口阈值在 offload fragment（windowRatio），不在此。
- */
+// 运行期兜底阈值（liveness + cost + per-message 闸）。生产默认宽，eval 经 runtimeConfig 调小；各旋钮被对应 guard hook 消费。
 export interface GuardConfig {
   /** 迭代（tick）上限——MaxIterationsHook 到此即强制收尾。生产 1000（纯 runaway 兜底）。 */
   maxIterations: number;
@@ -15,8 +9,7 @@ export interface GuardConfig {
   maxTokenUsage: number;
   /** 连续无新动作 tick 数——StuckHook 到此即判卡死强制收尾。 */
   stuckThreshold: number;
-  /** 单条消息占 contextWindow 的比例上限（per-latest 口径，默认 0.4）——QueryBudgetHook 超即 drop 最新一条。
-   *  与 offload 无关：offload 是总量/窗口口径，阈值在 offload.fragment.windowRatio。 */
+  // 单条消息占 contextWindow 比例上限（per-latest，默认 0.4）——QueryBudgetHook 超即 drop。与 offload 的 windowRatio 无关。
   maxQuerySize?: number;
   /** 单条消息 token 绝对上限（默认 10000）——QueryBudgetHook 在大 context 上拦病态胖取。取 min 与比例值。 */
   maxQueryTokens?: number;

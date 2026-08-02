@@ -1,9 +1,6 @@
 import type { EnrichedEvent } from '@/shared/types/events';
 
-/**
- * Agent run 的领域事件契约——agent 拥有并外发，conv（及其它订阅方）按需 import。
- * Token 是纯字符串常量，EventBus 按值匹配；移动定义只改 import 来源，不影响接线。
- */
+// Agent run 领域事件契约——agent 拥有并外发，conv 及其它订阅方按需 import。Token 纯字符串常量，EventBus 按值匹配。
 
 /** agent→conv：run 开始（conv 据此 registerRun + persistAgentRunId）。 */
 export const RunStarted = 'run_started';

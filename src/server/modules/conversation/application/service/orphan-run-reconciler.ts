@@ -6,10 +6,7 @@ import {
 import Logger from '@/server/utils/logger';
 import { ChatService } from './chat.service';
 
-/**
- * 孤儿 run 清扫（启动用例）：服务重启后内存 activeRuns 丢失，DB 里残留的
- * initialized/running run 已死——启动时一次性把它们驱动到 failed。
- */
+// 孤儿 run 清扫（启动用例）：服务重启后内存 activeRuns 丢失，DB 里残留的 initialized/running run 已死——启动时一次性把它们驱动到 failed。
 @singleton()
 @lifecycleHook
 export class OrphanRunReconciler implements LifecycleHook {

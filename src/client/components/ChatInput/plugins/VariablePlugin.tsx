@@ -17,14 +17,7 @@ import type {
   VariablePluginProps,
 } from './types';
 
-/**
- * Combines ReplacePlugin (pattern → chip on type/paste) and PopoverPlugin
- * (trigger → picker), sharing one registry `name` and one `contentRender`.
- *
- * `popoverRender` additionally receives `insert({ text, data })`: it removes the
- * trigger+query span at the caret, drops an InlineControlNode there, adds a
- * trailing space, places the caret after it, and closes the popover.
- */
+// ReplacePlugin chips + Popover picker, one shared `name`; insert() swaps trigger+query for a chip.
 export const VariablePlugin: React.FC<VariablePluginProps> = ({
   name,
   trigger,

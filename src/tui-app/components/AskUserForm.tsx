@@ -26,21 +26,16 @@ type SchemaProp = {
   maximum?: number;
   minLength?: number;
   maxLength?: number;
-};
-type Schema = {
-  type?: string;
-  title?: string;
-  description?: string;
-  enum?: EnumItem[];
-  items?: { type?: string; enum?: EnumItem[] };
-  default?: unknown;
   properties?: Record<string, SchemaProp>;
   required?: string[];
 };
+type Schema = SchemaProp;
 
 type FieldKind = 'text' | 'number' | 'boolean' | 'enum' | 'multiselect';
 type Field = {
-  key: string;
+  path: string[];
+  pathKey: string;
+  depth: number;
   label: string;
   description?: string;
   kind: FieldKind;
@@ -50,7 +45,11 @@ type Field = {
   max?: number;
   minLength?: number;
   maxLength?: number;
+  default?: unknown;
 };
+type Row =
+  | { kind: 'group'; key: string; depth: number; title: string }
+  | { kind: 'field'; field: Field };
 
 function normalizeEnum(
   items?: EnumItem[],
@@ -73,58 +72,87 @@ function fieldKind(p: SchemaProp): FieldKind {
   if (p.type === 'boolean') return 'boolean';
   if (p.type === 'array') {
     if (p.items?.enum?.length) return 'multiselect';
-    return 'text'; // array-of-objects / plain array → text (deferred)
+    return 'text';
   }
   if (p.enum?.length) return 'enum';
   if (p.type === 'number' || p.type === 'integer') return 'number';
   return 'text';
 }
 
-function deriveFields(schema: Schema): Field[] {
-  const required = schema.required ?? [];
-  const fromProp = (key: string, p: SchemaProp): Field => ({
-    key,
-    label: p.title ?? key,
-    description: p.description,
-    kind: fieldKind(p),
-    options: normalizeEnum(p.enum) ?? normalizeEnum(p.items?.enum),
-    required: required.includes(key),
-    min: p.minimum,
-    max: p.maximum,
-    minLength: p.minLength,
-    maxLength: p.maxLength,
-  });
+// Derive an ordered row list from the schema: object props become a group header, then recurse.
+function deriveRows(schema: Schema): Row[] {
+  const rows: Row[] = [];
+  const walk = (
+    key: string,
+    p: SchemaProp,
+    path: string[],
+    depth: number,
+    required: boolean,
+  ) => {
+    if (p.type === 'object' && p.properties) {
+      rows.push({
+        kind: 'group',
+        key: `${path.join('.')}:g`,
+        depth,
+        title: p.title ?? key,
+      });
+      const reqSet = new Set(p.required ?? []);
+      for (const [k, child] of Object.entries(p.properties)) {
+        walk(k, child, [...path, k], depth + 1, reqSet.has(k));
+      }
+      return;
+    }
+    const pathKey = path.join('.');
+    rows.push({
+      kind: 'field',
+      field: {
+        path,
+        pathKey,
+        depth,
+        label: p.title ?? key,
+        description: p.description,
+        kind: fieldKind(p),
+        options: normalizeEnum(p.enum) ?? normalizeEnum(p.items?.enum),
+        required,
+        min: p.minimum,
+        max: p.maximum,
+        minLength: p.minLength,
+        maxLength: p.maxLength,
+        default: p.default,
+      },
+    });
+  };
+
   if (schema.type === 'object' && schema.properties) {
-    return Object.entries(schema.properties).map(([k, p]) => fromProp(k, p));
+    const reqSet = new Set(schema.required ?? []);
+    for (const [k, p] of Object.entries(schema.properties)) {
+      walk(k, p, [k], 0, reqSet.has(k));
+    }
+  } else {
+    walk('value', schema, ['value'], 0, false);
   }
-  return [fromProp('value', schema)];
+  return rows;
 }
 
-function initValues(fields: Field[], schema: Schema): Record<string, unknown> {
-  const defaults: Record<string, unknown> =
-    schema.type === 'object' && schema.properties
-      ? Object.fromEntries(
-          Object.entries(schema.properties).map(([k, p]) => [k, p.default]),
-        )
-      : { value: schema.default };
+function initValues(rows: Row[]): Record<string, unknown> {
   const v: Record<string, unknown> = {};
-  for (const f of fields) {
-    const d = defaults[f.key];
-    if (f.kind === 'boolean') v[f.key] = d ?? false;
+  for (const row of rows) {
+    if (row.kind !== 'field') continue;
+    const f = row.field;
+    const d = f.default;
+    if (f.kind === 'boolean') v[f.pathKey] = d ?? false;
     else if (f.kind === 'multiselect') {
-      v[f.key] = Array.isArray(d) ? d : d != null ? [d] : [];
+      v[f.pathKey] = Array.isArray(d) ? d : d != null ? [d] : [];
     } else if (f.kind === 'enum') {
-      v[f.key] = d ?? f.options?.[0]?.value ?? '';
-    } else v[f.key] = d ?? '';
+      v[f.pathKey] = d ?? f.options?.[0]?.value ?? '';
+    } else v[f.pathKey] = d ?? '';
   }
   return v;
 }
 
-/** Validate against required / numeric range / string length. Returns the
- * first error message, or '' if valid. */
 function validate(fields: Field[], values: Record<string, unknown>): string {
   for (const f of fields) {
-    const v = values[f.key];
+    const v = values[f.pathKey];
     if (f.required) {
       const empty =
         v == null || v === '' || (Array.isArray(v) && v.length === 0);
@@ -148,11 +176,18 @@ function validate(fields: Field[], values: Record<string, unknown>): string {
   return '';
 }
 
-/** Renders `node.awaitingInput` as a schema-driven form in a bordered panel.
- * Owns the keyboard while mounted: ↑↓ navigate, Enter submits (or advances),
- * ◀▶ toggle booleans / cycle enums / move the multi-select cursor, Space
- * toggles a multi-select option, text/number fields type directly, Esc/Ctrl-C
- * aborts the run. Unmounts when the run resumes and awaitingInput clears. */
+function setPath(obj: Record<string, unknown>, path: string[], value: unknown) {
+  let cur = obj;
+  for (let i = 0; i < path.length - 1; i++) {
+    const k = path[i];
+    if (typeof cur[k] !== 'object' || cur[k] === null) cur[k] = {};
+    cur = cur[k] as Record<string, unknown>;
+  }
+  cur[path[path.length - 1]] = value;
+}
+
+// Renders node.awaitingInput as a schema-driven form in a bordered panel; owns the
+// keyboard while mounted (↑↓ navigate, Enter submit, ◀▶/Space toggle, Esc/Ctrl-C abort).
 export const AskUserForm = observer(function AskUserForm({
   node,
   cols,
@@ -163,18 +198,22 @@ export const AskUserForm = observer(function AskUserForm({
   const chat = useStore('chat');
   const awaiting = node.awaitingInput!;
   const schema = awaiting.schema as Schema;
-  const fields = deriveFields(schema);
+  const rows = deriveRows(schema);
+  const fields: Field[] = rows
+    .filter((r): r is Extract<Row, { kind: 'field' }> => r.kind === 'field')
+    .map(r => r.field);
   const [values, setValues] = useState<Record<string, unknown>>(() =>
-    initValues(fields, schema),
+    initValues(rows),
   );
   const [focusIdx, setFocusIdx] = useState(0);
   const [multiCursor, setMultiCursor] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
-  const submitIdx = fields.length; // index of the Submit row
+  const submitIdx = fields.length;
   const labelW = fields.reduce((m, f) => Math.max(m, f.label.length), 0);
   const inner = Math.max(1, cols - 2);
+  const focusedField = fields[focusIdx];
 
   async function submit() {
     const err = validate(fields, values);
@@ -184,9 +223,9 @@ export const AskUserForm = observer(function AskUserForm({
     }
     const data: Record<string, unknown> = {};
     for (const f of fields) {
-      const v = values[f.key];
-      data[f.key] =
-        f.kind === 'number' && v !== '' && v != null ? Number(v) : v;
+      let v = values[f.pathKey];
+      if (f.kind === 'number' && v !== '' && v != null) v = Number(v);
+      setPath(data, f.path, v);
     }
     setSubmitting(true);
     setSubmitError('');
@@ -200,7 +239,14 @@ export const AskUserForm = observer(function AskUserForm({
 
   useKeyboard(data => {
     if (submitting) return;
-    if (data === '\x1b' || data === '\x03') {
+    const quit =
+      data === '\x1b' ||
+      data === '\x03' ||
+      (data === 'q' &&
+        focusedField != null &&
+        focusedField.kind !== 'text' &&
+        focusedField.kind !== 'number');
+    if (quit) {
       void chat.cancelChat({
         conversationId: node.conversationId,
         messageId: node.id,
@@ -221,10 +267,10 @@ export const AskUserForm = observer(function AskUserForm({
       }
       return;
     }
-    const f = fields[focusIdx];
+    const f = focusedField;
     if (!f) return;
     if (f.kind === 'boolean' && (data === '\x1b[D' || data === '\x1b[C')) {
-      setValues(v => ({ ...v, [f.key]: !v[f.key] }));
+      setValues(v => ({ ...v, [f.pathKey]: !v[f.pathKey] }));
       return;
     }
     if (
@@ -235,12 +281,12 @@ export const AskUserForm = observer(function AskUserForm({
       setValues(v => {
         const idx = Math.max(
           0,
-          f.options!.findIndex(o => o.value === v[f.key]),
+          f.options!.findIndex(o => o.value === v[f.pathKey]),
         );
         const next =
           (idx + (data === '\x1b[C' ? 1 : -1) + f.options!.length) %
           f.options!.length;
-        return { ...v, [f.key]: f.options![next].value };
+        return { ...v, [f.pathKey]: f.options![next].value };
       });
       return;
     }
@@ -256,82 +302,90 @@ export const AskUserForm = observer(function AskUserForm({
         const cur = f.options[n ? multiCursor % n : 0];
         if (cur) {
           setValues(v => {
-            const arr = Array.isArray(v[f.key])
-              ? [...(v[f.key] as unknown[])]
-              : [];
+            const raw = v[f.pathKey];
+            const arr = Array.isArray(raw) ? [...(raw as unknown[])] : [];
             const at = arr.findIndex(x => x === cur.value);
             if (at >= 0) arr.splice(at, 1);
             else arr.push(cur.value);
-            return { ...v, [f.key]: arr };
+            return { ...v, [f.pathKey]: arr };
           });
         }
       }
     }
-    // text/number: the focused <Input> owns typing / cursor / backspace.
   });
+
+  const renderControl = (f: Field, focused: boolean): ReactNode => {
+    if (f.kind === 'boolean') {
+      return (
+        <Text fg={focused ? 'cyan' : 'white'}>
+          {values[f.pathKey] ? '● yes' : '○ no'}
+        </Text>
+      );
+    }
+    if (f.kind === 'enum') {
+      const cur = f.options?.find(o => o.value === values[f.pathKey]);
+      return (
+        <Text
+          fg={focused ? 'cyan' : 'white'}
+        >{`${cur?.label ?? '?'} ◀▶`}</Text>
+      );
+    }
+    if (f.kind === 'multiselect') {
+      const raw = values[f.pathKey];
+      const arr: unknown[] = Array.isArray(raw) ? raw : [];
+      const opts = f.options ?? [];
+      const ci = opts.length ? multiCursor % opts.length : -1;
+      return (
+        <>
+          {opts.map((o, oi) => {
+            const sel = arr.includes(o.value);
+            const isCur = focused && oi === ci;
+            return (
+              <Text
+                key={oi}
+                fg={isCur ? 'cyan' : sel ? 'white' : 'gray'}
+              >{`${sel ? '●' : '○'}${o.label} `}</Text>
+            );
+          })}
+          {focused && <Text fg="gray">{'◀▶␣'}</Text>}
+        </>
+      );
+    }
+    return (
+      <Input
+        value={String(values[f.pathKey] ?? '')}
+        onChange={v => setValues(prev => ({ ...prev, [f.pathKey]: v }))}
+        enabled={focused}
+        fg="white"
+      />
+    );
+  };
 
   return (
     <BorderedBox title="ask_user" cols={cols}>
       {awaiting.message && (
         <Markdown text={awaiting.message} width={inner - 2} />
       )}
-      {fields.map((f, i) => {
-        const focused = i === focusIdx;
-        const label = f.label.padEnd(labelW);
-        const render = (): ReactNode => {
-          if (f.kind === 'boolean') {
-            return (
-              <Text fg={focused ? 'cyan' : 'white'}>
-                {values[f.key] ? '● yes' : '○ no'}
-              </Text>
-            );
-          }
-          if (f.kind === 'enum') {
-            const cur = f.options?.find(o => o.value === values[f.key]);
-            return (
-              <Text fg={focused ? 'cyan' : 'white'}>
-                {`${cur?.label ?? '?'} ◀▶`}
-              </Text>
-            );
-          }
-          if (f.kind === 'multiselect') {
-            const raw = values[f.key];
-            const arr: unknown[] = Array.isArray(raw) ? raw : [];
-            const opts = f.options ?? [];
-            const ci = opts.length ? multiCursor % opts.length : -1;
-            return (
-              <>
-                {opts.map((o, oi) => {
-                  const sel = arr.includes(o.value);
-                  const isCur = focused && oi === ci;
-                  return (
-                    <Text
-                      key={oi}
-                      fg={isCur ? 'cyan' : sel ? 'white' : 'gray'}
-                    >{`${sel ? '●' : '○'}${o.label} `}</Text>
-                  );
-                })}
-                {focused && <Text fg="gray">{'◀▶␣'}</Text>}
-              </>
-            );
-          }
+      {rows.map(row => {
+        if (row.kind === 'group') {
           return (
-            <Input
-              value={String(values[f.key] ?? '')}
-              onChange={v => setValues(prev => ({ ...prev, [f.key]: v }))}
-              enabled={focused}
-              fg="white"
-            />
+            <Box key={row.key}>
+              <Text fg="cyan">{`${' '.repeat(row.depth * 2 + 1)}${row.title}`}</Text>
+            </Box>
           );
-        };
+        }
+        const f = row.field;
+        const focused = focusedField?.pathKey === f.pathKey;
+        const indent = ' '.repeat(f.depth * 2 + 1);
+        const label = f.label.padEnd(labelW);
         return (
-          <Box key={f.key} flexDirection="column">
+          <Box key={f.pathKey} flexDirection="column">
             <Box>
-              <Text fg="gray">{` ${label}  `}</Text>
-              {render()}
+              <Text fg="gray">{`${indent}${label}  `}</Text>
+              {renderControl(f, focused)}
             </Box>
             {f.description && (
-              <Text fg="gray">{` ${' '.repeat(labelW)}  ${f.description}`}</Text>
+              <Text fg="gray">{`${indent}${' '.repeat(labelW)}  ${f.description}`}</Text>
             )}
           </Box>
         );
@@ -343,7 +397,7 @@ export const AskUserForm = observer(function AskUserForm({
         </Text>
       </Box>
       <Text fg="gray">
-        {' ↑↓ navigate · ◀▶ change · ␣ toggle · Enter submit · Esc cancel'}
+        {' ↑↓ navigate · ◀▶ change · ␣ toggle · Enter submit · q/Esc cancel'}
       </Text>
     </BorderedBox>
   );

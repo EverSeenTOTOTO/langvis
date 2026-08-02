@@ -24,13 +24,7 @@ export interface PdfExtractStrategy {
   extract(filePath: string, req: ExtractRequest): Promise<ExtractResult>;
 }
 
-/**
- * pdftotext 策略：处理真实文本层 PDF。
- * - pdfinfo 取页数；
- * - 全文为空 → 判定疑似扫描件，置 warning（OCR 策略的接入点）；
- * - pdftotext -layout 提取（保留财报表格对齐），按 \f 分页；
- * - 每页套 maxCharsPerPage 截断，重组 "--- Page N ---" 分页文本。
- */
+// pdftotext 策略：pdfinfo 取页数；全文空 → 判扫描件置 warning；-layout 提取按 \f 分页，每页截断。
 export class PdftotextStrategy implements PdfExtractStrategy {
   async extract(filePath: string, req: ExtractRequest): Promise<ExtractResult> {
     const pages = await getPageCount(filePath);

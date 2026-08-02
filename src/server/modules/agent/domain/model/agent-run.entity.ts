@@ -34,10 +34,7 @@ export class AgentRun extends AggregateRoot<string> {
     this.config = config;
   }
 
-  /**
-   * 唯一带终止守卫的入口。已终止则返回 null——静默丢弃而非抛异常，以兼容外部 cancel
-   * 与执行循环的竞态。
-   */
+  // 唯一带终止守卫的入口。已终止则返回 null——静默丢弃而非抛异常，以兼容外部 cancel 与执行循环的竞态。
   append(event: RunEvent): EnrichedEvent | null {
     if (this.#terminated) return null;
     return this.record(event);

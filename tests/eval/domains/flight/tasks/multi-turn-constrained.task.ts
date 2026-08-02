@@ -1,23 +1,5 @@
-/**
- * G4.5 多 turn 会话级压缩任务 — 跨 turn 累积压到 history 阈值，逼出 turn-end
- * CompactTransform（会话级压缩），是 4leg 的会话级镜像。
- *
- * 5 turn、每 turn 订一个 distinct city-pair（catalog 5 对全用），cross-turn 共享沙箱。
- * 每 turn user 消息内嵌一段 ~1k tok 的差旅备忘（真实、逐 turn 不同——非同质填充）。
- * user 消息不被 processSummary 折叠（只折 assistant turn→meta.summary），故逐 turn
- * 原样累积进 history：system(~2.5k) + 5×(user ~1k + summary ~0.5k) → ~turn3-4 越过
- * 0.8×8192=6553。
- *
- *   - bare：loop/history fragment 省略 → mid-loop fold 与 turn-end CompactTransform
- *     都早 return；context 跨 turn 无界增长 → ~turn4-5 爆 8192 → run failed(400 overflow)。
- *   - compact-only/hybrid：turn-end CompactTransform 触发，把 tail 折成一条 compact 摘要 →
- *     回到窗内 → 跑完 5 turn。offload-only：offload(0.5) 桩化老 user 消息到盘 → 同样在窗内。
- *
- * 预期 headroom 正（压缩救活 baseline 必挂的跨 turn 累积爆窗）——验证"会话级压缩触发与否"。
- * hist_compact 列（runner 计 meta.kind=compact 条数）即本任务的核心读数。
- *
- * grading 与 4leg 同：fresh-catalog cheapestConstrained target、distinct pair 无 seat 冲突。
- */
+// G4.5 多 turn 会话级压缩：5 turn 每轮订一 pair，user 消息带 ~1k tok 备忘，
+// 跨 turn 累积越 history 阈值→逼 turn-end CompactTransform；压缩救跨轮爆窗（headroom 正）。
 import type { MultiTurnTask } from '../../../types';
 import {
   createBookingBackend,
@@ -40,17 +22,8 @@ const TARGETS = new Map(
 
 const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五'];
 
-/**
- * 逐 turn 差旅备忘（内容各异）：同行人 / 预算 / 会议目的 / 到达安排 / 特殊说明 / 应急。
- * 真实差旅语境，非同质填充。
- *
- * TODO(exec-eval)：实测 9B 在 turn 3-5 不再调 search_flights，却在 response_user 里"我筛选了
- * 符合条件的航班：f80 MU1081…"——把未搜索的 leg 伪造成已筛选（且 f80 真值是 CA1080/国航/07:30/
- * ¥960/座1，模型编成 MU1081/东航/12:30/¥953/座2 全部"恰好"满足约束），再"是否确认预订？"而非
- * book_flight。这是对 search/filter 步骤输出的幻觉，非幻觉工具调用本身。success 只验末态 bookings，
- * 抓不到"未搜索就报数据"——需加 agent 执行评判机制：每条 response_user 引用的实体(航班号/价格)
- * 须能在本轮前置 tool_result 中追溯，否则判 hallucination fail。当前留 TODO，任务本身保留以暴露此行为。
- */
+// 差旅备忘逐 turn 各异（真实语境）。TODO(exec-eval)：9B 常不调 search 而在 response_user
+// 编造"已筛选航班"（真值全不符却恰好满足约束）——success 验不到，需实体追溯判 hallucination。
 const BRIEFINGS: string[] = [
   `【差旅备忘·第 1 程 / 京→沪】华东区客户回访季首站。同行人：技术总监 Bob Chen（东航金卡，积分尾号 8841）。预算：本程机票上限 ¥1000，超出走 OA 二级审批（财务王经理 8211）。会议：与张江客户"芯启科技"做 Q3 系统集成方案评审，对方负责人 Linda Wang（138xxxx4920），14:00 入场、14:30 我主讲方案、16:00 Q&A。到达：浦东落地打车去张江园区（~35min ¥120），行李寄存全季张江店（确认码 Q-7732）。特殊说明：Bob 只坐东航（MU 字头），上午有晨会须下午 12:00 后出发。剩余座位多于 1（Bob 同行另订同班次，本程只订 Alice 一张）。如最便宜不满足约束，顺位次便宜，全程只订一张。`,
   `【差旅备忘·第 2 程 / 沪→广】参加供应链年度供应商大会。独行。预算：差旅包干 ¥5000，已订琶洲展馆店 ¥620/晚×2（订单 GZ-1108），机票预算 ¥1100 内。会议：13:30 签到换证（带名片 30 张）、14:30 主题演讲（采购陈总）、15:45 分组圆桌（B 组电子料件组桌号 7，我备 5min Q4 交付能力陈述）、17:00 晚宴。到达：白云 T2 落地乘 3 号线转 8 号线到琶洲 A 口（~50min ¥7），行李先放酒店。特殊说明：东航金卡走优先安检，只订东航；下午出发以便上午收尾上海客户纪要。座>1 硬约束（留改签缓冲）。不要早班（与上海收尾冲突）。`,

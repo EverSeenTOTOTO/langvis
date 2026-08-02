@@ -1,8 +1,4 @@
-/**
- * - inline 成员 → schema 全文写进 system 提示（formatToolsToMarkdown）。
- * - listed 成员 → 仅 id 进提示的 "Other Tools and Skills" 列表。
- * - resolve 时仅允许集合内成员，越界由应用层抛 ToolNotFoundError。
- */
+// inline 成员 schema 全文进 system 提示，listed 仅 id 进列表；resolve 越界抛 ToolNotFoundError。
 export type ToolMode = 'inline' | 'listed';
 
 export interface ToolMember {
@@ -54,10 +50,7 @@ export class ToolSet {
     return [...this.skills];
   }
 
-  /**
-   * 派生子集：剔除指定 id（工具与 skill 都查）。用于子 agent——
-   * 例如 child = parent.without(call_subagents, ask_user)。
-   */
+  // 派生子集：剔除指定 id（工具与 skill 都查）。用于子 agent—— 例如 child = parent.without(call_subagents, ask_user)。
   without(...ids: string[]): ToolSet {
     const exclude = new Set(ids);
     return new ToolSet(

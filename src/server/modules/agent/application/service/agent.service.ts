@@ -34,10 +34,7 @@ export class AgentService {
     return configSchema as JSONSchemaType<Record<string, unknown>>;
   }
 
-  /**
-   * 全局 conv agent 的 system prompt——内容固定，构建一次后 memoize。首次调用触发动态 import 注册。
-   * 等价于 buildSystemPrompt(buildToolSet())（conv 默认全集）。
-   */
+  // 全局 conv agent 的 system prompt：内容固定，首次构建后 memoize（等价 buildSystemPrompt(buildToolSet())）。
   getSystemPrompt(): Promise<string> {
     if (!this.cachedPrompt) {
       this.cachedPrompt = (async () => {
@@ -70,10 +67,7 @@ export class AgentService {
     });
   }
 
-  /**
-   * 从 conv 侧已 parse 的 runtimeConfig 直接产出 RunConfigVO——不再二次 parse。
-   * contextSize 不参与（按需派生）。
-   */
+  // 从 conv 侧已 parse 的 runtimeConfig 直接产出 RunConfigVO——不再二次 parse。 contextSize 不参与（按需派生）。
   buildResolvedRunConfig(runtimeConfig: ConversationConfig): RunConfigVO {
     return RunConfigVO.of({
       tools: this.inlineTools,
@@ -81,11 +75,8 @@ export class AgentService {
     });
   }
 
-  /**
-   * 构建一个 ToolSet：全集 = 已发现工具，inline/listed 分类沿用 inlineTools；
-   * 可剔除指定 id（子 agent 派生用）。inline 成员保持 inlineTools 顺序、listed 保持发现顺序，
-   * 保证 conv 默认 ToolSet 渲染出的提示与历史一致。
-   */
+  // 构建 ToolSet：全集 = 已发现工具，inline/listed 分类沿用 inlineTools 顺序；可剔除指定 id（子 agent 派生用）。
+  // inline 保持 inlineTools 序、listed 保持发现序，保证 conv 默认 ToolSet 渲染的提示与历史一致。
   buildToolSet(exclude: string[] = []): ToolSet {
     const discovered = this.toolService.getCachedToolIds();
     const inlineSet = new Set(this.inlineTools as string[]);
@@ -106,11 +97,8 @@ export class AgentService {
     return ToolSet.of(members, skillIds);
   }
 
-  /**
-   * 按 ToolSet 渲染 system prompt（per-run，conv 与子 agent 复用同一机制）。
-   * inline 成员 → base 的工具文档段；listed + skills → "Other Tools and Skills" 列表。
-   * base 默认 BASE_PROMPT；子 agent 传 SUBAGENT_PROMPT。
-   */
+  // 按 ToolSet 渲染 system prompt（per-run，conv 与子 agent 复用）。inline 成员 → base 工具文档段。
+  // listed + skills → "Other Tools and Skills" 列表；base 默认 BASE_PROMPT，子 agent 传 SUBAGENT_PROMPT。
   buildSystemPrompt(toolSet: ToolSet, base = BASE_PROMPT): string {
     const inlineTools = toolSet
       .inlineIds()

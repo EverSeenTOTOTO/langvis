@@ -20,10 +20,8 @@ type GetSessionParams = Parameters<
 
 @store()
 export class AuthStore {
-  // In the browser the default client uses same-origin fetch + browser cookies.
-  // In the CLI (bun, no cookie jar) route through the shared fetch-cookie jar
-  // (serverFetch) so the session cookie is shared with the API + SSE layers,
-  // and point at the backend origin.
+  // Browser: same-origin fetch + browser cookies. CLI (bun): route through
+  // serverFetch's cookie jar so the session cookie is shared with API + SSE.
   private client = createAuthClient(
     isClient()
       ? {}

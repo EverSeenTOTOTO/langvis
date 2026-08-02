@@ -10,7 +10,7 @@ import type { CachedReference } from '@/server/modules/agent/domain/port/cache.p
 export const OBSERVATION_PREFIX = 'Observation: ';
 export const OFFLOADED_MARK = '[offloaded to file'; // 已桩标记 → 跳过重复桩
 export const HEAD_KEEP = 256; // 裸 user 桩化保留头部（保 skill 触发 / 元信息）
-export const CHUNK_SIZE = 2000; // 桩化指引的块大小单位：估 chunks 数分叉大小文件策略，兼作「原文短于一个 chunk 不桩」的下限
+export const CHUNK_SIZE = 2000; // 块大小单位：估 chunks 分叉策略，兼作「短于一个 chunk 不桩」下限
 export const LARGE_CHUNK_THRESHOLD = 10; // 超此块数 → 大文件，只劝 rg 不劝分页
 
 /** 桩候选 */
@@ -19,8 +19,7 @@ export type Candidate =
   | { kind: 'bare'; body: string }
   | { kind: 'assistant'; body: string; parsed: ParsedAction };
 
-/** 取候选正文，用于体积评估 + 落盘。assistant 桩候选正文即整条 ReAct 报文原文（一次性 dump thought+input），
- *  并顺带解析一次供下游 stubContent/hintFromAction 复用——不在 stubContent 里再 parse。 */
+// 取候选正文用于体积评估 + 落盘；assistant 候选即整条 ReAct 报文原文，顺带解析一次供下游复用。
 export function candidateBody(msg: LlmMessage): Candidate | null {
   if (msg.role === 'user') {
     if (msg.content.startsWith(OBSERVATION_PREFIX)) {
@@ -43,15 +42,8 @@ export function candidateBody(msg: LlmMessage): Candidate | null {
   return null;
 }
 
-/**
- * 桩正文生成。
- * - observation：全替（保前缀 + hint 含 tool）。
- * - bare user：保 HEAD_KEEP 头部。
- * - assistant：整条 ReAct 报文已一次性落盘——重建 `{tool, input:{_offloaded}, thought:annot}`，
- *
- * 访问指引按量级分叉：大文件只劝 rg（分页/整读必爆窗）；小文件才劝 sed -n / head -n 顺序分页。
- * 共享于 OutputOffloadHook（产出即桩）与 OffloadHook（预算回溯桩）——读端 hint 两处一致。
- */
+// 桩正文生成：observation 全替；bare 保 HEAD_KEEP 头部；assistant 重建 `{tool, input:{_offloaded}}`。
+// 大文件只劝 rg，小文件劝 sed -n 分页（整读必爆窗）；读端 hint 两处一致。
 export function stubContent(
   candidate: Candidate,
   stub: CachedReference,
@@ -83,8 +75,7 @@ export function stubContent(
   });
 }
 
-/** 已解析 ReAct action → hint：tool + 首个 scalar 入参。bash 取命令动词（不带参数，防文件名嵌套）。
- *  纯函数、不 parse——调用方负责一次性解析后复用本函数（observation 配对 assistant / assistant 候选同源）。 */
+// ReAct action → hint：tool + 首个 scalar 入参；bash 取命令动词。纯函数，调用方一次性解析后复用。
 export function hintFromAction(parsed: ParsedAction): string {
   const { tool, input } = parsed;
   if (tool === ToolIds.BASH) {
@@ -112,8 +103,7 @@ export function hintForUser(body: string): string {
   return firstLine.slice(0, 32);
 }
 
-/** 解析 messages[i] 的 assistant ReAct action；非 assistant / 不可解析 → null。
- *  供 hook 在 [base,len) 顶部一次性建索引后复用，避免 observation 路径 classifyRecall + hintForObservation 各 parse 一次。 */
+// 解析 messages[i] 的 assistant action；不可解析 → null。hook 一次性建索引复用，避免各路径重复 parse。
 export function parseAssistantAt(
   messages: LlmMessage[],
   i: number,

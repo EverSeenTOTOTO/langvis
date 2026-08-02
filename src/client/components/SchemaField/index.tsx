@@ -34,11 +34,7 @@ export type SchemaProperty = {
   description?: string;
   title?: string;
   properties?: Record<string, SchemaProperty>;
-  /**
-   * JSON Schema 语义（仅 object 用）：列出哪些子属性必填。
-   * 注意：reaction 的 `set.required`（布尔，表示「本字段必填」）经 applyReactions
-   * 合并后会以布尔形式出现在这里——故类型为两者之并，读取时按 typeof 区分。
-   */
+  // 仅 object 用：哪些子属性必填。reaction 的 set.required 合并后为布尔，读取时按 typeof 区分。
   required?: boolean | readonly string[];
   /** 反应式：本字段是否禁用（由 reaction 的 set.disabled 合入）。 */
   disabled?: boolean;
@@ -49,10 +45,7 @@ export type SchemaProperty = {
   format?: string;
   /** For format='model-select': filter models by type (chat/embedding/tts) */
   modelType?: string;
-  /**
-   * 响应式联动规则：当 `when` 成立时，用 `set` 覆盖本字段的渲染状态
-   * （visible/required/disabled/enum/title/description）。机制与写法见 ./reactions.ts。
-   */
+  // 响应式联动规则：when 成立时用 set 覆盖本字段渲染状态（visible/required/disabled/enum/title/description）。见 ./reactions.ts。
   reactions?: readonly SchemaReaction[];
 };
 
@@ -75,8 +68,7 @@ function normalizeEnumItems(items: readonly EnumItem[]): {
   });
 }
 
-/** Read a nested value out of a plain form-values object by NamePath. Used by the
- * reactive branch's `shouldUpdate` to diff prev/next snapshots at each peer path. */
+// Read a nested value from a form-values object by NamePath (for shouldUpdate diffing).
 function getAtPath(obj: unknown, path: NamePath): unknown {
   const keys = Array.isArray(path) ? path : [path];
   return keys.reduce<unknown>((acc, key) => {
@@ -94,12 +86,7 @@ interface SchemaFieldProps {
   grid?: boolean;
 }
 
-/**
- * 枚举收窄守卫：当 reaction 把 `enum` 收窄、而当前值已不在新选项内时，清空该字段值。
- * 避免提交「值不属于当前可选选项」的脏配置（如选了 slide_window_memory 后切到只支持
- * react_memory 的 agent）。在 effect 中 setFieldValue（避免渲染期副作用）；enum 未变或当前值
- * 仍合法时不动作。`name` 对给定 fieldKey 稳定，故以 fieldKey + 枚举签名 为依赖。
- */
+// 枚举收窄守卫：当前值不在新选项内时清空字段值，避免提交脏配置；在 effect 中 setFieldValue，依赖 fieldKey+枚举签名。
 const ReactiveEnumGuard: React.FC<{
   name: NamePath;
   fieldKey: string;
@@ -275,10 +262,7 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
       );
     }
 
-    // Custom format: model-select renders TreeSelect.
-    // 选中模型时把 multimodal 写到与 modelId 同级的兄弟字段（parent 下的 'multimodal'），
-    // 供声明了 reactions 的兄弟字段联动读取（当前无消费方，保留以备后续片段）。
-    // ModelSelect 只报选中模型对象，写哪个路径由这里（知道 name）决定。
+    // model-select 渲染 TreeSelect：选中时把 multimodal 写到与 modelId 同级的兄弟字段，供 reactions 联动读取。
     if (effective.format === 'model-select') {
       const parent = (Array.isArray(fullName) ? fullName : [fullName]).slice(
         0,
@@ -367,12 +351,8 @@ const SchemaField: React.FC<SchemaFieldProps> = ({
     );
   };
 
-  // 有 reactions：套响应式 Form.Item。用 `shouldUpdate`（而非 `dependencies`）触发重渲染：
-  // dependencies 只在「已注册字段」变化时重渲染——而 model.multimodal 这类「衍生元信息」
-  // 没有归属的 Form.Item，仅靠 setFieldValue 写入，对 dependencies 的路径匹配不可见，
-  // 不会触发联动。shouldUpdate 对比整份 values 快照（prev vs next），能捕捉到这种 ghost peer。
-  // `preserve={false}` 让被 visible:false 卸载的字段其值自动从 form store 丢弃，
-  // 避免隐藏值被提交。无 reactions 时走原路径，行为零变化。
+  // 有 reactions：用 shouldUpdate 而非 dependencies 重渲染——ghost peer 无归属 Form.Item，仅 setFieldValue 写入，
+  // dependencies 对之不可见；preserve={false} 丢弃 visible:false 卸载值，避免隐藏值被提交。
   if (prop.reactions?.length) {
     const depPaths = collectFields(prop.reactions).map(peerPath);
     const fullName: NamePath = namePrefix ? [...namePrefix, name].flat() : name;

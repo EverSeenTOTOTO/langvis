@@ -1,13 +1,5 @@
-/**
- * G4.3 Task B — 4 程多约束交叉验证(测压缩贡献)。
- *
- * 在 3leg 基础上加第 4 程 京→广。估算累积峰值 ~9400 tok,爆 8192 全窗:
- *   - baseline(bare)不折叠,4 次大 search 累积爆窗 → 失败(provider 截断/信息丢失)
- *   - default(压缩)过阈后折叠掉早期 search → 回到窗内 → 能完成
- *   → headroom 应为正(default 救活 baseline 必挂的 run),即 driver 贡献的正面证据。
- *
- * 8 步(search×4 + book×4)稳破 keepRecent=4。catalog 与 3leg 共用同一生成器。
- */
+// G4.3 Task B：4 程多约束，测压缩贡献。累积峰值 ~9400 tok 爆 8192 窗：
+// baseline(bare) 不折叠失败，default 折叠早期 search 后完成 → headroom 为正。
 import type { Task } from '../../../types';
 import {
   createBookingBackend,
@@ -25,12 +17,8 @@ const LEGS: ReadonlyArray<readonly [string, string]> = [
   ['北京', '广州'],
 ];
 
-/**
- * 每程正确答案:在 **fresh catalog(预订前)** 上满足全约束的最便宜 flight。
- * 须在 setup 预订前算——book_flight 会改座位(seats--),若在 success 里用
- * 已被订过的 b.flights 重算,target 会被座位扣减挤掉、误判。
- * catalog 确定性,故模块加载时算一次即每 run 恒同。
- */
+// 正确答案须在 setup 预订前于 fresh catalog 上算：book_flight 会扣 seats，
+// 若用订后 b.flights 重算，target 会被扣减挤掉。确定性，加载时算一次即可。
 const TARGETS = new Map(
   LEGS.map(([o, d]) => [
     `${o}|${d}`,

@@ -7,12 +7,7 @@ import type { GroupedModels } from '@/shared/types/provider';
 interface ModelSelectProps {
   value?: string;
   onChange?: (value: string) => void;
-  /**
-   * 选中/清空模型时回调整条模型对象（含 multimodal 等元信息）。
-   * ModelSelect 只负责「从已拉取的列表里找出选中的模型并报上来」，
-   * 不关心自己在表单里的 name 路径——把元信息写到哪个兄弟字段，
-   * 由上层（知道 name 的 SchemaField）决定。见 SchemaField 的 model-select 分支。
-   */
+  // 选中/清空模型时回调整条模型对象（含 multimodal 等元信息）；写哪个兄弟字段由上层 SchemaField 决定。
   onModelSelect?: (model: GroupedModels['models'][number] | undefined) => void;
   modelType?: string;
   placeholder?: string;

@@ -10,18 +10,12 @@ import {
 
 const logger = Logger.child({ source: 'CacheProvider' });
 
-/*
- * CachePort 实现。落盘入口只有 offload（pre-LLM / post-observation hook 用）：始终写盘返 CachedReference，
- * 文件名带语义 hint。读端不再自动 resolve——agent 经 bash rg/sed/head 检索盘上件。
- */
+// CachePort 实现：offload 始终写盘返 CachedReference，文件名带语义 hint；读端经 bash rg/sed/head 检索。
 
 // $preview 长度：桩里露的预览，供 LLM 不读正文即判断该不该 page-in。
 export const PREVIEW_LENGTH = 100;
 
-/**
- * 把语义 hint（tool + 关键入参）规整为文件名安全段：小写、非 [a-z0-9] 替 -、
- * 压连续分隔、去首尾分隔、截断。空/纯符号 → ''（调用方据此退 fc_<id>）。
- */
+// 把语义 hint（tool + 关键入参）规整为文件名安全段：小写、非 [a-z0-9] 替 -、 压连续分隔、去首尾分隔、截断。空/纯符号 → ''（调用方据此退 fc_<id>）。
 function sanitizeHint(hint?: string): string {
   if (!hint) return '';
   return hint
@@ -34,12 +28,8 @@ function sanitizeHint(hint?: string): string {
 /** 折行宽度上限：rg 命中后单行回显不致失控（8k 上下文模型也吃得下）。 */
 const MAX_GREP_LINE = 2000;
 
-/** offload 落盘内容 reflow 成 rg 友好形：剥 untrusted 包裹后递归；JSON 形先解转义再按需结构化裂行。
- *  - 紧凑 JSON（如 search_flights 的 {"flights":[...]}，无转义）：unescape 是 no-op → 仍单行巨 JSON
- *    → JSON.parse + 缩进 stringify 裂成每字段/每元素一行，rg -C3 才能切出片段而非回整条。
- *  - bash 形（{exitCode, stdout:"line1\nline2"}）：unespace 把 \n 真换行 → 字符串内夹真换行 → 非法 JSON
- *    → 落 wrapLongLines（stdout 已多行，仅兜底超宽行）。
- *  落盘件只供 bash rg/sed/head 检索，resolve 路径 JSON.parse 缩进形仍等价原值。 */
+// offload 落盘内容 reflow 成 rg 友好形：紧凑 JSON 解转义后 JSON.parse+缩进裂行，rg -C3 才能切出片段。
+// bash 形（stdout 含 \n）解析失败落 wrapLongLines 兜底；resolve 时缩进形 JSON.parse 仍等价原值。
 const JSON_ESCAPES: Record<string, string> = {
   '\\': '\\',
   '"': '"',

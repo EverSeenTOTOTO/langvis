@@ -71,7 +71,7 @@ function makeCtx(
   } as unknown as AgentRunContext;
 }
 
-// contextSize=8192, maxQuerySize 默认 0.4 → budget=min(10k,3276)=3276；prefix=0 → remaining=8192 → cap=min(3276,8192)=3276。
+// contextSize=8192，maxQuerySize 0.4 → budget=min(10k,3276)=3276；prefix=0 → cap=3276。
 function makeHook(contextSize: number): QueryBudgetHook {
   const provider = { resolveContextSize: () => contextSize };
   return new QueryBudgetHook(provider as never);

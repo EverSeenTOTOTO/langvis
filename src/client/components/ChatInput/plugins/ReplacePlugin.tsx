@@ -5,14 +5,7 @@ import { $createInlineControlNode } from './InlineControlNode';
 import { useRegisterRenderer } from './InlineControlRegistry';
 import type { ReplacePluginProps } from './types';
 
-/**
- * Replaces every `pattern` match in plain text nodes with an InlineControlNode.
- * Runs on typing and on paste (Lexical runs registered transforms on dirty text
- * nodes during reconciliation), so pasted `use /web-search now` becomes a chip too.
- *
- * Handles all matches within a single node in one pass; remaining text becomes a
- * new dirty node that re-runs the transform, so arbitrarily long pastes converge.
- */
+// Replaces every `pattern` match in plain text with an InlineControlNode, on type and paste.
 export const ReplacePlugin: React.FC<ReplacePluginProps> = ({
   name,
   pattern,

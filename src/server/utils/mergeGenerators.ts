@@ -1,7 +1,4 @@
-/**
- * 并发汇流多个 AsyncGenerator：任一产出即转发，全部结束后收尾。单条流抛错不影响其它
- * （allSettled 语义）。事件按到达顺序交错转发，保证消费方近实时看到各流进展。
- */
+// 并发汇流多个 AsyncGenerator：任一产出即转发，全部结束后收尾。单条流抛错不影响其它 （allSettled 语义）。事件按到达顺序交错转发，保证消费方近实时看到各流进展。
 export async function* mergeGenerators<T>(
   gens: readonly AsyncGenerator<T>[],
 ): AsyncGenerator<T> {

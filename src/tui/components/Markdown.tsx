@@ -9,8 +9,7 @@ type MarkdownProps = {
   theme?: string;
 };
 
-/** Markdown → styled ANSI (via streammark), fed verbatim to Ink's Text, whose
- * tokenizer renders the embedded SGR codes. Recomputed each render. */
+// Markdown → styled ANSI (via streammark) fed to Ink's Text, which renders the embedded SGR codes.
 export function Markdown({ text, width, theme }: MarkdownProps) {
   const { cols } = useTerminalSize();
   if (!text) return null;

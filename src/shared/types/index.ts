@@ -10,7 +10,7 @@ export interface ToolConfig<
   inputSchema?: JSONSchemaType<Input>;
   outputSchema?: JSONSchemaType<Output>;
   enabled?: boolean;
-  /** Mark tool output as untrusted/external content — will be wrapped with untrusted_content tags in the agent loop */
+  /** Treat tool output as untrusted external content — wrapped with untrusted_content tags */
   untrustedOutput?: boolean;
 }
 

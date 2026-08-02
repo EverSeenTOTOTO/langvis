@@ -18,8 +18,7 @@ type InputProps = {
 
 type KeyResult = { value: string; cursor: number; submit: boolean } | null;
 
-/** Interpret a raw terminal input chunk against the current value/cursor.
- * Returns the new state, or null to ignore the key. */
+// Interpret a raw input chunk against value/cursor; null means ignore the key.
 function applyKey(data: string, value: string, cursor: number): KeyResult {
   switch (data) {
     case '\r':
@@ -67,9 +66,7 @@ function applyKey(data: string, value: string, cursor: number): KeyResult {
   }
 }
 
-/** Controlled single-line input with an inline reverse-video block cursor.
- * The cursor SGR is embedded in the display string so it never perturbs
- * Ink's width measurement. */
+// Controlled single-line input with an inline block cursor; its SGR is embedded in the display string.
 export function Input({
   value,
   onChange,

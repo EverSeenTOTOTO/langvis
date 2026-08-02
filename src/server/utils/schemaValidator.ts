@@ -75,9 +75,7 @@ export function coerceJsonStringFields(
 }
 
 function looseJsonParse(s: string): unknown {
-  // 走到这里说明 parseValue 的 JSON.parse 已失败（否则就是对象了），故不再直 parse。
-  // 先剥一层 ```fence```/配对引号（jsonrepair 不认这层包裹），仅当形似 JSON 时才 jsonrepair
-  // 修结构损坏（截断/缺括号/尾逗号/单引号）；最终仍由 ajv 二次校验兜底。
+  // JSON.parse 已失败的兜底：剥 fence/引号后形似 JSON 才 jsonrepair，再由 ajv 二次校验。
   const candidate = stripWrap(s.trim());
   if (candidate[0] !== '{' && candidate[0] !== '[') return undefined;
   try {

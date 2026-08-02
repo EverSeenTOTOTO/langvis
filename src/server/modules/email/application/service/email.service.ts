@@ -117,10 +117,7 @@ export class EmailService {
     return success;
   }
 
-  /** Composes the `/document_archive` user prompt for a just-archived email.
-   *  Owns the prompt template (subject / sender / time + inline body). Body 经
-   *  htmlToMarkdown 转 markdown——DB 仍存原始 sanitized HTML 供前端渲染，仅此处清洗。
-   *  超长则 pre-LLM offload hook 照常落盘。Keeps EmailArchived a thin dispatcher. */
+  // 组装归档邮件的 `/document_archive` prompt（body 经 htmlToMarkdown 转 markdown，仅此处清洗）。
   async composeArchivePrompt(input: ArchivePromptInput): Promise<string> {
     const fromDisplay = input.fromName
       ? `${input.fromName} <${input.from}>`

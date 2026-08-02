@@ -1,15 +1,5 @@
-/**
- * eval 用的"真够用"in-memory 仓库桩（**模块级单例 + 原地清空**）。
- *
- * 为什么不用 noop：summary-attach（conv turn-start）读 agentRunRepo.findByIds 取
- * processSummary，compact-transform（conv turn-end）写 messageRepo.batchCreate——
- * noop 让这两条压缩链路静默盲掉（G1.1 要让四条压缩机制都可观测）。
- *
- * 为什么是单例 + 原地清空：conv transform（SummaryAttachTransform / CompactTransform）是
- * @singleton，构造时经 DI 捕获 repo 引用——容器只解析一次。故 eval 必须复用同一 repo
- * **对象**，reset 时清空其内部 Map（而非换对象），否则 transform 仍指着旧引用。
- * 对象在 registerEvalRepos() 首次创建并登记入容器，之后保持不变。
- */
+// eval 用"真够用"in-memory 仓库桩（模块级单例 + 原地清空）：noop 会让 summary-attach/
+// compact 两条压缩链路静默盲掉；单例复用同一 repo 对象，reset 只清内部 Map，供 transform 引用。
 import type { AgentRun, Message } from '@/shared/types/entities';
 import { Role } from '@/shared/types/entities';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';

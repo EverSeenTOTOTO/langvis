@@ -1,14 +1,6 @@
 import { container } from 'tsyringe';
 
-/**
- * 生命周期切面：把"启动 / 关停"做成一对可插拔的连接点。
- *
- * 任何 singleton 想参与启停，实现 LifecycleHook 的 onBoot/onShutdown（均可选），
- * 并叠加 @lifecycleHook 标记即可——bootAll()/shutdownAll() 经 resolveAll 解析后按鸭子类型调用。
- *
- * 失败语义：hook 抛错视为环境缺陷（依赖缺失、基础设施未就绪等），fail-fast——
- * 整个 phase reject、不静默吞掉。空 registry（无 hook）则 no-op（非缺陷）。
- */
+// 生命周期切面：启停做成可插拔连接点。hook 抛错视为环境缺陷 fail-fast；空 registry no-op。
 export interface LifecycleHook {
   onBoot?(): Promise<void> | void;
   onShutdown?(): Promise<void> | void;

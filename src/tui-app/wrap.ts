@@ -1,7 +1,6 @@
 import { visualWidth } from '@/tui/width';
 
-/** Word-wrap with hard-break for over-long tokens. Wraps by **visual cell
- * width** (so CJK/emoji, which are 2 cells, break correctly). Preserves blanks. */
+// Word-wrap with hard-break; wraps by visual cell width so CJK/emoji (2 cells) break correctly.
 export function wrapText(text: string, width: number): string[] {
   const w = Math.max(1, Math.floor(width));
   const out: string[] = [];

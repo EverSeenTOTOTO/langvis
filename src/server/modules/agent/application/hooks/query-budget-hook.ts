@@ -21,9 +21,7 @@ const TRUNCATE_TARGET_RATIO = 0.8;
 /** 初始 char-budget：英文 ~4 chars/token 取满；中文由循环按估算裁进目标。 */
 const CHARS_PER_TOKEN = 4;
 
-/**
- * 最新消息体积护栏
- */
+// 最新消息体积护栏
 @agentHook
 export class QueryBudgetHook implements Hook {
   readonly id = 'query-budget';
@@ -87,9 +85,8 @@ export class QueryBudgetHook implements Hook {
       throw new StopLoop();
     }
 
-    // 超限但可恢复：截断保留前 ~cap token 真实内容 + 收窄指引，放行 LLM（agent 据指引收窄重取，
-    // 而非销毁内容只留空泛 note → 9B 不知如何收窄 → 重取大块 → drop 螺旋）。recall（盘上已落盘内容）
-    // 指明 rg/sed-n/head-n 收窄；非 recall 指明收窄发起方工具。
+    // 超限但可恢复：截断保留前 ~cap token 真实头部 + 收窄指引放行 LLM（销毁内容 → agent 不知如何收窄 → drop 螺旋）。
+    // recall（盘上已落）指明 rg/sed-n/head-n 收窄；非 recall 指明收窄发起方工具。
     const msg = messages[last]!;
     const raw = msg.content;
     const isObservation = raw.startsWith(OBSERVATION_PREFIX);
@@ -119,8 +116,7 @@ export class QueryBudgetHook implements Hook {
   }
 }
 
-/** 截断到 cap×TRUNCATE_TARGET_RATIO 内（按 estimateTokens 迭代裁尾），保留真实头部 + 收窄指引。
- *  不调 cache.offload → 不产生新句柄 → 无 fc→fc 别名增殖。 */
+// 截断到 cap×TRUNCATE_TARGET_RATIO（按 estimateTokens 迭代裁尾）；不调 cache.offload → 无新句柄 → 无 fc 别名增殖。
 function truncatedObservation(
   body: string,
   isObservation: boolean,

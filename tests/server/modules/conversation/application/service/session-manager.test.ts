@@ -60,7 +60,7 @@ describe('SessionManager', () => {
   const conversationId = 'conv_1';
 
   describe('initSession（连接生命周期——孤儿对账已移至启动期 OrphanRunReconciler）', () => {
-    it('新会话：attach 传输并登记 redis key，不对账孤儿、不补发帧', async () => {
+    it('新会话：attach 传输(发 connected 握手) 并登记 redis key，不对账孤儿、不重放 run_view', async () => {
       const { manager, chat, redis } = makeManager([
         { id: 'msg_1', agentRunId: 'run_1' },
       ]);
@@ -69,7 +69,7 @@ describe('SessionManager', () => {
       await manager.initSession(conversationId, transport);
 
       expect(chat.markMessagesTerminated).not.toHaveBeenCalled();
-      expect(transport.sent).toHaveLength(0);
+      expect(transport.sent).toEqual([{ type: 'connected' }]);
       expect(redis.set).toHaveBeenCalledWith(
         `chat_session:${conversationId}`,
         expect.any(Object),

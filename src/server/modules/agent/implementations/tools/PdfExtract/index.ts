@@ -148,9 +148,7 @@ function expandPath(rawPath: string, workDir: string): string {
   return path.resolve(workDir, rawPath);
 }
 
-/**
- * 含通配符 → 视为越界（glob 可能命中 workDir 外）；否则绝对/~-路径越界，相对路径在沙箱内。
- */
+// 含通配符 → 视为越界（glob 可能命中 workDir 外）；否则绝对/~-路径越界，相对路径在沙箱内。
 function isOutsideWorkspace(expanded: string, workDir: string): boolean {
   if (GLOB_CHARS.test(expanded)) return true;
   if (!path.isAbsolute(expanded)) return false;

@@ -10,8 +10,7 @@ type BorderedBoxProps = {
   children?: ReactNode;
 };
 
-/** A bordered frame with an optional title set into the top border. Ink draws
- * the box-drawing border; the panel fills its parent's width. */
+// A bordered frame with an optional title set into the top border; fills parent width.
 export function BorderedBox({
   title,
   fg = 'gray',

@@ -29,10 +29,8 @@ export class SSEClientTransport extends Transport<StreamFrame> {
     return isClient() ? this.connectEventSource() : this.connectFetch();
   }
 
-  /** Dispatch one parsed frame, shared by both transports: resolve the connect
-   * promise on `connected`, emit `disconnect` on `session_replaced`, otherwise
-   * emit the business frame. Returns true when the caller should stop reading
-   * (i.e. `session_replaced`). */
+  // Resolve on `connected`, emit `disconnect` on `session_replaced`, else emit
+  // the business frame. Returns true = caller stops reading.
   private dispatchFrame(frame: StreamFrame, resolve: () => void): boolean {
     if (frame.type === 'connected') {
       this.connectionState = 'connected';
@@ -132,8 +130,7 @@ export class SSEClientTransport extends Transport<StreamFrame> {
     });
   }
 
-  /** Open the SSE URL over the cookie-jar fetch and call `onFrame` for each
-   * parsed frame until the stream ends or `onFrame` returns true (stop). */
+  // Open the SSE URL over the cookie-jar fetch, calling `onFrame` until it returns true.
   private async readFetchStream(
     url: string,
     onFrame: (frame: StreamFrame) => boolean,
