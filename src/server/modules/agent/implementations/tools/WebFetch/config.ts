@@ -31,16 +31,8 @@ export type WebFetchOutput = WebFetchOutputConcise | WebFetchOutputDetailed;
 export const config: ToolConfig<WebFetchInput, WebFetchOutput> = {
   name: 'web_fetch',
   untrustedOutput: true,
-  description: `Fetch and extract main content from a web page URL.
-
-**Response formats:**
-- \`concise\` (default): Returns only title and content. Use for most cases.
-- \`detailed\`: Also includes excerpt, author, site name. Use when you need metadata.
-
-**Common use cases:**
-- Reading article content: use concise format
-- Archiving documents: use concise format
-- Extracting article metadata: use detailed format`,
+  description:
+    'Fetch and extract main content from a web page URL; choose concise (default) or detailed output via response_format.',
   inputSchema: {
     type: 'object',
     properties: {

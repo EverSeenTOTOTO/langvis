@@ -27,7 +27,7 @@ export interface DocumentStoreOutput {
 export const config: ToolConfig<DocumentStoreInput, DocumentStoreOutput> = {
   name: 'DocumentStore Tool',
   description:
-    'Store a document to the database. Chunking and embeddings are both handled internally — the caller passes the document with either rawContent (full text) or rawFile (filename in workDir of an offloaded large fetch).',
+    'Store a document to the database. Chunking and embeddings are handled internally; pass the document via rawContent or rawFile.',
   inputSchema: {
     type: 'object',
     properties: {

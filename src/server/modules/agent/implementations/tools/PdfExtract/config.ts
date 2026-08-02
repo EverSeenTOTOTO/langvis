@@ -26,7 +26,7 @@ export interface PdfExtractOutput {
 export const config: ToolConfig<PdfExtractInput, PdfExtractOutput> = {
   name: 'pdf_extract',
   description:
-    'Extract text from PDF files. Accepts an absolute path, a ~-prefixed path, a path relative to the workspace, or a glob pattern. All matched files must be .pdf. Text-layer PDFs are extracted via the built-in pdftotext; scanned/image-only PDFs yield no text and are flagged for OCR. Use `pages` to read a range (e.g. "1-5", "3,7,10", "1-") of large reports, and `maxCharsPerPage` to cap per-page size.',
+    'Extract text from PDF files. Text-layer PDFs are read via pdftotext; scanned/image-only PDFs yield no text and are flagged for OCR. Accepts absolute, ~-prefixed, relative, or glob paths.',
   untrustedOutput: true,
   inputSchema: {
     type: 'object',

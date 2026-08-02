@@ -14,6 +14,9 @@ const CJK = /[一-鿿㐀-䶿]/;
 // 按脚本边界切段：CJK 连续段、拉丁/数字段分别成 token；纯空白切分会让 "pdf" 埋在路径里命不中。
 const SEGMENT_RE = /[一-鿿㐀-䶿]+|[A-Za-z0-9]+/g;
 
+// 关键词最短长度：滤掉单字符噪声（如 min-width:0 的 "0"），CJK 真词天然 ≥2。
+const MIN_KEYWORD_LEN = 2;
+
 const zhSegmenter = (() => {
   try {
     return new Intl.Segmenter('zh', { granularity: 'word' });
@@ -41,7 +44,7 @@ export function tokenizeQuery(query: string): string[] {
       const seg = match[0];
       if (CJK.test(seg[0])) {
         cjkKeywords(seg, keywords);
-      } else {
+      } else if (seg.length >= MIN_KEYWORD_LEN) {
         keywords.push(seg);
       }
     }
@@ -56,7 +59,14 @@ export function matchFilter(
 ): boolean {
   if (!keywords || keywords.length === 0) return true;
   const hay = text.toLowerCase();
-  return keywords.some(k => hay.includes(k.toLowerCase()));
+  // 拉丁/数字 token 走整词命中（词边界），杜绝 space⊂workspace、word⊂keywords、max⊂maxCharsPerPage；
+  // 含 CJK 的 token 无可靠词边界，降级为子串匹配（描述多为英文，CJK 基本不命中）。
+  const words = new Set(hay.match(/[a-z0-9]+/g) ?? []);
+  return keywords.some(k => {
+    const lk = k.toLowerCase();
+    if (lk.length < MIN_KEYWORD_LEN) return false;
+    return /^[a-z0-9]+$/.test(lk) ? words.has(lk) : hay.includes(lk);
+  });
 }
 
 /** ListToolsTool 与 ToolHintHook 共用的关键词检索。默认排除 list_tools 自身。 */
