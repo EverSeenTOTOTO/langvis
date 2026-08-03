@@ -8,10 +8,11 @@ import { Root, type ConvStorage } from './app';
 import { useKeyboard } from '@/tui/hooks';
 import { serverFetch, getPrefetchPath } from '@/client/decorator/api';
 import { useStore } from '@/client/store';
+import { LANGVIS_DIR } from '@/shared/constants';
 
-const LANGVIS_DIR = join(homedir(), '.langvis');
-const CONV_FILE = join(LANGVIS_DIR, 'cli-conv-id');
-const COOKIE_FILE = join(LANGVIS_DIR, 'cookies.json');
+const LANGVIS_HOME = join(homedir(), LANGVIS_DIR);
+const CONV_FILE = join(LANGVIS_HOME, 'cli-conv-id');
+const COOKIE_FILE = join(LANGVIS_HOME, 'cookies.json');
 
 // Persist the CLI's conversation id under ~/.langvis so reruns resume the same conversation.
 const fileConv: ConvStorage = {
@@ -78,7 +79,7 @@ async function persistSessionCookies() {
   if (!jar) return;
   const url = getPrefetchPath('/');
   const lines = await jarGetCookies(jar, url);
-  mkdirSync(LANGVIS_DIR, { recursive: true });
+  mkdirSync(LANGVIS_HOME, { recursive: true });
   writeFileSync(COOKIE_FILE, JSON.stringify(lines));
 }
 

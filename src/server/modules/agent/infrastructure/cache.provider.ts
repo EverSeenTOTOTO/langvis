@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { singleton } from 'tsyringe';
 import { generateId } from '@/shared/utils';
+import { LANGVIS_DIR } from '@/shared/constants';
 import Logger from '@/server/utils/logger';
 import {
   type CachePort,
@@ -105,9 +106,9 @@ export class CacheProvider implements CachePort {
     const filename = sanitized ? `${sanitized}__${id}` : id;
     // offload 侧车件收进 workspace 的 .langvis（与 config/grants 同处），不散落到 workdir 根；
     // $cached 仍为 workDir 相对路径（读端 bash cwd=workDir 可直接 rg/sed）。
-    const rel = path.join('.langvis', filename);
+    const rel = path.join(LANGVIS_DIR, filename);
     const filePath = path.join(workDir, rel);
-    await fs.mkdir(path.join(workDir, '.langvis'), { recursive: true });
+    await fs.mkdir(path.join(workDir, LANGVIS_DIR), { recursive: true });
     // 落盘前 reflow：把一整行 JSON（text 字段全转义 \n）裂成多行，否则 rg 一命中就回整条 885KB 巨行。
     const stored = reflowForGrep(serialized);
     await fs.writeFile(filePath, stored, 'utf-8');
