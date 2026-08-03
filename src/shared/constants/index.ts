@@ -25,6 +25,9 @@ export enum ToolIds {
 
 export const UNGROUPED_GROUP_NAME = 'Ungrouped';
 
+// Workspace-local / user-local hidden folder for config, grants and caches.
+export const LANGVIS_DIR = '.langvis';
+
 export { DEFAULT_UPLOAD_CONFIG } from './upload';
 export {
   TTS_VOICES,

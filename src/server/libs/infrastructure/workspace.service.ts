@@ -3,6 +3,7 @@ import path from 'path';
 import { service } from '@/server/decorator/service';
 import { resolveSafePath } from '@/server/utils/pathSafety';
 import { generateId } from '@/shared/utils';
+import { LANGVIS_DIR } from '@/shared/constants';
 
 @service()
 export class WorkspaceService {
@@ -87,7 +88,7 @@ export class WorkspaceService {
   }
 
   private configPath(workDir: string): string {
-    return path.join(workDir, '.langvis', 'config.json');
+    return path.join(workDir, LANGVIS_DIR, 'config.json');
   }
 
   async readConfig(workDir: string): Promise<Record<string, unknown> | null> {
