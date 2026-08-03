@@ -11,8 +11,11 @@ function cliShebang() {
   return {
     name: 'cli-shebang',
     generateBundle(_opts: unknown, bundle: Record<string, unknown>) {
-      const chunk = bundle['cli.js'] as { type: string; code: string } | undefined;
-      if (chunk?.type === 'chunk') chunk.code = '#!/usr/bin/env bun\n' + chunk.code;
+      const chunk = bundle['cli.js'] as
+        | { type: string; code: string }
+        | undefined;
+      if (chunk?.type === 'chunk')
+        chunk.code = '#!/usr/bin/env bun\n' + chunk.code;
     },
   };
 }

@@ -44,75 +44,77 @@ function caretize(text: string, caretAt: number): string {
 }
 
 /** Multi-line input: readline keys + bracketed paste + \\-continuation send. */
-export const Textarea = forwardRef<TextareaHandle, TextareaProps>(function Textarea(
-  {
-    buffer,
-    onBufferChange,
-    onSubmit,
-    fg = 'white',
-    enabled = true,
-    prompt = '> ',
-    width,
-  },
-  ref,
-) {
-  const { cols } = useTerminalSize();
-  const contentWidth = Math.max(1, (width ?? cols) - visualWidth(prompt));
-  const [cursor, setCursor] = useState(0);
-
-  // An external clear (owner resets the buffer) resets the caret to the start.
-  useEffect(() => {
-    if (buffer.segs.length === 0) setCursor(0);
-  }, [buffer]);
-
-  // Backfill at the current caret: advance the internal caret past the insert.
-  useImperativeHandle(
+export const Textarea = forwardRef<TextareaHandle, TextareaProps>(
+  function Textarea(
+    {
+      buffer,
+      onBufferChange,
+      onSubmit,
+      fg = 'white',
+      enabled = true,
+      prompt = '> ',
+      width,
+    },
     ref,
-    () => ({
-      insert(text) {
-        const r = insertTextAt(buffer, cursor, text);
+  ) {
+    const { cols } = useTerminalSize();
+    const contentWidth = Math.max(1, (width ?? cols) - visualWidth(prompt));
+    const [cursor, setCursor] = useState(0);
+
+    // An external clear (owner resets the buffer) resets the caret to the start.
+    useEffect(() => {
+      if (buffer.segs.length === 0) setCursor(0);
+    }, [buffer]);
+
+    // Backfill at the current caret: advance the internal caret past the insert.
+    useImperativeHandle(
+      ref,
+      () => ({
+        insert(text) {
+          const r = insertTextAt(buffer, cursor, text);
+          onBufferChange(r.buffer);
+          setCursor(r.cursor);
+        },
+      }),
+      [buffer, cursor, onBufferChange],
+    );
+
+    useKeyboard(data => {
+      const r = applyKey(data, buffer, cursor, contentWidth);
+      if (!r) return;
+      if (r.submit) {
+        onSubmit?.(bufferText(buffer));
+        return;
+      }
+      if (r.buffer !== buffer) onBufferChange(r.buffer);
+      setCursor(r.cursor);
+    }, enabled);
+
+    usePaste(
+      text => {
+        const r = insertPaste(buffer, cursor, text);
         onBufferChange(r.buffer);
         setCursor(r.cursor);
       },
-    }),
-    [buffer, cursor, onBufferChange],
-  );
+      { isActive: enabled },
+    );
 
-  useKeyboard(data => {
-    const r = applyKey(data, buffer, cursor, contentWidth);
-    if (!r) return;
-    if (r.submit) {
-      onSubmit?.(bufferText(buffer));
-      return;
-    }
-    if (r.buffer !== buffer) onBufferChange(r.buffer);
-    setCursor(r.cursor);
-  }, enabled);
+    const rows = visualRows(buffer, contentWidth);
+    const { row: caretRow, col } = enabled
+      ? caretToXY(buffer, cursor, contentWidth)
+      : { row: -1, col: 0 };
 
-  usePaste(
-    text => {
-      const r = insertPaste(buffer, cursor, text);
-      onBufferChange(r.buffer);
-      setCursor(r.cursor);
-    },
-    { isActive: enabled },
-  );
-
-  const rows = visualRows(buffer, contentWidth);
-  const { row: caretRow, col } = enabled
-    ? caretToXY(buffer, cursor, contentWidth)
-    : { row: -1, col: 0 };
-
-  return (
-    <Box flexDirection="column">
-      {rows.map((r, i) => (
-        <Text key={i} fg={fg}>
-          {(i === 0 ? prompt : '') +
-            (i === caretRow
-              ? caretize(r.text, cellIndexAt(r.text, col))
-              : r.text)}
-        </Text>
-      ))}
-    </Box>
-  );
-});
+    return (
+      <Box flexDirection="column">
+        {rows.map((r, i) => (
+          <Text key={i} fg={fg}>
+            {(i === 0 ? prompt : '') +
+              (i === caretRow
+                ? caretize(r.text, cellIndexAt(r.text, col))
+                : r.text)}
+          </Text>
+        ))}
+      </Box>
+    );
+  },
+);

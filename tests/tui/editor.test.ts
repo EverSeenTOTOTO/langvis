@@ -213,10 +213,7 @@ describe('basic text editing still works', () => {
   });
 
   it('a trailing \\n keeps a blank continuation row for the caret', () => {
-    expect(visualRows(text('abc\n'), 20).map(r => r.text)).toEqual([
-      'abc',
-      '',
-    ]);
+    expect(visualRows(text('abc\n'), 20).map(r => r.text)).toEqual(['abc', '']);
     expect(caretToXY(text('abc\n'), 4, 20)).toEqual({ row: 1, col: 0 });
   });
 

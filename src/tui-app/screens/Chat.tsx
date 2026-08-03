@@ -141,7 +141,9 @@ const ChatInput = observer(function ChatInput({
   return (
     <>
       {voice.recording && (
-        <Text fg="yellow">● recording…  (Ctrl-r/Enter stop · Ctrl-c cancel)</Text>
+        <Text fg="yellow">
+          ● recording… (Ctrl-r/Enter stop · Ctrl-c cancel)
+        </Text>
       )}
       {voice.processing && <Text fg="cyan">◦ transcribing…</Text>}
       {voiceErr !== '' && <Text fg="red">{voiceErr}</Text>}

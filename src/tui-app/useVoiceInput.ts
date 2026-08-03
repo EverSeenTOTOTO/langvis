@@ -74,18 +74,23 @@ export function useVoiceInput({ onTranscribed, onError }: VoiceHandlers) {
         handlersRef.current.onError('no audio captured');
         return;
       }
-      const audio = new File([new Uint8Array(bytes)], `${generateId('voice')}.wav`, {
-        type: 'audio/wav',
-      });
+      const audio = new File(
+        [new Uint8Array(bytes)],
+        `${generateId('voice')}.wav`,
+        {
+          type: 'audio/wav',
+        },
+      );
       const up = await file.upload({ file: audio, dir: 'stt' });
-      const stt = await file.stt({ filePath: up.filename, mimeType: up.mimeType });
+      const stt = await file.stt({
+        filePath: up.filename,
+        mimeType: up.mimeType,
+      });
       if (stt.text.trim()) handlersRef.current.onTranscribed(stt.text);
       else handlersRef.current.onError('no speech detected');
     } catch (e) {
       discard(r.tmp);
-      handlersRef.current.onError(
-        e instanceof Error ? e.message : String(e),
-      );
+      handlersRef.current.onError(e instanceof Error ? e.message : String(e));
     } finally {
       setProcessing(false);
     }

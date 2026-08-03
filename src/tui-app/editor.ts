@@ -298,7 +298,8 @@ export function visualRows(buf: Buffer, width: number): VisualRow[] {
   // Preserve the trailing blank row when the buffer ends with a newline — the
   // Enter-continuation caret lives on it (visualRows swallows a trailing \n).
   const last = buf.segs[buf.segs.length - 1];
-  if (last?.kind === 'text' && last.text.endsWith('\n')) rows.push({ text: '' });
+  if (last?.kind === 'text' && last.text.endsWith('\n'))
+    rows.push({ text: '' });
   else if (curText !== '' || rows.length === 0) rows.push({ text: curText });
   return rows;
 }
