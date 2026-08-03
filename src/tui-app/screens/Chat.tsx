@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Spinner } from '@/tui/components/Spinner';
 import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
-import { Input } from '@/tui/components/Input';
 import { Static } from '@/tui/components/Static';
 import { Progress } from '@/tui/components/Progress';
 import { useKeyboard, useTerminalSize } from '@/tui/hooks';
@@ -14,6 +13,8 @@ import { AssistantView, UserView } from '../components/MessageView';
 import { AskUserForm } from '../components/AskUserForm';
 import { ModelPicker } from '../components/ModelPicker';
 import { ConvPicker } from '../components/ConvPicker';
+import { Textarea } from '../components/Textarea';
+import { emptyBuffer, type Buffer } from '../editor';
 
 // Bottom panel is in exactly one of these modes at a time. `busy` covers every
 // non-functional state (input disabled); sources live in their natural layers.
@@ -103,7 +104,7 @@ const ChatInput = observer(function ChatInput({
   onCommand: (raw: string) => void;
 }) {
   const chat = useStore('chat');
-  const [v, setV] = useState('');
+  const [buf, setBuf] = useState<Buffer>(emptyBuffer());
 
   useKeyboard(data => {
     if ((data === '\x1b' || data === '\x03') && streamingId) {
@@ -112,27 +113,25 @@ const ChatInput = observer(function ChatInput({
   });
 
   return (
-    <Box height={1}>
-      <Text fg="green">{streamingId ? '… ' : '> '}</Text>
-      <Input
-        value={v}
-        onChange={setV}
-        fg={streamingId ? 'gray' : 'white'}
-        onSubmit={s => {
-          const trimmed = s.trim();
-          if (!trimmed) return;
-          if (trimmed.startsWith('/')) onCommand(s);
-          else {
-            void chat.startChat({
-              conversationId: convId,
-              role: Role.USER,
-              content: s,
-            });
-          }
-          setV('');
-        }}
-      />
-    </Box>
+    <Textarea
+      buffer={buf}
+      onBufferChange={setBuf}
+      fg={streamingId ? 'gray' : 'white'}
+      prompt={streamingId ? '… ' : '> '}
+      onSubmit={real => {
+        const trimmed = real.trim();
+        if (!trimmed) return;
+        if (trimmed.startsWith('/')) onCommand(real);
+        else {
+          void chat.startChat({
+            conversationId: convId,
+            role: Role.USER,
+            content: real,
+          });
+        }
+        setBuf(emptyBuffer());
+      }}
+    />
   );
 });
 

@@ -20,7 +20,8 @@ export const truncate = (s: string, max: number): string => {
   return `${out}…`;
 };
 
-// Word-wrap with hard-break; wraps by visual cell width so CJK/emoji (2 cells) break correctly.
+// Word-wrap with hard-break, keeping each \n paragraph on its own row(s);
+// wraps by visual cell width so CJK/emoji (2 cells) break correctly.
 export function wrapText(text: string, width: number): string[] {
   const w = Math.max(1, Math.floor(width));
   const out: string[] = [];
@@ -29,7 +30,9 @@ export function wrapText(text: string, width: number): string[] {
       out.push('');
       continue;
     }
+    let line = '';
     for (const word of para.split(/ +/)) {
+      if (word === '') continue;
       // hard-break a token into chunks each ≤ w visual cells (char-by-char so
       // wide glyphs don't overflow)
       const chunks: string[] = [];
@@ -44,15 +47,19 @@ export function wrapText(text: string, width: number): string[] {
       }
       if (cur) chunks.push(cur);
       for (const token of chunks) {
-        const last = out[out.length - 1];
-        const fits =
-          last !== undefined &&
-          last !== '' &&
-          visualWidth(last) + 1 + visualWidth(token) <= w;
-        if (fits) out[out.length - 1] = `${last} ${token}`;
-        else out.push(token);
+        if (line === '') {
+          line = token;
+          continue;
+        }
+        if (visualWidth(line + ' ' + token) > w) {
+          out.push(line);
+          line = token;
+        } else {
+          line += ' ' + token;
+        }
       }
     }
+    if (line !== '') out.push(line);
   }
   return out.length ? out : [''];
 }

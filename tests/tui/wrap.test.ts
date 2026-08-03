@@ -23,6 +23,19 @@ describe('wrapText', () => {
     expect(wrapText('a\n\nb', 10)).toEqual(['a', '', 'b']);
   });
 
+  it('does not merge consecutive lines into one row', () => {
+    expect(wrapText('line1\nline2\n\nline4', 20)).toEqual([
+      'line1',
+      'line2',
+      '',
+      'line4',
+    ]);
+  });
+
+  it('starts each paragraph on a fresh row regardless of fit', () => {
+    expect(wrapText('abc def\nghi', 10)).toEqual(['abc def', 'ghi']);
+  });
+
   it('returns a single blank for empty input', () => {
     expect(wrapText('', 10)).toEqual(['']);
   });
