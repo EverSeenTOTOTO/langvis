@@ -11,10 +11,12 @@ import { useStore } from '@/client/store';
 import { LANGVIS_DIR } from '@/shared/constants';
 
 const LANGVIS_HOME = join(homedir(), LANGVIS_DIR);
-const CONV_FILE = join(LANGVIS_HOME, 'cli-conv-id');
 const COOKIE_FILE = join(LANGVIS_HOME, 'cookies.json');
 
-// Persist the CLI's conversation id under ~/.langvis so reruns resume the same conversation.
+// Login is global (~/.langvis/cookies.json); the conversation is per workspace —
+// its id lives in the working dir's .langvis so each directory resumes its own.
+const CONV_FILE = join(process.cwd(), LANGVIS_DIR, 'cli-conv-id');
+
 const fileConv: ConvStorage = {
   getConvId: () => {
     try {

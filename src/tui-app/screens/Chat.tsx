@@ -1,6 +1,8 @@
 /** @jsxImportSource react */
 import { observer } from 'mobx-react-lite';
+import { basename } from 'node:path';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useVoiceInput } from '../useVoiceInput';
 import { Spinner } from '@/tui/components/Spinner';
 import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
@@ -13,8 +15,8 @@ import { AssistantView, UserView } from '../components/MessageView';
 import { AskUserForm } from '../components/AskUserForm';
 import { ModelPicker } from '../components/ModelPicker';
 import { ConvPicker } from '../components/ConvPicker';
-import { Textarea } from '../components/Textarea';
-import { emptyBuffer, type Buffer } from '../editor';
+import { Textarea, type TextareaHandle } from '../components/Textarea';
+import { emptyBuffer, bufferText, type Buffer } from '../editor';
 
 // Bottom panel is in exactly one of these modes at a time. `busy` covers every
 // non-functional state (input disabled); sources live in their natural layers.
@@ -65,10 +67,12 @@ const StatusBar = observer(function StatusBar() {
     conversation.currentConversationId ||
     '';
   const pct = usage ? Math.min((usage.used / usage.total) * 100, 100) : 0;
+  // Leftmost slot shows the workspace dir (last segment of cwd) instead of the brand.
+  const workspace = basename(process.cwd());
   return (
     <Box height={1}>
       <Text fg="cyan" bold>
-        langvis
+        {workspace}
       </Text>
       <Text fg="gray">{' · '}</Text>
       <Text fg="magenta">{model}</Text>
@@ -105,6 +109,17 @@ const ChatInput = observer(function ChatInput({
 }) {
   const chat = useStore('chat');
   const [buf, setBuf] = useState<Buffer>(emptyBuffer());
+  const [voiceErr, setVoiceErr] = useState('');
+  const taRef = useRef<TextareaHandle>(null);
+  const voice = useVoiceInput({
+    // Mirror the web voice input: the transcript is wrapped in <speech> so the
+    // sent content carries the speech marker the backend (gf skill) consumes.
+    onTranscribed: text => {
+      const wrapped = `<speech>\n${text}\n</speech>`;
+      taRef.current?.insert(bufferText(buf) ? `\n${wrapped}` : wrapped);
+    },
+    onError: setVoiceErr,
+  });
 
   useKeyboard(data => {
     if ((data === '\x1b' || data === '\x03') && streamingId) {
@@ -112,26 +127,50 @@ const ChatInput = observer(function ChatInput({
     }
   });
 
+  // Ctrl-r toggles recording; Enter (below) stops + transcribes; Ctrl-c cancels.
+  useKeyboard(data => {
+    if (data === '\x12' && !streamingId && !voice.processing) {
+      // 0x12 = Ctrl-r
+      if (voice.recording) void voice.stop();
+      else voice.start();
+    } else if (data === '\x03' && voice.recording) {
+      voice.cancel();
+    }
+  });
+
   return (
-    <Textarea
-      buffer={buf}
-      onBufferChange={setBuf}
-      fg={streamingId ? 'gray' : 'white'}
-      prompt={streamingId ? '… ' : '> '}
-      onSubmit={real => {
-        const trimmed = real.trim();
-        if (!trimmed) return;
-        if (trimmed.startsWith('/')) onCommand(real);
-        else {
-          void chat.startChat({
-            conversationId: convId,
-            role: Role.USER,
-            content: real,
-          });
-        }
-        setBuf(emptyBuffer());
-      }}
-    />
+    <>
+      {voice.recording && (
+        <Text fg="yellow">● recording…  (Ctrl-r/Enter stop · Ctrl-c cancel)</Text>
+      )}
+      {voice.processing && <Text fg="cyan">◦ transcribing…</Text>}
+      {voiceErr !== '' && <Text fg="red">{voiceErr}</Text>}
+      <Textarea
+        ref={taRef}
+        buffer={buf}
+        onBufferChange={setBuf}
+        fg={streamingId ? 'gray' : 'white'}
+        prompt={streamingId ? '… ' : '> '}
+        onSubmit={real => {
+          if (voice.recording) {
+            // Enter during recording stops + transcribes instead of sending.
+            void voice.stop();
+            return;
+          }
+          const trimmed = real.trim();
+          if (!trimmed) return;
+          if (trimmed.startsWith('/')) onCommand(real);
+          else {
+            void chat.startChat({
+              conversationId: convId,
+              role: Role.USER,
+              content: real,
+            });
+          }
+          setBuf(emptyBuffer());
+        }}
+      />
+    </>
   );
 });
 
@@ -139,6 +178,7 @@ export const Chat = observer(function Chat() {
   const conversation = useStore('conversation');
   const chat = useStore('chat');
   const model = useStore('model');
+  const auth = useStore('auth');
   const { cols } = useTerminalSize();
   const convId = conversation.currentConversationId;
   const [picker, setPicker] = useState<null | 'model' | 'conv'>(null);
@@ -190,8 +230,13 @@ export const Chat = observer(function Chat() {
     if (cmd === '/model') setPicker('model');
     else if (cmd === '/conv') setPicker('conv');
     else if (cmd === '/new') void createNew();
-    else if (cmd === '/' || cmd === '/help') {
-      setNotice('commands: /model  /conv  /new');
+    else if (cmd === '/logout') {
+      // Clear local state first (lands on SignIn even if the server call fails),
+      // then best-effort invalidate the remote session; cli.tsx drops the cookie.
+      auth.logoutLocal();
+      void auth.signOut({}).catch(() => {});
+    } else if (cmd === '/' || cmd === '/help') {
+      setNotice('commands: /model  /conv  /new  /logout');
     } else {
       setNotice(`unknown command: ${raw.trim()}`);
     }

@@ -2,6 +2,9 @@
   "private": true,
   "name": "langvis",
   "type": "module",
+  "bin": {
+    "langvis": "dist/cli.js"
+  },
   "config": {
     "commitizen": {
       "path": "./node_modules/cz-conventional-changelog"

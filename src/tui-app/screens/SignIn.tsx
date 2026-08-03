@@ -43,7 +43,12 @@ export const SignIn = observer(function SignIn() {
   // ↑/↓, so this never conflicts with typing.
   useKeyboard(data => {
     if (busy) return;
-    if (data === '\x1b[A' || data === '\x1b[B') {
+    if (
+      data === '\x1b[A' ||
+      data === '\x1b[B' ||
+      data === '\x0e' ||
+      data === '\x10'
+    ) {
       setField(f => (f === 0 ? 1 : 0));
     }
   });
@@ -59,14 +64,14 @@ export const SignIn = observer(function SignIn() {
       <Box flexGrow={1} />
       <Box flexDirection="column" alignItems="center" paddingBottom={1}>
         <Box flexDirection="column" width={48}>
-          <Box height={1} marginBottom={1}>
+          <Box height={1} marginBottom={1} paddingLeft={2}>
             <Text fg="cyan" bold>
               langvis · sign in
             </Text>
           </Box>
-          <BorderedBox title="credentials" fg="cyan">
+          <BorderedBox fg="blue">
             <Box height={1}>
-              <Text fg="gray">{'email'}</Text>
+              <Text fg="cyan">{'email'}</Text>
             </Box>
             <Box height={1}>
               <Input
@@ -77,7 +82,7 @@ export const SignIn = observer(function SignIn() {
               />
             </Box>
             <Box height={1} marginTop={1}>
-              <Text fg="gray">{'password'}</Text>
+              <Text fg="cyan">{'password'}</Text>
             </Box>
             <Box height={1}>
               <Input

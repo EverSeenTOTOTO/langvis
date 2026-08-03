@@ -5,8 +5,17 @@ import { compile } from 'path-to-regexp';
 
 const metaDataKey = Symbol.for('client_api');
 
-export const getPrefetchPath = (path: string) =>
-  `http://localhost:${import.meta.env.VITE_PORT}${path}`;
+// Backend base URL: runtime override (LANGVIS_SERVER_URL) or the build-time dev
+// port. Browser clients use relative paths, so this only affects SSR/CLI fetches.
+const serverBase = (() => {
+  const over =
+    typeof process !== 'undefined' ? process.env.LANGVIS_SERVER_URL : undefined;
+  return over
+    ? over.replace(/\/+$/, '')
+    : `http://localhost:${import.meta.env.VITE_PORT}`;
+})();
+
+export const getPrefetchPath = (path: string) => `${serverBase}${path}`;
 
 // Server-side fetch with cookie support - only loaded on SSR
 // The import is conditional to avoid bundling tough-cookie/tldts in client

@@ -152,6 +152,16 @@ export function insertPaste(
   return { buffer: { segs: normalizeSegs(segs) }, cursor: k + 1 };
 }
 
+// Insert text at boundary k as normal inline text (no paste-collapse);
+// cursor lands after the inserted text. Used by voice backfill.
+export function insertTextAt(
+  buf: Buffer,
+  k: number,
+  text: string,
+): { buffer: Buffer; cursor: number } {
+  return insertText(buf, k, normalize(text));
+}
+
 // Delete the unit right before boundary k; a paste unit is removed whole.
 function deleteBack(
   buf: Buffer,
@@ -285,7 +295,11 @@ export function visualRows(buf: Buffer, width: number): VisualRow[] {
       curWidth += cw;
     }
   }
-  if (curText !== '' || rows.length === 0) rows.push({ text: curText });
+  // Preserve the trailing blank row when the buffer ends with a newline — the
+  // Enter-continuation caret lives on it (visualRows swallows a trailing \n).
+  const last = buf.segs[buf.segs.length - 1];
+  if (last?.kind === 'text' && last.text.endsWith('\n')) rows.push({ text: '' });
+  else if (curText !== '' || rows.length === 0) rows.push({ text: curText });
   return rows;
 }
 
@@ -332,7 +346,8 @@ export function caretToXY(
   return { row, col: curWidth };
 }
 
-// Reverse of caretToXY: the boundary nearest a visual (row, col).
+// Reverse of caretToXY: the boundary nearest a visual (row, col). col beyond
+// the target row's width clamps to that row's end (the standard arrow-key pad).
 export function xyToOffset(
   buf: Buffer,
   row: number,
@@ -348,15 +363,14 @@ export function xyToOffset(
     if (seg.kind === 'paste') {
       const uw = visualWidth(pasteLabel(seg.text));
       if (curWidth > 0 && curWidth + uw > w) {
+        if (r === row) return u;
         r++;
         curWidth = 0;
       }
-      if (r === row) {
-        if (curWidth + uw > col && curWidth <= col) {
-          const before = col - curWidth;
-          const after = curWidth + uw - col;
-          return after > w || before <= after ? u : u + 1;
-        }
+      if (r === row && curWidth + uw > col && curWidth <= col) {
+        const before = col - curWidth;
+        const after = curWidth + uw - col;
+        return after > w || before <= after ? u : u + 1;
       }
       curWidth += uw;
       u++;
@@ -364,6 +378,7 @@ export function xyToOffset(
     }
     for (const ch of [...seg.text]) {
       if (ch === '\n') {
+        if (r === row) return u;
         r++;
         curWidth = 0;
         u++;
@@ -371,6 +386,7 @@ export function xyToOffset(
       }
       const cw = visualWidth(ch);
       if (curWidth > 0 && curWidth + cw > w) {
+        if (r === row) return u;
         r++;
         curWidth = 0;
       }
@@ -428,7 +444,9 @@ export function applyKey(
         cursor: Math.min(total, cursor + 1),
         submit: false,
       };
-    case '\x1b[A': {
+    case '\x1b[A':
+    case '\x10': {
+      // Ctrl-p = up
       const { row, col } = caretToXY(buf, cursor, width);
       if (row === 0) return null;
       return {
@@ -437,7 +455,9 @@ export function applyKey(
         submit: false,
       };
     }
-    case '\x1b[B': {
+    case '\x1b[B':
+    case '\x0e': {
+      // Ctrl-n = down
       const { row, col } = caretToXY(buf, cursor, width);
       if (row >= visualRows(buf, width).length - 1) return null;
       return {

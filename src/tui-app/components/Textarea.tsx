@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import { useEffect, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { usePaste } from 'ink';
 import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
@@ -8,12 +8,18 @@ import { visualWidth } from '../wrap';
 import {
   applyKey,
   insertPaste,
+  insertTextAt,
   bufferText,
   visualRows,
   caretToXY,
   cellIndexAt,
   type Buffer,
 } from '../editor';
+
+/** Imperative handle so an owner can backfill text at the caret (e.g. voice STT). */
+export type TextareaHandle = {
+  insert: (text: string) => void;
+};
 
 type TextareaProps = {
   buffer: Buffer;
@@ -38,15 +44,18 @@ function caretize(text: string, caretAt: number): string {
 }
 
 /** Multi-line input: readline keys + bracketed paste + \\-continuation send. */
-export function Textarea({
-  buffer,
-  onBufferChange,
-  onSubmit,
-  fg = 'white',
-  enabled = true,
-  prompt = '> ',
-  width,
-}: TextareaProps) {
+export const Textarea = forwardRef<TextareaHandle, TextareaProps>(function Textarea(
+  {
+    buffer,
+    onBufferChange,
+    onSubmit,
+    fg = 'white',
+    enabled = true,
+    prompt = '> ',
+    width,
+  },
+  ref,
+) {
   const { cols } = useTerminalSize();
   const contentWidth = Math.max(1, (width ?? cols) - visualWidth(prompt));
   const [cursor, setCursor] = useState(0);
@@ -55,6 +64,19 @@ export function Textarea({
   useEffect(() => {
     if (buffer.segs.length === 0) setCursor(0);
   }, [buffer]);
+
+  // Backfill at the current caret: advance the internal caret past the insert.
+  useImperativeHandle(
+    ref,
+    () => ({
+      insert(text) {
+        const r = insertTextAt(buffer, cursor, text);
+        onBufferChange(r.buffer);
+        setCursor(r.cursor);
+      },
+    }),
+    [buffer, cursor, onBufferChange],
+  );
 
   useKeyboard(data => {
     const r = applyKey(data, buffer, cursor, contentWidth);
@@ -93,4 +115,4 @@ export function Textarea({
       ))}
     </Box>
   );
-}
+});

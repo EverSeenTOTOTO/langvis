@@ -65,6 +65,14 @@ export class AuthStore {
     return result;
   }
 
+  // Local-only logout: drop currentUser even if the server sign-out call fails
+  // (unreachable backend), so the UI always returns to the sign-in screen.
+  logoutLocal() {
+    if (this.user) {
+      this.user.currentUser = null;
+    }
+  }
+
   async getSession(param: GetSessionParams = {}) {
     const result = await this.client.getSession(param);
     if (this.user) {

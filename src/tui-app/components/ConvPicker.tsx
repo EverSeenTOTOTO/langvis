@@ -60,9 +60,9 @@ export const ConvPicker = observer(function ConvPicker({
       }
       return;
     }
-    if (data === '\x1b[C' || data === '\x1b[B') {
+    if (data === '\x1b[C' || data === '\x1b[B' || data === '\x0e') {
       setSel(s => (items.length ? (s + 1) % items.length : 0));
-    } else if (data === '\x1b[D' || data === '\x1b[A') {
+    } else if (data === '\x1b[D' || data === '\x1b[A' || data === '\x10') {
       setSel(s => (items.length ? (s - 1 + items.length) % items.length : 0));
     } else if (data === '\r') {
       const picked = items[sel];

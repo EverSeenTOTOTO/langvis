@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   applyKey,
   insertPaste,
+  insertTextAt,
   bufferText,
   emptyBuffer,
   visualRows,
@@ -109,6 +110,19 @@ function typeChars(
   return { buffer: b };
 }
 
+describe('insertTextAt', () => {
+  it('inserts as inline text (no collapse) at the caret and advances the cursor', () => {
+    const r = insertTextAt(text('abc'), 1, 'X'.repeat(300));
+    expect(bufferText(r.buffer)).toBe(`a${'X'.repeat(300)}bc`);
+    expect(r.cursor).toBe(1 + 300);
+  });
+  it('normalizes line endings', () => {
+    expect(bufferText(insertTextAt(emptyBuffer(), 0, 'a\r\nb').buffer)).toBe(
+      'a\nb',
+    );
+  });
+});
+
 describe('bufferText', () => {
   it('concatenates real text across text and paste segments', () => {
     const r = insertPaste(text('ab'), 2, 'x'.repeat(300)); // 'ab' + paste
@@ -178,6 +192,32 @@ describe('basic text editing still works', () => {
     );
     const down = applyKey('\x1b[B', text(value), value.length, w);
     expect(down).toBe(null); // at last row
+  });
+
+  it('Ctrl-p/Ctrl-n move across wrapped lines like the arrows', () => {
+    const value = 'hello world foo bar';
+    const w = 7;
+    const endXY = caretToXY(text(value), value.length, w);
+    const up = applyKey('\x10', text(value), value.length, w); // Ctrl-p
+    expect(up).not.toBeNull();
+    expect(up!.cursor).toBe(
+      xyToOffset(text(value), endXY.row - 1, endXY.col, w),
+    );
+    expect(applyKey('\x0e', text(value), value.length, w)).toBe(null); // at last row
+  });
+
+  it('up clamps the column to a shorter upper line (no swallow to EOF)', () => {
+    const buf = text('ab\ncdefg'); // row0 len 2, row1 len 5
+    const atEnd = applyKey('\x1b[A', buf, 8, 20); // caret after 'g'
+    expect(atEnd!.cursor).toBe(2); // end of 'ab'
+  });
+
+  it('a trailing \\n keeps a blank continuation row for the caret', () => {
+    expect(visualRows(text('abc\n'), 20).map(r => r.text)).toEqual([
+      'abc',
+      '',
+    ]);
+    expect(caretToXY(text('abc\n'), 4, 20)).toEqual({ row: 1, col: 0 });
   });
 
   it('inserts printable text at the cursor', () => {

@@ -47,11 +47,12 @@ dev:
 cli:
 	NODE_ENV=development bun run src/tui-app/cli.tsx
 
-# Bundle the CLI to dist/cli.js; run `bun <repo>/dist/cli.js` from any directory
-# (launch cwd = the CLI's workspace). Decorators are baked in, so no tsconfig needed.
+# Bundle the CLI to dist/cli.js (bun shebang + exec bit) for `langvis` from any
+# directory (launch cwd = the CLI's workspace). Decorators are baked in.
 .PHONY: cli-build
 cli-build:
 	bunx vite build --mode production --config config/vite.cli.ts
+	chmod +x ${DIST}/cli.js
 
 .PHONY: build
 build: clean

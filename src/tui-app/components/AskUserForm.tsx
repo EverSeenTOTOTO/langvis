@@ -264,8 +264,14 @@ export const AskUserForm = observer(function AskUserForm({
       });
       return;
     }
-    if (data === '\x1b[A' || data === '\x1b[B') {
-      const dir = data === '\x1b[B' ? 1 : -1;
+    if (
+      data === '\x1b[A' ||
+      data === '\x1b[B' ||
+      data === '\x0e' ||
+      data === '\x10'
+    ) {
+      // Ctrl-n = next (down), Ctrl-p = prev (up)
+      const dir = data === '\x1b[B' || data === '\x0e' ? 1 : -1;
       setFocusIdx(i => (i + dir + submitIdx + 1) % (submitIdx + 1));
       return;
     }
