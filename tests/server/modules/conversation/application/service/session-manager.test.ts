@@ -3,6 +3,7 @@ import { SessionManager } from '@/server/modules/conversation/application/servic
 import type { RedisService } from '@/server/libs/infrastructure/redis.service';
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { EventBus } from '@/server/libs/ddd';
+import type { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { Transport } from '@/shared/transport';
 import type { StreamFrame } from '@/shared/types/events';
 
@@ -50,9 +51,17 @@ function makeManager(activeMessages: unknown[] = []): {
 } {
   const redis = makeMockRedis();
   const chat = makeMockChat(activeMessages);
-  const manager = new SessionManager(redis, chat, {
-    dispatch: vi.fn(),
-  } as unknown as EventBus);
+  const provider = {
+    resolveContextSize: vi.fn().mockReturnValue(8000),
+  } as unknown as ProviderService;
+  const manager = new SessionManager(
+    redis,
+    chat,
+    {
+      dispatch: vi.fn(),
+    } as unknown as EventBus,
+    provider,
+  );
   return { manager, chat, redis };
 }
 

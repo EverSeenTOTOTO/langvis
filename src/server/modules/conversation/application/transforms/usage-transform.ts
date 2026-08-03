@@ -16,7 +16,7 @@ import Logger from '@/server/utils/logger';
 import { convTransform } from './registry';
 
 /** 有效历史用量：最新压缩摘要 C + 其后 turn（与 compact-transform 同口径）。 */
-function computeContextUsage(
+export function computeContextUsage(
   messages: Message[],
   contextSize: number,
 ): ContextUsage {

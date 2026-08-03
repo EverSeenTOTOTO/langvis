@@ -41,6 +41,12 @@ export class ChatStore {
 
         if (!newId) return;
 
+        // usage is a per-active-conversation field; reset so a fresh conv doesn't
+        // keep the previous conv's usage until its own activate frame lands.
+        runInAction(() => {
+          this.conversationStore.conversationUsage = null;
+        });
+
         await this.loadMessages(newId);
         await this.activateConversation(newId);
       },

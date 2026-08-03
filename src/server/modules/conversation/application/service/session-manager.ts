@@ -14,7 +14,9 @@ import { ConversationSession } from './conversation-session';
 import type { ConversationContext } from '../../domain/model/conv-transform';
 import type { ConversationConfig } from '@/server/libs/config';
 import { getConvTransformPlan } from '../transforms';
+import { computeContextUsage } from '../transforms/usage-transform';
 import type { Message } from '@/shared/types/entities';
+import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
 
 export interface ChatState {
@@ -35,6 +37,8 @@ export class SessionManager implements LifecycleHook {
     private convService: ChatService,
     @inject(EventBus)
     private eventBus: EventBus,
+    @inject(ProviderService)
+    private providerService: ProviderService,
   ) {}
 
   private getOrCreate(conversationId: string): ConversationSession {
@@ -206,7 +210,15 @@ export class SessionManager implements LifecycleHook {
     conversationId: string,
     runtimeConfig: ConversationConfig,
   ): void {
-    this.sessions.get(conversationId)?.updateRuntimeConfig(runtimeConfig);
+    const session = this.sessions.get(conversationId);
+    if (!session) return;
+    session.updateRuntimeConfig(runtimeConfig);
+    // 配置更新不算相位、不触发 UsageTransform；模型切换时立即重推用量，客户端 usage 栏即时刷新。
+    if (!session.hasCtx() || !session.hasConnection) return;
+    const ctx = session.getCtx();
+    const total = this.providerService.resolveContextSize(runtimeConfig);
+    const { used } = computeContextUsage(ctx.messages, total);
+    session.sendFrame({ type: 'conversation_usage', used, total });
   }
 
   hasCtx(conversationId: string): boolean {

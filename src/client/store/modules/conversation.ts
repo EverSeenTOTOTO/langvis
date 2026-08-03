@@ -72,7 +72,8 @@ export class ConversationStore {
     try {
       const result = await req!.send();
       if (result) {
-        await this.conversationGroupStore.getAllGroups();
+        // 组树刷新是附带更新；失败/挂起不阻塞创建，否则 /new 会建好会话却拿不到 id 切换。
+        void this.conversationGroupStore.getAllGroups().catch(() => {});
         return result as Conversation;
       }
       return undefined;

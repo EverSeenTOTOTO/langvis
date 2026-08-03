@@ -83,7 +83,7 @@ function noCommentRunsRule() {
       type: 'problem',
       docs: { description: 'Reject three or more consecutive comment lines.' },
       messages: {
-        run: '{{n}} consecutive comment lines — condense.',
+        run: '{{n}} consecutive comment lines (>=3) — condense.',
       },
       schema: [],
     },
