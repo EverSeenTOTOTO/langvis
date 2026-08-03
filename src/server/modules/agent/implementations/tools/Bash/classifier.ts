@@ -133,7 +133,7 @@ export function classifyBashCommand(
   command: string,
   workDir: string,
 ): BashPermission {
-  const promptHeader = `### 执行命令\n\n\`\`\`bash\n${command}\`\`\`\n\n**工作目录:** \`${shortenHome(workDir)}\``;
+  const promptHeader = `### 执行命令\n\n\`\`\`bash\n${command.trimEnd()}\n\`\`\`\n\n**工作目录:** \`${shortenHome(workDir)}\``;
 
   // 元字符（含未引号包裹的）→ sensitive。
   // 取引号外的元字符：逐字符扫描是否处于引号内。

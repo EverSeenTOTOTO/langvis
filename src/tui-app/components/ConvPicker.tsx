@@ -8,42 +8,39 @@ import { useStore } from '@/client/store';
 import { Spinner } from '@/tui/components/Spinner';
 import type { Conversation } from '@/shared/types/entities';
 
-// `/conv` — flat list. Enter switches (activates chat + persists conv-id); `d` y/n delete.
+// `/conv` — this workspace's conversations (launch cwd). Enter switches
+// (activates chat + persists conv-id); `d` y/n delete; list refreshes after delete.
 export const ConvPicker = observer(function ConvPicker({
   onClose,
 }: {
   onClose: () => void;
 }) {
   const conversation = useStore('conversation');
-  const groupStore = useStore('conversationGroup');
+  const [items, setItems] = useState<Conversation[]>([]);
   const [sel, setSel] = useState(0);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
 
+  const fetchList = async (): Promise<Conversation[]> => {
+    const list = await conversation.listByWorkspace({
+      workspacePath: process.cwd(),
+    });
+    setItems(list);
+    const idx = list.findIndex(
+      c => c.id === conversation.currentConversationId,
+    );
+    setSel(idx >= 0 ? idx : 0);
+    return list;
+  };
+
   useEffect(() => {
-    groupStore
-      .getAllGroups()
-      .then(() => {
-        const list = groupStore.sortedGroups.flatMap(
-          g => g.conversations ?? [],
-        );
-        const idx = list.findIndex(
-          c => c.id === conversation.currentConversationId,
-        );
-        setSel(idx >= 0 ? idx : 0);
-      })
+    fetchList()
       .catch(e => setErr(String(e instanceof Error ? e.message : e)))
       .finally(() => setLoading(false));
-  }, [groupStore, conversation]);
+  }, [conversation]);
 
-  const items: Conversation[] = groupStore.sortedGroups.flatMap(
-    g => g.conversations ?? [],
-  );
   const currentId = conversation.currentConversationId;
-  const refresh = () => {
-    void groupStore.getAllGroups();
-  };
 
   useKeyboard(data => {
     if (data === '\x1b' || data === 'q') {
@@ -54,7 +51,10 @@ export const ConvPicker = observer(function ConvPicker({
       if (data === 'y') {
         const target = confirmId;
         setConfirmId(null);
-        void conversation.deleteConversation({ id: target }).then(refresh);
+        void conversation
+          .deleteConversation({ id: target })
+          .then(() => fetchList())
+          .catch(e => setErr(String(e instanceof Error ? e.message : e)));
       } else if (data === 'n') {
         setConfirmId(null);
       }
@@ -96,7 +96,12 @@ export const ConvPicker = observer(function ConvPicker({
               <Text fg="red">{`Delete '${c.name || c.id}'? (y/n)`}</Text>
             ) : (
               <>
-                <Text fg={isCur ? 'green' : 'white'}>{c.name || c.id}</Text>
+                <Text
+                  fg={isCur ? 'green' : isSel ? 'gray' : 'white'}
+                  bold={isCur}
+                >
+                  {c.name || c.id}
+                </Text>
                 {isCur && <Text fg="green">{' ✓'}</Text>}
               </>
             )}

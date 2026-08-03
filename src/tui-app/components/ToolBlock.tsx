@@ -3,7 +3,7 @@ import { observer } from 'mobx-react-lite';
 import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
 import { Spinner } from '@/tui/components/Spinner';
-import { truncate } from '@/tui/width';
+import { truncate } from '../wrap';
 import { useTerminalSize } from '@/tui/hooks';
 import {
   aggregateSubagentChildren,

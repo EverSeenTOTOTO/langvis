@@ -97,7 +97,9 @@ export const ModelPicker = observer(function ModelPicker({
         return (
           <Box key={m.id} height={1}>
             <Text fg={isSel ? 'cyan' : 'gray'}>{isSel ? '› ' : '  '}</Text>
-            <Text fg={isCur ? 'green' : 'white'}>{m.id}</Text>
+            <Text fg={isCur ? 'green' : isSel ? 'gray' : 'white'} bold={isCur}>
+              {m.id}
+            </Text>
             {m.name && m.name !== m.id && (
               <Text fg="gray">{`  ${m.name}`}</Text>
             )}

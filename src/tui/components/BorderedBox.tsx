@@ -22,6 +22,8 @@ export function BorderedBox({
       width="100%"
       borderStyle="single"
       borderColor={fg}
+      paddingLeft={1}
+      paddingRight={1}
     >
       {title && <Text color={fg}>{title}</Text>}
       {children}

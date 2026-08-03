@@ -6,9 +6,16 @@ import { Text } from '@/tui/components/Text';
 import { Input } from '@/tui/components/Input';
 import { BorderedBox } from '@/tui/components/BorderedBox';
 import { Markdown } from '@/tui/components/Markdown';
+import { Spinner } from '@/tui/components/Spinner';
 import { useKeyboard } from '@/tui/hooks';
 import { useStore } from '@/client/store';
 import type { MessageNode } from '@/client/store/modules/message-node';
+import {
+  BooleanControl,
+  EnumControl,
+  MultiSelectControl,
+  type Option,
+} from './AskUserControls';
 
 type EnumItem =
   | string
@@ -206,13 +213,16 @@ export const AskUserForm = observer(function AskUserForm({
     initValues(rows),
   );
   const [focusIdx, setFocusIdx] = useState(0);
-  const [multiCursor, setMultiCursor] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
   const submitIdx = fields.length;
-  const labelW = fields.reduce((m, f) => Math.max(m, f.label.length), 0);
-  const inner = Math.max(1, cols - 2);
+  // Content width inside borders (2) + side padding (2).
+  const contentW = Math.max(1, cols - 4);
+  // Single control column across all depths so field controls line up vertically.
+  const controlCol =
+    fields.reduce((m, f) => Math.max(m, f.depth * 2 + 1 + f.label.length), 0) +
+    2;
   const focusedField = fields[focusIdx];
 
   async function submit() {
@@ -237,6 +247,7 @@ export const AskUserForm = observer(function AskUserForm({
     }
   }
 
+  // Navigation only — per-field keys (◀▶/space) are handled by each focused control's own useKeyboard.
   useKeyboard(data => {
     if (submitting) return;
     const quit =
@@ -256,105 +267,48 @@ export const AskUserForm = observer(function AskUserForm({
     if (data === '\x1b[A' || data === '\x1b[B') {
       const dir = data === '\x1b[B' ? 1 : -1;
       setFocusIdx(i => (i + dir + submitIdx + 1) % (submitIdx + 1));
-      setMultiCursor(0);
       return;
     }
     if (data === '\r') {
       if (focusIdx === submitIdx) submit();
-      else {
-        setFocusIdx(i => Math.min(submitIdx, i + 1));
-        setMultiCursor(0);
-      }
-      return;
-    }
-    const f = focusedField;
-    if (!f) return;
-    if (f.kind === 'boolean' && (data === '\x1b[D' || data === '\x1b[C')) {
-      setValues(v => ({ ...v, [f.pathKey]: !v[f.pathKey] }));
-      return;
-    }
-    if (
-      f.kind === 'enum' &&
-      f.options &&
-      (data === '\x1b[D' || data === '\x1b[C')
-    ) {
-      setValues(v => {
-        const idx = Math.max(
-          0,
-          f.options!.findIndex(o => o.value === v[f.pathKey]),
-        );
-        const next =
-          (idx + (data === '\x1b[C' ? 1 : -1) + f.options!.length) %
-          f.options!.length;
-        return { ...v, [f.pathKey]: f.options![next].value };
-      });
-      return;
-    }
-    if (f.kind === 'multiselect' && f.options) {
-      const n = f.options.length;
-      if (data === '\x1b[D' || data === '\x1b[C') {
-        setMultiCursor(c =>
-          n ? (c + (data === '\x1b[C' ? 1 : -1) + n) % n : 0,
-        );
-        return;
-      }
-      if (data === ' ') {
-        const cur = f.options[n ? multiCursor % n : 0];
-        if (cur) {
-          setValues(v => {
-            const raw = v[f.pathKey];
-            const arr = Array.isArray(raw) ? [...(raw as unknown[])] : [];
-            const at = arr.findIndex(x => x === cur.value);
-            if (at >= 0) arr.splice(at, 1);
-            else arr.push(cur.value);
-            return { ...v, [f.pathKey]: arr };
-          });
-        }
-      }
+      else setFocusIdx(i => Math.min(submitIdx, i + 1));
     }
   });
 
   const renderControl = (f: Field, focused: boolean): ReactNode => {
+    const value = values[f.pathKey];
+    const setValue = (v: unknown) =>
+      setValues(prev => ({ ...prev, [f.pathKey]: v }));
+    const options = f.options as unknown as Option[] | undefined;
     if (f.kind === 'boolean') {
       return (
-        <Text fg={focused ? 'cyan' : 'white'}>
-          {values[f.pathKey] ? '● yes' : '○ no'}
-        </Text>
+        <BooleanControl value={value} onChange={setValue} focused={focused} />
       );
     }
     if (f.kind === 'enum') {
-      const cur = f.options?.find(o => o.value === values[f.pathKey]);
       return (
-        <Text
-          fg={focused ? 'cyan' : 'white'}
-        >{`${cur?.label ?? '?'} ◀▶`}</Text>
+        <EnumControl
+          options={options}
+          value={value}
+          onChange={setValue}
+          focused={focused}
+        />
       );
     }
     if (f.kind === 'multiselect') {
-      const raw = values[f.pathKey];
-      const arr: unknown[] = Array.isArray(raw) ? raw : [];
-      const opts = f.options ?? [];
-      const ci = opts.length ? multiCursor % opts.length : -1;
       return (
-        <>
-          {opts.map((o, oi) => {
-            const sel = arr.includes(o.value);
-            const isCur = focused && oi === ci;
-            return (
-              <Text
-                key={oi}
-                fg={isCur ? 'cyan' : sel ? 'white' : 'gray'}
-              >{`${sel ? '●' : '○'}${o.label} `}</Text>
-            );
-          })}
-          {focused && <Text fg="gray">{'◀▶␣'}</Text>}
-        </>
+        <MultiSelectControl
+          options={options}
+          value={value}
+          onChange={setValue}
+          focused={focused}
+        />
       );
     }
     return (
       <Input
-        value={String(values[f.pathKey] ?? '')}
-        onChange={v => setValues(prev => ({ ...prev, [f.pathKey]: v }))}
+        value={String(value ?? '')}
+        onChange={setValue}
         enabled={focused}
         fg="white"
       />
@@ -364,41 +318,48 @@ export const AskUserForm = observer(function AskUserForm({
   return (
     <BorderedBox title="ask_user" cols={cols}>
       {awaiting.message && (
-        <Markdown text={awaiting.message} width={inner - 2} />
+        <>
+          <Text> </Text>
+          <Markdown text={awaiting.message} width={contentW} />
+          <Text> </Text>
+        </>
       )}
       {rows.map(row => {
         if (row.kind === 'group') {
           return (
-            <Box key={row.key}>
-              <Text fg="cyan">{`${' '.repeat(row.depth * 2 + 1)}${row.title}`}</Text>
+            <Box key={row.key} flexDirection="column">
+              <Text> </Text>
+              <Text fg="cyan">{`${' '.repeat(row.depth * 2 + 1)}${row.title}:`}</Text>
             </Box>
           );
         }
         const f = row.field;
         const focused = focusedField?.pathKey === f.pathKey;
         const indent = ' '.repeat(f.depth * 2 + 1);
-        const label = f.label.padEnd(labelW);
+        const label = `${indent}${f.label}:`;
         return (
-          <Box key={f.pathKey} flexDirection="column">
-            <Box>
-              <Text fg="gray">{`${indent}${label}  `}</Text>
-              {renderControl(f, focused)}
-            </Box>
-            {f.description && (
-              <Text fg="gray">{`${indent}${' '.repeat(labelW)}  ${f.description}`}</Text>
-            )}
+          <Box key={f.pathKey}>
+            <Text fg={focused ? 'cyan' : 'gray'}>
+              {label.padEnd(controlCol)}
+            </Text>
+            {renderControl(f, focused)}
+            {f.description && <Text fg="gray">{` (${f.description})`}</Text>}
           </Box>
         );
       })}
       {submitError && <Text fg="red">{` ${submitError}`}</Text>}
+      <Text> </Text>
       <Box>
-        <Text fg={focusIdx === submitIdx ? 'cyan' : 'gray'}>
-          {`  [ ${submitting ? 'submitting…' : 'Submit'} ]`}
-        </Text>
+        {submitting ? (
+          <Spinner label="Submitting" />
+        ) : (
+          <Text fg={focusIdx === submitIdx ? 'cyan' : 'gray'}>
+            {' [ Submit ]'}
+          </Text>
+        )}
       </Box>
-      <Text fg="gray">
-        {' ↑↓ navigate · ◀▶ change · ␣ toggle · Enter submit · q/Esc cancel'}
-      </Text>
+      <Text> </Text>
+      <Text fg="gray">{' ↑↓ · ◀▶ · ␣ · Enter submit · q/Esc cancel'}</Text>
     </BorderedBox>
   );
 });

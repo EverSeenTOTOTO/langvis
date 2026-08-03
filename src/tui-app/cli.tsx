@@ -118,7 +118,12 @@ async function main() {
   reaction(
     () => conversationStore.currentConversationId,
     id => {
-      if (id) fileConv.setConvId(id);
+      if (id) {
+        fileConv.setConvId(id);
+        // Clear on switch so the previous conv's Static scrollback doesn't linger
+        // (Ink Static is append-only; the remount in Chat shows the new conv).
+        ink.clear();
+      }
     },
   );
 }

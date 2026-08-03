@@ -5,6 +5,8 @@ import { Text } from '@/tui/components/Text';
 import { getPrefetchPath, serverFetch } from '@/client/decorator/api';
 import { isClient } from '@/shared/utils';
 import { useStore } from '@/client/store';
+import type { ConversationStore } from '@/client/store/modules/conversation';
+import type { ModelStore } from '@/client/store/modules/model';
 import { SignIn } from './screens/SignIn';
 import { Chat } from './screens/Chat';
 
@@ -14,57 +16,59 @@ export type ConvStorage = {
   setConvId: (id: string) => void;
 };
 
-// Create-or-reuse a conversation and point the store at it (chat store auto-activates SSE).
-function useBootstrap(storage: ConvStorage): {
-  phase: 'boot' | 'ready' | 'error';
-  error?: string;
-} {
+type BootState = { phase: 'boot' | 'ready' | 'error'; error?: string };
+
+// True if a conversation with `id` exists (GET /api/conversation/:id 404s on
+// unknown — the messages endpoint returns []). Network errors read as stale → create fallback.
+async function conversationExists(id: string): Promise<boolean> {
+  try {
+    const fetchFn = await serverFetch.init();
+    const resp = await fetchFn(getPrefetchPath(`/api/conversation/${id}`));
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function defaultModelId(model: ModelStore): Promise<string> {
+  const groups = (await model.getModels()) as Array<{
+    models: Array<{ id: string }>;
+  }>;
+  return groups[0]?.models[0]?.id ?? 'localhost:default';
+}
+
+// Resume the stored conversation if it still exists, else create a fresh one in
+// this workspace — either way the chat store auto-activates SSE from the id.
+async function resumeOrCreate(
+  conversation: ConversationStore,
+  model: ModelStore,
+  storage: ConvStorage,
+): Promise<void> {
+  const stored = storage.getConvId();
+  if (stored && (await conversationExists(stored))) {
+    conversation.currentConversationId = stored;
+    return;
+  }
+  const conv = await conversation.createConversation({
+    name: 'New Conversation',
+    config: { model: { modelId: await defaultModelId(model) } },
+    workspacePath: process.cwd(),
+  });
+  if (conv?.id) conversation.currentConversationId = conv.id;
+}
+
+function useBootstrap(storage: ConvStorage): BootState {
   const conversation = useStore('conversation');
   const model = useStore('model');
   const conversationGroup = useStore('conversationGroup');
-  const [state, setState] = useState<{
-    phase: 'boot' | 'ready' | 'error';
-    error?: string;
-  }>({ phase: 'boot' });
+  const [state, setState] = useState<BootState>({ phase: 'boot' });
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const stored = storage.getConvId();
-        let reused = false;
-        if (stored) {
-          try {
-            // Validate the stored id (GET /api/conversation/:id 404s on unknown;
-            // the messages endpoint returns [] and can't distinguish stale).
-            const fetchFn = await serverFetch.init();
-            const resp = await fetchFn(
-              getPrefetchPath(`/api/conversation/${stored}`),
-            );
-            if (resp.ok) {
-              conversation.currentConversationId = stored;
-              reused = true;
-            }
-          } catch {
-            // network error falls through to create
-          }
-        }
-        if (!reused) {
-          const groups = (await model.getModels()) as Array<{
-            models: Array<{ id: string }>;
-          }>;
-          const modelId = groups[0]?.models[0]?.id ?? 'localhost:default';
-          const conv = await conversation.createConversation({
-            name: 'New Conversation',
-            config: { model: { modelId } },
-            workspacePath: process.cwd(),
-          });
-          if (conv?.id) {
-            conversation.currentConversationId = conv.id;
-          }
-        }
-        // Load conversations in the background so the boot screen isn't held on
-        // that roundtrip — the /conv list and StatusBar refresh when it lands.
+        await resumeOrCreate(conversation, model, storage);
+        // Background-load groups so /conv + StatusBar refresh without blocking boot.
         void conversationGroup.getAllGroups().catch(() => {});
         if (!cancelled) setState({ phase: 'ready' });
       } catch (e) {
@@ -79,7 +83,7 @@ function useBootstrap(storage: ConvStorage): {
     return () => {
       cancelled = true;
     };
-  }, [conversation, model, storage]);
+  }, [conversation, model, conversationGroup, storage]);
 
   return state;
 }

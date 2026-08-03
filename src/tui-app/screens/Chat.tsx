@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
 import { observer } from 'mobx-react-lite';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Spinner } from '@/tui/components/Spinner';
 import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
@@ -39,6 +39,17 @@ function HRule({ cols }: { cols: number }) {
   );
 }
 
+// Ink's <Static> region is append-only and can't erase itself — on conversation
+// switch the previous conv's scrollback lingers. Clear the screen + scrollback.
+const CLEAR_SCREEN = '\x1b[2J\x1b[3J\x1b[H';
+
+// Compact token count: 1234 → "1.2K", 1234567 → "1.2M" (mirrors web ContextUsageBar).
+const formatTokens = (n: number): string => {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toString();
+};
+
 const StatusBar = observer(function StatusBar() {
   const conversation = useStore('conversation');
   const usage = conversation.conversationUsage;
@@ -52,6 +63,7 @@ const StatusBar = observer(function StatusBar() {
     conversation.currentConversation?.name ||
     conversation.currentConversationId ||
     '';
+  const pct = usage ? Math.min((usage.used / usage.total) * 100, 100) : 0;
   return (
     <Box height={1}>
       <Text fg="cyan" bold>
@@ -61,7 +73,15 @@ const StatusBar = observer(function StatusBar() {
       <Text fg="magenta">{model}</Text>
       <Text fg="gray">{' · ctx '}</Text>
       {usage ? (
-        <Progress value={usage.used} max={usage.total} width={16} />
+        <>
+          <Progress
+            value={usage.used}
+            max={usage.total}
+            width={12}
+            showPct={false}
+          />
+          <Text fg="gray">{` ${formatTokens(usage.used)}/${formatTokens(usage.total)} (${pct.toFixed(1)}%)`}</Text>
+        </>
       ) : (
         <Text fg="gray">—</Text>
       )}
@@ -126,12 +146,30 @@ export const Chat = observer(function Chat() {
   const [notice, setNotice] = useState('');
   const [expanded, setExpanded] = useState(false);
 
+  // Wipe stale Static scrollback on conversation switch; bump remountKey so the
+  // Static remounts and re-emits the new conv's history after the clear.
+  const prevConv = useRef<string | undefined>(undefined);
+  const [remountKey, setRemountKey] = useState(0);
+  useEffect(() => {
+    if (prevConv.current !== undefined && prevConv.current !== convId) {
+      process.stdout.write(CLEAR_SCREEN);
+      setRemountKey(k => k + 1);
+    }
+    prevConv.current = convId;
+  }, [convId]);
+
   async function createNew() {
+    // 模型挑选是附带增强；失败降级默认模型，不阻断创建与切换。
+    let modelId = 'localhost:default';
     try {
       const groups = (await model.getModels()) as Array<{
         models: Array<{ id: string }>;
       }>;
-      const modelId = groups[0]?.models[0]?.id ?? 'localhost:default';
+      modelId = groups[0]?.models[0]?.id ?? 'localhost:default';
+    } catch {
+      /* fallback to default */
+    }
+    try {
       const conv = await conversation.createConversation({
         name: 'New Conversation',
         config: { model: { modelId } },
@@ -187,25 +225,10 @@ export const Chat = observer(function Chat() {
     : null;
   const activating = chat.isTransportConnecting && !streamingId;
 
-  // Keep the most recent assistant turn live (not Static) so Ctrl+O works after
-  // completion; promotion is gated on the assistant staying the final message.
-  const lastAssistIdx = streamingId
-    ? -1
-    : (() => {
-        for (let i = committed.length - 1; i >= 0; i--) {
-          if (committed[i].role === Role.ASSIST) return i;
-        }
-        return -1;
-      })();
-  const lastTurnNode =
-    lastAssistIdx >= 0 && lastAssistIdx === committed.length - 1
-      ? (chat.getMessageNode(convId, committed[lastAssistIdx].id) ?? null)
-      : null;
-  const staticItems =
-    lastAssistIdx >= 0 && lastTurnNode
-      ? committed.filter((_, i) => i !== lastAssistIdx)
-      : committed;
-  const liveNode = streamingNode ?? lastTurnNode;
+  // Only the in-flight turn is live (not Static); committed turns go to Static so
+  // the dynamic region stays under the viewport and Ink 7 never full-clears.
+  const staticItems = committed;
+  const liveNode = streamingNode;
 
   // Bottom-panel mode — one discriminated value, priority ask > picker > busy
   // > input; busy sources read from their own layers and merged only here.
@@ -256,7 +279,8 @@ export const Chat = observer(function Chat() {
 
   return (
     <>
-      <Static items={staticItems}>
+      {/* key remounts Static on conv switch so the clear + remount re-emits fresh history */}
+      <Static key={`${convId}:${remountKey}`} items={staticItems}>
         {m => (
           <Box key={m.id} flexDirection="column">
             {m.role === Role.ASSIST ? (
