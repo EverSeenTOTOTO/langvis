@@ -103,7 +103,11 @@ export class CacheProvider implements CachePort {
     // 无 hint 退 fc_<id>（保 /^fc_/ 既有契约）；有 hint 前置语义段 + '__fc_' 分隔。
     const id = generateId('fc');
     const filename = sanitized ? `${sanitized}__${id}` : id;
-    const filePath = path.join(workDir, filename);
+    // offload 侧车件收进 workspace 的 .langvis（与 config/grants 同处），不散落到 workdir 根；
+    // $cached 仍为 workDir 相对路径（读端 bash cwd=workDir 可直接 rg/sed）。
+    const rel = path.join('.langvis', filename);
+    const filePath = path.join(workDir, rel);
+    await fs.mkdir(path.join(workDir, '.langvis'), { recursive: true });
     // 落盘前 reflow：把一整行 JSON（text 字段全转义 \n）裂成多行，否则 rg 一命中就回整条 885KB 巨行。
     const stored = reflowForGrep(serialized);
     await fs.writeFile(filePath, stored, 'utf-8');
@@ -113,7 +117,7 @@ export class CacheProvider implements CachePort {
     });
 
     return {
-      $cached: filename,
+      $cached: rel,
       $size: Buffer.byteLength(stored, 'utf8'),
       $preview: stored.slice(0, PREVIEW_LENGTH),
       ...(sanitized ? { $label: sanitized } : {}),

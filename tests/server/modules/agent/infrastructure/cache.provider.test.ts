@@ -44,7 +44,7 @@ describe('CacheProvider', () => {
     it('always writes to disk and returns a CachedReference (even for small content)', async () => {
       const result = await cacheService.offload(workDir, 'tiny');
 
-      expect(result.$cached).toMatch(/^fc_/);
+      expect(result.$cached).toMatch(/^\.langvis\/fc_/);
       expect(result.$size).toBe(4);
       expect(result.$preview).toBe('tiny');
       // offload 始终写盘，小内容也落文件
@@ -69,18 +69,20 @@ describe('CacheProvider', () => {
       )) as CachedReference;
 
       // hint 规整为文件名安全段，前置语义 + '__' + fc_<id>
-      expect(result.$cached).toMatch(/^search-flights-40-records__fc_/);
+      expect(result.$cached).toMatch(
+        /^\.langvis\/search-flights-40-records__fc_/,
+      );
       expect(result.$label).toBe('search-flights-40-records');
       expect(result.$size).toBe(500);
     });
 
     it('falls back to fc_<id> when hint absent or empty', async () => {
       const noHint = await cacheService.offload(workDir, 'data');
-      expect(noHint.$cached).toMatch(/^fc_/);
+      expect(noHint.$cached).toMatch(/^\.langvis\/fc_/);
       expect(noHint.$label).toBeUndefined();
 
       const emptyHint = await cacheService.offload(workDir, 'data', '   ');
-      expect(emptyHint.$cached).toMatch(/^fc_/);
+      expect(emptyHint.$cached).toMatch(/^\.langvis\/fc_/);
       expect(emptyHint.$label).toBeUndefined();
     });
 
