@@ -1,7 +1,7 @@
 import type { JSONSchemaType } from 'ajv';
 import type { ConfigFragment } from '../config-fragment';
 
-/** ReAct loop 内有损压缩（fold）：超 threshold 时折较早步骤为过程摘要，保留 keepRecent 条尾。 */
+/** ReAct loop 内有损压缩（fold）：超 threshold 折较早步骤为过程摘要、保留 keepRecent 条尾。默认开（对象层 default，防小窗口 run 撑爆窗口）。 */
 export interface LoopCompactionConfig {
   threshold: number;
   windowSize: number;
@@ -14,10 +14,12 @@ export const LOOP_FRAGMENT: ConfigFragment<'loop', LoopCompactionConfig> = {
   key: 'loop',
   schema: {
     type: 'object',
+    // 对象层 default：缺省会话也让 loop 压缩默认开（否则 ajv 不填子字段 → CompactionHook 永不折）。
+    default: { threshold: 0.95, windowSize: 10, keepRecent: 4 },
     nullable: true,
     title: 'Loop Iteration Compaction',
     description:
-      'ReAct loop 内迭代压缩（超阈折叠较早步骤、保留近期）。省略即关。',
+      'ReAct loop 内迭代压缩（超阈折叠较早步骤、保留近期）。默认开。',
     properties: {
       threshold: {
         type: 'number',

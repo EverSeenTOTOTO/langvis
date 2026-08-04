@@ -124,7 +124,15 @@ function truncatedObservation(
   cap: number,
   recall: RecallKind | null,
 ): string {
-  const target = Math.floor(cap * TRUNCATE_TARGET_RATIO);
+  // directive 也随 head 一并进窗，须先算其量级、提前从 head 预算里扣掉（否则 prefix
+  // 受限 cap=remaining 时 head+directive 越窗 → 模型 400）。量级用省略量上界 used 估算即可。
+  const directiveTokens = estimateTokens([
+    { role: 'user', content: narrowDirective(used, cap, used, recall) },
+  ]);
+  const target = Math.max(
+    64,
+    Math.floor(cap * TRUNCATE_TARGET_RATIO) - directiveTokens,
+  );
   let head = body.slice(0, cap * CHARS_PER_TOKEN);
   let est = estimateTokens([{ role: 'user', content: head }]);
   let guard = 0;
@@ -136,10 +144,18 @@ function truncatedObservation(
   }
   const kept = estimateTokens([{ role: 'user', content: head }]);
   const omitted = Math.max(0, used - kept);
+  const text = `${head}\n${narrowDirective(used, cap, omitted, recall)}`;
+  return isObservation ? `${OBSERVATION_PREFIX}${text}` : text;
+}
+
+function narrowDirective(
+  used: number,
+  cap: number,
+  omitted: number,
+  recall: RecallKind | null,
+): string {
   const recallTarget = recall?.type === 'bash' ? recall.file : null;
-  const directive = recallTarget
+  return recallTarget
     ? `[query over budget: ~${used} tokens > ~${cap} cap. Above is the truncated head (~${omitted} tokens omitted); the full content remains on disk. Narrow: via the bash tool run rg -n "<keyword>" -C3 ${recallTarget} (tighter pattern / smaller -C) or sed -n "<range>" ${recallTarget} or head -n <N> ${recallTarget}; do NOT re-read the whole file or re-run the same broad search; then continue.]`
     : `[query over budget: ~${used} tokens > ~${cap} cap. Above is the truncated head (~${omitted} tokens omitted). Narrow the originating call (tighter pattern / smaller page range / smaller limit) and re-issue so the result fits, then continue.]`;
-  const text = `${head}\n${directive}`;
-  return isObservation ? `${OBSERVATION_PREFIX}${text}` : text;
 }

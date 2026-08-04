@@ -103,6 +103,25 @@ describe('QueryBudgetHook（pre-LLM 超限兜底：latest > min(budget, remainin
     expect(replaced.length).toBeLessThan(8000); // 截断后远小于原文
   });
 
+  it('directive 也计入预算：head+directive 总量 ≤ cap×ratio，防 prefix 受限时越窗(模型 400)', async () => {
+    // prefix 受限：旧条撑满余量，cap=remaining 取小。head 预算须先扣 directive token，
+    // 否则 head+directive 最终越窗。mock 下 estimate=字符数 → 断言最终 content 长度 ≤ 0.8×cap。
+    const ctx = makeCtx(
+      [
+        obs(body(6300)), // prefix 6312 → remaining=1880 → cap=min(3276,1880)=1880
+        obs(body(8000)),
+      ],
+      {},
+    );
+    const { ret } = await collect(makeHook(8192).apply(ctx));
+    expect(ret).toBeUndefined();
+    const replaced = ctx.messages[1]!.content;
+    expect(replaced).toContain('[query over budget');
+    // target = max(64, 0.8×1880 − directiveTokens)。directiveTokens 含 4 固定开销 + 文案，
+    // 与 "user: " 前缀等固定开销相抵后仍应 ≤ 0.8×cap=1504（宽松断言，防回归再越窗）。
+    expect(replaced.length).toBeLessThanOrEqual(Math.floor(1880 * 0.8) + 40);
+  });
+
   it('只动最新一条：多条时次新条不变', async () => {
     // 两条：旧 2000、最新 8000。prefix=2012 → remaining=6180 → cap=min(3276,6180)=3276；8000 > 3276 → 截断最新，旧条不变。
     const ctx = makeCtx([obs(body(2000)), obs(body(8000))], {});
