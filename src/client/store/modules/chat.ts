@@ -20,11 +20,16 @@ import { SettingStore } from './setting';
 import type { Message } from '@/shared/types/entities';
 import type { StreamFrame } from '@/shared/types/events';
 
+type RunViewFrame = Extract<StreamFrame, { type: 'run_view' }>;
+
 @store()
 export class ChatStore {
   private messageNodes = new Map<string, Map<string, MessageNode>>();
   private transports = new Map<string, SSEClientTransport>();
   private connectingPromises = new Map<string, Promise<void>>();
+  // run_view 帧经 SSE 与 POST 并发早到，而节点要等 POST 返回才创建。直接丢帧会让
+  // "到达即阻塞的 ask_user"丢失 awaitingInput 而卡死 thinking——这里按 messageId 暂存最近一帧，建好节点后再补灌。
+  private readonly pendingRunViews = new Map<string, RunViewFrame>();
 
   constructor(
     @inject(ConversationStore) private conversationStore: ConversationStore,
@@ -110,8 +115,28 @@ export class ChatStore {
         audio: msg.audio ?? undefined,
       });
       nodes.set(msg.id, node);
+      // 节点建好于 run 之后（POST 返回）——补灌暂存的最新投影帧，别让阻塞的 ask_user 丢帧。
+      const pending = this.pendingRunViews.get(msg.id);
+      if (pending) {
+        this.pendingRunViews.delete(msg.id);
+        this.applyToNode(conversationId, pending);
+      }
     }
     return node;
+  }
+
+  // 把一帧 run_view 应用到已存在的节点；转入终态时刷新消息并清掉该 run 的瞬态用量。
+  private applyToNode(conversationId: string, frame: RunViewFrame): void {
+    const node = this.messageNodes.get(conversationId)?.get(frame.messageId);
+    if (!node) return;
+    const wasTerminal = node.isTerminal;
+    node.applyView(frame);
+    // 终态由 run_view.status 承载（final/cancelled/error 不再单独成帧）：
+    // 转入终态时刷新消息（取回持久化 content/meta），并清掉该 run 的瞬态用量。
+    if (!wasTerminal && node.isTerminal) {
+      this.conversationStore.loopUsage.delete(frame.runId);
+      this.refreshMessages(conversationId);
+    }
   }
 
   // ═══ Conversation lifecycle ═══
@@ -178,18 +203,12 @@ export class ChatStore {
 
       // 投影帧 → 整体替换 MessageNode 状态（实时 / 重连 / 历史同此一帧）
       if (frame.type === 'run_view') {
-        const node = this.messageNodes
-          .get(conversationId)
-          ?.get(frame.messageId);
-        if (!node) return;
-        const wasTerminal = node.isTerminal;
-        node.applyView(frame);
-        // 终态由 run_view.status 承载（final/cancelled/error 不再单独成帧）：
-        // 转入终态时刷新消息（取回持久化 content/meta），并清掉该 run 的瞬态用量。
-        if (!wasTerminal && node.isTerminal) {
-          this.conversationStore.loopUsage.delete(frame.runId);
-          this.refreshMessages(conversationId);
+        // 节点未建（POST 返回前）时先暂存，建好后再补灌——避免丢帧卡死 thinking。
+        if (!this.messageNodes.get(conversationId)?.has(frame.messageId)) {
+          this.pendingRunViews.set(frame.messageId, frame);
+          return;
         }
+        this.applyToNode(conversationId, frame);
         return;
       }
     });
@@ -360,5 +379,6 @@ export class ChatStore {
     }
     this.connectingPromises.delete(oldId);
     this.messageNodes.delete(oldId);
+    this.pendingRunViews.clear();
   }
 }
