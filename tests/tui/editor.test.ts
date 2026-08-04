@@ -3,6 +3,7 @@ import {
   applyKey,
   insertPaste,
   insertTextAt,
+  removeRange,
   bufferText,
   emptyBuffer,
   visualRows,
@@ -10,6 +11,7 @@ import {
   xyToOffset,
   cellIndexAt,
   pasteLabel,
+  queryTokenStart,
 } from '@/tui-app/editor';
 import type { Buffer } from '@/tui-app/editor';
 
@@ -248,6 +250,39 @@ describe('basic text editing still works', () => {
     expect(bufferText(r!.buffer)).toBe('');
     expect(r!.cursor).toBe(0);
     expect(r!.submit).toBe(false);
+  });
+});
+
+describe('queryTokenStart', () => {
+  it('finds a bare slash at the start', () => {
+    expect(queryTokenStart(text('/'), 1)).toBe(0);
+  });
+  it('finds the token start after leading whitespace', () => {
+    expect(queryTokenStart(text('  /conv'), 7)).toBe(2);
+  });
+  it('returns null when the caret is not in a boundary slash token', () => {
+    expect(queryTokenStart(text('foo/bar'), 7)).toBeNull();
+    expect(queryTokenStart(text('hello '), 6)).toBeNull();
+    expect(queryTokenStart(emptyBuffer(), 0)).toBeNull();
+  });
+});
+
+describe('acceptQuery composition (replace trigger + insert)', () => {
+  const accept = (buf: Buffer, cursor: number, replacement: string): string => {
+    const start = queryTokenStart(buf, cursor);
+    const b = start === null ? buf : removeRange(buf, start, cursor);
+    const r = insertTextAt(b, start === null ? cursor : start, replacement);
+    return bufferText(r.buffer);
+  };
+
+  it('replaces a bare `/` trigger', () => {
+    expect(accept(text('/'), 1, '/skill ')).toBe('/skill ');
+  });
+  it('replaces a `/doc` query instead of doubling it', () => {
+    expect(accept(text('/doc'), 4, '/skill ')).toBe('/skill ');
+  });
+  it('replaces a query that follows leading text', () => {
+    expect(accept(text('say /doc'), 8, '/skill ')).toBe('say /skill ');
   });
 });
 

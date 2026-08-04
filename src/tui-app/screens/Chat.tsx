@@ -1,7 +1,8 @@
 /** @jsxImportSource react */
 import { observer } from 'mobx-react-lite';
 import { basename } from 'node:path';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useAsyncFn } from 'react-use';
 import { useVoiceInput } from '../useVoiceInput';
 import { Spinner } from '@/tui/components/Spinner';
 import { Box } from '@/tui/components/Box';
@@ -16,7 +17,9 @@ import { AskUserForm } from '../components/AskUserForm';
 import { ModelPicker } from '../components/ModelPicker';
 import { ConvPicker } from '../components/ConvPicker';
 import { Textarea, type TextareaHandle } from '../components/Textarea';
+import { SlashPicker } from '../components/SlashPicker';
 import { emptyBuffer, bufferText, type Buffer } from '../editor';
+import { buildEntries, SLASH_COMMANDS, type SlashEntry } from '../slash';
 
 // Bottom panel is in exactly one of these modes at a time. `busy` covers every
 // non-functional state (input disabled); sources live in their natural layers.
@@ -108,9 +111,23 @@ const ChatInput = observer(function ChatInput({
   onCommand: (raw: string) => void;
 }) {
   const chat = useStore('chat');
+  const agent = useStore('agent');
   const [buf, setBuf] = useState<Buffer>(emptyBuffer());
   const [voiceErr, setVoiceErr] = useState('');
   const taRef = useRef<TextareaHandle>(null);
+
+  const [skillState, fetchSkills] = useAsyncFn(() => agent.listSkills());
+  useEffect(() => {
+    void fetchSkills();
+  }, [fetchSkills]);
+  const entries = useMemo(
+    () => buildEntries(skillState.value ?? []),
+    [skillState.value],
+  );
+
+  // Caret-ending `/query` — non-null while the caret sits in a slash token.
+  const [query, setQuery] = useState<string | null>(null);
+
   const voice = useVoiceInput({
     // Mirror the web voice input: the transcript is wrapped in <speech> so the
     // sent content carries the speech marker the backend (gf skill) consumes.
@@ -133,6 +150,17 @@ const ChatInput = observer(function ChatInput({
     }
   });
 
+  const paletteOpen = query !== null;
+
+  function pick(entry: SlashEntry) {
+    setQuery(null);
+    // Fill the token only — the user hits Enter to run a config command or keeps
+    // typing args for a skill; the trailing space stops the palette re-opening.
+    taRef.current?.acceptQuery(
+      `${entry.kind === 'skill' ? `/${entry.skill.id}` : `/${entry.cmd}`} `,
+    );
+  }
+
   return (
     <>
       {voice.recording && (
@@ -142,12 +170,23 @@ const ChatInput = observer(function ChatInput({
       )}
       {voice.processing && <Text fg="cyan">◦ transcribing…</Text>}
       {voiceErr !== '' && <Text fg="red">{voiceErr}</Text>}
+      {paletteOpen && (
+        <SlashPicker
+          query={query}
+          entries={entries}
+          isLoading={skillState.loading}
+          onPick={pick}
+          onClose={() => setQuery(null)}
+        />
+      )}
       <Textarea
         ref={taRef}
         buffer={buf}
         onBufferChange={setBuf}
         fg={streamingId ? 'gray' : 'white'}
         prompt={streamingId ? '… ' : '> '}
+        navLocked={paletteOpen}
+        onSlashQuery={setQuery}
         onSubmit={real => {
           if (voice.recording) {
             // Enter during recording stops + transcribes instead of sending.
@@ -156,7 +195,10 @@ const ChatInput = observer(function ChatInput({
           }
           const trimmed = real.trim();
           if (!trimmed) return;
-          if (trimmed.startsWith('/')) onCommand(real);
+          // Only config commands are handled locally; a `/skill …` message is
+          // sent as normal content (the backend retrieves the skill by query).
+          const first = trimmed.split(/\s+/)[0].toLowerCase();
+          if (SLASH_COMMANDS.some(c => c.token === first)) onCommand(first);
           else {
             void chat.startChat({
               conversationId: convId,

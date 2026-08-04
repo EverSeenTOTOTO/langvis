@@ -9,16 +9,34 @@ import {
   applyKey,
   insertPaste,
   insertTextAt,
+  removeRange,
   bufferText,
   visualRows,
   caretToXY,
   cellIndexAt,
+  textBeforeUnit,
+  queryTokenStart,
   type Buffer,
 } from '../editor';
+import { computeSlashQuery } from '../slash';
 
-/** Imperative handle so an owner can backfill text at the caret (e.g. voice STT). */
+// Keys a nav-owning picker (slash palette) takes over; editing ignores them.
+const PICKER_KEYS = new Set([
+  '\x1b[A',
+  '\x1b[B',
+  '\x10',
+  '\x0e',
+  '\r',
+  '\x1b[13;5u',
+  '\t',
+]);
+
+/** Imperative handle so an owner can backfill/replace text at the caret. */
 export type TextareaHandle = {
+  /** Backfill text at the current caret (e.g. voice STT). */
   insert: (text: string) => void;
+  /** Replace the caret-ending `/query` token with `text` (e.g. a picked skill). */
+  acceptQuery: (text: string) => void;
 };
 
 type TextareaProps = {
@@ -31,6 +49,10 @@ type TextareaProps = {
   prompt?: string;
   /** Total width incl. prompt; defaults to the terminal width. */
   width?: number;
+  /** When true, Up/Down/Enter are not consumed by editing (a picker owns them). */
+  navLocked?: boolean;
+  /** Emit the caret-ending `/query` (null when the caret isn't in a slash token). */
+  onSlashQuery?: (query: string | null) => void;
 };
 
 // Embed a block (reverse-video) caret at a char index of `text`; if caretAt is
@@ -54,6 +76,8 @@ export const Textarea = forwardRef<TextareaHandle, TextareaProps>(
       enabled = true,
       prompt = '> ',
       width,
+      navLocked = false,
+      onSlashQuery,
     },
     ref,
   ) {
@@ -75,11 +99,26 @@ export const Textarea = forwardRef<TextareaHandle, TextareaProps>(
           onBufferChange(r.buffer);
           setCursor(r.cursor);
         },
+        acceptQuery(text) {
+          const start = queryTokenStart(buffer, cursor);
+          const b =
+            start === null ? buffer : removeRange(buffer, start, cursor);
+          const r = insertTextAt(b, start === null ? cursor : start, text);
+          onBufferChange(r.buffer);
+          setCursor(r.cursor);
+        },
       }),
       [buffer, cursor, onBufferChange],
     );
 
+    // Emit the caret-ending `/query` whenever the buffer or caret moves.
+    useEffect(() => {
+      onSlashQuery?.(computeSlashQuery(textBeforeUnit(buffer, cursor)));
+    }, [buffer, cursor, onSlashQuery]);
+
     useKeyboard(data => {
+      // With the palette open, a picker owns nav/submit — leave them to it.
+      if (navLocked && PICKER_KEYS.has(data)) return;
       const r = applyKey(data, buffer, cursor, contentWidth);
       if (!r) return;
       if (r.submit) {

@@ -38,6 +38,41 @@ export function bufferText(buf: Buffer): string {
   return buf.segs.map(s => s.text).join('');
 }
 
+// Real text of the units strictly before boundary k (paste blobs expand).
+export function textBeforeUnit(buf: Buffer, k: number): string {
+  let out = '';
+  let u = 0;
+  for (const seg of buf.segs) {
+    if (seg.kind === 'paste') {
+      if (u < k) out += seg.text;
+      u++;
+    } else {
+      if (u < k) out += seg.text.slice(0, k - u);
+      u += seg.text.length;
+    }
+    if (u >= k) break;
+  }
+  return out;
+}
+
+// Start boundary of a trailing `/\S*` token before k; the `/` must sit at a
+// start/whitespace boundary (mirrors computeSlashQuery) or null is returned.
+export function queryTokenStart(buf: Buffer, k: number): number | null {
+  let i = k - 1;
+  while (i >= 0) {
+    const u = unitInfo(buf, i);
+    if (u.paste) return null;
+    if (u.ch === '/') {
+      if (i === 0) return 0;
+      const p = unitInfo(buf, i - 1);
+      return p.paste || !/\s/.test(p.ch) ? null : i;
+    }
+    if (/\s/.test(u.ch)) return null;
+    i--;
+  }
+  return null;
+}
+
 // Merge adjacent text segments and drop empty ones, keeping the buffer canonical.
 function normalizeSegs(segs: Segment[]): Segment[] {
   const out: Segment[] = [];
@@ -187,7 +222,7 @@ function deleteBack(
 }
 
 // Drop units in [a, b); keeps whole paste units outside the range.
-function removeRange(buf: Buffer, a: number, b: number): Buffer {
+export function removeRange(buf: Buffer, a: number, b: number): Buffer {
   if (a >= b) return buf;
   const out: Segment[] = [];
   let u = 0;
