@@ -7,8 +7,8 @@ import { isClient } from '@/shared/utils';
 import { useStore } from '@/client/store';
 import type { ConversationStore } from '@/client/store/modules/conversation';
 import type { ModelStore } from '@/client/store/modules/model';
-import { SignIn } from './screens/SignIn';
-import { Chat } from './screens/Chat';
+import { SignIn } from './pages/SignIn';
+import { Chat } from './pages/Chat';
 
 // Conv-id persistence: localStorage (web) or a file (CLI); injected to keep shell free of I/O.
 export type ConvStorage = {

@@ -8,7 +8,14 @@ export type Segment =
   | { kind: 'text'; text: string }
   | { kind: 'paste'; text: string };
 export type Buffer = { segs: Segment[] };
-export type EditResult = { buffer: Buffer; cursor: number; submit?: boolean };
+// `history` is set only when the caret sits at a buffer boundary (top/bottom
+// visual row) so Up/Down fall through to history navigation instead of moving.
+export type EditResult = {
+  buffer: Buffer;
+  cursor: number;
+  submit?: boolean;
+  history?: 'prev' | 'next';
+};
 
 // Paste label shown in place of a collapsed blob (its real text is expanded at send).
 export function pasteLabel(text: string): string {
@@ -484,7 +491,8 @@ export function applyKey(
     case '\x10': {
       // Ctrl-p = up
       const { row, col } = caretToXY(buf, cursor, width);
-      if (row === 0) return null;
+      if (row === 0)
+        return { buffer: buf, cursor, submit: false, history: 'prev' };
       return {
         buffer: buf,
         cursor: xyToOffset(buf, row - 1, col, width),
@@ -495,7 +503,8 @@ export function applyKey(
     case '\x0e': {
       // Ctrl-n = down
       const { row, col } = caretToXY(buf, cursor, width);
-      if (row >= visualRows(buf, width).length - 1) return null;
+      if (row >= visualRows(buf, width).length - 1)
+        return { buffer: buf, cursor, submit: false, history: 'next' };
       return {
         buffer: buf,
         cursor: xyToOffset(buf, row + 1, col, width),

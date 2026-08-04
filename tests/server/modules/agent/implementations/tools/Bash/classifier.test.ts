@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
+import crypto from 'node:crypto';
 import { classifyBashCommand } from '@/server/modules/agent/implementations/tools/Bash/classifier';
 
 const PWD = '/tmp/workdir';
@@ -20,7 +21,7 @@ describe('classifyBashCommand', () => {
       'grep -r pattern .',
       'wc -l ./a.txt',
       "rg 'foo|bar' ./sub",
-      'rg "with $literal" .',
+      "rg 'with $literal' .",
     ];
     for (const cmd of safeCases) {
       it(`safe: ${cmd}`, () => {
@@ -68,14 +69,15 @@ describe('classifyBashCommand', () => {
     });
   });
 
-  describe('sensitive — 元字符一律 exec-cmd', () => {
+  describe('sensitive — 危险展开一律 exec-cmd', () => {
     const metaCases = [
       'rg foo | head',
       'rg foo > out.txt',
-      'rg foo && ls',
-      'rg foo; ls',
+      'rg foo & ls',
       'echo $(date)',
       'rg foo `pwd`',
+      'rg "with $literal" .',
+      'echo "$(rm ./a)"',
     ];
     for (const cmd of metaCases) {
       it(`meta: ${cmd}`, () => {
@@ -86,6 +88,63 @@ describe('classifyBashCommand', () => {
         expect(p.resource.startsWith('bash:')).toBe(true);
       });
     }
+  });
+
+  describe('safe — &&/||/; 链逐段判定，全段 safe 放行', () => {
+    const chainCases = [
+      'rg foo && ls',
+      'rg foo; ls',
+      'ls && rg foo && wc -l ./a.txt',
+      'echo hello; ls .',
+      'echo "a&&b" && ls',
+      'cd sub && cat file',
+      `cd ${PWD} && cat ./a.txt && echo hi && head -c 3000 resume/resume.json`,
+      `cd ${PWD} && cat README.md && echo "===RESUME===" && head -c 3000 resume/resume.json`,
+      "echo 'a;b' && rg 'foo|bar' ./sub",
+    ];
+    for (const cmd of chainCases) {
+      it(`safe chain: ${cmd}`, () => {
+        expect(classifyBashCommand(cmd, PWD).kind).toBe('safe');
+      });
+    }
+  });
+
+  describe('sensitive — 链中任一段越界/写/exec → 整条 sensitive', () => {
+    const chainCases: Array<[string, string]> = [
+      ['cd sub && cat ../../sib', 'read-path'],
+      ['cd /etc && ls', 'exec-cmd'],
+      ['cd ~ && ls', 'exec-cmd'],
+      ['cd && ls', 'exec-cmd'],
+      ['cd - && ls', 'exec-cmd'],
+      ['cd a b && ls', 'exec-cmd'],
+      ['echo hi && rm ./a', 'exec-cmd'],
+      ['rg foo && node x.js', 'exec-cmd'],
+      ['cd sub && rm x', 'exec-cmd'],
+      ['cd "$(echo /etc)" && ls', 'exec-cmd'],
+    ];
+    for (const [cmd, action] of chainCases) {
+      it(`sensitive chain: ${cmd}`, () => {
+        const p = classifyBashCommand(cmd, PWD);
+        expect(p.kind).toBe('sensitive');
+        if (p.kind !== 'sensitive') return;
+        expect(p.action).toBe(action);
+      });
+    }
+  });
+
+  it('链式敏感：resource=整条命令 hash，prompt 含完整命令（汇总一次审批）', () => {
+    const cmd = 'rg foo && rm ./a';
+    const p = classifyBashCommand(cmd, PWD);
+    if (p.kind !== 'sensitive') throw new Error();
+    expect(p.action).toBe('exec-cmd');
+    const expected = `bash:${crypto
+      .createHash('sha1')
+      .update(cmd)
+      .digest('hex')
+      .slice(0, 16)}`;
+    expect(p.resource).toBe(expected);
+    expect(p.prompt).toContain('rg foo && rm ./a');
+    expect(p.prompt).toContain(PWD);
   });
 
   describe('sensitive — 写/exec/未知', () => {

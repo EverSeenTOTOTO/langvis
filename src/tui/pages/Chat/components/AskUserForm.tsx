@@ -7,7 +7,7 @@ import { Input } from '@/tui/components/Input';
 import { BorderedBox } from '@/tui/components/BorderedBox';
 import { Markdown } from '@/tui/components/Markdown';
 import { Spinner } from '@/tui/components/Spinner';
-import { useKeyboard } from '@/tui/hooks';
+import { useKeyboard } from '@/tui/hooks/useKeyboard';
 import { useStore } from '@/client/store';
 import type { MessageNode } from '@/client/store/modules/message-node';
 import {

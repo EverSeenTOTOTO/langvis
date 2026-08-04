@@ -10,6 +10,13 @@ export abstract class Tool<O = unknown> {
   protected abstract readonly logger: Logger;
 
   abstract call(ctx: ToolCallContext): AsyncGenerator<RunEvent, O, void>;
+
+  /** 单次调用的人类可读过程叙述（turn-end 确定性摘要消费）。未实现则走通用回退。 */
+  describe?(
+    input: Record<string, unknown>,
+    output?: unknown,
+    error?: string,
+  ): string;
 }
 
 export type ToolConstructor = new (...args: any[]) => Tool;

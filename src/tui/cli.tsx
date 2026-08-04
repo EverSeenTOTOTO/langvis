@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { Root, type ConvStorage } from './app';
-import { useKeyboard } from '@/tui/hooks';
+import { useKeyboard } from '@/tui/hooks/useKeyboard';
 import { serverFetch, getPrefetchPath } from '@/client/decorator/api';
 import { useStore } from '@/client/store';
 import { LANGVIS_DIR } from '@/shared/constants';

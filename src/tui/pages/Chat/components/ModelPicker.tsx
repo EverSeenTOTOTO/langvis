@@ -3,7 +3,7 @@ import { observer } from 'mobx-react-lite';
 import { useEffect, useState } from 'react';
 import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
-import { useKeyboard } from '@/tui/hooks';
+import { useKeyboard } from '@/tui/hooks/useKeyboard';
 import { useStore } from '@/client/store';
 import { Spinner } from '@/tui/components/Spinner';
 

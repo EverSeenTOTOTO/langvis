@@ -26,6 +26,11 @@ type BoxProps = {
   paddingBottom?: number;
   paddingLeft?: number;
   paddingRight?: number;
+  /** Shorthand for setting both horizontal paddings. */
+  paddingX?: number;
+  /** Shorthand for setting both vertical paddings. */
+  paddingY?: number;
+  backgroundColor?: string;
   margin?: number;
   marginTop?: number;
   marginBottom?: number;
@@ -44,9 +49,22 @@ type BoxProps = {
 };
 
 /** Flex container over Ink's Box. Defaults to row (flexbox/Ink convention). */
-export function Box({ children, flexDirection = 'row', ...props }: BoxProps) {
+export function Box({
+  children,
+  flexDirection = 'row',
+  paddingX,
+  paddingY,
+  ...props
+}: BoxProps) {
   return (
-    <InkBox flexDirection={flexDirection} {...props}>
+    <InkBox
+      flexDirection={flexDirection}
+      paddingLeft={paddingX}
+      paddingRight={paddingX}
+      paddingTop={paddingY}
+      paddingBottom={paddingY}
+      {...props}
+    >
       {children}
     </InkBox>
   );

@@ -51,6 +51,22 @@ export default class BashTool extends Tool<BashOutput> {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
+  describe(
+    input: Record<string, unknown>,
+    output?: unknown,
+    error?: string,
+  ): string {
+    const { command } = input as unknown as BashInput;
+    if (error) return `ran \`${command}\` → failed: ${error}`;
+    const o = output as BashOutput | undefined;
+    const status = o?.timedOut
+      ? 'timed out'
+      : o?.exitCode === 0
+        ? 'ok'
+        : `exit ${o?.exitCode ?? '?'}`;
+    return `ran \`${command}\` → ${status}`;
+  }
+
   async *call(
     ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, BashOutput, void> {

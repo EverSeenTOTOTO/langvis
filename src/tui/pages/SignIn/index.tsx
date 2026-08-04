@@ -5,7 +5,8 @@ import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
 import { Input } from '@/tui/components/Input';
 import { BorderedBox } from '@/tui/components/BorderedBox';
-import { useKeyboard, useTerminalSize } from '@/tui/hooks';
+import { useKeyboard } from '@/tui/hooks/useKeyboard';
+import { useTerminalSize } from '@/tui/hooks/useTerminalSize';
 import { useStore } from '@/client/store';
 
 // Email/password sign-in; each Input owns its Enter via onSubmit (advance or

@@ -1,5 +1,8 @@
 import type { RunEvent } from '@/shared/types/events';
-import type { AgentRunContext } from '../port/agent-run-context.port';
+import type {
+  AgentRunContext,
+  ToolRunResult,
+} from '../port/agent-run-context.port';
 import type { ToolCallContext } from '../port/tool-call-context.port';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { Entity } from '@/server/libs/ddd';
@@ -48,7 +51,7 @@ export class ToolCall extends Entity<string> {
     this.startedAt = Date.now();
   }
 
-  async *execute(): AsyncGenerator<RunEvent, string, void> {
+  async *execute(): AsyncGenerator<RunEvent, ToolRunResult, void> {
     // 工具入参即 LLM 产出的 JSON原样直用；大输出经 OutputOffloadHook 桩化落盘，不自动解析回对象。
     this.input = this.toolArgs;
 
@@ -95,7 +98,7 @@ export class ToolCall extends Entity<string> {
       };
     }
 
-    return this.observation;
+    return { observation: this.observation, status: this.status };
   }
 
   get observation(): string {

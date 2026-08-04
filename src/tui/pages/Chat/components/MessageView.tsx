@@ -6,22 +6,34 @@ import type { MessageNode } from '@/client/store/modules/message-node';
 import { Paragraph } from './Paragraph';
 import { Markdown } from '@/tui/components/Markdown';
 import { ToolCallView } from './ToolBlock';
-import { useFrameSequence, useTerminalSize } from '@/tui/hooks';
+import { useFrameSequence } from '@/tui/hooks/useFrameSequence';
+import { useTerminalSize } from '@/tui/hooks/useTerminalSize';
 
 /** Avatar glyph + spaces; the body column is `cols - AVATAR_GAP` wide. */
-const AVATAR_GAP = 3;
+export const AVATAR_GAP = 3;
 
-// A user turn — avatar `❯` inline with the content column, from raw message content.
+// A user turn — avatar `◆` inline with the content column. A full-width gray
+// band (with breathing room above/below) keeps it distinct from assistant turns.
+const USER_BAND_PAD = 1; // horizontal + vertical padding inside the gray band
+
 export function UserView({ content }: { content: string }) {
   const { cols } = useTerminalSize();
-  const w = Math.max(1, cols - AVATAR_GAP);
+  const w = Math.max(1, cols - AVATAR_GAP - USER_BAND_PAD * 2);
   return (
-    <Box alignItems="flex-start">
-      <Text fg="cyan" bold>
-        {'◆  '}
-      </Text>
-      <Box flexDirection="column" width={w}>
-        {content !== '' && <Paragraph text={content} fg="white" width={w} />}
+    <Box
+      width={cols}
+      flexDirection="column"
+      backgroundColor="gray"
+      paddingX={USER_BAND_PAD}
+      paddingY={USER_BAND_PAD}
+    >
+      <Box flexDirection="row" alignItems="flex-start">
+        <Text fg="cyan" bold>
+          {'◆  '}
+        </Text>
+        <Box flexDirection="column" width={w}>
+          {content !== '' && <Paragraph text={content} fg="white" width={w} />}
+        </Box>
       </Box>
     </Box>
   );
@@ -32,9 +44,12 @@ export function UserView({ content }: { content: string }) {
 export const AssistantView = observer(function AssistantView({
   node,
   expanded = false,
+  deferred = false,
 }: {
   node: MessageNode;
   expanded?: boolean;
+  // History (Static) mode: render markdown via the async worker cache.
+  deferred?: boolean;
 }) {
   const { cols } = useTerminalSize();
   const w = Math.max(1, cols - AVATAR_GAP);
@@ -67,7 +82,9 @@ export const AssistantView = observer(function AssistantView({
             />
           );
         })}
-        {node.hasContent && <Markdown text={node.content} width={w} />}
+        {node.hasContent && (
+          <Markdown text={node.content} width={w} deferred={deferred} />
+        )}
         {node.status === 'failed' && <Text fg="red">{'✗ run failed'}</Text>}
         {node.status === 'cancelled' && (
           <Text fg="yellow">{'○ cancelled'}</Text>

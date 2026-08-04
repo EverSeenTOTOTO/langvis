@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import { useFrameSequence } from '../hooks';
+import { useFrameSequence } from '../hooks/useFrameSequence';
 import { Box } from './Box';
 import { Text } from './Text';
 

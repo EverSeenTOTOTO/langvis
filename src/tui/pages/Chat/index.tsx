@@ -1,25 +1,21 @@
 /** @jsxImportSource react */
 import { observer } from 'mobx-react-lite';
-import { basename } from 'node:path';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useAsyncFn } from 'react-use';
-import { useVoiceInput } from '../useVoiceInput';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Spinner } from '@/tui/components/Spinner';
 import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
 import { Static } from '@/tui/components/Static';
-import { Progress } from '@/tui/components/Progress';
-import { useKeyboard, useTerminalSize } from '@/tui/hooks';
+import { useKeyboard } from '@/tui/hooks/useKeyboard';
+import { useTerminalSize } from '@/tui/hooks/useTerminalSize';
 import { useStore } from '@/client/store';
 import { Role, type Message } from '@/shared/types/entities';
-import { AssistantView, UserView } from '../components/MessageView';
-import { AskUserForm } from '../components/AskUserForm';
-import { ModelPicker } from '../components/ModelPicker';
-import { ConvPicker } from '../components/ConvPicker';
-import { Textarea, type TextareaHandle } from '../components/Textarea';
-import { SlashPicker } from '../components/SlashPicker';
-import { emptyBuffer, bufferText, type Buffer } from '../editor';
-import { buildEntries, SLASH_COMMANDS, type SlashEntry } from '../slash';
+import { AssistantView, UserView, AVATAR_GAP } from './components/MessageView';
+import { AskUserForm } from './components/AskUserForm';
+import { ModelPicker } from './components/ModelPicker';
+import { ConvPicker } from './components/ConvPicker';
+import { ChatInput } from './components/ChatInput';
+import { StatusBar } from './components/StatusBar';
+import { useStaticReveal } from './hooks/useStaticReveal';
 
 // Bottom panel is in exactly one of these modes at a time. `busy` covers every
 // non-functional state (input disabled); sources live in their natural layers.
@@ -49,170 +45,6 @@ function HRule({ cols }: { cols: number }) {
 // switch the previous conv's scrollback lingers. Clear the screen + scrollback.
 const CLEAR_SCREEN = '\x1b[2J\x1b[3J\x1b[H';
 
-// Compact token count: 1234 → "1.2K", 1234567 → "1.2M" (mirrors web ContextUsageBar).
-const formatTokens = (n: number): string => {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toString();
-};
-
-const StatusBar = observer(function StatusBar() {
-  const conversation = useStore('conversation');
-  const usage = conversation.conversationUsage;
-  const model =
-    (
-      conversation.currentConversation?.config as {
-        model?: { modelId?: string };
-      } | null
-    )?.model?.modelId ?? '?';
-  const name =
-    conversation.currentConversation?.name ||
-    conversation.currentConversationId ||
-    '';
-  const pct = usage ? Math.min((usage.used / usage.total) * 100, 100) : 0;
-  // Leftmost slot shows the workspace dir (last segment of cwd) instead of the brand.
-  const workspace = basename(process.cwd());
-  return (
-    <Box height={1}>
-      <Text fg="cyan" bold>
-        {workspace}
-      </Text>
-      <Text fg="gray">{' · '}</Text>
-      <Text fg="magenta">{model}</Text>
-      <Text fg="gray">{' · ctx '}</Text>
-      {usage ? (
-        <>
-          <Progress
-            value={usage.used}
-            max={usage.total}
-            width={12}
-            showPct={false}
-          />
-          <Text fg="gray">{` ${formatTokens(usage.used)}/${formatTokens(usage.total)} (${pct.toFixed(1)}%)`}</Text>
-        </>
-      ) : (
-        <Text fg="gray">—</Text>
-      )}
-      <Text fg="gray">{' · '}</Text>
-      <Text fg="yellow" bold>
-        {name}
-      </Text>
-    </Box>
-  );
-});
-
-const ChatInput = observer(function ChatInput({
-  convId,
-  streamingId,
-  onCommand,
-}: {
-  convId: string;
-  streamingId: string | null;
-  onCommand: (raw: string) => void;
-}) {
-  const chat = useStore('chat');
-  const agent = useStore('agent');
-  const [buf, setBuf] = useState<Buffer>(emptyBuffer());
-  const [voiceErr, setVoiceErr] = useState('');
-  const taRef = useRef<TextareaHandle>(null);
-
-  const [skillState, fetchSkills] = useAsyncFn(() => agent.listSkills());
-  useEffect(() => {
-    void fetchSkills();
-  }, [fetchSkills]);
-  const entries = useMemo(
-    () => buildEntries(skillState.value ?? []),
-    [skillState.value],
-  );
-
-  // Caret-ending `/query` — non-null while the caret sits in a slash token.
-  const [query, setQuery] = useState<string | null>(null);
-
-  const voice = useVoiceInput({
-    // Mirror the web voice input: the transcript is wrapped in <speech> so the
-    // sent content carries the speech marker the backend (gf skill) consumes.
-    onTranscribed: text => {
-      const wrapped = `<speech>\n${text}\n</speech>`;
-      taRef.current?.insert(bufferText(buf) ? `\n${wrapped}` : wrapped);
-    },
-    onError: setVoiceErr,
-  });
-
-  // Ctrl-r toggles recording; Enter (below) stops + transcribes; Ctrl-c cancels.
-  // (Streaming cancel now lives in Chat so it works off the input panel too.)
-  useKeyboard(data => {
-    if (data === '\x12' && !streamingId && !voice.processing) {
-      // 0x12 = Ctrl-r
-      if (voice.recording) void voice.stop();
-      else voice.start();
-    } else if (data === '\x03' && voice.recording) {
-      voice.cancel();
-    }
-  });
-
-  const paletteOpen = query !== null;
-
-  function pick(entry: SlashEntry) {
-    setQuery(null);
-    // Fill the token only — the user hits Enter to run a config command or keeps
-    // typing args for a skill; the trailing space stops the palette re-opening.
-    taRef.current?.acceptQuery(
-      `${entry.kind === 'skill' ? `/${entry.skill.id}` : `/${entry.cmd}`} `,
-    );
-  }
-
-  return (
-    <>
-      {voice.recording && (
-        <Text fg="yellow">
-          ● recording… (Ctrl-r/Enter stop · Ctrl-c cancel)
-        </Text>
-      )}
-      {voice.processing && <Text fg="cyan">◦ transcribing…</Text>}
-      {voiceErr !== '' && <Text fg="red">{voiceErr}</Text>}
-      {paletteOpen && (
-        <SlashPicker
-          query={query}
-          entries={entries}
-          isLoading={skillState.loading}
-          onPick={pick}
-          onClose={() => setQuery(null)}
-        />
-      )}
-      <Textarea
-        ref={taRef}
-        buffer={buf}
-        onBufferChange={setBuf}
-        fg={streamingId ? 'gray' : 'white'}
-        prompt={streamingId ? '… ' : '> '}
-        navLocked={paletteOpen}
-        onSlashQuery={setQuery}
-        onSubmit={real => {
-          if (voice.recording) {
-            // Enter during recording stops + transcribes instead of sending.
-            void voice.stop();
-            return;
-          }
-          const trimmed = real.trim();
-          if (!trimmed) return;
-          // Only config commands are handled locally; a `/skill …` message is
-          // sent as normal content (the backend retrieves the skill by query).
-          const first = trimmed.split(/\s+/)[0].toLowerCase();
-          if (SLASH_COMMANDS.some(c => c.token === first)) onCommand(first);
-          else {
-            void chat.startChat({
-              conversationId: convId,
-              role: Role.USER,
-              content: real,
-            });
-          }
-          setBuf(emptyBuffer());
-        }}
-      />
-    </>
-  );
-});
-
 export const Chat = observer(function Chat() {
   const conversation = useStore('conversation');
   const chat = useStore('chat');
@@ -235,6 +67,34 @@ export const Chat = observer(function Chat() {
     }
     prevConv.current = convId;
   }, [convId]);
+
+  // Derive the committed (non-streaming) list up front — the reveal hook below
+  // depends on its length, and all of this is null-safe before a conv is loaded.
+  const id = convId ?? '';
+  const all = (conversation.messages[id] ?? []).filter(isVisible);
+
+  let streamingId: string | null = null;
+  for (let i = all.length - 1; i >= 0; i--) {
+    if (all[i].role !== Role.ASSIST) continue;
+    const node = chat.getMessageNode(id, all[i].id);
+    if (node && !node.isTerminal && i === all.length - 1) {
+      streamingId = all[i].id;
+    }
+    break;
+  }
+
+  const committed = streamingId ? all.filter(m => m.id !== streamingId) : all;
+  // History renders off-thread (worker) and appends as each message is ready;
+  // content + width must match AssistantView's Markdown so the cache key lines up.
+  const msgWidth = Math.max(1, cols - AVATAR_GAP);
+  const contentOf = (m: Message) =>
+    chat.getMessageNode(id, m.id)?.content ?? m.content;
+  const staticItems = useStaticReveal(
+    committed,
+    msgWidth,
+    `${id}:${remountKey}`,
+    contentOf,
+  );
 
   async function createNew() {
     // 模型挑选是附带增强；失败降级默认模型，不阻断创建与切换。
@@ -295,27 +155,12 @@ export const Chat = observer(function Chat() {
 
   if (!convId) return null;
 
-  const all = (conversation.messages[convId] ?? []).filter(isVisible);
-
-  // The streaming turn = the last assistant message still in flight; only the
-  // final entry qualifies so a stale previous node is never latched onto.
-  let streamingId: string | null = null;
-  for (let i = all.length - 1; i >= 0; i--) {
-    if (all[i].role !== Role.ASSIST) continue;
-    const node = chat.getMessageNode(convId, all[i].id);
-    if (node && !node.isTerminal && i === all.length - 1) {
-      streamingId = all[i].id;
-    }
-    break;
-  }
-
   // Wire the global cancel handler to the in-flight turn (if any).
   streamCancelRef.current = streamingId
     ? () =>
         void chat.cancelChat({ conversationId: convId, messageId: streamingId })
     : null;
 
-  const committed = streamingId ? all.filter(m => m.id !== streamingId) : all;
   const streamingNode = streamingId
     ? chat.getMessageNode(convId, streamingId)
     : null;
@@ -323,7 +168,6 @@ export const Chat = observer(function Chat() {
 
   // Only the in-flight turn is live (not Static); committed turns go to Static so
   // the dynamic region stays under the viewport and Ink 7 never full-clears.
-  const staticItems = committed;
   const liveNode = streamingNode;
 
   // Bottom-panel mode — one discriminated value, priority ask > picker > busy
@@ -380,7 +224,10 @@ export const Chat = observer(function Chat() {
         {m => (
           <Box key={m.id} flexDirection="column">
             {m.role === Role.ASSIST ? (
-              <AssistantView node={chat.getMessageNode(convId, m.id)!} />
+              <AssistantView
+                node={chat.getMessageNode(convId, m.id)!}
+                deferred
+              />
             ) : (
               <UserView content={m.content} />
             )}

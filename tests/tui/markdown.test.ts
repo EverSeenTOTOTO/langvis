@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderMarkdown } from '@/tui/markdown';
+import { renderMarkdown } from '@/tui/libs/markdown';
 
 describe('renderMarkdown', () => {
   it('forces color (emits SGR) and trims trailing newlines', () => {

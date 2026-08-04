@@ -1,7 +1,7 @@
 /** @jsxImportSource react */
 import { useEffect, useState } from 'react';
 import { Text } from './Text';
-import { useKeyboard } from '../hooks';
+import { useKeyboard } from '../hooks/useKeyboard';
 
 type InputProps = {
   value: string;

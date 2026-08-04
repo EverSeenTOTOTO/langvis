@@ -3,10 +3,12 @@ import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { usePaste } from 'ink';
 import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
-import { useKeyboard, useTerminalSize } from '@/tui/hooks';
-import { visualWidth } from '../wrap';
+import { useKeyboard } from '@/tui/hooks/useKeyboard';
+import { useTerminalSize } from '@/tui/hooks/useTerminalSize';
+import { visualWidth } from '../../../libs/wrap';
 import {
   applyKey,
+  emptyBuffer,
   insertPaste,
   insertTextAt,
   removeRange,
@@ -17,8 +19,8 @@ import {
   textBeforeUnit,
   queryTokenStart,
   type Buffer,
-} from '../editor';
-import { computeSlashQuery } from '../slash';
+} from '../../../libs/editor';
+import { computeSlashQuery } from '../../../libs/slash';
 
 // Keys a nav-owning picker (slash palette) takes over; editing ignores them.
 const PICKER_KEYS = new Set([
@@ -37,12 +39,16 @@ export type TextareaHandle = {
   insert: (text: string) => void;
   /** Replace the caret-ending `/query` token with `text` (e.g. a picked skill). */
   acceptQuery: (text: string) => void;
+  /** Replace the whole input with `text` and park the caret at its end (history). */
+  replace: (text: string) => void;
 };
 
 type TextareaProps = {
   buffer: Buffer;
   onBufferChange: (buffer: Buffer) => void;
   onSubmit?: (realText: string) => void;
+  /** Up/Down pressed at the input's top/bottom boundary: hand nav to the owner. */
+  onHistory?: (dir: 'prev' | 'next') => void;
   fg?: string;
   enabled?: boolean;
   /** Prefix on the first row (e.g. '> '). Its width is excluded from wrapping. */
@@ -72,6 +78,7 @@ export const Textarea = forwardRef<TextareaHandle, TextareaProps>(
       buffer,
       onBufferChange,
       onSubmit,
+      onHistory,
       fg = 'white',
       enabled = true,
       prompt = '> ',
@@ -107,6 +114,11 @@ export const Textarea = forwardRef<TextareaHandle, TextareaProps>(
           onBufferChange(r.buffer);
           setCursor(r.cursor);
         },
+        replace(text) {
+          const r = insertTextAt(emptyBuffer(), 0, text);
+          onBufferChange(r.buffer);
+          setCursor(r.cursor);
+        },
       }),
       [buffer, cursor, onBufferChange],
     );
@@ -121,6 +133,11 @@ export const Textarea = forwardRef<TextareaHandle, TextareaProps>(
       if (navLocked && PICKER_KEYS.has(data)) return;
       const r = applyKey(data, buffer, cursor, contentWidth);
       if (!r) return;
+      if (r.history) {
+        // Caret hit a boundary: the owner navigates history; leave buffer/caret.
+        onHistory?.(r.history);
+        return;
+      }
       if (r.submit) {
         onSubmit?.(bufferText(buffer));
         return;
@@ -145,14 +162,19 @@ export const Textarea = forwardRef<TextareaHandle, TextareaProps>(
 
     return (
       <Box flexDirection="column">
-        {rows.map((r, i) => (
-          <Text key={i} fg={fg}>
-            {(i === 0 ? prompt : '') +
-              (i === caretRow
-                ? caretize(r.text, cellIndexAt(r.text, col))
-                : r.text)}
-          </Text>
-        ))}
+        {rows.map((r, i) => {
+          // Ink gives empty <Text> zero height — a bare space keeps blank rows visible.
+          const line =
+            (i === 0 ? prompt : '') +
+            (i === caretRow
+              ? caretize(r.text, cellIndexAt(r.text, col))
+              : r.text);
+          return (
+            <Text key={i} fg={fg}>
+              {line === '' ? ' ' : line}
+            </Text>
+          );
+        })}
       </Box>
     );
   },

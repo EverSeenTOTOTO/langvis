@@ -12,8 +12,8 @@ import {
   cellIndexAt,
   pasteLabel,
   queryTokenStart,
-} from '@/tui-app/editor';
-import type { Buffer } from '@/tui-app/editor';
+} from '@/tui/libs/editor';
+import type { Buffer } from '@/tui/libs/editor';
 
 const text = (s: string): Buffer =>
   s === '' ? emptyBuffer() : { segs: [{ kind: 'text', text: s }] };
@@ -145,6 +145,36 @@ describe('basic text editing still works', () => {
     expect(r?.cursor).toBe(4);
   });
 
+  it('repeated \\-continuation grows lines across empty continuation rows', () => {
+    let buf = emptyBuffer();
+    let r = applyKey('\\', buf, 0, 10)!;
+    buf = r.buffer;
+    r = applyKey('\r', buf, r.cursor, 10)!;
+    expect(r.submit).toBe(false);
+    buf = r.buffer;
+    expect(bufferText(buf)).toBe('\n');
+    expect(caretToXY(buf, r.cursor, 10).row).toBe(1);
+    // Second continuation from the now-empty row.
+    r = applyKey('\\', buf, r.cursor, 10)!;
+    buf = r.buffer;
+    r = applyKey('\r', buf, r.cursor, 10)!;
+    expect(r.submit).toBe(false);
+    buf = r.buffer;
+    expect(bufferText(buf)).toBe('\n\n');
+    expect(caretToXY(buf, r.cursor, 10).row).toBe(2);
+    expect(visualRows(buf, 10).map(v => v.text)).toEqual(['', '', '']);
+  });
+
+  it('visualRows keeps every trailing \\n as a row, not just the last one', () => {
+    expect(visualRows(text('a\n'), 20).map(r => r.text)).toEqual(['a', '']);
+    expect(visualRows(text('a\n\n'), 20).map(r => r.text)).toEqual([
+      'a',
+      '',
+      '',
+    ]);
+    expect(visualRows(text('\n\n'), 20).map(r => r.text)).toEqual(['', '', '']);
+  });
+
   it('Ctrl+Enter (kitty CSI-u) also sends', () => {
     expect(applyKey('\x1b[13;5u', text('hi'), 2, 10)?.submit).toBe(true);
   });
@@ -193,7 +223,8 @@ describe('basic text editing still works', () => {
       xyToOffset(text(value), endXY.row - 1, endXY.col, w),
     );
     const down = applyKey('\x1b[B', text(value), value.length, w);
-    expect(down).toBe(null); // at last row
+    expect(down).not.toBe(null);
+    expect(down!.history).toBe('next'); // at last row → history next
   });
 
   it('Ctrl-p/Ctrl-n move across wrapped lines like the arrows', () => {
@@ -205,7 +236,30 @@ describe('basic text editing still works', () => {
     expect(up!.cursor).toBe(
       xyToOffset(text(value), endXY.row - 1, endXY.col, w),
     );
-    expect(applyKey('\x0e', text(value), value.length, w)).toBe(null); // at last row
+    expect(applyKey('\x0e', text(value), value.length, w)?.history).toBe(
+      'next',
+    ); // at last row
+  });
+
+  it('Up/Ctrl-p at the top row signals history prev instead of moving', () => {
+    // Single-line buffer: caret is on the top (and only) row.
+    expect(applyKey('\x1b[A', emptyBuffer(), 0, 10)?.history).toBe('prev');
+    expect(applyKey('\x10', text('hi'), 0, 10)?.history).toBe('prev');
+    // A wrapped buffer's top row also signals prev (regardless of column).
+    expect(applyKey('\x1b[A', text('hello world foo bar'), 0, 7)?.history).toBe(
+      'prev',
+    );
+  });
+
+  it('Up/Down still move the caret on a non-boundary row', () => {
+    const value = 'hello world foo bar'; // wraps at width 7
+    // Caret on the middle row → plain caret move (no history flag), not null.
+    const r = applyKey('\x1b[A', text(value), 8, 7);
+    expect(r).not.toBeNull();
+    expect(r!.history).toBeUndefined();
+    const d = applyKey('\x1b[B', text(value), 0, 7);
+    expect(d).not.toBeNull();
+    expect(d!.history).toBeUndefined();
   });
 
   it('up clamps the column to a shorter upper line (no swallow to EOF)', () => {

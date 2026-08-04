@@ -3,7 +3,10 @@ import { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
-import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
+import type {
+  AgentRunContext,
+  ToolRunResult,
+} from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { AuthorizationPort } from '@/server/modules/agent/domain/port/authorization.port';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
@@ -75,7 +78,7 @@ function createToolCall(tool?: Tool, ctx?: AgentRunContext): ToolCall {
 }
 
 async function collect(
-  gen: AsyncGenerator<RunEvent, string>,
+  gen: AsyncGenerator<RunEvent, ToolRunResult>,
 ): Promise<RunEvent[]> {
   const events: RunEvent[] = [];
   for await (const e of gen) events.push(e);
@@ -120,19 +123,20 @@ describe('ToolCall', () => {
       expect(toolCall.status).toBe('failed');
     });
 
-    it('returns the observation string', async () => {
+    it('returns { observation, status } with raw output untouched', async () => {
       const toolCall = createToolCall();
       const gen = toolCall.execute();
-      let observation = '';
+      let result: ToolRunResult | undefined;
       // drive to completion and read return value
       while (true) {
         const r = await gen.next();
         if (r.done) {
-          observation = r.value;
+          result = r.value;
           break;
         }
       }
-      expect(observation).toBe('tool output');
+      expect(result?.status).toBe('completed');
+      expect(result?.observation).toBe('tool output');
     });
   });
 

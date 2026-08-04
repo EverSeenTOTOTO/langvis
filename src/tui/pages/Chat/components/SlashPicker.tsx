@@ -2,13 +2,13 @@
 import { useEffect, useState } from 'react';
 import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
-import { useKeyboard } from '@/tui/hooks';
+import { useKeyboard } from '@/tui/hooks/useKeyboard';
 import {
   entryDesc,
   entryToken,
   filterEntries,
   type SlashEntry,
-} from '../slash';
+} from '../../../libs/slash';
 
 // `/` command palette. Nav is Up/Down; Enter or Tab completes the highlighted
 // entry; cancel is Esc only (a `q` keystroke stays free for the query text).

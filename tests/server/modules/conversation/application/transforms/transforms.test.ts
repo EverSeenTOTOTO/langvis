@@ -4,7 +4,7 @@ import { resolveConvTransforms } from '@/server/modules/conversation/application
 import { UsageTransform } from '@/server/modules/conversation/application/transforms/usage-transform';
 import {
   ProcessSummaryTransform,
-  eventsToTrajectory,
+  buildProcessSummary,
 } from '@/server/modules/conversation/application/transforms/process-summary-transform';
 import { CompactTransform } from '@/server/modules/conversation/application/transforms/compact-transform';
 import {
@@ -18,6 +18,8 @@ import type { Message } from '@/shared/types/entities';
 import type { StreamFrame, EnrichedEvent } from '@/shared/types/events';
 import { MESSAGE_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
+import { ToolService } from '@/server/modules/agent/application/service/tool.service';
+import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 
 const { foldMock } = vi.hoisted(() => ({ foldMock: vi.fn() }));
 vi.mock('@/server/libs/compaction/summarizer', () => ({ fold: foldMock }));
@@ -137,12 +139,24 @@ function loopCtx(
   };
 }
 
-describe('ProcessSummaryTransform', () => {
-  beforeEach(() => {
-    foldMock.mockReset();
-  });
+const NO_DESCRIBE_TOOL = {} as unknown as Tool;
 
-  it('eventsToTrajectory：thought/tool_call+args/tool_result/tool_error → ReAct 轨迹', () => {
+function toolServiceWith(tools: Record<string, Tool>): ToolService {
+  return {
+    resolve: (id: string) => tools[id],
+  } as unknown as ToolService;
+}
+
+describe('ProcessSummaryTransform', () => {
+  it('buildProcessSummary：按 callId 配对，有 describe 自述，否则走通用回退', () => {
+    const describeFn = vi.fn(
+      (input: { cmd?: unknown }, _output: unknown, error: string) =>
+        `custom ${input.cmd} → ${error ? 'ERR' : 'OK'}`,
+    );
+    const tools: Record<string, Tool> = {
+      Bash: { describe: describeFn } as unknown as Tool,
+      X: NO_DESCRIBE_TOOL,
+    };
     const events = [
       ev({ type: 'thought', content: 'plan' }),
       ev({
@@ -157,52 +171,132 @@ describe('ProcessSummaryTransform', () => {
         toolName: 'Bash',
         output: 'a b',
       }),
+      ev({
+        type: 'tool_call',
+        callId: 'c2',
+        toolName: 'X',
+        toolArgs: { a: 1 },
+      }),
       ev({ type: 'tool_error', callId: 'c2', toolName: 'X', error: 'boom' }),
       ev({ type: 'start' }),
     ];
-    const traj = eventsToTrajectory(events as readonly EnrichedEvent[]);
-    expect(traj.map(m => m.role)).toEqual(['assistant', 'user', 'user']);
-    expect(traj[0].content).toContain('Bash');
-    expect(traj[1].content).toContain('Observation:');
-    expect(traj[2].content).toContain('Error: boom');
+    const summary = buildProcessSummary(
+      events as readonly EnrichedEvent[],
+      id => tools[id],
+    );
+    expect(describeFn).toHaveBeenCalledWith({ cmd: 'ls' }, 'a b', undefined);
+    expect(summary).toBe('1. custom ls → OK\n2. X(a=1) → Error: boom');
   });
 
-  it('有 runCtx + events 时 fold → 写 meta.summary（不覆盖既有 meta 键）', async () => {
-    foldMock.mockResolvedValue('THE PS');
+  it('通用回退：未实现 describe 时用 toolName(args) → 结果模板', () => {
+    const events = [
+      ev({
+        type: 'tool_call',
+        callId: 'c',
+        toolName: 'NoDescribe',
+        toolArgs: { cmd: 'ls' },
+      }),
+      ev({
+        type: 'tool_result',
+        callId: 'c',
+        toolName: 'NoDescribe',
+        output: { ok: true },
+      }),
+    ];
+    const summary = buildProcessSummary(
+      events as readonly EnrichedEvent[],
+      () => NO_DESCRIBE_TOOL,
+    );
+    expect(summary).toBe('1. NoDescribe(cmd=ls) → {"ok":true}');
+  });
+
+  it('response_user（终端交付）不写入摘要', () => {
+    const events = [
+      ev({
+        type: 'tool_call',
+        callId: 'c1',
+        toolName: 'Bash',
+        toolArgs: { cmd: 'ls' },
+      }),
+      ev({ type: 'tool_result', callId: 'c1', toolName: 'Bash', output: 'o1' }),
+      ev({
+        type: 'tool_call',
+        callId: 'c2',
+        toolName: 'response_user',
+        toolArgs: { message: 'final answer' },
+      }),
+      ev({
+        type: 'tool_result',
+        callId: 'c2',
+        toolName: 'response_user',
+        output: { delivered: true },
+      }),
+    ];
+    const summary = buildProcessSummary(
+      events as readonly EnrichedEvent[],
+      () => NO_DESCRIBE_TOOL,
+    );
+    expect(summary).toBe('1. Bash(cmd=ls) → "o1"');
+  });
+
+  it('无 outcome（无 tool_call）→ null', () => {
+    const events = [ev({ type: 'thought', content: 'only' })];
+    expect(
+      buildProcessSummary(events as readonly EnrichedEvent[], () => undefined),
+    ).toBeNull();
+  });
+
+  it('有 runCtx + events 时确定性写 meta.summary（不覆盖既有 meta 键）', async () => {
+    const toolService = toolServiceWith({ Bash: NO_DESCRIBE_TOOL });
     const update = vi.fn(async (_id: string, partial: any) => partial);
     const messageRepo = { update } as unknown as MessageRepositoryPort;
     const events = [
-      ev({ type: 'thought', content: 't1' }),
-      ev({ type: 'tool_call', callId: 'c1', toolName: 'Bash', toolArgs: {} }),
+      ev({
+        type: 'tool_call',
+        callId: 'c1',
+        toolName: 'Bash',
+        toolArgs: { cmd: 'ls' },
+      }),
       ev({ type: 'tool_result', callId: 'c1', toolName: 'Bash', output: 'o1' }),
+      ev({
+        type: 'tool_call',
+        callId: 'c2',
+        toolName: 'Bash',
+        toolArgs: { cmd: 'pwd' },
+      }),
+      ev({ type: 'tool_result', callId: 'c2', toolName: 'Bash', output: 'o2' }),
     ];
     const ctx = loopCtx(
       [makeMessage(Role.ASSIST, 'ans', { id: 'msg_1', meta: { foo: 'bar' } })],
       { msg_1: events as readonly EnrichedEvent[] },
     );
     await collect(
-      new ProcessSummaryTransform(messageRepo).apply(ctx, {
+      new ProcessSummaryTransform(messageRepo, toolService).apply(ctx, {
         messageId: 'msg_1',
         runId: 'run_1',
       }),
     );
-    expect(foldMock).toHaveBeenCalledTimes(1);
+    expect(foldMock).not.toHaveBeenCalled();
     expect(update).toHaveBeenCalledWith('msg_1', {
-      meta: { foo: 'bar', summary: 'THE PS' },
+      meta: {
+        foo: 'bar',
+        summary: '1. Bash(cmd=ls) → "o1"\n2. Bash(cmd=pwd) → "o2"',
+      },
     });
   });
 
   it('无 runCtx（非 turn-end）跳过', async () => {
-    foldMock.mockResolvedValue('PS');
+    const toolService = toolServiceWith({});
     const messageRepo = { update: vi.fn() } as unknown as MessageRepositoryPort;
     const ctx = loopCtx([makeMessage(Role.ASSIST, 'a')], {});
-    await collect(new ProcessSummaryTransform(messageRepo).apply(ctx));
-    expect(foldMock).not.toHaveBeenCalled();
+    await collect(
+      new ProcessSummaryTransform(messageRepo, toolService).apply(ctx),
+    );
     expect(messageRepo.update).not.toHaveBeenCalled();
   });
 
-  it('trivial turn（轨迹 ≤1）跳过', async () => {
-    foldMock.mockResolvedValue('PS');
+  it('trivial turn（工具调用 ≤1）跳过', async () => {
+    const toolService = toolServiceWith({});
     const messageRepo = { update: vi.fn() } as unknown as MessageRepositoryPort;
     const ctx = loopCtx([makeMessage(Role.ASSIST, 'a', { id: 'msg_1' })], {
       msg_1: [
@@ -210,16 +304,16 @@ describe('ProcessSummaryTransform', () => {
       ] as readonly EnrichedEvent[],
     });
     await collect(
-      new ProcessSummaryTransform(messageRepo).apply(ctx, {
+      new ProcessSummaryTransform(messageRepo, toolService).apply(ctx, {
         messageId: 'msg_1',
         runId: 'run_1',
       }),
     );
-    expect(foldMock).not.toHaveBeenCalled();
+    expect(messageRepo.update).not.toHaveBeenCalled();
   });
 
   it('缺 runtimeConfig.loop 跳过', async () => {
-    foldMock.mockResolvedValue('PS');
+    const toolService = toolServiceWith({});
     const messageRepo = { update: vi.fn() } as unknown as MessageRepositoryPort;
     const ctx = loopCtx(
       [makeMessage(Role.ASSIST, 'a', { id: 'msg_1' })],
@@ -232,39 +326,20 @@ describe('ProcessSummaryTransform', () => {
       {},
     );
     await collect(
-      new ProcessSummaryTransform(messageRepo).apply(ctx, {
+      new ProcessSummaryTransform(messageRepo, toolService).apply(ctx, {
         messageId: 'msg_1',
         runId: 'run_1',
       }),
     );
-    expect(foldMock).not.toHaveBeenCalled();
+    expect(messageRepo.update).not.toHaveBeenCalled();
   });
 
   it('events 缺失（getRunEvents 返回 undefined）跳过', async () => {
-    foldMock.mockResolvedValue('PS');
+    const toolService = toolServiceWith({});
     const messageRepo = { update: vi.fn() } as unknown as MessageRepositoryPort;
     const ctx = loopCtx([makeMessage(Role.ASSIST, 'a', { id: 'msg_1' })], {});
     await collect(
-      new ProcessSummaryTransform(messageRepo).apply(ctx, {
-        messageId: 'msg_1',
-        runId: 'run_1',
-      }),
-    );
-    expect(foldMock).not.toHaveBeenCalled();
-  });
-
-  it('fold 返回空时不 persist', async () => {
-    foldMock.mockResolvedValue('');
-    const messageRepo = { update: vi.fn() } as unknown as MessageRepositoryPort;
-    const events = [
-      ev({ type: 'thought', content: 't' }),
-      ev({ type: 'tool_call', callId: 'c', toolName: 'B', toolArgs: {} }),
-    ];
-    const ctx = loopCtx([makeMessage(Role.ASSIST, 'a', { id: 'msg_1' })], {
-      msg_1: events as readonly EnrichedEvent[],
-    });
-    await collect(
-      new ProcessSummaryTransform(messageRepo).apply(ctx, {
+      new ProcessSummaryTransform(messageRepo, toolService).apply(ctx, {
         messageId: 'msg_1',
         runId: 'run_1',
       }),

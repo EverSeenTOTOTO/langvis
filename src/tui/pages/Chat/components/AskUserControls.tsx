@@ -1,7 +1,7 @@
 /** @jsxImportSource react */
 import { useState } from 'react';
 import { Text } from '@/tui/components/Text';
-import { useKeyboard } from '@/tui/hooks';
+import { useKeyboard } from '@/tui/hooks/useKeyboard';
 
 export type Option = { label: string; value: string | number | boolean };
 

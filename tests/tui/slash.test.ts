@@ -4,7 +4,7 @@ import {
   computeSlashQuery,
   filterEntries,
   type SlashEntry,
-} from '@/tui-app/slash';
+} from '@/tui/libs/slash';
 import type { SkillInfo } from '@/shared/types/agent';
 
 const skill = (id: string, name = id): SkillInfo => ({

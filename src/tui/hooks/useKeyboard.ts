@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
-import { useInput, useStdout } from 'ink';
-import { useEffect, useRef, useState } from 'react';
+import { useInput } from 'ink';
+import { useRef } from 'react';
 
 // Map Ink's (input, key) event to the raw data string screen handlers expect.
 function inkToRawData(
@@ -45,32 +45,4 @@ export function useKeyboard(
     },
     { isActive: enabled },
   );
-}
-
-/** Track terminal size, re-rendering on resize. */
-export function useTerminalSize(): { cols: number; rows: number } {
-  const { stdout } = useStdout();
-  return {
-    cols: stdout?.columns ?? 80,
-    rows: stdout?.rows ?? 24,
-  };
-}
-
-// Cycle frames while active; idle returns frames[0] so callers embed without a branch.
-export function useFrameSequence(
-  active: boolean,
-  frames: readonly string[],
-  intervalMs = 120,
-): string {
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    if (!active || frames.length === 0) return;
-    const id = setInterval(
-      () => setI(v => (v + 1) % frames.length),
-      intervalMs,
-    );
-    return () => clearInterval(id);
-  }, [active, intervalMs, frames.length]);
-  if (frames.length === 0) return '';
-  return active ? (frames[i] ?? frames[0]) : frames[0];
 }

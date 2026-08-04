@@ -38,6 +38,17 @@ export default class CallSubagentsTool extends Tool<CallSubagentsOutput> {
     super();
   }
 
+  describe(
+    input: Record<string, unknown>,
+    _output?: unknown,
+    error?: string,
+  ): string {
+    const { children } = input as { children?: unknown[] };
+    const n = children?.length ?? 0;
+    if (error) return `spawned ${n} subagent(s) → failed: ${error}`;
+    return `spawned ${n} subagent${n === 1 ? '' : 's'}`;
+  }
+
   async *call(
     ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, CallSubagentsOutput, void> {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { wrapText } from '@/tui-app/wrap';
+import { wrapText } from '@/tui/libs/wrap';
 
 describe('wrapText', () => {
   it('word-wraps to the given width', () => {
