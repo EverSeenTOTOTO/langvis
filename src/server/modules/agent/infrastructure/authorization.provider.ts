@@ -5,7 +5,7 @@ import { ToolIds } from '@/shared/constants';
 import type { RunEvent } from '@/shared/types/events';
 import type { ToolCallContext } from '../domain/port/tool-call-context.port';
 import AskUserTool from '../implementations/tools/AskUser';
-import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
+import { WorkspaceLocalStore } from '@/server/libs/infrastructure/workspace-local-store';
 import {
   AUTHORIZATION_PORT,
   type AuthAction,
@@ -14,12 +14,12 @@ import {
 } from '../domain/port/authorization.port';
 
 // 横切授权实现：session 持久 (action, resource) 决策。命中 grants 直放行；interactive 弹 AskUser，allow 追加写文件。
-// grants 真相源 = workDir 的 `.langvis/config.json` 的 grants 段，经 WorkspaceService 整对象读写，跨 run 持久。
+// grants 真相源 = workDir 的 `.langvis/grants.json`（WorkspaceLocalStore section），跨 run 持久。
 @injectable()
 export class AuthorizationProvider implements AuthorizationPort {
   constructor(
-    @inject(WorkspaceService)
-    private readonly workspace: WorkspaceService,
+    @inject(WorkspaceLocalStore)
+    private readonly store: WorkspaceLocalStore,
   ) {}
 
   async *ensureApproved(
@@ -59,20 +59,31 @@ export class AuthorizationProvider implements AuthorizationPort {
   }
 
   private async hasGrant(workDir: string, key: string): Promise<boolean> {
-    const grants = (await this.workspace.readConfig(workDir))?.grants;
-    return Array.isArray(grants) && grants.includes(key);
+    const grants = await this.readGrants(workDir);
+    return grants.includes(key);
+  }
+
+  /** 读 grants；缺文件时做一次性迁移（旧 config.json.grants → grants.json）。 */
+  private async readGrants(workDir: string): Promise<string[]> {
+    let grants = await this.store.readSection<string[]>(workDir, 'grants');
+    if (!grants) {
+      // 一次性迁移：旧 config.json 的 grants 段 → grants.json。
+      const legacy = (
+        await this.store.readSection<{ grants?: unknown }>(workDir, 'config')
+      )?.grants;
+      if (Array.isArray(legacy)) {
+        grants = legacy.filter((k): k is string => typeof k === 'string');
+        await this.store.writeSection(workDir, 'grants', grants);
+      }
+    }
+    return grants ?? [];
   }
 
   private async addGrant(workDir: string, key: string): Promise<void> {
-    const cfg = (await this.workspace.readConfig(workDir)) ?? {};
-    const prev = cfg.grants;
-    const grants: string[] = Array.isArray(prev)
-      ? prev.filter((k): k is string => typeof k === 'string')
-      : [];
+    const grants = await this.readGrants(workDir);
     if (grants.includes(key)) return;
     grants.push(key);
-    cfg.grants = grants;
-    await this.workspace.writeConfig(workDir, cfg);
+    await this.store.writeSection(workDir, 'grants', grants);
   }
 }
 

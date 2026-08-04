@@ -1,9 +1,9 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { singleton } from 'tsyringe';
+import { inject, singleton } from 'tsyringe';
 import { generateId } from '@/shared/utils';
-import { LANGVIS_DIR } from '@/shared/constants';
 import Logger from '@/server/utils/logger';
+import { WorkspaceLocalStore } from '@/server/libs/infrastructure/workspace-local-store';
 import {
   type CachePort,
   type CachedReference,
@@ -26,8 +26,8 @@ function sanitizeHint(hint?: string): string {
     .slice(0, 48);
 }
 
-/** 折行宽度上限：rg 命中后单行回显不致失控（8k 上下文模型也吃得下）。 */
-const MAX_GREP_LINE = 2000;
+/** 折行宽度上限：rg 命中后单行回显不致溢出（8k 上下文模型也吃得下）。 */
+const MAX_GREP_LINE = 1000;
 
 // offload 落盘内容 reflow 成 rg 友好形：紧凑 JSON 解转义后 JSON.parse+缩进裂行，rg -C3 才能切出片段。
 // bash 形（stdout 含 \n）解析失败落 wrapLongLines 兜底；resolve 时缩进形 JSON.parse 仍等价原值。
@@ -85,6 +85,10 @@ function wrapLongLines(text: string, width: number): string {
 
 @singleton()
 export class CacheProvider implements CachePort {
+  constructor(
+    @inject(WorkspaceLocalStore) private readonly store: WorkspaceLocalStore,
+  ) {}
+
   async offload(
     workDir: string,
     value: unknown,
@@ -104,14 +108,12 @@ export class CacheProvider implements CachePort {
     // 无 hint 退 fc_<id>（保 /^fc_/ 既有契约）；有 hint 前置语义段 + '__fc_' 分隔。
     const id = generateId('fc');
     const filename = sanitized ? `${sanitized}__${id}` : id;
-    // offload 侧车件收进 workspace 的 .langvis（与 config/grants 同处），不散落到 workdir 根；
-    // $cached 仍为 workDir 相对路径（读端 bash cwd=workDir 可直接 rg/sed）。
-    const rel = path.join(LANGVIS_DIR, filename);
-    const filePath = path.join(workDir, rel);
-    await fs.mkdir(path.join(workDir, LANGVIS_DIR), { recursive: true });
+    // offload 侧车件收进 workspace 的 .langvis/offload 命名空间（dir 由 WorkspaceLocalStore 预建）；
+    // $cached 为 workDir 相对路径（读端 bash cwd=workDir 可直接 rg/sed）。
+    const rel = await this.store.reserveBlob(workDir, 'offload', filename);
     // 落盘前 reflow：把一整行 JSON（text 字段全转义 \n）裂成多行，否则 rg 一命中就回整条 885KB 巨行。
     const stored = reflowForGrep(serialized);
-    await fs.writeFile(filePath, stored, 'utf-8');
+    await fs.writeFile(path.join(workDir, rel), stored, 'utf-8');
     logger.debug('offloaded to file', {
       filename,
       size: Buffer.byteLength(stored, 'utf8'),

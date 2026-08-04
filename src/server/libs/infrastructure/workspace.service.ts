@@ -3,7 +3,6 @@ import path from 'path';
 import { service } from '@/server/decorator/service';
 import { resolveSafePath } from '@/server/utils/pathSafety';
 import { generateId } from '@/shared/utils';
-import { LANGVIS_DIR } from '@/shared/constants';
 
 @service()
 export class WorkspaceService {
@@ -85,30 +84,5 @@ export class WorkspaceService {
       content.slice(index + oldString.length);
     await fs.writeFile(filePath, updated, 'utf-8');
     return { changes: 1 };
-  }
-
-  private configPath(workDir: string): string {
-    return path.join(workDir, LANGVIS_DIR, 'config.json');
-  }
-
-  async readConfig(workDir: string): Promise<Record<string, unknown> | null> {
-    try {
-      const content = await fs.readFile(this.configPath(workDir), 'utf-8');
-      const parsed = JSON.parse(content);
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : null;
-    } catch {
-      return null;
-    }
-  }
-
-  async writeConfig(
-    workDir: string,
-    config: Record<string, unknown>,
-  ): Promise<void> {
-    const file = this.configPath(workDir);
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, JSON.stringify(config, null, 2), 'utf-8');
   }
 }

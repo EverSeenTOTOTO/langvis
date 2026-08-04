@@ -4,10 +4,6 @@ import type { ToolCallContext } from '../port/tool-call-context.port';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { Entity } from '@/server/libs/ddd';
 import type { Tool } from './tool.base';
-import {
-  validate,
-  coerceJsonStringFields,
-} from '@/server/utils/schemaValidator';
 
 /** ToolCall — 一次工具调用的完整业务流程（聚合内实体）。 */
 export class ToolCall extends Entity<string> {
@@ -24,7 +20,7 @@ export class ToolCall extends Entity<string> {
     return this.ctx.workDir;
   }
   get runId(): string {
-    return this.ctx.runId;
+    return this.ctx.run.runId;
   }
   get llm(): LlmPort {
     return this.ctx.llm;
@@ -64,7 +60,7 @@ export class ToolCall extends Entity<string> {
     };
 
     try {
-      this.validateInput();
+      // 入参校验在 @tool 装饰器包好的 call 内完成（校验 + 替换 ctx.input），此处仅编排。
       const callCtx: ToolCallContext = {
         callId: this.id,
         input: this.input,
@@ -73,7 +69,7 @@ export class ToolCall extends Entity<string> {
         conversationId: this.ctx.conversationId,
         llm: this.ctx.llm,
         auth: this.ctx.auth,
-        runId: this.ctx.runId,
+        run: this.ctx.run,
         interactive: this.ctx.interactive,
         runtimeConfig: this.ctx.config.runtimeConfig,
       };
@@ -133,24 +129,5 @@ export class ToolCall extends Entity<string> {
     this.#status = 'failed';
     this.#error = error;
     this.#completedAt = Date.now();
-  }
-
-  /** 校验 inputSchema：缺 required/类型不符抛错，被 execute catch 转成 tool_error 回馈模型。 */
-  private validateInput(): void {
-    const schema = this.tool.config?.inputSchema;
-    if (!schema) return;
-    let result = validate<Record<string, unknown>>(schema, this.input);
-    // object/array 参数被模型当字符串传（引号/```围栏/双重编码）时，按声明类型宽松还原后再校验。
-    if (!result.valid) {
-      const recovered = coerceJsonStringFields(schema, this.input);
-      if (recovered)
-        result = validate<Record<string, unknown>>(schema, recovered);
-    }
-    if (!result.valid) {
-      throw new Error(
-        `Invalid input for tool "${this.tool.id}": ${result.errors}`,
-      );
-    }
-    this.input = result.data;
   }
 }

@@ -16,7 +16,7 @@ function makeCtx(
     signal: new AbortController().signal,
     workDir: '/tmp',
     llm: { tts } as unknown as LlmPort,
-    runId: 'run_1',
+    run: { runId: 'run_1' } as unknown as ToolCallContext['run'],
     runtimeConfig: {},
   } as unknown as ToolCallContext;
   return { ctx, tts };

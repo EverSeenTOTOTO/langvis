@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
-import type { RedisService } from '@/server/libs/infrastructure/redis.service';
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { EventBus } from '@/server/libs/ddd';
 import type { ProviderService } from '@/server/libs/infrastructure/provider.service';
@@ -29,14 +28,6 @@ class FakeTransport extends Transport<StreamFrame> {
   }
 }
 
-function makeMockRedis(): RedisService {
-  return {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn().mockResolvedValue(undefined),
-    del: vi.fn().mockResolvedValue(undefined),
-  } as unknown as RedisService;
-}
-
 function makeMockChat(activeMessages: unknown[]): ChatService {
   return {
     findActiveAssistantMessages: vi.fn().mockResolvedValue(activeMessages),
@@ -47,30 +38,27 @@ function makeMockChat(activeMessages: unknown[]): ChatService {
 function makeManager(activeMessages: unknown[] = []): {
   manager: SessionManager;
   chat: ChatService;
-  redis: RedisService;
 } {
-  const redis = makeMockRedis();
   const chat = makeMockChat(activeMessages);
   const provider = {
     resolveContextSize: vi.fn().mockReturnValue(8000),
   } as unknown as ProviderService;
   const manager = new SessionManager(
-    redis,
     chat,
     {
       dispatch: vi.fn(),
     } as unknown as EventBus,
     provider,
   );
-  return { manager, chat, redis };
+  return { manager, chat };
 }
 
 describe('SessionManager', () => {
   const conversationId = 'conv_1';
 
   describe('initSession（连接生命周期——孤儿对账已移至启动期 OrphanRunReconciler）', () => {
-    it('新会话：attach 传输(发 connected 握手) 并登记 redis key，不对账孤儿、不重放 run_view', async () => {
-      const { manager, chat, redis } = makeManager([
+    it('新会话：attach 传输(发 connected 握手) 并登记进程内会话状态，不对账孤儿、不重放 run_view', async () => {
+      const { manager, chat } = makeManager([
         { id: 'msg_1', agentRunId: 'run_1' },
       ]);
       const transport = new FakeTransport();
@@ -79,21 +67,30 @@ describe('SessionManager', () => {
 
       expect(chat.markMessagesTerminated).not.toHaveBeenCalled();
       expect(transport.sent).toEqual([{ type: 'connected' }]);
-      expect(redis.set).toHaveBeenCalledWith(
-        `chat_session:${conversationId}`,
-        expect.any(Object),
-        3600,
-      );
+      expect(manager.getSessionState(conversationId)).toEqual({
+        conversationId,
+        startedAt: expect.any(Number),
+      });
     });
 
-    it('重连（connection 已存在）时跳过 redis 登记', async () => {
-      const { manager, redis } = makeManager([]);
+    it('重连（connection 已存在）时保留既有会话状态，不重置 startedAt', async () => {
+      const { manager } = makeManager([]);
       await manager.initSession(conversationId, new FakeTransport());
-      (redis.set as ReturnType<typeof vi.fn>).mockClear();
+      const first = manager.getSessionState(conversationId);
 
       await manager.initSession(conversationId, new FakeTransport());
 
-      expect(redis.set).not.toHaveBeenCalled();
+      expect(manager.getSessionState(conversationId)).toEqual(first);
+    });
+
+    it('disposeChat 后会话状态清空', async () => {
+      const { manager } = makeManager([]);
+      await manager.initSession(conversationId, new FakeTransport());
+      expect(manager.getSessionState(conversationId)).not.toBeNull();
+
+      manager.disposeChat(conversationId);
+
+      expect(manager.getSessionState(conversationId)).toBeNull();
     });
   });
 

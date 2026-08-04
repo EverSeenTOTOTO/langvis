@@ -37,7 +37,7 @@ export default class ResponseUserTool extends Tool<ResponseUserOutput> {
       yield* this.synthesizeAudio(ctx, message, tts);
     }
 
-    this.logger.info(`ResponseUser delivered for run ${ctx.runId}`);
+    this.logger.info(`ResponseUser delivered for run ${ctx.run.runId}`);
 
     return { delivered: true };
   }
@@ -50,17 +50,19 @@ export default class ResponseUserTool extends Tool<ResponseUserOutput> {
   ): AsyncGenerator<RunEvent, void, void> {
     if (!tts.voice) {
       this.logger.warn(
-        `ResponseUser tts enabled for run ${ctx.runId} but no voice provided — skipping audio`,
+        `ResponseUser tts enabled for run ${ctx.run.runId} but no voice provided — skipping audio`,
       );
       return;
     }
 
-    this.logger.info(`Generating speech audio response for run ${ctx.runId}`);
+    this.logger.info(
+      `Generating speech audio response for run ${ctx.run.runId}`,
+    );
 
     try {
       const params: TextToSpeechInput = {
         text: message,
-        reqId: ctx.runId,
+        reqId: ctx.run.runId,
         voice: tts.voice,
         emotion: tts.emotion,
         speedRatio: tts.speedRatio,
@@ -69,7 +71,7 @@ export default class ResponseUserTool extends Tool<ResponseUserOutput> {
       yield { type: 'audio', filePath: result.filePath, voice: result.voice };
     } catch (err) {
       this.logger.warn(
-        `ResponseUser TTS failed for run ${ctx.runId}: ${(err as Error)?.message ?? err}`,
+        `ResponseUser TTS failed for run ${ctx.run.runId}: ${(err as Error)?.message ?? err}`,
       );
     }
   }

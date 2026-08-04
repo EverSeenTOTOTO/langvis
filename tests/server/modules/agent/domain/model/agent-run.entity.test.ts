@@ -118,6 +118,68 @@ describe('AgentRun', () => {
     });
   });
 
+  describe('HITL 待输入（运行期协调态，不入事件流）', () => {
+    it('submitInput 唤醒等待中的 waitForInput 并返回结果', async () => {
+      const run = createRun();
+      run.beginAwaitInput({ formSchema: {}, message: '请确认' });
+
+      const waiter = run.waitForInput(1000, new AbortController().signal);
+      const result = run.submitInput({ answer: 'yes' });
+
+      expect(result).toBe('success');
+      await expect(waiter).resolves.toEqual({
+        submitted: true,
+        result: { answer: 'yes' },
+      });
+    });
+
+    it('重复提交返回 already_submitted', () => {
+      const run = createRun();
+      run.beginAwaitInput({ formSchema: {}, message: 'x' });
+      expect(run.submitInput({ a: 1 })).toBe('success');
+      expect(run.submitInput({ a: 2 })).toBe('already_submitted');
+    });
+
+    it('未登记待输入时提交返回 not_found', () => {
+      const run = createRun();
+      expect(run.submitInput({})).toBe('not_found');
+    });
+
+    it('waitForInput 超时返回 false', async () => {
+      const run = createRun();
+      run.beginAwaitInput({ formSchema: {}, message: 'x' });
+      const r = await run.waitForInput(5, new AbortController().signal);
+      expect(r).toEqual({ submitted: false });
+    });
+
+    it('waitForInput 中止（abort）返回 false', async () => {
+      const run = createRun();
+      run.beginAwaitInput({ formSchema: {}, message: 'x' });
+      const controller = new AbortController();
+      const waiter = run.waitForInput(1000, controller.signal);
+      controller.abort();
+      await expect(waiter).resolves.toEqual({ submitted: false });
+    });
+
+    it('inputStatus 反映待输入状态，未登记时返回 null', () => {
+      const run = createRun();
+      expect(run.inputStatus()).toBeNull();
+
+      run.beginAwaitInput({ formSchema: { type: 'boolean' }, message: '?' });
+      expect(run.inputStatus()).toEqual({
+        exists: true,
+        submitted: false,
+        message: '?',
+        schema: { type: 'boolean' },
+      });
+
+      run.submitInput({ ok: true });
+      const status = run.inputStatus();
+      expect(status?.submitted).toBe(true);
+      expect(status).not.toHaveProperty('result');
+    });
+  });
+
   describe('eventStream immutability', () => {
     it('returns a readonly view', () => {
       const run = createRun();

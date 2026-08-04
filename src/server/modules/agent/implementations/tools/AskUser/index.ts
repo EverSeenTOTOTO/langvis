@@ -1,52 +1,11 @@
 import { tool } from '@/server/decorator/tool';
 import type { Logger } from '@/server/utils/logger';
-import { RedisKeys, ToolIds } from '@/shared/constants';
+import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { JSONSchemaType } from 'ajv';
-import type { RedisClientType } from 'redis';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import { RedisService } from '@/server/libs/infrastructure/redis.service';
-import { inject } from 'tsyringe';
-
-function waitForNotification(
-  subscriber: RedisClientType,
-  channel: string,
-  timeout: number,
-  signal: AbortSignal,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const onAbort = () => {
-      clearTimeout(timeoutId);
-      subscriber.unsubscribe(channel).catch(() => {});
-      reject(signal.reason);
-    };
-
-    const timeoutId = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort);
-      subscriber.unsubscribe(channel).catch(() => {});
-      resolve();
-    }, timeout);
-
-    signal.addEventListener('abort', onAbort, { once: true });
-
-    subscriber
-      .subscribe(channel, message => {
-        if (message === 'submitted') {
-          clearTimeout(timeoutId);
-          signal.removeEventListener('abort', onAbort);
-          subscriber.unsubscribe(channel).catch(() => {});
-          resolve();
-        }
-      })
-      .catch(err => {
-        clearTimeout(timeoutId);
-        signal.removeEventListener('abort', onAbort);
-        reject(err);
-      });
-  });
-}
 
 export interface AskUserInput {
   message: string;
@@ -59,15 +18,13 @@ export interface AskUserOutput {
   data?: Record<string, any>;
 }
 
+// HITL：在 ctx.run 的聚合运行期协调态上登记待输入表单并阻塞等待提交。
+// 状态在聚合上，由 web 提交端经 executor.getActiveRun 写入；此处只等 Deferred 被 resolve。
 @tool(ToolIds.ASK_USER)
 export default class AskUserTool extends Tool<AskUserOutput> {
   readonly id!: string;
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
-
-  constructor(@inject(RedisService) private redisService: RedisService) {
-    super();
-  }
 
   async *call(
     ctx: ToolCallContext,
@@ -81,19 +38,12 @@ export default class AskUserTool extends Tool<AskUserOutput> {
       );
     }
 
+    const run = ctx.run;
     const params = ctx.input as unknown as AskUserInput;
     const { message, formSchema, timeout = 300_000 } = params;
-    const key = RedisKeys.HUMAN_INPUT(ctx.runId);
-    const POLL_INTERVAL = 30_000; // 30s fallback check when Pub/Sub fails
 
-    await this.redisService.set(key, {
-      formSchema,
-      message,
-      submitted: false,
-      createdAt: Date.now(),
-    });
-
-    this.logger.info(`AskUser request created for run ${ctx.runId}`);
+    run.beginAwaitInput({ formSchema, message });
+    this.logger.info(`AskUser request created for run ${ctx.run.runId}`);
 
     yield {
       type: 'tool_progress',
@@ -105,56 +55,18 @@ export default class AskUserTool extends Tool<AskUserOutput> {
       },
     };
 
-    const startTime = Date.now();
+    const { submitted, result } = await run.waitForInput(timeout, ctx.signal);
 
-    while (true) {
-      const elapsed = Date.now() - startTime;
-      if (elapsed >= timeout) {
-        break;
-      }
-
-      const remainingTime = timeout - elapsed;
-      const waitTime = Math.min(POLL_INTERVAL, remainingTime);
-
-      try {
-        await waitForNotification(
-          this.redisService.subscriber,
-          key,
-          waitTime,
-          ctx.signal,
-        );
-      } catch (e) {
-        if (ctx.signal.aborted) {
-          await this.redisService.del(key);
-          throw e;
-        }
-      }
-
-      // Check Redis (works for both submitted and timeout cases)
-      const pending = await this.redisService.get<{
-        submitted: boolean;
-        result?: Record<string, any>;
-      }>(key);
-      if (pending?.submitted) {
-        await this.redisService.del(key);
-        this.logger.info(`AskUser request submitted for run ${ctx.runId}`);
-
-        const output: AskUserOutput = {
-          submitted: true,
-          data: pending.result,
-        };
-
-        return output;
-      }
+    if (ctx.signal.aborted) {
+      ctx.signal.throwIfAborted();
     }
 
-    await this.redisService.del(key);
-    this.logger.info(`AskUser request timeout for run ${ctx.runId}`);
+    if (submitted) {
+      this.logger.info(`AskUser request submitted for run ${ctx.run.runId}`);
+      return { submitted: true, data: result };
+    }
 
-    const output: AskUserOutput = {
-      submitted: false,
-    };
-
-    return output;
+    this.logger.info(`AskUser request timeout for run ${ctx.run.runId}`);
+    return { submitted: false };
   }
 }

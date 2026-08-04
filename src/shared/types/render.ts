@@ -2,6 +2,7 @@
 
 // ask_user / awaiting_input 提示的投影 —— run 阻塞等待用户输入时非空。 随 run_view 帧下发（实时 / 重连 / 历史同此一帧），前端据以渲染确认表单。
 export interface AwaitingInputProjection {
+  runId: string;
   callId: string;
   message: string;
   schema: Record<string, unknown>;

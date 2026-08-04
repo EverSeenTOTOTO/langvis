@@ -88,6 +88,7 @@ export const aggregateSubagentChildren = (
 
 export type AwaitingInputData = {
   // React key for HumanInputForm — a new ask_user in one turn remounts it to re-check status.
+  runId: string;
   callId: string;
   message: string;
   schema: Record<string, unknown>;

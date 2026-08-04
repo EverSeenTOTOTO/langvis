@@ -5,8 +5,6 @@ import {
   lifecycleHook,
   type LifecycleHook,
 } from '@/server/decorator/lifecycle';
-import { RedisService } from '@/server/libs/infrastructure/redis.service';
-import { RedisKeys } from '@/shared/constants';
 import { EventBus, createDomainEvent } from '@/server/libs/ddd';
 import { CancelRun } from '@/server/modules/agent/contracts';
 import { ChatService } from './chat.service';
@@ -29,10 +27,9 @@ export interface ChatState {
 export class SessionManager implements LifecycleHook {
   private readonly logger = Logger.child({ source: 'SessionManager' });
   private readonly sessions = new Map<string, ConversationSession>();
+  private readonly startedAt = new Map<string, number>();
 
   constructor(
-    @inject(RedisService)
-    private redisService: RedisService,
     @inject(ChatService)
     private convService: ChatService,
     @inject(EventBus)
@@ -58,7 +55,7 @@ export class SessionManager implements LifecycleHook {
       this.sessions.delete(conversationId);
       session.dispose(); // 连接 idle 自释放路径下 connection 已 undefined，此处 no-op
     }
-    this.redisService.del(RedisKeys.CHAT_SESSION(conversationId));
+    this.startedAt.delete(conversationId);
     this.logger.info(`Chat disposed`, { chatId: conversationId });
   }
 
@@ -86,11 +83,13 @@ export class SessionManager implements LifecycleHook {
     }
 
     // 重启残留 run 的清扫已在启动期由 OrphanRunReconciler 完成，此处不再对账。
-    await this.redisService.set(
-      RedisKeys.CHAT_SESSION(conversationId),
-      { conversationId, startedAt: Date.now() } satisfies ChatState,
-      3600,
-    );
+    this.startedAt.set(conversationId, Date.now());
+  }
+
+  /** 会话存活查询（HITL 提交后前端用于判断会话是否仍在）。 */
+  getSessionState(conversationId: string): ChatState | null {
+    const startedAt = this.startedAt.get(conversationId);
+    return startedAt ? { conversationId, startedAt } : null;
   }
 
   hasSession(conversationId: string): boolean {
