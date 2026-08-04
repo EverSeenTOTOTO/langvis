@@ -22,87 +22,66 @@ Agent 执行 → 调用 HumanInTheLoop → yield awaiting_input 事件
                                               ↓
                               前端渲染表单，用户填写提交
                                               ↓
-                              POST /api/human-input/:conversationId
+                              POST /api/human-input/:runId
                                               ↓
-                              Redis Pub/Sub 通知 Tool 继续执行
+                              进程内通知（resolve 等待中的 Deferred）
                                               ↓
                               Agent 继续执行
 ```
 
 ## 设计考量
 
-### 1. Key 的选择：conversationId vs requestId
+### 1. Key 的选择：runId
 
-**最终选择：conversationId**
+**最终选择：runId（AgentRun 聚合 id）**
 
 考量：
 
-- 项目设计假定单一 conversation 同时只有一个进行中的消息流
-- 使用 conversationId 简化前端逻辑，无需追踪额外 ID
-- 前一次提交后自动清理，下一次可复用
+- 待输入状态属于具体的 AgentRun，AskUser 在其运行期间阻塞等待，键天然对应该 runId
+- web 提交端经 `executor.getActiveRun(runId)` 直接定位内存聚合，无需额外翻译
+- 前端从 `awaitingInput` 投影拿到 runId 即可提交/查询，不分 conv 与子 agent
 
-如果未来需要支持一次 Agent 执行中多次人工介入，可扩展为 `conversationId:messageId` 或 `requestId`。
+如果未来需要支持一次 Agent 执行中多次人工介入，可扩展为 `runId:reqIndex` 或独立 requestId。
 
-### 2. 等待机制：Pub/Sub + 兜底轮询
+### 2. 状态位置：AgentRun 聚合（运行期协调态）
 
-**最终选择：Redis Pub/Sub（主） + 轮询（兜底）**
+**最终选择：状态放在 `AgentRun` 聚合上，作为运行期协调态（同 `abortController`，不入事件流）。**
 
-对比：
+AskUser（写入）与 web（提交）都命中同一个内存聚合实例：
 
-| 方案       | 优点                         | 缺点                       |
-| ---------- | ---------------------------- | -------------------------- |
-| 纯轮询     | 实现简单                     | 响应延迟，资源占用         |
-| Pub/Sub    | 即时响应，无等待时零资源消耗 | 需要额外 Redis 连接        |
-| 持久化恢复 | 支持跨天等待，高可用         | 实现复杂，需要状态恢复机制 |
+- AskUser 经 `ctx` 拿到 runId，通过注入的 `AgentRunExecutor.getActiveRun(runId)` 取到活跃聚合。
+- web 提交端（HTTP controller）同样注入 `AgentRunExecutor`，`getActiveRun(runId)` 够到同一个实例后调聚合的 `submitInput` / `inputStatus`。
 
-选择 Pub/Sub 的原因：
+这与 `cancel` 的既有路径一致——web 侧的取消就是靠 `executor.cancel(runId)` 定位内存聚合。
 
-- 即时响应：用户提交后毫秒级通知 Tool 继续
-- 零轮询开销：等待期间不消耗 Redis 资源
-- 兜底机制：每 30s 检查一次 Redis，防止 Pub/Sub 意外失败
+等待用 Deferred 实现：`submitInput` 同步改状态并 resolve 聚合上等待中的 waiter，AskUser 侧立即收到结果。无需 Redis、无需轮询，也不需要单独的 store / port 抽象。
 
-**为什么需要两个 Redis 连接？**
-
-Redis 协议规定：客户端执行 `SUBSCRIBE` 后进入订阅状态，只能接收推送消息，不能再发送其他命令（如 SET/GET）。因此需要：
-
-- `redis`：普通客户端，用于 SET/GET/PUBLISH 等命令
-- `redisSubscriber`：订阅客户端，专用于 SUBSCRIBE 接收消息
-
-### 3. 超时与轮询参数
+### 3. 超时与中止参数
 
 ```typescript
 timeout = 300_000; // 5 分钟总超时
-POLL_INTERVAL = 30_000; // 30 秒兜底轮询间隔
 ```
 
 流程：
 
 ```
-while (未超时) {
-  subscribe(channel);                    // 订阅频道
-  await waitForNotification(...);        // 等待 Pub/Sub 通知或超时
-  check Redis;                           // 确认提交状态
-}
+AskUser（run 内）:
+  run = executor.getActiveRun(runId)
+  run.beginAwaitInput({ formSchema, message })   // 登记待输入
+  yield awaiting_input 事件                        // 前端据以渲染表单
+  await run.waitForInput(timeout, signal)          // Deferred，提交即 resolve
+
+Controller（web）:
+  executor.getActiveRun(runId)?.submitInput(data)  // 同步 write + resolve waiter
 ```
 
-`waitForNotification` 内部实现了超时和取消信号处理，无论是收到通知还是超时，都会清理订阅。调用方只需在返回后检查 Redis 确认状态。
+- 提交路径 resolve waiter 后 AskUser 立即读到结果，无轮询。
+- 超时：`waitForInput` 内部 setTimeout，到点 resolve `{ submitted: false }`。
+- 中止：监听 AbortSignal，中止时 resolve `{ submitted: false }`，由 AskUser 检测 `signal.aborted` 后抛出。
 
-### 4. 存储方案：Redis Key + Pub/Sub Channel
+### 4. HTTP 寻址：以 runId 为键
 
-使用相同前缀 `human_input:`：
-
-- **Key-Value 存储**：`human_input:{conversationId}` 存储表单数据和提交状态
-- **Pub/Sub 频道**：`human_input:{conversationId}` 用于即时通知
-
-```typescript
-// Tool 端
-await redis.set(key, JSON.stringify({ submitted: false, ... }));
-await redisSubscriber.subscribe(key, callback);
-
-// Controller 端
-await redis.set(key, JSON.stringify({ submitted: true, result: data }));
-await redis.publish(key, 'submitted');
-```
+端点 `GET/POST /api/human-input/:runId` 直接以 runId 寻址，无需 messageId→runId 翻译，因此不存在对 MessageRepository 的依赖。前端从 run_view 的 `awaitingInput` 投影（含 `runId` 字段）取得 runId 进行提交/查询。
 
 ## API
 
@@ -164,8 +143,8 @@ await redis.publish(key, 'submitted');
 
 ### HTTP 端点
 
-- `GET /api/human-input/:conversationId` - 查询等待状态（用于页面刷新时检查）
-- `POST /api/human-input/:conversationId` - 提交表单数据，并发布 Pub/Sub 通知
+- `GET /api/human-input/:runId` - 查询等待状态（用于页面刷新时检查）
+- `POST /api/human-input/:runId` - 提交表单数据，并通知等待中的 Tool 继续
 
 ### SSE 事件
 
@@ -243,7 +222,7 @@ EventRenderer 检测最后一个事件为 human_in_the_loop_tool + awaiting_inpu
         ↓
 渲染 HumanInputForm 组件
         ↓
-组件挂载时调用 GET /api/human-input/:conversationId 检查提交状态
+组件挂载时调用 GET /api/human-input/:runId 检查提交状态
         ↓
 ┌─────────────────────────────────────────────────────────┐
 │ 已提交 → 显示 "Processing..." 等待 SSE 后续事件         │
@@ -252,11 +231,11 @@ EventRenderer 检测最后一个事件为 human_in_the_loop_tool + awaiting_inpu
         ↓
 用户填写表单提交
         ↓
-ChatStore.submitHumanInput() → POST /api/human-input/:conversationId
+ChatStore.submitHumanInput() → POST /api/human-input/:runId
         ↓
 显示 "Processing..." 防止重复提交
         ↓
-Controller 发布 Redis Pub/Sub 通知
+Controller 提交到 HumanInputStore（resolve 等待中的 Tool）
         ↓
 Tool 收到通知继续执行，yield tool_result
         ↓
@@ -265,7 +244,7 @@ EventRenderer 收到 SSE 事件，HumanInputForm 不再渲染
 
 ### 防重复提交
 
-1. **提交前**：检查服务端状态 `GET /api/human-input/:conversationId`
+1. **提交前**：检查服务端状态 `GET /api/human-input/:runId`
 2. **提交后**：本地状态标记已提交，显示 "Processing..."
 3. **页面刷新**：重新检查服务端状态，已提交则显示 "Processing..."
 

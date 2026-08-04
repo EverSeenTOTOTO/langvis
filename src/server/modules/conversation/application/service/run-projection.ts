@@ -119,6 +119,7 @@ export function applyEventToView(view: RunView, event: EnrichedEvent): RunView {
         | undefined;
       if (data?.status === 'awaiting_input' && data.schema) {
         view.awaitingInput = {
+          runId: event.runId,
           callId: event.callId!,
           message: data.message ?? 'Please provide input',
           schema: data.schema,

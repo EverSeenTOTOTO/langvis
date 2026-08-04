@@ -4,7 +4,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import { ToolIds } from '@/shared/constants';
-import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
+import { WorkspaceLocalStore } from '@/server/libs/infrastructure/workspace-local-store';
 import { AuthorizationProvider } from '@/server/modules/agent/infrastructure/authorization.provider';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
@@ -57,21 +57,21 @@ async function collect<R>(gen: AsyncGenerator<RunEvent, R, void>): Promise<R> {
 
 describe('AuthorizationProvider', () => {
   let workDir: string;
-  let workspace: WorkspaceService;
+  let store: WorkspaceLocalStore;
   let provider: AuthorizationProvider;
 
   beforeEach(async () => {
     container.reset();
     workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'authprov-'));
-    workspace = new WorkspaceService();
-    provider = new AuthorizationProvider(workspace);
+    store = new WorkspaceLocalStore();
+    provider = new AuthorizationProvider(store);
   });
 
   afterEach(async () => {
     await fs.rm(workDir, { recursive: true, force: true });
   });
 
-  it('hasGrant 未命中 + allow → grants 写入 <workDir>/.langvis/config.json', async () => {
+  it('hasGrant 未命中 + allow → grants 写入 <workDir>/.langvis/grants.json', async () => {
     registerFakeAskUser({
       submitted: true,
       data: { confirmed: true, timeout: 30 },
@@ -85,12 +85,12 @@ describe('AuthorizationProvider', () => {
     )) as Record<string, unknown> | undefined;
 
     expect(ret?.timeout).toBe(30);
-    const cfg = await workspace.readConfig(workDir);
-    expect(cfg?.grants).toContain('read-path:/etc');
+    const grants = await store.readSection<string[]>(workDir, 'grants');
+    expect(grants).toContain('read-path:/etc');
   });
 
   it('hasGrant 命中 → 直接 return（不调 AskUser、不改文件）', async () => {
-    await workspace.writeConfig(workDir, { grants: ['read-path:/etc'] });
+    await store.writeSection(workDir, 'grants', ['read-path:/etc']);
     const tracker = registerFakeAskUser({
       submitted: true,
       data: { confirmed: true },
@@ -105,8 +105,8 @@ describe('AuthorizationProvider', () => {
 
     expect(ret).toBeUndefined();
     expect(tracker.calls).toBe(0);
-    const cfg = await workspace.readConfig(workDir);
-    expect(cfg?.grants).toEqual(['read-path:/etc']);
+    const grants = await store.readSection<string[]>(workDir, 'grants');
+    expect(grants).toEqual(['read-path:/etc']);
   });
 
   it('非 interactive → 抛（不调 AskUser）', async () => {
@@ -142,7 +142,7 @@ describe('AuthorizationProvider', () => {
         }),
       ),
     ).rejects.toThrow(/拒绝授权/);
-    expect(await workspace.readConfig(workDir)).toBeNull();
+    expect(await store.readSection(workDir, 'grants')).toBeNull();
   });
 
   it('grants 跨实例持久（文件即真相）', async () => {
@@ -159,7 +159,7 @@ describe('AuthorizationProvider', () => {
       submitted: true,
       data: { confirmed: true },
     });
-    const fresh = new AuthorizationProvider(new WorkspaceService());
+    const fresh = new AuthorizationProvider(new WorkspaceLocalStore());
     const ret = await collect(
       fresh.ensureApproved(makeCtx(workDir), 'read-path', '/etc', {
         prompt: 'p',

@@ -29,7 +29,7 @@ export default class TextToSpeechTool extends Tool<TextToSpeechOutput> {
     // voice/reqId/modelId 由调用方决定（reqId 缺省用 runId）；仅 text 与 emotion 可选。
     const params: TextToSpeechInput = {
       text: input.text,
-      reqId: input.reqId ?? ctx.runId,
+      reqId: input.reqId ?? ctx.run.runId,
       voice: input.voice ?? '',
       modelId: input.modelId,
       emotion: input.emotion,

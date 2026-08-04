@@ -8,7 +8,7 @@ import {
   PREVIEW_LENGTH,
 } from '@/server/modules/agent/infrastructure/cache.provider';
 import type { CachedReference } from '@/server/modules/agent/domain/port/cache.port';
-import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
+import { WorkspaceLocalStore } from '@/server/libs/infrastructure/workspace-local-store';
 
 let testDir: string;
 
@@ -33,9 +33,9 @@ describe('CacheProvider', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    container.register(WorkspaceService, { useValue: mockWorkspaceService });
+    container.register(WorkspaceLocalStore, {
+      useValue: new WorkspaceLocalStore(),
+    });
     cacheService = container.resolve(CacheProvider);
     workDir = await mockWorkspaceService.getWorkDir();
   });
@@ -44,7 +44,7 @@ describe('CacheProvider', () => {
     it('always writes to disk and returns a CachedReference (even for small content)', async () => {
       const result = await cacheService.offload(workDir, 'tiny');
 
-      expect(result.$cached).toMatch(/^\.langvis\/fc_/);
+      expect(result.$cached).toMatch(/^\.langvis\/offload\/fc_/);
       expect(result.$size).toBe(4);
       expect(result.$preview).toBe('tiny');
       // offload 始终写盘，小内容也落文件
@@ -70,7 +70,7 @@ describe('CacheProvider', () => {
 
       // hint 规整为文件名安全段，前置语义 + '__' + fc_<id>
       expect(result.$cached).toMatch(
-        /^\.langvis\/search-flights-40-records__fc_/,
+        /^\.langvis\/offload\/search-flights-40-records__fc_/,
       );
       expect(result.$label).toBe('search-flights-40-records');
       expect(result.$size).toBe(500);
@@ -78,11 +78,11 @@ describe('CacheProvider', () => {
 
     it('falls back to fc_<id> when hint absent or empty', async () => {
       const noHint = await cacheService.offload(workDir, 'data');
-      expect(noHint.$cached).toMatch(/^\.langvis\/fc_/);
+      expect(noHint.$cached).toMatch(/^\.langvis\/offload\/fc_/);
       expect(noHint.$label).toBeUndefined();
 
       const emptyHint = await cacheService.offload(workDir, 'data', '   ');
-      expect(emptyHint.$cached).toMatch(/^\.langvis\/fc_/);
+      expect(emptyHint.$cached).toMatch(/^\.langvis\/offload\/fc_/);
       expect(emptyHint.$label).toBeUndefined();
     });
 

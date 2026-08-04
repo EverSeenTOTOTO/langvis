@@ -12,6 +12,13 @@ export class AgentRun extends AggregateRoot<string> {
   #terminated = false;
   private readonly abortController = new AbortController();
 
+  // HITL 待输入状态——运行期协调态（同 abortController，不入事件流）。
+  // AskUser 经 ctx.run 登记并阻塞等待；web 经 executor.getActiveRun 提交。
+  private awaitingInput: { formSchema: unknown; message: string } | null = null;
+  private inputSubmitted = false;
+  private inputResult?: Record<string, unknown>;
+  private inputWaiter?: () => void;
+
   get runId(): string {
     return this.id;
   }
@@ -65,6 +72,65 @@ export class AgentRun extends AggregateRoot<string> {
     this.#terminated = true;
     this.status = 'cancelled';
     return this.record({ type: 'cancelled', reason });
+  }
+
+  /** AskUser：登记待输入表单（清空上次提交状态）。 */
+  beginAwaitInput(payload: { formSchema: unknown; message: string }): void {
+    this.awaitingInput = payload;
+    this.inputSubmitted = false;
+  }
+
+  /** AskUser：阻塞等待提交。提交成功立即 resolve（附结果）；超时或中止 resolve false。 */
+  waitForInput(
+    timeoutMs: number,
+    signal: AbortSignal,
+  ): Promise<{ submitted: boolean; result?: Record<string, unknown> }> {
+    if (!this.awaitingInput) return Promise.resolve({ submitted: false });
+    if (this.inputSubmitted) {
+      return Promise.resolve({ submitted: true, result: this.inputResult });
+    }
+    return new Promise(resolve => {
+      const finish = (submitted: boolean, result?: Record<string, unknown>) => {
+        clearTimeout(timer);
+        signal.removeEventListener('abort', onAbort);
+        this.inputWaiter = undefined;
+        resolve({ submitted, result });
+      };
+      const timer = setTimeout(() => finish(false), timeoutMs);
+      const onAbort = () => finish(false);
+      signal.addEventListener('abort', onAbort, { once: true });
+      if (signal.aborted) onAbort();
+      this.inputWaiter = () => finish(true, this.inputResult);
+    });
+  }
+
+  /** web（经 executor.getActiveRun）：提交结果。 */
+  submitInput(
+    data: Record<string, unknown>,
+  ): 'not_found' | 'already_submitted' | 'success' {
+    if (!this.awaitingInput) return 'not_found';
+    if (this.inputSubmitted) return 'already_submitted';
+    this.inputSubmitted = true;
+    this.inputResult = data;
+    this.inputWaiter?.();
+    this.inputWaiter = undefined;
+    return 'success';
+  }
+
+  /** web：HITL 等待状态查询（真刷新渲染 / 防重复提交用）。 */
+  inputStatus(): {
+    exists: boolean;
+    submitted: boolean;
+    message: string;
+    schema: unknown;
+  } | null {
+    if (!this.awaitingInput) return null;
+    return {
+      exists: true,
+      submitted: this.inputSubmitted,
+      message: this.awaitingInput.message,
+      schema: this.awaitingInput.formSchema,
+    };
   }
 
   private record(event: RunEvent): EnrichedEvent {

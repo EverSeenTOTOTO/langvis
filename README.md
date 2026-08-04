@@ -26,13 +26,13 @@ A personal AI agent platform — streaming conversation, tool use, document inte
 ## Tech Stack
 
 - **Frontend**: React 18, Ant Design V6, Lexical editor, MobX, Vite
-- **Backend**: Express, TypeORM, PostgreSQL + pgvector, Redis
+- **Backend**: Express, TypeORM, PostgreSQL + pgvector
 - **LLM**: OpenAI-compatible API
 - **Tooling**: Bun, Make, Vitest
 
 ## Getting Started
 
-Prerequisites: Node.js 18+ or Bun, PostgreSQL 14+ with pgvector, Redis 6+, an OpenAI API key.
+Prerequisites: Node.js 18+ or Bun, PostgreSQL 14+ with pgvector, an OpenAI API key.
 
 ```bash
 bun install

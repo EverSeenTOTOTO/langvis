@@ -18,7 +18,7 @@ export abstract class FictionalTool<O, B> extends Tool<O> {
   ): AsyncGenerator<RunEvent, O, void>;
 
   async *call(ctx: ToolCallContext): AsyncGenerator<RunEvent, O, void> {
-    const backend = getSandbox<B>(ctx.runId);
+    const backend = getSandbox<B>(ctx.run.runId);
     return yield* this.run(backend, ctx.input, ctx);
   }
 }

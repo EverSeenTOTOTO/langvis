@@ -86,7 +86,7 @@ export const UniversalEventRenderer = observer(function UniversalEventRenderer({
                     {showForm && awaiting && (
                       <HumanInputForm
                         key={awaiting.callId}
-                        messageId={node.id}
+                        runId={awaiting.runId}
                         conversationId={node.conversationId}
                         message={awaiting.message}
                         schema={awaiting.schema}

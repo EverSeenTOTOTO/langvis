@@ -4,20 +4,21 @@ import { controller } from '@/server/decorator/controller';
 import { body, param, response } from '@/server/decorator/param';
 import type { Response } from 'express';
 import { inject } from 'tsyringe';
-import { HUMAN_INPUT_PORT } from '@/server/modules/conversation/conversation.di-tokens';
-import type { HumanInputPort } from '@/server/modules/conversation/domain/port/human-input.port';
+import { AgentRunExecutor } from '@/server/modules/agent/application/service/agent-run-executor';
 
+// 以 runId 寻址内存中的活跃 AgentRun 聚合（HITL 待输入状态在其上），提交/查询均委托聚合方法。
 @controller('/api/human-input')
 export default class HumanInputController {
-  constructor(@inject(HUMAN_INPUT_PORT) private humanInput: HumanInputPort) {}
+  constructor(@inject(AgentRunExecutor) private executor: AgentRunExecutor) {}
 
-  @api('/:messageId', { method: 'post' })
+  @api('/:runId', { method: 'post' })
   async submitInput(
-    @param('messageId') messageId: string,
+    @param('runId') runId: string,
     @body() dto: SubmitHumanInputRequestDto,
     @response() res: Response,
   ) {
-    const result = await this.humanInput.submit(messageId, dto.data);
+    const result =
+      this.executor.getActiveRun(runId)?.submitInput(dto.data) ?? 'not_found';
 
     if (result === 'not_found') {
       return res.status(404).json({
@@ -36,22 +37,14 @@ export default class HumanInputController {
     return res.json({ success: true });
   }
 
-  @api('/:messageId', { method: 'get' })
-  async getStatus(
-    @param('messageId') messageId: string,
-    @response() res: Response,
-  ) {
-    const status = await this.humanInput.getStatus(messageId);
+  @api('/:runId', { method: 'get' })
+  async getStatus(@param('runId') runId: string, @response() res: Response) {
+    const status = this.executor.getActiveRun(runId)?.inputStatus();
 
     if (!status) {
       return res.json({ exists: false });
     }
 
-    return res.json({
-      exists: status.exists,
-      submitted: status.submitted,
-      message: status.message,
-      schema: status.schema,
-    });
+    return res.json(status);
   }
 }

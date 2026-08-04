@@ -121,13 +121,8 @@ const ChatInput = observer(function ChatInput({
     onError: setVoiceErr,
   });
 
-  useKeyboard(data => {
-    if ((data === '\x1b' || data === '\x03') && streamingId) {
-      void chat.cancelChat({ conversationId: convId, messageId: streamingId });
-    }
-  });
-
   // Ctrl-r toggles recording; Enter (below) stops + transcribes; Ctrl-c cancels.
+  // (Streaming cancel now lives in Chat so it works off the input panel too.)
   useKeyboard(data => {
     if (data === '\x12' && !streamingId && !voice.processing) {
       // 0x12 = Ctrl-r
@@ -244,6 +239,13 @@ export const Chat = observer(function Chat() {
     }
   }
 
+  // Cancel the in-flight turn from any bottom-panel state (thinking spinner /
+  // ask / streaming / picker): panel-specific handlers unmount, so own it here.
+  const streamCancelRef = useRef<(() => void) | null>(null);
+  useKeyboard(data => {
+    if (data === '\x03') streamCancelRef.current?.();
+  });
+
   // Ctrl+O toggles full tool detail for the current (streaming) turn.
   useKeyboard(data => {
     if (data === '\x0f') setExpanded(v => !v);
@@ -264,6 +266,12 @@ export const Chat = observer(function Chat() {
     }
     break;
   }
+
+  // Wire the global cancel handler to the in-flight turn (if any).
+  streamCancelRef.current = streamingId
+    ? () =>
+        void chat.cancelChat({ conversationId: convId, messageId: streamingId })
+    : null;
 
   const committed = streamingId ? all.filter(m => m.id !== streamingId) : all;
   const streamingNode = streamingId

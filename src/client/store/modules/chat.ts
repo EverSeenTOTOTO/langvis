@@ -218,7 +218,7 @@ export class ChatStore {
     await req!.send();
   }
 
-  @api('/api/human-input/:messageId', { method: 'post' })
+  @api('/api/human-input/:runId', { method: 'post' })
   async submitHumanInput(
     _params: SubmitHumanInputRequest,
     req?: ApiRequest<SubmitHumanInputRequest>,
@@ -226,7 +226,7 @@ export class ChatStore {
     return await req!.send();
   }
 
-  @api('/api/human-input/:messageId')
+  @api('/api/human-input/:runId')
   async getHumanInputStatus(
     _params: GetHumanInputStatusRequest,
     req?: ApiRequest<GetHumanInputStatusRequest>,

@@ -1,12 +1,13 @@
 import HumanInputController from '@/server/controller/HumanInputController';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HumanInputPort } from '@/server/modules/conversation/domain/port/human-input.port';
 
-function makeMockHumanInputPort(): HumanInputPort {
-  return {
-    submit: vi.fn(),
-    getStatus: vi.fn(),
-  };
+interface FakeRun {
+  submitInput: ReturnType<typeof vi.fn>;
+  inputStatus: ReturnType<typeof vi.fn>;
+}
+
+function makeMockExecutor(active: FakeRun | undefined) {
+  return { getActiveRun: vi.fn(() => active) };
 }
 
 function createMockResponse() {
@@ -25,27 +26,28 @@ function createMockResponse() {
   return res as any;
 }
 
-describe('HumanInputController', () => {
-  let mockHumanInput: HumanInputPort;
+const runId = 'run_1';
+
+describe('HumanInputController（以 runId 寻址内存中的活跃 AgentRun）', () => {
   let controller: HumanInputController;
+  let executor: { getActiveRun: ReturnType<typeof vi.fn> };
+  let run: FakeRun;
 
   beforeEach(() => {
-    mockHumanInput = makeMockHumanInputPort();
-    controller = new HumanInputController(mockHumanInput);
+    run = {
+      submitInput: vi.fn(),
+      inputStatus: vi.fn().mockReturnValue(null),
+    };
+    executor = makeMockExecutor(run);
+    controller = new HumanInputController(executor as any);
     vi.clearAllMocks();
   });
 
   describe('submitInput', () => {
-    it('should return 404 when request not found', async () => {
-      (mockHumanInput.submit as any).mockResolvedValue('not_found');
-
+    it('应返回 404 当 run 不在活跃区（getActiveRun 返回 undefined）', async () => {
+      executor.getActiveRun.mockReturnValue(undefined);
       const res = createMockResponse();
-      await controller.submitInput(
-        'nonexistent-message',
-        { messageId: 'nonexistent-message', data: {} },
-        res,
-      );
-
+      await controller.submitInput(runId, { runId, data: {} }, res);
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
@@ -53,16 +55,10 @@ describe('HumanInputController', () => {
       });
     });
 
-    it('should return 400 when request already submitted', async () => {
-      (mockHumanInput.submit as any).mockResolvedValue('already_submitted');
-
+    it('应返回 400 当已提交', async () => {
+      run.submitInput.mockReturnValue('already_submitted');
       const res = createMockResponse();
-      await controller.submitInput(
-        'test-message',
-        { messageId: 'test-message', data: { answer: 'yes' } },
-        res,
-      );
-
+      await controller.submitInput(runId, { runId, data: {} }, res);
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
@@ -70,86 +66,42 @@ describe('HumanInputController', () => {
       });
     });
 
-    it('should successfully submit data', async () => {
-      (mockHumanInput.submit as any).mockResolvedValue('success');
-
+    it('提交成功返回 success 并透传 runId 与 data', async () => {
+      run.submitInput.mockReturnValue('success');
       const res = createMockResponse();
       await controller.submitInput(
-        'test-message',
-        { messageId: 'test-message', data: { name: 'John' } },
+        runId,
+        { runId, data: { name: 'John' } },
         res,
       );
-
+      expect(run.submitInput).toHaveBeenCalledWith({ name: 'John' });
       expect(res.json).toHaveBeenCalledWith({ success: true });
-      expect(mockHumanInput.submit).toHaveBeenCalledWith('test-message', {
-        name: 'John',
-      });
     });
   });
 
   describe('getStatus', () => {
-    it('should return exists: false when no request found', async () => {
-      (mockHumanInput.getStatus as any).mockResolvedValue(null);
-
+    it('无 pending 输入时返回 exists: false', async () => {
+      run.inputStatus.mockReturnValue(null);
       const res = createMockResponse();
-      await controller.getStatus('nonexistent-message', res);
-
+      await controller.getStatus(runId, res);
       expect(res.json).toHaveBeenCalledWith({ exists: false });
     });
 
-    it('should return request status when exists and not submitted', async () => {
-      (mockHumanInput.getStatus as any).mockResolvedValue({
+    it('返回聚合的 inputStatus（含 exists/submitted/message/schema）', async () => {
+      run.inputStatus.mockReturnValue({
         exists: true,
         submitted: false,
         message: 'Please confirm',
         schema: { type: 'boolean' },
       });
-
       const res = createMockResponse();
-      await controller.getStatus('test-message', res);
-
+      await controller.getStatus(runId, res);
       expect(res.json).toHaveBeenCalledWith({
         exists: true,
         submitted: false,
         message: 'Please confirm',
         schema: { type: 'boolean' },
       });
-    });
-
-    it('should return request status when already submitted', async () => {
-      (mockHumanInput.getStatus as any).mockResolvedValue({
-        exists: true,
-        submitted: true,
-        message: 'Please confirm',
-        schema: { type: 'boolean' },
-      });
-
-      const res = createMockResponse();
-      await controller.getStatus('test-message', res);
-
-      expect(res.json).toHaveBeenCalledWith({
-        exists: true,
-        submitted: true,
-        message: 'Please confirm',
-        schema: { type: 'boolean' },
-      });
-    });
-
-    it('should not expose result data in status response', async () => {
-      (mockHumanInput.getStatus as any).mockResolvedValue({
-        exists: true,
-        submitted: true,
-        message: 'Enter password',
-        schema: { type: 'string' },
-      });
-
-      const res = createMockResponse();
-      await controller.getStatus('test-message', res);
-
-      expect(res.json).toHaveBeenCalled();
-      const callArg = res.json.mock.calls[0][0];
-      expect(callArg).not.toHaveProperty('result');
-      expect(callArg).not.toHaveProperty('data');
     });
   });
 });

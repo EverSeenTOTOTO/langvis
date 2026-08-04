@@ -240,7 +240,7 @@ export const AskUserForm = observer(function AskUserForm({
     setSubmitting(true);
     setSubmitError('');
     try {
-      await chat.submitHumanInput({ messageId: node.id, data });
+      await chat.submitHumanInput({ runId: awaiting.runId, data });
     } catch (e) {
       setSubmitError(String(e instanceof Error ? e.message : e));
       setSubmitting(false);
