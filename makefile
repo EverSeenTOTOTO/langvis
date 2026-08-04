@@ -45,7 +45,7 @@ dev:
 
 .PHONY: cli
 cli:
-	NODE_ENV=development bun run src/tui-app/cli.tsx
+	NODE_ENV=development bun run src/tui/cli.tsx
 
 # Bundle the CLI to dist/cli.js (bun shebang + exec bit) for `langvis` from any
 # directory (launch cwd = the CLI's workspace). Decorators are baked in.
@@ -53,6 +53,9 @@ cli:
 cli-build:
 	bunx vite build --mode production --config config/vite.cli.ts
 	chmod +x ${DIST}/cli.js
+	# The markdown worker is an ESM source file `new URL(..., import.meta.url)`'d
+	# by cli.js (SSR bundles don't emit it) — copy it alongside so it resolves.
+	cp -f src/tui/libs/markdown.worker.ts ${DIST}/markdown.worker.ts
 
 .PHONY: build
 build: clean

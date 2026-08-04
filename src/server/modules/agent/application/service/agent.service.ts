@@ -1,11 +1,10 @@
 import { inject, singleton } from 'tsyringe';
-import type { JSONSchemaType } from 'ajv';
 import { ToolIds } from '@/shared/constants';
 import type { Tool } from '../../domain/model/tool.base';
 import { ToolSet } from '../../domain/model/tool-set.vo';
 import type { ToolMember } from '../../domain/model/tool-set.vo';
 import { RunConfigVO } from '../../domain/model/run-config.vo';
-import { configSchema, type ConversationConfig } from '@/server/libs/config';
+import type { ConversationConfig } from '@/server/libs/config';
 import { BASE_PROMPT } from './base-prompt';
 import { ToolService } from './tool.service';
 import { SkillService } from './skill.service';
@@ -28,10 +27,6 @@ export class AgentService {
     @inject(ToolService) private readonly toolService: ToolService,
     @inject(SkillService) private readonly skillService: SkillService,
   ) {}
-
-  getConfigSchema(): JSONSchemaType<Record<string, unknown>> {
-    return configSchema as JSONSchemaType<Record<string, unknown>>;
-  }
 
   // 全局 conv agent 的 system prompt：内容固定，首次构建后 memoize（等价 buildSystemPrompt(buildToolSet())）。
   getSystemPrompt(): Promise<string> {

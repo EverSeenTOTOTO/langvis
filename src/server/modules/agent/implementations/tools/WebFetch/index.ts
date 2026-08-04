@@ -40,6 +40,11 @@ export default class WebFetchTool
 
   private browser: Browser | null = null;
 
+  describe(input: Record<string, unknown>): string {
+    const { url } = input as { url?: string };
+    return url ? `fetched ${url}` : 'fetched a URL';
+  }
+
   private async doFetch(
     url: string,
     signal: AbortSignal,

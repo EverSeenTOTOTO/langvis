@@ -10,6 +10,7 @@ import { estimateTokens } from '@/server/utils/estimateTokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
+import { responseUser } from './cumulative-budget-hook';
 import {
   classifyRecall,
   type RecallKind,
@@ -20,6 +21,10 @@ const OBSERVATION_PREFIX = 'Observation: ';
 const TRUNCATE_TARGET_RATIO = 0.8;
 /** 初始 char-budget：英文 ~4 chars/token 取满；中文由循环按估算裁进目标。 */
 const CHARS_PER_TOKEN = 4;
+
+/** 不可恢复超窗时向用户解释的消息（与兄弟 stop hook 的文案风格一致）。 */
+const overflowMessage = (reason: string) =>
+  `This reply couldn't be produced: the conversation already fills the model's context window (${reason}). Start a new session, lower the conversation compaction threshold, or use a larger-context model.`;
 
 // 最新消息体积护栏
 @agentHook
@@ -69,6 +74,8 @@ export class QueryBudgetHook implements Hook {
         summary: 'unrecoverable overflow (base too large)',
         data: { usage: { used: latestTokens, total: contextSize } },
       };
+      // 与兄弟 stop hook 一致：先发一条可见的解释消息再终止，避免前端只见空消息。
+      yield* responseUser(ctx, overflowMessage('base too large'));
       throw new StopLoop();
     }
     // ② prefix 自身 ≥ 窗口（remaining ≤ 0）→ offload/compaction 未能缩进窗口，drop 最新无济于事。
@@ -82,6 +89,7 @@ export class QueryBudgetHook implements Hook {
         summary: 'unrecoverable overflow (prefix fills window)',
         data: { usage: { used: prefixTokens, total: contextSize } },
       };
+      yield* responseUser(ctx, overflowMessage('prefix fills the window'));
       throw new StopLoop();
     }
 

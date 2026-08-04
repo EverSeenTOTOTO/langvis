@@ -26,6 +26,19 @@ export default class AskUserTool extends Tool<AskUserOutput> {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
+  describe(
+    input: Record<string, unknown>,
+    output?: unknown,
+    error?: string,
+  ): string {
+    const { message } = input as { message?: string };
+    if (error)
+      return `asked user${message ? `: ${message}` : ''} → failed: ${error}`;
+    const submitted = (output as { submitted?: boolean } | undefined)
+      ?.submitted;
+    return `asked user${message ? `: ${message}` : ''}${submitted ? ' (answered)' : ' (cancelled)'}`;
+  }
+
   async *call(
     ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, AskUserOutput, void> {

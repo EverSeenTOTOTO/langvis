@@ -21,9 +21,9 @@ export const HISTORY_FRAGMENT: ConfigFragment<
     properties: {
       threshold: {
         type: 'number',
-        default: 0.95,
+        default: 0.8,
         minimum: 0.1,
-        maximum: 0.95,
+        maximum: 0.8,
         description: '触发压缩的上下文用量比例',
       },
       windowSize: {

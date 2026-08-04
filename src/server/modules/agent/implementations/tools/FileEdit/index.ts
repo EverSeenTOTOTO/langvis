@@ -22,6 +22,17 @@ export default class FileEditTool extends Tool<FileEditOutput> {
     super();
   }
 
+  describe(
+    input: Record<string, unknown>,
+    output?: unknown,
+    error?: string,
+  ): string {
+    const { path } = input as { path?: string };
+    const changes = (output as FileEditOutput | undefined)?.changes;
+    if (error) return `edited ${path} → failed: ${error}`;
+    return `edited ${path} (${changes ?? 0} replacement${changes === 1 ? '' : 's'})`;
+  }
+
   async *call(
     ctx: ToolCallContext,
   ): AsyncGenerator<RunEvent, FileEditOutput, void> {

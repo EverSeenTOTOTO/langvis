@@ -4,6 +4,7 @@ import { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
 import type {
   AgentRunContext,
   ToolExecutor,
+  ToolRunResult,
 } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
@@ -232,7 +233,7 @@ export class AgentRunExecutor {
     toolName: string,
     args: Record<string, unknown>,
     toolSet: ToolSet,
-  ): AsyncGenerator<RunEvent, string, void> {
+  ): AsyncGenerator<RunEvent, ToolRunResult, void> {
     if (!toolSet.has(toolName)) throw new ToolNotFoundError(toolName);
     let tool: Tool;
     try {

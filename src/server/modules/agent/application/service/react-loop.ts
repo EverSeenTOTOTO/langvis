@@ -80,12 +80,14 @@ export async function* runReactLoop(
       const { tool, input } = parsed;
       if (parsed.thought) yield { type: 'thought', content: parsed.thought };
 
-      const observation = yield* runTool(tool, input);
-      if (tool === ToolIds.RESPONSE_USER) return yield* exitLoop(ctx);
+      const result = yield* runTool(tool, input);
+      // response_user 成功（completed=delivered）才退出；失败不退出，回灌 error 供模型重试。
+      if (tool === ToolIds.RESPONSE_USER && result.status === 'completed')
+        return yield* exitLoop(ctx);
 
       ctx.messages.push({
         role: Role.USER,
-        content: `Observation: ${observation}\n`,
+        content: `Observation: ${result.observation}\n`,
       });
       yield* applyHooks(ctx, 'post-observation');
     } catch (e) {

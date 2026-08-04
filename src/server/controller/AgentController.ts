@@ -4,14 +4,13 @@ import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { param, request, response } from '../decorator/param';
 import { QueryBus } from '@/server/libs/ddd';
-import { AgentService } from '../modules/agent/application/service/agent.service';
+import { configSchema } from '../libs/config';
 import { SkillService } from '../modules/agent/application/service/skill.service';
 import { GetRunViewQuery } from '../modules/conversation/contracts';
 
 @controller('/api/agent')
 export default class AgentController {
   constructor(
-    @inject(AgentService) private readonly agentService: AgentService,
     @inject(SkillService) private readonly skillService: SkillService,
     @inject(QueryBus) private readonly queryBus: QueryBus,
   ) {}
@@ -19,7 +18,7 @@ export default class AgentController {
   @api('/', { method: 'get' })
   async getConfig(@request() _req: Request, @response() res: Response) {
     // 收敛单一 agent 后返回聚合后的对话配置 schema（各域 ConfigFragment 平铺）。
-    return res.json(this.agentService.getConfigSchema());
+    return res.json(configSchema);
   }
 
   @api('/skills', { method: 'get' })

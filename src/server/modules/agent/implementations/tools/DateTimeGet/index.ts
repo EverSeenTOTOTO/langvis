@@ -26,6 +26,16 @@ export default class DateTimeGetTool extends Tool<DateTimeGetOutput> {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
+  describe(
+    input: Record<string, unknown>,
+    output?: unknown,
+    _error?: string,
+  ): string {
+    const { timezone } = input as DateTimeGetInput;
+    const result = (output as DateTimeGetOutput | undefined)?.result;
+    return `read time${timezone ? ` (${timezone})` : ''}: ${result ?? ''}`;
+  }
+
   async *call(
     ctx: ToolCallContext,
   ): AsyncGenerator<never, DateTimeGetOutput, void> {

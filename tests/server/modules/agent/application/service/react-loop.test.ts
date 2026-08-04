@@ -20,6 +20,7 @@ import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import type {
   AgentRunContext,
   ToolExecutor,
+  ToolRunResult,
 } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { AuthorizationPort } from '@/server/modules/agent/domain/port/authorization.port';
@@ -187,16 +188,27 @@ function fakeExecuteTool(handler: ToolHandler): ToolExecutor {
   let counter = 0;
   return (toolName, args) => {
     const callId = `tc_${++counter}`;
-    return (async function* generate(): AsyncGenerator<RunEvent, string, void> {
+    return (async function* generate(): AsyncGenerator<
+      RunEvent,
+      ToolRunResult,
+      void
+    > {
       const res = handler(toolName, args); // may throw → propagates before `tool_call`
       yield { type: 'tool_call', callId, toolName, toolArgs: args };
       if (res.error) {
         yield { type: 'tool_error', callId, toolName, error: res.error };
-        return `Error executing tool "${toolName}": ${res.error}`;
+        return {
+          status: 'failed',
+          observation: `Error executing tool "${toolName}": ${res.error}`,
+        };
       }
       const { output } = res;
       yield { type: 'tool_result', callId, toolName, output };
-      return typeof output === 'string' ? output : JSON.stringify(output);
+      return {
+        status: 'completed',
+        observation:
+          typeof output === 'string' ? output : JSON.stringify(output),
+      };
     })();
   };
 }
@@ -526,6 +538,35 @@ describe('runReactLoop', () => {
       expect(calls).toHaveLength(1);
       expect(types.filter(t => t === 'tool_call')).toHaveLength(1);
       expect(types).not.toContain('loop_usage');
+    });
+
+    it('response_user 失败不结束 loop：回灌 error 供模型重试', async () => {
+      let failCount = 0;
+      const failing: ToolHandler = () => {
+        if (failCount++ === 0) {
+          return { error: 'data/tts must be object' };
+        }
+        return { output: 'ok' };
+      };
+      // 第一次 response_user 失败 → 重试同参数成功。
+      const { ctx, runTool } = buildCtx({
+        responses: [
+          responseUser('final'), // 触发一次(失败)
+          responseUser('final'), // 重试(成功)
+        ],
+        handler: failing,
+      });
+
+      const events = await collect(runReactLoop(ctx, runTool));
+      const types = events.map(e => e.type);
+
+      expect(types.filter(t => t === 'tool_call')).toHaveLength(2);
+      expect(types.filter(t => t === 'tool_error')).toHaveLength(1);
+      // 失败回灌成 Observation（未退出）；随后重试成功才退出
+      const userObs = ctx.messages.filter(
+        m => m.role === 'user' && m.content.includes('Error executing tool'),
+      );
+      expect(userObs).toHaveLength(1);
     });
   });
 

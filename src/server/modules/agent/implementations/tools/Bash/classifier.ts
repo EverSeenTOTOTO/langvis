@@ -5,7 +5,7 @@ import { shortenHome } from '@/server/modules/agent/infrastructure/authorization
 import type { AuthAction } from '@/server/modules/agent/domain/port/authorization.port';
 
 // Bash 命令分类器（工具侧 pwd-containment 判定）：auth 层对 workDir 一无所知。
-// safe（只读+在子树内）直放行不调 auth；sensitive（越界/写/exec/元字符/未知）走 ensureApproved。
+// safe（只读+在子树内，含 &&/||/; 链的逐段判定）直放行不调 auth；sensitive 整条一次走 ensureApproved。
 
 export type BashPermission =
   | { kind: 'safe' }
@@ -42,7 +42,7 @@ const READONLY_CMDS = new Set([
   'readlink',
 ]);
 
-/** shell 元字符：出现即判 sensitive（保守，管道/重定向/命令替换/变量展开皆此）。 */
+/** shell 元字符：未引号出现即判 sensitive（&&/||/; 已先行拆段，此处管管道/重定向/展开/转义）。 */
 const SHELL_METACHARS = /[|&;\n$()<>`\\]/;
 
 interface Token {
@@ -127,77 +127,131 @@ function hashCommand(command: string): string {
   return crypto.createHash('sha1').update(command).digest('hex').slice(0, 16);
 }
 
-// 分类 bash 命令：含元字符 → sensitive(exec-cmd, hash)；只读白名单 → 全 token 在子树内 safe，越界 sensitive(read-path)。
-// 写/可执行/未知 → sensitive(edit-path|exec-cmd, hash)。
+// 顶层拆分：引号感知，按 && / || / ; / 换行 分段（尊重 \\ 转义）。未闭合引号或行尾反斜杠 → null。
+function splitTopLevel(command: string): string[] | null {
+  const segments: string[] = [];
+  let cur = '';
+  let quoted: 'none' | 'single' | 'double' = 'none';
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i]!;
+    if (quoted === 'none') {
+      if (ch === '\\') {
+        if (command[i + 1] === undefined) return null; // 行尾续行未闭合
+        cur += ch + command[i + 1]!;
+        i++;
+        continue;
+      }
+      if (ch === "'" || ch === '"') {
+        quoted = ch === "'" ? 'single' : 'double';
+        cur += ch;
+        continue;
+      }
+      if (ch === '&' || ch === '|') {
+        if (command[i + 1] === ch) {
+          segments.push(cur);
+          cur = '';
+          i++;
+          continue;
+        }
+        cur += ch; // 单个 & / | 不拆，留给段内判定
+        continue;
+      }
+      if (ch === ';' || ch === '\n') {
+        segments.push(cur);
+        cur = '';
+        continue;
+      }
+      cur += ch;
+    } else if (quoted === 'single') {
+      cur += ch;
+      if (ch === "'") quoted = 'none';
+    } else {
+      cur += ch;
+      if (ch === '"') quoted = 'none';
+      else if (ch === '\\' && command[i + 1] !== undefined) {
+        cur += command[i + 1]!;
+        i++;
+      }
+    }
+  }
+  if (quoted !== 'none') return null;
+  segments.push(cur);
+  return segments;
+}
+
+// 分类 bash 命令：顶层拆段（&&/||/; 换行）后逐段判定，cwd 随 cd 更新。
+// 任一段 sensitive → 整条一次授权（resource=整条命令 hash）；全 safe → safe 放行。
 export function classifyBashCommand(
   command: string,
   workDir: string,
 ): BashPermission {
   const promptHeader = `### 执行命令\n\n\`\`\`bash\n${command.trimEnd()}\n\`\`\`\n\n**工作目录:** \`${shortenHome(workDir)}\``;
-
-  // 元字符（含未引号包裹的）→ sensitive。
-  // 取引号外的元字符：逐字符扫描是否处于引号内。
-  if (hasUnquotedMetachar(command)) {
-    return {
-      kind: 'sensitive',
-      action: 'exec-cmd',
-      resource: `bash:${hashCommand(command)}`,
-      prompt: promptHeader,
-    };
-  }
-
-  const tokens = tokenize(command);
-  if (tokens === null) {
-    return {
-      kind: 'sensitive',
-      action: 'exec-cmd',
-      resource: `bash:${hashCommand(command)}`,
-      prompt: promptHeader,
-    };
-  }
-
-  const cmdToken = findCommandToken(tokens);
-  if (!cmdToken) {
-    // 纯 flag / 空命令——保守 sensitive。
-    return {
-      kind: 'sensitive',
-      action: 'exec-cmd',
-      resource: `bash:${hashCommand(command)}`,
-      prompt: promptHeader,
-    };
-  }
-  const cmd = cmdToken.value;
-  const cmdIdx = tokens.indexOf(cmdToken);
-
-  if (READONLY_CMDS.has(cmd)) {
-    // 只读命令：检查所有非 flag、非首命令 token 是否落在 workDir 子树内。
-    for (let i = cmdIdx + 1; i < tokens.length; i++) {
-      const t = tokens[i]!;
-      if (t.value.startsWith('-')) continue; // flag
-      const resolved = resolveArgPath(t.value, workDir);
-      if (!isWithin(resolved, workDir)) {
-        return {
-          kind: 'sensitive',
-          action: 'read-path',
-          resource: resolved,
-          prompt: promptHeader,
-        };
-      }
-    }
-    return { kind: 'safe' };
-  }
-
-  // 非只读：写 / exec / 未知 一律 sensitive（resource=hash，逐命令授权）。
-  return {
+  const sensitiveExec = (): BashPermission => ({
     kind: 'sensitive',
     action: 'exec-cmd',
     resource: `bash:${hashCommand(command)}`,
     prompt: promptHeader,
-  };
+  });
+
+  const segments = splitTopLevel(command);
+  if (segments === null) return sensitiveExec();
+
+  let cwd = workDir;
+  for (const raw of segments) {
+    const segment = raw.trim();
+    if (segment === '') continue; // 空段（如尾部 `&&`）
+
+    // 段内危险展开（管道/重定向/后台/替换/转义，含双引号内 $/反引号）→ 整条 sensitive。
+    if (hasDangerousExpansion(segment)) return sensitiveExec();
+
+    const tokens = tokenize(segment);
+    if (tokens === null) return sensitiveExec();
+    const cmdToken = findCommandToken(tokens);
+    if (!cmdToken) return sensitiveExec();
+    const cmd = cmdToken.value;
+    const cmdIdx = tokens.indexOf(cmdToken);
+
+    if (cmd === 'cd') {
+      // cd 仅允许在 workDir 子树内移动；裸 cd / cd - / 多参数 → sensitive。
+      const args = tokens
+        .slice(cmdIdx + 1)
+        .filter(t => !t.value.startsWith('-'));
+      if (args.length !== 1) return sensitiveExec();
+      const resolved = resolveArgPath(args[0]!.value, cwd);
+      if (!isWithin(resolved, workDir)) return sensitiveExec();
+      cwd = resolved;
+      continue;
+    }
+
+    if (cmd === 'echo') continue; // 只写 stdout、参数非路径；替换已由 hasDangerousExpansion 拦截
+
+    if (READONLY_CMDS.has(cmd)) {
+      // 只读命令：检查所有非 flag token 是否落在 workDir 子树内（相对当前 cwd 解析）。
+      for (let i = cmdIdx + 1; i < tokens.length; i++) {
+        const t = tokens[i]!;
+        if (t.value.startsWith('-')) continue; // flag
+        const resolved = resolveArgPath(t.value, cwd);
+        if (!isWithin(resolved, workDir)) {
+          return {
+            kind: 'sensitive',
+            action: 'read-path',
+            resource: resolved,
+            prompt: promptHeader,
+          };
+        }
+      }
+      continue;
+    }
+
+    // 写 / exec / 未知 一律敏感（resource=整条命令 hash）。
+    return sensitiveExec();
+  }
+  return { kind: 'safe' };
 }
 
-/** 扫描 command，返回是否存在未被引号包裹的 shell 元字符。 */
-function hasUnquotedMetachar(command: string): boolean {
+// 段内危险展开判定：未引号元字符，或双引号内 $/反引号（shell 会实际展开），皆 sensitive。
+// 单引号内容字面化（'$(x)' 不展开）；双引号内 \\ 转义其后一字符（"\$x" 为字面 $）。
+function hasDangerousExpansion(command: string): boolean {
   let quoted: 'none' | 'single' | 'double' = 'none';
   for (let i = 0; i < command.length; i++) {
     const ch = command[i]!;
@@ -212,6 +266,7 @@ function hasUnquotedMetachar(command: string): boolean {
     } else {
       if (ch === '"') quoted = 'none';
       else if (ch === '\\' && command[i + 1] !== undefined) i++;
+      else if (ch === '$' || ch === '`') return true;
     }
   }
   return false;

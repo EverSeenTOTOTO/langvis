@@ -47,8 +47,11 @@ export class ChatStore {
           this.conversationStore.conversationUsage = null;
         });
 
-        await this.loadMessages(newId);
+        // Activate (transport → 'connecting') in parallel with loading history,
+        // so "activating…" paints instead of waiting for the long full-list render.
+        const load = this.loadMessages(newId);
         await this.activateConversation(newId);
+        await load;
       },
     );
   }

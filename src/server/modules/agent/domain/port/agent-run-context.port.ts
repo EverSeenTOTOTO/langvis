@@ -7,11 +7,17 @@ import type { AuthorizationPort } from './authorization.port';
 import type { HookPlan } from '../model/hook';
 import type { LlmMessage } from '@/shared/types/entities';
 
+/** 工具执行结果：observation 供模型回灌；status 作终态判定（如 response_user 失败不退出）。 */
+export interface ToolRunResult {
+  observation: string;
+  status: 'pending' | 'completed' | 'failed';
+}
+
 /** 工具执行能力；executor 持有，显式注入 loop。 */
 export type ToolExecutor = (
   toolName: string,
   args: Record<string, unknown>,
-) => AsyncGenerator<RunEvent, string, void>;
+) => AsyncGenerator<RunEvent, ToolRunResult, void>;
 
 /** 解析出的 ReAct 动作。loop 权威解析一次后挂到 ctx.pendingAction，pre-action hook 直接读、不再各自 parse。 */
 export interface ParsedAction {
