@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import type { MessageNode } from '@/client/store/modules/message-node';
+import type { MessageNode } from '@/client/view-model/message-node';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Typography } from 'antd';
 import type React from 'react';

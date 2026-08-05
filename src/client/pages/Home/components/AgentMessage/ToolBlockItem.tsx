@@ -11,7 +11,7 @@ import type React from 'react';
 import {
   streamChunks,
   type UIToolCall,
-} from '@/client/store/modules/message-node';
+} from '@/client/view-model/message-node';
 import { useStore } from '@/client/store';
 import './index.scss';
 

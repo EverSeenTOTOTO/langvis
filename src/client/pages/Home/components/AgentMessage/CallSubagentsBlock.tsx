@@ -5,7 +5,7 @@ import {
   aggregateSubagentChildren,
   type SubagentChildState,
   type UIToolCall,
-} from '@/client/store/modules/message-node';
+} from '@/client/view-model/message-node';
 import Modal from '@/client/components/Modal';
 import { useStore } from '@/client/store';
 import { getToolColor } from './ToolBlockItem';

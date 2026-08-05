@@ -2,7 +2,7 @@ import type { ReActStep } from '@/shared/types/render';
 import {
   stepsToToolCalls,
   stepsToTimeline,
-} from '@/client/store/modules/message-node';
+} from '@/client/view-model/message-node';
 import { StandaloneThoughtBlock, ToolBlockItem } from './ToolBlockItem';
 
 export interface RunStepsProps {

@@ -6,7 +6,7 @@ import composeHydrate from '../decorator/hydrate';
 import { AgentStore } from './modules/agent';
 import { AuthStore } from './modules/auth';
 import { ChatStore } from './modules/chat';
-import { ConversationGroupStore } from './modules/conversationGroup';
+import { ConversationGroupStore } from './modules/conversation-group';
 import { ConversationStore } from './modules/conversation';
 import { DocumentStore } from './modules/document';
 import { EmailStore } from './modules/email';

@@ -10,7 +10,7 @@ import type {
 import type { Conversation, Message } from '@/shared/types/entities';
 import { makeAutoObservable } from 'mobx';
 import { inject } from 'tsyringe';
-import { ConversationGroupStore } from './conversationGroup';
+import { ConversationGroupStore } from './conversation-group';
 
 @store()
 export class ConversationStore {
