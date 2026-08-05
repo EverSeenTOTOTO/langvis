@@ -9,7 +9,7 @@ import {
   aggregateSubagentChildren,
   lastStreamLine,
   type UIToolCall,
-} from '@/client/store/modules/message-node';
+} from '@/client/view-model/message-node';
 
 const AVATAR_GAP = 3;
 // card content width: terminal minus avatar gap, two border columns, and padding.

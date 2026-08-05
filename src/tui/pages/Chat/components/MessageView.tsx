@@ -2,7 +2,7 @@
 import { observer } from 'mobx-react-lite';
 import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
-import type { MessageNode } from '@/client/store/modules/message-node';
+import type { MessageNode } from '@/client/view-model/message-node';
 import { Paragraph } from './Paragraph';
 import { Markdown } from '@/tui/components/Markdown';
 import { ToolCallView } from './ToolBlock';

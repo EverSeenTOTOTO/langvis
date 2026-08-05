@@ -1,7 +1,7 @@
 import { Transport } from '@/shared/transport';
 import type { StreamFrame } from '@/shared/types/events';
 import { isClient } from '@/shared/utils';
-import { getPrefetchPath, serverFetch } from '../../../decorator/api';
+import { getPrefetchPath, serverFetch } from '../decorator/api';
 import { makeObservable, observable, computed } from 'mobx';
 
 const CONNECTION_TIMEOUT_MS = 30_000;

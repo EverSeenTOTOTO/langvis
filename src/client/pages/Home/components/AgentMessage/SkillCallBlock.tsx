@@ -2,7 +2,7 @@ import { CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { Button, Flex, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { lazy, Suspense } from 'react';
-import type { UIToolCall } from '@/client/store/modules/message-node';
+import type { UIToolCall } from '@/client/view-model/message-node';
 import Modal from '@/client/components/Modal';
 import './index.scss';
 import { useStore } from '@/client/store';

@@ -1,6 +1,6 @@
 import HumanInputForm from '@/client/components/HumanInputForm';
-import type { MessageNode } from '@/client/store/modules/message-node';
-import type { UIToolCall } from '@/client/store/modules/message-node';
+import type { MessageNode } from '@/client/view-model/message-node';
+import type { UIToolCall } from '@/client/view-model/message-node';
 import { LoadingOutlined } from '@ant-design/icons';
 import { Collapse, Typography } from 'antd';
 import { observer } from 'mobx-react-lite';

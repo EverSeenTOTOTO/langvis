@@ -5,7 +5,7 @@ import {
   MessageNode,
   stepsToTimeline,
   stepsToToolCalls,
-} from '@/client/store/modules/message-node';
+} from '@/client/view-model/message-node';
 
 const step = (over: Partial<ReActStep>): ReActStep => ({
   thought: '',

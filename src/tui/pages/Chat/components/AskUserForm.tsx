@@ -9,7 +9,7 @@ import { Markdown } from '@/tui/components/Markdown';
 import { Spinner } from '@/tui/components/Spinner';
 import { useKeyboard } from '@/tui/hooks/useKeyboard';
 import { useStore } from '@/client/store';
-import type { MessageNode } from '@/client/store/modules/message-node';
+import type { MessageNode } from '@/client/view-model/message-node';
 import {
   BooleanControl,
   EnumControl,
