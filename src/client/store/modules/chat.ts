@@ -300,6 +300,36 @@ export class ChatStore {
     }
   }
 
+  // ═══ Retry ═══
+
+  @api('/api/chat/truncate/:conversationId/:messageId', {
+    method: 'post',
+  })
+  async truncateMessages(
+    params: { conversationId: string; messageId: string },
+    req?: ApiRequest<{ conversationId: string; messageId: string }>,
+  ): Promise<void> {
+    const { conversationId, messageId } = params;
+
+    // 本地先截断到目标之前（点击即有反馈）；后端随后持久化截断并重置 ctx。重发由用户走常规发送。
+    const existing = this.conversationStore.messages[conversationId] ?? [];
+    const idx = existing.findIndex(m => m.id === messageId);
+    if (idx >= 0) {
+      runInAction(() => {
+        this.conversationStore.messages[conversationId] = existing.slice(
+          0,
+          idx,
+        );
+      });
+    }
+
+    try {
+      await req!.send();
+    } finally {
+      this.refreshMessages(conversationId);
+    }
+  }
+
   // ═══ Private helpers ═══
 
   private refreshMessages(conversationId: string): void {

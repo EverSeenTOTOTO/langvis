@@ -67,6 +67,17 @@ export class StartChatCommand extends Command {
   }
 }
 
+/** 截断会话到某条消息之前：删除该消息及之后所有消息（含折叠 summary），重置 ctx.messages。重发走常规发送路径。 */
+export class TruncateConversationCommand extends Command {
+  constructor(
+    readonly conversationId: string,
+    readonly messageId: string,
+    readonly userId: string,
+  ) {
+    super();
+  }
+}
+
 export class GetSessionStateQuery extends Query {
   constructor(readonly conversationId: string) {
     super();

@@ -47,7 +47,16 @@ describe('buildEntries', () => {
     const entries = buildEntries([skill('doc'), skill('code')]);
     expect(
       entries.map(e => (e.kind === 'cmd' ? e.cmd : `s:${e.skill.id}`)),
-    ).toEqual(['conv', 'model', 'new', 'logout', 'help', 's:doc', 's:code']);
+    ).toEqual([
+      'conv',
+      'model',
+      'new',
+      'resume',
+      'logout',
+      'help',
+      's:doc',
+      's:code',
+    ]);
   });
 });
 
@@ -65,6 +74,11 @@ describe('filterEntries', () => {
   it('matches a config command by token', () => {
     const r = filterEntries(entries, 'mod');
     expect(r.map(e => (e.kind === 'cmd' ? e.cmd : null))).toContain('model');
+  });
+
+  it('matches /resume by token prefix', () => {
+    const r = filterEntries(entries, 'res');
+    expect(r.map(e => (e.kind === 'cmd' ? e.cmd : null))).toContain('resume');
   });
 
   it('matches a skill by id', () => {

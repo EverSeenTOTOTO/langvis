@@ -58,6 +58,18 @@ describe('ChatService', () => {
     service = new ChatService(messageRepo, convRepo, agentRunRepo, workspace);
   });
 
+  // ═══ 删除 ═══
+
+  describe('deleteMessages', () => {
+    it('delegates to the message repository with the given ids', async () => {
+      await service.deleteMessages('conv_1', ['m1', 'm2']);
+      expect(messageRepo.batchDeleteInConversation).toHaveBeenCalledWith(
+        'conv_1',
+        ['m1', 'm2'],
+      );
+    });
+  });
+
   // ═══ 消息构建 ═══
 
   describe('activate', () => {

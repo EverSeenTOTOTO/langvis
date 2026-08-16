@@ -3,7 +3,7 @@ import type { SkillInfo } from '@/shared/types/agent';
 // Unified `/` command model for the TUI palette: skills (insert /skill-id) plus
 // the fixed config commands Chat.tsx already dispatches.
 
-export type SlashCmd = 'model' | 'conv' | 'new' | 'logout' | 'help';
+export type SlashCmd = 'model' | 'conv' | 'new' | 'resume' | 'logout' | 'help';
 
 export type SlashEntry =
   | { kind: 'skill'; skill: SkillInfo } // insert /skill-id at the caret
@@ -19,6 +19,7 @@ export const SLASH_COMMANDS: SlashCommandMeta[] = [
   { cmd: 'conv', token: '/conv', desc: 'switch conversation' },
   { cmd: 'model', token: '/model', desc: 'switch model' },
   { cmd: 'new', token: '/new', desc: 'new conversation' },
+  { cmd: 'resume', token: '/resume', desc: 'retry from a past message' },
   { cmd: 'logout', token: '/logout', desc: 'sign out' },
   { cmd: 'help', token: '/help', desc: 'list commands' },
 ];

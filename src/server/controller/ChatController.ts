@@ -14,6 +14,7 @@ import {
   ConversationActivateCommand,
   CancelChatCommand,
   StartChatCommand,
+  TruncateConversationCommand,
   GetSessionStateQuery,
 } from '../modules/conversation/contracts';
 
@@ -119,6 +120,25 @@ export default class ChatController {
     );
 
     return res.status(200).json({ success: true, messageId: assistantId });
+  }
+
+  @api('/truncate/:conversationId/:messageId', { method: 'post' })
+  async truncate(
+    @param('conversationId') conversationId: string,
+    @param('messageId') messageId: string,
+    @request() req: Request,
+    @response() res: Response,
+  ) {
+    const userId = await this.authService.getUserId(req);
+    await this.commandBus.execute(
+      new TruncateConversationCommand(conversationId, messageId, userId),
+    );
+
+    req.log.info(
+      `Truncated conversation ${conversationId} before ${messageId}`,
+    );
+
+    return res.status(200).json({ success: true });
   }
 
   @api('/session/:conversationId')

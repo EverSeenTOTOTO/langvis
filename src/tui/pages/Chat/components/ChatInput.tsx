@@ -25,10 +25,15 @@ export const ChatInput = observer(function ChatInput({
   convId,
   streamingId,
   onCommand,
+  initialContent = '',
+  onApplyInitial,
 }: {
   convId: string;
   streamingId: string | null;
   onCommand: (raw: string) => void;
+  /** 重试预填：本组件挂载时把该文本写入输入区后回调（幂等，仅首次）。 */
+  initialContent?: string;
+  onApplyInitial?: () => void;
 }) {
   const chat = useStore('chat');
   const agent = useStore('agent');
@@ -66,6 +71,15 @@ export const ChatInput = observer(function ChatInput({
   useEffect(() => {
     histRef.current = { pos: history.length, draft: '' };
   }, [convId, history.length]);
+
+  // 重试预填：组件挂载后把 initialContent 写入输入区（仅首次），并通知父级已消费。
+  const appliedInitialRef = useRef(false);
+  useEffect(() => {
+    if (!initialContent || appliedInitialRef.current) return;
+    appliedInitialRef.current = true;
+    taRef.current?.replace(initialContent);
+    onApplyInitial?.();
+  }, [initialContent, onApplyInitial]);
 
   const [skillState, fetchSkills] = useAsyncFn(() => agent.listSkills());
   useEffect(() => {

@@ -13,6 +13,7 @@ import { AssistantView, UserView, AVATAR_GAP } from './components/MessageView';
 import { AskUserForm } from './components/AskUserForm';
 import { ModelPicker } from './components/ModelPicker';
 import { ConvPicker } from './components/ConvPicker';
+import { ResumePicker } from './components/ResumePicker';
 import { ChatInput } from './components/ChatInput';
 import { StatusBar } from './components/StatusBar';
 import { useStaticReveal } from './hooks/useStaticReveal';
@@ -23,6 +24,7 @@ type BottomMode =
   | { kind: 'ask' }
   | { kind: 'model' }
   | { kind: 'conv' }
+  | { kind: 'resume' }
   | { kind: 'busy'; label: string }
   | { kind: 'input' };
 
@@ -52,8 +54,11 @@ export const Chat = observer(function Chat() {
   const auth = useStore('auth');
   const { cols } = useTerminalSize();
   const convId = conversation.currentConversationId;
-  const [picker, setPicker] = useState<null | 'model' | 'conv'>(null);
+  const [picker, setPicker] = useState<null | 'model' | 'conv' | 'resume'>(
+    null,
+  );
   const [notice, setNotice] = useState('');
+  const [prefill, setPrefill] = useState('');
   const [expanded, setExpanded] = useState(false);
 
   // Wipe stale Static scrollback on conversation switch; bump remountKey so the
@@ -84,6 +89,7 @@ export const Chat = observer(function Chat() {
   }
 
   const committed = streamingId ? all.filter(m => m.id !== streamingId) : all;
+
   // History renders off-thread (worker) and appends as each message is ready;
   // content + width must match AssistantView's Markdown so the cache key lines up.
   const msgWidth = Math.max(1, cols - AVATAR_GAP);
@@ -123,11 +129,22 @@ export const Chat = observer(function Chat() {
     }
   }
 
+  function handleResumePick(msg: { id: string; content: string }) {
+    if (!convId) return;
+    // 截断本地即同步生效（本地先删）。Ink <Static> 是只追加的，删掉的消息无法自行
+    // 擦除——像切会话一样清屏 + 重挂，让 Static 重发截断后的剩余历史。
+    chat.truncateMessages({ conversationId: convId, messageId: msg.id });
+    process.stdout.write(CLEAR_SCREEN);
+    setRemountKey(k => k + 1);
+    setPrefill(msg.content);
+  }
+
   function handleCommand(raw: string) {
     const cmd = raw.trim().toLowerCase();
     setNotice('');
     if (cmd === '/model') setPicker('model');
     else if (cmd === '/conv') setPicker('conv');
+    else if (cmd === '/resume') setPicker('resume');
     else if (cmd === '/new') void createNew();
     else if (cmd === '/logout') {
       // Clear local state first (lands on SignIn even if the server call fails),
@@ -135,7 +152,7 @@ export const Chat = observer(function Chat() {
       auth.logoutLocal();
       void auth.signOut({}).catch(() => {});
     } else if (cmd === '/' || cmd === '/help') {
-      setNotice('commands: /model  /conv  /new  /logout');
+      setNotice('commands: /model  /conv  /new  /resume  /logout');
     } else {
       setNotice(`unknown command: ${raw.trim()}`);
     }
@@ -176,6 +193,7 @@ export const Chat = observer(function Chat() {
     if (liveNode?.awaitingInput) return { kind: 'ask' };
     if (picker === 'model') return { kind: 'model' };
     if (picker === 'conv') return { kind: 'conv' };
+    if (picker === 'resume') return { kind: 'resume' };
     if (conversation.isCreating) {
       return { kind: 'busy', label: 'creating new conversation…' };
     }
@@ -200,6 +218,11 @@ export const Chat = observer(function Chat() {
     case 'conv':
       bottomPanel = <ConvPicker onClose={closePanel} />;
       break;
+    case 'resume':
+      bottomPanel = (
+        <ResumePicker onPick={handleResumePick} onClose={closePanel} />
+      );
+      break;
     case 'busy':
       bottomPanel = <Spinner label={mode.label} />;
       break;
@@ -211,6 +234,8 @@ export const Chat = observer(function Chat() {
             convId={convId}
             streamingId={streamingId}
             onCommand={handleCommand}
+            initialContent={prefill}
+            onApplyInitial={() => setPrefill('')}
           />
         </>
       );
