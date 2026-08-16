@@ -18,6 +18,7 @@ import CompactDivider from './CompactDivider';
 import ContextDivider from './ContextDivider';
 import SystemMessage from './SystemMessage';
 import UserMessage from './UserMessage';
+import type { Message } from '@/shared/types/entities';
 
 const PIN_THRESHOLD = 80;
 
@@ -25,7 +26,11 @@ export interface MessagesRef {
   scrollToBottom: (smooth?: boolean) => void;
 }
 
-const Messages = forwardRef<MessagesRef>((_props, ref) => {
+interface MessagesProps {
+  onRetry?: (msg: Message) => void;
+}
+
+const Messages = forwardRef<MessagesRef, MessagesProps>(({ onRetry }, ref) => {
   const conversationStore = useStore('conversation');
   // 不过滤：context/compact 各自渲染为分割线，其余按 role——消除 meta.kind 隐藏边界。
   const currentMessages = conversationStore.currentMessages;
@@ -93,7 +98,9 @@ const Messages = forwardRef<MessagesRef>((_props, ref) => {
   }, [conversationId, lastMessageId, currentMessages.length]);
 
   const handleRetry = (messageId: string) => {
-    console.log('Retrying message:', messageId);
+    if (!conversationId) return;
+    const target = currentMessages.find(m => m.id === messageId);
+    if (target) onRetry?.(target);
   };
 
   return (

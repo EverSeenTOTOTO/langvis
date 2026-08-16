@@ -157,6 +157,14 @@ export class ChatService {
     return this.messageRepo.findByConversationId(conversationId);
   }
 
+  /** 按消息 id 批量删除（retry 截断用）：保留目标之前的历史，含目标本身 + 其后消息。 */
+  deleteMessages(conversationId: string, messageIds: string[]): Promise<void> {
+    return this.messageRepo.batchDeleteInConversation(
+      conversationId,
+      messageIds,
+    );
+  }
+
   /** 解析会话配置为 runtimeConfig（configSchema 全量 parse，边界处一次 as）。contextSize 不在此——按需派生。 */
   async resolveConversationConfig(
     conversationId: string,

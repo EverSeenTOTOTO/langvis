@@ -18,6 +18,7 @@ import './application/command/create-conversation.handler';
 import './application/command/conversation-update.handler';
 import './application/command/cancel-chat.handler';
 import './application/command/start-chat.handler';
+import './application/command/truncate-chat.handler';
 import './application/query/get-session-state.handler';
 import './application/query/get-messages.handler';
 import './application/query/get-conversations-by-workspace.handler';

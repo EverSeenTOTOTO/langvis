@@ -4,7 +4,7 @@ import type { ChatInputRef } from '@/client/components/ChatInput';
 import { lazy, Suspense } from 'react';
 import { SkillPickerPlugin } from '@/client/components/ChatInput/plugins/SkillPickerPlugin';
 import { getStore, useStore } from '@/client/store';
-import type { MessageAttachment } from '@/shared/types/entities';
+import type { Message, MessageAttachment } from '@/shared/types/entities';
 import { Role } from '@/shared/types/entities';
 import { MenuOutlined } from '@ant-design/icons';
 import { Button, Layout, message, Skeleton } from 'antd';
@@ -118,6 +118,15 @@ const Chat: React.FC = () => {
     });
   };
 
+  // 重试：截断到该条及其之后，并把其内容预填进输入框；用户编辑后走常规发送。
+  const handleRetry = (msg: Message) => {
+    const conversationId = conversationStore.currentConversationId;
+    if (!conversationId) return;
+    void chatStore.truncateMessages({ conversationId, messageId: msg.id });
+    setValue(msg.content);
+    chatInputRef.current?.focus();
+  };
+
   const handleCancel = async () => {
     const conversationId = conversationStore.currentConversationId;
     if (!conversationId) return;
@@ -184,7 +193,7 @@ const Chat: React.FC = () => {
           { '--chat-input-height': `${inputHeight}px` } as React.CSSProperties
         }
       >
-        <Messages ref={messagesRef} />
+        <Messages ref={messagesRef} onRetry={handleRetry} />
         <div className="chat-input" ref={inputRef}>
           <ContextUsageBar />
           <Suspense
