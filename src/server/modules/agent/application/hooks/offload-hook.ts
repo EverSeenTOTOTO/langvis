@@ -8,6 +8,7 @@ import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
 import { classifyRecallParsed } from '@/server/modules/agent/domain/offload/offload-recall';
+import { isPinnedObservation } from '@/server/modules/agent/domain/offload/pin';
 import {
   candidateBody,
   stubContent,
@@ -75,6 +76,7 @@ export class OffloadHook implements Hook {
     };
     const candByIndex = new Map<number, { cand: Candidate; tokens: number }>();
     const ordered: number[] = [];
+    let pinnedSkipped = 0;
     for (let i = base; i < len; i++) {
       const cand = candidateBody(messages[i]!);
       if (!cand) continue;
@@ -87,6 +89,14 @@ export class OffloadHook implements Hook {
         classifyRecallParsed(parsedAt(i - 1)) !== null
       )
         continue;
+      // pinned（list_tools/skill_call 产出）不桩——参考资料须原样驻留。
+      if (
+        cand.kind === 'observation' &&
+        isPinnedObservation(messages, i, parsedAt(i - 1))
+      ) {
+        pinnedSkipped++;
+        continue;
+      }
       // 原文短于一个 chunk → 桩文本不会明显小于原文，不桩。
       if (cand.body.length < CHUNK_SIZE) continue;
       candByIndex.set(i, { cand, tokens: estimateTokens([messages[i]!]) });
@@ -127,7 +137,7 @@ export class OffloadHook implements Hook {
 
     if (stubbed === 0) {
       this.logger.warn(
-        `over cap but nothing stubable (run ${ctx.runId}): ${Math.round(tokens * factor)} > cap ${Math.round(cap)}; query-budget truncation imminent`,
+        `over cap but nothing stubable (run ${ctx.runId}): ${Math.round(tokens * factor)} > cap ${Math.round(cap)}${pinnedSkipped ? `, ${pinnedSkipped} pinned skipped` : ''}; query-budget truncation imminent`,
       );
       return;
     }
@@ -136,7 +146,7 @@ export class OffloadHook implements Hook {
     const afterTokens = estimateTokens(ctx.messages);
     this.logger.info(
       `offloaded (run ${ctx.runId}): ${stubbed} msg, ${beforeTokens}→${afterTokens} tokens (window cap ${cap})`,
-      { stubbed, totalBytes, beforeTokens, afterTokens, cap },
+      { stubbed, pinnedSkipped, totalBytes, beforeTokens, afterTokens, cap },
     );
 
     yield {

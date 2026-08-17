@@ -8,6 +8,7 @@ import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
 import { classifyRecallParsed } from '@/server/modules/agent/domain/offload/offload-recall';
+import { isPinnedObservation } from '@/server/modules/agent/domain/offload/pin';
 import {
   candidateBody,
   stubContent,
@@ -70,6 +71,14 @@ export class OutputOffloadHook implements Hook {
     if (cand.kind === 'observation' && classifyRecallParsed(paired) !== null)
       return this.logger.debug(
         `skip (run ${ctx.runId}): recall echo (fc→fc alias risk)`,
+      );
+    // pinned（list_tools/skill_call 产出）不桩——单条再大也原样驻留，爆窗兜底归 query-budget。
+    if (
+      cand.kind === 'observation' &&
+      isPinnedObservation(messages, last, paired)
+    )
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): pinned observation (${paired?.tool})`,
       );
 
     const bodyTokens = estimateTokens([messages[last]!]);
