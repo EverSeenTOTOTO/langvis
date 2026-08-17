@@ -265,6 +265,48 @@ describe('OffloadHook（pre-LLM 无损体积护栏：总量超 contextWindow×wi
     expect(offloaded).not.toContain('geely'); // 参数不入文件名 → 不嵌套
   });
 
+  it('pinned observation（list_tools detail 产出）总量超 cap 也不桩', async () => {
+    const ctx = makeCtx(
+      [assistant('list_tools', { tool: 'bash' }), obs(body(8000))],
+      {
+        offload: CFG(),
+      },
+    );
+    const { events, ret } = await collect(makeHook(8192).apply(ctx));
+    expect(ret).toBeUndefined();
+    expect(events).toHaveLength(0); // 唯一候选被 pin 豁免 → 无可桩
+    expect(ctx.cache.offload).not.toHaveBeenCalled();
+    expect(ctx.messages[1]!.content).toBe(`Observation: ${body(8000)}`);
+  });
+
+  it('list_tools keywords 简表（无 tool 参数）不 pin：超 cap 照桩', async () => {
+    const ctx = makeCtx(
+      [assistant('list_tools', { keywords: 'search' }), obs(body(8000))],
+      {
+        offload: CFG(),
+      },
+    );
+    const { events } = await collect(makeHook(8192).apply(ctx));
+    expect(events).toHaveLength(1);
+    expect(ctx.messages[1]!.content).toContain('[offloaded to file');
+  });
+
+  it('pinned 豁免不阻塞旁边普通大 obs：普通照桩、pinned 原样', async () => {
+    const ctx = makeCtx(
+      [
+        assistant('list_tools', { tool: 'bash' }),
+        obs(body(8000)), // pinned → 不桩
+        assistant('bash', { command: 'rg x src/' }),
+        obs(body(8000)), // 普通 → 桩
+      ],
+      { offload: CFG() },
+    );
+    const { events } = await collect(makeHook(8192).apply(ctx));
+    expect(events).toHaveLength(1);
+    expect(ctx.messages[1]!.content).toBe(`Observation: ${body(8000)}`);
+    expect(ctx.messages[3]!.content).toContain('[offloaded to file');
+  });
+
   it('已桩化的消息不重复桩（OFFLOADED_MARK 跳过）', async () => {
     const alreadyOffloaded = '[offloaded to file fc_old] size=600B.';
     const ctx = makeCtx(

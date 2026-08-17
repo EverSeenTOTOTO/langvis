@@ -88,6 +88,40 @@ describe('OutputOffloadHook（post-observation 产出即桩：单条超 outputTo
     expect(ctx.messages.length).toBe(before);
   });
 
+  it('pinned observation（skill_call 产出）单条再大也不桩', async () => {
+    // 8000 chars >> 1600 阈值，但 skill_call 产出是参考资料 → pin 豁免（爆窗兜底归 query-budget）。
+    const ctx = makeCtx(
+      [assistant('skill_call', { skillId: 'gf' }), obs(body(8000))],
+      { offload: {} },
+    );
+    const { events, ret } = await collect(hook().apply(ctx));
+    expect(ret).toBeUndefined();
+    expect(events).toHaveLength(0);
+    expect(ctx.cache.offload).not.toHaveBeenCalled();
+    expect(ctx.messages[1]!.content).toBe(`Observation: ${body(8000)}`);
+  });
+
+  it('pinned observation（list_tools detail 产出）同样豁免', async () => {
+    const ctx = makeCtx(
+      [assistant('list_tools', { tool: 'bash' }), obs(body(8000))],
+      { offload: {} },
+    );
+    await collect(hook().apply(ctx));
+    expect(ctx.cache.offload).not.toHaveBeenCalled();
+    expect(ctx.messages[1]!.content).toBe(`Observation: ${body(8000)}`);
+  });
+
+  it('list_tools keywords 简表（无 tool 参数）不 pin：单条超大照桩', async () => {
+    const ctx = makeCtx(
+      [assistant('list_tools', { keywords: 'search' }), obs(body(8000))],
+      { offload: {} },
+    );
+    const { events } = await collect(hook().apply(ctx));
+    expect(events).toHaveLength(1);
+    expect(ctx.cache.offload).toHaveBeenCalled();
+    expect(ctx.messages[1]!.content).toContain('[offloaded to file');
+  });
+
   it('末条 Observation 超阈值 → 桩化（大小口径，与窗口压力无关）', async () => {
     // contextSize=8000×0.2=1600 阈值；8000 chars >> 1600 → 桩（无需 windowRatio）。
     const ctx = makeCtx(

@@ -7,6 +7,8 @@ import { estimateTokens } from '@/server/utils/estimateTokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
+import { isPinnedObservation } from '@/server/modules/agent/domain/offload/pin';
+import type { LlmMessage } from '@/shared/types/entities';
 
 /** loop 内压缩：折叠 turn 动作轨迹为过程摘要（仅记工作，不复述最终答案） */
 @agentHook
@@ -48,11 +50,31 @@ export class CompactionHook implements Hook {
 
     const keep = compaction.keepRecent;
     const recent = loopActions.slice(-keep);
-    const older = loopActions.slice(0, -keep);
+    const olderEnd = list.length - keep;
+
+    // pinned (action, observation) 原子对移出折叠区——孤儿 observation 会破坏 i-1 配对解析（recall/hint/pin 全依赖）。
+    // 配对 action 在折叠区内必居 foldable 末位；在 seed 前缀内则不动（前缀本就保真）。
+    const pinned: LlmMessage[] = [];
+    const foldable: LlmMessage[] = [];
+    let pinnedPairs = 0;
+    for (let i = base; i < olderEnd; i++) {
+      if (isPinnedObservation(list, i)) {
+        if (i > base) pinned.push(foldable.pop()!);
+        pinned.push(list[i]!);
+        pinnedPairs++;
+        continue;
+      }
+      foldable.push(list[i]!);
+    }
+    if (foldable.length === 0) {
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): older region all pinned (${pinnedPairs} pair(s)), nothing to fold`,
+      );
+    }
 
     try {
       const recap = await fold({
-        messages: older,
+        messages: foldable,
         windowSize: compaction.windowSize,
         signal: ctx.signal,
         prompt: PROCESS_SUMMARY_PROMPT,
@@ -61,7 +83,7 @@ export class CompactionHook implements Hook {
       });
       if (!recap) {
         this.logger.warn(
-          `fold returned no recap (run ${ctx.runId}): older=${older.length} msgs left uncompacted`,
+          `fold returned no recap (run ${ctx.runId}): older=${foldable.length} msgs left uncompacted`,
         );
         return;
       }
@@ -72,12 +94,13 @@ export class CompactionHook implements Hook {
           role: 'user',
           content: `Observation: [earlier steps in this turn — summarized]\n${recap}`,
         },
+        ...pinned,
         ...recent,
       ];
 
       const afterTokens = estimateTokens(ctx.messages);
       this.logger.info(
-        `compacted (run ${ctx.runId}): ${list.length}→${ctx.messages.length} msgs, ${beforeTokens}→${afterTokens} tokens`,
+        `compacted (run ${ctx.runId}): ${list.length}→${ctx.messages.length} msgs, ${beforeTokens}→${afterTokens} tokens, kept ${pinnedPairs} pinned pair(s)`,
       );
 
       yield {

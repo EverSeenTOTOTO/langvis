@@ -105,7 +105,7 @@ export function hintForUser(body: string): string {
 
 // 解析 messages[i] 的 assistant action；不可解析 → null。hook 一次性建索引复用，避免各路径重复 parse。
 export function parseAssistantAt(
-  messages: LlmMessage[],
+  messages: readonly LlmMessage[],
   i: number,
 ): ParsedAction | null {
   const m = messages[i];
