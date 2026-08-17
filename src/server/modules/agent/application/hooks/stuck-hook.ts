@@ -25,10 +25,16 @@ export class StuckHook implements Hook {
 
   async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const guard = ctx.config.runtimeConfig.guard;
-    if (!guard) return;
+    if (!guard)
+      return this.logger.debug(`skip (run ${ctx.runId}): guard config off`);
 
     const action = ctx.pendingAction;
-    if (!action || action.tool === ToolIds.RESPONSE_USER) return;
+    if (!action)
+      return this.logger.debug(`skip (run ${ctx.runId}): no pending action`);
+    if (action.tool === ToolIds.RESPONSE_USER)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): terminal response_user tick`,
+      );
     const sig = `${action.tool}:${JSON.stringify(action.input)}`;
 
     if (this.seen.has(sig)) this.streak++;
@@ -36,7 +42,10 @@ export class StuckHook implements Hook {
       this.seen.add(sig);
       this.streak = 0;
     }
-    if (this.streak < guard.stuckThreshold) return;
+    if (this.streak < guard.stuckThreshold)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): streak ${this.streak} < threshold ${guard.stuckThreshold} (${action.tool})`,
+      );
 
     this.logger.warn(
       `stuck (run ${ctx.runId}): ${this.streak} consecutive no-progress ticks (last sig=${sig})`,

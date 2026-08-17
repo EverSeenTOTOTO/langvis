@@ -40,12 +40,16 @@ export class OffloadHook implements Hook {
 
   async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const cfg = ctx.config.runtimeConfig.offload as OffloadConfig | undefined;
-    if (!cfg) return;
+    if (!cfg)
+      return this.logger.debug(`skip (run ${ctx.runId}): offload config off`);
 
     const contextSize = this.providerService.resolveContextSize(
       ctx.config.runtimeConfig,
     );
-    if (!contextSize) return;
+    if (!contextSize)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): contextSize unresolved`,
+      );
 
     // factor 放大估算，吸收 estimateTokens 对中文/JSON 的系统性低估（防桩化不足→真实爆窗）。
     const factor = ESTIMATE_SAFETY_FACTOR;
@@ -55,7 +59,10 @@ export class OffloadHook implements Hook {
     const len = messages.length;
     const base = ctx.base;
     let tokens = estimateTokens(messages);
-    if (tokens * factor <= cap) return;
+    if (tokens * factor <= cap)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): under window cap (${Math.round(tokens * factor)} <= ${Math.round(cap)})`,
+      );
 
     // 候选：仅 [base,len)；已桩 / 盘上句柄回取 / 短于 MIN 跳过；最胖优先（tokens 降序）。
     // assistant 的 ParsedAction 由 candidateBody 解析后寄存单一索引，hint/stub 与下条 observation 配对源共用，免重复 parse。
@@ -118,7 +125,12 @@ export class OffloadHook implements Hook {
       await stubIndex(i);
     }
 
-    if (stubbed === 0) return;
+    if (stubbed === 0) {
+      this.logger.warn(
+        `over cap but nothing stubable (run ${ctx.runId}): ${Math.round(tokens * factor)} > cap ${Math.round(cap)}; query-budget truncation imminent`,
+      );
+      return;
+    }
 
     ctx.messages = messages;
     const afterTokens = estimateTokens(ctx.messages);

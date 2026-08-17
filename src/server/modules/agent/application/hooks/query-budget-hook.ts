@@ -40,11 +40,15 @@ export class QueryBudgetHook implements Hook {
 
   async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const guard = ctx.config.runtimeConfig.guard;
-    if (!guard) return;
+    if (!guard)
+      return this.logger.debug(`skip (run ${ctx.runId}): guard config off`);
     const contextSize = this.providerService.resolveContextSize(
       ctx.config.runtimeConfig,
     );
-    if (!contextSize) return;
+    if (!contextSize)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): contextSize unresolved`,
+      );
     // per-latest 单条预算 = min(maxQueryTokens, contextWindow×maxQuerySize)。阈值在 guard fragment。
     const budget = Math.min(
       guard.maxQueryTokens!,
@@ -60,7 +64,10 @@ export class QueryBudgetHook implements Hook {
 
     // 最新一条塞得进留给它的余量 → 放行。须先判，否则 seed 末条（last<base）会被误判不可恢复。
     const latestTokens = estimateTokens([messages[last]!]);
-    if (latestTokens <= cap) return;
+    if (latestTokens <= cap)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): latest ${latestTokens} <= cap ${cap} (prefix ${prefixTokens}/${contextSize})`,
+      );
 
     // 超限但无可 drop：
     // ① 最新一条落在 [0,base) seed 内 → 无可 drop（base 自身超窗）。

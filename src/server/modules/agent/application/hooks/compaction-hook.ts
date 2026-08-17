@@ -22,19 +22,29 @@ export class CompactionHook implements Hook {
 
   async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const compaction = ctx.config.runtimeConfig.loop;
-    if (!compaction) return;
+    if (!compaction)
+      return this.logger.debug(`skip (run ${ctx.runId}): loop compaction off`);
     const contextSize = this.providerService.resolveContextSize(
       ctx.config.runtimeConfig,
     );
-    if (!contextSize) return;
+    if (!contextSize)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): contextSize unresolved`,
+      );
 
     const list = ctx.messages;
     const base = ctx.base;
     const loopActions = list.slice(base);
-    if (loopActions.length <= compaction.keepRecent) return;
+    if (loopActions.length <= compaction.keepRecent)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): loop actions ${loopActions.length} <= keepRecent ${compaction.keepRecent}`,
+      );
 
     const beforeTokens = estimateTokens(list);
-    if (beforeTokens <= contextSize * compaction.threshold) return;
+    if (beforeTokens <= contextSize * compaction.threshold)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): tokens ${beforeTokens} <= ${Math.round(contextSize * compaction.threshold)} (window×threshold)`,
+      );
 
     const keep = compaction.keepRecent;
     const recent = loopActions.slice(-keep);
@@ -49,7 +59,12 @@ export class CompactionHook implements Hook {
         modelId:
           compaction.compactModelId ?? ctx.config.runtimeConfig.model?.modelId,
       });
-      if (!recap) return;
+      if (!recap) {
+        this.logger.warn(
+          `fold returned no recap (run ${ctx.runId}): older=${older.length} msgs left uncompacted`,
+        );
+        return;
+      }
 
       ctx.messages = [
         ...list.slice(0, base),
