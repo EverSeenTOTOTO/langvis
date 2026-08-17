@@ -9,6 +9,7 @@ import { visualWidth } from '../../../libs/wrap';
 import {
   applyKey,
   emptyBuffer,
+  graphemeSpanEnd,
   insertPaste,
   insertTextAt,
   removeRange,
@@ -66,8 +67,9 @@ type TextareaProps = {
 function caretize(text: string, caretAt: number): string {
   const ci = Math.max(0, Math.min(caretAt, text.length));
   const before = text.slice(0, ci);
-  const cell = text.slice(ci, ci + 1) || ' ';
-  const after = text.slice(ci + 1);
+  // The caret cell covers the whole grapheme at ci (emoji, base+marks).
+  const cell = text.slice(ci, graphemeSpanEnd(text, ci)) || ' ';
+  const after = text.slice(ci + cell.length);
   return `${before}\x1b[7m${cell}\x1b[27m${after}`;
 }
 

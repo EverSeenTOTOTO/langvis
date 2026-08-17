@@ -2,6 +2,80 @@ import { visualWidth } from './wrap';
 
 export const PASTE_COLLAPSE_THRESHOLD = 200;
 
+// Editing treats a grapheme (surrogate pair, base+combining, ZWJ chain) as one
+// atomic cell; canonical segments (adjacent text merged) never straddle one.
+const graphemeSegmenter = new Intl.Segmenter(undefined, {
+  granularity: 'grapheme',
+});
+
+function isAsciiOnly(text: string): boolean {
+  for (let i = 0; i < text.length; i++)
+    if (text.charCodeAt(i) > 0x7f) return false;
+  return true;
+}
+
+// Grapheme-start offsets of a text segment, ascending, including text.length.
+// ASCII-only text returns null — every offset is a grapheme boundary.
+function graphemeStarts(text: string): number[] | null {
+  if (isAsciiOnly(text)) return null;
+  const starts = [0];
+  let at = 0;
+  for (const { segment } of graphemeSegmenter.segment(text)) {
+    at += segment.length;
+    starts.push(at);
+  }
+  return starts;
+}
+
+// End offset of the grapheme cluster containing char index ci (caret cell
+// rendering: the reverse-video cell must cover the whole cluster).
+export function graphemeSpanEnd(text: string, ci: number): number {
+  if (isAsciiOnly(text)) return ci + 1;
+  let at = 0;
+  for (const { segment } of graphemeSegmenter.segment(text)) {
+    if (ci < at + segment.length) return at + segment.length;
+    at += segment.length;
+  }
+  return ci + 1;
+}
+
+// Largest grapheme boundary at or before k (k itself may sit mid-cluster).
+function snapBack(buf: Buffer, k: number): number {
+  if (k <= 0) return 0;
+  const pos = posAt(buf, k);
+  const seg = buf.segs[pos.seg];
+  if (!seg || seg.kind !== 'text' || pos.off === 0) return k;
+  const starts = graphemeStarts(seg.text);
+  if (!starts) return k;
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid]! <= pos.off) lo = mid;
+    else hi = mid - 1;
+  }
+  return k - pos.off + starts[lo]!;
+}
+
+// Next grapheme boundary strictly after boundary k (k must be a boundary).
+function nextBoundary(buf: Buffer, k: number): number {
+  const total = totalUnits(buf);
+  if (k >= total) return total;
+  const pos = posAt(buf, k);
+  const seg = buf.segs[pos.seg];
+  if (!seg || seg.kind === 'paste') return k + 1;
+  const starts = graphemeStarts(seg.text);
+  if (!starts) return k + 1;
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (starts[mid]! > pos.off) hi = mid;
+    else lo = mid + 1;
+  }
+  return k - pos.off + starts[lo]!;
+}
+
 // A buffer is an ordered list of segments. `text` holds normal chars; `paste`
 // holds a large blob rendered as a short label and edited as one atomic unit.
 export type Segment =
@@ -204,28 +278,14 @@ export function insertTextAt(
   return insertText(buf, k, normalize(text));
 }
 
-// Delete the unit right before boundary k; a paste unit is removed whole.
+// Delete the grapheme right before boundary k whole; a paste unit is removed whole.
 function deleteBack(
   buf: Buffer,
   k: number,
 ): { buffer: Buffer; cursor: number } | null {
   if (k <= 0 || totalUnits(buf) === 0) return null;
-  const segs = buf.segs.slice();
-  let u = k - 1;
-  for (let i = 0; i < segs.length; i++) {
-    const c = count(segs[i]);
-    if (u < c) {
-      if (segs[i].kind === 'paste') {
-        segs.splice(i, 1);
-      } else {
-        const t = segs[i].text;
-        segs[i] = { kind: 'text', text: t.slice(0, u) + t.slice(u + 1) };
-      }
-      return { buffer: { segs: normalizeSegs(segs) }, cursor: k - 1 };
-    }
-    u -= c;
-  }
-  return null;
+  const a = snapBack(buf, k - 1);
+  return { buffer: removeRange(buf, a, k), cursor: a };
 }
 
 // Drop units in [a, b); keeps whole paste units outside the range.
@@ -250,7 +310,7 @@ export function removeRange(buf: Buffer, a: number, b: number): Buffer {
     } else {
       for (const ch of [...seg.text]) {
         if (!(u >= a && u < b)) cur += ch;
-        u++;
+        u += ch.length;
       }
     }
   }
@@ -383,7 +443,7 @@ export function caretToXY(
         curWidth = 0;
       }
       curWidth += cw;
-      u++;
+      u += ch.length;
     }
   }
   return { row, col: curWidth };
@@ -392,6 +452,17 @@ export function caretToXY(
 // Reverse of caretToXY: the boundary nearest a visual (row, col). col beyond
 // the target row's width clamps to that row's end (the standard arrow-key pad).
 export function xyToOffset(
+  buf: Buffer,
+  row: number,
+  col: number,
+  width: number,
+): number {
+  // col maps to a codepoint start, which may sit mid-cluster (zero-width
+  // marks) — snap so the caret lands at the whole cluster's start.
+  return snapBack(buf, xyToOffsetRaw(buf, row, col, width));
+}
+
+function xyToOffsetRaw(
   buf: Buffer,
   row: number,
   col: number,
@@ -435,7 +506,7 @@ export function xyToOffset(
       }
       if (r === row && curWidth + cw > col && curWidth <= col) return u;
       curWidth += cw;
-      u++;
+      u += ch.length;
     }
   }
   return u;
@@ -480,13 +551,9 @@ export function applyKey(
       return d ? { buffer: d.buffer, cursor: d.cursor, submit: false } : null;
     }
     case '\x1b[D':
-      return { buffer: buf, cursor: Math.max(0, cursor - 1), submit: false };
+      return { buffer: buf, cursor: snapBack(buf, cursor - 1), submit: false };
     case '\x1b[C':
-      return {
-        buffer: buf,
-        cursor: Math.min(total, cursor + 1),
-        submit: false,
-      };
+      return { buffer: buf, cursor: nextBoundary(buf, cursor), submit: false };
     case '\x1b[A':
     case '\x10': {
       // Ctrl-p = up
@@ -537,13 +604,9 @@ export function applyKey(
       return { buffer: removeRange(buf, cursor, e), cursor, submit: false };
     }
     case '\x06':
-      return {
-        buffer: buf,
-        cursor: Math.min(total, cursor + 1),
-        submit: false,
-      };
+      return { buffer: buf, cursor: nextBoundary(buf, cursor), submit: false };
     case '\x02':
-      return { buffer: buf, cursor: Math.max(0, cursor - 1), submit: false };
+      return { buffer: buf, cursor: snapBack(buf, cursor - 1), submit: false };
     case '\x07':
       // Ctrl-g clears the composed input (Ctrl-l is eaten by the terminal).
       return { buffer: emptyBuffer(), cursor: 0, submit: false };

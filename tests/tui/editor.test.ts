@@ -6,6 +6,7 @@ import {
   removeRange,
   bufferText,
   emptyBuffer,
+  graphemeSpanEnd,
   visualRows,
   caretToXY,
   xyToOffset,
@@ -368,5 +369,60 @@ describe('rendering helpers', () => {
 
   it('cellIndexAt finds the char index at a visual col', () => {
     expect(cellIndexAt('hello', 3)).toBe(3);
+  });
+});
+
+describe('grapheme editing', () => {
+  // 'ab😀' — the emoji is one grapheme spanning units 2..3.
+  const emojiEnd = text('ab😀');
+
+  it('backspace deletes a surrogate-pair emoji whole', () => {
+    const r = applyKey('\x7f', emojiEnd, 4, 40)!;
+    expect(bufferText(r.buffer)).toBe('ab');
+    expect(r.cursor).toBe(2);
+  });
+
+  it('backspace deletes base+combining-mark whole', () => {
+    // 'x' + U+0301 is one cluster of two units.
+    const r = applyKey('\x7f', text('á'), 2, 40)!;
+    expect(bufferText(r.buffer)).toBe('');
+    expect(r.cursor).toBe(0);
+  });
+
+  it('left arrow skips over a whole emoji', () => {
+    const r = applyKey('\x1b[D', emojiEnd, 4, 40)!;
+    expect(r.cursor).toBe(2);
+    expect(applyKey('\x1b[D', r.buffer, r.cursor, 40)!.cursor).toBe(1);
+  });
+
+  it('right arrow lands on cluster starts, never mid-cluster', () => {
+    let cursor = 0;
+    const steps: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      cursor = applyKey('\x1b[C', emojiEnd, cursor, 40)!.cursor;
+      steps.push(cursor);
+    }
+    // Steps past the emoji jump 2 → 4; 3 (mid-pair) never appears.
+    expect(steps).toEqual([1, 2, 4, 4]);
+  });
+
+  it('graphemeSpanEnd covers a full emoji or flag cluster', () => {
+    expect(graphemeSpanEnd('a😀b', 1)).toBe(3);
+    expect(graphemeSpanEnd('🇺🇸x', 0)).toBe(4);
+    expect(graphemeSpanEnd('abc', 1)).toBe(2);
+  });
+
+  it('xyToOffset snaps a mid-cluster col to the cluster start', () => {
+    // The flag is one 4-unit cluster rendered as 2 cells; col 1 falls inside
+    // it — the caret must land at the flag's start, not mid-cluster.
+    expect(xyToOffset(text('🇺🇸x'), 0, 1, 40)).toBe(0);
+    expect(xyToOffset(text('🇺🇸x'), 0, 2, 40)).toBe(4);
+  });
+
+  it('ASCII editing is unchanged by the grapheme layer', () => {
+    const r = applyKey('\x7f', text('abc'), 3, 40)!;
+    expect(bufferText(r.buffer)).toBe('ab');
+    expect(r.cursor).toBe(2);
+    expect(applyKey('\x1b[D', text('abc'), 3, 40)!.cursor).toBe(2);
   });
 });
