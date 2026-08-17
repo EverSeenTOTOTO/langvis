@@ -35,21 +35,33 @@ export class ProcessSummaryTransform implements ConvTransform {
   ): AsyncGenerator<StreamFrame | void> {
     if (!runCtx) return;
     const compaction = ctx.runtimeConfig.loop;
-    if (!compaction) return;
+    if (!compaction) {
+      this.logger.debug(
+        `process summary off (no loop config), skipped (msg ${runCtx.messageId})`,
+      );
+      return;
+    }
 
     const events = ctx.getRunEvents(runCtx.messageId);
     if (!events || events.length === 0) return;
 
     const calls = events.filter(e => e.type === 'tool_call');
     if (calls.length <= 1) {
-      this.logger.debug(`trivial turn, skipped (msg ${runCtx.messageId})`);
+      this.logger.debug(
+        `trivial turn (${calls.length} tool call), skipped (msg ${runCtx.messageId})`,
+      );
       return;
     }
 
     const summary = buildProcessSummary(events, id =>
       this.toolService.resolve(id),
     );
-    if (!summary) return;
+    if (!summary) {
+      this.logger.debug(
+        `no non-terminal tool calls, skipped (msg ${runCtx.messageId})`,
+      );
+      return;
+    }
 
     const existing = await this.fetchMeta(ctx, runCtx.messageId);
     await this.messageRepo.update(runCtx.messageId, {
