@@ -89,6 +89,10 @@ export type EditResult = {
   cursor: number;
   submit?: boolean;
   history?: 'prev' | 'next';
+  /** Vertical movement carries this visual col across rows (sticky column). */
+  stickyCol?: number;
+  /** Text removed by a kill command, for the kill ring. */
+  killed?: { text: string; dir: 'forward' | 'backward' };
 };
 
 // Paste label shown in place of a collapsed blob (its real text is expanded at send).
@@ -134,6 +138,12 @@ export function textBeforeUnit(buf: Buffer, k: number): string {
     if (u >= k) break;
   }
   return out;
+}
+
+// Real text between boundaries [a, b) (paste blobs expand).
+export function rangeText(buf: Buffer, a: number, b: number): string {
+  if (a >= b) return '';
+  return textBeforeUnit(buf, b).slice(textBeforeUnit(buf, a).length);
 }
 
 // Start boundary of a trailing `/\S*` token before k; the `/` must sit at a
@@ -318,24 +328,30 @@ export function removeRange(buf: Buffer, a: number, b: number): Buffer {
   return { segs: out };
 }
 
-// Units of the word (and nothing else) before boundary k; never crosses a newline.
+// Start boundary of the single-class run (letters/digits, punctuation, or one
+// paste blob) before k, skipping trailing blanks.
+const WORD_CHAR = /[\p{L}\p{N}\p{M}_]/u;
+
+function clusterClass(
+  buf: Buffer,
+  u: number,
+): 'word' | 'space' | 'newline' | 'punct' | 'paste' {
+  const info = unitInfo(buf, u);
+  if (info.paste) return 'paste';
+  if (info.ch === '\n') return 'newline';
+  if (/\s/.test(info.ch)) return 'space';
+  return WORD_CHAR.test(info.ch) ? 'word' : 'punct';
+}
+
 function wordBackStart(buf: Buffer, k: number): number {
-  let u = k - 1;
-  while (u >= 0) {
-    const i = unitInfo(buf, u);
-    if (i.paste || (i.ch !== ' ' && i.ch !== '\t')) break;
-    u--;
-  }
-  while (u >= 0) {
-    const i = unitInfo(buf, u);
-    if (i.paste) {
-      u--;
-      break;
-    }
-    if (/\s/.test(i.ch)) break;
-    u--;
-  }
-  return u + 1;
+  // Class is read at the cluster containing the char just before the boundary.
+  const classBefore = (b: number): string | null =>
+    b <= 0 ? null : clusterClass(buf, snapBack(buf, b - 1));
+  let u = k;
+  while (classBefore(u) === 'space') u = snapBack(buf, u - 1);
+  const cls = classBefore(u);
+  while (u > 0 && classBefore(u) === cls) u = snapBack(buf, u - 1);
+  return u;
 }
 
 function lineStartUnits(buf: Buffer, k: number): number {
@@ -533,6 +549,7 @@ export function applyKey(
   buf: Buffer,
   cursor: number,
   width: number,
+  stickyCol?: number | null,
 ): EditResult | null {
   const total = totalUnits(buf);
   switch (data) {
@@ -548,7 +565,14 @@ export function applyKey(
     case '\x7f':
     case '\b': {
       const d = deleteBack(buf, cursor);
-      return d ? { buffer: d.buffer, cursor: d.cursor, submit: false } : null;
+      return d
+        ? {
+            buffer: d.buffer,
+            cursor: d.cursor,
+            submit: false,
+            killed: { text: rangeText(buf, d.cursor, cursor), dir: 'backward' },
+          }
+        : null;
     }
     case '\x1b[D':
       return { buffer: buf, cursor: snapBack(buf, cursor - 1), submit: false };
@@ -560,10 +584,12 @@ export function applyKey(
       const { row, col } = caretToXY(buf, cursor, width);
       if (row === 0)
         return { buffer: buf, cursor, submit: false, history: 'prev' };
+      const target = stickyCol ?? col;
       return {
         buffer: buf,
-        cursor: xyToOffset(buf, row - 1, col, width),
+        cursor: xyToOffset(buf, row - 1, target, width),
         submit: false,
+        stickyCol: target,
       };
     }
     case '\x1b[B':
@@ -572,10 +598,12 @@ export function applyKey(
       const { row, col } = caretToXY(buf, cursor, width);
       if (row >= visualRows(buf, width).length - 1)
         return { buffer: buf, cursor, submit: false, history: 'next' };
+      const target = stickyCol ?? col;
       return {
         buffer: buf,
-        cursor: xyToOffset(buf, row + 1, col, width),
+        cursor: xyToOffset(buf, row + 1, target, width),
         submit: false,
+        stickyCol: target,
       };
     }
     case '\x01':
@@ -593,15 +621,30 @@ export function applyKey(
     case '\x17': {
       const a = wordBackStart(buf, cursor);
       if (a === cursor) return null;
-      return { buffer: removeRange(buf, a, cursor), cursor: a, submit: false };
+      return {
+        buffer: removeRange(buf, a, cursor),
+        cursor: a,
+        submit: false,
+        killed: { text: rangeText(buf, a, cursor), dir: 'backward' },
+      };
     }
     case '\x15': {
       const a = lineStartUnits(buf, cursor);
-      return { buffer: removeRange(buf, a, cursor), cursor: a, submit: false };
+      return {
+        buffer: removeRange(buf, a, cursor),
+        cursor: a,
+        submit: false,
+        killed: { text: rangeText(buf, a, cursor), dir: 'backward' },
+      };
     }
     case '\x0b': {
       const e = lineEndUnits(buf, cursor);
-      return { buffer: removeRange(buf, cursor, e), cursor, submit: false };
+      return {
+        buffer: removeRange(buf, cursor, e),
+        cursor,
+        submit: false,
+        killed: { text: rangeText(buf, cursor, e), dir: 'forward' },
+      };
     }
     case '\x06':
       return { buffer: buf, cursor: nextBoundary(buf, cursor), submit: false };
@@ -621,5 +664,88 @@ export function applyKey(
       // route them through the same collapse rule as system paste.
       return insertPaste(buf, cursor, normalize(data));
     }
+  }
+}
+
+// Classify a raw key into the undo-merge kind for the snapshot it produces.
+// Only meaningful when the key actually changed the buffer.
+export type UndoKind = 'char' | 'space' | 'delete' | 'paste';
+
+export function undoKindOf(data: string): UndoKind {
+  if (data.length === 1) {
+    const code = data.charCodeAt(0);
+    if (code >= 0x20 && code !== 0x7f)
+      return /\s/.test(data) ? 'space' : 'char';
+  }
+  if (data === '\r' || data === '\x1b[13;5u') return 'space'; // inserts \n via continuation
+  if (['\x7f', '\b', '\x17', '\x15', '\x0b'].includes(data)) return 'delete';
+  return 'paste';
+}
+
+export type EditorSnapshot = { buffer: Buffer; cursor: number };
+
+const UNDO_LIMIT = 200;
+
+// Fish-style undo: snapshots are pre-states — consecutive letters merge, a
+// space opens a unit, consecutive deletes merge, each paste is its own unit.
+export class UndoStack {
+  private readonly entries: EditorSnapshot[] = [];
+  private lastKind: UndoKind | null = null;
+
+  push(snap: EditorSnapshot, kind: UndoKind): void {
+    const merge =
+      (kind === 'char' &&
+        (this.lastKind === 'char' || this.lastKind === 'space')) ||
+      (kind === 'delete' && this.lastKind === 'delete');
+    this.lastKind = kind;
+    if (merge) return;
+    this.entries.push(snap);
+    if (this.entries.length > UNDO_LIMIT) this.entries.shift();
+  }
+
+  undo(): EditorSnapshot | null {
+    this.lastKind = null;
+    return this.entries.pop() ?? null;
+  }
+
+  reset(): void {
+    this.entries.length = 0;
+    this.lastKind = null;
+  }
+}
+
+const KILL_RING_LIMIT = 10;
+
+// Emacs kill ring: consecutive kills merge (backward prepends, forward
+// appends); any other command breaks the sequence.
+export class KillRing {
+  private readonly items: string[] = [];
+  private idx = 0;
+  private killing = false;
+
+  kill(text: string, dir: 'forward' | 'backward'): void {
+    if (text === '') return;
+    if (this.killing && this.items.length > 0) {
+      this.items[0] =
+        dir === 'backward' ? text + this.items[0] : this.items[0] + text;
+    } else {
+      this.items.unshift(text);
+      if (this.items.length > KILL_RING_LIMIT) this.items.pop();
+    }
+    this.idx = 0;
+    this.killing = true;
+  }
+
+  current(): string {
+    return this.items[this.idx] ?? '';
+  }
+
+  rotate(): string {
+    if (this.items.length > 0) this.idx = (this.idx + 1) % this.items.length;
+    return this.current();
+  }
+
+  breakSequence(): void {
+    this.killing = false;
   }
 }

@@ -16,6 +16,7 @@ function inkToRawData(
     backspace?: boolean;
     delete?: boolean;
     ctrl?: boolean;
+    meta?: boolean;
   },
 ): string | null {
   if (key.return) return '\r';
@@ -27,6 +28,7 @@ function inkToRawData(
   if (key.tab) return '\t';
   if (key.backspace || key.delete) return '\x7f';
   if (key.ctrl && input) return String.fromCharCode(input.charCodeAt(0) - 96);
+  if (key.meta && input) return `\x1b${input}`;
   return input || null;
 }
 

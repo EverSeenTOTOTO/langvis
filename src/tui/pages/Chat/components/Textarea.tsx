@@ -1,5 +1,11 @@
 /** @jsxImportSource react */
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import { usePaste } from 'ink';
 import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
@@ -19,6 +25,9 @@ import {
   cellIndexAt,
   textBeforeUnit,
   queryTokenStart,
+  undoKindOf,
+  UndoStack,
+  KillRing,
   type Buffer,
 } from '../../../libs/editor';
 import { computeSlashQuery } from '../../../libs/slash';
@@ -93,6 +102,11 @@ export const Textarea = forwardRef<TextareaHandle, TextareaProps>(
     const { cols } = useTerminalSize();
     const contentWidth = Math.max(1, (width ?? cols) - visualWidth(prompt));
     const [cursor, setCursor] = useState(0);
+    const undoRef = useRef(new UndoStack());
+    const ringRef = useRef(new KillRing());
+    // Vertical-movement sticky column; span of the last yank (for yank-pop).
+    const stickyRef = useRef<number | null>(null);
+    const yankRef = useRef<{ start: number; end: number } | null>(null);
 
     // An external clear (owner resets the buffer) resets the caret to the start.
     useEffect(() => {
@@ -105,6 +119,9 @@ export const Textarea = forwardRef<TextareaHandle, TextareaProps>(
       () => ({
         insert(text) {
           const r = insertTextAt(buffer, cursor, text);
+          undoRef.current.push({ buffer, cursor }, 'paste');
+          ringRef.current.breakSequence();
+          yankRef.current = null;
           onBufferChange(r.buffer);
           setCursor(r.cursor);
         },
@@ -113,11 +130,17 @@ export const Textarea = forwardRef<TextareaHandle, TextareaProps>(
           const b =
             start === null ? buffer : removeRange(buffer, start, cursor);
           const r = insertTextAt(b, start === null ? cursor : start, text);
+          undoRef.current.push({ buffer, cursor }, 'paste');
+          ringRef.current.breakSequence();
+          yankRef.current = null;
           onBufferChange(r.buffer);
           setCursor(r.cursor);
         },
         replace(text) {
           const r = insertTextAt(emptyBuffer(), 0, text);
+          undoRef.current.push({ buffer, cursor }, 'paste');
+          ringRef.current.breakSequence();
+          yankRef.current = null;
           onBufferChange(r.buffer);
           setCursor(r.cursor);
         },
@@ -133,24 +156,75 @@ export const Textarea = forwardRef<TextareaHandle, TextareaProps>(
     useKeyboard(data => {
       // With the palette open, a picker owns nav/submit — leave them to it.
       if (navLocked && PICKER_KEYS.has(data)) return;
-      const r = applyKey(data, buffer, cursor, contentWidth);
+      // Ctrl-y yanks the ring head; Alt-y replaces the last yank with the next
+      // older entry (only valid immediately after a yank).
+      if (data === '\x19') {
+        const t = ringRef.current.current();
+        if (t === '') return;
+        ringRef.current.breakSequence();
+        const r = insertTextAt(buffer, cursor, t);
+        undoRef.current.push({ buffer, cursor }, 'paste');
+        yankRef.current = { start: cursor, end: r.cursor };
+        stickyRef.current = null;
+        onBufferChange(r.buffer);
+        setCursor(r.cursor);
+        return;
+      }
+      if (data === '\x1by') {
+        const y = yankRef.current;
+        if (!y) return;
+        const t = ringRef.current.rotate();
+        if (t === '') return;
+        const b = removeRange(buffer, y.start, y.end);
+        const r = insertTextAt(b, y.start, t);
+        yankRef.current = { start: y.start, end: r.cursor };
+        onBufferChange(r.buffer);
+        setCursor(r.cursor);
+        return;
+      }
+      // Ctrl-_ and Ctrl-z undo the last edit unit.
+      if (data === '\x1f' || data === '\x1a') {
+        const snap = undoRef.current.undo();
+        if (!snap) return;
+        ringRef.current.breakSequence();
+        yankRef.current = null;
+        stickyRef.current = null;
+        onBufferChange(snap.buffer);
+        setCursor(snap.cursor);
+        return;
+      }
+      const r = applyKey(data, buffer, cursor, contentWidth, stickyRef.current);
       if (!r) return;
+      // A vertical move reports the column to carry; anything else clears it.
+      stickyRef.current = r.stickyCol ?? null;
       if (r.history) {
         // Caret hit a boundary: the owner navigates history; leave buffer/caret.
         onHistory?.(r.history);
         return;
       }
       if (r.submit) {
+        undoRef.current.reset();
+        ringRef.current.breakSequence();
         onSubmit?.(bufferText(buffer));
         return;
       }
-      if (r.buffer !== buffer) onBufferChange(r.buffer);
+      if (r.killed) ringRef.current.kill(r.killed.text, r.killed.dir);
+      else ringRef.current.breakSequence();
+      if (r.buffer !== buffer) {
+        undoRef.current.push({ buffer, cursor }, undoKindOf(data));
+        yankRef.current = null;
+        onBufferChange(r.buffer);
+      }
       setCursor(r.cursor);
     }, enabled);
 
     usePaste(
       text => {
         const r = insertPaste(buffer, cursor, text);
+        undoRef.current.push({ buffer, cursor }, 'paste');
+        ringRef.current.breakSequence();
+        yankRef.current = null;
+        stickyRef.current = null;
         onBufferChange(r.buffer);
         setCursor(r.cursor);
       },

@@ -13,6 +13,9 @@ import {
   cellIndexAt,
   pasteLabel,
   queryTokenStart,
+  undoKindOf,
+  UndoStack,
+  KillRing,
 } from '@/tui/libs/editor';
 import type { Buffer } from '@/tui/libs/editor';
 
@@ -424,5 +427,173 @@ describe('grapheme editing', () => {
     expect(bufferText(r.buffer)).toBe('ab');
     expect(r.cursor).toBe(2);
     expect(applyKey('\x1b[D', text('abc'), 3, 40)!.cursor).toBe(2);
+  });
+});
+
+describe('sticky column', () => {
+  const buf = text('abcdef\nx\nghijkl');
+
+  it('vertical moves carry the pre-move column across shorter rows', () => {
+    const up1 = applyKey('\x1b[A', buf, 15, 20)!;
+    expect(up1.cursor).toBe(8); // row 'x' clamps col 6 to its end
+    expect(up1.stickyCol).toBe(6);
+    const up2 = applyKey('\x1b[A', up1.buffer, up1.cursor, 20, up1.stickyCol)!;
+    expect(up2.cursor).toBe(6); // sticky 6 reaches the end of 'abcdef'
+  });
+
+  it('without the sticky column the shorter row col carries on', () => {
+    const up1 = applyKey('\x1b[A', buf, 15, 20)!;
+    const up2 = applyKey('\x1b[A', up1.buffer, up1.cursor, 20)!;
+    expect(up2.cursor).toBe(1);
+  });
+
+  it('non-vertical results carry no stickyCol', () => {
+    expect(applyKey('\x01', buf, 4, 20)!.stickyCol).toBeUndefined();
+    expect(applyKey('x', emptyBuffer(), 0, 20)!.stickyCol).toBeUndefined();
+  });
+});
+
+describe('word navigation classes', () => {
+  it('Ctrl-w deletes by class: word, then punctuation, then word', () => {
+    let r = applyKey('\x17', text('foo.bar'), 7, 40)!;
+    expect(bufferText(r.buffer)).toBe('foo.');
+    r = applyKey('\x17', r.buffer, r.cursor, 40)!;
+    expect(bufferText(r.buffer)).toBe('foo');
+    r = applyKey('\x17', r.buffer, r.cursor, 40)!;
+    expect(bufferText(r.buffer)).toBe('');
+  });
+
+  it('Ctrl-w swallows trailing blanks together with the word', () => {
+    const r = applyKey('\x17', text('foo bar  '), 9, 40)!;
+    expect(bufferText(r.buffer)).toBe('foo ');
+    expect(r.cursor).toBe(4);
+  });
+
+  it('Ctrl-w at a line start deletes the newline (joins lines)', () => {
+    const r = applyKey('\x17', text('ab\ncd'), 3, 40)!;
+    expect(bufferText(r.buffer)).toBe('abcd');
+    expect(r.cursor).toBe(2);
+  });
+
+  it('a paste blob is one word-class unit', () => {
+    const r0 = insertPaste(text('a'), 1, 'x'.repeat(300));
+    const r = applyKey('\x17', r0.buffer, r0.cursor, 40)!;
+    expect(bufferText(r.buffer)).toBe('a');
+  });
+});
+
+describe('kill reporting', () => {
+  it('kills report the removed text and direction', () => {
+    expect(applyKey('\x7f', text('abc'), 3, 40)!.killed).toEqual({
+      text: 'c',
+      dir: 'backward',
+    });
+    expect(applyKey('\x17', text('foo bar'), 7, 40)!.killed).toEqual({
+      text: 'bar',
+      dir: 'backward',
+    });
+    expect(applyKey('\x15', text('ab\ncd'), 5, 40)!.killed).toEqual({
+      text: 'cd',
+      dir: 'backward',
+    });
+    expect(applyKey('\x0b', text('ab\ncd'), 1, 40)!.killed).toEqual({
+      text: 'b',
+      dir: 'forward',
+    });
+    expect(applyKey('\x1b[D', text('abc'), 3, 40)!.killed).toBeUndefined();
+  });
+});
+
+describe('UndoStack', () => {
+  const snap = (s: string, c: number) => ({ buffer: text(s), cursor: c });
+
+  it('merges consecutive letters into one unit', () => {
+    const u = new UndoStack();
+    u.push(snap('', 0), 'char');
+    u.push(snap('f', 1), 'char');
+    u.push(snap('fo', 2), 'char');
+    expect(u.undo()).toEqual(snap('', 0));
+    expect(u.undo()).toBeNull();
+  });
+
+  it('a space opens a unit so one undo removes " word" wholesale', () => {
+    const u = new UndoStack();
+    u.push(snap('', 0), 'char');
+    u.push(snap('foo', 3), 'space');
+    u.push(snap('foo ', 4), 'char');
+    expect(u.undo()).toEqual(snap('foo', 3));
+    expect(u.undo()).toEqual(snap('', 0));
+  });
+
+  it('merges consecutive deletes into one unit', () => {
+    const u = new UndoStack();
+    u.push(snap('foo bar', 7), 'delete');
+    u.push(snap('foo ba', 6), 'delete');
+    u.push(snap('foo b', 5), 'delete');
+    expect(u.undo()).toEqual(snap('foo bar', 7));
+    expect(u.undo()).toBeNull();
+  });
+
+  it('separates a delete run from the letters before it', () => {
+    const u = new UndoStack();
+    u.push(snap('foo', 3), 'char');
+    u.push(snap('fo', 2), 'delete');
+    expect(u.undo()).toEqual(snap('fo', 2));
+    expect(u.undo()).toEqual(snap('foo', 3));
+  });
+
+  it('undo breaks the merge chain (later letters push again)', () => {
+    const u = new UndoStack();
+    u.push(snap('', 0), 'char');
+    u.undo();
+    u.push(snap('x', 1), 'char');
+    expect(u.undo()).toEqual(snap('x', 1));
+  });
+});
+
+describe('KillRing', () => {
+  it('consecutive backward kills merge by prepending', () => {
+    const r = new KillRing();
+    r.kill('bar', 'backward');
+    r.kill(' ', 'backward');
+    r.kill('foo', 'backward');
+    expect(r.current()).toBe('foo bar');
+  });
+
+  it('consecutive forward kills merge by appending', () => {
+    const r = new KillRing();
+    r.kill('foo', 'forward');
+    r.kill(' bar', 'forward');
+    expect(r.current()).toBe('foo bar');
+  });
+
+  it('breakSequence separates kills; rotate walks older entries and wraps', () => {
+    const r = new KillRing();
+    r.kill('one', 'backward');
+    r.breakSequence();
+    r.kill('two', 'backward');
+    r.breakSequence();
+    r.kill('three', 'backward');
+    expect(r.current()).toBe('three');
+    expect(r.rotate()).toBe('two');
+    expect(r.rotate()).toBe('one');
+    expect(r.rotate()).toBe('three');
+  });
+
+  it('empty text is ignored', () => {
+    const r = new KillRing();
+    r.kill('', 'backward');
+    expect(r.current()).toBe('');
+  });
+});
+
+describe('undoKindOf', () => {
+  it('classifies printable keys, blanks, deletes and pastes', () => {
+    expect(undoKindOf('a')).toBe('char');
+    expect(undoKindOf(' ')).toBe('space');
+    expect(undoKindOf('\r')).toBe('space');
+    expect(undoKindOf('\x7f')).toBe('delete');
+    expect(undoKindOf('\x17')).toBe('delete');
+    expect(undoKindOf('hello')).toBe('paste');
   });
 });
