@@ -47,9 +47,19 @@ export class CompactTransform implements ConvTransform {
     const contextSize = this.providerService.resolveContextSize(
       ctx.runtimeConfig,
     );
-    if (!contextSize) return;
+    if (!contextSize) {
+      this.logger.debug(
+        `context size unresolvable, skipped (conv ${ctx.conversationId})`,
+      );
+      return;
+    }
     const compaction = ctx.runtimeConfig.history;
-    if (!compaction) return;
+    if (!compaction) {
+      this.logger.debug(
+        `history compaction off, skipped (conv ${ctx.conversationId})`,
+      );
+      return;
+    }
 
     const history = ctx.messages;
     const { summary, index } = findLatestCompactionSummary(history);
@@ -58,7 +68,13 @@ export class CompactTransform implements ConvTransform {
 
     const effective = summary ? [summary, ...tail] : tail;
     const used = estimateTokens(toLlmMessages(effective));
-    if (used <= contextSize * compaction.threshold) return;
+    const limit = contextSize * compaction.threshold;
+    if (used <= limit) {
+      this.logger.debug(
+        `below threshold, skipped (conv ${ctx.conversationId}): used=${used} ≤ limit=${Math.round(limit)} (${contextSize} × ${(compaction.threshold * 100).toFixed(0)}%)`,
+      );
+      return;
+    }
 
     this.logger.info(
       `History over threshold (${used}/${contextSize}, ${(compaction.threshold * 100).toFixed(0)}%) — compacting ${tail.length} messages`,
@@ -75,7 +91,12 @@ export class CompactTransform implements ConvTransform {
       prompt: HISTORY_PROMPT,
       modelId: compaction.compactModelId ?? ctx.runtimeConfig.model?.modelId,
     });
-    if (!content) return;
+    if (!content) {
+      this.logger.warn(
+        `fold returned empty, history not compacted (conv ${ctx.conversationId}): used=${used} > limit=${Math.round(limit)}`,
+      );
+      return;
+    }
 
     const [compactMessage] = await this.messageRepo.batchCreate(
       ctx.conversationId,
@@ -93,6 +114,7 @@ export class CompactTransform implements ConvTransform {
       `compacted (conv ${ctx.conversationId}): folded ${tail.length} msgs → 1 summary`,
       {
         folded: tail.length,
+        usedBefore: used,
         summaryTokens: estimateTokens(toLlmMessages([compactMessage])),
       },
     );
