@@ -11,6 +11,30 @@ export type ContextUsage = {
 // tiktoken 仅有 OpenAI encoding，per-model 配置只是虚假精度。cl100k_base 对多数模型是合理近似。
 const encoding = getEncoding('cl100k_base');
 
+// js-tiktoken 的 BPE 对无边界长串（CJK、连续字母）是 O(n²)（3300 汉字 ≈ 7s），会同步阻塞事件循环。
+// 按 ≤16 字符分块编码压回线性：切点优先取空白（天然 token 边界，实测 0 误差），无边界的长串才硬切（实测 0 误差）。
+const ENCODE_CHUNK = 16;
+
+function encodeChunked(text: string): number {
+  let tokens = 0;
+  let start = 0;
+  while (start < text.length) {
+    let end = Math.min(start + ENCODE_CHUNK, text.length);
+    if (end < text.length) {
+      for (let j = end; j > start + 4; j--) {
+        const c = text[j];
+        if (c === ' ' || c === '\n' || c === '\t') {
+          end = j;
+          break;
+        }
+      }
+    }
+    tokens += encoding.encode(text.slice(start, end)).length;
+    start = end;
+  }
+  return tokens;
+}
+
 function messageToString(message: LlmMessage): string {
   const parts: string[] = [];
 
@@ -34,7 +58,7 @@ export function estimateTokens(messages: readonly LlmMessage[]): number {
   for (const message of messages) {
     // <|start|>{role}\n{content}<|end|>\n 每条消息固定开销。
     totalTokens += 4;
-    totalTokens += encoding.encode(messageToString(message)).length;
+    totalTokens += encodeChunked(messageToString(message));
   }
 
   // 回复启动令牌 <|start|>assistant<|message|>。
