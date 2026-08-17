@@ -4,10 +4,8 @@ import TerminalRenderer from 'marked-terminal';
 // Off-main-thread markdown→ANSI renderer: the UI thread is never blocked by the
 // (potentially large) `marked` reflow. Messages move one per postMessage.
 
-self.onmessage = (
-  e: MessageEvent<{ key: string; md: string; width: number }>,
-) => {
-  const { key, md, width } = e.data;
+self.onmessage = (e: MessageEvent<{ md: string; width: number }>) => {
+  const { md, width } = e.data;
   const renderer = new TerminalRenderer({
     reflowText: true,
     width,
@@ -22,5 +20,5 @@ self.onmessage = (
   } catch {
     ansi = md;
   }
-  self.postMessage({ key, ansi });
+  self.postMessage({ md, width, ansi });
 };

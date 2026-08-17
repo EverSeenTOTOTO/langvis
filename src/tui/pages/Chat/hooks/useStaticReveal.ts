@@ -26,12 +26,9 @@ export function useStaticReveal(
 
   let revealed = 0;
   for (const m of items) {
-    if (
-      m.role === Role.ASSIST &&
-      contentOf(m) !== '' &&
-      requestMarkdown(contentOf(m), width) === null
-    ) {
-      break;
+    if (m.role === Role.ASSIST) {
+      const content = contentOf(m);
+      if (content !== '' && requestMarkdown(content, width) === null) break;
     }
     revealed++;
   }
