@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { estimateTokens } from '@/server/utils/estimateTokens';
+import { getEncoding } from 'js-tiktoken';
 import type { Message } from '@/shared/types/entities';
 import { Role } from '@/shared/types/entities';
 
@@ -78,6 +79,28 @@ describe('estimateTokens', () => {
       expect(
         estimateTokens([createMessage(Role.USER, 'Hello 🎉 你好 مرحبا')]),
       ).toBeGreaterThan(0);
+    });
+  });
+
+  // 分块编码只允许有界偏差（估算本就是压缩阈值/用量的单调代理）：与整体 tiktoken
+  // 编码的相对误差 ≤6%（空白切点为天然边界，英文/代码实测 0 偏差）。
+  describe('chunked encoding equivalence', () => {
+    const encoding = getEncoding('cl100k_base');
+    const direct = (content: string) =>
+      encoding.encode(`user: ${content}`).length + 4;
+
+    it.each([
+      [
+        'english prose',
+        'The quick brown fox jumps over the lazy dog. '.repeat(20),
+      ],
+      ['cjk', '这是一段比较长的中文文本用来测试分词性能问题'.repeat(5)],
+      ['code', 'const x = await fetch(url); // comment\n'.repeat(10)],
+      ['pathological run', 'x'.repeat(500)],
+    ])('stays within 6% of direct encoding for %s', (_name, content) => {
+      const chunked = estimateTokens([createMessage(Role.USER, content)]) - 3;
+      const exact = direct(content);
+      expect(Math.abs(chunked - exact) / exact).toBeLessThanOrEqual(0.06);
     });
   });
 });
