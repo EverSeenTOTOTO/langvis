@@ -25,10 +25,14 @@ export class CumulativeBudgetHook implements Hook {
 
   async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const guard = ctx.config.runtimeConfig.guard;
-    if (!guard) return;
+    if (!guard)
+      return this.logger.debug(`skip (run ${ctx.runId}): guard config off`);
     const budget = guard.maxTokenUsage;
     this.consumed += estimateTokens(ctx.messages);
-    if (this.consumed <= budget) return;
+    if (this.consumed <= budget)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): consumed ${this.consumed} <= budget ${budget}`,
+      );
 
     if (ctx.pendingAction?.tool === ToolIds.RESPONSE_USER) {
       this.logger.info(

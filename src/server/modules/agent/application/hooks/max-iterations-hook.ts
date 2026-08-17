@@ -22,9 +22,13 @@ export class MaxIterationsHook implements Hook {
 
   async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const guard = ctx.config.runtimeConfig.guard;
-    if (!guard) return;
+    if (!guard)
+      return this.logger.debug(`skip (run ${ctx.runId}): guard config off`);
     this.ticks++;
-    if (this.ticks < guard.maxIterations) return;
+    if (this.ticks < guard.maxIterations)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): tick ${this.ticks} < cap ${guard.maxIterations}`,
+      );
 
     this.logger.warn(
       `iteration cap reached (run ${ctx.runId}): ${this.ticks} >= ${guard.maxIterations}`,

@@ -36,7 +36,8 @@ export class OutputOffloadHook implements Hook {
 
   async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const cfg = ctx.config.runtimeConfig.offload as OffloadConfig | undefined;
-    if (!cfg) return;
+    if (!cfg)
+      return this.logger.debug(`skip (run ${ctx.runId}): offload config off`);
 
     // 动态阈值：outputTokenThreshold 绝对覆盖，否则 contextSize×outputSizeRatio（与 query-budget 同构）。
     const threshold =
@@ -45,24 +46,37 @@ export class OutputOffloadHook implements Hook {
         (this.providerService.resolveContextSize(ctx.config.runtimeConfig) ??
           0) * (cfg.outputSizeRatio ?? DEFAULT_OUTPUT_SIZE_RATIO),
       );
-    if (threshold <= 0) return;
+    if (threshold <= 0)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): threshold ${threshold} <= 0`,
+      );
 
     const messages = ctx.messages;
     const last = messages.length - 1;
-    if (last < 0) return;
+    if (last < 0)
+      return this.logger.debug(`skip (run ${ctx.runId}): no messages`);
 
     const cand = candidateBody(messages[last]!);
-    if (!cand) return;
-    if (cand.body.includes(OFFLOADED_MARK)) return;
+    if (!cand)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): last message not a stub candidate (role=${messages[last]!.role})`,
+      );
+    if (cand.body.includes(OFFLOADED_MARK))
+      return this.logger.debug(`skip (run ${ctx.runId}): already stubbed`);
 
     // 配对 assistant 一次性解析：recall 判定 + hint 共用，免双重 parse。
     const paired = parseAssistantAt(messages, last - 1);
     // recall 回取（cat/rg 已 offload 句柄）→ 再落盘只 fc→fc 别名 → 跳过（仅 observation 有此风险）。
     if (cand.kind === 'observation' && classifyRecallParsed(paired) !== null)
-      return;
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): recall echo (fc→fc alias risk)`,
+      );
 
     const bodyTokens = estimateTokens([messages[last]!]);
-    if (bodyTokens <= threshold) return;
+    if (bodyTokens <= threshold)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): ~${bodyTokens} <= threshold ${threshold}`,
+      );
 
     const hint =
       cand.kind === 'observation'

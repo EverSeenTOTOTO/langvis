@@ -17,8 +17,8 @@ import { agentHook } from './registry';
 const MAX_ITEMS = 3;
 const TOOL_HINT_THRESHOLD = 12;
 
-// pre-llm 首 tick：按 user query 检索命中工具/skill，注入精简概要 note；完整参数由 list_tools(tool=<id>) 获取。
-// 仅 conv（interactive）注入一次；subagent/eval 跳过（受限 ToolSet 不在 ctx 上）。
+// pre-llm 首 tick：按 user query 检索命中工具/skill，以 <details> 前缀并入最后一条 user 消息，正文居末；
+// 完整参数由 list_tools(tool=<id>) 获取。仅 conv（interactive）注入一次；subagent/eval 跳过。
 @agentHook
 export class ToolHintHook implements Hook {
   readonly id = 'tool-hint';
@@ -32,19 +32,29 @@ export class ToolHintHook implements Hook {
   ) {}
 
   async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
-    if (!ctx.interactive || this.done) return;
+    if (!ctx.interactive)
+      return this.logger.debug(`skip (run ${ctx.runId}): not interactive`);
+    if (this.done) return;
     this.done = true;
 
-    const query = lastUserContent(ctx.messages);
-    if (!query || query.length <= TOOL_HINT_THRESHOLD) return;
+    const target = lastUserMessage(ctx.messages);
+    if (!target)
+      return this.logger.debug(`skip (run ${ctx.runId}): no user message`);
+    if (target.content.length <= TOOL_HINT_THRESHOLD)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): query too short (len ${target.content.length} <= ${TOOL_HINT_THRESHOLD})`,
+      );
     const { tools, skills } = await retrieveRelevantTools(
       this.toolService,
       this.skillService,
-      query,
+      target.content,
       { excludeToolIds: [ToolIds.LIST_TOOLS] },
     );
     const total = tools.length + skills.length;
-    if (total === 0) return;
+    if (total === 0)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): no relevant tools/skills matched`,
+      );
 
     const capTools = tools.slice(0, MAX_ITEMS);
     const remaining = MAX_ITEMS - capTools.length;
@@ -60,10 +70,8 @@ export class ToolHintHook implements Hook {
       parts.push(`…（共 ${total} 项，已显示前 ${shown}；其余调 list_tools）`);
     }
 
-    ctx.messages.push({
-      role: Role.USER,
-      content: parts.filter(Boolean).join('\n---\n'),
-    });
+    const hint = parts.filter(Boolean).join('\n---\n');
+    target.content = `<details>\n${hint}\n</details>\n\n${target.content}`;
     this.logger.debug(
       `tool-hint injected (run ${ctx.runId}): ${tools.length}t/${skills.length}s`,
     );
@@ -71,12 +79,12 @@ export class ToolHintHook implements Hook {
   }
 }
 
-function lastUserContent(
+function lastUserMessage(
   messages: AgentRunContext['messages'],
-): string | undefined {
+): AgentRunContext['messages'][number] | undefined {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
-    if (m?.role === Role.USER) return m.content;
+    if (m?.role === Role.USER) return m;
   }
   return undefined;
 }
