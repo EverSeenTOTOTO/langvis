@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Text } from '@/tui/components/Text';
 import { useKeyboard } from '@/tui/hooks/useKeyboard';
+import { isKey } from '@/tui/libs/keys';
 
 export type Option = { label: string; value: string | number | boolean };
 
@@ -11,13 +12,10 @@ type ControlProps = {
   focused: boolean;
 };
 
-const ARROW_LEFT = '\x1b[D';
-const ARROW_RIGHT = '\x1b[C';
-
 /** ◀▶ toggles a boolean value. */
 export function BooleanControl({ value, onChange, focused }: ControlProps) {
   useKeyboard(data => {
-    if (data === ARROW_LEFT || data === ARROW_RIGHT) onChange(!value);
+    if (isKey(data, 'left') || isKey(data, 'right')) onChange(!value);
   }, focused);
   return (
     <Text fg={focused ? 'cyan' : 'white'}>{value ? '● yes' : '○ no'}</Text>
@@ -34,12 +32,12 @@ export function EnumControl({
   useKeyboard(data => {
     const opts = options ?? [];
     if (!opts.length) return;
-    if (data === ARROW_LEFT || data === ARROW_RIGHT) {
+    if (isKey(data, 'left') || isKey(data, 'right')) {
       const from = Math.max(
         0,
         opts.findIndex(o => o.value === value),
       );
-      const dir = data === ARROW_RIGHT ? 1 : -1;
+      const dir = isKey(data, 'right') ? 1 : -1;
       const next = (from + dir + opts.length) % opts.length;
       onChange(opts[next]?.value);
     }
@@ -62,13 +60,13 @@ export function MultiSelectControl({
 
   useKeyboard(data => {
     if (!opts.length) return;
-    if (data === ARROW_LEFT || data === ARROW_RIGHT) {
+    if (isKey(data, 'left') || isKey(data, 'right')) {
       setCursor(
-        c => (c + (data === ARROW_RIGHT ? 1 : -1) + opts.length) % opts.length,
+        c => (c + (isKey(data, 'right') ? 1 : -1) + opts.length) % opts.length,
       );
       return;
     }
-    if (data === ' ') {
+    if (isKey(data, 'space')) {
       const sel = opts[cursor % opts.length]?.value;
       if (sel == null) return;
       const arr = Array.isArray(value) ? [...(value as unknown[])] : [];

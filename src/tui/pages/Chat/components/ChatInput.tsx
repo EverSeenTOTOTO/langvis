@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAsyncFn } from 'react-use';
 import { Text } from '@/tui/components/Text';
 import { useKeyboard } from '@/tui/hooks/useKeyboard';
+import { isKey } from '@/tui/libs/keys';
 import { useStore } from '@/client/store';
 import { Role } from '@/shared/types/entities';
 import { useVoiceInput } from '../hooks/useVoiceInput';
@@ -106,11 +107,10 @@ export const ChatInput = observer(function ChatInput({
   // Ctrl-r toggles recording; Enter (below) stops + transcribes; Ctrl-c cancels.
   // (Streaming cancel now lives in Chat so it works off the input panel too.)
   useKeyboard(data => {
-    if (data === '\x12' && !streamingId && !voice.processing) {
-      // 0x12 = Ctrl-r
+    if (isKey(data, 'voice') && !streamingId && !voice.processing) {
       if (voice.recording) void voice.stop();
       else voice.start();
-    } else if (data === '\x03' && voice.recording) {
+    } else if (isKey(data, 'cancel') && voice.recording) {
       voice.cancel();
     }
   });

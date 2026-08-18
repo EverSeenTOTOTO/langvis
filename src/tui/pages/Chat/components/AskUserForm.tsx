@@ -8,6 +8,7 @@ import { BorderedBox } from '@/tui/components/BorderedBox';
 import { Markdown } from '@/tui/components/Markdown';
 import { Spinner } from '@/tui/components/Spinner';
 import { useKeyboard } from '@/tui/hooks/useKeyboard';
+import { isKey } from '@/tui/libs/keys';
 import { useStore } from '@/client/store';
 import type { MessageNode } from '@/client/view-model/message-node';
 import {
@@ -250,10 +251,12 @@ export const AskUserForm = observer(function AskUserForm({
   // Navigation only — per-field keys (◀▶/space) are handled by each focused control's own useKeyboard.
   useKeyboard(data => {
     if (submitting) return;
+    // Esc/Ctrl-c always quit; `q` only when focus isn't on a text/number field
+    // (there it stays free to type).
     const quit =
-      data === '\x1b' ||
-      data === '\x03' ||
-      (data === 'q' &&
+      isKey(data, 'esc') ||
+      isKey(data, 'cancel') ||
+      (isKey(data, 'q') &&
         focusedField != null &&
         focusedField.kind !== 'text' &&
         focusedField.kind !== 'number');
@@ -264,18 +267,12 @@ export const AskUserForm = observer(function AskUserForm({
       });
       return;
     }
-    if (
-      data === '\x1b[A' ||
-      data === '\x1b[B' ||
-      data === '\x0e' ||
-      data === '\x10'
-    ) {
-      // Ctrl-n = next (down), Ctrl-p = prev (up)
-      const dir = data === '\x1b[B' || data === '\x0e' ? 1 : -1;
+    if (isKey(data, 'up') || isKey(data, 'down')) {
+      const dir = isKey(data, 'down') ? 1 : -1;
       setFocusIdx(i => (i + dir + submitIdx + 1) % (submitIdx + 1));
       return;
     }
-    if (data === '\r') {
+    if (isKey(data, 'enter')) {
       if (focusIdx === submitIdx) submit();
       else setFocusIdx(i => Math.min(submitIdx, i + 1));
     }

@@ -11,6 +11,7 @@ import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
 import { useKeyboard } from '@/tui/hooks/useKeyboard';
 import { useTerminalSize } from '@/tui/hooks/useTerminalSize';
+import { DEFAULT_BINDINGS, isKey, type KeyAction } from '../../../libs/keys';
 import { visualWidth } from '../../../libs/wrap';
 import {
   applyKey,
@@ -33,15 +34,11 @@ import {
 import { computeSlashQuery } from '../../../libs/slash';
 
 // Keys a nav-owning picker (slash palette) takes over; editing ignores them.
-const PICKER_KEYS = new Set([
-  '\x1b[A',
-  '\x1b[B',
-  '\x10',
-  '\x0e',
-  '\r',
-  '\x1b[13;5u',
-  '\t',
-]);
+const PICKER_KEYS = new Set(
+  (['up', 'down', 'enter', 'pick'] as KeyAction[]).flatMap(
+    a => DEFAULT_BINDINGS[a],
+  ),
+);
 
 /** Imperative handle so an owner can backfill/replace text at the caret. */
 export type TextareaHandle = {
@@ -158,7 +155,7 @@ export const Textarea = forwardRef<TextareaHandle, TextareaProps>(
       if (navLocked && PICKER_KEYS.has(data)) return;
       // Ctrl-y yanks the ring head; Alt-y replaces the last yank with the next
       // older entry (only valid immediately after a yank).
-      if (data === '\x19') {
+      if (isKey(data, 'yank')) {
         const t = ringRef.current.current();
         if (t === '') return;
         ringRef.current.breakSequence();
@@ -170,7 +167,7 @@ export const Textarea = forwardRef<TextareaHandle, TextareaProps>(
         setCursor(r.cursor);
         return;
       }
-      if (data === '\x1by') {
+      if (isKey(data, 'yankPop')) {
         const y = yankRef.current;
         if (!y) return;
         const t = ringRef.current.rotate();
@@ -183,7 +180,7 @@ export const Textarea = forwardRef<TextareaHandle, TextareaProps>(
         return;
       }
       // Ctrl-_ and Ctrl-z undo the last edit unit.
-      if (data === '\x1f' || data === '\x1a') {
+      if (isKey(data, 'undo')) {
         const snap = undoRef.current.undo();
         if (!snap) return;
         ringRef.current.breakSequence();

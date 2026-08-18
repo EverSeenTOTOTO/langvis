@@ -6,6 +6,7 @@ import { Text } from '@/tui/components/Text';
 import { Input } from '@/tui/components/Input';
 import { BorderedBox } from '@/tui/components/BorderedBox';
 import { useKeyboard } from '@/tui/hooks/useKeyboard';
+import { isKey } from '@/tui/libs/keys';
 import { useTerminalSize } from '@/tui/hooks/useTerminalSize';
 import { useStore } from '@/client/store';
 
@@ -44,12 +45,7 @@ export const SignIn = observer(function SignIn() {
   // ↑/↓, so this never conflicts with typing.
   useKeyboard(data => {
     if (busy) return;
-    if (
-      data === '\x1b[A' ||
-      data === '\x1b[B' ||
-      data === '\x0e' ||
-      data === '\x10'
-    ) {
+    if (isKey(data, 'up') || isKey(data, 'down')) {
       setField(f => (f === 0 ? 1 : 0));
     }
   });

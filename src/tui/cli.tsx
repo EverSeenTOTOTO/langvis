@@ -6,6 +6,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { Root, type ConvStorage } from './app';
 import { useKeyboard } from '@/tui/hooks/useKeyboard';
+import { isKey } from '@/tui/libs/keys';
 import { serverFetch, getPrefetchPath } from '@/client/decorator/api';
 import { useStore } from '@/client/store';
 import { LANGVIS_DIR } from '@/shared/constants';
@@ -38,7 +39,7 @@ const fileConv: ConvStorage = {
 // Ctrl-D quits; Ctrl-C stays a normal key so screens cancel a running stream on '\x03'.
 function QuitOnCtrlD() {
   useKeyboard(data => {
-    if (data === '\x04') process.exit(0);
+    if (isKey(data, 'quit')) process.exit(0);
   });
   return null;
 }

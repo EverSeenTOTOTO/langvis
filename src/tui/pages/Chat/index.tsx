@@ -6,6 +6,7 @@ import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
 import { Static } from '@/tui/components/Static';
 import { useKeyboard } from '@/tui/hooks/useKeyboard';
+import { isKey } from '@/tui/libs/keys';
 import { useTerminalSize } from '@/tui/hooks/useTerminalSize';
 import { useStore } from '@/client/store';
 import { Role, type Message } from '@/shared/types/entities';
@@ -162,12 +163,12 @@ export const Chat = observer(function Chat() {
   // ask / streaming / picker): panel-specific handlers unmount, so own it here.
   const streamCancelRef = useRef<(() => void) | null>(null);
   useKeyboard(data => {
-    if (data === '\x03') streamCancelRef.current?.();
+    if (isKey(data, 'cancel')) streamCancelRef.current?.();
   });
 
   // Ctrl+O toggles full tool detail for the current (streaming) turn.
   useKeyboard(data => {
-    if (data === '\x0f') setExpanded(v => !v);
+    if (isKey(data, 'expand')) setExpanded(v => !v);
   });
 
   if (!convId) return null;

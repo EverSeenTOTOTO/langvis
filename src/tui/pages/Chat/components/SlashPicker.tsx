@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
 import { useKeyboard } from '@/tui/hooks/useKeyboard';
+import { isKey } from '@/tui/libs/keys';
 import {
   entryDesc,
   entryToken,
@@ -34,17 +35,17 @@ export function SlashPicker({
   }, [query]);
 
   useKeyboard(data => {
-    if (data === '\x1b') {
+    if (isKey(data, 'esc')) {
       onClose();
       return;
     }
-    if (data === '\x1b[B' || data === '\x0e') {
+    if (isKey(data, 'down')) {
       setSel(s => (filtered.length ? (s + 1) % filtered.length : 0));
-    } else if (data === '\x1b[A' || data === '\x10') {
+    } else if (isKey(data, 'up')) {
       setSel(s =>
         filtered.length ? (s - 1 + filtered.length) % filtered.length : 0,
       );
-    } else if (data === '\r' || data === '\x1b[13;5u' || data === '\t') {
+    } else if (isKey(data, 'pick')) {
       const picked = filtered[sel];
       if (picked) onPick(picked);
     }

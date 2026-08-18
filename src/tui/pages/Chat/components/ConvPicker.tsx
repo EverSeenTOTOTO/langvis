@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Box } from '@/tui/components/Box';
 import { Text } from '@/tui/components/Text';
 import { useKeyboard } from '@/tui/hooks/useKeyboard';
+import { isKey } from '@/tui/libs/keys';
 import { useStore } from '@/client/store';
 import { Spinner } from '@/tui/components/Spinner';
 import type { Conversation } from '@/shared/types/entities';
@@ -43,7 +44,7 @@ export const ConvPicker = observer(function ConvPicker({
   const currentId = conversation.currentConversationId;
 
   useKeyboard(data => {
-    if (data === '\x1b' || data === 'q') {
+    if (isKey(data, 'close')) {
       onClose();
       return;
     }
@@ -60,11 +61,11 @@ export const ConvPicker = observer(function ConvPicker({
       }
       return;
     }
-    if (data === '\x1b[C' || data === '\x1b[B' || data === '\x0e') {
+    if (isKey(data, 'down') || isKey(data, 'right')) {
       setSel(s => (items.length ? (s + 1) % items.length : 0));
-    } else if (data === '\x1b[D' || data === '\x1b[A' || data === '\x10') {
+    } else if (isKey(data, 'up') || isKey(data, 'left')) {
       setSel(s => (items.length ? (s - 1 + items.length) % items.length : 0));
-    } else if (data === '\r') {
+    } else if (isKey(data, 'enter')) {
       const picked = items[sel];
       if (picked) {
         conversation.currentConversationId = picked.id;
