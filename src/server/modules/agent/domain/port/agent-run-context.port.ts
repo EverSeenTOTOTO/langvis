@@ -31,12 +31,12 @@ export interface AgentRunContext {
   readonly config: RunConfigVO;
   readonly runId: string;
   readonly workDir: string;
-  /** 会话句柄：授权 grant 按 conversationId 持久（workDir 文件），跨 run 复用。 */
+  /** 会话句柄。授权 grant 键控见 workDir 与 AuthorizationPort。 */
   readonly conversationId: string;
   readonly signal: AbortSignal;
   readonly llm: LlmPort;
   readonly cache: CachePort;
-  /** 横切授权能力（Principal(conversationId)×Action×Resource，session 持久 + HITL）。 */
+  /** 横切授权能力（Action×Resource，workDir 持久 + HITL）。 */
   readonly auth: AuthorizationPort;
   messages: LlmMessage[];
   readonly base: number;

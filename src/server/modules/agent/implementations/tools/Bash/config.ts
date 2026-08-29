@@ -16,7 +16,7 @@ export interface BashOutput {
 export const config: ToolConfig<BashInput, BashOutput> = {
   name: 'bash',
   description:
-    'Execute a shell command in the workspace directory. Requires user confirmation before execution. Prefer modern CLI tools: use `rg` instead of `grep`, `fd` instead of `find`, `lsd` instead of `ls`, `bat` instead of `cat`. In production, commands run inside an isolated Docker sandbox (no network, resource-limited); in development they execute directly on the host.',
+    'Execute a shell command in the workspace directory. Read-only commands confined to the workspace run without confirmation; anything else (writes, execution, out-of-workspace paths, shell metacharacters) requires user approval. In sub-agent runs only already-approved commands run — the rest fail fast. Prefer modern CLI tools: use `rg` instead of `grep`, `fd` instead of `find`, `lsd` instead of `ls`, `bat` instead of `cat`.',
   untrustedOutput: true,
   inputSchema: {
     type: 'object',

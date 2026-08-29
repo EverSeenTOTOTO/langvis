@@ -23,11 +23,6 @@ vi.mock(
         return { child: {}, kill: () => undefined };
       }
     },
-    DockerBash: class {
-      spawn() {
-        return { child: {}, kill: () => undefined };
-      }
-    },
     runChild: runChildMock,
   }),
 );
@@ -39,6 +34,7 @@ const { default: BashTool } = await import(
 function makeCtx(
   input: Record<string, unknown>,
   auth: AuthorizationPort,
+  interactive = true,
 ): ToolCallContext {
   return {
     callId: 'tc_1',
@@ -49,7 +45,7 @@ function makeCtx(
     llm: {} as never,
     auth,
     runId: 'run_1',
-    interactive: true,
+    interactive,
     runtimeConfig: {},
   } as unknown as ToolCallContext;
 }
@@ -73,7 +69,7 @@ async function run(ctx: ToolCallContext): Promise<void> {
   while (!r.done) r = await gen.next();
 }
 
-describe('BashTool interactive 授权门', () => {
+describe('BashTool 授权门', () => {
   beforeEach(() => {
     runChildMock.mockClear();
   });
@@ -114,5 +110,41 @@ describe('BashTool interactive 授权门', () => {
     const [, action, resource] = ensureApproved.mock.calls[0]!;
     expect(action).toBe('read-path');
     expect(String(resource)).toBe('/etc');
+  });
+
+  it('非交互 safe（只读 + pwd 内）→ 不调 ensureApproved，静默执行', async () => {
+    const ensureApproved = stubEnsureApproved(async function* () {
+      throw new Error('should not be called');
+    });
+    const auth = { ensureApproved } as unknown as AuthorizationPort;
+    await run(makeCtx({ command: 'ls', timeout: 30 }, auth, false));
+    expect(ensureApproved).not.toHaveBeenCalled();
+    expect(runChildMock).toHaveBeenCalledTimes(1);
+    const opts = runChildMock.mock.calls[0]![1];
+    expect(opts.timeoutSec).toBe(30);
+  });
+
+  it('非交互 sensitive + 继承 grant 命中（返 undefined）→ 执行，timeout 回落 suggested', async () => {
+    const ensureApproved = stubEnsureApproved(async function* () {
+      return undefined;
+    });
+    const auth = { ensureApproved } as unknown as AuthorizationPort;
+    await run(makeCtx({ command: 'rm ./a', timeout: 15 }, auth, false));
+    expect(ensureApproved).toHaveBeenCalledTimes(1);
+    const opts = runChildMock.mock.calls[0]![1];
+    expect(opts.timeoutSec).toBe(15);
+  });
+
+  it('非交互 sensitive 无 grant（ensureApproved 抛）→ 工具抛错，不执行命令', async () => {
+    const ensureApproved = stubEnsureApproved(async function* () {
+      throw new Error(
+        'Authorization for exec-cmd on "bash:abc" unavailable in non-interactive (sub-agent) run',
+      );
+    });
+    const auth = { ensureApproved } as unknown as AuthorizationPort;
+    await expect(
+      run(makeCtx({ command: 'rm ./a', timeout: 15 }, auth, false)),
+    ).rejects.toThrow(/non-interactive/);
+    expect(runChildMock).not.toHaveBeenCalled();
   });
 });

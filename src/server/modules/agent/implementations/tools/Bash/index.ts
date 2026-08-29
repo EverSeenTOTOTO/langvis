@@ -6,12 +6,7 @@ import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-ca
 import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { BashInput, BashOutput } from './config';
-import {
-  DirectBash,
-  // DockerBash, // 暂时禁用 Docker 沙箱——非交互也走 host
-  runChild,
-  type BashBackend,
-} from './bash-backend';
+import { DirectBash, runChild, type BashBackend } from './bash-backend';
 import { classifyBashCommand } from './classifier';
 
 const DEFAULT_TIMEOUT = 60;
@@ -79,35 +74,29 @@ export default class BashTool extends Tool<BashOutput> {
       MAX_TIMEOUT,
     );
 
-    // backend 按交互性选：interactive → DirectBash；非 interactive → DockerBash。
-    // 暂时禁用 Docker 沙箱——非交互也走 host（DirectBash）。
     const backend: BashBackend = new DirectBash();
 
+    // pwd-containment：只读且在 workDir 内 → safe 直放；其余 sensitive 走授权门。
+    // 子 agent（非交互）同门：命中继承 grant 直放，缺则 ensureApproved 快速失败。
+    const perm = classifyBashCommand(command, workDir);
     let userTimeout: number;
-    if (ctx.interactive) {
-      // 工具侧 pwd-containment 判定：只读 + 全在 workDir 子树内 → safe 放行、不调 auth；
-      // 越界 / 写 / exec / 含元字符 / 未知 → sensitive 走统一授权门（session 复用）。
-      const perm = classifyBashCommand(command, workDir);
-      if (perm.kind === 'safe') {
-        userTimeout = suggestedTimeout;
-      } else {
-        const data = (yield* ctx.auth.ensureApproved(
-          ctx,
-          perm.action,
-          perm.resource,
-          {
-            prompt: perm.prompt,
-            formSchema: bashFormSchema(suggestedTimeout),
-          },
-        )) as Record<string, unknown> | undefined;
-
-        userTimeout = Math.min(
-          Math.max(Number(data?.timeout) || suggestedTimeout, 1),
-          MAX_TIMEOUT,
-        );
-      }
-    } else {
+    if (perm.kind === 'safe') {
       userTimeout = suggestedTimeout;
+    } else {
+      const data = (yield* ctx.auth.ensureApproved(
+        ctx,
+        perm.action,
+        perm.resource,
+        {
+          prompt: perm.prompt,
+          formSchema: bashFormSchema(suggestedTimeout),
+        },
+      )) as Record<string, unknown> | undefined;
+
+      userTimeout = Math.min(
+        Math.max(Number(data?.timeout) || suggestedTimeout, 1),
+        MAX_TIMEOUT,
+      );
     }
 
     ctx.signal.throwIfAborted();

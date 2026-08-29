@@ -1,30 +1,11 @@
-import {
-  spawn,
-  execFileSync,
-  type ChildProcess,
-  type SpawnOptions,
-} from 'child_process';
-import { readFileSync, unlinkSync } from 'fs';
-import os from 'node:os';
-import path from 'node:path';
-import { singleton } from 'tsyringe';
-import { generateId } from '@/shared/utils';
+import { spawn, type ChildProcess, type SpawnOptions } from 'child_process';
 import { createTimeoutController } from '@/server/utils/abort';
-import {
-  lifecycleHook,
-  type LifecycleHook,
-} from '@/server/decorator/lifecycle';
-import Logger from '@/server/utils/logger';
 import type { RunEvent } from '@/shared/types/events';
 import type { BashOutput } from './config';
-
-const logger = Logger.child({ source: 'BashBackend' });
 
 const FLUSH_INTERVAL = 100;
 const PROGRESS_LIMIT = 8 * 1024; // preview cap streamed via tool_progress
 const SIGTERM_GRACE = 5000;
-const DOCKER_IMAGE =
-  process.env.LANGVIS_BASH_IMAGE || 'langvis-bash-sandbox:latest';
 
 const activeProcesses = new Set<ChildProcess>();
 let cleanupRegistered = false;
@@ -68,7 +49,7 @@ function killProcessTree(child: ChildProcess): void {
 
 export interface ChildHandle {
   child: ChildProcess;
-  /** Idempotent: SIGTERM→SIGKILL the process (+ container, for Docker). */
+  /** Idempotent: SIGTERM→SIGKILL the process. */
   kill: () => void;
 }
 
@@ -82,7 +63,7 @@ const COMMON_SPAWN_OPTS: SpawnOptions = {
   stdio: ['pipe', 'pipe', 'pipe'],
 };
 
-// interactive 态：直接在 host 上执行（shell 模式，cwd=workDir）。 Bash 工具仅在 ctx.interactive 时选它——人工确认后才在 host 跑。
+// host 直接执行（shell 模式，cwd=workDir）。
 export class DirectBash implements BashBackend {
   spawn(command: string, workDir: string): ChildHandle {
     const child = spawn(command, {
@@ -94,63 +75,13 @@ export class DirectBash implements BashBackend {
   }
 }
 
-// prod：Docker 沙箱内执行。workDir 同路径 bind-mount，`--network=none` 断网，资源上限防 DoS。
-// kill 走 `--cidfile` + `docker kill`——group-kill 在 SIGKILL 时会孤立容器。
-export class DockerBash implements BashBackend {
-  spawn(command: string, workDir: string): ChildHandle {
-    const cidFile = path.join(os.tmpdir(), `bash-cid-${generateId('')}`);
-    const child = spawn(
-      'docker',
-      [
-        'run',
-        '--rm',
-        '--init',
-        '--sig-proxy=true',
-        '--network=none',
-        '--pids-limit=128',
-        '--memory=512m',
-        `--user=${process.getuid!()}:${process.getgid!()}`,
-        `--cidfile=${cidFile}`,
-        '-v',
-        `${workDir}:${workDir}`,
-        '-w',
-        workDir,
-        DOCKER_IMAGE,
-        'sh',
-        '-c',
-        command,
-      ],
-      COMMON_SPAWN_OPTS,
-    );
-    const kill = (): void => {
-      try {
-        const cid = readFileSync(cidFile, 'utf8').trim();
-        if (cid)
-          execFileSync('docker', ['kill', cid], {
-            stdio: 'ignore',
-            timeout: 5000,
-          });
-      } catch {
-        /* cidfile 尚未写出 / docker kill 失败 / 容器已退出 */
-      }
-      killProcessTree(child);
-      try {
-        unlinkSync(cidFile);
-      } catch {
-        /* already gone */
-      }
-    };
-    return { child, kill };
-  }
-}
-
 interface RunChildOpts {
   timeoutSec: number;
   signal: AbortSignal;
   callId: string;
 }
 
-// 共享执行核：流式收集 stdout/stderr，超时/abort 即 kill，退出后汇总；Direct/Docker 仅 spawn+kill 不同。
+// 共享执行核：流式收集 stdout/stderr，超时/abort 即 kill，退出后汇总。
 export async function* runChild(
   handle: ChildHandle,
   opts: RunChildOpts,
@@ -241,40 +172,4 @@ export async function* runChild(
     stderr += `\nProcess timed out after ${timeoutSec}s and was killed.`;
 
   return { exitCode, stdout, stderr, timedOut };
-}
-
-/** docker 守护进程是否可用（启动探测用，同步）。 */
-function dockerAvailable(): boolean {
-  try {
-    execFileSync('docker', ['info'], {
-      stdio: 'ignore',
-      timeout: 5000,
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// 启动期探测：docker 守护或沙箱镜像缺失时仅警告（spawn 会自然 fail-fast）；经 @lifecycleHook 自注册。
-@singleton()
-@lifecycleHook
-export class BashSandboxProbe implements LifecycleHook {
-  onBoot(): void {
-    if (!dockerAvailable()) {
-      logger.warn(
-        'Docker daemon unavailable — non-interactive Bash will fail at spawn. Install/start docker.',
-      );
-      return;
-    }
-    try {
-      execFileSync('docker', ['image', 'inspect', DOCKER_IMAGE], {
-        stdio: 'ignore',
-      });
-    } catch {
-      logger.warn(
-        `Bash sandbox image "${DOCKER_IMAGE}" not found — run: make sandbox-image`,
-      );
-    }
-  }
 }

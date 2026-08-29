@@ -6,7 +6,7 @@ A personal AI agent platform — streaming conversation, tool use, document inte
 
 ### Agent & conversation
 
-- **Tool-using agent** out of the box: web fetch, document archive & semantic search, Docker-sandboxed shell, file editing, sub-agent orchestration, and more.
+- **Tool-using agent** out of the box: web fetch, document archive & semantic search, approval-gated shell, file editing, sub-agent orchestration, and more.
 - **Skills system**: drop a markdown file under `skills/` to teach the agent a new workflow — ships with translate, mock interview, document archive, and others.
 - **Long-context memory**: a fold-based compaction model keeps conversations coherent well past the model's context window.
 - **Human in the loop**: structured forms (`ask_user`) let the agent pause and collect input mid-run.

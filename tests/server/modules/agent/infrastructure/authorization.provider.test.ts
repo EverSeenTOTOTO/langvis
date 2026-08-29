@@ -128,6 +128,26 @@ describe('AuthorizationProvider', () => {
     expect(tracker.calls).toBe(0);
   });
 
+  it('非 interactive + grant 命中 → 直接 return（子 agent 继承父授权的正例）', async () => {
+    await store.writeSection(workDir, 'grants', ['exec-cmd:bash:abc']);
+    const tracker = registerFakeAskUser({
+      submitted: true,
+      data: { confirmed: true },
+    });
+
+    const ret = await collect(
+      provider.ensureApproved(
+        makeCtx(workDir, { interactive: false }),
+        'exec-cmd',
+        'bash:abc',
+        { prompt: 'p', formSchema: {} },
+      ),
+    );
+
+    expect(ret).toBeUndefined();
+    expect(tracker.calls).toBe(0);
+  });
+
   it('deny → 抛（不写 grants）', async () => {
     registerFakeAskUser({
       submitted: true,

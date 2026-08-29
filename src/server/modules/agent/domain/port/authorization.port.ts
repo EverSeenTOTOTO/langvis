@@ -1,7 +1,7 @@
 import type { RunEvent } from '@/shared/types/events';
 import type { ToolCallContext } from './tool-call-context.port';
 
-// 横切授权：Principal(conversationId)×Action×Resource。越界工具共用此门；grant 持久于 workDir 文件，跨 run 复用。
+// 横切授权：Action×Resource。越界工具共用此门；grant 持久于 workDir 文件，跨 run（含子 agent）复用。
 export type AuthAction = 'read-path' | 'exec-cmd' | 'edit-path';
 
 export interface EnsureApprovedOptions {

@@ -17,12 +17,10 @@ container.register(CACHE_PORT, CacheProvider, {
   lifecycle: Lifecycle.Singleton,
 });
 
-// 横切授权：Principal(runId) × Action × Resource。越界工具按 AUTHORIZATION_PORT 注入。
+// 横切授权：Action × Resource。越界工具按 AUTHORIZATION_PORT 注入。
 container.register(AUTHORIZATION_PORT, AuthorizationProvider, {
   lifecycle: Lifecycle.Singleton,
 });
-
-// Bash 执行后端不经 DI——BashTool 按 ctx.interactive 在 DirectBash/DockerBash 间 new。
 
 import './application/hooks'; // side-effect：触发各 @agentHook 自注册（resolveAgentHooks 从 registry 取）
 import './application/event/agent-run.handler';
