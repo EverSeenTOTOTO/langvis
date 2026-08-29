@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   ManyToOne,
   OneToMany,
   PrimaryColumn,
@@ -15,6 +16,7 @@ import { UserEntity } from './User';
 
 export { Conversation };
 
+@Index('idx_conversations_user_workspace', ['userId', 'workspacePath'])
 @Entity('conversations')
 export class ConversationEntity implements Conversation {
   @PrimaryColumn('varchar', { length: 16 })

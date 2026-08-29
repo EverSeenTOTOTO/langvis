@@ -6,6 +6,7 @@ import {
   BeforeInsert,
   Column,
   Entity,
+  Index,
   PrimaryColumn,
   VersionColumn,
 } from 'typeorm';
@@ -26,6 +27,7 @@ export class AgentRunEntity implements AgentRunType {
   }
 
   @Column({ type: 'varchar', length: 32 })
+  @Index()
   status!: RunStatus;
 
   /** 事实源 —— 投影 (content/steps) 由 projectRun 派生，不持久化投影结果 */

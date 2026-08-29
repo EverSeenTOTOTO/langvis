@@ -3,6 +3,7 @@ import {
   BeforeInsert,
   Column,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryColumn,
@@ -13,6 +14,7 @@ import { generateId } from '@/shared/utils';
 
 export { Message, Role };
 
+@Index('idx_messages_conversation_created', ['conversationId', 'createdAt'])
 @Entity('messages')
 export class MessageEntity implements Message {
   @PrimaryColumn('varchar', { length: 16 })
@@ -41,6 +43,7 @@ export class MessageEntity implements Message {
   parentId!: string | null;
 
   @Column({ type: 'varchar', length: 16, nullable: true })
+  @Index()
   agentRunId!: string | null;
 
   @Column({ type: 'jsonb', nullable: true })
