@@ -69,3 +69,21 @@ start: build
 .PHONY: test
 test:
 	bunx vitest run --coverage
+
+# 受控迁移——synchronize 已关闭，schema 变更走 migration 流程。
+# generate 产出的文件须手动在 src/server/libs/infrastructure/migrations/index.ts 注册。
+.PHONY: migration-generate
+migration-generate:
+	NODE_ENV=development bun node_modules/typeorm/cli.js migration:generate \
+		src/server/libs/infrastructure/migrations/$(name) \
+		-d src/server/libs/infrastructure/datasource.ts
+
+.PHONY: migration-run
+migration-run:
+	NODE_ENV=development bun node_modules/typeorm/cli.js migration:run \
+		-d src/server/libs/infrastructure/datasource.ts
+
+.PHONY: migration-revert
+migration-revert:
+	NODE_ENV=development bun node_modules/typeorm/cli.js migration:revert \
+		-d src/server/libs/infrastructure/datasource.ts

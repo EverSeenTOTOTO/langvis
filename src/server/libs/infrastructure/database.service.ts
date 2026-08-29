@@ -1,12 +1,3 @@
-import { AgentRunEntity } from '@/shared/entities/AgentRun';
-import { ConversationEntity } from '@/shared/entities/Conversation';
-import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
-import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
-import { DocumentEntity } from '@/shared/entities/Document';
-import { EmailEntity } from '@/shared/entities/Email';
-import { MessageEntity } from '@/shared/entities/Message';
-import { SettingsEntity } from '@/shared/entities/Settings';
-import { entities, migrations } from '@hedystia/better-auth-typeorm';
 import { DataSource, type EntityTarget, type Repository } from 'typeorm';
 import logger from '@/server/utils/logger';
 import { service } from '@/server/decorator/service';
@@ -14,6 +5,7 @@ import {
   lifecycleHook,
   type LifecycleHook,
 } from '@/server/decorator/lifecycle';
+import { buildDataSourceOptions } from './datasource-options';
 
 @service()
 @lifecycleHook
@@ -21,29 +13,7 @@ export class DatabaseService implements LifecycleHook {
   private _dataSource: DataSource | null = null;
   private readonly initPromise: Promise<void>;
 
-  private readonly dataSourceConfig = {
-    type: 'postgres' as const,
-    host: import.meta.env.VITE_PG_HOST,
-    port: import.meta.env.VITE_PG_PORT,
-    username: import.meta.env.VITE_PG_USERNAME,
-    password: import.meta.env.VITE_PG_PASSWORD,
-    database: import.meta.env.VITE_PG_DATABASE,
-    synchronize: true,
-    logging: false,
-    entities: [
-      ...entities,
-      AgentRunEntity,
-      ConversationEntity,
-      MessageEntity,
-      ConversationGroupEntity,
-      DocumentEntity,
-      DocumentChunkEntity,
-      EmailEntity,
-      SettingsEntity,
-    ],
-    migrations: [...migrations],
-    migrationsRun: true,
-  };
+  private readonly dataSourceConfig = buildDataSourceOptions();
 
   constructor() {
     this.initPromise = this.initialize();
