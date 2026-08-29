@@ -1,10 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
-import type { EventBus } from '@/server/libs/ddd';
+import type { EventBus, DomainEvent } from '@/server/libs/ddd';
 import type { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { Transport } from '@/shared/transport';
 import type { StreamFrame } from '@/shared/types/events';
+import {
+  CancelRun,
+  type CancelRunPayload,
+} from '@/server/modules/agent/contracts';
 
 /** 记录所有 send 帧的最小 Transport 实现。 */
 class FakeTransport extends Transport<StreamFrame> {
@@ -131,5 +135,85 @@ describe('SessionManager', () => {
 
       expect(chat.markMessagesTerminated).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('SessionManager.onShutdown（关停先 abort 活跃 run 再关池）', () => {
+  function makeManagerWithDispatch(dispatch: EventBus['dispatch']): {
+    manager: SessionManager;
+    dispatch: ReturnType<typeof vi.fn>;
+  } {
+    const chat = {
+      findActiveAssistantMessages: vi.fn().mockResolvedValue([]),
+      markMessagesTerminated: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ChatService;
+    const provider = {
+      resolveContextSize: vi.fn().mockReturnValue(8000),
+    } as unknown as ProviderService;
+    const dispatchFn = vi.fn(dispatch);
+    const manager = new SessionManager(
+      chat,
+      { dispatch: dispatchFn } as unknown as EventBus,
+      provider,
+    );
+    return { manager, dispatch: dispatchFn };
+  }
+
+  async function registerRun(
+    manager: SessionManager,
+    conversationId: string,
+    messageId: string,
+    runId: string,
+  ): Promise<void> {
+    await manager.initSession(conversationId, new FakeTransport());
+    manager.registerRun(conversationId, messageId, runId);
+  }
+
+  it('跨会话所有活跃 run 都派发 CancelRun，等终态落库后关 SSE', async () => {
+    // mock dispatch 模拟 run 同步 finalize——payload 带 conversationId+messageId。
+    const { manager, dispatch } = makeManagerWithDispatch(
+      (_type: string, evt: DomainEvent) => {
+        const payload = evt.payload as CancelRunPayload;
+        manager.finalizeRun(payload.conversationId, payload.messageId);
+      },
+    );
+    await registerRun(manager, 'conv_1', 'msg_1', 'run_1');
+    await registerRun(manager, 'conv_2', 'msg_2', 'run_2');
+
+    await manager.onShutdown();
+
+    const cancelled = dispatch.mock.calls
+      .filter(([type]) => type === CancelRun)
+      .map(([, evt]) => evt.payload.runId);
+    expect(cancelled).toEqual(expect.arrayContaining(['run_1', 'run_2']));
+    expect(manager.hasSession('conv_1')).toBe(false);
+    expect(manager.hasSession('conv_2')).toBe(false);
+  });
+
+  it('stuck run 不观测 abort 时——宽限超时放行，仍关 SSE（余 reconciler 兜底）', async () => {
+    const { manager, dispatch } = makeManagerWithDispatch(() => {});
+    await registerRun(manager, 'conv_1', 'msg_1', 'run_1');
+    manager.abortGraceMs = 40;
+
+    const start = Date.now();
+    await manager.onShutdown();
+    const elapsed = Date.now() - start;
+
+    expect(dispatch).toHaveBeenCalledWith(
+      CancelRun,
+      expect.objectContaining({
+        payload: expect.objectContaining({ runId: 'run_1' }),
+      }),
+    );
+    // 有界放行：不超过宽限 + slack；SSE 仍关。
+    expect(elapsed).toBeLessThan(500);
+    expect(manager.hasSession('conv_1')).toBe(false);
+  });
+
+  it('无活跃 run 时——onShutdown 立即返回不空等', async () => {
+    const { manager } = makeManagerWithDispatch(() => {});
+    const start = Date.now();
+    await manager.onShutdown();
+    expect(Date.now() - start).toBeLessThan(50);
   });
 });

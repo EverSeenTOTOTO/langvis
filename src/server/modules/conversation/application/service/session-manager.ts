@@ -28,6 +28,8 @@ export class SessionManager implements LifecycleHook {
   private readonly logger = Logger.child({ source: 'SessionManager' });
   private readonly sessions = new Map<string, ConversationSession>();
   private readonly startedAt = new Map<string, number>();
+  /** 关停 abort 后等终态落库的宽限；测试可覆盖调小。 */
+  abortGraceMs = 3000;
 
   constructor(
     @inject(ChatService)
@@ -60,11 +62,48 @@ export class SessionManager implements LifecycleHook {
   }
 
   async onShutdown(): Promise<void> {
+    await this.abortActiveRuns('server shutting down');
+
     for (const session of this.sessions.values()) {
       session.dispose();
     }
     this.sessions.clear();
     this.logger.info(`Closed all SSE connections`);
+  }
+
+  // 关停先 abort 活跃 run 再让池销毁（LIFO 保证此刻池仍活）。
+  // 派发 CancelRun 即时停 LLM；轮询 hasActiveRun 等终态落库，超时交 reconciler。
+  private async abortActiveRuns(reason: string): Promise<void> {
+    const snapshot: Array<[string, string]> = [];
+    for (const [conversationId, session] of this.sessions) {
+      for (const messageId of session.runMessageIds()) {
+        snapshot.push([conversationId, messageId]);
+      }
+    }
+    if (snapshot.length === 0) return;
+
+    this.logger.info(`Aborting ${snapshot.length} active run(s) on shutdown`);
+    for (const [conversationId, messageId] of snapshot) {
+      this.cancelActiveRun(conversationId, messageId, reason);
+    }
+
+    const deadline = Date.now() + this.abortGraceMs;
+    await new Promise<void>(resolve => {
+      const tick = () => {
+        const pending = snapshot.filter(([c, m]) => this.hasActiveRun(c, m));
+        if (pending.length === 0 || Date.now() >= deadline) {
+          if (pending.length > 0) {
+            this.logger.warn(
+              `${pending.length} run(s) still active after abort grace — leaving to reconciler`,
+            );
+          }
+          resolve();
+          return;
+        }
+        setTimeout(tick, 50);
+      };
+      tick();
+    });
   }
 
   async initSession(

@@ -21,7 +21,10 @@ async function runPhase(phase: 'onBoot' | 'onShutdown'): Promise<void> {
   // 空 registry（无 hook）是 no-op，非缺陷——不抛。
   if (!container.isRegistered(LIFECYCLE_HOOK)) return;
   const hooks = container.resolveAll<LifecycleHook>(LIFECYCLE_HOOK);
-  for (const hook of hooks) {
+  // 启动 FIFO（基础设施先就绪）；关停 LIFO——app 层先停、infra（DB 池）最后关，
+  // 确保 app hook 的终态写库在池销毁前完成（见 SessionManager.onShutdown abort 后等落库）。
+  const ordered = phase === 'onShutdown' ? [...hooks].reverse() : hooks;
+  for (const hook of ordered) {
     const method = hook[phase];
     // 鸭子类型：hook 只参与它实现的 phase。方法缺失=跳过（非错误）；
     // 方法抛错=环境缺陷，向上传播、fail-fast（不 try/catch 吞掉）。

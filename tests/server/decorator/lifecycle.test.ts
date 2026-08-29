@@ -67,8 +67,38 @@ describe('lifecycle aspect', () => {
     void OkHook;
 
     await expect(shutdownAll()).rejects.toThrow('boom');
-    // fail-fast：FailingHook 先注册先抛，OkHook 不再执行
-    expect(ok).not.toHaveBeenCalled();
+    // LIFO：后注册者先停——OkHook 先跑（已调用），FailingHook 最后跑抛错，phase reject。
+    expect(ok).toHaveBeenCalledTimes(1);
+  });
+
+  it('onBoot FIFO、onShutdown LIFO（基础设施先就绪后停）', async () => {
+    const order: string[] = [];
+    @service()
+    @lifecycleHook
+    class A {
+      onBoot = () => {
+        order.push('A-boot');
+      };
+      onShutdown = () => {
+        order.push('A-down');
+      };
+    }
+    @service()
+    @lifecycleHook
+    class B {
+      onBoot = () => {
+        order.push('B-boot');
+      };
+      onShutdown = () => {
+        order.push('B-down');
+      };
+    }
+    void A;
+    void B;
+
+    await bootAll();
+    await shutdownAll();
+    expect(order).toEqual(['A-boot', 'B-boot', 'B-down', 'A-down']);
   });
 
   it('缺省 onBoot/onShutdown 不报错（鸭子类型跳过）', async () => {
