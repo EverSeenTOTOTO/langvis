@@ -8,7 +8,10 @@ import type {
 } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
-import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
+import {
+  AgentRunConcurrentModificationError,
+  ToolNotFoundError,
+} from '@/server/modules/agent/domain/errors';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
@@ -33,6 +36,12 @@ import {
 import type { AuthorizationPort } from '@/server/modules/agent/domain/port/authorization.port';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 
+/** 终态乐观锁提交的最大重试次数。commit 每次重读最新版本，重试几乎必然成功。 */
+const FINALIZE_MAX_RETRIES = 2;
+
+/** 每累积这么多非终态事件，就 checkpoint 一次事件流快照（崩溃恢复投影依赖它）。 */
+const CHECKPOINT_EVERY = 50;
+
 /** 对话无关的 run 启动参数——conv 与子 agent 都用它驱动 Launcher。 */
 export interface LaunchParams {
   runId: string;
@@ -56,6 +65,8 @@ export class AgentRunExecutor {
   private readonly logger = Logger.child({ source: 'AgentRunExecutor' });
   /** 活跃 run 注册表——cancel(runId) 据此找到内存中的 AgentRun。 */
   private readonly activeRuns = new Map<string, AgentRun>();
+  /** 每 N 个非终态事件 checkpoint 一次；测试可覆盖调小。 */
+  checkpointEvery = CHECKPOINT_EVERY;
 
   constructor(
     @inject(LLM_PORT) private readonly llm: LlmPort,
@@ -135,11 +146,45 @@ export class AgentRunExecutor {
       yield* this.execute(run, ctx, runTool);
     } finally {
       this.activeRuns.delete(run.runId);
-      await this.agentRunRepo.update(run.runId, {
-        events: [...run.eventStream],
-        status: run.currentStatus,
-        completedAt: new Date(),
-      });
+      await this.persistFinal(run);
+    }
+  }
+
+  // 乐观锁写环（checkpoint + 终态共用）：冲突（另一 writer 已改版本）就重读重试——commit/checkpoint 每次重读最新版本，重试几乎必然成功；仍冲突记错不静默覆盖。
+  private async withVersionRetry(
+    run: AgentRun,
+    write: () => Promise<boolean>,
+  ): Promise<boolean> {
+    for (let attempt = 0; attempt < FINALIZE_MAX_RETRIES; attempt++) {
+      try {
+        if (await write()) return true;
+        this.logger.warn(`Run ${run.runId} write: row missing, skipped`);
+        return false;
+      } catch (err) {
+        if (!(err instanceof AgentRunConcurrentModificationError)) throw err;
+        this.logger.warn(
+          `Run ${run.runId} write conflicted with concurrent writer, retrying (${attempt + 1}/${FINALIZE_MAX_RETRIES})`,
+        );
+      }
+    }
+    return false;
+  }
+
+  /** 乐观锁终态提交：events 是本事件流的唯一权威 writer。 */
+  private async persistFinal(run: AgentRun): Promise<void> {
+    const params = {
+      events: [...run.eventStream],
+      status: run.currentStatus,
+      completedAt: new Date(),
+    };
+    const saved = await this.withVersionRetry(run, () =>
+      this.agentRunRepo.commit(run.runId, params).then(r => r !== null),
+    );
+    if (!saved) {
+      this.logger.error(
+        `Run ${run.runId} finalize abandoned after ${FINALIZE_MAX_RETRIES} attempts — not persisted`,
+        { status: params.status, eventCount: params.events.length },
+      );
     }
   }
 
@@ -195,6 +240,19 @@ export class AgentRunExecutor {
             enriched.toolName,
             enriched.at,
             enriched.error,
+          );
+        }
+
+        // 中途 checkpoint：事件流单调增长，每 N 个非终态事件落一次快照；冲突重读重试。
+        if (
+          !run.isTerminated &&
+          run.eventStream.length > 0 &&
+          run.eventStream.length % this.checkpointEvery === 0
+        ) {
+          await this.withVersionRetry(run, () =>
+            this.agentRunRepo
+              .checkpoint(run.runId, [...run.eventStream])
+              .then(r => r !== null),
           );
         }
 

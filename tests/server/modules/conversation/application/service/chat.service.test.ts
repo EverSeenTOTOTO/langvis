@@ -28,6 +28,8 @@ function makeMockAgentRunRepo(): AgentRunRepositoryPort {
     findByIds: vi.fn().mockResolvedValue([]),
     findNonTerminal: vi.fn().mockResolvedValue([]),
     update: vi.fn().mockResolvedValue(null),
+    commit: vi.fn().mockResolvedValue(null),
+    checkpoint: vi.fn().mockResolvedValue(null),
   };
 }
 
@@ -322,6 +324,31 @@ describe('ChatService', () => {
 
       expect(count).toBe(0);
       expect(messageRepo.findByAgentRunIds).not.toHaveBeenCalled();
+    });
+
+    it('run 有已持久化事件 → 文案用投影的部分回复，run 仍标 failed', async () => {
+      const runEvents = [
+        { type: 'start', runId: 'run_1', at: 1 },
+        { type: 'thought', runId: 'run_1', at: 2, content: 'think' },
+        { type: 'text_chunk', runId: 'run_1', at: 3, content: 'partial reply' },
+      ];
+      (agentRunRepo.findNonTerminal as any).mockResolvedValue([
+        { id: 'run_1', events: runEvents },
+      ]);
+      (messageRepo.findByAgentRunIds as any).mockResolvedValue([
+        { id: 'msg_1', agentRunId: 'run_1' },
+      ]);
+
+      const count = await service.markInterruptedRuns('interrupted');
+
+      expect(count).toBe(1);
+      expect(messageRepo.update).toHaveBeenCalledWith('msg_1', {
+        content: 'partial reply',
+      });
+      expect(agentRunRepo.update).toHaveBeenCalledWith('run_1', {
+        status: 'failed',
+        completedAt: expect.any(Date),
+      });
     });
   });
 

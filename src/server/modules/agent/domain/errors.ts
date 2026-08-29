@@ -31,6 +31,14 @@ export class ToolExecutionError extends ExceptionBase {
   }
 }
 
+export class AgentRunConcurrentModificationError extends ExceptionBase {
+  readonly code = 'RUN_CONCURRENT_MODIFICATION';
+  readonly statusCode = 409;
+  constructor(runId: string) {
+    super(`Run ${runId} was modified concurrently; retry from latest state`);
+  }
+}
+
 export class ConfigValidationError extends ExceptionBase {
   readonly code = 'CONFIG_VALIDATION_ERROR';
   readonly statusCode = 400;

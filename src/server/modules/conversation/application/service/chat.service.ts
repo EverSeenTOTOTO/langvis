@@ -13,6 +13,7 @@ import {
   CONVERSATION_REPOSITORY,
 } from '../../conversation.di-tokens';
 import type { MessageRepositoryPort } from '../../domain/port/message.repository.port';
+import { projectRun } from './run-projection';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
 import { AGENT_RUN_REPOSITORY } from '@/server/modules/agent/agent.di-tokens';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
@@ -225,7 +226,7 @@ export class ChatService {
     }
   }
 
-  // 全局清扫（启动用例）：把重启残留的非终态 run 批量标记 failed，并更新其 assistant 消息文案。
+  // 全局清扫（启动用例）：重启残留 run 批量标 failed；有中途 checkpoint 事件的 run 文案用投影的部分回复，否则回退 reason。
   async markInterruptedRuns(reason: string): Promise<number> {
     const runs = await this.agentRunRepo.findNonTerminal();
     if (runs.length === 0) return 0;
@@ -233,15 +234,22 @@ export class ChatService {
     const messages = await this.messageRepo.findByAgentRunIds(
       runs.map(r => r.id),
     );
+    const byRunId = new Map(runs.map(r => [r.id, r] as const));
     const now = new Date();
     await Promise.all([
-      ...messages.map(m => this.messageRepo.update(m.id, { content: reason })),
       ...runs.map(r =>
         this.agentRunRepo.update(r.id, {
           status: 'failed',
           completedAt: now,
         }),
       ),
+      ...messages.map(m => {
+        const run = m.agentRunId ? byRunId.get(m.agentRunId) : undefined;
+        const projected = run?.events?.length
+          ? projectRun(run.events).content
+          : '';
+        return this.messageRepo.update(m.id, { content: projected || reason });
+      }),
     ]);
     return runs.length;
   }

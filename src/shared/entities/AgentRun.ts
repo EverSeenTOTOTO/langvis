@@ -2,7 +2,13 @@ import type { AgentRun as AgentRunType } from '@/shared/types/entities';
 import type { RunStatus } from '@/shared/types/agent';
 import type { EnrichedEvent } from '@/shared/types/events';
 import type { RunConfigVOProps } from '@/server/modules/agent/domain/model/run-config.vo';
-import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  Entity,
+  PrimaryColumn,
+  VersionColumn,
+} from 'typeorm';
 import { generateId } from '@/shared/utils';
 
 export { RunStatus };
@@ -34,4 +40,8 @@ export class AgentRunEntity implements AgentRunType {
 
   @Column({ type: 'timestamp', nullable: true })
   completedAt!: Date | null;
+
+  /** 乐观锁版本列——并发的终态写（executor finalize vs 终止标记）靠它检测覆盖。 */
+  @VersionColumn()
+  version!: number;
 }
