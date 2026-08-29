@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { GetMessagesHandler } from '@/server/modules/conversation/application/query/get-messages.handler';
 import { GetMessagesQuery } from '@/server/modules/conversation/contracts';
+import { RunViewCache } from '@/server/modules/conversation/application/service/run-view-cache';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import { Role } from '@/shared/entities/Message';
@@ -35,7 +36,11 @@ describe('GetMessagesHandler', () => {
       ]),
     } as unknown as AgentRunRepositoryPort;
 
-    const handler = new GetMessagesHandler(messageRepo, agentRunRepo);
+    const handler = new GetMessagesHandler(
+      messageRepo,
+      agentRunRepo,
+      new RunViewCache(),
+    );
     const result = await handler.execute(new GetMessagesQuery('conv_1'));
 
     // 非 assistant 透传
@@ -82,7 +87,11 @@ describe('GetMessagesHandler', () => {
       ]),
     } as unknown as AgentRunRepositoryPort;
 
-    const handler = new GetMessagesHandler(messageRepo, agentRunRepo);
+    const handler = new GetMessagesHandler(
+      messageRepo,
+      agentRunRepo,
+      new RunViewCache(),
+    );
     const result = await handler.execute(new GetMessagesQuery('conv_1'));
 
     expect(result[0].audio).toEqual({
@@ -108,7 +117,11 @@ describe('GetMessagesHandler', () => {
       findByIds: vi.fn().mockResolvedValue([]),
     } as unknown as AgentRunRepositoryPort;
 
-    const handler = new GetMessagesHandler(messageRepo, agentRunRepo);
+    const handler = new GetMessagesHandler(
+      messageRepo,
+      agentRunRepo,
+      new RunViewCache(),
+    );
     const result = await handler.execute(new GetMessagesQuery('conv_1'));
 
     expect(result[0]).toMatchObject({
@@ -142,9 +155,54 @@ describe('GetMessagesHandler', () => {
       ]),
     } as unknown as AgentRunRepositoryPort;
 
-    const handler = new GetMessagesHandler(messageRepo, agentRunRepo);
+    const handler = new GetMessagesHandler(
+      messageRepo,
+      agentRunRepo,
+      new RunViewCache(),
+    );
     const result = await handler.execute(new GetMessagesQuery('conv_1'));
 
     expect(result[0].content).toBe('projected');
+  });
+
+  it('连续两次读同一终态 run：steps 同一引用（读路径吃到投影缓存）', async () => {
+    const messages = [
+      {
+        id: 'm2',
+        role: Role.ASSIST,
+        content: 'hello',
+        agentRunId: 'run_1',
+        conversationId: 'conv_1',
+      },
+    ];
+    const messageRepo = {
+      findByConversationId: vi.fn().mockResolvedValue(messages),
+    } as unknown as MessageRepositoryPort;
+    const agentRunRepo = {
+      findByIds: vi.fn().mockResolvedValue([
+        {
+          id: 'run_1',
+          status: 'completed',
+          events: [
+            makeEnriched({
+              type: 'tool_call',
+              callId: 'tc_1',
+              toolName: 'bash',
+            }),
+          ],
+        },
+      ]),
+    } as unknown as AgentRunRepositoryPort;
+
+    const handler = new GetMessagesHandler(
+      messageRepo,
+      agentRunRepo,
+      new RunViewCache(),
+    );
+    const first = await handler.execute(new GetMessagesQuery('conv_1'));
+    const second = await handler.execute(new GetMessagesQuery('conv_1'));
+
+    expect(second[0].steps).toBe(first[0].steps);
+    expect(first[0].steps?.length).toBeGreaterThan(0);
   });
 });
