@@ -1,2 +1,2 @@
-make lint
+npx --no-install lint-staged
 make test

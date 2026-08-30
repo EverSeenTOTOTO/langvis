@@ -350,7 +350,9 @@ describe('FileController - Upload', () => {
 
     await controller.uploadFile(mockFile, { agent: 'MockAgent' }, mockRes);
 
-    expect(mockFileService.saveFile).toHaveBeenCalled();
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({ filename: 'image.png' }),
+    );
   });
 });
 
@@ -394,7 +396,6 @@ describe('FileController - List and Delete', () => {
         page: 1,
         pageSize: 20,
       });
-      expect(mockRes.json).toHaveBeenCalled();
     });
 
     it('should list files with custom pagination', async () => {

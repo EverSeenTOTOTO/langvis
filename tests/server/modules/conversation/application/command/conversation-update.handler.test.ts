@@ -82,10 +82,11 @@ describe('ConversationUpdateHandler', () => {
 
   it('allows update when config is undefined (no change)', async () => {
     const repo = makeRepo(existing);
+    const chatService = makeChatService(null);
     const sessionManager = makeSessionManager();
     const handler = new ConversationUpdateHandler(
       repo,
-      makeChatService(null),
+      chatService,
       sessionManager,
     );
 
@@ -101,6 +102,7 @@ describe('ConversationUpdateHandler', () => {
       undefined,
       undefined,
     );
+    expect(chatService.resolveConversationConfig).not.toHaveBeenCalled();
     expect(sessionManager.refreshRuntimeConfig).not.toHaveBeenCalled();
   });
 
@@ -129,23 +131,5 @@ describe('ConversationUpdateHandler', () => {
     expect(sessionManager.refreshRuntimeConfig).toHaveBeenCalledWith('conv_1', {
       model: { modelId: 'm2' },
     });
-  });
-
-  it('does not refresh runtimeConfig when config is not part of the update', async () => {
-    const repo = makeRepo(existing);
-    const chatService = makeChatService({ model: { modelId: 'm2' } });
-    const sessionManager = makeSessionManager();
-    const handler = new ConversationUpdateHandler(
-      repo,
-      chatService,
-      sessionManager,
-    );
-
-    await handler.execute(
-      new ConversationUpdateCommand('conv_1', 'user_1', 'renamed', undefined),
-    );
-
-    expect(chatService.resolveConversationConfig).not.toHaveBeenCalled();
-    expect(sessionManager.refreshRuntimeConfig).not.toHaveBeenCalled();
   });
 });

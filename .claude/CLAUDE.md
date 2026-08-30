@@ -35,6 +35,8 @@ The user's shell aliases `rm`/`mv`/`cp`/`ln` with `-i` (interactive confirm) via
 
 ## Testing & Validation
 
-- Run specific tests only when necessary, skip coverage.
 - Run lint after code generation: `make lint`.
 - After modifying entity definitions, verify with: `timeout 10 make dev`.
+- **Assert outcomes/contracts, not call-recording.** A test asserts an observable result (return value, thrown error, HTTP status/body, emitted event) or a contract — the exact arguments that ARE the unit's promise (DTO shape, pagination defaults, status/error mapping). A bare `expect(x).toHaveBeenCalled()` with no arguments is filler: delete it; if nothing else is assertable, the test tests nothing. Don't append `toHaveBeenCalled()` after a result assertion that already implies the call.
+- **No existence tests.** Skip `it('should be defined', ...)` for a unit constructed in `beforeEach` — every other test already proves construction. Cover behavior instead.
+- **Coverage on demand.** `make test` runs the suite without coverage; use `make test-cover` only when you need coverage numbers. Don't re-add `--coverage` to the default `make test`.

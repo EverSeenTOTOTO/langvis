@@ -38,10 +38,6 @@ describe('AuthController', () => {
     vi.clearAllMocks();
   });
 
-  it('should be defined', () => {
-    expect(authController).toBeDefined();
-  });
-
   describe('signIn', () => {
     it('should call authService.api.signInEmail and set cookies', async () => {
       const req = mockRequest({

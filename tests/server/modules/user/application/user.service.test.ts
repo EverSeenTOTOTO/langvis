@@ -47,7 +47,6 @@ describe('UserService', () => {
     const users = await userService.getAllUsers();
 
     expect(users).toEqual(mockUsers);
-    expect(mockRepo.findAll).toHaveBeenCalled();
   });
 
   it('should get user by ID', async () => {

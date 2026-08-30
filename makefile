@@ -68,7 +68,16 @@ start: build
 
 .PHONY: test
 test:
+	bunx vitest run
+
+# 覆盖率按需跑——默认 `make test` 不带 --coverage（见 CLAUDE.md）。
+.PHONY: test-cover
+test-cover:
 	bunx vitest run --coverage
+
+.PHONY: typecheck
+typecheck:
+	bunx tsc --noEmit
 
 # 受控迁移——synchronize 已关闭，schema 变更走 migration 流程。
 # generate 产出的文件须手动在 src/server/libs/infrastructure/migrations/index.ts 注册。
