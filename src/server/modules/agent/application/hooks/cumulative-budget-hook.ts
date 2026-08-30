@@ -1,5 +1,4 @@
 import { ToolIds } from '@/shared/constants';
-import { Role } from '@/shared/entities/Message';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import {
   StopLoop,
@@ -9,8 +8,8 @@ import {
 import type { RunEvent } from '@/shared/types/events';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import Logger from '@/server/utils/logger';
-import { serializeAction } from '@/server/modules/agent/application/service/react-loop';
 import { agentHook } from './registry';
+import { responseUser } from '../service/react-message';
 
 const budgetMessage = (used: number, budget: number) =>
   `This turn exceeded its token budget (≈${used} / ${budget}). Stopping here — please rephrase or continue in a new turn.`;
@@ -52,19 +51,4 @@ export class CumulativeBudgetHook implements Hook {
     yield* responseUser(ctx, budgetMessage(this.consumed, budget));
     throw new StopLoop();
   }
-}
-
-/** 复刻 response_user 工具的可观测效果：yield text_chunk + append 一条 response_user ReAct XML。 */
-export async function* responseUser(
-  ctx: AgentRunContext,
-  message: string,
-): AsyncGenerator<RunEvent, void> {
-  yield { type: 'text_chunk', content: message };
-  ctx.messages.push({
-    role: Role.ASSIST,
-    content: serializeAction({
-      tool: ToolIds.RESPONSE_USER,
-      input: { message },
-    }),
-  });
 }

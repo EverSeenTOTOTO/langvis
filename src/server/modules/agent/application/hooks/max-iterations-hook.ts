@@ -7,7 +7,7 @@ import {
 import type { RunEvent } from '@/shared/types/events';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
-import { responseUser } from './cumulative-budget-hook';
+import { responseUser } from '../service/react-message';
 
 const ITER_CAP_MESSAGE =
   'This turn reached its iteration limit without finishing. Stopping here — please continue in a new turn if needed.';

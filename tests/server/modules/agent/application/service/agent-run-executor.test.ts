@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { restoreReactMessage } from '@/server/modules/agent/application/service/agent-run-executor';
-import { parseResponse } from '@/server/modules/agent/application/service/react-loop';
+import {
+  parseResponse,
+  restoreReactMessage,
+} from '@/server/modules/agent/application/service/react-message';
 import type { LlmMessage } from '@/shared/types/entities';
 
 describe('restoreReactMessage', () => {

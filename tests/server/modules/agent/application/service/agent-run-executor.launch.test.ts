@@ -4,7 +4,7 @@ import {
   AgentRunExecutor,
   type LaunchParams,
 } from '@/server/modules/agent/application/service/agent-run-executor';
-import { serializeAction } from '@/server/modules/agent/application/service/react-loop';
+import { serializeAction } from '@/server/modules/agent/application/service/react-message';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';

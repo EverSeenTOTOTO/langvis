@@ -3,9 +3,9 @@ import { container } from 'tsyringe';
 
 import {
   parseResponse,
-  runReactLoop,
   serializeAction,
-} from '@/server/modules/agent/application/service/react-loop';
+} from '@/server/modules/agent/application/service/react-message';
+import { runReactLoop } from '@/server/modules/agent/application/service/react-loop';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { HookPlan, type Hook } from '@/server/modules/agent/domain/model/hook';

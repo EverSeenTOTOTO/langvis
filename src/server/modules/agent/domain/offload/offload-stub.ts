@@ -2,7 +2,7 @@ import type { LlmMessage } from '@/shared/types/entities';
 import {
   parseResponse,
   serializeAction,
-} from '@/server/modules/agent/application/service/react-loop';
+} from '@/server/modules/agent/application/service/react-message';
 import { ToolIds } from '@/shared/constants';
 import type { ParsedAction } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { CachedReference } from '@/server/modules/agent/domain/port/cache.port';

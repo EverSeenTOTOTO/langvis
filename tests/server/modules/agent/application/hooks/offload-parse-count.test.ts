@@ -5,23 +5,26 @@ import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { TrimHook } from '@/server/modules/agent/application/hooks/trim-hook';
-import { serializeAction } from '@/server/modules/agent/application/service/react-loop';
+import { serializeAction } from '@/server/modules/agent/application/service/react-message';
 import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
 
 // 计数 parseResponse 调用——验证「每候选一次」契约（candidateBody 一次性解析，hint/stub/classifyRecall 复用，不重复 parse）。
 let parseCalls = 0;
-vi.mock('@/server/modules/agent/application/service/react-loop', async () => {
-  const actual = await vi.importActual<
-    typeof import('@/server/modules/agent/application/service/react-loop')
-  >('@/server/modules/agent/application/service/react-loop');
-  return {
-    ...actual,
-    parseResponse: (content: string) => {
-      parseCalls++;
-      return actual.parseResponse(content);
-    },
-  };
-});
+vi.mock(
+  '@/server/modules/agent/application/service/react-message',
+  async () => {
+    const actual = await vi.importActual<
+      typeof import('@/server/modules/agent/application/service/react-message')
+    >('@/server/modules/agent/application/service/react-message');
+    return {
+      ...actual,
+      parseResponse: (content: string) => {
+        parseCalls++;
+        return actual.parseResponse(content);
+      },
+    };
+  },
+);
 
 // estimateTokens 用字符数代理。
 vi.mock('@/server/utils/estimateTokens', () => ({

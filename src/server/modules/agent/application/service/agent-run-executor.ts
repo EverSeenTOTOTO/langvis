@@ -17,15 +17,15 @@ import type { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';
 import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { generateId } from '@/shared/utils';
-import { ToolIds } from '@/shared/constants';
-import { serializeAction } from '@/server/modules/agent/application/service/react-loop';
 import { TraceContext } from '@/server/middleware/trace-context';
 import type { LlmMessage } from '@/shared/types/entities';
 import type { ConversationConfig } from '@/server/libs/config';
 import { HookPlan } from '@/server/modules/agent/domain/model/hook';
 import { resolveAgentHooks } from '@/server/modules/agent/application/hooks/registry';
 import { AgentService } from './agent.service';
+import { restoreReactMessage } from './react-message';
 import { runReactLoop } from './react-loop';
+import { ToolLatencyTracker } from './tool-latency-tracker';
 import Logger from '@/server/utils/logger';
 import chalk from 'chalk';
 import {
@@ -86,7 +86,7 @@ export class AgentRunExecutor {
     const modelId = runtimeConfig.model?.modelId;
 
     this.logger.info(
-      `Create run ${chalk.cyan(params.runId)} — model: ${chalk.red(modelId ?? '(default)')}`,
+      `Create run ${chalk.cyan(params.runId)} — model: ${chalk.yellowBright(modelId ?? '(default)')}`,
     );
 
     const config = this.agentService.buildResolvedRunConfig(runtimeConfig);
@@ -195,67 +195,16 @@ export class AgentRunExecutor {
   ): AsyncGenerator<EnrichedEvent> {
     if (TraceContext.get()) TraceContext.update({ runId: run.runId });
     const startedAt = Date.now();
-    const toolStart = new Map<string, number>(); // callId → 起始 at(ms)，算 tool 延迟
-    let iterations = 0;
+    const tracker = new ToolLatencyTracker(this.logger);
     this.logger.debug(`Execute run ${chalk.cyan(run.runId)}`);
     if (!run.isTerminated) yield run.start();
-
-    const toolDone = (
-      callId: string,
-      toolName: string,
-      at: number,
-      error?: unknown,
-    ): void => {
-      const beganAt = toolStart.get(callId);
-      const durationMs = beganAt != null ? at - beganAt : undefined;
-      toolStart.delete(callId);
-      if (error !== undefined) {
-        this.logger.warn(`Tool ${toolName} failed`, {
-          toolName,
-          callId,
-          error,
-          durationMs,
-        });
-      } else {
-        this.logger.debug(`Tool ${toolName} completed`, {
-          toolName,
-          durationMs,
-        });
-      }
-    };
 
     try {
       for await (const event of runReactLoop(ctx, runTool)) {
         const enriched = run.append(event);
         if (!enriched) continue;
-
-        if (enriched.type === 'tool_call') {
-          iterations++;
-          toolStart.set(enriched.callId, enriched.at);
-        } else if (enriched.type === 'tool_result') {
-          toolDone(enriched.callId, enriched.toolName, enriched.at);
-        } else if (enriched.type === 'tool_error') {
-          toolDone(
-            enriched.callId,
-            enriched.toolName,
-            enriched.at,
-            enriched.error,
-          );
-        }
-
-        // 中途 checkpoint：事件流单调增长，每 N 个非终态事件落一次快照；冲突重读重试。
-        if (
-          !run.isTerminated &&
-          run.eventStream.length > 0 &&
-          run.eventStream.length % this.checkpointEvery === 0
-        ) {
-          await this.withVersionRetry(run, () =>
-            this.agentRunRepo
-              .checkpoint(run.runId, [...run.eventStream])
-              .then(r => r !== null),
-          );
-        }
-
+        tracker.observe(enriched);
+        await this.maybeCheckpoint(run);
         yield enriched;
       }
 
@@ -269,11 +218,22 @@ export class AgentRunExecutor {
     } finally {
       this.logger.info(`Run ${chalk.cyan(run.runId)} → ${run.currentStatus}`, {
         status: run.currentStatus,
-        iterations,
+        iterations: tracker.iterations,
         durationMs: Date.now() - startedAt,
         model: ctx.config.runtimeConfig.model?.modelId,
       });
     }
+  }
+
+  /** 中途 checkpoint：事件流单调增长，每 N 个非终态事件落一次快照；冲突重读重试。 */
+  private async maybeCheckpoint(run: AgentRun): Promise<void> {
+    if (run.isTerminated || run.eventStream.length === 0) return;
+    if (run.eventStream.length % this.checkpointEvery !== 0) return;
+    await this.withVersionRetry(run, () =>
+      this.agentRunRepo
+        .checkpoint(run.runId, [...run.eventStream])
+        .then(r => r !== null),
+    );
   }
 
   cancel(runId: string, reason: string): EnrichedEvent | null {
@@ -304,18 +264,4 @@ export class AgentRunExecutor {
 
     return toolCall.execute();
   }
-}
-
-/** assistant 文本 → response_user XML；LlmMessage.summary（源自 message.meta.summary）注入为 thought。 */
-export function restoreReactMessage(m: LlmMessage): LlmMessage {
-  return m.role === 'assistant'
-    ? {
-        role: 'assistant' as const,
-        content: serializeAction({
-          ...(m.summary ? { thought: m.summary } : {}),
-          tool: ToolIds.RESPONSE_USER,
-          input: { message: m.content },
-        }),
-      }
-    : { role: m.role, content: m.content };
 }

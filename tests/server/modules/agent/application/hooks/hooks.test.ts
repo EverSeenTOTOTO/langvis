@@ -8,7 +8,7 @@ import { StuckHook } from '@/server/modules/agent/application/hooks/stuck-hook';
 import { MaxIterationsHook } from '@/server/modules/agent/application/hooks/max-iterations-hook';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
-import { serializeAction } from '@/server/modules/agent/application/service/react-loop';
+import { serializeAction } from '@/server/modules/agent/application/service/react-message';
 import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import type { LlmProvider } from '@/server/libs/infrastructure/llm.provider';

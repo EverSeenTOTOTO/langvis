@@ -10,7 +10,7 @@ import { estimateTokens } from '@/server/utils/estimateTokens';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
 import { agentHook } from './registry';
-import { responseUser } from './cumulative-budget-hook';
+import { responseUser } from '../service/react-message';
 
 /** 不可恢复超窗时向用户解释的消息（与兄弟 stop hook 的文案风格一致）。 */
 const overflowMessage = (reason: string) =>
