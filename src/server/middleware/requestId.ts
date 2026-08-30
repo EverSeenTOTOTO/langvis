@@ -3,7 +3,11 @@ import { container } from 'tsyringe';
 import { generateId } from '@/shared/utils';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
 import Logger from '../utils/logger';
+import { isProd } from '../utils/env';
 import { TraceContext } from '@/server/middleware/trace-context';
+
+// prod 落日志的 header 白名单——剔除 cookie/authorization 等凭据；dev 保留全量便于调试。
+const SAFE_HEADERS = ['user-agent', 'content-type', 'accept', 'x-request-id'];
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -39,11 +43,21 @@ export default async (app: Express) => {
   });
 
   app.use('/api/*', (req, res, next) => {
+    // prod 白名单 headers（不落 cookie/authorization）；dev 全量保留。
+    const headers = isProd
+      ? Object.fromEntries(
+          SAFE_HEADERS.filter(k => req.headers[k] != null).map(k => [
+            k,
+            req.headers[k],
+          ]),
+        )
+      : req.headers;
+
     req.log.info({
       type: '->',
       method: req.method,
       url: req.originalUrl,
-      headers: req.headers,
+      headers,
     });
 
     res.on('finish', () => {

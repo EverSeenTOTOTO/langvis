@@ -4,6 +4,7 @@ import { getOwnPropertyNames } from '@/shared/utils';
 import { DEFAULT_UPLOAD_CONFIG } from '@/shared/constants';
 import { Express, NextFunction, Request, Response } from 'express';
 import multer from 'multer';
+import { isProd } from '@/server/utils/env';
 import {
   extractParams,
   ParamMetadata,
@@ -147,8 +148,11 @@ export default function <T extends Record<string, any>>(
           }
 
           req.log?.error(e.stack || e.message);
+          // 未知错误：prod 回泛指消息（底层详情已进服务端日志），dev 保留 e.message 便于调试。
           return res.status(500).json({
-            error: e.message || 'Internal Server Error',
+            error: isProd
+              ? 'Internal Server Error'
+              : e.message || 'Internal Server Error',
           });
         }
       });

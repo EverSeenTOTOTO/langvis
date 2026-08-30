@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { inject } from 'tsyringe';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { api } from '../decorator/api';
 import { controller } from '../decorator/controller';
 import { body, param, query, request, response } from '../decorator/param';
@@ -14,6 +15,13 @@ import { ListEmailsRequestDto } from '@/shared/dto/controller';
 import Logger from '../utils/logger';
 
 const INBOUND_SECRET = import.meta.env.VITE_INBOUND_SECRET || '';
+
+// 常量时间比较：sha256 等长摘要再 timingSafeEqual——既不泄漏内容也不泄漏长度。
+function constantTimeEqual(a: string, b: string): boolean {
+  const ah = createHash('sha256').update(a).digest();
+  const bh = createHash('sha256').update(b).digest();
+  return timingSafeEqual(ah, bh);
+}
 
 interface InboundEmailBody {
   raw: string;
@@ -75,9 +83,9 @@ export default class EmailController {
     @request() req: Request,
     @response() res: Response,
   ) {
-    const secret = req.headers['x-inbound-secret'];
+    const secret = String(req.headers['x-inbound-secret'] ?? '');
 
-    if (!INBOUND_SECRET || secret !== INBOUND_SECRET) {
+    if (!INBOUND_SECRET || !constantTimeEqual(secret, INBOUND_SECRET)) {
       this.logger.warn('Invalid or missing inbound secret');
       return res.status(401).json({ error: 'Unauthorized' });
     }

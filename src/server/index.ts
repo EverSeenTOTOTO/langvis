@@ -80,6 +80,17 @@ createServer()
 
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
+
+    // 进程级兜底：未 catch 的 rejection/exception 在 Node≥15 默认静默崩进程——
+    // 此处记日志后硬退，使崩溃有痕可溯（状态已不确定，不走 graceful）。
+    process.on('unhandledRejection', reason => {
+      logger.error('Unhandled rejection:', reason);
+      process.exit(1);
+    });
+    process.on('uncaughtException', err => {
+      logger.error('Uncaught exception:', err);
+      process.exit(1);
+    });
   })
   .catch(logger.error);
 
