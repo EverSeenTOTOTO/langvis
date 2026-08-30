@@ -3,6 +3,7 @@ import { ChatService } from '@/server/modules/conversation/application/service/c
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
 import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
+import type { TransactionPort } from '@/server/libs/ports/transaction/transaction.port';
 import type { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
 import { Role } from '@/shared/entities/Message';
 import { ConversationNotFoundError } from '@/server/modules/conversation/domain/errors';
@@ -45,6 +46,13 @@ function makeMockConvRepo(): ConversationRepositoryPort {
   } as unknown as ConversationRepositoryPort;
 }
 
+/** 直跑 work 的 tx stub：事务边界存在但无 DB，断言 repo 调用参数不受事务包裹影响。 */
+function makeTxStub(): TransactionPort {
+  return {
+    transaction: vi.fn(<T>(work: () => Promise<T>) => work()),
+  } as TransactionPort;
+}
+
 describe('ChatService', () => {
   let service: ChatService;
   let messageRepo: MessageRepositoryPort;
@@ -57,7 +65,13 @@ describe('ChatService', () => {
     agentRunRepo = makeMockAgentRunRepo();
     workspace = makeMockWorkspace();
     convRepo = makeMockConvRepo();
-    service = new ChatService(messageRepo, convRepo, agentRunRepo, workspace);
+    service = new ChatService(
+      messageRepo,
+      convRepo,
+      agentRunRepo,
+      makeTxStub(),
+      workspace,
+    );
   });
 
   // ═══ 删除 ═══
@@ -293,6 +307,37 @@ describe('ChatService', () => {
 
       expect(messageRepo.update).toHaveBeenCalledTimes(1);
       expect(agentRunRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('agentRun 更新抛错时整体回滚：不吞错、事务边界包裹两表写', async () => {
+      // tx stub 暴露 work 本体：work 内 agentRunRepo.update 抛错 → 冒泡（事务回滚由真实 DatabaseService 实现，此处理论等价：错误可见即回滚承诺）。
+      const tx = makeTxStub();
+      const svc = new ChatService(
+        messageRepo,
+        convRepo,
+        agentRunRepo,
+        tx,
+        workspace,
+      );
+      const messages = [
+        {
+          id: 'msg_1',
+          role: Role.ASSIST,
+          agentRunId: 'run_1',
+          content: '',
+          createdAt: new Date(),
+          conversationId: 'conv_1',
+        },
+      ];
+      (agentRunRepo.update as any).mockRejectedValue(
+        new Error('lock conflict'),
+      );
+
+      await expect(
+        svc.markMessagesTerminated(messages, 'failed', 'Error'),
+      ).rejects.toThrow('lock conflict');
+      // 事务边界确实包裹了两表写（work 被作为整体执行）。
+      expect(tx.transaction).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -18,6 +18,10 @@ import type { ConversationRepositoryPort } from '../../domain/port/conversation.
 import { AGENT_RUN_REPOSITORY } from '@/server/modules/agent/agent.di-tokens';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import {
+  TRANSACTION_PORT,
+  type TransactionPort,
+} from '@/server/libs/ports/transaction/transaction.port';
+import {
   createActivationMessages,
   createTurnMessages,
 } from '../../domain/service/message-factory';
@@ -37,6 +41,8 @@ export class ChatService {
     private convRepo: ConversationRepositoryPort,
     @inject(AGENT_RUN_REPOSITORY)
     private agentRunRepo: AgentRunRepositoryPort,
+    @inject(TRANSACTION_PORT)
+    private readonly tx: TransactionPort,
     @inject(WorkspaceService)
     private workspaceService: WorkspaceService,
   ) {}
@@ -206,24 +212,21 @@ export class ChatService {
     status: RunStatus,
     content: string,
   ): Promise<void> {
-    await Promise.all(
-      messages.map(msg => this.messageRepo.update(msg.id, { content })),
-    );
-
+    const now = new Date();
     const agentRunIds = messages
       .map(m => m.agentRunId)
       .filter((id): id is string => !!id);
 
-    if (agentRunIds.length > 0) {
-      await Promise.all(
-        agentRunIds.map(runId =>
-          this.agentRunRepo.update(runId, {
-            status,
-            completedAt: new Date(),
-          }),
-        ),
-      );
-    }
+    // 跨 message+run 两表多写须原子：任一抛错（含乐观锁冲突）回滚，不留半截状态。
+    // 同一 queryrunner 不支持并发查询 → 事务内顺序写（孤儿数 N 通常 0–很小，代价可忽略）。
+    await this.tx.transaction(async () => {
+      for (const msg of messages) {
+        await this.messageRepo.update(msg.id, { content });
+      }
+      for (const runId of agentRunIds) {
+        await this.agentRunRepo.update(runId, { status, completedAt: now });
+      }
+    });
   }
 
   // 全局清扫（启动用例）：重启残留 run 批量标 failed；有中途 checkpoint 事件的 run 文案用投影的部分回复，否则回退 reason。
@@ -236,21 +239,22 @@ export class ChatService {
     );
     const byRunId = new Map(runs.map(r => [r.id, r] as const));
     const now = new Date();
-    await Promise.all([
-      ...runs.map(r =>
-        this.agentRunRepo.update(r.id, {
+    // 跨 message+run 两表多写须原子：任一抛错回滚。读 phase 留事务外（启动清扫幂等）。
+    await this.tx.transaction(async () => {
+      for (const r of runs) {
+        await this.agentRunRepo.update(r.id, {
           status: 'failed',
           completedAt: now,
-        }),
-      ),
-      ...messages.map(m => {
+        });
+      }
+      for (const m of messages) {
         const run = m.agentRunId ? byRunId.get(m.agentRunId) : undefined;
         const projected = run?.events?.length
           ? projectRun(run.events).content
           : '';
-        return this.messageRepo.update(m.id, { content: projected || reason });
-      }),
-    ]);
+        await this.messageRepo.update(m.id, { content: projected || reason });
+      }
+    });
     return runs.length;
   }
 
