@@ -35,6 +35,8 @@
   "Conversation started": "对话开始于",
   "View summary": "查看摘要",
   "Compacted summary": "压缩摘要",
+  "Context truncated": "上下文已截断",
+  "Truncated to fit the model context window; only the beginning is sent to the model": "已截断以适配模型上下文窗口，仅开头部分发送给模型",
   "View context": "查看上下文",
   "Session context": "会话上下文",
   "Conversation Name": "对话名称",

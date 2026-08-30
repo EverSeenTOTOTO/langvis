@@ -1,8 +1,6 @@
 import { useStore } from '@/client/store';
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
 import { Button, Divider, Skeleton, Typography } from 'antd';
-
-const MarkdownRender = lazy(() => import('@/client/components/MarkdownRender'));
 import type { Message } from '@/shared/types/entities';
 import Modal from '@/client/components/Modal';
 
@@ -26,7 +24,7 @@ const CompactDivider: React.FC<{ msg: Message }> = ({ msg }) => {
             }
           >
             <Suspense fallback={<Skeleton active />}>
-              <MarkdownRender>{msg.content}</MarkdownRender>
+              <pre>{msg.content}</pre>
             </Suspense>
           </Modal>
         </Typography.Text>

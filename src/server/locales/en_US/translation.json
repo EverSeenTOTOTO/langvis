@@ -35,6 +35,8 @@
   "Conversation started": "Conversation started",
   "View summary": "View summary",
   "Compacted summary": "Compacted summary",
+  "Context truncated": "Context truncated",
+  "Truncated to fit the model context window; only the beginning is sent to the model": "Truncated to fit the model context window; only the beginning is sent to the model",
   "View context": "View context",
   "Session context": "Session context",
   "Conversation Name": "Conversation Name",
