@@ -50,13 +50,13 @@ export interface LaunchParams {
   conversationId: string;
   /** conv 侧一次性 parse 的运行时配置（agent 直接复用，不再二次 parse）。contextSize 按需派生，不在此处。 */
   runtimeConfig: ConversationConfig;
-  /** run 初始消息；conv 直传 effectiveHistory（ReAct 还原在 createRun），子 agent 由 brief+query 派生。 */
+  /** run 初始消息；conv 直传 effectiveHistory */
   seed: LlmMessage[];
-  /** 该 run 的有界工具集——executeTool 仅允许集合内成员。conv 传全集，子 agent 传 parent.without(...)。 */
+  /** 该 run 的有界工具集——executeTool 仅允许集合内成员。conv 传全集，子 agent 传 parent.without(...) 子集。 */
   toolSet: ToolSet;
-  /** 是否允许 HITL。conv run = true；子 agent = false（无 HTTP 提交入口）。 */
+  /** 是否允许 HITL。conv run = true；子 agent = false。 */
   interactive: boolean;
-  /** 父 run 的取消信号（子 agent 用）；父 abort 时传播并 cancel 本 run。conv run 不传。 */
+  /** 父 run 的取消信号（子 agent 用）；父 abort 时传播并 cancel 本 run。 */
   parentSignal?: AbortSignal;
 }
 

@@ -1,10 +1,7 @@
 import type { LlmMessage } from '@/shared/types/entities';
 import { ToolIds } from '@/shared/constants';
 import type { ParsedAction } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import { parseAssistantAt } from './offload-stub';
-
-/** 落盘文件名约定：fc_ + 恰好 8 hex（裸或 <hint>__fc_<hex>）；给 agent 指明收窄目标。 */
-const FC_FILE_RE = /[A-Za-z0-9._-]*fc_[0-9a-f]{8}(?![0-9a-f])/;
+import { FC_FILE_RE, parseAssistantAt } from './offload-stub';
 
 // offload 句柄回取视图：再 offload 只会 fc→fc 别名；rg-on-fc 会逐轮延伸 alias 链到 iter 上限。
 export type RecallKind = { type: 'bash'; file: string };

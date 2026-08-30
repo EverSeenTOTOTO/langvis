@@ -9,9 +9,18 @@ import type { CachedReference } from '@/server/modules/agent/domain/port/cache.p
 
 export const OBSERVATION_PREFIX = 'Observation: ';
 export const OFFLOADED_MARK = '[offloaded to file'; // 已桩标记 → 跳过重复桩
-export const HEAD_KEEP = 256; // 裸 user 桩化保留头部（保 skill 触发 / 元信息）
+export const HEAD_KEEP = 256; // 裁剪/裸 user 桩化保留头部（保 skill 触发 / 元信息）
 export const CHUNK_SIZE = 2000; // 块大小单位：估 chunks 分叉策略，兼作「短于一个 chunk 不桩」下限
 export const LARGE_CHUNK_THRESHOLD = 10; // 超此块数 → 大文件，只劝 rg 不劝分页
+
+/** 落盘文件名约定：fc_ + 恰好 8 hex（裸或 <hint>__fc_<hex>）；裁剪桩内/回取命令内统一用此匹配。 */
+export const FC_FILE_RE = /[A-Za-z0-9._-]*fc_[0-9a-f]{8}(?![0-9a-f])/;
+
+/** 从桩化正文里取落盘文件名（fc 句柄）；非桩或无句柄 → null。微压缩据它判“是否被后续 bash 回取”。 */
+export function fcIdFromStub(content: string): string | null {
+  const m = content.match(FC_FILE_RE);
+  return m ? m[0]! : null;
+}
 
 /** 桩候选 */
 export type Candidate =

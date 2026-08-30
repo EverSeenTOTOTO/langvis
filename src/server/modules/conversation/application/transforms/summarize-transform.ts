@@ -30,11 +30,13 @@ const HISTORY_PROMPT = Prompt.empty()
     'Output the summary directly (no extra explanation, no Markdown headings).',
   );
 
+// 全对话摘要（turn-end）：高阈、折叠为摘要 C、上下文趋近清空。effective 超 contextSize×threshold 时，
+// tail 折叠为 role=USER/meta.kind='compact' 摘要并 append（与 ReconstructTransform 截断头部划界）。C 落库 reload-safe。
 @convTransform
-export class CompactTransform implements ConvTransform {
-  readonly id = 'compact';
+export class SummarizeTransform implements ConvTransform {
+  readonly id = 'summarize';
   readonly phase: ConvPhase = 'turn-end';
-  private readonly logger = Logger.child({ source: 'CompactTransform' });
+  private readonly logger = Logger.child({ source: 'SummarizeTransform' });
 
   constructor(
     @inject(MESSAGE_REPOSITORY)
@@ -71,13 +73,13 @@ export class CompactTransform implements ConvTransform {
     const limit = contextSize * compaction.threshold;
     if (used <= limit) {
       this.logger.debug(
-        `below threshold, skipped (conv ${ctx.conversationId}): used=${used} ≤ limit=${Math.round(limit)} (${contextSize} × ${(compaction.threshold * 100).toFixed(0)}%)`,
+        `below summarize threshold, skipped (conv ${ctx.conversationId}): used=${used} ≤ limit=${Math.round(limit)} (${contextSize} × ${(compaction.threshold * 100).toFixed(0)}%)`,
       );
       return;
     }
 
     this.logger.info(
-      `History over threshold (${used}/${contextSize}, ${(compaction.threshold * 100).toFixed(0)}%) — compacting ${tail.length} messages`,
+      `History over summarize threshold (${used}/${contextSize}, ${(compaction.threshold * 100).toFixed(0)}%) — compacting ${tail.length} messages`,
     );
 
     const tailMessages = toLlmMessages(tail);
@@ -93,7 +95,7 @@ export class CompactTransform implements ConvTransform {
     });
     if (!content) {
       this.logger.warn(
-        `fold returned empty, history not compacted (conv ${ctx.conversationId}): used=${used} > limit=${Math.round(limit)}`,
+        `fold returned empty, history not summarized (conv ${ctx.conversationId}): used=${used} > limit=${Math.round(limit)}`,
       );
       return;
     }
@@ -111,7 +113,7 @@ export class CompactTransform implements ConvTransform {
     );
     ctx.messages.push(compactMessage);
     this.logger.info(
-      `compacted (conv ${ctx.conversationId}): folded ${tail.length} msgs → 1 summary`,
+      `summarized (conv ${ctx.conversationId}): folded ${tail.length} msgs → 1 summary`,
       {
         folded: tail.length,
         usedBefore: used,

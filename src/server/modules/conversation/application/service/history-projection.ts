@@ -1,8 +1,23 @@
 import type { LlmMessage, Message, MessageKind } from '@/shared/types/entities';
 import { Role } from '@/shared/entities/Message';
 
+/** 选择性重构截断保留头部字符数（保提问意图 / 元信息，弃冗长正文）。投影读取时按此截断已重构消息。 */
+export const RECONSTRUCTED_HEAD_CHARS = 512;
+const RECONSTRUCTED_TAIL_MARKER =
+  '\n[…truncated: earlier message body omitted to fit context…]\n';
+
+/** 已重构（meta.reconstructed）的 USER 消息：投影/折叠读取时只取头部 + 省略标记，原正文留库不改。 */
+export function reconstructedContent(msg: Message): string {
+  if (!msg.meta?.reconstructed) return msg.content;
+  if (msg.content.length <= RECONSTRUCTED_HEAD_CHARS) return msg.content;
+  return `${msg.content.slice(0, RECONSTRUCTED_HEAD_CHARS)}${RECONSTRUCTED_TAIL_MARKER}`;
+}
+
 export function toLlmMessages(messages: Message[]): LlmMessage[] {
-  return messages.map(m => ({ role: m.role, content: m.content }));
+  return messages.map(m => ({
+    role: m.role,
+    content: reconstructedContent(m),
+  }));
 }
 
 /** 压缩摘要 C：role=USER, meta.kind='compact'（与 'context' 并列的脚手架判别键）。 */
@@ -72,7 +87,7 @@ export function projectToLlmMessages(messages: Message[]): LlmMessage[] {
     for (const msg of turn) {
       out.push({
         role: msg.role as LlmMessage['role'],
-        content: msg.content,
+        content: reconstructedContent(msg),
         summary: msg.meta?.summary as string | undefined,
       });
     }

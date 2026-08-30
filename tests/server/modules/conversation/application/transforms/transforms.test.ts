@@ -6,11 +6,13 @@ import {
   ProcessSummaryTransform,
   buildProcessSummary,
 } from '@/server/modules/conversation/application/transforms/process-summary-transform';
-import { CompactTransform } from '@/server/modules/conversation/application/transforms/compact-transform';
+import { SummarizeTransform } from '@/server/modules/conversation/application/transforms/summarize-transform';
+import { ReconstructTransform } from '@/server/modules/conversation/application/transforms/reconstruct-transform';
 import {
   ConvTransformPlan,
   type ConversationContext,
 } from '@/server/modules/conversation/domain/model/conv-transform';
+import { projectToLlmMessages } from '@/server/modules/conversation/application/service/history-projection';
 import type { ConversationConfig } from '@/server/libs/config';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { Role } from '@/shared/entities/Message';
@@ -79,24 +81,26 @@ describe('conv transform registry（自动识别）', () => {
   });
   afterEach(() => container.clearInstances());
 
-  it('resolveConvTransforms 发现 @convTransform 标记的三个 transform', () => {
+  it('resolveConvTransforms 发现 @convTransform 标记的四个 transform', () => {
     const transforms = resolveConvTransforms();
     expect(transforms.some(t => t instanceof UsageTransform)).toBe(true);
     expect(transforms.some(t => t instanceof ProcessSummaryTransform)).toBe(
       true,
     );
-    expect(transforms.some(t => t instanceof CompactTransform)).toBe(true);
+    expect(transforms.some(t => t instanceof ReconstructTransform)).toBe(true);
+    expect(transforms.some(t => t instanceof SummarizeTransform)).toBe(true);
   });
 
-  it('相位分桶：process-summary+compact+usage 进 turn-end，usage 进 activated', () => {
+  it('相位分桶：process-summary+reconstruct+summarize+usage 进 turn-end，usage 进 activated', () => {
     const plan = new ConvTransformPlan(resolveConvTransforms());
     const ids = (ts: readonly { id: string }[]) => ts.map(t => t.id);
     expect(ids(plan.forPhase('activated'))).toEqual(['usage']);
     expect(ids(plan.forPhase('turn-start'))).toEqual([]);
-    // 导入序即运行序：烘 summary 列 → 折叠历史 → 量压缩后用量
+    // 导入序即运行序：烘 summary 列 → 选择性截断胖用户消息 → 折叠全对话为 C → 量压缩后用量
     expect(ids(plan.forPhase('turn-end'))).toEqual([
       'process-summary',
-      'compact',
+      'reconstruct',
+      'summarize',
       'usage',
     ]);
   });
@@ -348,7 +352,7 @@ describe('ProcessSummaryTransform', () => {
   });
 });
 
-describe('CompactTransform', () => {
+describe('SummarizeTransform', () => {
   beforeEach(() => {
     foldMock.mockReset();
   });
@@ -364,7 +368,7 @@ describe('CompactTransform', () => {
     ]);
     const before = ctx.messages.length;
     await collect(
-      new CompactTransform(messageRepo, mockProvider(1_000_000)).apply(ctx),
+      new SummarizeTransform(messageRepo, mockProvider(1_000_000)).apply(ctx),
     );
     expect(foldMock).not.toHaveBeenCalled();
     expect(messageRepo.batchCreate).not.toHaveBeenCalled();
@@ -391,9 +395,9 @@ describe('CompactTransform', () => {
     ]);
 
     const events = await collect(
-      new CompactTransform(messageRepo, mockProvider(10)).apply(ctx),
+      new SummarizeTransform(messageRepo, mockProvider(10)).apply(ctx),
     );
-    expect(events).toHaveLength(0); // compact 不发帧
+    expect(events).toHaveLength(0); // summarize 不发帧
     expect(foldMock).toHaveBeenCalledTimes(1);
     expect(messageRepo.batchCreate).toHaveBeenCalledTimes(1);
     expect(ctx.messages.length).toBe(5); // 4 + C
@@ -413,9 +417,120 @@ describe('CompactTransform', () => {
       makeMessage(Role.ASSIST, 'a one'),
     ]);
     await collect(
-      new CompactTransform(messageRepo, mockProvider(10)).apply(ctx),
+      new SummarizeTransform(messageRepo, mockProvider(10)).apply(ctx),
     );
     expect(messageRepo.batchCreate).not.toHaveBeenCalled();
     expect(ctx.messages.length).toBe(2);
+  });
+});
+
+describe('ReconstructTransform（选择性重构：低阈、保细节、打 meta.reconstructed 标记落库，投影读取时截头部，原正文不改）', () => {
+  function mockRepo() {
+    return {
+      update: vi.fn(async (_id: string, partial: any) => partial),
+    } as unknown as MessageRepositoryPort;
+  }
+
+  it('未超 reconstructThreshold → 不动（不标记、不 update）', async () => {
+    // history 带 reconstructThreshold=0.5；contextSize 大到 used ≤ limit → 跳过。
+    const ctx: ConversationContext = {
+      conversationId: 'conv_test',
+      messages: [makeMessage(Role.USER, 'q'), makeMessage(Role.ASSIST, 'a')],
+      runtimeConfig: {
+        history: { reconstructThreshold: 0.5, threshold: 0.99, windowSize: 10 },
+      },
+      transforms: new ConvTransformPlan(),
+      getRunEvents: () => undefined,
+    } as unknown as ConversationContext;
+    const before = ctx.messages.length;
+    const repo = mockRepo();
+    await collect(
+      new ReconstructTransform(repo, mockProvider(1_000_000)).apply(ctx),
+    );
+    expect(ctx.messages.length).toBe(before);
+    expect(ctx.messages[0]!.meta?.reconstructed).toBeUndefined();
+    expect(repo.update).not.toHaveBeenCalled();
+  });
+
+  it('超 reconstructThreshold → 打 meta.reconstructed 标记并落库；原正文不动、近窗口保真、投影截头部', async () => {
+    // history 带 reconstructThreshold=0.5 + keepRecent=1；长用户消息在 tail 首位、出窗 → 标记。
+    const longBody = 'y'.repeat(10_000);
+    const longMsg = makeMessage(Role.USER, longBody, { id: 'msg_long' });
+    const ctx: ConversationContext = {
+      conversationId: 'conv_test',
+      messages: [
+        longMsg,
+        makeMessage(Role.ASSIST, 'a1'),
+        makeMessage(Role.USER, 'q2', { id: 'msg_q2' }),
+      ],
+      runtimeConfig: {
+        history: {
+          reconstructThreshold: 0.5,
+          reconstructKeepRecent: 1,
+          threshold: 0.99,
+          windowSize: 10,
+        },
+      },
+      transforms: new ConvTransformPlan(),
+      getRunEvents: () => undefined,
+    } as unknown as ConversationContext;
+    const repo = mockRepo();
+    await collect(new ReconstructTransform(repo, mockProvider(10)).apply(ctx));
+    // 原正文不动（非破坏）；打了标记；落库 update。
+    expect(ctx.messages[0]!.content).toBe(longBody);
+    expect(ctx.messages[0]!.meta?.reconstructed).toBe(true);
+    expect(repo.update).toHaveBeenCalledWith('msg_long', {
+      meta: { reconstructed: true },
+    });
+    // 近窗口内的短用户消息不打标。
+    expect(ctx.messages[2]!.content).toBe('q2');
+    expect(ctx.messages[2]!.meta?.reconstructed).toBeUndefined();
+    // 投影读取时按标记截断头部（原正文仍全量在库）。
+    const projected = projectToLlmMessages(ctx.messages);
+    const projectedLong = projected.find(m => m.content.includes('truncated'))!;
+    expect(projectedLong).toBeDefined();
+    expect(projectedLong.content.length).toBeLessThan(longBody.length);
+  });
+
+  it('缺 reconstructThreshold → 跳过', async () => {
+    // COMPACTION 无 reconstructThreshold → 不重构。
+    const ctx = makeCtx([
+      makeMessage(Role.USER, 'y'.repeat(10_000)),
+      makeMessage(Role.ASSIST, 'a'),
+    ]);
+    const before = ctx.messages[0]!.content;
+    const repo = mockRepo();
+    await collect(new ReconstructTransform(repo, mockProvider(10)).apply(ctx));
+    expect(ctx.messages[0]!.content).toBe(before); // 未动
+    expect(ctx.messages[0]!.meta?.reconstructed).toBeUndefined();
+    expect(repo.update).not.toHaveBeenCalled();
+  });
+
+  it('已标记的消息不重复标记（幂等）', async () => {
+    const longBody = 'y'.repeat(10_000);
+    const ctx: ConversationContext = {
+      conversationId: 'conv_test',
+      messages: [
+        makeMessage(Role.USER, longBody, {
+          id: 'msg_long',
+          meta: { reconstructed: true },
+        }),
+        makeMessage(Role.ASSIST, 'a1'),
+        makeMessage(Role.USER, 'q2', { id: 'msg_q2' }),
+      ],
+      runtimeConfig: {
+        history: {
+          reconstructThreshold: 0.5,
+          reconstructKeepRecent: 1,
+          threshold: 0.99,
+          windowSize: 10,
+        },
+      },
+      transforms: new ConvTransformPlan(),
+      getRunEvents: () => undefined,
+    } as unknown as ConversationContext;
+    const repo = mockRepo();
+    await collect(new ReconstructTransform(repo, mockProvider(10)).apply(ctx));
+    expect(repo.update).not.toHaveBeenCalled(); // 已标记 → 不重复 update
   });
 });

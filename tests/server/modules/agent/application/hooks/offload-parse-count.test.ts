@@ -4,13 +4,11 @@ import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-r
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
-import { OffloadHook } from '@/server/modules/agent/application/hooks/offload-hook';
-import { OutputOffloadHook } from '@/server/modules/agent/application/hooks/output-offload-hook';
+import { TrimHook } from '@/server/modules/agent/application/hooks/trim-hook';
 import { serializeAction } from '@/server/modules/agent/application/service/react-loop';
 import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
 
-// 计数 parseResponse 调用——验证「每候选一次」契约（candidateBody 一次性解析，
-// hint/stub/classifyRecall 复用，不重复 parse）。
+// 计数 parseResponse 调用——验证「每候选一次」契约（candidateBody 一次性解析，hint/stub/classifyRecall 复用，不重复 parse）。
 let parseCalls = 0;
 vi.mock('@/server/modules/agent/application/service/react-loop', async () => {
   const actual = await vi.importActual<
@@ -25,7 +23,7 @@ vi.mock('@/server/modules/agent/application/service/react-loop', async () => {
   };
 });
 
-// estimateTokens 用字符数代理（与 offload-hook.test 同手法）。
+// estimateTokens 用字符数代理。
 vi.mock('@/server/utils/estimateTokens', () => ({
   estimateTokens: (msgs: { content?: string }[] | undefined) =>
     (msgs ?? []).reduce((s, m) => s + (m?.content?.length ?? 0), 0),
@@ -73,14 +71,15 @@ function makeCtx(
   } as unknown as AgentRunContext;
 }
 
-const CFG = (): OffloadConfig => ({ windowRatio: 0.9 });
-function offloadHook(contextSize: number): OffloadHook {
-  return new OffloadHook({ resolveContextSize: () => contextSize } as never);
+const CFG = (): OffloadConfig => ({ trimAge: 2, keepRecent: 4 });
+function trimHook(contextSize: number): TrimHook {
+  return new TrimHook({ resolveContextSize: () => contextSize } as never);
 }
 
-describe('offload parseResponse 调用计数（每候选一次：candidateBody 一次性解析，下游复用）', () => {
+describe('trim parseResponse 调用计数（每候选一次：candidateBody 一次性解析，下游复用）', () => {
   it('assistant 候选：candidateBody 解析 1 次，hint/stub 复用 → 全程只 parse 1 次', async () => {
     parseCalls = 0;
+    // bigA0 age=2≥2（其后 2 assistant）→ 桩。
     const ctx = makeCtx(
       [
         {
@@ -91,16 +90,27 @@ describe('offload parseResponse 调用计数（每候选一次：candidateBody �
             input: { document: 'big' },
           }),
         },
+        {
+          role: 'assistant',
+          content: serializeAction({ tool: 's', input: {} }),
+        },
+        { role: 'user', content: 'Observation: ok' },
+        {
+          role: 'assistant',
+          content: serializeAction({ tool: 's', input: {} }),
+        },
+        { role: 'user', content: 'Observation: ok' },
       ],
       { offload: CFG() },
     );
-    await collect(offloadHook(8192).apply(ctx));
+    await collect(trimHook(8192).apply(ctx));
     expect(ctx.cache.offload).toHaveBeenCalled(); // 确实桩了
     expect(parseCalls).toBe(1);
   });
 
   it('observation 候选：配对 assistant 仅 parse 1 次（classifyRecallParsed + hintForObservation 复用）', async () => {
     parseCalls = 0;
+    // obs1 age=2≥2、出窗 → 桩；配对 a0 仅 parse 1 次。
     const ctx = makeCtx(
       [
         {
@@ -108,35 +118,21 @@ describe('offload parseResponse 调用计数（每候选一次：candidateBody �
           content: serializeAction({ tool: 'search', input: { q: 'a' } }),
         },
         { role: 'user', content: `Observation: ${body(8000)}` },
+        {
+          role: 'assistant',
+          content: serializeAction({ tool: 'search', input: { q: 'b' } }),
+        },
+        { role: 'user', content: 'Observation: ok' },
+        {
+          role: 'assistant',
+          content: serializeAction({ tool: 'search', input: { q: 'c' } }),
+        },
+        { role: 'user', content: 'Observation: ok' },
       ],
       { offload: CFG() },
     );
-    await collect(offloadHook(8192).apply(ctx));
+    await collect(trimHook(8192).apply(ctx));
     expect(ctx.cache.offload).toHaveBeenCalled(); // 确实桩了
     expect(parseCalls).toBe(1); // 配对 assistant 一次，observation 本身不 parse
-  });
-
-  it('OutputOffloadHook：observation 配对 assistant 同样只 parse 1 次', async () => {
-    parseCalls = 0;
-    const ctx = makeCtx(
-      [
-        {
-          role: 'assistant',
-          content: serializeAction({
-            tool: 'bash',
-            input: { command: 'echo x' },
-          }),
-        },
-        { role: 'user', content: `Observation: ${body(8000)}` },
-      ],
-      { offload: {} },
-    );
-    await collect(
-      new OutputOffloadHook({
-        resolveContextSize: () => 8000,
-      } as never).apply(ctx),
-    );
-    expect(ctx.cache.offload).toHaveBeenCalled();
-    expect(parseCalls).toBe(1);
   });
 });

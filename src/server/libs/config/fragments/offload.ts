@@ -1,14 +1,16 @@
 import type { JSONSchemaType } from 'ajv';
 import type { ConfigFragment } from '../config-fragment';
 
-/** offload 体积护栏：两层——post-observation 逐条大小桩 + pre-LLM 总量压力桩（共用 offload/stubContent）。 */
+// offload 体积护栏：两层——裁剪（age 驱动，无损落盘 + hint 桩）+ 微压缩（步数驱动，有损丢弃旧桩）。共用 offload-stub。
 export interface OffloadConfig {
-  /** 总量触发比例，默认 0.8。pre-LLM OffloadHook 用。 */
-  windowRatio?: number;
-  // 产出即桩比例，默认 0.2：单条 Observation 超 contextSize×此值即落盘。大窗口放宽（小结构化输出不落盘），outputTokenThreshold 可绝对覆盖。
-  outputSizeRatio?: number;
-  /** 产出即桩绝对阈值覆盖（token 估算）。设则忽略 outputSizeRatio，用此写死值；省略走动态比例。 */
-  outputTokenThreshold?: number;
+  /** 裁剪：observation/assistant 满 trimAge 个 tick 后桩化落盘（无损、可回取）。默认 2。 */
+  trimAge?: number;
+  /** 微压缩触发门槛：run 步数（[base,len) 内 Observation 数）达此值才启用。默认 20。 */
+  compactStepThreshold?: number;
+  /** 微压缩：仅满 compactAge 个 tick 的 observation 桩被有损丢弃。默认 8。须 > trimAge。 */
+  compactAge?: number;
+  /** 近窗口保护：末 keepRecent 条消息裁剪/微压缩都不碰。默认 4。 */
+  keepRecent?: number;
 }
 
 export const OFFLOAD_FRAGMENT: ConfigFragment<'offload', OffloadConfig> = {
@@ -19,32 +21,38 @@ export const OFFLOAD_FRAGMENT: ConfigFragment<'offload', OffloadConfig> = {
     default: {},
     title: 'Offload',
     description:
-      '体积护栏两层：① post-observation 逐条——单条 Observation 超 contextSize×outputSizeRatio 即落盘（产出即桩，动态跟随窗口）；② pre-LLM 总量——total×factor > contextWindow×windowRatio 时最胖优先桩化到盘。省略即两层全关。',
+      '体积护栏两层：① 裁剪（pre-LLM）——observation/assistant 满 trimAge 个 tick 即桩化落盘（无损、可 rg/sed 回取），低价值结果以 hint 文本标记；② 微压缩（pre-LLM）——run 步数达 compactStepThreshold 后，满 compactAge 个 tick 且未被后续 bash 回取的 observation 桩有损丢弃以减负。省略即两层全关。',
     properties: {
-      windowRatio: {
-        type: 'number',
-        default: 0.8,
-        minimum: 0.1,
-        maximum: 1,
-        nullable: true,
-        description: 'pre-LLM 总量触发比例（默认 0.8）',
-      },
-      outputSizeRatio: {
-        type: 'number',
-        default: 0.2,
-        minimum: 0.01,
-        maximum: 1,
-        nullable: true,
-        description:
-          'post-observation 产出即桩比例（默认 0.2）。单条 Observation 超 contextSize×此值即落盘；大窗口放宽、小窗口收紧。',
-      },
-      outputTokenThreshold: {
-        type: 'number',
-        default: null,
+      trimAge: {
+        type: 'integer',
+        default: 2,
         minimum: 0,
         nullable: true,
         description:
-          '产出即桩绝对阈值覆盖（token 估算）。设则忽略 outputSizeRatio；省略走动态比例。0=关闭产出即桩。',
+          '裁剪触发年龄（tick）；observation/assistant 满此年龄即桩化（默认 2）',
+      },
+      compactStepThreshold: {
+        type: 'integer',
+        default: 20,
+        minimum: 1,
+        nullable: true,
+        description: '微压缩启用门槛：run 步数达此值才丢弃旧桩（默认 20）',
+      },
+      compactAge: {
+        type: 'integer',
+        default: 8,
+        minimum: 1,
+        nullable: true,
+        description:
+          '微压缩丢弃年龄（tick）；仅满此年龄的 observation 桩被丢弃（默认 8，须 > trimAge）',
+      },
+      keepRecent: {
+        type: 'integer',
+        default: 4,
+        minimum: 0,
+        nullable: true,
+        description:
+          '近窗口保护：末 keepRecent 条消息裁剪/微压缩都不碰（默认 4）',
       },
     },
   } as unknown as JSONSchemaType<unknown>,

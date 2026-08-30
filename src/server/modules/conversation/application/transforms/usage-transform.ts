@@ -5,8 +5,11 @@ import type {
   ConvPhase,
   ConvTransform,
 } from '@/server/modules/conversation/domain/model/conv-transform';
-import { findLatestCompactionSummary } from '@/server/modules/conversation/application/service/history-projection';
-import type { LlmMessage, Message } from '@/shared/types/entities';
+import {
+  findLatestCompactionSummary,
+  toLlmMessages,
+} from '@/server/modules/conversation/application/service/history-projection';
+import type { Message } from '@/shared/types/entities';
 import {
   estimateTokens,
   type ContextUsage,
@@ -24,7 +27,7 @@ export function computeContextUsage(
   const tail = summary ? messages.slice(index + 1) : messages;
   const effective = summary ? [summary, ...tail] : tail;
   return {
-    used: estimateTokens(effective as unknown as LlmMessage[]),
+    used: estimateTokens(toLlmMessages(effective)),
     total: contextSize,
   };
 }

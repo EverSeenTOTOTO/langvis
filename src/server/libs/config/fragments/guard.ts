@@ -1,7 +1,7 @@
 import type { JSONSchemaType } from 'ajv';
 import type { ConfigFragment } from '../config-fragment';
 
-// 运行期兜底阈值（liveness + cost + per-message 闸）。生产默认宽，eval 经 runtimeConfig 调小；各旋钮被对应 guard hook 消费。
+// 运行期兜底阈值（liveness + cost 闸）。生产默认宽，eval 经 runtimeConfig 调小；各旋钮被对应 guard hook 消费。
 export interface GuardConfig {
   /** 迭代（tick）上限——MaxIterationsHook 到此即强制收尾。生产 1000（纯 runaway 兜底）。 */
   maxIterations: number;
@@ -9,10 +9,6 @@ export interface GuardConfig {
   maxTokenUsage: number;
   /** 连续无新动作 tick 数——StuckHook 到此即判卡死强制收尾。 */
   stuckThreshold: number;
-  // 单条消息占 contextWindow 比例上限（per-latest，默认 0.4）——QueryBudgetHook 超即 drop。与 offload 的 windowRatio 无关。
-  maxQuerySize?: number;
-  /** 单条消息 token 绝对上限（默认 10000）——QueryBudgetHook 在大 context 上拦病态胖取。取 min 与比例值。 */
-  maxQueryTokens?: number;
 }
 
 export const GUARD_FRAGMENT: ConfigFragment<'guard', GuardConfig> = {
@@ -23,7 +19,7 @@ export const GUARD_FRAGMENT: ConfigFragment<'guard', GuardConfig> = {
     default: {},
     title: 'Agent Run Guards',
     description:
-      '运行期兜底：迭代上限 / 累计 token 上限 / 卡死阈值 / 单条消息体积上限（QueryBudgetHook；offload 总量阈值见 offload fragment）',
+      '运行期兜底：迭代上限 / 累计 token 上限 / 卡死阈值。上下文超窗 fail-fast 由 QueryBudgetHook 以整体上下文为视角处理（无单条 query 体积旋钮）；offload 体积阈值见 offload fragment',
     properties: {
       maxIterations: {
         type: 'integer',
@@ -46,23 +42,6 @@ export const GUARD_FRAGMENT: ConfigFragment<'guard', GuardConfig> = {
         minimum: 1,
         nullable: true,
         description: '连续无新动作 tick 数，到即判卡死强制收尾（StuckHook）',
-      },
-      maxQuerySize: {
-        type: 'number',
-        default: 0.4,
-        minimum: 0.1,
-        maximum: 1,
-        nullable: true,
-        description:
-          '单条消息占 contextWindow 的比例上限（默认 0.4，QueryBudgetHook per-latest）',
-      },
-      maxQueryTokens: {
-        type: 'integer',
-        default: 10_000,
-        minimum: 1,
-        nullable: true,
-        description:
-          '单条消息 token 绝对上限（默认 10000，QueryBudgetHook）；取 min 与比例值',
       },
     },
   } as unknown as JSONSchemaType<unknown>,

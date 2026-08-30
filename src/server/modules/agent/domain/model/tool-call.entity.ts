@@ -52,7 +52,7 @@ export class ToolCall extends Entity<string> {
   }
 
   async *execute(): AsyncGenerator<RunEvent, ToolRunResult, void> {
-    // 工具入参即 LLM 产出的 JSON原样直用；大输出经 OutputOffloadHook 桩化落盘，不自动解析回对象。
+    // 工具入参即 LLM 产出的 JSON原样直用；大输出经 TrimHook（age 驱动）桩化落盘，不自动解析回对象。
     this.input = this.toolArgs;
 
     yield {
@@ -79,7 +79,7 @@ export class ToolCall extends Entity<string> {
       const output = yield* this.tool.call(callCtx);
 
       // #output 留全文：tool_result 事件/DB/前端/历史回放都看全文（事件真相）。
-      // 给 LLM 看的 messages 由 post-observation OutputOffloadHook 按大小桩化（产出即桩，无损落盘）。
+      // 给 LLM 看的 messages 由 pre-LLM TrimHook 按 age 桩化（无损落盘 + hint 桩，可 rg/sed 回取）。
       this.complete(output);
       yield {
         type: 'tool_result',
