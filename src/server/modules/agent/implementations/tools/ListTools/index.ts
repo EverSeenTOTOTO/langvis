@@ -11,7 +11,7 @@ import {
   formatToolsToMarkdown,
   formatSkillsToMarkdown,
 } from '@/server/utils/formatTools';
-import { retrieveRelevantTools } from '@/server/utils/tool-retrieval';
+import { retrieveRelevantTools } from '@/server/modules/agent/application/service/tool-retrieval';
 import type { ListToolsInput, ListToolsOutput } from './config';
 
 @tool(ToolIds.LIST_TOOLS)

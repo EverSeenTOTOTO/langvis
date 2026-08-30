@@ -4,7 +4,7 @@ import { ToolIds } from '@/shared/constants';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
-import { retrieveRelevantTools } from '@/server/utils/tool-retrieval';
+import { retrieveRelevantTools } from '@/server/modules/agent/application/service/tool-retrieval';
 import {
   formatToolsToMarkdown,
   formatSkillsToMarkdown,

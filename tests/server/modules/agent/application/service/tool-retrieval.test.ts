@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { tokenizeQuery, matchFilter } from '@/server/utils/tool-retrieval';
+import {
+  tokenizeQuery,
+  matchFilter,
+} from '@/server/modules/agent/application/service/tool-retrieval';
 
 describe('tokenizeQuery', () => {
   it('保留整个空白 token（向后兼容）', () => {
