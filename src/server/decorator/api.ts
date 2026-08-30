@@ -1,6 +1,7 @@
 import { ValidationException } from '@/shared/dto/base';
 import { ExceptionBase } from '@/server/libs/exceptions/exception.base';
 import { getOwnPropertyNames } from '@/shared/utils';
+import { DEFAULT_UPLOAD_CONFIG } from '@/shared/constants';
 import { Express, NextFunction, Request, Response } from 'express';
 import multer from 'multer';
 import {
@@ -38,11 +39,19 @@ function createUploadMiddleware(
 ): ((req: Request, res: Response, next: NextFunction) => void) | null {
   if (fileParams.length === 0) return null;
 
+  // fileSize 上限放在 multer 层——整块缓冲进内存前即拒（防内存 DoS）；
+  // 真相源 DEFAULT_UPLOAD_CONFIG.maxSize（与 file.service 校验 / picker 同源），调用方可经 uploadConfig.limits 覆盖。
+  const defaultLimits = { fileSize: DEFAULT_UPLOAD_CONFIG.maxSize };
+
   // Single FILE param -> use upload.single()
   if (fileParams.length === 1 && fileParams[0].type === ParamType.FILE) {
     const options = fileParams[0].config as multer.Options | undefined;
     const storage = options?.storage ?? multer.memoryStorage();
-    const upload = multer({ ...options, storage });
+    const upload = multer({
+      ...options,
+      storage,
+      limits: { ...defaultLimits, ...options?.limits },
+    });
     return upload.single(fileParams[0].propertyKey || 'file');
   }
 
@@ -65,7 +74,11 @@ function createUploadMiddleware(
   }
 
   const storage = options?.storage ?? multer.memoryStorage();
-  const upload = multer({ ...options, storage });
+  const upload = multer({
+    ...options,
+    storage,
+    limits: { ...defaultLimits, ...options?.limits },
+  });
   return upload.fields(fields);
 }
 

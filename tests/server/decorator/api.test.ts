@@ -1,5 +1,6 @@
 import bindApi, { api } from '@/server/decorator/api';
 import { file, files, request, response } from '@/server/decorator/param';
+import { DEFAULT_UPLOAD_CONFIG } from '@/shared/constants';
 import bodyParser from 'body-parser';
 import express, { type Request, type Response } from 'express';
 
@@ -224,6 +225,23 @@ it('api with file upload', async () => {
         ).then(rsp => ({ status: rsp.status, json: rsp.json() }));
 
         expect(maxCountExceeded.status).toBe(400);
+
+        // 默认 fileSize 上限在 multer 层——无 config 端点超 maxSize 整块缓冲前即拒（防内存 DoS）。
+        const oversized = new Blob([
+          new Uint8Array(DEFAULT_UPLOAD_CONFIG.maxSize + 1),
+        ]);
+        const formData7 = new FormData();
+        formData7.append('file', oversized, 'big.bin');
+
+        const fileSizeExceeded = await fetch(
+          `http://localhost:${port}/upload-single`,
+          {
+            method: 'post',
+            body: formData7,
+          },
+        ).then(rsp => ({ status: rsp.status, json: rsp.json() }));
+
+        expect(fileSizeExceeded.status).toBe(400);
 
         resolve();
       } catch (error) {
