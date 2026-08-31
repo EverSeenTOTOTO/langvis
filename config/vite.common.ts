@@ -11,7 +11,6 @@ export const paths = {
   dist: path.resolve(__dirname, '..', 'dist'),
   server: path.resolve(__dirname, '..', 'src/server/index.ts'),
   serverEntry: path.resolve(__dirname, '..', 'src/client/index.server.tsx'),
-  cli: path.resolve(__dirname, '..', 'src/tui/cli.tsx'),
 };
 
 export const fetchEntries = (pattern: string) =>
