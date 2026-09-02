@@ -9,7 +9,9 @@ export const getOwnPropertyNames = <T extends object>(x: T) => {
 };
 
 export const isClient = () => typeof document !== 'undefined';
-export const isTest = () => import.meta.env.MODE === 'test';
+// import.meta.env 仅 Vite 加载路径存在（tsx/Node 直跑为 undefined）；NODE_ENV 在
+// vitest（=test）与客户端构建（vite 静态替换 process.env.NODE_ENV）下语义等价。
+export const isTest = () => process.env.NODE_ENV === 'test';
 
 export const sleep = (ms: number): Promise<void> => {
   return new Promise(resolve => setTimeout(resolve, ms));

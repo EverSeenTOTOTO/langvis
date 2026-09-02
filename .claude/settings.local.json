@@ -10,7 +10,8 @@
       "Bash(python3 *)",
       "Bash(git add *)",
       "Read(//tmp/**)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(grep -E '\\(^|/\\)\\\\.env$')"
     ]
   }
 }

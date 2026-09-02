@@ -13,7 +13,6 @@ export class AuthService implements AuthPort {
 
   constructor(@inject(DatabaseService) private readonly db: DatabaseService) {
     this.auth = betterAuth({
-      // @ts-expect-error type
       database: typeormAdapter(this.db.dataSource),
       emailAndPassword: {
         enabled: true,

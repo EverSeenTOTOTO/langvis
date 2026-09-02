@@ -2,12 +2,14 @@
 
 ## Toolchain
 
-| Purpose         | Tool     | Notes                                 |
-| --------------- | -------- | ------------------------------------- |
-| Package Manager | `bun`    | Dependency management & script engine |
-| Dev Framework   | `vite`   | Development server & build            |
-| Build System    | `make`   | Use instead of npm scripts            |
-| Test Framework  | `vitest` | Run specific tests: `bunx vitest run` |
+| Purpose         | Tool     | Notes                                          |
+| --------------- | -------- | ---------------------------------------------- |
+| Runtime         | `node`   | >=22 required (`engines` in package.json)      |
+| Package Manager | `pnpm`   | Dependency management                          |
+| Dev Framework   | `vite`   | Development server & build                     |
+| Dev Watch       | `tsx`    | `make dev` = `tsx watch` (TS + tsconfig paths) |
+| Build System    | `make`   | Use instead of npm scripts                     |
+| Test Framework  | `vitest` | Run specific tests: `pnpm exec vitest run`     |
 
 ## Shell
 

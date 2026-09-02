@@ -8,10 +8,9 @@ import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { createTimeoutController } from '@/server/utils/abort';
 import { Readability } from '@mozilla/readability';
-import { JSDOM } from 'jsdom';
 import TurndownService from 'turndown';
+import { ProxyAgent } from 'undici';
 import type { Browser } from 'playwright';
-import { chromium } from 'playwright';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
@@ -27,6 +26,23 @@ const turndownService = new TurndownService({
 const CONTENT_RATIO_THRESHOLD = 0.1;
 
 const SPA_ROOT_SELECTORS = ['#root', '#app', '#__next', '#__nuxt'];
+
+// playwright/jsdom 合计 ~200MB native 常驻——工具注册（首个 agent 活动）时并不需要，
+// 动态加载且缓存 promise：只有真正 fetch/render 时才付这笔内存。
+let jsdomLoader: Promise<typeof import('jsdom')> | null = null;
+const loadJSDOM = () => (jsdomLoader ??= import('jsdom'));
+
+let chromiumLoader: Promise<typeof import('playwright')> | null = null;
+const loadChromium = () =>
+  (chromiumLoader ??= import('playwright')).then(m => m.chromium);
+
+// Node fetch（undici）无 Bun 式 proxy 选项——代理经 ProxyAgent dispatcher，首次用到才建。
+let proxyDispatcher: ProxyAgent | undefined;
+const getProxyDispatcher = (proxy?: string) => {
+  if (!proxy) return undefined;
+  proxyDispatcher ??= new ProxyAgent(proxy);
+  return proxyDispatcher;
+};
 
 @tool(ToolIds.WEB_FETCH)
 @lifecycleHook
@@ -60,9 +76,8 @@ export default class WebFetchTool
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       },
       signal,
-      // @ts-expect-error bun fetch option
-      proxy,
-    });
+      dispatcher: getProxyDispatcher(proxy),
+    } as RequestInit & { dispatcher?: ProxyAgent });
 
     if (!response.ok) {
       const statusHints: Record<number, string> = {
@@ -84,14 +99,15 @@ export default class WebFetchTool
     return response;
   }
 
-  extractContent(
+  private async extractContent(
     html: string,
     url: string,
-  ): {
+  ): Promise<{
     article: ReturnType<Readability['parse']>;
     markdown: string;
-  } {
-    const sanitizedHTML = sanitizeHtml(html);
+  }> {
+    const { JSDOM } = await loadJSDOM();
+    const sanitizedHTML = await sanitizeHtml(html);
     const sanitizedDOM = new JSDOM(sanitizedHTML, { url });
     const reader = new Readability(sanitizedDOM.window.document);
     const article = reader.parse();
@@ -128,6 +144,7 @@ export default class WebFetchTool
 
   private async getBrowser(): Promise<Browser> {
     if (this.browser?.isConnected()) return this.browser;
+    const chromium = await loadChromium();
     this.browser = await chromium.launch({ headless: true });
     this.logger.debug('Playwright browser launched');
     return this.browser;
@@ -175,7 +192,7 @@ export default class WebFetchTool
 
     if (renderMode === 'browser') {
       const html = await this.fetchWithPlaywright(url, timeout, ctx.signal);
-      const { article, markdown } = this.extractContent(html, url);
+      const { article, markdown } = await this.extractContent(html, url);
 
       if (!article) {
         throw new Error(
@@ -209,7 +226,7 @@ export default class WebFetchTool
       try {
         const response = await this.doFetch(url, controller.signal, proxy);
         const html = await response.text();
-        const { article, markdown } = this.extractContent(html, url);
+        const { article, markdown } = await this.extractContent(html, url);
 
         // Static mode: no fallback, throw if content is sparse
         if (renderMode === 'static') {
@@ -233,7 +250,7 @@ export default class WebFetchTool
             ctx.signal,
           );
           const { article: browserArticle, markdown: browserMarkdown } =
-            this.extractContent(browserHtml, url);
+            await this.extractContent(browserHtml, url);
 
           if (browserArticle && browserMarkdown.length > markdown.length) {
             yield {

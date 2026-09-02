@@ -121,7 +121,7 @@ export class EmailService {
     const fromDisplay = input.fromName
       ? `${input.fromName} <${input.from}>`
       : input.from;
-    const body = htmlToMarkdown(input.content);
+    const body = await htmlToMarkdown(input.content);
     return `/document_archive 归档邮件：${input.subject}\n\n发件人：${fromDisplay}\n发件时间：${input.sentAt}\n\n内容：\n${body}`;
   }
 
@@ -178,7 +178,9 @@ export class EmailService {
       fromName: parsed.from?.value?.[0]?.name,
       to: toAddress || '',
       subject: parsed.subject || '',
-      content: parsed.html ? sanitizeHtml(parsed.html) : parsed.text || '',
+      content: parsed.html
+        ? await sanitizeHtml(parsed.html)
+        : parsed.text || '',
       sentAt: parsed.date || new Date(),
       receivedAt: new Date(),
       attachmentCount: parsed.attachments?.length || 0,

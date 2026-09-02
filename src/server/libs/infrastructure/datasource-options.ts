@@ -18,11 +18,12 @@ import { appMigrations } from './migrations';
 export function buildDataSourceOptions(): DataSourceOptions {
   return {
     type: 'postgres',
-    host: import.meta.env.VITE_PG_HOST,
-    port: import.meta.env.VITE_PG_PORT,
-    username: import.meta.env.VITE_PG_USERNAME,
-    password: import.meta.env.VITE_PG_PASSWORD,
-    database: import.meta.env.VITE_PG_DATABASE,
+    // 运行时经 dotenv 进 process.env（tsx 直跑/Node prod 通用）；vite 构建路径同值注入。
+    host: process.env.VITE_PG_HOST,
+    port: Number(process.env.VITE_PG_PORT),
+    username: process.env.VITE_PG_USERNAME,
+    password: process.env.VITE_PG_PASSWORD,
+    database: process.env.VITE_PG_DATABASE,
     synchronize: false,
     logging: false,
     entities: [

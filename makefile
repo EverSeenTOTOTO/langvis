@@ -8,10 +8,10 @@ better-auth-typeorm:
 	@if [ ! -d third-party/better-auth-typeorm-pg/package/dist ]; then \
 		echo "Building better-auth-typeorm-pg..." && \
 		cd third-party/better-auth-typeorm-pg && \
-		bun install && \
+		pnpm install && \
 		cd package && \
-		bun run build && \
-		bun i && \
+		pnpm run build && \
+		pnpm install && \
 		echo "better-auth-typeorm-pg built successfully."; \
 	else \
 		echo "better-auth-typeorm-pg already built. Skipping build step."; \
@@ -19,16 +19,13 @@ better-auth-typeorm:
 
 .PHONY: prepare
 prepare: better-auth-typeorm
-	bunx husky
-	# https://github.com/oven-sh/bun/issues/4677#issuecomment-1713522789
-	# https://github.com/oven-sh/bun/pull/18086
-	jq '.main = .module' node_modules/tsyringe/package.json > tmp.json && mv tmp.json node_modules/tsyringe/package.json
+	pnpm exec husky
 
 .PHONY: lint
 lint:
-	bunx tsc --noEmit
-	bunx eslint --fix .
-	bunx prettier --log-level silent -w .
+	pnpm exec tsc --noEmit
+	pnpm exec eslint --fix .
+	pnpm exec prettier --log-level silent -w .
 	@echo -e '\033[1;32mNo lint errors found.'
 
 .PHONY: clean
@@ -37,48 +34,48 @@ clean:
 
 .PHONY: dev
 dev:
-	NODE_ENV=development bun --watch src/server/index.ts
+	NODE_ENV=development pnpm exec tsx watch src/server/index.ts
 
 .PHONY: build
 build: clean
-	bunx vite build --mode production --config config/vite.prod.ts
-	bunx vite build --mode production --config config/vite.server.ts
-	bunx vite build --mode production --config config/vite.serverEntry.ts
+	pnpm exec vite build --mode production --config config/vite.prod.ts
+	pnpm exec vite build --mode production --config config/vite.server.ts
+	pnpm exec vite build --mode production --config config/vite.serverEntry.ts
 	cp -r src/server/locales ${DIST}/server/locales
 	mkdir -p ${DIST}/server/modules/agent/implementations/
 	cp -r src/server/modules/agent/implementations/skills ${DIST}/server/modules/agent/implementations/skills
 
 .PHONY: start
 start: build
-	NODE_ENV=production bun ${DIST}/server.js
+	NODE_ENV=production node ${DIST}/server.js
 
 .PHONY: test
 test:
-	bunx vitest run
+	pnpm exec vitest run
 
 # 覆盖率按需跑——默认 `make test` 不带 --coverage（见 CLAUDE.md）。
 .PHONY: test-cover
 test-cover:
-	bunx vitest run --coverage
+	pnpm exec vitest run --coverage
 
 .PHONY: typecheck
 typecheck:
-	bunx tsc --noEmit
+	pnpm exec tsc --noEmit
 
 # 受控迁移——synchronize 已关闭，schema 变更走 migration 流程。
 # generate 产出的文件须手动在 src/server/libs/infrastructure/migrations/index.ts 注册。
 .PHONY: migration-generate
 migration-generate:
-	NODE_ENV=development bun node_modules/typeorm/cli.js migration:generate \
+	NODE_ENV=development pnpm exec tsx ./node_modules/typeorm/cli.js migration:generate \
 		src/server/libs/infrastructure/migrations/$(name) \
 		-d src/server/libs/infrastructure/datasource.ts
 
 .PHONY: migration-run
 migration-run:
-	NODE_ENV=development bun node_modules/typeorm/cli.js migration:run \
+	NODE_ENV=development pnpm exec tsx ./node_modules/typeorm/cli.js migration:run \
 		-d src/server/libs/infrastructure/datasource.ts
 
 .PHONY: migration-revert
 migration-revert:
-	NODE_ENV=development bun node_modules/typeorm/cli.js migration:revert \
+	NODE_ENV=development pnpm exec tsx ./node_modules/typeorm/cli.js migration:revert \
 		-d src/server/libs/infrastructure/datasource.ts

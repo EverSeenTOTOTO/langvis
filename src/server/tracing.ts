@@ -2,7 +2,8 @@ import dotenv from 'dotenv';
 import nodePath from 'node:path';
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 import { NodeSDK } from '@opentelemetry/sdk-node';
-import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
+import { PgInstrumentation } from '@opentelemetry/instrumentation-pg';
+import { NetInstrumentation } from '@opentelemetry/instrumentation-net';
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 
@@ -43,17 +44,9 @@ function initTracing(): void {
       'deployment.environment': process.env.NODE_ENV ?? 'development',
     }),
     contextManager: new AsyncLocalStorageContextManager(),
-    instrumentations: [
-      getNodeAutoInstrumentations({
-        '@opentelemetry/instrumentation-fs': { enabled: false },
-        '@opentelemetry/instrumentation-dns': { enabled: false },
-        // Bun 未实现 v8.getHeapSpaceStatistics，runtime-node 采集器每次抓取抛 ERR_NOT_IMPLEMENTED。
-        '@opentelemetry/instrumentation-runtime-node': { enabled: false },
-        // 注：winston instrumentation 在 Bun 上不生效（ESM 静态 import 预解析先于 registerInstrumentations
-        // 的 require hook，configure 没 patch 到）。logs 走 logger.ts 手动挂 OpenTelemetryTransportV3。
-        '@opentelemetry/instrumentation-winston': { enabled: false },
-      }),
-    ],
+    // 只装能生效的插桩：pg/net（CJS require 链被 patch）。http/winston/express 在 ESM 下连 metrics
+    // 都 patch 不到——span 与 http 指标由 requestId 手动补；runtime-node Bun 必抛错不装。
+    instrumentations: [new PgInstrumentation(), new NetInstrumentation()],
   });
   started.start();
 }

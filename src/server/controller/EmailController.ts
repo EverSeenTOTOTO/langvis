@@ -14,7 +14,7 @@ import {
 import { ListEmailsRequestDto } from '@/shared/dto/controller';
 import Logger from '../utils/logger';
 
-const INBOUND_SECRET = import.meta.env.VITE_INBOUND_SECRET || '';
+const INBOUND_SECRET = process.env.VITE_INBOUND_SECRET || '';
 
 // 常量时间比较：sha256 等长摘要再 timingSafeEqual——既不泄漏内容也不泄漏长度。
 function constantTimeEqual(a: string, b: string): boolean {

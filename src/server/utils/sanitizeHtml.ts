@@ -1,5 +1,4 @@
 import DOMPurify from 'dompurify';
-import { JSDOM } from 'jsdom';
 
 const ALLOWED_TAGS = [
   'html',
@@ -48,12 +47,17 @@ const ALLOWED_TAGS = [
 
 const ALLOWED_ATTR = ['href', 'src', 'alt', 'title', 'style'];
 
-// JSDOM/DOMPurify 实例仅在模块加载时创建一次——每次创建代价极高。
-const window = new JSDOM('').window;
-const purify = DOMPurify(window);
+// jsdom 体积大（~75MB 常驻），静态 import 会把它拖进启动基线——首次真正清洗时才加载；
+// JSDOM/DOMPurify 实例只建一次，缓存 promise。
+let purifyLoader: Promise<ReturnType<typeof DOMPurify>> | null = null;
+const loadPurify = () =>
+  (purifyLoader ??= import('jsdom').then(({ JSDOM }) =>
+    DOMPurify(new JSDOM('').window),
+  ));
 
-// Sanitize HTML with DOMPurify, preserving safe tags while removing dangerous elements.
-export function sanitizeHtml(html: string): string {
+/** Sanitize HTML with DOMPurify, preserving safe tags while removing dangerous elements. */
+export async function sanitizeHtml(html: string): Promise<string> {
+  const purify = await loadPurify();
   return purify.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
