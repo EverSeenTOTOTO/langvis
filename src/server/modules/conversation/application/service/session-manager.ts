@@ -58,7 +58,7 @@ export class SessionManager implements LifecycleHook {
       session.dispose(); // 连接 idle 自释放路径下 connection 已 undefined，此处 no-op
     }
     this.startedAt.delete(conversationId);
-    this.logger.info(`Chat disposed`, { chatId: conversationId });
+    this.logger.debug(`Chat disposed`, { chatId: conversationId });
   }
 
   async onShutdown(): Promise<void> {

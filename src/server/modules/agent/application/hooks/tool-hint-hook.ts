@@ -72,7 +72,7 @@ export class ToolHintHook implements Hook {
 
     const hint = parts.filter(Boolean).join('\n---\n');
     target.content = `<details>\n${hint}\n</details>\n\n${target.content}`;
-    this.logger.debug(
+    this.logger.info(
       `tool-hint injected (run ${ctx.runId}): ${tools.length}t/${skills.length}s`,
     );
     return;

@@ -8,7 +8,6 @@ import { createRoutes } from './routes';
 import { createStore } from './store';
 import { getPrefetchPath, serverFetch } from './decorator/api';
 import { isEmpty } from 'lodash-es';
-import { getSessionHeaders } from '@/server/utils/http';
 
 enableStaticRendering(true);
 
@@ -32,21 +31,13 @@ export async function render(context: RenderContext) {
   ctx.store = store;
   ctx.routes = routes;
 
+  // SSR bundle 与 server bundle 模块态隔离——session 由 ssr.ts（server 侧）进程内解析，
+  // 经 RenderContext.user 跨 bundle 传入，避免 createAuthClient 的 HTTP 自往返。
+  if (ctx.user) store.user.currentUser = ctx.user;
+
   if (!isEmpty(req.cookies)) {
     // Initialize fetch-cookie instance before setting cookies
     await serverFetch.init();
-
-    // prefetch user session if client cookie present
-    await store.auth
-      .getSession({
-        fetchOptions: {
-          headers: getSessionHeaders(req),
-          signal: AbortSignal.timeout(10_000),
-        },
-      })
-      .catch(e => {
-        req.log.error(e);
-      });
 
     // Set each cookie individually with Path=/ to ensure they're available for all API paths
     const rootUrl = getPrefetchPath('/');

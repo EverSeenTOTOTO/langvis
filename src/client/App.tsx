@@ -5,6 +5,7 @@ import {
 } from '@ant-design/cssinjs';
 import { App as AntdApp, theme as antdTheme, ConfigProvider } from 'antd';
 import type { Request, Response } from 'express';
+import type { User } from '@/shared/types/entities';
 import { observer } from 'mobx-react-lite';
 import { Route, Routes } from 'react-router-dom';
 import ClientOnly from './components/ClientOnly';
@@ -82,11 +83,13 @@ export type RenderContext = {
   html?: string;
   routes?: AppRoutes;
   store?: AppStore;
+  /** SSR 前由服务端（ssr.ts，同 bundle）进程内解析的登录用户，跨 bundle 传给渲染入口。 */
+  user?: User | null;
 };
 
 export type PrefetchContext = Omit<
   Required<RenderContext>,
-  'req' | 'res' | 'template' | 'html'
+  'req' | 'res' | 'template' | 'html' | 'user'
 > & { req: { originalUrl: string } };
 
 export function prefetch(ctx: PrefetchContext) {

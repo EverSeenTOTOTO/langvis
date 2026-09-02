@@ -198,7 +198,6 @@ export class AgentRunExecutor {
     if (TraceContext.get()) TraceContext.update({ runId: run.runId });
     const startedAt = Date.now();
     const tracker = new ToolLatencyTracker(this.logger);
-    this.logger.debug(`Execute run ${chalk.cyan(run.runId)}`);
     if (!run.isTerminated) yield run.start();
 
     yield* traceGen(

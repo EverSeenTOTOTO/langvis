@@ -129,7 +129,7 @@ export default class WebFetchTool
   private async getBrowser(): Promise<Browser> {
     if (this.browser?.isConnected()) return this.browser;
     this.browser = await chromium.launch({ headless: true });
-    this.logger.info('Playwright browser launched');
+    this.logger.debug('Playwright browser launched');
     return this.browser;
   }
 
@@ -308,7 +308,7 @@ export default class WebFetchTool
     if (this.browser?.isConnected()) {
       await this.browser.close();
       this.browser = null;
-      this.logger.info('Playwright browser closed');
+      this.logger.debug('Playwright browser closed');
     }
   }
 }

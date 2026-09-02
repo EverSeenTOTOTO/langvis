@@ -1,8 +1,11 @@
 import { isProd } from '@/server/utils/env';
-import { Express } from 'express';
+import { Express, Request } from 'express';
 import fs from 'fs';
 import path from 'path';
+import { container } from 'tsyringe';
 import { createServer as createViteServer } from 'vite';
+import { AuthService } from '@/server/libs/infrastructure/auth.service';
+import { isEmpty } from 'lodash-es';
 
 const configFile = path.join(process.cwd(), `config/vite.common.ts`);
 const templateFile = path.join(
@@ -13,6 +16,17 @@ const serverEntry = path.join(
   process.cwd(),
   isProd ? 'dist/index.server.js' : 'src/client/index.server.tsx',
 );
+
+// SSR bundle 与 server bundle 模块态隔离——session 在此处（server bundle）进程内解析，
+// 经 RenderContext.user 传给 SSR 入口，避免其经 HTTP 自往返取 /api/auth/get-session。
+async function resolveUser(req: Request) {
+  if (isEmpty(req.cookies)) return null;
+  const authService = container.resolve(AuthService);
+  return authService.getUser(req).catch(e => {
+    req.log.error(e);
+    return null;
+  });
+}
 
 // ssr
 export default async (app: Express) => {
@@ -31,7 +45,8 @@ export default async (app: Express) => {
           req.originalUrl!,
           templateHtml,
         );
-        const { html } = await render({ req, res, template });
+        const user = await resolveUser(req);
+        const { html } = await render({ req, res, template, user });
 
         res.setHeader('Content-Type', 'text/html');
         res.end(html);
@@ -51,7 +66,8 @@ export default async (app: Express) => {
   ]);
 
   app.get('*', async (req, res) => {
-    const { html } = await render({ req, res, template });
+    const user = await resolveUser(req);
+    const { html } = await render({ req, res, template, user });
 
     res.setHeader('Content-Type', 'text/html');
     res.end(html);

@@ -60,7 +60,6 @@ export class EmailService {
     data: CreateEmailData,
   ): Promise<{ success: boolean; id?: string; error?: string }> {
     try {
-      this.logger.info(`Checking if email exists: ${data.messageId}`);
       const exists = await this.repo.existsByMessageId(data.messageId);
       if (exists) {
         return { success: true };

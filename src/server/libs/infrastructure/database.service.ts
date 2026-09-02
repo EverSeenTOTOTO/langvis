@@ -33,7 +33,7 @@ export class DatabaseService implements LifecycleHook, TransactionPort {
     if (this._dataSource?.isInitialized) return;
 
     const start = Date.now();
-    logger.info('Initializing PostgreSQL connection...');
+    logger.debug('Initializing PostgreSQL connection...');
 
     this._dataSource = new DataSource(this.dataSourceConfig);
     await this._dataSource.initialize();
