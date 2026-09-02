@@ -84,7 +84,9 @@ describe('requestId（-> 帧 headers 脱敏）', () => {
       'content-type': 'application/json',
     });
 
-    const payload = logInfo.mock.calls[0][0];
+    // -> 帧：可读消息（箭头 + path）+ meta（type/method/url/headers）。
+    const [msg, payload] = logInfo.mock.calls[0];
+    expect(msg).toBe('-> GET /api/test');
     expect(payload.type).toBe('->');
     const keys = Object.keys(payload.headers);
     expect(keys).not.toContain('cookie');
@@ -102,7 +104,8 @@ describe('requestId（-> 帧 headers 脱敏）', () => {
       'user-agent': 'curl/8',
     });
 
-    const payload = logInfo.mock.calls[0][0];
+    const [msg, payload] = logInfo.mock.calls[0];
+    expect(msg).toBe('-> GET /api/test');
     expect(Object.keys(payload.headers)).toEqual(
       expect.arrayContaining(['cookie', 'authorization', 'user-agent']),
     );

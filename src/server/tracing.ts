@@ -27,6 +27,9 @@ import {
 // 在 index.ts 最前面 import，保证 auto-instrumentation 先于业务 import patch。
 let started: NodeSDK | undefined;
 
+/** OTel 是否启用（tracing.ts 已 start）——logger.ts 据此决定是否挂 OTel logs transport。 */
+export const isOtelEnabled = () => started !== undefined;
+
 function initTracing(): void {
   if (process.env.NODE_ENV === 'test') return;
   if (!process.env.OTEL_EXPORTER_OTLP_ENDPOINT) return;
@@ -46,6 +49,9 @@ function initTracing(): void {
         '@opentelemetry/instrumentation-dns': { enabled: false },
         // Bun 未实现 v8.getHeapSpaceStatistics，runtime-node 采集器每次抓取抛 ERR_NOT_IMPLEMENTED。
         '@opentelemetry/instrumentation-runtime-node': { enabled: false },
+        // 注：winston instrumentation 在 Bun 上不生效（ESM 静态 import 预解析先于 registerInstrumentations
+        // 的 require hook，configure 没 patch 到）。logs 走 logger.ts 手动挂 OpenTelemetryTransportV3。
+        '@opentelemetry/instrumentation-winston': { enabled: false },
       }),
     ],
   });

@@ -20,6 +20,7 @@
         "@opentelemetry/resources": "^2.11.0",
         "@opentelemetry/sdk-node": "^0.222.0",
         "@opentelemetry/semantic-conventions": "^1.43.0",
+        "@opentelemetry/winston-transport": "^0.32.0",
         "@types/dompurify": "^3.2.0",
         "@types/jsdom": "^27.0.0",
         "@xterm/addon-fit": "^0.11.0",
@@ -659,6 +660,8 @@
     "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.43.0", "https://registry.npmmirror.com/@opentelemetry/semantic-conventions/-/semantic-conventions-1.43.0.tgz", {}, "sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg=="],
 
     "@opentelemetry/sql-common": ["@opentelemetry/sql-common@0.42.0", "https://registry.npmmirror.com/@opentelemetry/sql-common/-/sql-common-0.42.0.tgz", { "dependencies": { "@opentelemetry/core": "^2.0.0" }, "peerDependencies": { "@opentelemetry/api": "^1.1.0" } }, "sha512-nwUwUU+8O8a4bnLqk6CodWeegGMEANgC94KTAhXcpGWLrW/2/hek/0ajNbjXnSOoNuCX+nteUPs46HFHhou9Xw=="],
+
+    "@opentelemetry/winston-transport": ["@opentelemetry/winston-transport@0.32.0", "https://registry.npmmirror.com/@opentelemetry/winston-transport/-/winston-transport-0.32.0.tgz", { "dependencies": { "@opentelemetry/api-logs": "^0.222.0", "@opentelemetry/semantic-conventions": "^1.41.1", "winston-transport": "4.*" } }, "sha512-TnGek6c90hbcrzW5jcSvdNcyicl7KChEETJak9sHz+pExwS5jbnBLNSNe6Q0agNZzY0FDj3ozz5//91bsd4ZUA=="],
 
     "@parcel/watcher": ["@parcel/watcher@2.5.1", "https://registry.npmmirror.com/@parcel/watcher/-/watcher-2.5.1.tgz", { "dependencies": { "detect-libc": "^1.0.3", "is-glob": "^4.0.3", "micromatch": "^4.0.5", "node-addon-api": "^7.0.0" }, "optionalDependencies": { "@parcel/watcher-android-arm64": "2.5.1", "@parcel/watcher-darwin-arm64": "2.5.1", "@parcel/watcher-darwin-x64": "2.5.1", "@parcel/watcher-freebsd-x64": "2.5.1", "@parcel/watcher-linux-arm-glibc": "2.5.1", "@parcel/watcher-linux-arm-musl": "2.5.1", "@parcel/watcher-linux-arm64-glibc": "2.5.1", "@parcel/watcher-linux-arm64-musl": "2.5.1", "@parcel/watcher-linux-x64-glibc": "2.5.1", "@parcel/watcher-linux-x64-musl": "2.5.1", "@parcel/watcher-win32-arm64": "2.5.1", "@parcel/watcher-win32-ia32": "2.5.1", "@parcel/watcher-win32-x64": "2.5.1" } }, "sha512-dfUnCxiN9H4ap84DvD2ubjw+3vUNpstxa0TneY/Paat8a3R4uQZDLSvWjmznAY/DoahqTHl9V46HF/Zs3F29pg=="],
 

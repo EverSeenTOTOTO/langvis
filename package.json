@@ -30,6 +30,7 @@
     "@opentelemetry/resources": "^2.11.0",
     "@opentelemetry/sdk-node": "^0.222.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
+    "@opentelemetry/winston-transport": "^0.32.0",
     "@types/dompurify": "^3.2.0",
     "@types/jsdom": "^27.0.0",
     "@xterm/addon-fit": "^0.11.0",
