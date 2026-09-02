@@ -3,10 +3,8 @@ import chalk from 'chalk';
 import { isEmpty, isObject } from 'lodash-es';
 import winston from 'winston';
 import 'winston-daily-rotate-file';
-import { trace as otelTrace, context as otelContext } from '@opentelemetry/api';
-import { OpenTelemetryTransportV3 } from '@opentelemetry/winston-transport';
+import { trace as otelTrace } from '@opentelemetry/api';
 import { isProd } from './env';
-import { isOtelEnabled } from '../tracing';
 import { TraceContext } from '@/server/middleware/trace-context';
 
 export type Logger = winston.Logger;
@@ -135,23 +133,8 @@ if (!isProd) {
   );
 }
 
-// OTel logs：手动挂 OpenTelemetryTransportV3（经全局 logs API 发 OTLP）+ 盖 active context。
-// winston instrumentation 在 Bun 上 patch 不到 configure（ESM 静态 import 预解析先于 require hook）。
-const OTEL_CONTEXT_SYMBOL = Symbol.for(
-  'opentelemetry.js.contrib.winston.context',
-);
-if (isOtelEnabled()) {
-  logger.add(
-    new OpenTelemetryTransportV3({
-      level: isProd ? 'info' : 'debug',
-      format: winston.format(info => {
-        (info as Record<symbol, unknown>)[OTEL_CONTEXT_SYMBOL] =
-          otelContext.active();
-        return info;
-      })(),
-    }),
-  );
-}
+// OTel logs 由 tracing.ts 的 WinstonInstrumentation 自动接管：configure 时注入
+// OpenTelemetryTransportV3（经全局 logs API 发 OTLP）并按 active span 绑 trace_id。
 
 // Safely serialize errors to avoid readonly property issues in Winston
 const serializeError = (error: unknown): Record<string, any> => {

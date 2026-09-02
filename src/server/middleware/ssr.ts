@@ -28,6 +28,20 @@ async function resolveUser(req: Request) {
   });
 }
 
+// 只对已知页面路由做 SSR——公网扫描器探针（.php / wp-admin 等）直接 404，
+// 省一次完整 React 渲染；404 亦可供 fail2ban 计数。新增页面记得同步此表。
+const SSR_ROUTES = new Set([
+  '/',
+  '/login',
+  '/documents',
+  '/emails',
+  '/files',
+  '/notfound',
+]);
+
+const isSsrRoute = (url: string) =>
+  SSR_ROUTES.has(url.split('?')[0].replace(/\/+$/, '') || '/');
+
 // ssr
 export default async (app: Express) => {
   if (!isProd) {
@@ -38,6 +52,10 @@ export default async (app: Express) => {
     });
     app.use(vite.middlewares);
     app.get('*', async (req, res, next) => {
+      if (!isSsrRoute(req.originalUrl!)) {
+        res.status(404).end('Not Found');
+        return;
+      }
       try {
         const templateHtml = await fs.promises.readFile(templateFile, 'utf-8');
         const { render } = await vite.ssrLoadModule(serverEntry);
@@ -66,6 +84,10 @@ export default async (app: Express) => {
   ]);
 
   app.get('*', async (req, res) => {
+    if (!isSsrRoute(req.originalUrl!)) {
+      res.status(404).end('Not Found');
+      return;
+    }
     const user = await resolveUser(req);
     const { html } = await render({ req, res, template, user });
 
