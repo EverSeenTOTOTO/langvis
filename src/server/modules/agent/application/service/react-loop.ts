@@ -13,6 +13,7 @@ import {
   StopLoop,
 } from '@/server/modules/agent/domain/model/hook';
 import Logger from '@/server/utils/logger';
+import { traceGen } from '@/server/otel';
 
 const logger = Logger.child({ source: 'ReactLoop' });
 
@@ -76,7 +77,16 @@ export async function* runReactLoop(
       const { tool, input } = parsed;
       if (parsed.thought) yield { type: 'thought', content: parsed.thought };
 
-      const result = yield* runTool(tool, input);
+      const result = yield* traceGen(
+        'tool.call',
+        { 'tool.name': tool },
+        toolSpan =>
+          (async function* () {
+            const r = yield* runTool(tool, input);
+            toolSpan.setAttribute('tool.status', r.status);
+            return r;
+          })(),
+      );
       // response_user 成功（completed=delivered）才退出；失败不退出，回灌 error 供模型重试。
       if (tool === ToolIds.RESPONSE_USER && result.status === 'completed')
         return yield* exitLoop(ctx);

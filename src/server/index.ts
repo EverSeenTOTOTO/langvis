@@ -1,3 +1,4 @@
+import './tracing';
 import { isProd } from '@/server/utils/env';
 import bodyParser from 'body-parser';
 import compression from 'compression';
@@ -16,6 +17,7 @@ import './modules/email/email.module';
 import './modules/settings/settings.module';
 import './modules/user/user.module';
 import { bootAll, shutdownAll } from './decorator/lifecycle';
+import { shutdownTracing } from './tracing';
 import bindAuthMiddleware from './middleware/auth';
 import bindRequestId from './middleware/requestId';
 import bindSSRMiddleware from './middleware/ssr';
@@ -71,6 +73,7 @@ createServer()
     const shutdown = () => {
       logger.info('Shutting down server...');
       shutdownAll()
+        .then(() => shutdownTracing())
         .then(() => gracefulClose(server, 0))
         .catch(err => {
           logger.error('Error during shutdown:', err);

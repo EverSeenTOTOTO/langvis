@@ -27,6 +27,8 @@ import { restoreReactMessage } from './react-message';
 import { runReactLoop } from './react-loop';
 import { ToolLatencyTracker } from './tool-latency-tracker';
 import Logger from '@/server/utils/logger';
+import { traceGen } from '@/server/otel';
+import { SpanStatusCode } from '@opentelemetry/api';
 import chalk from 'chalk';
 import {
   AGENT_RUN_REPOSITORY,
@@ -199,30 +201,53 @@ export class AgentRunExecutor {
     this.logger.debug(`Execute run ${chalk.cyan(run.runId)}`);
     if (!run.isTerminated) yield run.start();
 
-    try {
-      for await (const event of runReactLoop(ctx, runTool)) {
-        const enriched = run.append(event);
-        if (!enriched) continue;
-        tracker.observe(enriched);
-        await this.maybeCheckpoint(run);
-        yield enriched;
-      }
+    yield* traceGen(
+      'agent.run',
+      {
+        'run.id': run.runId,
+        'conversation.id': ctx.conversationId,
+        'model.id': ctx.config.runtimeConfig.model?.modelId ?? 'default',
+      },
+      span =>
+        async function* (this: AgentRunExecutor) {
+          try {
+            for await (const event of runReactLoop(ctx, runTool)) {
+              const enriched = run.append(event);
+              if (!enriched) continue;
+              tracker.observe(enriched);
+              await this.maybeCheckpoint(run);
+              yield enriched;
+            }
 
-      if (!run.isTerminated) {
-        yield run.complete();
-      }
-    } catch (err) {
-      if (ctx.signal.aborted || run.isTerminated) return;
-      this.logger.error(`Run ${chalk.cyan(run.runId)} failed: ${err}`);
-      yield run.fail((err as Error)?.message ?? String(err));
-    } finally {
-      this.logger.info(`Run ${chalk.cyan(run.runId)} → ${run.currentStatus}`, {
-        status: run.currentStatus,
-        iterations: tracker.iterations,
-        durationMs: Date.now() - startedAt,
-        model: ctx.config.runtimeConfig.model?.modelId,
-      });
-    }
+            if (!run.isTerminated) {
+              yield run.complete();
+            }
+          } catch (err) {
+            // abort / 已终态：控制流退出不标记 span 异常。
+            if (ctx.signal.aborted || run.isTerminated) return;
+            span.recordException(err as Error);
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: (err as Error)?.message ?? String(err),
+            });
+            this.logger.error(`Run ${chalk.cyan(run.runId)} failed: ${err}`);
+            yield run.fail((err as Error)?.message ?? String(err));
+          } finally {
+            span.setAttribute('run.status', run.currentStatus);
+            span.setAttribute('run.iterations', tracker.iterations);
+            span.setAttribute('run.duration_ms', Date.now() - startedAt);
+            this.logger.info(
+              `Run ${chalk.cyan(run.runId)} → ${run.currentStatus}`,
+              {
+                status: run.currentStatus,
+                iterations: tracker.iterations,
+                durationMs: Date.now() - startedAt,
+                model: ctx.config.runtimeConfig.model?.modelId,
+              },
+            );
+          }
+        }.call(this),
+    );
   }
 
   /** 中途 checkpoint：事件流单调增长，每 N 个非终态事件落一次快照；冲突重读重试。 */

@@ -7,6 +7,7 @@ import type {
 } from 'openai/resources/chat/completions';
 import { inject, singleton } from 'tsyringe';
 import logger from '@/server/utils/logger';
+import { traceGen, traceSync } from '@/server/otel';
 import { ProviderService } from '@/server/libs/infrastructure/provider.service';
 import { stripThinking } from '@/server/libs/llm-text';
 import type { ModelDefinition, ModelType } from '@/shared/types/provider';
@@ -200,53 +201,55 @@ export class LlmProvider implements LlmPort {
 
     logLLMRequest(resolved, data, defaultParams.temperature, messages);
 
-    let response;
-    try {
-      response = await client.chat.completions.create(
-        {
-          model: modelCode,
-          ...defaultParams,
-          ...data,
-          messages,
-          stream: true as const,
-        },
-        { signal },
-      );
-    } catch (err) {
-      const apiError = err as APIError;
-      logger.error('LLM call failed', {
-        model: resolved,
-        provider: providerId,
-        status: apiError?.status ?? 'unknown',
-        error: apiError?.error ?? apiError?.message ?? String(err),
-      });
-      throw err;
-    }
+    return yield* traceGen(
+      'gen_ai.chat',
+      {
+        'gen_ai.request.model': resolved,
+        'gen_ai.provider': providerId,
+        'gen_ai.request.message_count': messages.length,
+      },
+      span =>
+        (async function* () {
+          const response = await client.chat.completions.create(
+            {
+              model: modelCode,
+              ...defaultParams,
+              ...data,
+              messages,
+              stream: true as const,
+            },
+            { signal },
+          );
 
-    let content = '';
+          let content = '';
 
-    for await (const chunk of response) {
-      const choice = chunk?.choices?.[0];
-      const delta = choice?.delta?.content;
-      const finishReason = choice?.finish_reason;
+          for await (const chunk of response) {
+            const choice = chunk?.choices?.[0];
+            const delta = choice?.delta?.content;
+            const finishReason = choice?.finish_reason;
 
-      if (delta) {
-        content += delta;
-        yield delta;
-      }
+            if (delta) {
+              content += delta;
+              yield delta;
+            }
 
-      if (finishReason) {
-        if (finishReason === 'content_filter') {
-          throw new Error('Content filter triggered - response incomplete.');
-        }
-        if (finishReason === 'length') {
-          logger.warn('LLM stream truncated: max_tokens limit reached');
-        }
-        break;
-      }
-    }
+            if (finishReason) {
+              span.setAttribute('gen_ai.response.finish_reason', finishReason);
+              if (finishReason === 'content_filter') {
+                throw new Error(
+                  'Content filter triggered - response incomplete.',
+                );
+              }
+              if (finishReason === 'length') {
+                logger.warn('LLM stream truncated: max_tokens limit reached');
+              }
+              break;
+            }
+          }
 
-    return content;
+          return content;
+        })(),
+    );
   }
 
   async chatContent(
@@ -273,44 +276,60 @@ export class LlmProvider implements LlmPort {
     logLLMRequest(resolved, data, defaultParams.temperature, messages);
 
     const startedAt = Date.now();
-    try {
-      const response = await client.chat.completions.create(
-        {
-          model: modelCode,
-          ...defaultParams,
-          ...data,
-          messages,
-          stream: false,
-        },
-        { signal },
-      );
+    return traceSync(
+      'gen_ai.chat',
+      {
+        'gen_ai.request.model': resolved,
+        'gen_ai.provider': providerId,
+        'gen_ai.request.message_count': messages.length,
+      },
+      async span => {
+        try {
+          const response = await client.chat.completions.create(
+            {
+              model: modelCode,
+              ...defaultParams,
+              ...data,
+              messages,
+              stream: false,
+            },
+            { signal },
+          );
 
-      const content = response.choices[0]?.message?.content ?? '';
-      const finishReason = response.choices[0]?.finish_reason;
+          const content = response.choices[0]?.message?.content ?? '';
+          const finishReason = response.choices[0]?.finish_reason;
 
-      if (finishReason === 'content_filter') {
-        throw new Error('Content filter triggered - response incomplete.');
-      }
-      if (finishReason === 'length') {
-        logger.warn('LLM response truncated: max_tokens limit reached');
-      }
+          span.setAttribute(
+            'gen_ai.response.finish_reason',
+            finishReason ?? 'none',
+          );
+          span.setAttribute('gen_ai.response.content_length', content.length);
 
-      logger.info('LLM call done', {
-        model: resolved,
-        durationMs: Date.now() - startedAt,
-      });
-      return stripThinking(content);
-    } catch (err) {
-      const apiError = err as APIError;
-      logger.error('LLM call failed', {
-        model: resolved,
-        provider: providerId,
-        status: apiError?.status ?? 'unknown',
-        durationMs: Date.now() - startedAt,
-        error: apiError?.error ?? apiError?.message ?? String(err),
-      });
-      throw err;
-    }
+          if (finishReason === 'content_filter') {
+            throw new Error('Content filter triggered - response incomplete.');
+          }
+          if (finishReason === 'length') {
+            logger.warn('LLM response truncated: max_tokens limit reached');
+          }
+
+          logger.info('LLM call done', {
+            model: resolved,
+            durationMs: Date.now() - startedAt,
+          });
+          return stripThinking(content);
+        } catch (err) {
+          const apiError = err as APIError;
+          logger.error('LLM call failed', {
+            model: resolved,
+            provider: providerId,
+            status: apiError?.status ?? 'unknown',
+            durationMs: Date.now() - startedAt,
+            error: apiError?.error ?? apiError?.message ?? String(err),
+          });
+          throw err;
+        }
+      },
+    );
   }
 
   async embed(

@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { isEmpty, isObject } from 'lodash-es';
 import winston from 'winston';
 import 'winston-daily-rotate-file';
+import { trace as otelTrace } from '@opentelemetry/api';
 import { isProd } from './env';
 import { TraceContext } from '@/server/middleware/trace-context';
 
@@ -49,6 +50,13 @@ const consoleFormat = printf(({ timestamp: time, level, ...meta }) => {
   if (meta.runId) {
     result += ` ${chalk.gray(`[runId: ${meta.runId}]`)}`;
     delete meta.runId;
+  }
+  if (meta.traceId) {
+    const traceId = String(meta.traceId);
+    const spanId = meta.spanId ? String(meta.spanId) : '';
+    result += ` ${chalk.gray(`[tr:${traceId.slice(0, 8)}·${spanId.slice(0, 8)}]`)}`;
+    delete meta.traceId;
+    delete meta.spanId;
   }
 
   if (isObject(meta.message)) {
@@ -172,14 +180,22 @@ const createSafeLogger = (winstonLogger: winston.Logger) => {
     const safeMessage = makeSafe(message);
     const safeMeta = meta.map(makeSafe);
 
-    // Auto-inject trace context from TraceContext
+    // Auto-inject trace context from TraceContext + OTel active span
     const trace = TraceContext.get();
-    if (trace) {
+    const span = otelTrace.getActiveSpan()?.spanContext();
+    if (trace || span) {
       const traceMeta: Record<string, any> = {};
-      if (trace.requestId) traceMeta.requestId = trace.requestId;
-      if (trace.userId) traceMeta.userId = trace.userId;
-      if (trace.runId) traceMeta.runId = trace.runId;
-      if (trace.conversationId) traceMeta.conversationId = trace.conversationId;
+      if (trace) {
+        if (trace.requestId) traceMeta.requestId = trace.requestId;
+        if (trace.userId) traceMeta.userId = trace.userId;
+        if (trace.runId) traceMeta.runId = trace.runId;
+        if (trace.conversationId)
+          traceMeta.conversationId = trace.conversationId;
+      }
+      if (span) {
+        traceMeta.traceId = span.traceId;
+        traceMeta.spanId = span.spanId;
+      }
 
       // Merge trace meta with first meta object if it exists
       if (safeMeta.length > 0 && typeof safeMeta[0] === 'object') {
