@@ -55,8 +55,7 @@ export class SkillService {
       }
 
       this.logger.info(
-        `Discovered ${this.skills.size} skills:`,
-        [...this.skills.values()].map(s => s.id),
+        `Discovered ${this.skills.size} skills: ${[...this.skills.values()].map(s => s.id).join(', ')}`,
       );
     } catch (e) {
       this.isInitialized = false;

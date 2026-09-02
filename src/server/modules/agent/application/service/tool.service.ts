@@ -46,8 +46,7 @@ export class ToolService {
       const tools = await this.discoverTools();
 
       this.logger.info(
-        `Discovered ${tools.length} tools:`,
-        tools.map(a => a.clazz.name),
+        `Discovered ${tools.length} tools: ${tools.map(a => a.clazz.name).join(', ')}`,
       );
 
       this.tools = await Promise.all(

@@ -180,8 +180,27 @@ const createSafeLogger = (winstonLogger: winston.Logger) => {
   };
 
   const safeLog = (level: string, message: any, ...meta: any[]) => {
-    const safeMessage = makeSafe(message);
-    const safeMeta = meta.map(makeSafe);
+    let safeMessage = makeSafe(message);
+    let safeMeta = meta.map(makeSafe);
+
+    // 归一化防 OpenObserve schema 噪音：Error 对象作消息会被逐字段摊平成
+    // body_name/body_stack/exception_* 等；数组会被摊平成 0/1/2... 下标字段。
+    if (isObject(safeMessage) && 'stack' in safeMessage) {
+      const {
+        name,
+        message: msg,
+        ...rest
+      } = safeMessage as Record<string, any>;
+      safeMessage = msg ? `${name}: ${msg}` : String(name);
+      safeMeta = [{ ...rest }, ...safeMeta];
+    }
+    safeMeta = safeMeta.map(m =>
+      Array.isArray(m)
+        ? m.every(x => typeof x === 'string')
+          ? m.join(', ')
+          : JSON.stringify(m)
+        : m,
+    );
 
     // Auto-inject trace context from TraceContext + OTel active span
     const trace = TraceContext.get();
