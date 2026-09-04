@@ -35,8 +35,9 @@ function katexFontPreload(): Plugin {
 
       const preloadLinks = katexFonts
         .map(
+          // bundle key 自带 assets/ 前缀（如 assets/KaTeX_*.woff2），拼 / 即站点根
           font =>
-            `<link rel="preload" href="/assets/${font}" as="font" type="font/woff2" crossorigin />`,
+            `<link rel="preload" href="/${font}" as="font" type="font/woff2" crossorigin />`,
         )
         .join('\n    ');
 

@@ -39,6 +39,16 @@ export const createServer = async (): Promise<Express> => {
   const app = express();
   const dist = path.join(process.cwd(), 'dist');
 
+  // vite 产物带内容 hash——/assets 可放心 immutable 长缓存（省掉每次刷新的
+  // revalidate RTT）；其余（index.html 等）仍走默认协商缓存。
+  app.use(
+    '/assets',
+    express.static(path.join(dist, 'assets'), {
+      index: false,
+      maxAge: '365d',
+      immutable: true,
+    }),
+  );
   app.use(express.static(dist, { index: false }));
   // 上传产物（如 TTS 合成的 upload/tts/*.mp3）静态服务，供前端按 /upload/... 直取。
   app.use('/upload', express.static(path.join(process.cwd(), 'upload')));
