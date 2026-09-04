@@ -1,4 +1,4 @@
-import { Express } from 'express';
+import { Express, Request } from 'express';
 import { container } from 'tsyringe';
 import { generateId } from '@/shared/utils';
 import { AuthService } from '@/server/libs/infrastructure/auth.service';
@@ -8,6 +8,9 @@ import { TraceContext } from '@/server/middleware/trace-context';
 
 // prod 落日志的 header 白名单——剔除 cookie/authorization 等凭据；dev 保留全量便于调试。
 const SAFE_HEADERS = ['user-agent', 'content-type', 'accept', 'x-request-id'];
+
+// 客户端 IP（直连无代理场景）；剥掉 IPv6 映射前缀，供访问日志与 fail2ban 消费。
+const clientIp = (req: Request) => req.ip?.replace('::ffff:', '');
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -57,6 +60,7 @@ export default async (app: Express) => {
       type: '->',
       method: req.method,
       url: req.originalUrl,
+      ip: clientIp(req),
       headers,
     });
 
@@ -65,6 +69,7 @@ export default async (app: Express) => {
         type: '<-',
         method: req.method,
         url: req.originalUrl,
+        ip: clientIp(req),
         statusCode: res.statusCode,
         statusMessage: res.statusMessage,
       });

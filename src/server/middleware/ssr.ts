@@ -1,5 +1,5 @@
 import { isProd } from '@/server/utils/env';
-import { Express, Request } from 'express';
+import { Express, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { container } from 'tsyringe';
@@ -42,6 +42,17 @@ const SSR_ROUTES = new Set([
 const isSsrRoute = (url: string) =>
   SSR_ROUTES.has(url.split('?')[0].replace(/\/+$/, '') || '/');
 
+// 非 /api 路径不过访问日志中间件——探针 404 在此落一条带 IP 的日志（fail2ban 原料）。
+function rejectProbe(req: Request, res: Response) {
+  req.log.info(`404 ${req.method} ${req.originalUrl}`, {
+    type: '404',
+    method: req.method,
+    url: req.originalUrl,
+    ip: req.ip?.replace('::ffff:', ''),
+  });
+  res.status(404).end('Not Found');
+}
+
 // ssr
 export default async (app: Express) => {
   if (!isProd) {
@@ -53,7 +64,7 @@ export default async (app: Express) => {
     app.use(vite.middlewares);
     app.get('*', async (req, res, next) => {
       if (!isSsrRoute(req.originalUrl!)) {
-        res.status(404).end('Not Found');
+        rejectProbe(req, res);
         return;
       }
       try {
@@ -85,7 +96,7 @@ export default async (app: Express) => {
 
   app.get('*', async (req, res) => {
     if (!isSsrRoute(req.originalUrl!)) {
-      res.status(404).end('Not Found');
+      rejectProbe(req, res);
       return;
     }
     const user = await resolveUser(req);
