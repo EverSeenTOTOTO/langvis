@@ -53,10 +53,16 @@ export interface HookRecord {
 
 // ─── 传输帧 ───
 
-// SSE 传输帧：投影帧 run_view = 服务端 fold 的整包 RunView；控制帧 = 通道状态 + 用量遥测。
+// SSE 传输帧：投影帧 run_view = 服务端 fold 的整包 RunView；增量帧 run_events = 未下发的原始事件（CLI 翻译消费）；控制帧 = 通道状态 + 用量遥测。
 export type StreamFrame =
   | { type: 'connected' }
   | { type: 'session_replaced' }
+  | {
+      type: 'run_events';
+      messageId: string;
+      runId: string;
+      events: EnrichedEvent[];
+    }
   | {
       type: 'run_view';
       messageId: string;

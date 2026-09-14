@@ -55,6 +55,8 @@ export class ConversationSession {
 
     for (const run of this.activeRuns.values()) {
       this.connection.send(run.buildFrame());
+      // run_view 快照之后补发滞留的 run_events 增量——增量消费者（CLI）断线期间的事件不丢。
+      run.flushEvents();
       logger.info(`Replayed run_view (run ${run.runId})`, {
         chatId: this.conversationId,
         messageId: run.messageId,

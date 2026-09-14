@@ -13,11 +13,13 @@ export class ActiveRun {
   private events: EnrichedEvent[] = [];
   private view: RunView = emptyRunView();
   private flushTimer?: ReturnType<typeof setTimeout>;
+  // 增量帧游标：events[0..sentEventCount) 已随 run_events 下发。 flush 送达才前进——断线期间事件滞留，重连后首个 flush 补发。
+  private sentEventCount = 0;
 
   constructor(
     readonly messageId: string,
     readonly runId: string,
-    private readonly send: (frame: StreamFrame) => void,
+    private readonly send: (frame: StreamFrame) => boolean,
   ) {}
 
   handleEvent(event: EnrichedEvent): void {
@@ -50,6 +52,11 @@ export class ActiveRun {
     return extractChildEvents(this.events, childRunId);
   }
 
+  /** 重连补发滞留增量（断线期间 send 失败滞留的 run_events），不碰视图帧与定时器。 */
+  flushEvents(): void {
+    this.flushPendingEvents();
+  }
+
   /** 当前视图的 run_view 帧（重连补发用，不碰合并定时器）。 */
   buildFrame(): StreamFrame {
     return {
@@ -74,12 +81,26 @@ export class ActiveRun {
     }, RUN_VIEW_FLUSH_MS);
   }
 
-  /** Send current view as run_view frame. Clears any pending timer. */
+  /** Send pending events as run_events frame. Cursor advances only on delivery. */
+  private flushPendingEvents(): void {
+    if (this.sentEventCount >= this.events.length) return;
+    const pending = this.events.slice(this.sentEventCount);
+    const delivered = this.send({
+      type: 'run_events',
+      messageId: this.messageId,
+      runId: this.runId,
+      events: pending,
+    });
+    if (delivered) this.sentEventCount = this.events.length;
+  }
+
+  /** Send pending run_events then the run_view snapshot. Clears any pending timer. */
   flush(): void {
     if (this.flushTimer) {
       clearTimeout(this.flushTimer);
       this.flushTimer = undefined;
     }
+    this.flushPendingEvents();
     this.send(this.buildFrame());
   }
 
