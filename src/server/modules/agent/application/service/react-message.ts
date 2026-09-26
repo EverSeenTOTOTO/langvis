@@ -140,3 +140,213 @@ export function restoreReactMessage(m: LlmMessage): LlmMessage {
       }
     : { role: m.role, content: m.content };
 }
+
+// ── 流式信封切分（react-loop 边流边发；与 parseResponse 同源维护 wire format）──
+// thought 闭合即发；response_user 的 <message> 实体感知增量 → text_chunk；其余只缓冲。
+
+const KNOWN_TAGS = [
+  '<thought>',
+  '</thought>',
+  '<tool>',
+  '</tool>',
+  '<message>',
+  '</message>',
+];
+
+const ENTITIES: Record<string, string> = {
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&apos;': "'",
+  '&amp;': '&',
+};
+
+const CDATA_OPEN = '<![CDATA[';
+const CDATA_CLOSE = ']]>';
+const CLOSE_MESSAGE = '</message>';
+
+/** text 结尾与 tag 互为前缀的最长片段（跨 chunk 标签保留）。 */
+function overlappingSuffix(text: string, tag: string): string {
+  const max = Math.min(text.length, tag.length - 1);
+  for (let n = max; n > 0; n--) {
+    if (tag.startsWith(text.slice(-n))) return text.slice(-n);
+  }
+  return '';
+}
+
+/** 实体感知解码：返回 [已解码输出, 需保留的尾部（潜在不完整实体，final 时为空）]。 */
+function decodeEntities(text: string, final: boolean): [string, string] {
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '&') {
+      out += text[i];
+      continue;
+    }
+    const rest = text.slice(i);
+    const hit = (Object.keys(ENTITIES) as string[]).find(e =>
+      rest.startsWith(e),
+    );
+    if (hit) {
+      out += ENTITIES[hit]!;
+      i += hit.length - 1;
+      continue;
+    }
+    const maybePartial =
+      !final &&
+      (Object.keys(ENTITIES) as string[]).some(
+        e => e.startsWith(rest) && rest.length < e.length,
+      );
+    if (maybePartial) return [out, rest];
+    out += '&';
+  }
+  return [out, ''];
+}
+
+export class ReActStreamSplitter {
+  private mode: 'scan' | 'thought' | 'tool' | 'message' = 'scan';
+  private pending = '';
+  private thoughtBuf = '';
+  private toolBuf = '';
+  private toolName = '';
+  private inCdata = false;
+
+  /** 喂入一个增量，返回本段产出的事件。 */
+  push(delta: string): RunEvent[] {
+    this.pending += delta;
+    return this.digest(false);
+  }
+
+  /** 流结束：冲刷残余（未闭合标签按字面收尾，与宽松解析一致）。 */
+  flush(): RunEvent[] {
+    return this.digest(true);
+  }
+
+  private emit(events: RunEvent[], text: string): void {
+    if (text) events.push({ type: 'text_chunk', content: text });
+  }
+
+  private digest(final: boolean): RunEvent[] {
+    const events: RunEvent[] = [];
+    for (;;) {
+      if (this.mode === 'scan') {
+        const idx = this.pending.indexOf('<');
+        if (idx < 0) {
+          this.pending = '';
+          break;
+        }
+        const rest = this.pending.slice(idx);
+        const tag = KNOWN_TAGS.find(t => rest.startsWith(t));
+        if (tag) {
+          this.pending = rest.slice(tag.length);
+          if (tag === '<thought>') this.mode = 'thought';
+          else if (tag === '<tool>') this.mode = 'tool';
+          else if (tag === '<message>' && this.toolName === 'response_user') {
+            this.mode = 'message';
+          }
+          continue;
+        }
+        if (
+          !final &&
+          KNOWN_TAGS.some(t => t.startsWith(rest) && rest.length < t.length)
+        ) {
+          this.pending = rest;
+          break;
+        }
+        this.pending = rest.slice(1);
+        continue;
+      }
+
+      if (this.mode === 'thought' || this.mode === 'tool') {
+        const isThought = this.mode === 'thought';
+        const close = isThought ? '</thought>' : '</tool>';
+        const idx = this.pending.indexOf(close);
+        if (idx >= 0) {
+          const body =
+            (isThought ? this.thoughtBuf : this.toolBuf) +
+            this.pending.slice(0, idx);
+          this.pending = this.pending.slice(idx + close.length);
+          this.mode = 'scan';
+          if (isThought) {
+            this.thoughtBuf = '';
+            const content = decodeXml(body).trim();
+            if (content) events.push({ type: 'thought', content });
+          } else {
+            this.toolBuf = '';
+            this.toolName = body.trim();
+          }
+          continue;
+        }
+        const hold = overlappingSuffix(this.pending, close);
+        if (isThought)
+          this.thoughtBuf += this.pending.slice(0, -hold.length || undefined);
+        else this.toolBuf += this.pending.slice(0, -hold.length || undefined);
+        this.pending = hold;
+        if (final && !hold) {
+          // 未闭合：残余并入缓冲后丢弃（信封已坏，parse 阶段兜底）
+          if (isThought) this.thoughtBuf = '';
+          else this.toolBuf = '';
+          this.pending = '';
+        }
+        break;
+      }
+
+      // mode === 'message'
+      if (this.inCdata) {
+        const idx = this.pending.indexOf(CDATA_CLOSE);
+        if (idx >= 0) {
+          this.emit(events, this.pending.slice(0, idx));
+          this.pending = this.pending.slice(idx + CDATA_CLOSE.length);
+          this.inCdata = false;
+          continue;
+        }
+        const hold = overlappingSuffix(this.pending, CDATA_CLOSE);
+        this.emit(events, this.pending.slice(0, -hold.length || undefined));
+        this.pending = hold;
+        break;
+      }
+      if (this.pending.startsWith('<')) {
+        if (this.pending.startsWith(CDATA_OPEN)) {
+          this.pending = this.pending.slice(CDATA_OPEN.length);
+          this.inCdata = true;
+          continue;
+        }
+        if (
+          !final &&
+          CDATA_OPEN.startsWith(this.pending) &&
+          this.pending.length < CDATA_OPEN.length
+        ) {
+          break;
+        }
+      }
+
+      const idx = this.pending.indexOf('<');
+      const rawEnd = idx < 0 ? this.pending.length : idx;
+      const raw = this.pending.slice(0, rawEnd);
+      const tail = this.pending.slice(rawEnd);
+      const [out, keep] = decodeEntities(raw, final);
+      this.emit(events, out);
+
+      if (idx < 0) {
+        this.pending = keep;
+        break;
+      }
+      if (tail.startsWith(CLOSE_MESSAGE)) {
+        this.pending = keep + tail.slice(CLOSE_MESSAGE.length);
+        this.mode = 'scan';
+        continue;
+      }
+      if (
+        !final &&
+        CLOSE_MESSAGE.startsWith(tail) &&
+        tail.length < CLOSE_MESSAGE.length
+      ) {
+        this.pending = keep + tail;
+        break;
+      }
+      // 字面 '<'（模型未转义）：按字面输出，继续消费
+      this.emit(events, '<');
+      this.pending = keep + tail.slice(1);
+    }
+    return events;
+  }
+}

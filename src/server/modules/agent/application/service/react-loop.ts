@@ -1,7 +1,11 @@
 import { ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
 import type { RunEvent } from '@/shared/types/events';
-import { PARSE_ERROR_OBSERVATION_PREFIX, parseResponse } from './react-message';
+import {
+  PARSE_ERROR_OBSERVATION_PREFIX,
+  parseResponse,
+  ReActStreamSplitter,
+} from './react-message';
 import type {
   AgentRunContext,
   ParsedAction,
@@ -43,7 +47,11 @@ export async function* runReactLoop(
     try {
       yield* applyHooks(ctx, 'pre-llm');
 
-      const content = await ctx.llm.chatContent(
+      // 流式消费：边流边发 thought / response_user 的 message（text_chunk），
+      // 全文聚合后照旧走 parseResponse（action 解析仍在流结束进行）。
+      const splitter = new ReActStreamSplitter();
+      let content = '';
+      for await (const delta of ctx.llm.chat(
         model.modelId,
         {
           messages: ctx.messages,
@@ -51,7 +59,11 @@ export async function* runReactLoop(
           stop: ['Observation:', 'Observation：'],
         },
         ctx.signal,
-      );
+      )) {
+        content += delta;
+        for (const ev of splitter.push(delta)) yield ev;
+      }
+      for (const ev of splitter.flush()) yield ev;
       if (!content) throw new Error('No response from model');
       logger.debug(`ReAct origin response: ${content}`);
       ctx.messages.push({ role: Role.ASSIST, content });
@@ -75,7 +87,6 @@ export async function* runReactLoop(
       yield* applyHooks(ctx, 'pre-action');
 
       const { tool, input } = parsed;
-      if (parsed.thought) yield { type: 'thought', content: parsed.thought };
 
       const result = yield* traceGen(
         'tool.call',

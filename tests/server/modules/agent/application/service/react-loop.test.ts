@@ -123,27 +123,30 @@ type ToolHandler = (
 
 interface ScriptedLlm {
   llm: LlmPort;
-  /** One entry per `chatContent` call, snapshotting the messages sent that turn. */
+  /** One entry per `chat` call, snapshotting the messages sent that turn. */
   calls: { messages: LlmMessage[] }[];
 }
 
-/** Fake `LlmPort` that replays a scripted list of response strings, one per call. */
+/** Fake `LlmPort` that replays a scripted list of response strings, one per call（chat 流式单块返回）. */
 function scriptedLlm(responses: string[]): ScriptedLlm {
   let i = 0;
   const calls: { messages: LlmMessage[] }[] = [];
-  const chatContent = vi.fn(
-    async (
+  const chat = vi.fn(
+    (
       _modelId: unknown,
       data: { messages?: LlmMessage[] },
-    ): Promise<string> => {
+    ): AsyncGenerator<string, string, void> => {
       calls.push({ messages: data.messages ?? [] });
       if (i >= responses.length) throw new Error('script exhausted');
-      return responses[i++] ?? '';
+      const body = responses[i++] ?? '';
+      return (async function* () {
+        yield body;
+        return body;
+      })();
     },
   );
   const llm = {
-    chatContent,
-    chat: vi.fn(),
+    chat,
     embed: vi.fn(),
     tts: vi.fn(),
     stt: vi.fn(),
@@ -323,7 +326,8 @@ describe('runReactLoop', () => {
       const events = await collect(runReactLoop(ctx, runTool));
       const types = events.map(e => e.type);
 
-      expect(types).toEqual(['tool_call', 'tool_result']);
+      // text_chunk 现由 react-loop 流式（splitter）先于 tool_call 发出
+      expect(types).toEqual(['text_chunk', 'tool_call', 'tool_result']);
       expect(types).not.toContain('process_summary');
       expect(types).not.toContain('loop_usage');
       expect(calls).toHaveLength(1);

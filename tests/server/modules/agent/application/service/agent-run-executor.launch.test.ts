@@ -75,12 +75,17 @@ function makeRepoMock() {
   return { repo, committed, checkpoints, commitCallsRef: () => commitCalls };
 }
 
-const llmMock: Pick<LlmPort, 'chatContent'> = {
-  chatContent: async () =>
-    serializeAction({
-      tool: ToolIds.RESPONSE_USER,
-      input: { message: 'hello' },
-    }),
+const responseXml = serializeAction({
+  tool: ToolIds.RESPONSE_USER,
+  input: { message: 'hello' },
+});
+const llmMock: Pick<LlmPort, 'chat' | 'chatContent'> = {
+  chat: () =>
+    (async function* () {
+      yield responseXml;
+      return responseXml;
+    })(),
+  chatContent: async () => responseXml,
 };
 const cacheMock = {} as CachePort;
 const authMock = {} as AuthorizationPort;

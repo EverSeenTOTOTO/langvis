@@ -44,9 +44,8 @@ describe('ResponseUserTool', () => {
     const { ctx, tts } = makeCtx({ message: '你好！有什么我可以帮你的吗？' });
     const { events, output } = await collect(makeTool().call(ctx));
 
-    expect(events).toEqual([
-      { type: 'text_chunk', content: '你好！有什么我可以帮你的吗？' },
-    ]);
+    // text_chunk 已由 react-loop 流式发出，工具不再重复 yield
+    expect(events).toEqual([]);
     expect(output).toEqual({ delivered: true });
     expect(tts).not.toHaveBeenCalled();
   });
@@ -58,7 +57,7 @@ describe('ResponseUserTool', () => {
     });
     const { events } = await collect(makeTool().call(ctx));
 
-    expect(events).toEqual([{ type: 'text_chunk', content: 'hi' }]);
+    expect(events).toEqual([]);
     expect(tts).not.toHaveBeenCalled();
   });
 
@@ -69,8 +68,7 @@ describe('ResponseUserTool', () => {
     });
     const { events, output } = await collect(makeTool().call(ctx));
 
-    expect(events[0]).toEqual({ type: 'text_chunk', content: 'hi' });
-    expect(events[1]).toEqual({
+    expect(events[0]).toEqual({
       type: 'audio',
       filePath: 'tts/run_1.mp3',
       voice: 'V',
@@ -91,7 +89,7 @@ describe('ResponseUserTool', () => {
     const { ctx, tts } = makeCtx({ message: 'hi', tts: { enabled: true } });
     const { events, output } = await collect(makeTool().call(ctx));
 
-    expect(events).toEqual([{ type: 'text_chunk', content: 'hi' }]);
+    expect(events).toEqual([]);
     expect(output).toEqual({ delivered: true });
     expect(tts).not.toHaveBeenCalled();
   });
@@ -106,7 +104,7 @@ describe('ResponseUserTool', () => {
     );
     const { events, output } = await collect(makeTool().call(ctx));
 
-    expect(events).toEqual([{ type: 'text_chunk', content: 'hi' }]);
+    expect(events).toEqual([]);
     expect(output).toEqual({ delivered: true });
   });
 

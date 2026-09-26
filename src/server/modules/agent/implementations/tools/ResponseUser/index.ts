@@ -17,7 +17,8 @@ export interface ResponseUserOutput {
   delivered: boolean;
 }
 
-// ResponseUser — 人机边界交付工具：message 经 text_chunk 流出并终止本轮。可选 tts 在交付后合成语音，失败仅告警。
+// ResponseUser — 人机边界交付工具：message 已由 react-loop 流式以 text_chunk 流出，此处不重复 yield。
+// 可选 tts 在交付后合成语音，失败仅告警。
 @tool(ToolIds.RESPONSE_USER)
 export default class ResponseUserTool extends Tool<ResponseUserOutput> {
   readonly id!: string;
@@ -30,8 +31,6 @@ export default class ResponseUserTool extends Tool<ResponseUserOutput> {
     ctx.signal.throwIfAborted();
 
     const { message, tts } = ctx.input as unknown as ResponseUserInput;
-
-    yield { type: 'text_chunk', content: message };
 
     if (tts?.enabled) {
       yield* this.synthesizeAudio(ctx, message, tts);
