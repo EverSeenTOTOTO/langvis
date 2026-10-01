@@ -118,6 +118,14 @@ async function startMain(): Promise<void> {
 
   const shutdown = () => {
     logger.info('Shutting down server...');
+    // 5s 强退兜底覆盖整个关停链：nestApp.close() 会被 SSE/终端 WS 长连接
+    // 卡住不 resolve（tsx watch 热重载因此失效——旧进程占端口，新进程 EADDRINUSE）。
+    setTimeout(() => {
+      logger.warn('Forcing exit after timeout');
+      process.exit(1);
+    }, 5000).unref();
+    // 先斩活跃连接，close 链才可能在连接自然结束前走完
+    server.closeAllConnections();
     // Nest 拥有全部实例：close() 触发 onApplicationShutdown（app 层先停、DB 池最后）
     nestApp
       .close()
@@ -128,8 +136,8 @@ async function startMain(): Promise<void> {
         gracefulClose(server, 1);
       });
   };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
 
   // 进程级兜底：未 catch 的 rejection/exception 在 Node≥15 默认静默崩进程——
   // 此处记日志后硬退，使崩溃有痕可溯（状态已不确定，不走 graceful）。
@@ -143,15 +151,10 @@ async function startMain(): Promise<void> {
   });
 }
 
-/** 关停收尾：关连接 → 关服务 → 退出；5s 强制兜底。 */
+/** 关停收尾：关服务退出（连接已斩、强退兜底在 shutdown 入口）。 */
 function gracefulClose(server: Server, code: number): void {
-  server.closeAllConnections();
   server.close(() => {
     logger.info('Server shut down');
     process.exit(code);
   });
-  setTimeout(() => {
-    logger.warn('Forcing exit after timeout');
-    process.exit(1);
-  }, 5000).unref();
 }
