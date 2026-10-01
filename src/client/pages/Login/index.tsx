@@ -18,7 +18,7 @@ const Login = () => {
     // Only run redirect logic in browser environment
     if (userStore.currentUser) {
       // If user is already logged in, redirect to home or the page they were trying to access
-      const from = (location.state as any)?.from || '/';
+      const from = (location.state as any)?.from || '/terminal';
       navigate(from);
     }
   }, [location.state]);
@@ -41,7 +41,7 @@ const Login = () => {
 
       if (result.data?.user) {
         // Redirect to the page they were trying to access or home
-        const from = (location.state as any)?.from || '/';
+        const from = (location.state as any)?.from || '/terminal';
         navigate(from);
       } else {
         message.error(

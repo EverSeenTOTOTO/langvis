@@ -62,7 +62,7 @@ export default async (app: Express) => {
       appType: 'custom',
     });
     app.use(vite.middlewares);
-    app.get('*', async (req, res, next) => {
+    app.get('/{*splat}', async (req, res, next) => {
       if (!isSsrRoute(req.originalUrl!)) {
         rejectProbe(req, res);
         return;
@@ -94,7 +94,7 @@ export default async (app: Express) => {
     fs.promises.readFile(templateFile, 'utf-8'),
   ]);
 
-  app.get('*', async (req, res) => {
+  app.get('/{*splat}', async (req, res) => {
     if (!isSsrRoute(req.originalUrl!)) {
       rejectProbe(req, res);
       return;

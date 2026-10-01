@@ -22,6 +22,7 @@ import bindAuthMiddleware from './middleware/auth';
 import bindRequestId from './middleware/requestId';
 import bindSSRMiddleware from './middleware/ssr';
 import errorHandler from './middleware/errorHandler';
+import { attachTerminalServer } from '@/server/terminal/terminal.server';
 import logger from './utils/logger';
 
 logger.info(
@@ -79,6 +80,8 @@ createServer()
     const server = app.listen(port, () =>
       logger.info(`Server started at http://localhost:${port}`),
     );
+
+    attachTerminalServer(server); // 终端托管：浏览器 ⇄ ws ⇄ PTY ⇄ CLI（upgrade 事件挂载）
 
     const shutdown = () => {
       logger.info('Shutting down server...');

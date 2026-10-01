@@ -1,5 +1,5 @@
 import { useStore } from '@/client/store';
-import { useFileIcon } from '@/client/pages/Home/hooks/useFileIcon';
+import { useFileIcon } from '@/client/components/useFileIcon';
 import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Breadcrumb, Button, Layout, Popconfirm, message, theme } from 'antd';
 import { observer } from 'mobx-react-lite';

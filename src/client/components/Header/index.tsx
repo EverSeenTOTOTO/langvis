@@ -1,6 +1,7 @@
 import { useStore } from '@/client/store';
 import { SUPPORTED_LOCALES } from '@/client/store/modules/setting';
 import {
+  CodeOutlined,
   FileTextOutlined,
   LogoutOutlined,
   MailOutlined,
@@ -36,6 +37,11 @@ const Header = () => {
   const { token } = useToken();
 
   const navItems = [
+    {
+      key: '/terminal',
+      icon: <CodeOutlined />,
+      label: settingStore.tr('Terminal'),
+    },
     {
       key: '/documents',
       icon: <FileTextOutlined />,
@@ -126,7 +132,7 @@ const Header = () => {
         <Typography.Title
           className="logo"
           level={3}
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/terminal')}
         >
           Langvis
         </Typography.Title>
