@@ -42,13 +42,11 @@ class NotADto {}
 
 describe('Dto decorator', () => {
   describe('validate', () => {
-    it('should validate and return instance with valid data', async () => {
+    it('should validate and return plain object with valid data', async () => {
       const data = { name: 'John', age: 25 };
       const result = await TestUserDto.validate(data);
 
-      expect(result).toBeInstanceOf(TestUserDto);
-      expect(result.name).toBe('John');
-      expect(result.age).toBe(25);
+      expect(result).toEqual(data);
     });
 
     it('should validate with optional fields', async () => {
@@ -102,7 +100,7 @@ describe('Dto decorator', () => {
     it('should validate empty object dto', async () => {
       const result = await EmptyRequestDto.validate({});
 
-      expect(result).toBeInstanceOf(EmptyRequestDto);
+      expect(result).toEqual({});
     });
   });
 
@@ -111,18 +109,14 @@ describe('Dto decorator', () => {
       const data = { name: 'John', age: 25 };
       const result = TestUserDto.transform(data);
 
-      expect(result).toBeInstanceOf(TestUserDto);
-      expect(result.name).toBe('John');
-      expect(result.age).toBe(25);
+      expect(result).toEqual(data);
     });
 
-    it('should still return instance even with invalid data', () => {
+    it('should still return data even with invalid input', () => {
       const data = { name: 'John' };
       const result = TestUserDto.transform(data);
 
-      expect(result).toBeInstanceOf(TestUserDto);
-      expect(result.name).toBe('John');
-      expect(result.age).toBeUndefined();
+      expect(result).toEqual(data);
     });
 
     it('should not mutate original data', () => {

@@ -1,25 +1,26 @@
-import { inject } from 'tsyringe';
+import { Inject } from '@nestjs/common';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
-import { fold, PROCESS_SUMMARY_PROMPT } from '@/server/libs/compaction';
+import { fold, PROCESS_SUMMARY_PROMPT } from '@/server/shared/compaction';
 import { estimateTokens } from '@/server/utils/estimateTokens';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import { LLM_PORT } from '@/server/shared/ports/llm/llm.tokens';
+import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
+import { ProviderService } from '@/server/shared/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
-import { agentHook } from './registry';
 import { isPinnedObservation } from '@/server/modules/agent/domain/offload/pin';
 import type { LlmMessage } from '@/shared/types/entities';
 
 /** loop 内压缩：折叠 turn 动作轨迹为过程摘要（仅记工作，不复述最终答案） */
-@agentHook
 export class CompactionHook implements Hook {
   readonly id = 'compaction';
   readonly phase: HookPhase = 'post-observation';
   private readonly logger = Logger.child({ source: 'CompactionHook' });
 
   constructor(
-    @inject(ProviderService)
+    @Inject(ProviderService)
     private readonly providerService: ProviderService,
+    @Inject(LLM_PORT) private readonly llm: LlmPort,
   ) {}
 
   async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
@@ -74,6 +75,7 @@ export class CompactionHook implements Hook {
 
     try {
       const recap = await fold({
+        llm: this.llm,
         messages: foldable,
         windowSize: compaction.windowSize,
         signal: ctx.signal,

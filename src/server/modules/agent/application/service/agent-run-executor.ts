@@ -1,6 +1,7 @@
-import { container, inject, singleton } from 'tsyringe';
+import { ModuleRef } from '@nestjs/core';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { ToolCall } from '@/server/modules/agent/domain/model/tool-call.entity';
+import type { Hook } from '@/server/modules/agent/domain/model/hook';
 import type {
   AgentRunContext,
   ToolExecutor,
@@ -14,14 +15,14 @@ import {
 } from '@/server/modules/agent/domain/errors';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';
-import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
-import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
+import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
+import { LLM_PORT } from '@/server/shared/ports/llm/llm.tokens';
 import { generateId } from '@/shared/utils';
 import { TraceContext } from '@/server/middleware/trace-context';
 import type { LlmMessage } from '@/shared/types/entities';
-import type { ConversationConfig } from '@/server/libs/config';
+import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
 import { HookPlan } from '@/server/modules/agent/domain/model/hook';
-import { resolveAgentHooks } from '@/server/modules/agent/application/hooks/registry';
+import { HOOK_TYPES } from '@/server/modules/agent/application/hooks/registry';
 import { AgentService } from './agent.service';
 import { restoreReactMessage } from './react-message';
 import { runReactLoop } from './react-loop';
@@ -36,6 +37,7 @@ import {
   AUTHORIZATION_PORT,
 } from '@/server/modules/agent/agent.di-tokens';
 import type { AuthorizationPort } from '@/server/modules/agent/domain/port/authorization.port';
+import { Inject } from '@nestjs/common';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 
 /** 终态乐观锁提交的最大重试次数。commit 每次重读最新版本，重试几乎必然成功。 */
@@ -62,7 +64,6 @@ export interface LaunchParams {
   parentSignal?: AbortSignal;
 }
 
-@singleton()
 export class AgentRunExecutor {
   private readonly logger = Logger.child({ source: 'AgentRunExecutor' });
   /** 活跃 run 注册表——cancel(runId) 据此找到内存中的 AgentRun。 */
@@ -71,19 +72,20 @@ export class AgentRunExecutor {
   checkpointEvery = CHECKPOINT_EVERY;
 
   constructor(
-    @inject(LLM_PORT) private readonly llm: LlmPort,
-    @inject(CACHE_PORT) private readonly cache: CachePort,
-    @inject(AUTHORIZATION_PORT) private readonly auth: AuthorizationPort,
-    @inject(AGENT_RUN_REPOSITORY)
+    @Inject(LLM_PORT) private readonly llm: LlmPort,
+    @Inject(CACHE_PORT) private readonly cache: CachePort,
+    @Inject(AUTHORIZATION_PORT) private readonly auth: AuthorizationPort,
+    @Inject(AGENT_RUN_REPOSITORY)
     private readonly agentRunRepo: AgentRunRepositoryPort,
-    @inject(AgentService) private readonly agentService: AgentService,
+    @Inject(AgentService) private readonly agentService: AgentService,
+    @Inject(ModuleRef) private readonly moduleRef: ModuleRef,
   ) {}
 
-  createRun(params: LaunchParams): {
+  async createRun(params: LaunchParams): Promise<{
     run: AgentRun;
     ctx: AgentRunContext;
     runTool: ToolExecutor;
-  } {
+  }> {
     const { runtimeConfig } = params;
     const modelId = runtimeConfig.model?.modelId;
 
@@ -107,7 +109,8 @@ export class AgentRunExecutor {
       auth: this.auth,
       messages: params.seed.map(restoreReactMessage),
       base: params.seed.length,
-      hooks: new HookPlan(resolveAgentHooks()),
+      // per-run 瞬态：TRANSIENT providers 经 ModuleRef.resolve 每次 promise 新建
+      hooks: new HookPlan(await this.resolveHooks()),
       interactive: params.interactive,
     };
 
@@ -120,7 +123,7 @@ export class AgentRunExecutor {
   }
 
   async *launch(params: LaunchParams): AsyncGenerator<EnrichedEvent> {
-    const { run, ctx, runTool } = this.createRun(params);
+    const { run, ctx, runTool } = await this.createRun(params);
 
     // 父取消传播到子 run：父信号 abort 即 cancel 本 run（仅子 agent 场景需要）。
     if (params.parentSignal) {
@@ -270,6 +273,11 @@ export class AgentRunExecutor {
     return this.activeRuns.get(runId);
   }
 
+  /** per-run 瞬态 hooks：resolve 对 TRANSIENT 每次新建（get 不支持 scoped provider）。 */
+  private resolveHooks(): Promise<Hook[]> {
+    return Promise.all(HOOK_TYPES.map(T => this.moduleRef.resolve(T)));
+  }
+
   private executeTool(
     ctx: AgentRunContext,
     toolName: string,
@@ -279,7 +287,7 @@ export class AgentRunExecutor {
     if (!toolSet.has(toolName)) throw new ToolNotFoundError(toolName);
     let tool: Tool;
     try {
-      tool = container.resolve<Tool>(toolName);
+      tool = this.moduleRef.get<Tool>(toolName, { strict: false });
     } catch {
       throw new ToolNotFoundError(toolName);
     }

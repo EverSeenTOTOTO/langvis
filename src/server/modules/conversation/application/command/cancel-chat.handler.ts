@@ -1,14 +1,14 @@
-import { inject } from 'tsyringe';
-import { commandHandler } from '@/server/decorator/handler';
+import { Inject } from '@nestjs/common';
+import { CommandHandler } from '@nestjs/cqrs';
 import { SessionManager } from '../service/session-manager';
 import { CancelChatCommand } from '../../contracts';
 import { NoActiveRunError, SessionNotFoundError } from '../../domain/errors';
 import { TraceContext } from '@/server/middleware/trace-context';
 
-@commandHandler(CancelChatCommand)
+@CommandHandler(CancelChatCommand)
 export class CancelChatHandler {
   constructor(
-    @inject(SessionManager)
+    @Inject(SessionManager)
     private sessionManager: SessionManager,
   ) {}
 

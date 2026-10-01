@@ -1,4 +1,4 @@
-import { ExceptionBase } from '@/server/libs/exceptions/exception.base';
+import { ExceptionBase } from '@/server/shared/exceptions/exception.base';
 
 export class EmailNotFoundError extends ExceptionBase {
   readonly code = 'EMAIL_NOT_FOUND';

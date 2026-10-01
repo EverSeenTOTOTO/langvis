@@ -1,34 +1,29 @@
-import { inject } from 'tsyringe';
+import { Inject } from '@nestjs/common';
 import { generateId } from '@/shared/utils';
-import type { DomainEvent } from '@/server/libs/ddd';
-import { createDomainEvent, EventBus } from '@/server/libs/ddd';
+import { EventsHandler, EventBus } from '@nestjs/cqrs';
 import { TurnInitiated } from '@/server/modules/conversation/contracts';
-import type { TurnInitiatedPayload } from '@/server/modules/conversation/contracts';
+import type { RunEventPayload } from '@/server/modules/agent/contracts';
 import {
   RunStarted,
   RunEvent,
   RunCompleted,
 } from '@/server/modules/agent/contracts';
-import type { RunEventPayload } from '@/server/modules/agent/contracts';
 import { AgentRunExecutor } from '../service/agent-run-executor';
 import { AgentService } from '../service/agent.service';
-import { eventHandler } from '@/server/decorator/handler';
 import Logger from '@/server/utils/logger';
 
 // AgentRunHandler —— TurnInitiated 的订阅者，**只驱动 agent 执行**，不感知会话。
-@eventHandler(TurnInitiated)
+@EventsHandler(TurnInitiated)
 export class AgentRunHandler {
   private readonly logger = Logger.child({ source: 'AgentRunHandler' });
 
   constructor(
-    @inject(AgentRunExecutor) private executor: AgentRunExecutor,
-    @inject(AgentService) private agentService: AgentService,
-    @inject(EventBus) private eventBus: EventBus,
+    @Inject(AgentRunExecutor) private executor: AgentRunExecutor,
+    @Inject(AgentService) private agentService: AgentService,
+    @Inject(EventBus) private eventBus: EventBus,
   ) {}
 
-  async handle(
-    event: DomainEvent<string, TurnInitiatedPayload>,
-  ): Promise<void> {
+  async handle(event: TurnInitiated): Promise<void> {
     const {
       conversationId,
       assistantMessage,
@@ -40,9 +35,8 @@ export class AgentRunHandler {
     // effectiveHistory 即 agent 种子（createRun 经 restoreReactMessage 还原）；取 conv 默认 ToolSet（全集）。
     const toolSet = this.agentService.buildToolSet();
 
-    this.eventBus.dispatch(
-      RunStarted,
-      createDomainEvent(RunStarted, conversationId, {
+    this.eventBus.publish(
+      new RunStarted(conversationId, {
         conversationId,
         messageId: assistantMessage.id,
         runId,
@@ -60,9 +54,8 @@ export class AgentRunHandler {
         toolSet,
         interactive: true,
       })) {
-        this.eventBus.dispatch(
-          RunEvent,
-          createDomainEvent(RunEvent, runId, {
+        this.eventBus.publish(
+          new RunEvent(runId, {
             conversationId,
             messageId: assistantMessage.id,
             event: enriched,
@@ -70,9 +63,8 @@ export class AgentRunHandler {
         );
       }
     } finally {
-      this.eventBus.dispatch(
-        RunCompleted,
-        createDomainEvent(RunCompleted, conversationId, {
+      this.eventBus.publish(
+        new RunCompleted(conversationId, {
           conversationId,
           messageId: assistantMessage.id,
           agentRunId: runId,

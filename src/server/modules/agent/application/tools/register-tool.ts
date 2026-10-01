@@ -1,17 +1,19 @@
 import { ToolIds } from '@/shared/constants';
-import { ToolConfig } from '@/shared/types';
 import chalk from 'chalk';
-import { container, injectable, Lifecycle } from 'tsyringe';
-import { Tool } from '../modules/agent/domain/model/tool.base';
-import type { ToolCallContext } from '../modules/agent/domain/port/tool-call-context.port';
-import { validate, coerceJsonStringFields } from '../utils/schemaValidator';
-import logger from '../utils/logger';
+import { Tool } from '../../domain/model/tool.base';
+import type { ToolCallContext } from '../../domain/port/tool-call-context.port';
+import {
+  validate,
+  coerceJsonStringFields,
+} from '@/server/utils/schemaValidator';
+import logger from '@/server/utils/logger';
 
 const metaDataKey = Symbol.for('config');
 
+// 工具装饰器：声明 token 元数据 + 包一层 call 做输入校验/宽松还原。
+// 实例化由 createTool 工厂（AgentModule 的 string-token providers）完成，不经 DI 容器。
 export const tool = (token?: ToolIds) =>
   function configDecorator(target: any) {
-    injectable()(target);
     Reflect.defineMetadata(metaDataKey, { type: 'tool', token }, target);
 
     // 包一层 call：校验并宽松还原 ctx.input 后替换，再委托真实 call。
@@ -41,29 +43,27 @@ export const tool = (token?: ToolIds) =>
     };
   };
 
-export const registerTool = async <I, O>(
-  Clz: new (...params: any[]) => Tool,
-  config: ToolConfig<I, O>,
-) => {
+export const toolIdOf = (Clz: new (...params: any[]) => Tool): ToolIds => {
   const { token } = Reflect.getMetadata(metaDataKey, Clz);
+  return token;
+};
 
-  container.register<Tool>(token, Clz, {
-    lifecycle: Lifecycle.Singleton,
-  });
+/** 构造工具实例并注入 config/id/logger（AgentModule 按 string-token 注册为 provider）。 */
+// 构造依赖经 AgentModule 的 TOOL_DEPS 接线表按位传入（esbuild 无 paramtypes）。
+export const createTool = (
+  Clz: new (...params: any[]) => Tool,
 
+  config: any,
+  deps: unknown[] = [],
+): Tool => {
+  const token = toolIdOf(Clz);
+
+  const instance = new (Clz as any)(...deps);
+  Reflect.set(instance, 'config', config);
+  Reflect.set(instance, 'id', token);
+  Reflect.set(instance, 'logger', logger.child({ source: token }));
   logger.info(
     `Register tool ${chalk.cyan(config.name)} with token ${chalk.yellow(token)}`,
   );
-
-  container.afterResolution(
-    token,
-    (_token, instance: any) => {
-      Reflect.set(instance, 'config', config);
-      Reflect.set(instance, 'id', token);
-      Reflect.set(instance, 'logger', logger.child({ source: token }));
-    },
-    { frequency: 'Once' },
-  );
-
-  return token;
+  return instance;
 };

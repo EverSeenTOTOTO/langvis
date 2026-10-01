@@ -1,4 +1,4 @@
-import { Prompt } from '@/server/libs/prompt';
+import { Prompt } from '@/server/shared/prompt';
 
 export const BASE_PROMPT = Prompt.empty()
   .with(

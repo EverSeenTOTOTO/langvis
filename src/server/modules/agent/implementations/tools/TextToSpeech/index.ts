@@ -1,4 +1,4 @@
-import { tool } from '@/server/decorator/tool';
+import { tool } from '@/server/modules/agent/application/tools/register-tool';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import { ToolConfig } from '@/shared/types';
@@ -8,7 +8,7 @@ import type { RunEvent } from '@/shared/types/events';
 import type {
   TextToSpeechInput,
   TextToSpeechOutput,
-} from '@/server/libs/ports/llm/llm.types';
+} from '@/server/shared/ports/llm/llm.types';
 
 // 向后兼容：历史代码自本工具导入这两个类型，re-export 内核定义。
 export type { TextToSpeechInput, TextToSpeechOutput };

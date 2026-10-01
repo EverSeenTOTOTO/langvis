@@ -1,12 +1,13 @@
-import { Command } from '@/server/libs/ddd';
+import { Command } from '@nestjs/cqrs';
+import type { InboundEmailResult } from './domain/port/email.repository.port';
 
-export class ProcessInboundCommand extends Command {
+export class ProcessInboundCommand extends Command<InboundEmailResult> {
   constructor(readonly rawEmail: string) {
     super();
   }
 }
 
-export class ArchiveEmailCommand extends Command {
+export class ArchiveEmailCommand extends Command<ArchiveEmailResult> {
   constructor(
     readonly emailId: string,
     readonly userId: string,
@@ -20,7 +21,16 @@ export interface ArchiveEmailResult {
   conversationId: string;
 }
 
-export const EmailArchived = 'email_archived';
+/** email 内部：邮件已归档（据此编排 compose→activate→start）。 */
+export class EmailArchived {
+  readonly type = 'email_archived' as const;
+  readonly occurredAt = Date.now();
+
+  constructor(
+    readonly aggregateId: string,
+    readonly payload: EmailArchivedPayload,
+  ) {}
+}
 
 export interface EmailArchivedPayload {
   userId: string;

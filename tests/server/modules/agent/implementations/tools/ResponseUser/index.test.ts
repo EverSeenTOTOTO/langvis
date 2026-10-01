@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import ResponseUserTool from '@/server/modules/agent/implementations/tools/ResponseUser';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
-import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
+import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
 import type { RunEvent } from '@/shared/types/events';
 
 function makeCtx(

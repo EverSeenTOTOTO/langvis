@@ -1,11 +1,9 @@
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import path from 'node:path';
-import { container } from 'tsyringe';
 import { WebSocketServer, type WebSocket } from 'ws';
 import pty from '@lydell/node-pty';
-import { AuthService } from '@/server/libs/infrastructure/auth.service';
-import type { Request } from 'express';
+import { AuthService } from '@/server/shared/infrastructure/auth.service';
 import Logger from '@/server/utils/logger';
 
 const logger = Logger.child({ source: 'TerminalServer' });
@@ -21,10 +19,6 @@ const cliEntry = () =>
 const cliCwd = () => process.env.LANGVIS_CLI_CWD ?? process.cwd();
 
 /** upgrade 请求的 http.IncomingMessage → AuthService 需要的 express Request 形状（仅用 headers）。 */
-function asExpressReq(req: IncomingMessage): Request {
-  return req as unknown as Request;
-}
-
 function extractSessionCookie(req: IncomingMessage): string | undefined {
   const cookie = req.headers.cookie;
   if (!cookie) return undefined;
@@ -121,12 +115,15 @@ function handleConnection(ws: WebSocket, req: IncomingMessage): void {
 
 // 终端托管：浏览器终端画布 ⇄ ws ⇄ PTY ⇄ langvis CLI。
 // 挂在 http upgrade 事件上（express 中间件不覆盖 upgrade，鉴权手动做）；NestJS 迁移时归位 gateway。
-export function attachTerminalServer(server: {
-  on: (
-    event: 'upgrade',
-    listener: (req: IncomingMessage, socket: Duplex, head: Buffer) => void,
-  ) => void;
-}): void {
+export function attachTerminalServer(
+  server: {
+    on: (
+      event: 'upgrade',
+      listener: (req: IncomingMessage, socket: Duplex, head: Buffer) => void,
+    ) => void;
+  },
+  authService: AuthService,
+): void {
   const wss = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', async (req, socket, head) => {
@@ -134,8 +131,7 @@ export function attachTerminalServer(server: {
     if (url.pathname !== TERMINAL_WS_PATH) return;
 
     try {
-      const authService = container.resolve(AuthService);
-      const user = await authService.getUser(asExpressReq(req));
+      const user = await authService.getUser(req.headers.cookie ?? '');
       if (!user) throw new Error('unauthenticated');
     } catch {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');

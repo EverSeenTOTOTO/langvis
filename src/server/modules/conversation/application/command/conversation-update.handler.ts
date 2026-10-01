@@ -1,6 +1,6 @@
-import { inject } from 'tsyringe';
+import { Inject } from '@nestjs/common';
+import { CommandHandler } from '@nestjs/cqrs';
 import type { Conversation } from '@/shared/entities/Conversation';
-import { commandHandler } from '@/server/decorator/handler';
 import { CONVERSATION_REPOSITORY } from '../../conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
 import { ConversationUpdateCommand } from '../../contracts';
@@ -9,14 +9,14 @@ import { ChatService } from '../service/chat.service';
 import { SessionManager } from '../service/session-manager';
 import { TraceContext } from '@/server/middleware/trace-context';
 
-@commandHandler(ConversationUpdateCommand)
+@CommandHandler(ConversationUpdateCommand)
 export class ConversationUpdateHandler {
   constructor(
-    @inject(CONVERSATION_REPOSITORY)
+    @Inject(CONVERSATION_REPOSITORY)
     private convRepo: ConversationRepositoryPort,
-    @inject(ChatService)
+    @Inject(ChatService)
     private chatService: ChatService,
-    @inject(SessionManager)
+    @Inject(SessionManager)
     private sessionManager: SessionManager,
   ) {}
 

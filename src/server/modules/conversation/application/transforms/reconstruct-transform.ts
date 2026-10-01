@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe';
+import { Inject } from '@nestjs/common';
 import { Role } from '@/shared/entities/Message';
 import { MESSAGE_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
@@ -12,23 +12,21 @@ import {
   toLlmMessages,
   RECONSTRUCTED_HEAD_CHARS,
 } from '@/server/modules/conversation/application/service/history-projection';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import { ProviderService } from '@/server/shared/infrastructure/provider.service';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import Logger from '@/server/utils/logger';
-import { convTransform } from './registry';
 
 // 选择性重构（turn-end）：低阈、保细节、非破坏。effective 超 contextSize×reconstructThreshold 时，把 tail 内较早的长 USER 消息打
 // meta.reconstructed 标记并落库——投影/折叠读取时按标记只取头部（原正文留库不改、UI 仍全文）。落库故过刷新/重启（与 agent 运行时消息不同）。
-@convTransform
 export class ReconstructTransform implements ConvTransform {
   readonly id = 'reconstruct';
   readonly phase: ConvPhase = 'turn-end';
   private readonly logger = Logger.child({ source: 'ReconstructTransform' });
 
   constructor(
-    @inject(MESSAGE_REPOSITORY)
+    @Inject(MESSAGE_REPOSITORY)
     private readonly messageRepo: MessageRepositoryPort,
-    @inject(ProviderService)
+    @Inject(ProviderService)
     private readonly providerService: ProviderService,
   ) {}
 

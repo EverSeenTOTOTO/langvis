@@ -4,8 +4,8 @@ import type {
   EmailListResponse,
   EmailRepositoryPort,
 } from '../../domain/port/email.repository.port';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
-import { inject, singleton } from 'tsyringe';
+import { DatabaseService } from '@/server/shared/infrastructure/database.service';
+import { Inject } from '@nestjs/common';
 import {
   Between,
   LessThanOrEqual,
@@ -14,9 +14,8 @@ import {
   type FindOptionsWhere,
 } from 'typeorm';
 
-@singleton()
 export class EmailRepository implements EmailRepositoryPort {
-  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {}
+  constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
 
   private get repository() {
     return this.db.getRepository(EmailEntity);

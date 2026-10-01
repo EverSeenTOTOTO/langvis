@@ -1,11 +1,11 @@
-import { tool } from '@/server/decorator/tool';
+import { Inject } from '@nestjs/common';
+import { tool } from '@/server/modules/agent/application/tools/register-tool';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import { SkillService } from '@/server/modules/agent/application/service/skill.service';
-import { inject } from 'tsyringe';
 import type { SkillCallInput, SkillCallOutput } from './config';
 
 @tool(ToolIds.SKILL_CALL)
@@ -14,7 +14,7 @@ export default class SkillCallTool extends Tool<SkillCallOutput> {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  constructor(@inject(SkillService) private skillService: SkillService) {
+  constructor(@Inject(SkillService) private skillService: SkillService) {
     super();
   }
 

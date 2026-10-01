@@ -1,7 +1,7 @@
 import type { StreamFrame } from '@/shared/types/events';
 import type { EnrichedEvent } from '@/shared/types/events';
 import type { Message } from '@/shared/types/entities';
-import type { ConversationConfig } from '@/server/libs/config';
+import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
 
 export type ConvPhase = 'activated' | 'turn-start' | 'turn-end';
 

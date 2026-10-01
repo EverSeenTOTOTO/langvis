@@ -2,9 +2,8 @@ import { isProd } from '@/server/utils/env';
 import { Express, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-import { container } from 'tsyringe';
 import { createServer as createViteServer } from 'vite';
-import { AuthService } from '@/server/libs/infrastructure/auth.service';
+import { AuthService } from '@/server/shared/infrastructure/auth.service';
 import { isEmpty } from 'lodash-es';
 
 const configFile = path.join(process.cwd(), `config/vite.common.ts`);
@@ -19,28 +18,22 @@ const serverEntry = path.join(
 
 // SSR bundle 与 server bundle 模块态隔离——session 在此处（server bundle）进程内解析，
 // 经 RenderContext.user 传给 SSR 入口，避免其经 HTTP 自往返取 /api/auth/get-session。
-async function resolveUser(req: Request) {
+async function resolveUser(req: Request, authService: AuthService) {
   if (isEmpty(req.cookies)) return null;
-  const authService = container.resolve(AuthService);
-  return authService.getUser(req).catch(e => {
+  return authService.getUser(req.headers.cookie ?? '').catch(e => {
     req.log.error(e);
     return null;
   });
 }
 
-// 只对已知页面路由做 SSR——公网扫描器探针（.php / wp-admin 等）直接 404，
-// 省一次完整 React 渲染；404 亦可供 fail2ban 计数。新增页面记得同步此表。
-const SSR_ROUTES = new Set([
-  '/',
-  '/login',
-  '/documents',
-  '/emails',
-  '/files',
-  '/notfound',
-]);
+// history fallback：无扩展名的 GET 一律 SSR，client 路由自解析（未知路径渲染 NotFound 页）；
+// 带扩展名的（.php 等探针、静态资源未命中）直接 404，日志供 fail2ban 计数。
+const looksLikeProbe = (pathname: string) => /\.[a-zA-Z0-9]+$/.test(pathname);
 
-const isSsrRoute = (url: string) =>
-  SSR_ROUTES.has(url.split('?')[0].replace(/\/+$/, '') || '/');
+const isSsrRoute = (url: string) => {
+  const pathname = url.split('?')[0]!.replace(/\/+$/, '') || '/';
+  return !looksLikeProbe(pathname);
+};
 
 // 非 /api 路径不过访问日志中间件——探针 404 在此落一条带 IP 的日志（fail2ban 原料）。
 function rejectProbe(req: Request, res: Response) {
@@ -54,7 +47,7 @@ function rejectProbe(req: Request, res: Response) {
 }
 
 // ssr
-export default async (app: Express) => {
+export default async (app: Express, authService: AuthService) => {
   if (!isProd) {
     const vite = await createViteServer({
       configFile: configFile,
@@ -74,7 +67,7 @@ export default async (app: Express) => {
           req.originalUrl!,
           templateHtml,
         );
-        const user = await resolveUser(req);
+        const user = await resolveUser(req, authService);
         const { html } = await render({ req, res, template, user });
 
         res.setHeader('Content-Type', 'text/html');
@@ -99,7 +92,7 @@ export default async (app: Express) => {
       rejectProbe(req, res);
       return;
     }
-    const user = await resolveUser(req);
+    const user = await resolveUser(req, authService);
     const { html } = await render({ req, res, template, user });
 
     res.setHeader('Content-Type', 'text/html');

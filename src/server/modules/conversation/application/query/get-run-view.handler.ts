@@ -1,5 +1,5 @@
-import { inject } from 'tsyringe';
-import { queryHandler } from '@/server/decorator/handler';
+import { Inject } from '@nestjs/common';
+import { QueryHandler } from '@nestjs/cqrs';
 import { AGENT_RUN_REPOSITORY } from '@/server/modules/agent/agent.di-tokens';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import { SessionManager } from '../service/session-manager';
@@ -9,13 +9,13 @@ import { GetRunViewQuery } from '../../contracts';
 
 // conv 读模型查询：live 子 run 从父 run 的 session 缓冲派生（每次重 fold，事件在变）；
 // 历史 run 走自身持久化事件行（终态投影过 RunViewCache 复用）。
-@queryHandler(GetRunViewQuery)
+@QueryHandler(GetRunViewQuery)
 export class GetRunViewHandler {
   constructor(
-    @inject(SessionManager) private readonly sessionManager: SessionManager,
-    @inject(AGENT_RUN_REPOSITORY)
+    @Inject(SessionManager) private readonly sessionManager: SessionManager,
+    @Inject(AGENT_RUN_REPOSITORY)
     private readonly agentRunRepo: AgentRunRepositoryPort,
-    @inject(RunViewCache) private readonly viewCache: RunViewCache,
+    @Inject(RunViewCache) private readonly viewCache: RunViewCache,
   ) {}
 
   async execute(query: GetRunViewQuery): Promise<RunViewResult | null> {

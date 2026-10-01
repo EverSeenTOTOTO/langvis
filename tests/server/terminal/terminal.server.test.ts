@@ -2,14 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import http from 'node:http';
 import WebSocket from 'ws';
 
-vi.mock('tsyringe', async importOriginal => {
-  const actual = await importOriginal<typeof import('tsyringe')>();
-  // 原型链覆写：保留 register 等（lifecycle 装饰器在 import 期要用），只换 resolve
-  const container = Object.create(actual.container) as typeof actual.container;
-  container.resolve = vi.fn();
-  return { ...actual, container };
-});
-
 vi.mock('@lydell/node-pty', () => {
   const spawns: Array<{
     file: string;
@@ -64,21 +56,20 @@ vi.mock('@lydell/node-pty', () => {
   return { default: pty };
 });
 
-import { container } from 'tsyringe';
 import pty from '@lydell/node-pty';
-import { AuthService } from '@/server/libs/infrastructure/auth.service';
+import { AuthService } from '@/server/shared/infrastructure/auth.service';
 import { attachTerminalServer } from '@/server/terminal/terminal.server';
 
-const mockedResolve = vi.mocked(container.resolve);
 const mockedPty = vi.mocked(pty.spawn);
 const spawns = (pty as unknown as { __spawns: Array<Record<string, unknown>> })
   .__spawns;
 
+// authService 经 attachTerminalServer 显式传入；每个用例构造自己的实例
+let authService: AuthService;
 function fakeAuth(user: { id: string } | null): void {
-  const auth = {
+  authService = {
     getUser: vi.fn(async () => user),
   } as unknown as AuthService;
-  mockedResolve.mockImplementation((() => auth) as never);
 }
 
 function startServer(): Promise<{
@@ -90,7 +81,7 @@ function startServer(): Promise<{
     const server = http.createServer((_req, res) => {
       res.writeHead(404).end();
     });
-    attachTerminalServer(server);
+    attachTerminalServer(server, authService);
     server.listen(0, '127.0.0.1', () => {
       const addr = server.address() as { port: number };
       resolve({

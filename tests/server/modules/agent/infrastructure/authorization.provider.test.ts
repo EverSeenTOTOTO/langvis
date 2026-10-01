@@ -1,10 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { container } from 'tsyringe';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
-import { ToolIds } from '@/shared/constants';
-import { WorkspaceLocalStore } from '@/server/libs/infrastructure/workspace-local-store';
+import { WorkspaceLocalStore } from '@/server/shared/infrastructure/workspace-local-store';
 import { AuthorizationProvider } from '@/server/modules/agent/infrastructure/authorization.provider';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
@@ -28,6 +26,13 @@ function makeCtx(
   } as unknown as ToolCallContext;
 }
 
+let fakeAskUser: unknown;
+
+// get 惰性读当前 fakeAskUser（provider 先构造、测试内再 register 假工具）
+function makeModuleRef() {
+  return { get: () => fakeAskUser } as never;
+}
+
 function registerFakeAskUser(result: {
   submitted: boolean;
   data: Record<string, unknown>;
@@ -43,7 +48,7 @@ function registerFakeAskUser(result: {
       return result;
     },
   };
-  container.registerInstance(ToolIds.ASK_USER, fake as never);
+  fakeAskUser = fake as never;
   return tracker;
 }
 
@@ -61,10 +66,9 @@ describe('AuthorizationProvider', () => {
   let provider: AuthorizationProvider;
 
   beforeEach(async () => {
-    container.reset();
     workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'authprov-'));
     store = new WorkspaceLocalStore();
-    provider = new AuthorizationProvider(store);
+    provider = new AuthorizationProvider(store, makeModuleRef());
   });
 
   afterEach(async () => {
@@ -179,7 +183,10 @@ describe('AuthorizationProvider', () => {
       submitted: true,
       data: { confirmed: true },
     });
-    const fresh = new AuthorizationProvider(new WorkspaceLocalStore());
+    const fresh = new AuthorizationProvider(
+      new WorkspaceLocalStore(),
+      makeModuleRef(),
+    );
     const ret = await collect(
       fresh.ensureApproved(makeCtx(workDir), 'read-path', '/etc', {
         prompt: 'p',

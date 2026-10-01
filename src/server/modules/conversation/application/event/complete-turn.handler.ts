@@ -1,27 +1,24 @@
-import { inject, singleton } from 'tsyringe';
-import type { DomainEvent } from '@/server/libs/ddd';
-import { eventHandler } from '@/server/decorator/handler';
+import { Inject } from '@nestjs/common';
+import { EventsHandler } from '@nestjs/cqrs';
 import { RunCompleted } from '@/server/modules/agent/contracts';
-import type { RunCompletedPayload } from '@/server/modules/agent/contracts';
 import { SessionManager } from '../service/session-manager';
 import { ChatService } from '../service/chat.service';
 import { runConvTransforms } from '../transforms';
 import Logger from '@/server/utils/logger';
 
 // RunCompleted 订阅者，线性编排 turn-end；finalizeRun 恒执行，抛错也不漏 run。
-@singleton()
-@eventHandler(RunCompleted)
+@EventsHandler(RunCompleted)
 export class CompleteTurnHandler {
   private readonly logger = Logger.child({ source: 'CompleteTurnHandler' });
 
   constructor(
-    @inject(SessionManager)
+    @Inject(SessionManager)
     private sessionManager: SessionManager,
-    @inject(ChatService)
+    @Inject(ChatService)
     private chatService: ChatService,
   ) {}
 
-  async handle(event: DomainEvent<string, RunCompletedPayload>): Promise<void> {
+  async handle(event: RunCompleted): Promise<void> {
     const { conversationId, messageId, agentRunId } = event.payload;
     await this.sessionManager.awaitMaintenance(conversationId);
 

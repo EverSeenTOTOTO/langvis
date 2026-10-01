@@ -1,20 +1,18 @@
-import { inject } from 'tsyringe';
+import { Inject } from '@nestjs/common';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import { estimateTokens } from '@/server/utils/estimateTokens';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import { ProviderService } from '@/server/shared/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
-import { agentHook } from './registry';
 
-@agentHook
 export class LoopUsageHook implements Hook {
   readonly id = 'loop-usage';
   readonly phase: HookPhase = 'post-observation';
   private readonly logger = Logger.child({ source: 'LoopUsageHook' });
 
   constructor(
-    @inject(ProviderService)
+    @Inject(ProviderService)
     private readonly providerService: ProviderService,
   ) {}
 

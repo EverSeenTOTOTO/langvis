@@ -1,19 +1,18 @@
-import { globby } from 'globby';
-import { container } from 'tsyringe';
-import { service } from '@/server/decorator/service';
+import { Inject } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import Logger from '@/server/utils/logger';
-import path from 'path';
-import { registerTool } from '@/server/decorator/tool';
-import { ToolConfig } from '@/shared/types';
-import type { Tool, ToolConstructor } from '../../domain/model/tool.base';
-import { isProd } from '@/server/utils/env';
+import { toolIdOf } from '@/server/modules/agent/application/tools/register-tool';
+import type { Tool } from '../../domain/model/tool.base';
 
-@service()
+// 工具目录服务：id 清单来自静态 registry（惰性加载切 TDZ 环），实例解析走 ModuleRef
+// 的 string-token 查找（LLM 运行期按 id 寻址；providers 由 AgentModule 从 registry 生成）。
 export class ToolService {
   private readonly logger = Logger.child({ source: 'ToolService' });
 
   private tools: string[] = [];
   private isInitialized = false;
+
+  constructor(@Inject(ModuleRef) private readonly moduleRef: ModuleRef) {}
 
   async getAllToolInfo() {
     await this.initialize();
@@ -26,7 +25,7 @@ export class ToolService {
   /** 按 id 解析工具实例；未注册返回 undefined（动态注册表查询，非静态依赖）。 */
   resolve(id: string): Tool | undefined {
     try {
-      return container.resolve<Tool>(id);
+      return this.moduleRef.get<Tool>(id, { strict: false });
     } catch {
       return undefined;
     }
@@ -43,62 +42,18 @@ export class ToolService {
     this.isInitialized = true;
 
     try {
-      const tools = await this.discoverTools();
+      // 惰性加载切静态环：registry → 各工具模块 → 本服务（TDZ）。
+      const { TOOL_REGISTRY } = await import(
+        '../../implementations/tools/registry'
+      );
+      this.tools = TOOL_REGISTRY.map(({ clazz }) => toolIdOf(clazz));
 
       this.logger.info(
-        `Discovered ${tools.length} tools: ${tools.map(a => a.clazz.name).join(', ')}`,
-      );
-
-      this.tools = await Promise.all(
-        tools.map(tool => registerTool(tool.clazz, tool.config)),
+        `Registered ${this.tools.length} tools: ${TOOL_REGISTRY.map(a => a.clazz.name).join(', ')}`,
       );
     } catch (e) {
       this.isInitialized = false;
       this.logger.error('Failed to initialize ToolService:', e);
     }
-  }
-
-  private async discoverTools() {
-    const suffix = isProd ? '.js' : '.ts';
-    const pattern = `./${isProd ? 'dist' : 'src'}/server/modules/agent/implementations/tools/*/index${suffix}`;
-
-    const toolPaths = await globby(pattern, {
-      cwd: process.cwd(),
-      absolute: true,
-    });
-
-    const tools: {
-      clazz: ToolConstructor;
-      config: ToolConfig;
-    }[] = [];
-
-    for (const absolutePath of toolPaths) {
-      try {
-        const [{ default: clazz }, { config }] = await Promise.all([
-          import(absolutePath),
-          import(path.resolve(path.dirname(absolutePath), `config${suffix}`)),
-        ]);
-
-        if (clazz && config) {
-          tools.push({
-            clazz,
-            config,
-          });
-        } else {
-          this.logger.warn(
-            `Incomplete tool module at ${path.basename(absolutePath, suffix)}`,
-          );
-        }
-      } catch (error) {
-        this.logger.error(
-          `Failed to load tool module ${absolutePath}:`,
-          error instanceof Error
-            ? { message: error.message, stack: error.stack }
-            : error,
-        );
-      }
-    }
-
-    return tools;
   }
 }

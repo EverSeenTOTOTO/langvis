@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LlmProvider } from '@/server/libs/infrastructure/llm.provider';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import { LlmProvider } from '@/server/shared/infrastructure/llm.provider';
+import { ProviderService } from '@/server/shared/infrastructure/provider.service';
 import type { ProviderDefinition } from '@/shared/types/provider';
 
 vi.mock('fs/promises', () => ({

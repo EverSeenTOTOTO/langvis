@@ -1,109 +1,65 @@
 import { describe, it, beforeEach, afterEach, vi, expect } from 'vitest';
-import UserController from '@/server/controller/UserController';
-import { UserService } from '@/server/modules/user/application/user.service';
+import { HttpException } from '@nestjs/common';
+import { UserController } from '@/server/modules/user/user.controller';
 
-// Create a proper mock for UserService
 const mockUserService = {
   getAllUsers: vi.fn(),
   getUserById: vi.fn(),
   getUserByEmail: vi.fn(),
-} as unknown as UserService;
+};
 
-const mockResponse = () => {
-  const res: any = {};
-  res.status = vi.fn().mockReturnValue(res);
-  res.json = vi.fn().mockReturnValue(res);
-  return res;
+const expectHttpError = async (
+  promise: Promise<unknown>,
+  status: number,
+  body: Record<string, unknown>,
+) => {
+  const err = (await promise.catch(e => e)) as HttpException;
+  expect(err).toBeInstanceOf(HttpException);
+  expect(err.getStatus()).toBe(status);
+  expect(err.getResponse()).toMatchObject(body);
 };
 
 describe('UserController', () => {
-  let userController: UserController;
+  let controller: UserController;
 
   beforeEach(() => {
-    // Create controller with mocked service
-    userController = new UserController(mockUserService);
+    controller = new UserController(mockUserService as never);
   });
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should get all users', async () => {
-    const mockUsers = [
-      {
-        id: '1',
-        name: 'John Doe',
-        email: 'john@example.com',
-        emailVerified: true,
-        image: '',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ];
-
-    vi.mocked(mockUserService.getAllUsers).mockResolvedValue(mockUsers);
-    const res = mockResponse();
-
-    await userController.getAllUsers(res);
-
-    expect(res.json).toHaveBeenCalledWith(mockUsers);
+  it('getAllUsers 返回全量用户', async () => {
+    const users = [{ id: 'u1', name: 'A' }];
+    mockUserService.getAllUsers!.mockResolvedValue(users);
+    await expect(controller.getAllUsers()).resolves.toBe(users);
   });
 
-  it('should get user by ID', async () => {
-    const mockUser = {
-      id: '1',
-      name: 'John Doe',
-      email: 'john@example.com',
-      emailVerified: true,
-      image: '',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    vi.mocked(mockUserService.getUserById).mockResolvedValue(mockUser);
-    const res = mockResponse();
-
-    await userController.getUserById('1', res);
-
-    expect(res.json).toHaveBeenCalledWith(mockUser);
+  it('getUserById 命中返回用户', async () => {
+    const user = { id: 'u1', name: 'A' };
+    mockUserService.getUserById!.mockResolvedValue(user);
+    await expect(controller.getUserById('u1')).resolves.toBe(user);
+    expect(mockUserService.getUserById).toHaveBeenCalledWith('u1');
   });
 
-  it('should return 404 when user is not found by ID', async () => {
-    vi.mocked(mockUserService.getUserById).mockResolvedValue(null);
-    const res = mockResponse();
-
-    await userController.getUserById('nonexistent', res);
-
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'User not found' });
+  it('getUserById 未命中抛 404', async () => {
+    mockUserService.getUserById!.mockResolvedValue(null);
+    await expectHttpError(controller.getUserById('nope'), 404, {
+      error: 'User not found',
+    });
   });
 
-  it('should get user by email', async () => {
-    const mockUser = {
-      id: '1',
-      name: 'John Doe',
-      email: 'john@example.com',
-      emailVerified: true,
-      image: '',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    vi.mocked(mockUserService.getUserByEmail).mockResolvedValue(mockUser);
-    const res = mockResponse();
-
-    await userController.getUserByEmail('john@example.com', res);
-
-    expect(res.json).toHaveBeenCalledWith(mockUser);
+  it('getUserByEmail 命中返回用户', async () => {
+    const user = { id: 'u1', email: 'a@b.c' };
+    mockUserService.getUserByEmail!.mockResolvedValue(user);
+    await expect(controller.getUserByEmail('a@b.c')).resolves.toBe(user);
   });
 
-  it('should return 404 when user is not found by email', async () => {
-    vi.mocked(mockUserService.getUserByEmail).mockResolvedValue(null);
-    const res = mockResponse();
-
-    await userController.getUserByEmail('nonexistent@example.com', res);
-
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'User not found' });
+  it('getUserByEmail 未命中抛 404', async () => {
+    mockUserService.getUserByEmail!.mockResolvedValue(null);
+    await expectHttpError(controller.getUserByEmail('none@b.c'), 404, {
+      error: 'User not found',
+    });
   });
 });

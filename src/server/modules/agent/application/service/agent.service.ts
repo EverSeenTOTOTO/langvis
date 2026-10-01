@@ -1,16 +1,15 @@
-import { inject, singleton } from 'tsyringe';
 import { ToolIds } from '@/shared/constants';
 import type { Tool } from '../../domain/model/tool.base';
 import { ToolSet } from '../../domain/model/tool-set.vo';
 import type { ToolMember } from '../../domain/model/tool-set.vo';
 import { RunConfigVO } from '../../domain/model/run-config.vo';
-import type { ConversationConfig } from '@/server/libs/config';
+import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
 import { BASE_PROMPT } from './base-prompt';
 import { ToolService } from './tool.service';
 import { SkillService } from './skill.service';
+import { Inject } from '@nestjs/common';
 import { formatToolsToMarkdown } from '@/server/utils/formatTools';
 
-@singleton()
 export class AgentService {
   private readonly inlineTools = [
     ToolIds.RESPONSE_USER,
@@ -24,8 +23,8 @@ export class AgentService {
   private cachedPrompt: Promise<string> | null = null;
 
   constructor(
-    @inject(ToolService) private readonly toolService: ToolService,
-    @inject(SkillService) private readonly skillService: SkillService,
+    @Inject(ToolService) private readonly toolService: ToolService,
+    @Inject(SkillService) private readonly skillService: SkillService,
   ) {}
 
   // 全局 conv agent 的 system prompt：内容固定，首次构建后 memoize（等价 buildSystemPrompt(buildToolSet())）。

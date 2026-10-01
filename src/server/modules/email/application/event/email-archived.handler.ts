@@ -1,25 +1,24 @@
-import { inject } from 'tsyringe';
-import { eventHandler } from '@/server/decorator/handler';
-import { CommandBus } from '@/server/libs/ddd';
+import { Inject } from '@nestjs/common';
+import { CommandBus, EventsHandler } from '@nestjs/cqrs';
 import {
   ConversationActivateCommand,
   StartChatCommand,
 } from '@/server/modules/conversation/contracts';
 import { Role } from '@/shared/entities/Message';
-import { EmailArchived, type EmailArchivedPayload } from '../../contracts';
+import { EmailArchived } from '../../contracts';
 import { EmailService } from '../service/email.service';
 
 // EmailArchived 的薄调度器：仅编排 compose → activate → start，提示词与 body 缓存留在 EmailService。
-@eventHandler(EmailArchived)
+@EventsHandler(EmailArchived)
 export class EmailArchivedHandler {
   constructor(
-    @inject(EmailService)
+    @Inject(EmailService)
     private readonly emailService: EmailService,
-    @inject(CommandBus)
+    @Inject(CommandBus)
     private readonly commandBus: CommandBus,
   ) {}
 
-  async handle(event: { payload: EmailArchivedPayload }): Promise<void> {
+  async handle(event: EmailArchived): Promise<void> {
     const {
       userId,
       conversationId,

@@ -1,9 +1,8 @@
-import FileController from '@/server/controller/FileController';
+import { FileController } from '@/server/modules/file/file.controller';
 import { FileService } from '@/server/modules/file';
 import type { Request, Response } from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { container } from 'tsyringe';
 import {
   afterAll,
   beforeAll,
@@ -27,7 +26,7 @@ describe('FileController Security Tests', () => {
     headers: Record<string, string> = {},
   ) =>
     ({
-      params: filename ? { 0: filename } : {},
+      params: filename ? { splat: filename } : {},
       headers,
     }) as Request;
 
@@ -66,13 +65,9 @@ describe('FileController Security Tests', () => {
   });
 
   beforeEach(() => {
-    // Reset container
-    container.clearInstances();
-
-    // Register real service for security testing
-    container.register(FileService, { useClass: FileService });
-    controller = container.resolve(FileController);
-    fileService = container.resolve(FileService);
+    // 真实 service 做路径安全测试；Nest 控制器直接构造（@Inject 仅 Nest 侧生效）
+    fileService = new FileService();
+    controller = new FileController(fileService);
   });
 
   afterAll(async () => {
@@ -139,14 +134,8 @@ describe('FileController Security Tests', () => {
       });
 
       it(`should prevent path traversal in getFileInfo with payload: ${payload}`, async () => {
-        const res = mockResponse();
-
-        await controller.getFileInfo(payload, res);
-
-        // Should return 500 error due to security validation failure
-        expect(res.status).toHaveBeenCalledWith(500);
-        expect(res.json).toHaveBeenCalledWith({
-          error: 'Internal server error',
+        await expect(controller.getFileInfo(payload)).rejects.toMatchObject({
+          status: 500,
         });
       });
     });

@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe';
+import { Inject } from '@nestjs/common';
 import type { StreamFrame, EnrichedEvent } from '@/shared/types/events';
 import { MESSAGE_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
@@ -12,20 +12,18 @@ import { ToolService } from '@/server/modules/agent/application/service/tool.ser
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { ToolIds } from '@/shared/constants';
 import Logger from '@/server/utils/logger';
-import { convTransform } from './registry';
 
 // turn-end 把本 run 的工具调用轨迹拼成确定性过程摘要，写入 assistant 消息 meta.summary，
 // 供下轮透传为 seed thought。不调模型：每个工具经自身 describe 自述，未实现则走通用模板回退。
-@convTransform
 export class ProcessSummaryTransform implements ConvTransform {
   readonly id = 'process-summary';
   readonly phase: ConvPhase = 'turn-end';
   private readonly logger = Logger.child({ source: 'ProcessSummaryTransform' });
 
   constructor(
-    @inject(MESSAGE_REPOSITORY)
+    @Inject(MESSAGE_REPOSITORY)
     private readonly messageRepo: MessageRepositoryPort,
-    @inject(ToolService)
+    @Inject(ToolService)
     private readonly toolService: ToolService,
   ) {}
 

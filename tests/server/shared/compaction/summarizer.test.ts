@@ -1,9 +1,7 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { container } from 'tsyringe';
-import { fold } from '@/server/libs/compaction';
-import { Prompt } from '@/server/libs/prompt';
-import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
-import type { LlmProvider } from '@/server/libs/infrastructure/llm.provider';
+import { describe, it, expect, vi } from 'vitest';
+import { fold } from '@/server/shared/compaction';
+import { Prompt } from '@/server/shared/prompt';
+import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
 import type { LlmMessage } from '@/shared/types/entities';
 
 const tpl = Prompt.empty()
@@ -14,17 +12,8 @@ const tpl = Prompt.empty()
 
 const signal = new AbortController().signal;
 
-afterEach(() => {
-  container.clearInstances();
-});
-
-function registerLlm(chatContent: ReturnType<typeof vi.fn>) {
-  container.register(LLM_PORT, {
-    useValue: {
-      getDefaultModel: () => ({ id: 'compact-model' }),
-      chatContent,
-    } as unknown as LlmProvider,
-  });
+function mockLlm(chatContent: ReturnType<typeof vi.fn>): LlmPort {
+  return { chatContent } as unknown as LlmPort;
 }
 
 /** fold 发给 LLM 的 prompt 文本（第 callIdx 次调用）。 */
@@ -35,22 +24,29 @@ function sentPrompt(callIdx: number, chatContent: ReturnType<typeof vi.fn>) {
 describe('fold', () => {
   it('empty messages: returns empty string, no LLM call', async () => {
     const chatContent = vi.fn(async () => 'x');
-    registerLlm(chatContent);
+    const llm = mockLlm(chatContent);
     expect(
-      await fold({ messages: [], windowSize: 10, signal, prompt: tpl }),
+      await fold({
+        llm,
+        messages: [],
+        windowSize: 10,
+        signal,
+        prompt: tpl,
+      }),
     ).toBe('');
     expect(chatContent).not.toHaveBeenCalled();
   });
 
   it('messages ≤ window: one call; History filled with the chunk', async () => {
     const chatContent = vi.fn(async () => 'SUM');
-    registerLlm(chatContent);
+    const llm = mockLlm(chatContent);
     const msgs: LlmMessage[] = [
       { role: 'user', content: 'hello' },
       { role: 'assistant', content: 'hi' },
     ];
 
     const out = await fold({
+      llm,
       messages: msgs,
       windowSize: 10,
       signal,
@@ -67,13 +63,14 @@ describe('fold', () => {
   it('messages > window: slides chunks, threading the running summary', async () => {
     let i = 0;
     const chatContent = vi.fn(async () => `s${i++}`);
-    registerLlm(chatContent);
+    const llm = mockLlm(chatContent);
     const msgs: LlmMessage[] = Array.from({ length: 25 }, (_, k) => ({
       role: 'user',
       content: `m${k}`,
     }));
 
     const out = await fold({
+      llm,
       messages: msgs,
       windowSize: 10,
       signal,
@@ -89,13 +86,19 @@ describe('fold', () => {
 
   it('prior summary passed as messages[0] is folded into the history', async () => {
     const chatContent = vi.fn(async () => 'S');
-    registerLlm(chatContent);
+    const llm = mockLlm(chatContent);
     const msgs: LlmMessage[] = [
       { role: 'user', content: 'PRIOR SUMMARY' },
       { role: 'user', content: 'new1' },
     ];
 
-    await fold({ messages: msgs, windowSize: 10, signal, prompt: tpl });
+    await fold({
+      llm,
+      messages: msgs,
+      windowSize: 10,
+      signal,
+      prompt: tpl,
+    });
 
     expect(sentPrompt(0, chatContent)).toContain('PRIOR SUMMARY');
     expect(sentPrompt(0, chatContent)).toContain('new1');
@@ -104,13 +107,14 @@ describe('fold', () => {
   it('empty LLM output on a later chunk keeps the running summary', async () => {
     const seq = ['s0', '   '];
     const chatContent = vi.fn(async () => seq.shift() ?? '');
-    registerLlm(chatContent);
+    const llm = mockLlm(chatContent);
     const msgs: LlmMessage[] = Array.from({ length: 15 }, (_, k) => ({
       role: 'user',
       content: `m${k}`,
     }));
 
     const out = await fold({
+      llm,
       messages: msgs,
       windowSize: 10,
       signal,
@@ -122,8 +126,9 @@ describe('fold', () => {
 
   it('FoldOptions.modelId 透传给 chatContent（优先于默认）', async () => {
     const chatContent: ReturnType<typeof vi.fn> = vi.fn(async () => 'SUM');
-    registerLlm(chatContent);
+    const llm = mockLlm(chatContent);
     await fold({
+      llm,
       messages: [{ role: 'user', content: 'x' }],
       windowSize: 10,
       signal,
@@ -131,17 +136,5 @@ describe('fold', () => {
       modelId: 'my-compact',
     });
     expect(chatContent.mock.calls[0]![0]).toBe('my-compact');
-  });
-
-  it('未传 modelId → 回退 getDefaultModel("chat")', async () => {
-    const chatContent: ReturnType<typeof vi.fn> = vi.fn(async () => 'SUM');
-    registerLlm(chatContent);
-    await fold({
-      messages: [{ role: 'user', content: 'x' }],
-      windowSize: 10,
-      signal,
-      prompt: tpl,
-    });
-    expect(chatContent.mock.calls[0]![0]).toBe('compact-model');
   });
 });

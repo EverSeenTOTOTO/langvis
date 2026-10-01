@@ -1,10 +1,15 @@
-import { container, Lifecycle } from 'tsyringe';
-import { USER_REPOSITORY, AUTH_PORT } from './user.di-tokens';
+import { Module } from '@nestjs/common';
+import { USER_REPOSITORY } from './user.di-tokens';
 import { UserRepository } from './infrastructure/persistence/user.repository';
-import { AuthService } from '@/server/libs/infrastructure/auth.service';
+import { UserService } from './application/user.service';
+import { UserController } from './user.controller';
+import { ModelsController } from './models.controller';
 
-container.register(USER_REPOSITORY, UserRepository, {
-  lifecycle: Lifecycle.Singleton,
-});
-
-container.register(AUTH_PORT, AuthService);
+@Module({
+  controllers: [UserController, ModelsController],
+  providers: [
+    UserService,
+    { provide: USER_REPOSITORY, useClass: UserRepository },
+  ],
+})
+export class UserModule {}

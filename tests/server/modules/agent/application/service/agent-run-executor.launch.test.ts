@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { container } from 'tsyringe';
 import {
   AgentRunExecutor,
   type LaunchParams,
@@ -14,11 +13,11 @@ import type { Logger } from '@/server/utils/logger';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { AuthorizationPort } from '@/server/modules/agent/domain/port/authorization.port';
-import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
+import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
 import type { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 import type { ToolConfig } from '@/shared/types';
-import { AGENT_HOOK } from '@/server/modules/agent/application/hooks/registry';
+
 import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 
 /** 无操作 hook：防止 resolveAll 因未注册 token 而抛。 */
@@ -106,11 +105,16 @@ const params: LaunchParams = {
 };
 
 describe('AgentRunExecutor.launch — 终态写冲突重试', () => {
+  // ModuleRef stub：hook 全走 NoopHook、RESPONSE_USER 工具走 Stub（原容器注册语义）
+  const moduleRef = {
+    get: (token: unknown) => {
+      if (token === ToolIds.RESPONSE_USER) return new StubResponseUserTool();
+      return new NoopHook();
+    },
+    resolve: async (T: new () => NoopHook) => new T(),
+  };
   beforeEach(() => {
-    container.register(ToolIds.RESPONSE_USER, {
-      useClass: StubResponseUserTool,
-    });
-    container.register(AGENT_HOOK, { useClass: NoopHook });
+    // NoopHook/Stub 经 moduleRef.get 按次构造
   });
 
   it('commit 首次冲突时重试并成功，最终落库含全部事件 + 终态 status', async () => {
@@ -121,6 +125,7 @@ describe('AgentRunExecutor.launch — 终态写冲突重试', () => {
       authMock,
       repo,
       agentServiceStub,
+      moduleRef as never,
     );
 
     const events: EnrichedEvent[] = [];
@@ -142,6 +147,7 @@ describe('AgentRunExecutor.launch — 终态写冲突重试', () => {
       authMock,
       repo,
       agentServiceStub,
+      moduleRef as never,
     );
     executor.checkpointEvery = 1;
 

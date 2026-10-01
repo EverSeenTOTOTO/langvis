@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { stripThinking } from '@/server/libs/llm-text';
+import { stripThinking } from '@/server/shared/llm-text';
 
 describe('stripThinking', () => {
   it('removes a full paired <think> block', () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { OptimisticLockVersionMismatchError } from 'typeorm';
 import { AgentRunRepository } from '@/server/modules/agent/infrastructure/persistence/agent-run.repository';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
+import { DatabaseService } from '@/server/shared/infrastructure/database.service';
 import { AgentRunConcurrentModificationError } from '@/server/modules/agent/domain/errors';
 import type { EnrichedEvent } from '@/shared/types/events';
 

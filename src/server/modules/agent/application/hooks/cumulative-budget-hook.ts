@@ -8,14 +8,12 @@ import {
 import type { RunEvent } from '@/shared/types/events';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import Logger from '@/server/utils/logger';
-import { agentHook } from './registry';
 import { responseUser } from '../service/react-message';
 
 const budgetMessage = (used: number, budget: number) =>
   `This turn exceeded its token budget (≈${used} / ${budget}). Stopping here — please rephrase or continue in a new turn.`;
 
 // 累计 token 用量兜底（cost 闸）。阈值 guard.maxTokenUsage；pendingAction 由 loop 解析，此处直读。
-@agentHook
 export class CumulativeBudgetHook implements Hook {
   readonly id = 'cumulative-budget';
   readonly phase: HookPhase = 'pre-action';

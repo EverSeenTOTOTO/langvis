@@ -1,5 +1,5 @@
-import { inject } from 'tsyringe';
-import { commandHandler } from '@/server/decorator/handler';
+import { Inject } from '@nestjs/common';
+import { CommandHandler } from '@nestjs/cqrs';
 import { ChatService } from '../service/chat.service';
 import { SessionManager } from '../service/session-manager';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
@@ -7,14 +7,14 @@ import { ConversationActivateCommand } from '../../contracts';
 import { runConvTransforms } from '../transforms';
 import { TraceContext } from '@/server/middleware/trace-context';
 
-@commandHandler(ConversationActivateCommand)
+@CommandHandler(ConversationActivateCommand)
 export class ConversationActivateHandler {
   constructor(
-    @inject(ChatService)
+    @Inject(ChatService)
     private chatService: ChatService,
-    @inject(AgentService)
+    @Inject(AgentService)
     private readonly agentService: AgentService,
-    @inject(SessionManager)
+    @Inject(SessionManager)
     private readonly sessionManager: SessionManager,
   ) {}
 

@@ -2,13 +2,12 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
-import { container } from 'tsyringe';
 import {
   CacheProvider,
   PREVIEW_LENGTH,
 } from '@/server/modules/agent/infrastructure/cache.provider';
 import type { CachedReference } from '@/server/modules/agent/domain/port/cache.port';
-import { WorkspaceLocalStore } from '@/server/libs/infrastructure/workspace-local-store';
+import { WorkspaceLocalStore } from '@/server/shared/infrastructure/workspace-local-store';
 
 let testDir: string;
 
@@ -33,10 +32,7 @@ describe('CacheProvider', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    container.register(WorkspaceLocalStore, {
-      useValue: new WorkspaceLocalStore(),
-    });
-    cacheService = container.resolve(CacheProvider);
+    cacheService = new CacheProvider(new WorkspaceLocalStore());
     workDir = await mockWorkspaceService.getWorkDir();
   });
 

@@ -1,11 +1,12 @@
+import { Command, Query } from '@nestjs/cqrs';
+import type { Conversation } from '@/shared/types/entities';
 import type { MessageAttachment } from '@/shared/types/entities';
-import type { ConversationConfig } from '@/server/libs/config';
+import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
 import { Role } from '@/shared/entities/Message';
-import { Command, Query } from '@/server/libs/ddd';
 import type { Transport } from '@/shared/transport';
 import type { StreamFrame } from '@/shared/types/events';
 
-export class ConversationActivateCommand extends Command {
+export class ConversationActivateCommand extends Command<unknown> {
   constructor(
     readonly conversationId: string,
     readonly userId: string,
@@ -15,7 +16,7 @@ export class ConversationActivateCommand extends Command {
   }
 }
 
-export class CreateConversationCommand extends Command {
+export class CreateConversationCommand extends Command<Conversation> {
   constructor(
     readonly name: string,
     readonly userId: string,
@@ -28,7 +29,7 @@ export class CreateConversationCommand extends Command {
   }
 }
 
-export class CancelChatCommand extends Command {
+export class CancelChatCommand extends Command<void> {
   constructor(
     readonly conversationId: string,
     readonly messageId?: string,
@@ -38,7 +39,7 @@ export class CancelChatCommand extends Command {
   }
 }
 
-export class ConversationUpdateCommand extends Command {
+export class ConversationUpdateCommand extends Command<Conversation> {
   constructor(
     readonly conversationId: string,
     readonly userId: string,
@@ -51,7 +52,7 @@ export class ConversationUpdateCommand extends Command {
   }
 }
 
-export class StartChatCommand extends Command {
+export class StartChatCommand extends Command<{ assistantId: string }> {
   constructor(
     readonly conversationId: string,
     readonly userMessage: {
@@ -68,7 +69,7 @@ export class StartChatCommand extends Command {
 }
 
 /** 截断会话到某条消息之前：删除该消息及之后所有消息（含折叠 summary），重置 ctx.messages。重发走常规发送路径。 */
-export class TruncateConversationCommand extends Command {
+export class TruncateConversationCommand extends Command<void> {
   constructor(
     readonly conversationId: string,
     readonly messageId: string,
@@ -78,19 +79,19 @@ export class TruncateConversationCommand extends Command {
   }
 }
 
-export class GetSessionStateQuery extends Query {
+export class GetSessionStateQuery extends Query<unknown> {
   constructor(readonly conversationId: string) {
     super();
   }
 }
 
-export class GetMessagesQuery extends Query {
+export class GetMessagesQuery extends Query<unknown> {
   constructor(readonly conversationId: string) {
     super();
   }
 }
 
-export class GetConversationsByWorkspaceQuery extends Query {
+export class GetConversationsByWorkspaceQuery extends Query<Conversation[]> {
   constructor(
     readonly workspacePath: string,
     readonly userId: string,
@@ -100,7 +101,7 @@ export class GetConversationsByWorkspaceQuery extends Query {
 }
 
 /** 取任意 run（含子 agent run）的投影视图——live（父 session 缓冲）优先、repo 回落。 */
-export class GetRunViewQuery extends Query {
+export class GetRunViewQuery extends Query<unknown> {
   constructor(readonly runId: string) {
     super();
   }
@@ -108,7 +109,16 @@ export class GetRunViewQuery extends Query {
 
 import type { LlmMessage, Message } from '@/shared/types/entities';
 
-export const TurnInitiated = 'turn_initiated';
+// conv→agent：turn 已启动（agent 据此驱动 run）。保留 DomainEvent 形状。
+export class TurnInitiated {
+  readonly type = 'turn_initiated' as const;
+  readonly occurredAt = Date.now();
+
+  constructor(
+    readonly aggregateId: string,
+    readonly payload: TurnInitiatedPayload,
+  ) {}
+}
 
 export interface TurnInitiatedPayload {
   conversationId: string;

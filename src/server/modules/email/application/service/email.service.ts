@@ -1,12 +1,11 @@
 import { EmailEntity } from '@/shared/entities/Email';
 import { generateId } from '@/shared/utils';
-import { inject } from 'tsyringe';
-import { service } from '@/server/decorator/service';
 import Logger from '@/server/utils/logger';
 import { sanitizeHtml } from '@/server/utils/sanitizeHtml';
 import { htmlToMarkdown } from '@/server/utils/htmlToMarkdown';
 import type { simpleParser as SimpleParserFn } from 'mailparser';
 import { EMAIL_REPOSITORY } from '../../email.di-tokens';
+import { Inject } from '@nestjs/common';
 import type {
   CreateEmailData,
   EmailListParams,
@@ -31,12 +30,11 @@ export interface ArchivePromptInput {
   content: string;
 }
 
-@service()
 export class EmailService {
   private readonly logger = Logger.child({ source: 'EmailService' });
 
   constructor(
-    @inject(EMAIL_REPOSITORY)
+    @Inject(EMAIL_REPOSITORY)
     private readonly repo: EmailRepositoryPort,
   ) {}
 

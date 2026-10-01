@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { container } from 'tsyringe';
-import { resolveConvTransforms } from '@/server/modules/conversation/application/transforms';
+import { describe, it, expect, vi } from 'vitest';
+import { TRANSFORM_TYPES } from '@/server/modules/conversation/application/transforms';
 import { UsageTransform } from '@/server/modules/conversation/application/transforms/usage-transform';
 import {
   ProcessSummaryTransform,
@@ -13,18 +12,17 @@ import {
   type ConversationContext,
 } from '@/server/modules/conversation/domain/model/conv-transform';
 import { projectToLlmMessages } from '@/server/modules/conversation/application/service/history-projection';
-import type { ConversationConfig } from '@/server/libs/config';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
+import { ProviderService } from '@/server/shared/infrastructure/provider.service';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
 import type { StreamFrame, EnrichedEvent } from '@/shared/types/events';
-import { MESSAGE_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 
 const { foldMock } = vi.hoisted(() => ({ foldMock: vi.fn() }));
-vi.mock('@/server/libs/compaction/summarizer', () => ({ fold: foldMock }));
+vi.mock('@/server/shared/compaction/summarizer', () => ({ fold: foldMock }));
 
 const COMPACTION = { threshold: 0.8, windowSize: 10 };
 
@@ -70,29 +68,42 @@ async function collect(gen: AsyncGenerator<StreamFrame | void>) {
   return out;
 }
 
-describe('conv transform registry（自动识别）', () => {
-  beforeEach(() => {
-    container.register(MESSAGE_REPOSITORY, {
-      useValue: {
+describe('conv transform 清单（TRANSFORM_TYPES 显式发现）', () => {
+  const buildTransforms = () => [
+    new ProcessSummaryTransform(
+      {
         batchCreate: vi.fn(),
         update: vi.fn(),
       } as unknown as MessageRepositoryPort,
-    });
-  });
-  afterEach(() => container.clearInstances());
+      { getAllToolInfo: async () => [] } as never,
+    ),
+    new ReconstructTransform(
+      {
+        batchCreate: vi.fn(),
+        update: vi.fn(),
+      } as unknown as MessageRepositoryPort,
+      mockProvider(8000),
+    ),
+    new SummarizeTransform(
+      {
+        batchCreate: vi.fn(),
+        update: vi.fn(),
+      } as unknown as MessageRepositoryPort,
+      mockProvider(8000),
+      { chatContent: vi.fn(async () => 'S') } as never,
+    ),
+    new UsageTransform(mockProvider(8000)),
+  ];
 
-  it('resolveConvTransforms 发现 @convTransform 标记的四个 transform', () => {
-    const transforms = resolveConvTransforms();
-    expect(transforms.some(t => t instanceof UsageTransform)).toBe(true);
-    expect(transforms.some(t => t instanceof ProcessSummaryTransform)).toBe(
-      true,
-    );
-    expect(transforms.some(t => t instanceof ReconstructTransform)).toBe(true);
-    expect(transforms.some(t => t instanceof SummarizeTransform)).toBe(true);
+  it('TRANSFORM_TYPES 覆盖四个 transform', () => {
+    expect(TRANSFORM_TYPES.some(T => T === UsageTransform)).toBe(true);
+    expect(TRANSFORM_TYPES.some(T => T === ProcessSummaryTransform)).toBe(true);
+    expect(TRANSFORM_TYPES.some(T => T === ReconstructTransform)).toBe(true);
+    expect(TRANSFORM_TYPES.some(T => T === SummarizeTransform)).toBe(true);
   });
 
   it('相位分桶：process-summary+reconstruct+summarize+usage 进 turn-end，usage 进 activated', () => {
-    const plan = new ConvTransformPlan(resolveConvTransforms());
+    const plan = new ConvTransformPlan(buildTransforms() as never);
     const ids = (ts: readonly { id: string }[]) => ts.map(t => t.id);
     expect(ids(plan.forPhase('activated'))).toEqual(['usage']);
     expect(ids(plan.forPhase('turn-start'))).toEqual([]);
@@ -368,7 +379,9 @@ describe('SummarizeTransform', () => {
     ]);
     const before = ctx.messages.length;
     await collect(
-      new SummarizeTransform(messageRepo, mockProvider(1_000_000)).apply(ctx),
+      new SummarizeTransform(messageRepo, mockProvider(1_000_000), {
+        chatContent: vi.fn(async () => 'S'),
+      } as never).apply(ctx),
     );
     expect(foldMock).not.toHaveBeenCalled();
     expect(messageRepo.batchCreate).not.toHaveBeenCalled();
@@ -395,7 +408,9 @@ describe('SummarizeTransform', () => {
     ]);
 
     const events = await collect(
-      new SummarizeTransform(messageRepo, mockProvider(10)).apply(ctx),
+      new SummarizeTransform(messageRepo, mockProvider(10), {
+        chatContent: vi.fn(async () => 'S'),
+      } as never).apply(ctx),
     );
     expect(events).toHaveLength(0); // summarize 不发帧
     expect(foldMock).toHaveBeenCalledTimes(1);
@@ -417,7 +432,9 @@ describe('SummarizeTransform', () => {
       makeMessage(Role.ASSIST, 'a one'),
     ]);
     await collect(
-      new SummarizeTransform(messageRepo, mockProvider(10)).apply(ctx),
+      new SummarizeTransform(messageRepo, mockProvider(10), {
+        chatContent: vi.fn(async () => 'S'),
+      } as never).apply(ctx),
     );
     expect(messageRepo.batchCreate).not.toHaveBeenCalled();
     expect(ctx.messages.length).toBe(2);

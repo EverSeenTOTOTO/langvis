@@ -1,13 +1,13 @@
-import { tool } from '@/server/decorator/tool';
+import { Inject } from '@nestjs/common';
+import { tool } from '@/server/modules/agent/application/tools/register-tool';
 import { ToolIds } from '@/shared/constants';
 import type { Logger } from '@/server/utils/logger';
 import type { ToolConfig } from '@/shared/types';
-import { container, inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
-import type EmbeddingGenerateTool from '../EmbeddingGenerate';
+import { ToolService } from '@/server/modules/agent/application/service/tool.service';
+import { DatabaseService } from '@/server/shared/infrastructure/database.service';
 import type { DocumentSearchInput, DocumentSearchOutput } from './config';
 import { config } from './config';
 
@@ -17,7 +17,10 @@ export default class DocumentSearchTool extends Tool<DocumentSearchOutput> {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
-  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {
+  constructor(
+    @Inject(DatabaseService) private readonly db: DatabaseService,
+    @Inject(ToolService) private readonly toolService: ToolService,
+  ) {
     super();
   }
 
@@ -36,15 +39,14 @@ export default class DocumentSearchTool extends Tool<DocumentSearchOutput> {
       },
     };
 
-    const embedTool = container.resolve<EmbeddingGenerateTool>(
-      ToolIds.EMBEDDING_GENERATE,
-    );
-    const embedResult = yield* embedTool.call({
+    const embedTool = this.toolService.resolve(ToolIds.EMBEDDING_GENERATE)!;
+    const embedOut = yield* embedTool.call({
       ...ctx,
       input: { chunks: [{ content: query, index: 0 }] },
     });
+    const embedResult = embedOut as { embeddings: number[][] };
 
-    const queryVector = embedResult.embeddings[0];
+    const queryVector = embedResult.embeddings[0]!;
 
     const vectorStr = `[${queryVector.join(',')}]`;
 

@@ -1,20 +1,24 @@
-import { container, injectable } from 'tsyringe';
 import type { Hook } from '@/server/modules/agent/domain/model/hook';
+import { ToolHintHook } from './tool-hint-hook';
+import { TrimHook } from './trim-hook';
+import { MicroCompactHook } from './micro-compact-hook';
+import { QueryBudgetHook } from './query-budget-hook';
+import { CompactionHook } from './compaction-hook';
+import { LoopUsageHook } from './loop-usage-hook';
+import { CumulativeBudgetHook } from './cumulative-budget-hook';
+import { StuckHook } from './stuck-hook';
+import { MaxIterationsHook } from './max-iterations-hook';
 
-// agent hook 共享 DI token：所有 @agentHook 在此 token 下多注册，resolveAgentHooks 用 resolveAll 取全部。
-export const AGENT_HOOK = Symbol('AGENT_HOOK');
-
-// 标记装饰器（镜像 controller 装饰器）：@injectable + 在 AGENT_HOOK token 下 useClass 注册（每次 resolve 新实例）。
-// hook 非 singleton、per-run：跨 tick 私有状态可内聚实例字段（如累计 token）；跨 run 持久状态仍走 repo。
-export function agentHook<T extends new (...args: any[]) => Hook>(
-  target: T,
-): T {
-  injectable()(target);
-  container.register(AGENT_HOOK, { useClass: target });
-  return target;
-}
-
-/** 解析所有 @agentHook 登记的 hook（每次调用均构造新实例——per-run）。 */
-export function resolveAgentHooks(): Hook[] {
-  return container.resolveAll<Hook>(AGENT_HOOK);
-}
+// per-run 瞬态 hook 清单（序即相位内执行序）。注册为 TRANSIENT providers，
+// executor 经 ModuleRef 按次 get——每次新建实例，跨 tick 私有状态内聚实例字段。
+export const HOOK_TYPES: (new (...args: any[]) => Hook)[] = [
+  ToolHintHook,
+  TrimHook,
+  MicroCompactHook,
+  QueryBudgetHook,
+  CompactionHook,
+  LoopUsageHook,
+  CumulativeBudgetHook,
+  StuckHook,
+  MaxIterationsHook,
+];

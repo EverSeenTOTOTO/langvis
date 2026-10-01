@@ -49,7 +49,9 @@ async function setup(env: 'production' | 'development') {
     },
   } as any;
 
-  await bindRequestId(mockApp);
+  await bindRequestId(mockApp, {
+    getSessionId: vi.fn().mockResolvedValue(null),
+  } as never);
   return { uses, logInfo };
 }
 

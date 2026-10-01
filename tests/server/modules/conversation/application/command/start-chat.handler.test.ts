@@ -3,17 +3,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { StartChatHandler } from '@/server/modules/conversation/application/command/start-chat.handler';
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
-import type { EventBus } from '@/server/libs/ddd';
-import {
-  StartChatCommand,
-  TurnInitiated,
-} from '@/server/modules/conversation/contracts';
+import type { EventBus } from '@nestjs/cqrs';
+import { StartChatCommand } from '@/server/modules/conversation/contracts';
 import { ConversationNotFoundError } from '@/server/modules/conversation/domain/errors';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
 import { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
 
-const stubEventBus = { dispatch: vi.fn() } as unknown as EventBus;
+const stubEventBus = { publish: vi.fn() } as unknown as EventBus;
 
 function makeSessionManager(seed: Message[] = []) {
   const ctx = {
@@ -53,7 +50,7 @@ describe('StartChatHandler', () => {
       ),
     ).rejects.toBeInstanceOf(ConversationNotFoundError);
 
-    expect(stubEventBus.dispatch).not.toHaveBeenCalled();
+    expect(stubEventBus.publish).not.toHaveBeenCalled();
   });
 
   it('awaits maintenance, appends user message, projects, dispatches TurnInitiated', async () => {
@@ -82,9 +79,10 @@ describe('StartChatHandler', () => {
     expect(sm.getCtx).toHaveBeenCalledWith('conv_1');
     // userMessage appended after the barrier
     expect(sm.ctx.messages.map(m => m.id)).toEqual(['msg_s', 'msg_u']);
-    expect(stubEventBus.dispatch).toHaveBeenCalledWith(
-      TurnInitiated,
+    expect(stubEventBus.publish).toHaveBeenCalledWith(
       expect.objectContaining({
+        type: 'turn_initiated',
+        aggregateId: 'conv_1',
         payload: expect.objectContaining({
           assistantMessage: expect.objectContaining({ id: 'msg_a' }),
           effectiveHistory: [

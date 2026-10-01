@@ -1,9 +1,9 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { inject, singleton } from 'tsyringe';
 import { generateId } from '@/shared/utils';
 import Logger from '@/server/utils/logger';
-import { WorkspaceLocalStore } from '@/server/libs/infrastructure/workspace-local-store';
+import { WorkspaceLocalStore } from '@/server/shared/infrastructure/workspace-local-store';
+import { Inject } from '@nestjs/common';
 import {
   type CachePort,
   type CachedReference,
@@ -83,10 +83,9 @@ function wrapLongLines(text: string, width: number): string {
   return out.join('\n');
 }
 
-@singleton()
 export class CacheProvider implements CachePort {
   constructor(
-    @inject(WorkspaceLocalStore) private readonly store: WorkspaceLocalStore,
+    @Inject(WorkspaceLocalStore) private readonly store: WorkspaceLocalStore,
   ) {}
 
   async offload(

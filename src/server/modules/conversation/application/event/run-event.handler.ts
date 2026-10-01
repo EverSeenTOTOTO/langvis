@@ -1,16 +1,14 @@
-import { inject } from 'tsyringe';
-import type { DomainEvent } from '@/server/libs/ddd';
-import { eventHandler } from '@/server/decorator/handler';
+import { Inject } from '@nestjs/common';
+import { EventsHandler } from '@nestjs/cqrs';
 import { RunEvent } from '@/server/modules/agent/contracts';
-import type { RunEventPayload } from '@/server/modules/agent/contracts';
 import { SessionManager } from '../service/session-manager';
 
 /** 会话收到 agent 的每条富化事件，缓冲 + SSE 桥接。 */
-@eventHandler(RunEvent)
+@EventsHandler(RunEvent)
 export class RunEventHandler {
-  constructor(@inject(SessionManager) private sessionManager: SessionManager) {}
+  constructor(@Inject(SessionManager) private sessionManager: SessionManager) {}
 
-  async handle(event: DomainEvent<string, RunEventPayload>): Promise<void> {
+  async handle(event: RunEvent): Promise<void> {
     const { conversationId, messageId, event: enriched } = event.payload;
     this.sessionManager.handleRunEvent(conversationId, messageId, enriched);
   }

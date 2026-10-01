@@ -1,4 +1,4 @@
-import { ExceptionBase } from '@/server/libs/exceptions/exception.base';
+import { ExceptionBase } from '@/server/shared/exceptions/exception.base';
 
 export class ConversationNotFoundError extends ExceptionBase {
   readonly code = 'CONVERSATION_NOT_FOUND';

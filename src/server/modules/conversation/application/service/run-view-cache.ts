@@ -1,4 +1,3 @@
-import { singleton } from 'tsyringe';
 import type { RunStatus } from '@/shared/types/agent';
 import type { EnrichedEvent } from '@/shared/types/events';
 import { projectRun, type RunView } from './run-projection';
@@ -8,7 +7,6 @@ const MAX_CACHED_VIEWS = 500;
 
 // 终态 run 的投影缓存：终态行事件流已冻结（commit 一次性原子写 events+status），projectRun 纯 fold
 // 结果恒定 → 命中即权威永不失效；非终态（initialized/running）事件还在长，不入缓存直接 fold。
-@singleton()
 export class RunViewCache {
   /** 容量可变实例字段——测试可调小验证逐出。 */
   maxEntries = MAX_CACHED_VIEWS;

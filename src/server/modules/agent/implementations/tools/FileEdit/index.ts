@@ -1,14 +1,14 @@
-import { tool } from '@/server/decorator/tool';
+import { Inject } from '@nestjs/common';
+import { tool } from '@/server/modules/agent/application/tools/register-tool';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
-import { inject, container } from 'tsyringe';
+import { ToolService } from '@/server/modules/agent/application/service/tool.service';
+import { WorkspaceService } from '@/server/shared/infrastructure/workspace.service';
 import type { FileEditInput, FileEditOutput } from './config';
-import AskUserTool from '../AskUser';
 
 @tool(ToolIds.FILE_EDIT)
 export default class FileEditTool extends Tool<FileEditOutput> {
@@ -17,7 +17,8 @@ export default class FileEditTool extends Tool<FileEditOutput> {
   protected readonly logger!: Logger;
 
   constructor(
-    @inject(WorkspaceService) private workspaceService: WorkspaceService,
+    @Inject(WorkspaceService) private workspaceService: WorkspaceService,
+    @Inject(ToolService) private toolService: ToolService,
   ) {
     super();
   }
@@ -63,12 +64,15 @@ export default class FileEditTool extends Tool<FileEditOutput> {
       required: ['confirmed'],
     };
 
-    const hitl = container.resolve<AskUserTool>(ToolIds.ASK_USER);
-
-    const { submitted, data } = yield* hitl.call({
+    const hitl = this.toolService.resolve(ToolIds.ASK_USER)!;
+    const hitlOut = yield* hitl.call({
       ...ctx,
       input: { message, formSchema: formSchema as any },
     });
+    const { submitted, data } = hitlOut as {
+      submitted: boolean;
+      data?: Record<string, unknown>;
+    };
 
     if (!submitted || !(data as Record<string, unknown>)?.confirmed) {
       throw new Error('操作已取消');

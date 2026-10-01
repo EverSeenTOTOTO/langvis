@@ -5,12 +5,11 @@ import {
 import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
 import { UNGROUPED_GROUP_NAME } from '@/shared/constants';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
-import { inject, singleton } from 'tsyringe';
+import { Inject } from '@nestjs/common';
+import { DatabaseService } from '@/server/shared/infrastructure/database.service';
 
-@singleton()
 export class ConversationRepository implements ConversationRepositoryPort {
-  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {}
+  constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
 
   async create(
     name: string,

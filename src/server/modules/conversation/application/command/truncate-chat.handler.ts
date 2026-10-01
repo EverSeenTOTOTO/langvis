@@ -1,17 +1,17 @@
-import { inject } from 'tsyringe';
-import { commandHandler } from '@/server/decorator/handler';
+import { Inject } from '@nestjs/common';
+import { CommandHandler } from '@nestjs/cqrs';
 import { ChatService } from '../service/chat.service';
 import { SessionManager } from '../service/session-manager';
 import { TruncateConversationCommand } from '../../contracts';
 import { MessageNotFoundError } from '../../domain/errors';
 
 // 截断到某条消息之前：删该消息及之后（含折叠 summary），重置 ctx.messages。重发走常规发送路径。
-@commandHandler(TruncateConversationCommand)
+@CommandHandler(TruncateConversationCommand)
 export class TruncateChatHandler {
   constructor(
-    @inject(ChatService)
+    @Inject(ChatService)
     private chatService: ChatService,
-    @inject(SessionManager)
+    @Inject(SessionManager)
     private sessionManager: SessionManager,
   ) {}
 

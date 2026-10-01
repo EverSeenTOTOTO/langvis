@@ -1,4 +1,4 @@
-import { ExceptionBase } from '@/server/libs/exceptions/exception.base';
+import { ExceptionBase } from '@/server/shared/exceptions/exception.base';
 
 export class RunAlreadyCompletedError extends ExceptionBase {
   readonly code = 'RUN_ALREADY_COMPLETED';

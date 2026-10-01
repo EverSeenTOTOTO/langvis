@@ -1,14 +1,14 @@
-import { inject } from 'tsyringe';
-import { commandHandler } from '@/server/decorator/handler';
+import { Inject } from '@nestjs/common';
+import { CommandHandler } from '@nestjs/cqrs';
 import type { InboundEmailResult } from '../../domain/port/email.repository.port';
 import { EmailService } from '../service/email.service';
 import { ProcessInboundCommand } from '../../contracts';
 import { MissingRawEmailContentError } from '../../domain/errors';
 
-@commandHandler(ProcessInboundCommand)
+@CommandHandler(ProcessInboundCommand)
 export class ProcessInboundHandler {
   constructor(
-    @inject(EmailService)
+    @Inject(EmailService)
     private readonly emailService: EmailService,
   ) {}
 

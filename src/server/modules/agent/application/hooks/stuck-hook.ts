@@ -7,7 +7,6 @@ import {
 } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import Logger from '@/server/utils/logger';
-import { agentHook } from './registry';
 import { responseUser } from '../service/react-message';
 
 const STUCK_MESSAGE =
@@ -15,7 +14,6 @@ const STUCK_MESSAGE =
 
 // 卡死兜底：比对 pre-action 动作签名（tool+input）与已见集，新签名清零 streak，重复则 ++，达 guard.stuckThreshold 判卡死。
 // pre-action 在 response_user 终态 tick 也跑，先放行；parse 失败不进此相位（loop 兜底）。
-@agentHook
 export class StuckHook implements Hook {
   readonly id = 'stuck';
   readonly phase: HookPhase = 'pre-action';

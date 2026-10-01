@@ -1,7 +1,6 @@
 import { Express, Request } from 'express';
-import { container } from 'tsyringe';
 import { generateId } from '@/shared/utils';
-import { AuthService } from '@/server/libs/infrastructure/auth.service';
+import { AuthService } from '@/server/shared/infrastructure/auth.service';
 import Logger from '../utils/logger';
 import { isProd } from '../utils/env';
 import { TraceContext } from '@/server/middleware/trace-context';
@@ -22,7 +21,7 @@ declare global {
   }
 }
 
-export default async (app: Express) => {
+export default async (app: Express, authService: AuthService) => {
   app.use(async (req, res, next) => {
     const existingID = req.id ?? req.headers['x-request-id'];
     const requestId = existingID ? (existingID as string) : generateId('req');
@@ -31,8 +30,9 @@ export default async (app: Express) => {
     const loggerMeta: Record<string, string> = { requestId };
 
     // Try to get sessionId if available
-    const authService = container.resolve<AuthService>(AuthService);
-    const sessionId = await authService.getSessionId(req).catch(() => null);
+    const sessionId = await authService
+      .getSessionId(req.headers.cookie ?? '')
+      .catch(() => null);
     if (sessionId) {
       loggerMeta.sessionId = sessionId;
     }
@@ -45,7 +45,7 @@ export default async (app: Express) => {
     TraceContext.run({ requestId }, next);
   });
 
-  app.use('/api/*', (req, res, next) => {
+  app.use('/api', (req, res, next) => {
     // prod 白名单 headers（不落 cookie/authorization）；dev 全量保留。
     const headers = isProd
       ? Object.fromEntries(

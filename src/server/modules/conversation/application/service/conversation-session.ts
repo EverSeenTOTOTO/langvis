@@ -4,7 +4,7 @@ import { Connection } from './connection';
 import { ActiveRun } from './active-run';
 import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
-import type { ConversationConfig } from '@/server/libs/config';
+import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
 import {
   ConvTransformPlan,
   type ConversationContext,

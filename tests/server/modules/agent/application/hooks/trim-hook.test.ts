@@ -10,7 +10,7 @@ import {
   parseResponse,
   serializeAction,
 } from '@/server/modules/agent/application/service/react-message';
-import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
+import type { OffloadConfig } from '@/server/modules/conversation/domain/config/fragments/offload';
 
 // estimateTokens 用内容字符数代理（确定性、可控）。
 vi.mock('@/server/utils/estimateTokens', () => ({

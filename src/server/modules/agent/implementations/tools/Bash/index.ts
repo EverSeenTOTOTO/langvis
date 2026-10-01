@@ -1,4 +1,4 @@
-import { tool } from '@/server/decorator/tool';
+import { tool } from '@/server/modules/agent/application/tools/register-tool';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';

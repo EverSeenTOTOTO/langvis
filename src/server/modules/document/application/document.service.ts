@@ -1,17 +1,15 @@
+import { Inject } from '@nestjs/common';
 import type {
   DocumentDetail,
   ListDocumentsResponse,
 } from '@/shared/dto/controller/document.dto';
 import { DocumentCategory } from '@/shared/entities/Document';
-import { inject } from 'tsyringe';
-import { service } from '@/server/decorator/service';
 import { DOCUMENT_REPOSITORY } from '../document.di-tokens';
 import type { DocumentRepositoryPort } from '../domain/port/document.repository.port';
 
-@service()
 export class DocumentService {
   constructor(
-    @inject(DOCUMENT_REPOSITORY)
+    @Inject(DOCUMENT_REPOSITORY)
     private readonly repo: DocumentRepositoryPort,
   ) {}
 

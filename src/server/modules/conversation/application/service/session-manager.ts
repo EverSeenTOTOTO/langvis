@@ -1,20 +1,17 @@
+import { CancelRun } from '@/server/modules/agent/contracts';
 import type { StreamFrame, EnrichedEvent } from '@/shared/types/events';
 import type { Transport } from '@/shared/transport';
-import { inject, singleton } from 'tsyringe';
-import {
-  lifecycleHook,
-  type LifecycleHook,
-} from '@/server/decorator/lifecycle';
-import { EventBus, createDomainEvent } from '@/server/libs/ddd';
-import { CancelRun } from '@/server/modules/agent/contracts';
+import { EventBus } from '@nestjs/cqrs';
 import { ChatService } from './chat.service';
 import { ConversationSession } from './conversation-session';
 import type { ConversationContext } from '../../domain/model/conv-transform';
-import type { ConversationConfig } from '@/server/libs/config';
-import { getConvTransformPlan } from '../transforms';
+import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
+import type { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
+import { CONV_TRANSFORM_PLAN } from '../transforms';
 import { computeContextUsage } from '../transforms/usage-transform';
 import type { Message } from '@/shared/types/entities';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import { Inject, OnApplicationShutdown } from '@nestjs/common';
 import Logger from '@/server/utils/logger';
 
 export interface ChatState {
@@ -22,9 +19,7 @@ export interface ChatState {
   startedAt: number;
 }
 
-@singleton()
-@lifecycleHook
-export class SessionManager implements LifecycleHook {
+export class SessionManager implements OnApplicationShutdown {
   private readonly logger = Logger.child({ source: 'SessionManager' });
   private readonly sessions = new Map<string, ConversationSession>();
   private readonly startedAt = new Map<string, number>();
@@ -32,12 +27,14 @@ export class SessionManager implements LifecycleHook {
   abortGraceMs = 3000;
 
   constructor(
-    @inject(ChatService)
+    @Inject(ChatService)
     private convService: ChatService,
-    @inject(EventBus)
+    @Inject(EventBus)
     private eventBus: EventBus,
-    @inject(ProviderService)
+    @Inject(ProviderService)
     private providerService: ProviderService,
+    @Inject(CONV_TRANSFORM_PLAN)
+    private readonly transformPlan: ConvTransformPlan,
   ) {}
 
   private getOrCreate(conversationId: string): ConversationSession {
@@ -61,7 +58,7 @@ export class SessionManager implements LifecycleHook {
     this.logger.debug(`Chat disposed`, { chatId: conversationId });
   }
 
-  async onShutdown(): Promise<void> {
+  async onApplicationShutdown(): Promise<void> {
     await this.abortActiveRuns('server shutting down');
 
     for (const session of this.sessions.values()) {
@@ -203,9 +200,8 @@ export class SessionManager implements LifecycleHook {
     const run = this.sessions.get(conversationId)?.getRun(messageId);
     if (!run) return;
     // 事件驱动取消：会话不再直接调 agent 的 executor；agent 取消后 cancelled 事件经 RunEvent 回流。
-    this.eventBus.dispatch(
-      CancelRun,
-      createDomainEvent(CancelRun, run.runId, {
+    this.eventBus.publish(
+      new CancelRun(run.runId, {
         runId: run.runId,
         conversationId,
         messageId,
@@ -239,7 +235,7 @@ export class SessionManager implements LifecycleHook {
     this.getOrCreate(conversationId).activateContext(
       messages,
       runtimeConfig,
-      getConvTransformPlan(),
+      this.transformPlan,
     );
   }
 

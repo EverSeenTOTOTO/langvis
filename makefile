@@ -79,3 +79,8 @@ migration-run:
 migration-revert:
 	NODE_ENV=development pnpm exec tsx ./node_modules/typeorm/cli.js migration:revert \
 		-d src/server/libs/infrastructure/datasource.ts
+
+# e2e：boot 真 server + DB（SSE/SSR/auth 全链路），仅本机开发环境跑。
+.PHONY: test-e2e
+test-e2e:
+	pnpm exec vitest run --config vitest.e2e.config.ts

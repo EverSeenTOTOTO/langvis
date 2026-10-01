@@ -3,8 +3,8 @@ import { ChatService } from '@/server/modules/conversation/application/service/c
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
 import type { ConversationRepositoryPort } from '@/server/modules/conversation/domain/port/conversation.repository.port';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
-import type { TransactionPort } from '@/server/libs/ports/transaction/transaction.port';
-import type { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
+import type { TransactionPort } from '@/server/shared/ports/transaction/transaction.port';
+import type { WorkspaceService } from '@/server/shared/infrastructure/workspace.service';
 import { Role } from '@/shared/entities/Message';
 import { ConversationNotFoundError } from '@/server/modules/conversation/domain/errors';
 

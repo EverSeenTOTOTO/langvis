@@ -47,7 +47,9 @@ export function dto<T extends object>(schema: JSONSchemaType<T>) {
       const validator = getValidator(schema);
       const data = structuredClone(plain);
       if (validator(data)) {
-        return Object.assign(new Target(), data) as T;
+        // 返回 plain 对象而非类实例——下游校验器（如 better-auth 的 zod）
+        // 拒收非 plain 对象；DTO 是纯数据袋，实例化无收益。
+        return data as T;
       }
       throw new ValidationException(ajv.errorsText(validator.errors));
     };
@@ -56,7 +58,7 @@ export function dto<T extends object>(schema: JSONSchemaType<T>) {
       const data = structuredClone(plain);
       const validator = getValidator(schema);
       validator(data);
-      return Object.assign(new Target(), data) as T;
+      return data as T;
     };
 
     return EnhancedClass;

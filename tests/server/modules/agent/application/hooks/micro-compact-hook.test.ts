@@ -6,7 +6,7 @@ import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { MicroCompactHook } from '@/server/modules/agent/application/hooks/micro-compact-hook';
 import { serializeAction } from '@/server/modules/agent/application/service/react-message';
-import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
+import type { OffloadConfig } from '@/server/modules/conversation/domain/config/fragments/offload';
 
 async function collect(
   gen: AsyncGenerator<RunEvent, void>,

@@ -1,11 +1,10 @@
+import { Inject } from '@nestjs/common';
 import { Settings, SettingsEntity } from '@/shared/entities/Settings';
 import type { SettingsRepositoryPort } from '../../domain/port/settings.repository.port';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
-import { inject, singleton } from 'tsyringe';
+import { DatabaseService } from '@/server/shared/infrastructure/database.service';
 
-@singleton()
 export class SettingsRepository implements SettingsRepositoryPort {
-  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {}
+  constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
 
   async findByUserId(userId: string): Promise<Settings | null> {
     const repo = this.db.getRepository(SettingsEntity);

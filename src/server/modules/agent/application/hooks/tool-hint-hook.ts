@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe';
+import { Inject } from '@nestjs/common';
 import { Role } from '@/shared/entities/Message';
 import { ToolIds } from '@/shared/constants';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
@@ -12,14 +12,12 @@ import {
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import { SkillService } from '@/server/modules/agent/application/service/skill.service';
 import Logger from '@/server/utils/logger';
-import { agentHook } from './registry';
 
 const MAX_ITEMS = 3;
 const TOOL_HINT_THRESHOLD = 12;
 
 // pre-llm 首 tick：按 user query 检索命中工具/skill，以 <details> 前缀并入最后一条 user 消息，正文居末；
 // 完整参数由 list_tools(tool=<id>) 获取。仅 conv（interactive）注入一次；subagent/eval 跳过。
-@agentHook
 export class ToolHintHook implements Hook {
   readonly id = 'tool-hint';
   readonly phase: HookPhase = 'pre-llm';
@@ -27,8 +25,8 @@ export class ToolHintHook implements Hook {
   private done = false;
 
   constructor(
-    @inject(ToolService) private readonly toolService: ToolService,
-    @inject(SkillService) private readonly skillService: SkillService,
+    @Inject(ToolService) private readonly toolService: ToolService,
+    @Inject(SkillService) private readonly skillService: SkillService,
   ) {}
 
   async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {

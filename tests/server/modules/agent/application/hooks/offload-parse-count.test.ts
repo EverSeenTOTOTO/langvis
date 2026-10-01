@@ -6,7 +6,7 @@ import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { TrimHook } from '@/server/modules/agent/application/hooks/trim-hook';
 import { serializeAction } from '@/server/modules/agent/application/service/react-message';
-import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
+import type { OffloadConfig } from '@/server/modules/conversation/domain/config/fragments/offload';
 
 // 计数 parseResponse 调用——验证「每候选一次」契约（candidateBody 一次性解析，hint/stub/classifyRecall 复用，不重复 parse）。
 let parseCalls = 0;

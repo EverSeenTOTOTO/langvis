@@ -2,13 +2,12 @@ import type { Message } from '@/shared/types/entities';
 import type { MessageAttachment } from '@/shared/types/entities';
 import { MessageEntity, Role } from '@/shared/entities/Message';
 import type { MessageRepositoryPort } from '../../domain/port/message.repository.port';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
-import { inject, singleton } from 'tsyringe';
+import { DatabaseService } from '@/server/shared/infrastructure/database.service';
+import { Inject } from '@nestjs/common';
 import { In } from 'typeorm';
 
-@singleton()
 export class MessageRepository implements MessageRepositoryPort {
-  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {}
+  constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
 
   async batchCreate(
     conversationId: string,

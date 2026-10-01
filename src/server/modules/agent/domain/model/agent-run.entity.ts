@@ -1,7 +1,7 @@
 import { RunConfigVO } from './run-config.vo';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 import { RunAlreadyCompletedError } from '../errors';
-import { AggregateRoot } from '@/server/libs/ddd';
+import { AggregateRoot } from '@/server/shared/ddd';
 import type { RunStatus } from '@/shared/types/agent';
 
 export class AgentRun extends AggregateRoot<string> {

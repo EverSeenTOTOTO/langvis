@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { VectorIndexInitializer } from '@/server/libs/infrastructure/vector-index-initializer';
+import { VectorIndexInitializer } from '@/server/shared/infrastructure/vector-index-initializer';
 import { EMBEDDING_HNSW_INDEX_NAME } from '@/shared/entities/DocumentChunk';
-import type { DatabaseService } from '@/server/libs/infrastructure/database.service';
+import type { DatabaseService } from '@/server/shared/infrastructure/database.service';
 
 function makeMockDb(): DatabaseService {
   return {
@@ -12,7 +12,7 @@ function makeMockDb(): DatabaseService {
 describe('VectorIndexInitializer（HNSW 补建）', () => {
   it('onBoot 幂等建索引，名字与实体 synchronize:false 标记同源', async () => {
     const db = makeMockDb();
-    await new VectorIndexInitializer(db).onBoot();
+    await new VectorIndexInitializer(db).onModuleInit();
 
     expect(db.dataSource.query).toHaveBeenCalledTimes(1);
     const sql = (db.dataSource.query as ReturnType<typeof vi.fn>).mock

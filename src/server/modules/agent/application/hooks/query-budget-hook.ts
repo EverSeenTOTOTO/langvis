@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe';
+import { Inject } from '@nestjs/common';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import {
   StopLoop,
@@ -7,9 +7,8 @@ import {
 } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import { estimateTokens } from '@/server/utils/estimateTokens';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import { ProviderService } from '@/server/shared/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
-import { agentHook } from './registry';
 import { responseUser } from '../service/react-message';
 
 /** 不可恢复超窗时向用户解释的消息（与兄弟 stop hook 的文案风格一致）。 */
@@ -18,14 +17,13 @@ const overflowMessage = (reason: string) =>
 
 // 整体上下文 fail-fast（pre-LLM）：只以整体上下文为视角，不做单条 query 体积限制 / 截断 / 收窄。
 // 裁剪与微压缩已先跑；若全量仍超窗 → 无可恢复（再 drop 任何单条也无济于事）→ 先解释再 StopLoop。
-@agentHook
 export class QueryBudgetHook implements Hook {
   readonly id = 'query-budget';
   readonly phase: HookPhase = 'pre-llm';
   private readonly logger = Logger.child({ source: 'QueryBudgetHook' });
 
   constructor(
-    @inject(ProviderService)
+    @Inject(ProviderService)
     private readonly providerService: ProviderService,
   ) {}
 

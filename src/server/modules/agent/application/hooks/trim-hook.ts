@@ -1,13 +1,12 @@
-import { inject } from 'tsyringe';
+import { Inject } from '@nestjs/common';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { ParsedAction } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import { estimateTokens } from '@/server/utils/estimateTokens';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
-import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
+import { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import type { OffloadConfig } from '@/server/modules/conversation/domain/config/fragments/offload';
 import Logger from '@/server/utils/logger';
-import { agentHook } from './registry';
 import { classifyRecallParsed } from '@/server/modules/agent/domain/offload/offload-recall';
 import { isPinnedObservation } from '@/server/modules/agent/domain/offload/pin';
 import {
@@ -29,14 +28,13 @@ const DEFAULT_KEEP_RECENT = 4;
 
 // 裁剪（pre-LLM）：age 驱动的无损桩化。低价值 aged 结果满 trimAge 个 tick 即落盘 + 替换为 hint 文本标记，
 // 读端经 rg/sed 回取。与体积无关，按年龄裁剪。pinned 驻留；recall 句柄副本跳过；近窗口与短正文不动。
-@agentHook
 export class TrimHook implements Hook {
   readonly id = 'trim';
   readonly phase: HookPhase = 'pre-llm';
   private readonly logger = Logger.child({ source: 'TrimHook' });
 
   constructor(
-    @inject(ProviderService)
+    @Inject(ProviderService)
     private readonly providerService: ProviderService,
   ) {}
 

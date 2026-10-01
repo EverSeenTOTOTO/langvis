@@ -1,13 +1,12 @@
-import { inject } from 'tsyringe';
+import { Inject } from '@nestjs/common';
 import { ToolIds } from '@/shared/constants';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { ParsedAction } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
-import type { OffloadConfig } from '@/server/libs/config/fragments/offload';
+import { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import type { OffloadConfig } from '@/server/modules/conversation/domain/config/fragments/offload';
 import Logger from '@/server/utils/logger';
-import { agentHook } from './registry';
 import {
   OBSERVATION_PREFIX,
   OFFLOADED_MARK,
@@ -24,14 +23,13 @@ const DEFAULT_KEEP_RECENT = 4;
 
 // 微压缩（pre-LLM）：步数驱动的有损清理。run 步数达 compactStepThreshold 后，满 compactAge 个 tick 且未被后续 bash 回取
 // 的 observation 桩有损丢弃——长 run 下盘上内容已不再被引用，主动清除旧工具结果以减负。assistant 桩/seed/近窗口不动；磁盘文件不删（CachePort 仅写端）。
-@agentHook
 export class MicroCompactHook implements Hook {
   readonly id = 'micro-compact';
   readonly phase: HookPhase = 'pre-llm';
   private readonly logger = Logger.child({ source: 'MicroCompactHook' });
 
   constructor(
-    @inject(ProviderService)
+    @Inject(ProviderService)
     private readonly providerService: ProviderService,
   ) {}
 

@@ -1,6 +1,6 @@
 // RunConfigVO — 运行时配置不可变快照（createRunConfig 校验后产出）。contextSize 由消费者按需派生。
 
-import type { ConversationConfig } from '@/server/libs/config';
+import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
 
 export interface RunConfigVOProps {
   tools: string[];

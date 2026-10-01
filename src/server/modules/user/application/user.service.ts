@@ -1,13 +1,11 @@
+import { Inject } from '@nestjs/common';
 import type { User } from '@/shared/entities/User';
-import { inject } from 'tsyringe';
-import { service } from '@/server/decorator/service';
 import { USER_REPOSITORY } from '../user.di-tokens';
 import type { UserRepositoryPort } from '../domain/port/user.repository.port';
 
-@service()
 export class UserService {
   constructor(
-    @inject(USER_REPOSITORY)
+    @Inject(USER_REPOSITORY)
     private readonly repo: UserRepositoryPort,
   ) {}
 

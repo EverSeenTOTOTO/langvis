@@ -1,3 +1,4 @@
+import { Inject } from '@nestjs/common';
 import type {
   DocumentDetail,
   DocumentListItem,
@@ -5,14 +6,12 @@ import type {
 } from '@/shared/dto/controller/document.dto';
 import { DocumentCategory, DocumentEntity } from '@/shared/entities/Document';
 import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
-import { inject, singleton } from 'tsyringe';
 import { Between, LessThanOrEqual, Like, MoreThanOrEqual } from 'typeorm';
 import type { DocumentRepositoryPort } from '../../domain/port/document.repository.port';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
+import { DatabaseService } from '@/server/shared/infrastructure/database.service';
 
-@singleton()
 export class DocumentRepository implements DocumentRepositoryPort {
-  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {}
+  constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
 
   async listDocuments(params: {
     keyword?: string;

@@ -5,25 +5,23 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import express, { Express } from 'express';
+import { NestFactory } from '@nestjs/core';
+import { ExpressAdapter } from '@nestjs/platform-express';
 import type { Server } from 'http';
+import type { INestApplication } from '@nestjs/common';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import 'reflect-metadata';
-import bindControllers from './controller';
-import './libs/infrastructure';
-import './modules/agent/agent.module';
-import './modules/conversation/conversation.module';
-import './modules/document/document.module';
-import './modules/email/email.module';
-import './modules/settings/settings.module';
-import './modules/user/user.module';
-import { bootAll, shutdownAll } from './decorator/lifecycle';
-import { shutdownTracing } from './tracing';
-import bindAuthMiddleware from './middleware/auth';
+import { initializeTransactionalContext } from 'typeorm-transactional';
+import { toNodeHandler } from 'better-auth/node';
+import { AppModule } from './app.module';
+import { AuthService } from './shared/infrastructure/auth.service';
 import bindRequestId from './middleware/requestId';
 import bindSSRMiddleware from './middleware/ssr';
 import errorHandler from './middleware/errorHandler';
-import { attachTerminalServer } from '@/server/terminal/terminal.server';
 import logger from './utils/logger';
+import { attachTerminalServer } from '@/server/terminal/terminal.server';
+import { shutdownTracing } from './tracing';
 
 logger.info(
   `Starting with environment: ${isProd ? 'production' : 'development'}`,
@@ -36,7 +34,18 @@ dotenv.config({
   override: true,
 });
 
-export const createServer = async (): Promise<Express> => {
+// typeorm-transactional 原型补丁——须先于任何 DataSource 建立与事务执行。
+initializeTransactionalContext();
+
+export interface BootedApp {
+  app: Express;
+  nestApp: INestApplication;
+  authService: AuthService;
+}
+
+// Nest-first 自举：先建 Nest（init 即跑生命周期），再装配 express 壳。
+// 挂载序：requestId → better-auth → Nest(/api) → SSR（last）。
+export const createServer = async (): Promise<BootedApp> => {
   const app = express();
   const dist = path.join(process.cwd(), 'dist');
 
@@ -58,57 +67,74 @@ export const createServer = async (): Promise<Express> => {
   app.use(cookieParser());
   app.use(compression());
 
-  await bindRequestId(app);
-  await bindAuthMiddleware(app);
-  await bindControllers(app);
+  const nestApp = await NestFactory.create(AppModule, new ExpressAdapter(), {
+    logger: false,
+    abortOnError: false, // init 异常默认 process.abort() 无输出，关掉以便排障
+  });
+  await nestApp.init();
+  const authService = nestApp.get(AuthService, { strict: false });
+
+  await bindRequestId(app, authService);
+  // better-auth 标准挂载：完整 handler 自管 cookie，先于 Nest 子应用。
+  app.use('/api/auth', toNodeHandler(authService.handler));
+  // Nest 子应用挂 /api（SSR 之前）。Nest 会 404 终结子应用内未匹配请求，
+  // 故不能挂根前缀（会截走 SSR catch-all 流量）。
+  app.use('/api', nestApp.getHttpAdapter().getInstance());
   // must be last
-  await bindSSRMiddleware(app);
+  await bindSSRMiddleware(app, authService);
   app.use(errorHandler);
-  return app;
+  return { app, nestApp, authService };
 };
 
-const port = parseInt(process.env.PORT || '', 10);
+// 仅作为进程入口时自举（tsx watch / node dist/server.js）；
+// 被 e2e 测试 import 时不 listen、不挂信号钩子。
+const isMainModule =
+  !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 
-if (Number.isNaN(port)) {
-  throw new Error(`Invalid port: ${port}`);
+if (isMainModule) {
+  const port = parseInt(process.env.PORT || '', 10);
+
+  if (Number.isNaN(port)) {
+    throw new Error(`Invalid port: ${port}`);
+  }
+
+  createServer()
+    .then(({ app, nestApp, authService }) => {
+      const server = app.listen(port, () =>
+        logger.info(`Server started at http://localhost:${port}`),
+      );
+
+      attachTerminalServer(server, authService); // 终端托管：浏览器 ⇄ ws ⇄ PTY ⇄ CLI（upgrade 事件挂载）
+
+      const shutdown = () => {
+        logger.info('Shutting down server...');
+        // Nest 拥有全部实例：close() 触发 onApplicationShutdown（app 层先停、DB 池最后）
+        nestApp
+          .close()
+          .then(() => shutdownTracing())
+          .then(() => gracefulClose(server, 0))
+          .catch((err: Error) => {
+            logger.error('Error during shutdown:', err);
+            gracefulClose(server, 1);
+          });
+      };
+
+      process.on('SIGINT', shutdown);
+      process.on('SIGTERM', shutdown);
+
+      // 进程级兜底：未 catch 的 rejection/exception 在 Node≥15 默认静默崩进程——
+      // 此处记日志后硬退，使崩溃有痕可溯（状态已不确定，不走 graceful）。
+      process.on('unhandledRejection', reason => {
+        logger.error('Unhandled rejection:', reason);
+        process.exit(1);
+      });
+      process.on('uncaughtException', err => {
+        logger.error('Uncaught exception:', err);
+        process.exit(1);
+      });
+    })
+    .catch(logger.error);
 }
-
-createServer()
-  .then(async app => {
-    await bootAll(); // 生命周期启动钩子（DB 就绪 + 孤儿 run 清扫 + 沙箱探测 等）
-
-    const server = app.listen(port, () =>
-      logger.info(`Server started at http://localhost:${port}`),
-    );
-
-    attachTerminalServer(server); // 终端托管：浏览器 ⇄ ws ⇄ PTY ⇄ CLI（upgrade 事件挂载）
-
-    const shutdown = () => {
-      logger.info('Shutting down server...');
-      shutdownAll()
-        .then(() => shutdownTracing())
-        .then(() => gracefulClose(server, 0))
-        .catch(err => {
-          logger.error('Error during shutdown:', err);
-          gracefulClose(server, 1);
-        });
-    };
-
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
-
-    // 进程级兜底：未 catch 的 rejection/exception 在 Node≥15 默认静默崩进程——
-    // 此处记日志后硬退，使崩溃有痕可溯（状态已不确定，不走 graceful）。
-    process.on('unhandledRejection', reason => {
-      logger.error('Unhandled rejection:', reason);
-      process.exit(1);
-    });
-    process.on('uncaughtException', err => {
-      logger.error('Uncaught exception:', err);
-      process.exit(1);
-    });
-  })
-  .catch(logger.error);
 
 /** 关停收尾：关连接 → 关服务 → 退出；5s 强制兜底。 */
 function gracefulClose(server: Server, code: number): void {

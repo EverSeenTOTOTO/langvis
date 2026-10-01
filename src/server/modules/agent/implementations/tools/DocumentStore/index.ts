@@ -1,19 +1,25 @@
-import { tool } from '@/server/decorator/tool';
+import { Inject } from '@nestjs/common';
+import { tool } from '@/server/modules/agent/application/tools/register-tool';
 import { ToolIds } from '@/shared/constants';
 import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
 import { DocumentEntity } from '@/shared/entities/Document';
 import type { Logger } from '@/server/utils/logger';
 import type { ToolConfig } from '@/shared/types';
-import { container, inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
-import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
-import type EmbeddingGenerateTool from '../EmbeddingGenerate';
-import type ContentChunkTool from '../ContentChunk';
+import { ToolService } from '@/server/modules/agent/application/service/tool.service';
+import { DatabaseService } from '@/server/shared/infrastructure/database.service';
+import { WorkspaceService } from '@/server/shared/infrastructure/workspace.service';
 import type { DocumentStoreInput, DocumentStoreOutput } from './config';
 import { config } from './config';
+
+/** content_chunk 工具的返回块形状（内部分块复用）。 */
+interface ChunkOutput {
+  content: string;
+  index: number;
+  metadata?: Record<string, unknown>;
+}
 
 @tool(ToolIds.DOCUMENT_STORE)
 export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
@@ -22,9 +28,10 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
   protected readonly logger!: Logger;
 
   constructor(
-    @inject(DatabaseService) private readonly db: DatabaseService,
-    @inject(WorkspaceService)
+    @Inject(DatabaseService) private readonly db: DatabaseService,
+    @Inject(WorkspaceService)
     private readonly workspace: WorkspaceService,
+    @Inject(ToolService) private readonly toolService: ToolService,
   ) {
     super();
   }
@@ -43,22 +50,21 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
 
     // 分块:复用 content_chunk 工具。分块策略/参数是存储层的内部细节,
     // 用 content_chunk 的默认值(paragraph/1000),不暴露给调用方。
-    const chunkTool = container.resolve<ContentChunkTool>(
-      ToolIds.CONTENT_CHUNK,
-    );
-    const chunkResult = yield* chunkTool.call({
+    const chunkTool = this.toolService.resolve(ToolIds.CONTENT_CHUNK)!;
+    const chunkOut = yield* chunkTool.call({
       ...ctx,
       input: { content: rawContent },
     });
-    const chunks = chunkResult.chunks;
+    const chunks = (chunkOut as { chunks: ChunkOutput[] }).chunks;
 
     // 向量由内部 EmbeddingGenerate 按 chunks 顺序生成（与 DocumentSearch 同模式），
     // 调用方不再搬运 number[][]，模型循环里也不会出现大块向量。
-    const embedTool = container.resolve<EmbeddingGenerateTool>(
-      ToolIds.EMBEDDING_GENERATE,
-    );
-    const embedResult = yield* embedTool.call({ ...ctx, input: { chunks } });
-    const embeddings = embedResult.embeddings;
+    const embedTool = this.toolService.resolve(ToolIds.EMBEDDING_GENERATE)!;
+    const embedOut = yield* embedTool.call({
+      ...ctx,
+      input: { chunks: chunks.map(c => c.content) },
+    });
+    const embeddings = (embedOut as { embeddings: number[][] }).embeddings;
 
     // Coerce keywords: LLM may pass comma-separated string(s).
     // Ajv wraps a bare string as single-element array, so flatMap splits comma-separated elements.

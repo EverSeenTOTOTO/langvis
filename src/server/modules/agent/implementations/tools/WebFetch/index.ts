@@ -1,8 +1,5 @@
-import { tool } from '@/server/decorator/tool';
-import {
-  lifecycleHook,
-  type LifecycleHook,
-} from '@/server/decorator/lifecycle';
+import { tool } from '@/server/modules/agent/application/tools/register-tool';
+import { OnApplicationShutdown } from '@nestjs/common';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
@@ -45,10 +42,9 @@ const getProxyDispatcher = (proxy?: string) => {
 };
 
 @tool(ToolIds.WEB_FETCH)
-@lifecycleHook
 export default class WebFetchTool
   extends Tool<WebFetchOutput>
-  implements LifecycleHook
+  implements OnApplicationShutdown
 {
   readonly id!: string;
   readonly config!: ToolConfig;
@@ -321,7 +317,7 @@ export default class WebFetchTool
     };
   }
 
-  async onShutdown(): Promise<void> {
+  async onApplicationShutdown(): Promise<void> {
     if (this.browser?.isConnected()) {
       await this.browser.close();
       this.browser = null;

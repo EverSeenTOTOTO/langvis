@@ -1,11 +1,12 @@
+import { ModuleRef } from '@nestjs/core';
 import os from 'node:os';
 import path from 'node:path';
-import { injectable, inject, container } from 'tsyringe';
 import { ToolIds } from '@/shared/constants';
 import type { RunEvent } from '@/shared/types/events';
 import type { ToolCallContext } from '../domain/port/tool-call-context.port';
 import AskUserTool from '../implementations/tools/AskUser';
-import { WorkspaceLocalStore } from '@/server/libs/infrastructure/workspace-local-store';
+import { WorkspaceLocalStore } from '@/server/shared/infrastructure/workspace-local-store';
+import { Inject } from '@nestjs/common';
 import {
   AUTHORIZATION_PORT,
   type AuthAction,
@@ -15,11 +16,11 @@ import {
 
 // 横切授权实现：session 持久 (action, resource) 决策。命中 grants 直放行；interactive 弹 AskUser，allow 追加写文件。
 // grants 真相源 = workDir 的 `.langvis/grants.json`（WorkspaceLocalStore section），跨 run 持久。
-@injectable()
 export class AuthorizationProvider implements AuthorizationPort {
   constructor(
-    @inject(WorkspaceLocalStore)
+    @Inject(WorkspaceLocalStore)
     private readonly store: WorkspaceLocalStore,
+    @Inject(ModuleRef) private readonly moduleRef: ModuleRef,
   ) {}
 
   async *ensureApproved(
@@ -38,7 +39,9 @@ export class AuthorizationProvider implements AuthorizationPort {
       );
     }
 
-    const askUser = container.resolve<AskUserTool>(ToolIds.ASK_USER);
+    const askUser = this.moduleRef.get<AskUserTool>(ToolIds.ASK_USER, {
+      strict: false,
+    });
     const { submitted, data } = yield* askUser.call({
       ...ctx,
       input: { message: opts.prompt, formSchema: opts.formSchema as never },

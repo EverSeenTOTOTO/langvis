@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { buildDataSourceOptions } from '@/server/libs/infrastructure/datasource-options';
-import { BaselineSchema1788134400001 } from '@/server/libs/infrastructure/migrations/1788134400001-BaselineSchema';
-import { RestoreAuthUniqueIndexes1788134400002 } from '@/server/libs/infrastructure/migrations/1788134400002-RestoreAuthUniqueIndexes';
+import { buildDataSourceOptions } from '@/server/shared/infrastructure/datasource-options';
+import { BaselineSchema1788134400001 } from '@/server/shared/infrastructure/migrations/1788134400001-BaselineSchema';
+import { RestoreAuthUniqueIndexes1788134400002 } from '@/server/shared/infrastructure/migrations/1788134400002-RestoreAuthUniqueIndexes';
 
 type MigrationCtor =
   | typeof BaselineSchema1788134400001

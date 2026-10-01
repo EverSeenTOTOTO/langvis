@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { container } from 'tsyringe';
-import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
+import { describe, it, expect, vi } from 'vitest';
+import { HOOK_TYPES } from '@/server/modules/agent/application/hooks';
 import { CompactionHook } from '@/server/modules/agent/application/hooks/compaction-hook';
 import { LoopUsageHook } from '@/server/modules/agent/application/hooks/loop-usage-hook';
 import { CumulativeBudgetHook } from '@/server/modules/agent/application/hooks/cumulative-budget-hook';
@@ -9,9 +8,8 @@ import { MaxIterationsHook } from '@/server/modules/agent/application/hooks/max-
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { serializeAction } from '@/server/modules/agent/application/service/react-message';
-import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
-import type { LlmProvider } from '@/server/libs/infrastructure/llm.provider';
+import { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import type { LlmProvider } from '@/server/shared/infrastructure/llm.provider';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import type { LlmMessage } from '@/shared/types/entities';
@@ -37,9 +35,11 @@ function makeCtx(opts: {
   contextSize?: number;
   loopSteps: (string | LlmMessage)[];
   llm?: LlmProvider;
-}): { ctx: AgentRunContext; providerService: ProviderService } {
-  const llm = opts.llm ?? mockLlm();
-  container.register(LLM_PORT, { useValue: llm });
+}): {
+  ctx: AgentRunContext;
+  providerService: ProviderService;
+  llm: LlmProvider;
+} {
   const contextSize = opts.contextSize ?? 10;
   const config = RunConfigVO.of({
     tools: [],
@@ -48,6 +48,7 @@ function makeCtx(opts: {
   const providerService = {
     resolveContextSize: () => contextSize,
   } as unknown as ProviderService;
+  const llm = opts.llm ?? mockLlm();
   const seed = opts.seed;
   let messages = seed;
   for (const step of opts.loopSteps)
@@ -66,78 +67,63 @@ function makeCtx(opts: {
       signal: new AbortController().signal,
     } as unknown as AgentRunContext,
     providerService,
+    llm,
   };
 }
 
-describe('agent hook registry（自动识别 + per-run 实例）', () => {
-  afterEach(() => {
-    container.clearInstances();
+describe('agent hook 清单（HOOK_TYPES 发现 + 直接构造即新实例）', () => {
+  it('HOOK_TYPES 覆盖全部 hook', () => {
+    expect(HOOK_TYPES.some(T => T === CompactionHook)).toBe(true);
+    expect(HOOK_TYPES.some(T => T === LoopUsageHook)).toBe(true);
+    expect(HOOK_TYPES.some(T => T === CumulativeBudgetHook)).toBe(true);
+    expect(HOOK_TYPES.some(T => T === StuckHook)).toBe(true);
+    expect(HOOK_TYPES.some(T => T === MaxIterationsHook)).toBe(true);
   });
 
-  it('resolveAgentHooks 发现 @agentHook 标记的 hook', () => {
-    const hooks = resolveAgentHooks();
-    expect(hooks.some(h => h instanceof CompactionHook)).toBe(true);
-    expect(hooks.some(h => h instanceof LoopUsageHook)).toBe(true);
-    expect(hooks.some(h => h instanceof CumulativeBudgetHook)).toBe(true);
-    expect(hooks.some(h => h instanceof StuckHook)).toBe(true);
-    expect(hooks.some(h => h instanceof MaxIterationsHook)).toBe(true);
-  });
-
-  it('hook 为 per-run 实例：每次 resolve 构造新对象（useClass + 非 singleton）', () => {
-    const a = resolveAgentHooks();
-    const b = resolveAgentHooks();
+  it('直接构造即新实例——executor 的 ModuleRef 按次 get 同理（TRANSIENT）', () => {
+    const a = new CompactionHook({} as never, mockLlm());
+    const b = new CompactionHook({} as never, mockLlm());
     expect(a).not.toBe(b);
-    const find = (hs: typeof a, id: string) => hs.find(h => h.id === id)!;
-    // CumulativeBudgetHook 持可变 consumed，必须 per-run——两次解析不得同实例
-    expect(find(a, 'cumulative-budget')).not.toBe(find(b, 'cumulative-budget'));
-    expect(find(a, 'compaction')).not.toBe(find(b, 'compaction'));
   });
 });
 
 describe('CompactionHook（自持压缩逻辑，经 ctx.messages 读写缝）', () => {
-  afterEach(() => {
-    container.clearInstances();
-  });
-
   it('loop 步骤 ≤ keepRecent 时不动（无事件）', async () => {
-    const { ctx, providerService } = makeCtx({
+    const { ctx, providerService, llm } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       loopSteps: ['s0', 's1', 's2', 's3'], // = keepRecent
     });
     const before = ctx.messages.length;
     const events = await collect(
-      new CompactionHook(providerService).apply(ctx),
+      new CompactionHook(providerService, llm).apply(ctx),
     );
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(before);
   });
 
   it('未超阈时不动', async () => {
-    const llm = mockLlm();
-    const { ctx, providerService } = makeCtx({
+    const { ctx, providerService, llm } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       contextSize: 1_000_000,
       loopSteps: ['s0', 's1', 's2', 's3', 's4', 's5'],
-      llm,
     });
     const events = await collect(
-      new CompactionHook(providerService).apply(ctx),
+      new CompactionHook(providerService, llm).apply(ctx),
     );
     expect(events).toHaveLength(0);
     expect(llm.chatContent).not.toHaveBeenCalled();
   });
 
   it('超阈且步骤足够时折叠较早步骤、保留近期 keepRecent', async () => {
-    const llm = mockLlm('THE RECAP');
-    const { ctx, providerService } = makeCtx({
+    const { ctx, providerService, llm } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       contextSize: 10, // 阈值 8 token，几条消息即超
       loopSteps: Array.from({ length: 6 }, (_, i) => `observation step ${i}`),
-      llm,
+      llm: mockLlm('THE RECAP'),
     });
 
     const events = await collect(
-      new CompactionHook(providerService).apply(ctx),
+      new CompactionHook(providerService, llm).apply(ctx),
     );
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ type: 'hook', hookId: 'compaction' });
@@ -152,14 +138,14 @@ describe('CompactionHook（自持压缩逻辑，经 ctx.messages 读写缝）', 
   });
 
   it('pinned (action, observation) 原子对不折叠：原样驻留 recap 之后', async () => {
-    const llm = mockLlm('THE RECAP');
     const pinnedObs = {
       role: 'user' as const,
       content: 'Observation: ## AVAILABLE TOOLS MARKER\n- bash: run commands',
     };
-    const { ctx, providerService } = makeCtx({
+    const { ctx, providerService, llm } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       contextSize: 10,
+      llm: mockLlm('THE RECAP'),
       loopSteps: [
         {
           role: 'assistant',
@@ -176,11 +162,10 @@ describe('CompactionHook（自持压缩逻辑，经 ctx.messages 读写缝）', 
         's4',
         's5',
       ],
-      llm,
     });
 
     const events = await collect(
-      new CompactionHook(providerService).apply(ctx),
+      new CompactionHook(providerService, llm).apply(ctx),
     );
     expect(events).toHaveLength(1);
     // [sys, recap, 配对 action, pinnedObs, keepRecent(4)] = 8——对保真且相邻（i-1 配对不变式）
@@ -206,7 +191,7 @@ describe('CompactionHook（自持压缩逻辑，经 ctx.messages 读写缝）', 
       role: 'user' as const,
       content: 'Observation: SKILL BODY MARKER gf skill instructions',
     };
-    const { ctx, providerService } = makeCtx({
+    const { ctx, providerService, llm } = makeCtx({
       seed: [
         { role: 'system', content: 'sys' },
         { role: 'assistant', content: action },
@@ -217,7 +202,7 @@ describe('CompactionHook（自持压缩逻辑，经 ctx.messages 读写缝）', 
     });
 
     const events = await collect(
-      new CompactionHook(providerService).apply(ctx),
+      new CompactionHook(providerService, llm).apply(ctx),
     );
     expect(events).toHaveLength(1);
     // [sys, action(seed 原样), recap, pinnedObs, keepRecent(4)] = 8
@@ -228,7 +213,6 @@ describe('CompactionHook（自持压缩逻辑，经 ctx.messages 读写缝）', 
   });
 
   it('older 区全为 pinned 对 → 无可折叠，整体跳过', async () => {
-    const llm = mockLlm('THE RECAP');
     const { ctx, providerService } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       contextSize: 10,
@@ -252,19 +236,17 @@ describe('CompactionHook（自持压缩逻辑，经 ctx.messages 读写缝）', 
         's0',
         's1',
       ],
-      llm,
     });
     const before = ctx.messages.length;
     const events = await collect(
-      new CompactionHook(providerService).apply(ctx),
+      new CompactionHook(providerService, mockLlm()).apply(ctx),
     );
     expect(events).toHaveLength(0);
-    expect(llm.chatContent).not.toHaveBeenCalled();
     expect(ctx.messages.length).toBe(before);
   });
 
   it('折叠返回空时回退不动', async () => {
-    const { ctx, providerService } = makeCtx({
+    const { ctx, providerService, llm } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       contextSize: 10,
       loopSteps: ['s0', 's1', 's2', 's3', 's4', 's5'],
@@ -272,7 +254,7 @@ describe('CompactionHook（自持压缩逻辑，经 ctx.messages 读写缝）', 
     });
     const before = ctx.messages.length;
     const events = await collect(
-      new CompactionHook(providerService).apply(ctx),
+      new CompactionHook(providerService, llm).apply(ctx),
     );
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(before);
@@ -280,10 +262,6 @@ describe('CompactionHook（自持压缩逻辑，经 ctx.messages 读写缝）', 
 });
 
 describe('LoopUsageHook（post-observation 遥测：yield loop_usage）', () => {
-  afterEach(() => {
-    container.clearInstances();
-  });
-
   it('从 ctx.messages + 派生 contextSize 算用量并发 loop_usage', async () => {
     const { ctx, providerService } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],

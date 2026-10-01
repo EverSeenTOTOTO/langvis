@@ -1,19 +1,19 @@
-import { container, singleton } from 'tsyringe';
 import type { ConvTransform } from '@/server/modules/conversation/domain/model/conv-transform';
+import { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
+import { ProcessSummaryTransform } from './process-summary-transform';
+import { ReconstructTransform } from './reconstruct-transform';
+import { SummarizeTransform } from './summarize-transform';
+import { UsageTransform } from './usage-transform';
 
-// conv transform 的共享 DI token：容器即 registry，resolveConvTransforms 用 resolveAll 取全部。
-export const CONV_TRANSFORM = Symbol('CONV_TRANSFORM');
+// transform 显式清单（序即同相位运行序）。
+// turn-end：烘 summary → 截胖用户消息 → 折叠为 C → 量用量。
+export const TRANSFORM_TYPES: (new (...args: any[]) => ConvTransform)[] = [
+  ProcessSummaryTransform,
+  ReconstructTransform,
+  SummarizeTransform,
+  UsageTransform,
+];
 
-// 标记装饰器：注册为 singleton 并在 CONV_TRANSFORM token 下登记（useToken 复用实例）。
-export function convTransform<T extends new (...args: any[]) => ConvTransform>(
-  target: T,
-): T {
-  singleton()(target);
-  container.register(CONV_TRANSFORM, { useToken: target });
-  return target;
-}
-
-/** 解析所有 @convTransform 登记的 transform（经容器，保 singleton 语义）。 */
-export function resolveConvTransforms(): ConvTransform[] {
-  return container.resolveAll<ConvTransform>(CONV_TRANSFORM);
-}
+/** ConversationModule 内装配为 provider：注入实例数组构建相位管道。 */
+export const CONV_TRANSFORM_PLAN = Symbol('CONV_TRANSFORM_PLAN');
+export type ConvTransformPlanToken = ConvTransformPlan;

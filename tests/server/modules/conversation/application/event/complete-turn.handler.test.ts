@@ -2,9 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { CompleteTurnHandler } from '@/server/modules/conversation/application/event/complete-turn.handler';
 import type { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
-import type { DomainEvent } from '@/server/libs/ddd';
+import { RunCompleted } from '@/server/modules/agent/contracts';
 import type { EnrichedEvent } from '@/shared/types/events';
-import type { RunCompletedPayload } from '@/server/modules/agent/contracts';
 import type { Message } from '@/shared/types/entities';
 import { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
 
@@ -55,7 +54,7 @@ describe('CompleteTurnHandler — turn-end 触发适配器（线性屏障）', (
   const messageId = 'msg_1';
   const event = {
     payload: { conversationId, messageId, agentRunId: 'run_1' },
-  } as DomainEvent<string, RunCompletedPayload>;
+  } as RunCompleted;
 
   it('有事件流：persist + append + flushRunView + usage 帧 + begin/end 维护 + finalize', async () => {
     const { handler, sessionManager, chatService, ctx } = setup([

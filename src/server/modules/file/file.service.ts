@@ -1,7 +1,7 @@
+/// <reference types="multer" />
 import { createReadStream, promises as fs } from 'fs';
 import mime from 'mime-types';
 import path from 'path';
-import { service } from '@/server/decorator/service';
 import { resolveSafePath } from '@/server/utils/pathSafety';
 import { DEFAULT_UPLOAD_CONFIG } from '@/shared/constants';
 import { generateId } from '@/shared/utils';
@@ -14,7 +14,6 @@ export class FileValidationError extends Error {
   }
 }
 
-@service()
 export class FileService {
   private readonly uploadDir: string;
 

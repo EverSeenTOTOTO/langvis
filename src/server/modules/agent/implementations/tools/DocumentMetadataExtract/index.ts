@@ -1,14 +1,14 @@
-import { tool } from '@/server/decorator/tool';
+import { Inject } from '@nestjs/common';
+import { tool } from '@/server/modules/agent/application/tools/register-tool';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
 import { wrapUntrusted } from '@/shared/utils';
-import { inject } from 'tsyringe';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
-import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
-import { Prompt } from '@/server/libs/prompt';
+import { WorkspaceService } from '@/server/shared/infrastructure/workspace.service';
+import { Prompt } from '@/server/shared/prompt';
 import type {
   DocumentMetadataExtractInput,
   DocumentMetadataExtractOutput,
@@ -51,7 +51,7 @@ export default class DocumentMetadataExtractTool extends Tool<DocumentMetadataEx
   protected readonly logger!: Logger;
 
   constructor(
-    @inject(WorkspaceService)
+    @Inject(WorkspaceService)
     private readonly workspace: WorkspaceService,
   ) {
     super();

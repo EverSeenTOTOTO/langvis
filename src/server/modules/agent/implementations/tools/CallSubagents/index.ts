@@ -1,5 +1,5 @@
-import { tool } from '@/server/decorator/tool';
-import { inject } from 'tsyringe';
+import { Inject } from '@nestjs/common';
+import { tool } from '@/server/modules/agent/application/tools/register-tool';
 import type { Logger } from '@/server/utils/logger';
 import rootLogger from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
@@ -32,8 +32,8 @@ export default class CallSubagentsTool extends Tool<CallSubagentsOutput> {
   protected readonly logger!: Logger;
 
   constructor(
-    @inject(AgentRunExecutor) private readonly executor: AgentRunExecutor,
-    @inject(AgentService) private readonly agentService: AgentService,
+    @Inject(AgentRunExecutor) private readonly executor: AgentRunExecutor,
+    @Inject(AgentService) private readonly agentService: AgentService,
   ) {
     super();
   }

@@ -1,17 +1,9 @@
 import type { StreamFrame } from '@/shared/types/events';
-import {
-  ConvTransformPlan,
-  type ConversationContext,
-  type ConvPhase,
-  type RunCtx,
+import type {
+  ConversationContext,
+  ConvPhase,
+  RunCtx,
 } from '@/server/modules/conversation/domain/model/conv-transform';
-import { resolveConvTransforms } from './registry';
-
-/** 全局 transform 管道（单例缓存——transform 跨会话不变，无需每会话解析）。 */
-let cachedPlan: ConvTransformPlan | undefined;
-export function getConvTransformPlan(): ConvTransformPlan {
-  return (cachedPlan ??= new ConvTransformPlan(resolveConvTransforms()));
-}
 
 // 按相位跑 transform（注册序，无 priority）；抛错冒泡给调用方兜底。runCtx 仅 turn-end 透传。
 export async function* runConvTransforms(

@@ -5,18 +5,17 @@ import type {
 } from '../../domain/port/agent-run.repository.port';
 import { AgentRunConcurrentModificationError } from '../../domain/errors';
 import type { EnrichedEvent } from '@/shared/types/events';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
+import { DatabaseService } from '@/server/shared/infrastructure/database.service';
 import { AgentRunEntity } from '@/shared/entities/AgentRun';
+import { Inject } from '@nestjs/common';
 import {
   In,
   OptimisticLockVersionMismatchError,
   type Repository,
 } from 'typeorm';
-import { inject, singleton } from 'tsyringe';
 
-@singleton()
 export class AgentRunRepository implements AgentRunRepositoryPort {
-  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {}
+  constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
 
   async save(agentRun: AgentRun): Promise<AgentRun> {
     const repo = this.db.getRepository(AgentRunEntity);

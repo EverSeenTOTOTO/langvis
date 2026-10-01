@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ExceptionBase } from '@/server/libs/exceptions/exception.base';
+import { ExceptionBase } from '@/server/shared/exceptions/exception.base';
 
 class TestDomainError extends ExceptionBase {
   readonly code = 'TEST_DOMAIN_ERROR';

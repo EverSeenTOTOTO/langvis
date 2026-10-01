@@ -6,8 +6,7 @@ import type {
 } from '@/shared/types/entities';
 import type { RunStatus } from '@/shared/types/agent';
 import { Role } from '@/shared/entities/Message';
-import { inject, singleton } from 'tsyringe';
-import { WorkspaceService } from '@/server/libs/infrastructure/workspace.service';
+import { WorkspaceService } from '@/server/shared/infrastructure/workspace.service';
 import {
   MESSAGE_REPOSITORY,
   CONVERSATION_REPOSITORY,
@@ -20,30 +19,33 @@ import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/
 import {
   TRANSACTION_PORT,
   type TransactionPort,
-} from '@/server/libs/ports/transaction/transaction.port';
+} from '@/server/shared/ports/transaction/transaction.port';
 import {
   createActivationMessages,
   createTurnMessages,
 } from '../../domain/service/message-factory';
-import { configSchema, type ConversationConfig } from '@/server/libs/config';
+import {
+  configSchema,
+  type ConversationConfig,
+} from '@/server/modules/conversation/domain/config';
 import { parse } from '@/server/utils/schemaValidator';
 import { ConversationNotFoundError } from '../../domain/errors';
+import { Inject } from '@nestjs/common';
 import Logger from '@/server/utils/logger';
 
-@singleton()
 export class ChatService {
   private readonly logger = Logger.child({ source: 'ChatService' });
 
   constructor(
-    @inject(MESSAGE_REPOSITORY)
+    @Inject(MESSAGE_REPOSITORY)
     private messageRepo: MessageRepositoryPort,
-    @inject(CONVERSATION_REPOSITORY)
+    @Inject(CONVERSATION_REPOSITORY)
     private convRepo: ConversationRepositoryPort,
-    @inject(AGENT_RUN_REPOSITORY)
+    @Inject(AGENT_RUN_REPOSITORY)
     private agentRunRepo: AgentRunRepositoryPort,
-    @inject(TRANSACTION_PORT)
+    @Inject(TRANSACTION_PORT)
     private readonly tx: TransactionPort,
-    @inject(WorkspaceService)
+    @Inject(WorkspaceService)
     private workspaceService: WorkspaceService,
   ) {}
 

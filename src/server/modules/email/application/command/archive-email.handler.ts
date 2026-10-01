@@ -1,7 +1,6 @@
-import { inject } from 'tsyringe';
-import { commandHandler } from '@/server/decorator/handler';
-import { CommandBus, EventBus, createDomainEvent } from '@/server/libs/ddd';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import { Inject } from '@nestjs/common';
+import { CommandBus, CommandHandler, EventBus } from '@nestjs/cqrs';
+import { ProviderService } from '@/server/shared/infrastructure/provider.service';
 import type { Conversation } from '@/shared/types/entities';
 import { EmailService } from '../service/email.service';
 import { CreateConversationCommand } from '@/server/modules/conversation/contracts';
@@ -13,16 +12,16 @@ import {
 } from '../../contracts';
 import { EmailNotFoundError } from '../../domain/errors';
 
-@commandHandler(ArchiveEmailCommand)
+@CommandHandler(ArchiveEmailCommand)
 export class ArchiveEmailHandler {
   constructor(
-    @inject(EmailService)
+    @Inject(EmailService)
     private readonly emailService: EmailService,
-    @inject(CommandBus)
+    @Inject(CommandBus)
     private readonly commandBus: CommandBus,
-    @inject(ProviderService)
+    @Inject(ProviderService)
     private readonly providerService: ProviderService,
-    @inject(EventBus)
+    @Inject(EventBus)
     private readonly eventBus: EventBus,
   ) {}
 
@@ -48,9 +47,8 @@ export class ArchiveEmailHandler {
       ),
     );
 
-    this.eventBus.dispatch(
-      EmailArchived,
-      createDomainEvent(EmailArchived, emailId, {
+    this.eventBus.publish(
+      new EmailArchived(emailId, {
         userId,
         emailId,
         conversationId: conversation.id,

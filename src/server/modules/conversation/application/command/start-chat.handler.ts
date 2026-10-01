@@ -1,6 +1,5 @@
-import { inject } from 'tsyringe';
-import { commandHandler } from '@/server/decorator/handler';
-import { createDomainEvent, EventBus } from '@/server/libs/ddd';
+import { Inject } from '@nestjs/common';
+import { CommandHandler, EventBus } from '@nestjs/cqrs';
 import { ChatService } from '../service/chat.service';
 import { SessionManager } from '../service/session-manager';
 import { StartChatCommand, TurnInitiated } from '../../contracts';
@@ -9,16 +8,16 @@ import { runConvTransforms } from '../transforms';
 import { TraceContext } from '@/server/middleware/trace-context';
 import Logger from '@/server/utils/logger';
 
-@commandHandler(StartChatCommand)
+@CommandHandler(StartChatCommand)
 export class StartChatHandler {
   private readonly logger = Logger.child({ source: 'StartChatHandler' });
 
   constructor(
-    @inject(ChatService)
+    @Inject(ChatService)
     private chatService: ChatService,
-    @inject(SessionManager)
+    @Inject(SessionManager)
     private sessionManager: SessionManager,
-    @inject(EventBus)
+    @Inject(EventBus)
     private eventBus: EventBus,
   ) {}
 
@@ -59,9 +58,8 @@ export class StartChatHandler {
       userId,
     );
 
-    this.eventBus.dispatch(
-      TurnInitiated,
-      createDomainEvent(TurnInitiated, conversationId, {
+    this.eventBus.publish(
+      new TurnInitiated(conversationId, {
         conversationId,
         assistantMessage: turn.assistantMessage,
         runtimeConfig: ctx.runtimeConfig,

@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe';
+import { Inject } from '@nestjs/common';
 import { Role } from '@/shared/entities/Message';
 import { MESSAGE_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
@@ -11,12 +11,13 @@ import {
   findLatestCompactionSummary,
   toLlmMessages,
 } from '@/server/modules/conversation/application/service/history-projection';
-import { fold } from '@/server/libs/compaction';
-import { Prompt } from '@/server/libs/prompt';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import { fold } from '@/server/shared/compaction';
+import { Prompt } from '@/server/shared/prompt';
+import { LLM_PORT } from '@/server/shared/ports/llm/llm.tokens';
+import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
+import { ProviderService } from '@/server/shared/infrastructure/provider.service';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import Logger from '@/server/utils/logger';
-import { convTransform } from './registry';
 
 const HISTORY_PROMPT = Prompt.empty()
   .with('Role', 'You are a conversation compactor.')
@@ -32,17 +33,17 @@ const HISTORY_PROMPT = Prompt.empty()
 
 // 全对话摘要（turn-end）：高阈、折叠为摘要 C、上下文趋近清空。effective 超 contextSize×threshold 时，
 // tail 折叠为 role=USER/meta.kind='compact' 摘要并 append（与 ReconstructTransform 截断头部划界）。C 落库 reload-safe。
-@convTransform
 export class SummarizeTransform implements ConvTransform {
   readonly id = 'summarize';
   readonly phase: ConvPhase = 'turn-end';
   private readonly logger = Logger.child({ source: 'SummarizeTransform' });
 
   constructor(
-    @inject(MESSAGE_REPOSITORY)
+    @Inject(MESSAGE_REPOSITORY)
     private readonly messageRepo: MessageRepositoryPort,
-    @inject(ProviderService)
+    @Inject(ProviderService)
     private readonly providerService: ProviderService,
+    @Inject(LLM_PORT) private readonly llm: LlmPort,
   ) {}
 
   async *apply(ctx: ConversationContext): AsyncGenerator<void> {
@@ -87,6 +88,7 @@ export class SummarizeTransform implements ConvTransform {
       ? [{ role: 'user' as const, content: summary.content }, ...tailMessages]
       : tailMessages;
     const content = await fold({
+      llm: this.llm,
       messages,
       windowSize: compaction.windowSize,
       signal: new AbortController().signal,

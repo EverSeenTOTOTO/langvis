@@ -1,4 +1,4 @@
-import { Prompt } from '@/server/libs/prompt';
+import { Prompt } from '@/server/shared/prompt';
 import { describe, expect, it } from 'vitest';
 
 describe('Prompt', () => {

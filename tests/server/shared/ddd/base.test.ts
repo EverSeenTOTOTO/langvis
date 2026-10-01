@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { Entity, AggregateRoot, createDomainEvent } from '@/server/libs/ddd';
+import { Entity, AggregateRoot } from '@/server/shared/ddd';
+import type { DomainEvent } from '@/server/shared/ddd';
+
+const createDomainEvent = <T>(
+  type: string,
+  aggregateId: string,
+  payload: T,
+): DomainEvent<string, T> => ({
+  type,
+  occurredAt: Date.now(),
+  aggregateId,
+  payload,
+});
 
 class TestEntity extends Entity<string> {
   constructor(id: string) {

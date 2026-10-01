@@ -1,11 +1,10 @@
+import { Inject } from '@nestjs/common';
 import { User, UserEntity } from '@/shared/entities/User';
 import type { UserRepositoryPort } from '../../domain/port/user.repository.port';
-import { DatabaseService } from '@/server/libs/infrastructure/database.service';
-import { inject, singleton } from 'tsyringe';
+import { DatabaseService } from '@/server/shared/infrastructure/database.service';
 
-@singleton()
 export class UserRepository implements UserRepositoryPort {
-  constructor(@inject(DatabaseService) private readonly db: DatabaseService) {}
+  constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
 
   async findAll(): Promise<User[]> {
     const repo = this.db.getRepository(UserEntity);

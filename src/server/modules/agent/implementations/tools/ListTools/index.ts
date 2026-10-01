@@ -1,5 +1,5 @@
-import { inject } from 'tsyringe';
-import { tool } from '@/server/decorator/tool';
+import { Inject } from '@nestjs/common';
+import { tool } from '@/server/modules/agent/application/tools/register-tool';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
 import type { ToolConfig } from '@/shared/types';
@@ -21,8 +21,8 @@ export default class ListToolsTool extends Tool<ListToolsOutput> {
   protected readonly logger!: Logger;
 
   constructor(
-    @inject(ToolService) private toolService: ToolService,
-    @inject(SkillService) private skillService: SkillService,
+    @Inject(ToolService) private toolService: ToolService,
+    @Inject(SkillService) private skillService: SkillService,
   ) {
     super();
   }

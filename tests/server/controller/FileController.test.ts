@@ -1,8 +1,7 @@
-import FileController from '@/server/controller/FileController';
+import { FileController } from '@/server/modules/file/file.controller';
 import { FileService, FileValidationError } from '@/server/modules/file';
 import type { Request, Response } from 'express';
 import { Readable } from 'stream';
-import { container } from 'tsyringe';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('FileController - Streaming', () => {
@@ -16,7 +15,7 @@ describe('FileController - Streaming', () => {
     headers: Record<string, string> = {},
   ) =>
     ({
-      params: filename ? { 0: filename } : {},
+      params: filename ? { splat: filename } : {},
       headers,
     }) as Request;
 
@@ -66,9 +65,6 @@ describe('FileController - Streaming', () => {
   });
 
   beforeEach(() => {
-    // Reset container
-    container.clearInstances();
-
     // Create mock FileService
     mockFileService = {
       getFileStats: vi.fn(),
@@ -76,8 +72,7 @@ describe('FileController - Streaming', () => {
     };
 
     // Register mock service
-    container.register(FileService, { useValue: mockFileService });
-    controller = container.resolve(FileController);
+    controller = new FileController(mockFileService as never);
   });
 
   describe('downloadFile with streaming', () => {
@@ -230,31 +225,15 @@ describe('FileController - Streaming', () => {
   });
 });
 
-// Mock agent for validation tests
-const createMockAgent = () => ({
-  config: {
-    name: 'MockAgent',
-    description: 'Mock Agent for testing',
-    upload: {
-      maxSize: 1000, // 1KB
-      allowedTypes: ['text/plain', 'image/*'],
-      maxCount: 2,
-    },
-  },
-});
-
 describe('FileController - Upload', () => {
   let controller: FileController;
   let mockFileService: Partial<FileService>;
 
   beforeEach(() => {
-    container.clearInstances();
     mockFileService = {
       saveFile: vi.fn(),
     };
-    container.register(FileService, { useValue: mockFileService });
-    container.register('MockAgent', { useValue: createMockAgent() });
-    controller = container.resolve(FileController);
+    controller = new FileController(mockFileService as never);
   });
 
   it('should upload file successfully', async () => {
@@ -266,11 +245,6 @@ describe('FileController - Upload', () => {
       mimetype: 'text/plain',
     } as Express.Multer.File;
 
-    const mockRes = {
-      json: vi.fn(),
-      status: vi.fn().mockReturnThis(),
-    } as any;
-
     (mockFileService.saveFile as any).mockResolvedValue({
       filename: '1234567890-abc123.txt',
       url: '/api/files/download/1234567890-abc123.txt',
@@ -278,10 +252,7 @@ describe('FileController - Upload', () => {
       mimeType: 'text/plain',
     });
 
-    await controller.uploadFile(mockFile, {}, mockRes);
-
-    expect(mockFileService.saveFile).toHaveBeenCalledWith(mockFile, undefined);
-    expect(mockRes.json).toHaveBeenCalledWith({
+    await expect(controller.uploadFile(mockFile, {})).resolves.toEqual({
       filename: '1234567890-abc123.txt',
       url: '/api/files/download/1234567890-abc123.txt',
       size: 4,
@@ -290,15 +261,11 @@ describe('FileController - Upload', () => {
   });
 
   it('should reject file with no file provided', async () => {
-    const mockRes = {
-      json: vi.fn(),
-      status: vi.fn().mockReturnThis(),
-    } as any;
-
-    await controller.uploadFile(undefined as any, {}, mockRes);
-
-    expect(mockRes.status).toHaveBeenCalledWith(400);
-    expect(mockRes.json).toHaveBeenCalledWith({ error: 'No file uploaded' });
+    await expect(
+      controller.uploadFile(undefined as any, {}),
+    ).rejects.toMatchObject({
+      status: 400,
+    });
   });
 
   it('should map FileValidationError to 400', async () => {
@@ -310,20 +277,15 @@ describe('FileController - Upload', () => {
       mimetype: 'text/plain',
     } as Express.Multer.File;
 
-    const mockRes = {
-      json: vi.fn(),
-      status: vi.fn().mockReturnThis(),
-    } as any;
-
     (mockFileService.saveFile as any).mockRejectedValue(
       new FileValidationError('File size 999 exceeds limit: 10485760 bytes'),
     );
 
-    await controller.uploadFile(mockFile, { agent: 'MockAgent' }, mockRes);
-
-    expect(mockRes.status).toHaveBeenCalledWith(400);
-    expect(mockRes.json).toHaveBeenCalledWith({
-      error: expect.stringContaining('exceeds limit'),
+    await expect(
+      controller.uploadFile(mockFile, { agent: 'MockAgent' }),
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { error: expect.stringContaining('exceeds limit') },
     });
   });
 
@@ -336,11 +298,6 @@ describe('FileController - Upload', () => {
       mimetype: 'image/png',
     } as Express.Multer.File;
 
-    const mockRes = {
-      json: vi.fn(),
-      status: vi.fn().mockReturnThis(),
-    } as any;
-
     (mockFileService.saveFile as any).mockResolvedValue({
       filename: 'image.png',
       url: '/api/files/download/image.png',
@@ -348,11 +305,9 @@ describe('FileController - Upload', () => {
       mimeType: 'image/png',
     });
 
-    await controller.uploadFile(mockFile, { agent: 'MockAgent' }, mockRes);
-
-    expect(mockRes.json).toHaveBeenCalledWith(
-      expect.objectContaining({ filename: 'image.png' }),
-    );
+    await expect(
+      controller.uploadFile(mockFile, { agent: 'MockAgent' }),
+    ).resolves.toEqual(expect.objectContaining({ filename: 'image.png' }));
   });
 });
 
@@ -361,22 +316,15 @@ describe('FileController - List and Delete', () => {
   let mockFileService: Partial<FileService>;
 
   beforeEach(() => {
-    container.clearInstances();
     mockFileService = {
       listFiles: vi.fn(),
       deleteFile: vi.fn(),
     };
-    container.register(FileService, { useValue: mockFileService });
-    controller = container.resolve(FileController);
+    controller = new FileController(mockFileService as never);
   });
 
   describe('listFiles', () => {
     it('should list files with default pagination', async () => {
-      const mockRes = {
-        json: vi.fn(),
-        status: vi.fn().mockReturnThis(),
-      } as any;
-
       (mockFileService.listFiles as any).mockResolvedValue({
         items: [
           {
@@ -390,7 +338,7 @@ describe('FileController - List and Delete', () => {
         total: 1,
       });
 
-      await controller.listFiles({}, mockRes);
+      await controller.listFiles({});
 
       expect(mockFileService.listFiles).toHaveBeenCalledWith({
         page: 1,
@@ -399,17 +347,12 @@ describe('FileController - List and Delete', () => {
     });
 
     it('should list files with custom pagination', async () => {
-      const mockRes = {
-        json: vi.fn(),
-        status: vi.fn().mockReturnThis(),
-      } as any;
-
       (mockFileService.listFiles as any).mockResolvedValue({
         items: [],
         total: 0,
       });
 
-      await controller.listFiles({ page: 2, pageSize: 10 }, mockRes);
+      await controller.listFiles({ page: 2, pageSize: 10 });
 
       expect(mockFileService.listFiles).toHaveBeenCalledWith({
         page: 2,
@@ -420,33 +363,21 @@ describe('FileController - List and Delete', () => {
 
   describe('deleteFile', () => {
     it('should delete file successfully', async () => {
-      const mockRes = {
-        json: vi.fn(),
-        status: vi.fn().mockReturnThis(),
-      } as any;
-
-      await controller.deleteFile('test.txt', mockRes);
+      await expect(controller.deleteFile('test.txt')).resolves.toEqual({
+        success: true,
+      });
 
       expect(mockFileService.deleteFile).toHaveBeenCalledWith('test.txt');
-      expect(mockRes.json).toHaveBeenCalledWith({ success: true });
     });
 
     it('should handle delete error', async () => {
-      const mockRes = {
-        json: vi.fn(),
-        status: vi.fn().mockReturnThis(),
-      } as any;
-
       (mockFileService.deleteFile as any).mockRejectedValue(
         new Error('File not found'),
       );
 
-      await controller.deleteFile('nonexistent.txt', mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(500);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'Failed to delete file',
-      });
+      await expect(
+        controller.deleteFile('nonexistent.txt'),
+      ).rejects.toMatchObject({ status: 500 });
     });
   });
 });

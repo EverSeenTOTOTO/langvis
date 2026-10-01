@@ -13,7 +13,7 @@ describe('OrphanRunReconciler（启动清扫）', () => {
     const chat = makeMockChat(3);
     const reconciler = new OrphanRunReconciler(chat);
 
-    await reconciler.onBoot();
+    await reconciler.onModuleInit();
 
     expect(chat.markInterruptedRuns).toHaveBeenCalledWith(
       'Generation interrupted (server restarted)',
@@ -24,7 +24,7 @@ describe('OrphanRunReconciler（启动清扫）', () => {
     const chat = makeMockChat(0);
     const reconciler = new OrphanRunReconciler(chat);
 
-    await expect(reconciler.onBoot()).resolves.toBeUndefined();
+    await expect(reconciler.onModuleInit()).resolves.toBeUndefined();
     expect(chat.markInterruptedRuns).toHaveBeenCalledTimes(1);
   });
 });

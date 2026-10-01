@@ -1,5 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { container } from 'tsyringe';
+import { describe, it, expect, vi } from 'vitest';
 
 import {
   parseResponse,
@@ -9,14 +8,21 @@ import { runReactLoop } from '@/server/modules/agent/application/service/react-l
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { HookPlan, type Hook } from '@/server/modules/agent/domain/model/hook';
-import { resolveAgentHooks } from '@/server/modules/agent/application/hooks';
+import { CompactionHook } from '@/server/modules/agent/application/hooks/compaction-hook';
+import { LoopUsageHook } from '@/server/modules/agent/application/hooks/loop-usage-hook';
+import { CumulativeBudgetHook } from '@/server/modules/agent/application/hooks/cumulative-budget-hook';
+import { StuckHook } from '@/server/modules/agent/application/hooks/stuck-hook';
+import { MaxIterationsHook } from '@/server/modules/agent/application/hooks/max-iterations-hook';
+import { ToolHintHook } from '@/server/modules/agent/application/hooks/tool-hint-hook';
+import { TrimHook } from '@/server/modules/agent/application/hooks/trim-hook';
+import { MicroCompactHook } from '@/server/modules/agent/application/hooks/micro-compact-hook';
+import { QueryBudgetHook } from '@/server/modules/agent/application/hooks/query-budget-hook';
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import { SkillService } from '@/server/modules/agent/application/service/skill.service';
-import { LLM_PORT } from '@/server/libs/ports/llm/llm.tokens';
-import { ProviderService } from '@/server/libs/infrastructure/provider.service';
+import { ProviderService } from '@/server/shared/infrastructure/provider.service';
 import { ToolIds } from '@/shared/constants';
-import type { LlmPort } from '@/server/libs/ports/llm/llm.port';
+import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
 import type {
   AgentRunContext,
   ToolExecutor,
@@ -230,6 +236,34 @@ interface BuiltCtx {
   runTool: ToolExecutor;
 }
 
+// hooks 依赖 mock（原容器注册语义）：contextSize 大值抑制 mid-loop 压缩；
+// Tool/Skill 空集让 ToolHintHook no-op。直接构造真实 hook 链（依赖经构造注入）。
+const providerServiceMock = {
+  resolveContextSize: () => 128_000,
+  resolveChatModel: () => ({ id: undefined, contextSize: 128_000 }),
+} as unknown as ProviderService;
+const toolServiceMock = {
+  getAllToolInfo: async () => [],
+  getCachedToolIds: () => [],
+  initialize: async () => {},
+} as unknown as ToolService;
+const skillServiceMock = {
+  getAllSkillInfo: async () => [],
+  getCachedSkillIds: () => [],
+  initialize: async () => {},
+} as unknown as SkillService;
+const buildHooks = () => [
+  new ToolHintHook(toolServiceMock, skillServiceMock),
+  new TrimHook(providerServiceMock),
+  new MicroCompactHook(providerServiceMock),
+  new QueryBudgetHook(providerServiceMock),
+  new CompactionHook(providerServiceMock, summaryStubLlm() as never),
+  new LoopUsageHook(providerServiceMock),
+  new CumulativeBudgetHook(),
+  new StuckHook(),
+  new MaxIterationsHook(),
+];
+
 // Assemble a real `AgentRunContext` (real `AgentRun`/`RunConfigVO`) with scripted LLM,
 // faked tool path — enough to drive the real `runReactLoop`.
 function buildCtx(opts: BuildCtxOptions): BuiltCtx {
@@ -255,7 +289,7 @@ function buildCtx(opts: BuildCtxOptions): BuiltCtx {
     auth: noopAuth(),
     messages: seed,
     base: seed.length,
-    hooks: opts.hooks ?? new HookPlan(resolveAgentHooks()),
+    hooks: opts.hooks ?? new HookPlan(buildHooks()),
     interactive: true,
   };
   return { ctx, run, calls, runTool: fakeExecuteTool(opts.handler) };
@@ -272,30 +306,6 @@ const okHandler: ToolHandler = (name, _args) => ({ output: `${name}_result` });
 // ─── runReactLoop scenarios ─────────────────────────────────────────────────
 
 describe('runReactLoop', () => {
-  beforeEach(() => {
-    container.register(LLM_PORT, { useValue: summaryStubLlm() });
-    // hooks（CompactionHook/LoopUsageHook）经 ProviderService 派生 contextSize；mock 成大值抑制 mid-loop 压缩。
-    container.registerInstance(ProviderService, {
-      resolveContextSize: () => 128_000,
-      resolveChatModel: () => ({ id: undefined, contextSize: 128_000 }),
-    } as unknown as ProviderService);
-    // ToolHintHook 经 resolveAgentHooks 拉入，注入空 ToolService/SkillService stub
-    // 使其检索命中空集、no-op（避免真实 initialize 扫文件系统、resolve 全量工具污染容器）。
-    container.registerInstance(ToolService, {
-      getAllToolInfo: async () => [],
-      getCachedToolIds: () => [],
-      initialize: async () => {},
-    } as unknown as ToolService);
-    container.registerInstance(SkillService, {
-      getAllSkillInfo: async () => [],
-      getCachedSkillIds: () => [],
-      initialize: async () => {},
-    } as unknown as SkillService);
-  });
-  afterEach(() => {
-    container.clearInstances();
-  });
-
   describe('HappyPath', () => {
     it('runs one tool then response_user to completion without throwing', async () => {
       const { ctx, calls, runTool } = buildCtx({

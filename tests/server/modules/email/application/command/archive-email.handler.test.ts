@@ -1,13 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ArchiveEmailHandler } from '@/server/modules/email/application/command/archive-email.handler';
 import type { EmailService } from '@/server/modules/email/application/service/email.service';
-import type { ProviderService } from '@/server/libs/infrastructure/provider.service';
-import type { CommandBus, EventBus } from '@/server/libs/ddd';
+import type { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import type { CommandBus, EventBus } from '@nestjs/cqrs';
 import { CreateConversationCommand } from '@/server/modules/conversation/contracts';
-import {
-  ArchiveEmailCommand,
-  EmailArchived,
-} from '@/server/modules/email/contracts';
+import { ArchiveEmailCommand } from '@/server/modules/email/contracts';
 import { EmailNotFoundError } from '@/server/modules/email/domain/errors';
 
 function makeEmailService(
@@ -41,7 +38,7 @@ function makeDeps(email: typeof defaultEmail | null = defaultEmail) {
   const providerService = {
     getDefaultModel: vi.fn().mockReturnValue({ id: 'model_1' }),
   } as unknown as ProviderService;
-  const eventBus = { dispatch: vi.fn() } as unknown as EventBus;
+  const eventBus = { publish: vi.fn() } as unknown as EventBus;
   return { emailService, commandBus, providerService, eventBus };
 }
 
@@ -85,9 +82,9 @@ describe('ArchiveEmailHandler', () => {
     expect(cmd.userId).toBe('user_1');
     expect(cmd.config).toEqual({ model: { modelId: 'model_1' } });
     expect(cmd.groupName).toBe('Email Archive');
-    expect(eventBus.dispatch).toHaveBeenCalledWith(
-      EmailArchived,
+    expect(eventBus.publish).toHaveBeenCalledWith(
       expect.objectContaining({
+        type: 'email_archived',
         aggregateId: 'mail_1',
         payload: expect.objectContaining({
           emailId: 'mail_1',
