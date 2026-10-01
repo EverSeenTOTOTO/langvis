@@ -99,7 +99,7 @@ const TerminalCanvas = () => {
     <div
       ref={containerRef}
       style={{
-        height: 'calc(100vh - 64px - 32px)',
+        height: 'calc(100vh - 64px - 24px)',
         padding: '16px',
         background: '#14161f',
         borderRadius: 8,
@@ -109,14 +109,9 @@ const TerminalCanvas = () => {
 };
 
 const TerminalPage = () => (
-  <>
-    <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-      langvis CLI — 会话由终端管理（/chat 切换），刷新后自动恢复最近会话。
-    </Text>
-    <ClientOnly fallback={<Text>loading terminal…</Text>}>
-      <TerminalCanvas />
-    </ClientOnly>
-  </>
+  <ClientOnly fallback={<Text>loading terminal…</Text>}>
+    <TerminalCanvas />
+  </ClientOnly>
 );
 
 export default TerminalPage;
