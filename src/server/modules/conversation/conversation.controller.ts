@@ -27,6 +27,7 @@ import {
   GetConversationsByWorkspaceQuery,
   GetMessagesQuery,
 } from './contracts';
+import { WorkspaceCheckpoint } from './application/service/workspace-checkpoint';
 
 const requireUserId = (req: Request): string => {
   const userId = req.user?.id;
@@ -45,6 +46,7 @@ export class ConversationController {
     private messageRepo: MessageRepositoryPort,
     @Inject(CommandBus) private commandBus: CommandBus,
     @Inject(QueryBus) private queryBus: QueryBus,
+    private checkpoint = new WorkspaceCheckpoint(),
   ) {}
 
   @Post()
@@ -147,8 +149,35 @@ export class ConversationController {
     return message;
   }
 
-  // steps/status（+ content fallback）的读模型组装在 GetMessagesHandler：
-  // 事件流是事实源，projectRun 派生；controller 只做 HTTP 适配。
+  // steps/status 读模型组装在 GetMessagesHandler；controller 只做 HTTP 适配。
+  /** rewind：恢复 workspace 到某 turn 前的 git 快照（影子 ref）。 */
+  @Post(':id/rewind/:messageId')
+  async rewind(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+  ) {
+    const userId = requireUserId(req);
+    const conversation = await this.convRepo.findById(id, userId);
+    if (!conversation) {
+      throw new HttpException({ error: 'Conversation not found' }, 404);
+    }
+
+    const conv = conversation as { workspacePath?: string | null };
+    if (!conv.workspacePath) {
+      throw new HttpException(
+        { error: 'Conversation has no workspace to rewind' },
+        400,
+      );
+    }
+
+    const ok = await this.checkpoint.restore(conv.workspacePath, messageId);
+    if (!ok) {
+      throw new HttpException({ error: 'No checkpoint for this turn' }, 404);
+    }
+    return { id, messageId, restored: true };
+  }
+
   @Get(':id/messages')
   async getMessagesByConversationId(@Param('id') id: string) {
     return this.queryBus.execute(new GetMessagesQuery(id));
