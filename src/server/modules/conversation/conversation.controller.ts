@@ -28,6 +28,7 @@ import {
   GetMessagesQuery,
 } from './contracts';
 import { WorkspaceCheckpoint } from './application/service/workspace-checkpoint';
+import { SessionManager } from './application/service/session-manager';
 
 const requireUserId = (req: Request): string => {
   const userId = req.user?.id;
@@ -46,6 +47,7 @@ export class ConversationController {
     private messageRepo: MessageRepositoryPort,
     @Inject(CommandBus) private commandBus: CommandBus,
     @Inject(QueryBus) private queryBus: QueryBus,
+    @Inject(SessionManager) private sessionManager: SessionManager,
     private checkpoint = new WorkspaceCheckpoint(),
   ) {}
 
@@ -150,7 +152,7 @@ export class ConversationController {
   }
 
   // steps/status 读模型组装在 GetMessagesHandler；controller 只做 HTTP 适配。
-  /** rewind：恢复 workspace 到某 turn 前的 git 快照（影子 ref）。 */
+  /** rewind：恢复 workspace 到某 turn 前的 git 快照 + 截断该 turn 起的消息（文件与上下文一致回退）。 */
   @Post(':id/rewind/:messageId')
   async rewind(
     @Req() req: Request,
@@ -163,19 +165,41 @@ export class ConversationController {
       throw new HttpException({ error: 'Conversation not found' }, 404);
     }
 
-    const conv = conversation as { workspacePath?: string | null };
-    if (!conv.workspacePath) {
+    if (this.sessionManager.hasActiveRuns(id)) {
       throw new HttpException(
-        { error: 'Conversation has no workspace to rewind' },
-        400,
+        { error: 'Run in flight — wait or cancel before rewinding' },
+        409,
       );
     }
 
-    const ok = await this.checkpoint.restore(conv.workspacePath, messageId);
-    if (!ok) {
+    const conv = conversation as { workspacePath?: string | null };
+    if (conv.workspacePath) {
+      const ok = await this.checkpoint.restore(conv.workspacePath, messageId);
+      if (!ok) {
+        throw new HttpException({ error: 'No checkpoint for this turn' }, 404);
+      }
+    }
+
+    // 消息截断：该 turn 的 user 消息起全部删除（含 checkpoint 对应的 assistant 消息）
+    const messages = await this.messageRepo.findByConversationId(id);
+    const idx = messages.findIndex(m => m.id === messageId);
+    if (idx === -1) {
       throw new HttpException({ error: 'No checkpoint for this turn' }, 404);
     }
-    return { id, messageId, restored: true };
+    let start = idx;
+    for (let i = idx - 1; i >= 0; i--) {
+      if (messages[i].role === Role.USER) {
+        start = i;
+        break;
+      }
+    }
+    const doomed = messages.slice(start).map(m => m.id);
+    await this.messageRepo.batchDeleteInConversation(id, doomed);
+
+    // 逐出内存会话——下一 turn 从 DB 重建上下文；后台 bash 任务一并清理
+    this.sessionManager.disposeChat(id);
+
+    return { id, messageId, restored: true, deletedMessages: doomed.length };
   }
 
   @Get(':id/messages')

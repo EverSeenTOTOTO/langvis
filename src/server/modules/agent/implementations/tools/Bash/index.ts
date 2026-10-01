@@ -18,11 +18,16 @@ import { classifyBashCommand } from './classifier';
 const DEFAULT_TIMEOUT = 60;
 const MAX_TIMEOUT = 600;
 
-/** bash HITL 表单：超时可调 + 确认 + 备注（沿用原 schema）。 */
+/** bash HITL 表单：确认 + 超时可调 + 备注（confirmed 在首——光标落在主决策上）。 */
 function bashFormSchema(suggestedTimeout: number) {
   return {
     type: 'object' as const,
     properties: {
+      confirmed: {
+        type: 'boolean' as const,
+        title: '确认执行？',
+        default: true,
+      },
       timeout: {
         type: 'number' as const,
         title: '超时时间（秒）',
@@ -30,11 +35,6 @@ function bashFormSchema(suggestedTimeout: number) {
         default: suggestedTimeout,
         minimum: 1,
         maximum: MAX_TIMEOUT,
-      },
-      confirmed: {
-        type: 'boolean' as const,
-        title: '确认执行？',
-        default: true,
       },
       remark: {
         type: 'string' as const,
