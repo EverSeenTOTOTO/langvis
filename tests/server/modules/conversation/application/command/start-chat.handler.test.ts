@@ -4,6 +4,7 @@ import { StartChatHandler } from '@/server/modules/conversation/application/comm
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import type { EventBus } from '@nestjs/cqrs';
+import type { WorkspaceService } from '@/server/infrastructure/workspace/workspace.service';
 import { StartChatCommand } from '@/server/modules/conversation/contracts';
 import { ConversationNotFoundError } from '@/server/modules/conversation/domain/errors';
 import { Role } from '@/shared/entities/Message';
@@ -11,6 +12,9 @@ import type { Message } from '@/shared/types/entities';
 import { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
 
 const stubEventBus = { publish: vi.fn() } as unknown as EventBus;
+const stubWorkspace = {
+  readFile: vi.fn().mockResolvedValue(null),
+} as unknown as WorkspaceService;
 
 function makeSessionManager(seed: Message[] = []) {
   const ctx = {
@@ -40,6 +44,7 @@ describe('StartChatHandler', () => {
       chatService,
       makeSessionManager(),
       stubEventBus,
+      stubWorkspace,
     );
 
     await expect(
@@ -67,7 +72,12 @@ describe('StartChatHandler', () => {
       }),
       resolveWorkDir: vi.fn().mockResolvedValue('/tmp/workdir'),
     } as unknown as ChatService;
-    const handler = new StartChatHandler(chatService, sm, stubEventBus);
+    const handler = new StartChatHandler(
+      chatService,
+      sm,
+      stubEventBus,
+      stubWorkspace,
+    );
 
     const result = await handler.execute(
       new StartChatCommand(

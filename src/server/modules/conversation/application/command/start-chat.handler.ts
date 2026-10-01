@@ -5,7 +5,9 @@ import { SessionManager } from '../service/session-manager';
 import { StartChatCommand, TurnInitiated } from '../../contracts';
 import { projectToLlmMessages } from '../service/history-projection';
 import { runConvTransforms } from '../transforms';
+import { expandMentions } from '../service/file-mention';
 import { TraceContext } from '@/server/trace-context';
+import { WorkspaceService } from '@/server/infrastructure/workspace/workspace.service';
 import Logger from '@/server/utils/logger';
 
 @CommandHandler(StartChatCommand)
@@ -19,6 +21,8 @@ export class StartChatHandler {
     private sessionManager: SessionManager,
     @Inject(EventBus)
     private eventBus: EventBus,
+    @Inject(WorkspaceService)
+    private workspace: WorkspaceService,
   ) {}
 
   async execute(command: StartChatCommand): Promise<{ assistantId: string }> {
@@ -69,6 +73,21 @@ export class StartChatHandler {
 
     const ctx = this.sessionManager.getCtx(conversationId);
     ctx.messages.push(turn.userMessage);
+
+    // @file 引用展开（服务端模型）：注入进 LLM 上下文，消息原文保持 @token 不动
+    const mentionExpansion = await expandMentions(
+      userMessage.content,
+      await this.chatService.resolveWorkDir(conversationId, userId),
+      this.workspace,
+    );
+    if (mentionExpansion) {
+      ctx.messages.push({
+        id: `${turn.userMessage.id}:files`,
+        role: 'user',
+        content: mentionExpansion,
+        createdAt: turn.userMessage.createdAt,
+      } as typeof turn.userMessage);
+    }
 
     // turn-start transform：本相位当前仅 summary-bake 类无（process-summary 在 turn-end 烘 meta.summary）；
     // projectToLlmMessages 读 msg.meta.summary 透传至 agent 种子作 thought。
