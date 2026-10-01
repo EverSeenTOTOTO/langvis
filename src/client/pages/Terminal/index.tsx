@@ -99,8 +99,9 @@ const TerminalCanvas = () => {
     <div
       ref={containerRef}
       style={{
-        height: 'calc(100vh - 64px - 24px)',
-        padding: '16px',
+        height: 'calc(100vh - var(--header-height))',
+        boxSizing: 'border-box',
+        padding: '12px',
         background: '#14161f',
       }}
     />

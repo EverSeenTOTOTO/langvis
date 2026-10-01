@@ -5,7 +5,8 @@
   z-index: 2;
   flex-wrap: nowrap;
   gap: 8px;
-  max-height: var(--header-height);
+  height: var(--header-height);
+  box-sizing: border-box;
   padding: 8px 12px;
 
   .logo {
