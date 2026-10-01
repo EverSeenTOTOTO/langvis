@@ -30,6 +30,13 @@ export class AuthorizationProvider implements AuthorizationPort {
     opts: EnsureApprovedOptions,
   ): AsyncGenerator<RunEvent, Record<string, unknown> | void, void> {
     const key = `${action}:${resource}`;
+    const mode = this.approvalMode(ctx);
+
+    // yolo：全部直放（grants 语义保持——已有 grant 的照旧命中）
+    if (mode === 'yolo') return;
+
+    // auto：read 类直放（写类继续走确认）
+    if (mode === 'auto' && action === 'read-path') return;
 
     if (await this.hasGrant(ctx.workDir, key)) return;
 
@@ -59,6 +66,14 @@ export class AuthorizationProvider implements AuthorizationPort {
 
     await this.addGrant(ctx.workDir, key);
     return record;
+  }
+
+  /** 审批模式来自 runtimeConfig.approval.mode（Config fragment 默认 default）。 */
+  private approvalMode(ctx: ToolCallContext): 'default' | 'auto' | 'yolo' {
+    const mode = (
+      ctx.runtimeConfig as { approval?: { mode?: unknown } } | undefined
+    )?.approval?.mode;
+    return mode === 'auto' || mode === 'yolo' ? mode : 'default';
   }
 
   private async hasGrant(workDir: string, key: string): Promise<boolean> {

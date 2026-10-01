@@ -6,7 +6,10 @@ import type { ToolConfig } from '@/shared/types';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
-import { ToolService } from '@/server/modules/agent/application/service/tool.service';
+import {
+  AUTHORIZATION_PORT,
+  type AuthorizationPort,
+} from '@/server/modules/agent/domain/port/authorization.port';
 import { WorkspaceService } from '@/server/infrastructure/workspace/workspace.service';
 import type { FileEditInput, FileEditOutput } from './config';
 
@@ -18,7 +21,7 @@ export default class FileEditTool extends Tool<FileEditOutput> {
 
   constructor(
     @Inject(WorkspaceService) private workspaceService: WorkspaceService,
-    @Inject(ToolService) private toolService: ToolService,
+    @Inject(AUTHORIZATION_PORT) private auth: AuthorizationPort,
   ) {
     super();
   }
@@ -60,23 +63,21 @@ export default class FileEditTool extends Tool<FileEditOutput> {
       type: 'object' as const,
       properties: {
         confirmed: { type: 'boolean' as const, title: '确认修改？' },
+        remark: {
+          type: 'string' as const,
+          title: '备注',
+          description: '可选，拒绝原因',
+        },
       },
       required: ['confirmed'],
     };
 
-    const hitl = this.toolService.resolve(ToolIds.ASK_USER)!;
-    const hitlOut = yield* hitl.call({
-      ...ctx,
-      input: { message, formSchema: formSchema as any },
+    // 走统一授权门：approvalMode 感知（yolo 直放/auto 写类确认/default 现状），
+    // 确认后落 grant——同路径二次编辑不再问。
+    yield* this.auth.ensureApproved(ctx, 'edit-path', path, {
+      prompt: message,
+      formSchema,
     });
-    const { submitted, data } = hitlOut as {
-      submitted: boolean;
-      data?: Record<string, unknown>;
-    };
-
-    if (!submitted || !(data as Record<string, unknown>)?.confirmed) {
-      throw new Error('操作已取消');
-    }
 
     ctx.signal.throwIfAborted();
     const result = await this.workspaceService.editFile(
