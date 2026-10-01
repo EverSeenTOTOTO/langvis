@@ -75,9 +75,12 @@ export class AgentRun extends AggregateRoot<string> {
   }
 
   /** AskUser：登记待输入表单（清空上次提交状态）。 */
+  private inputCancelled = false;
+
   beginAwaitInput(payload: { formSchema: unknown; message: string }): void {
     this.awaitingInput = payload;
     this.inputSubmitted = false;
+    this.inputCancelled = false;
   }
 
   /** AskUser：阻塞等待提交。提交成功立即 resolve（附结果）；超时或中止 resolve false。 */
@@ -100,18 +103,21 @@ export class AgentRun extends AggregateRoot<string> {
       const onAbort = () => finish(false);
       signal.addEventListener('abort', onAbort, { once: true });
       if (signal.aborted) onAbort();
-      this.inputWaiter = () => finish(true, this.inputResult);
+      this.inputWaiter = () => finish(!this.inputCancelled, this.inputResult);
     });
   }
 
   /** web（经 executor.getActiveRun）：提交结果。 */
   submitInput(
     data: Record<string, unknown>,
+    action: 'submit' | 'cancel' = 'submit',
   ): 'not_found' | 'already_submitted' | 'success' {
     if (!this.awaitingInput) return 'not_found';
     if (this.inputSubmitted) return 'already_submitted';
     this.inputSubmitted = true;
-    this.inputResult = data;
+    // cancel：用户明确放弃——等价超时路径（submitted:false），工具侧按拒绝处理
+    this.inputResult = action === 'cancel' ? undefined : data;
+    this.inputCancelled = action === 'cancel';
     this.inputWaiter?.();
     this.inputWaiter = undefined;
     return 'success';

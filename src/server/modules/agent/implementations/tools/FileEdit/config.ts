@@ -8,6 +8,8 @@ export interface FileEditInput {
 }
 
 export interface FileEditOutput {
+  oldString?: string;
+  newString?: string;
   path: string;
   changes: number;
 }
@@ -45,6 +47,16 @@ export const config: ToolConfig<FileEditInput, FileEditOutput> = {
       changes: {
         type: 'number',
         description: 'Number of replacements made.',
+      },
+      oldString: {
+        type: 'string',
+        nullable: true,
+        description: 'Replaced text (for diff rendering).',
+      },
+      newString: {
+        type: 'string',
+        nullable: true,
+        description: 'Replacement text (for diff rendering).',
       },
     },
     required: ['path', 'changes'],

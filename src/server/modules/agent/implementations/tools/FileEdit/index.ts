@@ -7,7 +7,7 @@ import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-ca
 import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
-import { WorkspaceService } from '@/server/shared/infrastructure/workspace.service';
+import { WorkspaceService } from '@/server/infrastructure/workspace/workspace.service';
 import type { FileEditInput, FileEditOutput } from './config';
 
 @tool(ToolIds.FILE_EDIT)
@@ -85,6 +85,11 @@ export default class FileEditTool extends Tool<FileEditOutput> {
       new_string,
       workDir,
     );
-    return { path, changes: result.changes };
+    return {
+      path,
+      changes: result.changes,
+      oldString: old_string,
+      newString: new_string,
+    };
   }
 }

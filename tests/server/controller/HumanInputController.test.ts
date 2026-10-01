@@ -59,7 +59,7 @@ describe('HumanInputController（以 runId 寻址内存中的活跃 AgentRun）'
       await expect(
         controller.submitInput(runId, { data: { name: 'John' } }),
       ).resolves.toEqual({ success: true });
-      expect(run.submitInput).toHaveBeenCalledWith({ name: 'John' });
+      expect(run.submitInput).toHaveBeenCalledWith({ name: 'John' }, 'submit');
     });
   });
 

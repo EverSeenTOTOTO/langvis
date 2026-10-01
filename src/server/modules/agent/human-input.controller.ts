@@ -17,11 +17,16 @@ export class HumanInputController {
   @Post(':runId')
   async submitInput(
     @Param('runId') runId: string,
-    @Body() dto: { data?: Record<string, unknown> },
+    @Body()
+    dto: { data?: Record<string, unknown>; action?: 'submit' | 'cancel' },
   ) {
     const result =
-      this.executor.getActiveRun(runId)?.submitInput(dto.data ?? {}) ??
-      'not_found';
+      this.executor
+        .getActiveRun(runId)
+        ?.submitInput(
+          dto.data ?? {},
+          dto.action === 'cancel' ? 'cancel' : 'submit',
+        ) ?? 'not_found';
 
     if (result === 'not_found') {
       throw new HttpException(
