@@ -27,7 +27,6 @@ import {
   GetConversationsByWorkspaceQuery,
   GetMessagesQuery,
 } from './contracts';
-import { WorkspaceCheckpoint } from './application/service/workspace-checkpoint';
 import { SessionManager } from './application/service/session-manager';
 
 const requireUserId = (req: Request): string => {
@@ -48,7 +47,6 @@ export class ConversationController {
     @Inject(CommandBus) private commandBus: CommandBus,
     @Inject(QueryBus) private queryBus: QueryBus,
     @Inject(SessionManager) private sessionManager: SessionManager,
-    private checkpoint = new WorkspaceCheckpoint(),
   ) {}
 
   @Post()
@@ -152,7 +150,7 @@ export class ConversationController {
   }
 
   // steps/status 读模型组装在 GetMessagesHandler；controller 只做 HTTP 适配。
-  /** rewind：恢复 workspace 到某 turn 前的 git 快照 + 截断该 turn 起的消息（文件与上下文一致回退）。 */
+  /** rewind：截断该 user 消息起的会话（纯对话回退，不动文件——文件交给 git）。 */
   @Post(':id/rewind/:messageId')
   async rewind(
     @Req() req: Request,
@@ -172,28 +170,14 @@ export class ConversationController {
       );
     }
 
-    const conv = conversation as { workspacePath?: string | null };
-    if (conv.workspacePath) {
-      const ok = await this.checkpoint.restore(conv.workspacePath, messageId);
-      if (!ok) {
-        throw new HttpException({ error: 'No checkpoint for this turn' }, 404);
-      }
-    }
-
-    // 消息截断：该 turn 的 user 消息起全部删除（含 checkpoint 对应的 assistant 消息）
     const messages = await this.messageRepo.findByConversationId(id);
-    const idx = messages.findIndex(m => m.id === messageId);
+    const idx = messages.findIndex(
+      m => m.id === messageId && m.role === Role.USER,
+    );
     if (idx === -1) {
-      throw new HttpException({ error: 'No checkpoint for this turn' }, 404);
+      throw new HttpException({ error: 'No such turn' }, 404);
     }
-    let start = idx;
-    for (let i = idx - 1; i >= 0; i--) {
-      if (messages[i].role === Role.USER) {
-        start = i;
-        break;
-      }
-    }
-    const doomed = messages.slice(start).map(m => m.id);
+    const doomed = messages.slice(idx).map(m => m.id);
     await this.messageRepo.batchDeleteInConversation(id, doomed);
 
     // 逐出内存会话——下一 turn 从 DB 重建上下文；后台 bash 任务一并清理
@@ -207,45 +191,26 @@ export class ConversationController {
     return this.queryBus.execute(new GetMessagesQuery(id));
   }
 
-  /** checkpoint 列表（rewind UI 数据面）：key=assistantMessage.id → 映射 turn 的 user 消息预览。 */
-  @Get(':id/checkpoints')
-  async listCheckpoints(@Param('id') id: string, @Req() req: Request) {
+  /** rewind 点列表：全部 user 消息（turn 锚点），新到旧。 */
+  @Get(':id/turns')
+  async listTurns(@Param('id') id: string, @Req() req: Request) {
     const userId = requireUserId(req);
     const conversation = await this.convRepo.findById(id, userId);
     if (!conversation) {
       throw new HttpException({ error: 'Conversation not found' }, 404);
     }
 
-    const workspacePath = (conversation as { workspacePath?: string | null })
-      .workspacePath;
-    if (!workspacePath) return { checkpoints: [] };
-
-    const snapshots = await this.checkpoint.list(workspacePath);
-    if (snapshots.length === 0) return { checkpoints: [] };
-
     const messages = await this.messageRepo.findByConversationId(id);
-    const order = new Map(messages.map((m, i) => [m.id, i]));
-    const checkpoints = snapshots
-      .flatMap(({ key }) => {
-        const idx = order.get(key);
-        if (idx === undefined) return [];
-        let userPreview = '';
-        for (let i = idx - 1; i >= 0; i--) {
-          if (messages[i].role === Role.USER) {
-            userPreview = messages[i].content;
-            break;
-          }
-        }
-        return [
-          {
-            messageId: key,
-            createdAt: new Date(messages[idx].createdAt).toISOString(),
-            userPreview: userPreview.slice(0, 120),
-          },
-        ];
-      })
-      .sort((a, b) => order.get(b.messageId)! - order.get(a.messageId)!);
-    return { checkpoints };
+    // meta.kind 标脚手架（session-context/compact），非对话 turn——与 groupIntoTurns 同约定
+    const turns = messages
+      .filter(m => m.role === Role.USER && !m.meta?.kind)
+      .map(m => ({
+        messageId: m.id,
+        createdAt: new Date(m.createdAt).toISOString(),
+        userPreview: m.content.slice(0, 120),
+      }))
+      .reverse();
+    return { turns };
   }
 
   @Delete(':id/messages')

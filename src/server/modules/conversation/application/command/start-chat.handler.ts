@@ -6,7 +6,6 @@ import { StartChatCommand, TurnInitiated } from '../../contracts';
 import { projectToLlmMessages } from '../service/history-projection';
 import { runConvTransforms } from '../transforms';
 import { expandMentions } from '../service/file-mention';
-import { WorkspaceCheckpoint } from '../service/workspace-checkpoint';
 import { TraceContext } from '@/server/trace-context';
 import { WorkspaceService } from '@/server/infrastructure/workspace/workspace.service';
 import Logger from '@/server/utils/logger';
@@ -24,7 +23,6 @@ export class StartChatHandler {
     private eventBus: EventBus,
     @Inject(WorkspaceService)
     private workspace: WorkspaceService,
-    private checkpoint = new WorkspaceCheckpoint(),
   ) {}
 
   async execute(command: StartChatCommand): Promise<{ assistantId: string }> {
@@ -101,9 +99,6 @@ export class StartChatHandler {
       conversationId,
       userId,
     );
-
-    // workspace git 快照（rewind 数据面）
-    await this.checkpoint.snapshot(workDir, turn.assistantMessage.id);
 
     this.eventBus.publish(
       new TurnInitiated(conversationId, {
