@@ -12,7 +12,7 @@ import {
   toLlmMessages,
   RECONSTRUCTED_HEAD_CHARS,
 } from '@/server/modules/conversation/application/service/history-projection';
-import { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import { ProviderService } from '@/server/infrastructure/provider.service';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import Logger from '@/server/utils/logger';
 

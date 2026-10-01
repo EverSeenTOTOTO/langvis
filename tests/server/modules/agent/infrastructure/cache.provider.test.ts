@@ -7,7 +7,7 @@ import {
   PREVIEW_LENGTH,
 } from '@/server/modules/agent/infrastructure/cache.provider';
 import type { CachedReference } from '@/server/modules/agent/domain/port/cache.port';
-import { WorkspaceLocalStore } from '@/server/shared/infrastructure/workspace-local-store';
+import { WorkspaceLocalStore } from '@/server/infrastructure/workspace/workspace-local-store';
 
 let testDir: string;
 

@@ -5,7 +5,7 @@ import { SessionManager } from '../service/session-manager';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { ConversationActivateCommand } from '../../contracts';
 import { runConvTransforms } from '../transforms';
-import { TraceContext } from '@/server/middleware/trace-context';
+import { TraceContext } from '@/server/trace-context';
 
 @CommandHandler(ConversationActivateCommand)
 export class ConversationActivateHandler {

@@ -24,6 +24,8 @@ function makeSessionManager(seed: Message[] = []) {
     awaitMaintenance: vi.fn().mockResolvedValue(undefined),
     getCtx: vi.fn(() => ctx),
     sendFrame: vi.fn(),
+    hasActiveRuns: vi.fn().mockReturnValue(false),
+    enqueueTurn: vi.fn(),
   } as unknown as SessionManager & { ctx: typeof ctx };
 }
 

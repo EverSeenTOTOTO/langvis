@@ -5,7 +5,7 @@ import winston from 'winston';
 import 'winston-daily-rotate-file';
 import { trace as otelTrace } from '@opentelemetry/api';
 import { isProd } from './env';
-import { TraceContext } from '@/server/middleware/trace-context';
+import { TraceContext } from '@/server/trace-context';
 
 export type Logger = winston.Logger;
 

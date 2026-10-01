@@ -4,7 +4,7 @@ import type { ParsedAction } from '@/server/modules/agent/domain/port/agent-run-
 import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import { estimateTokens } from '@/server/utils/estimateTokens';
-import { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import { ProviderService } from '@/server/infrastructure/provider.service';
 import type { OffloadConfig } from '@/server/modules/conversation/domain/config/fragments/offload';
 import Logger from '@/server/utils/logger';
 import { classifyRecallParsed } from '@/server/modules/agent/domain/offload/offload-recall';

@@ -6,7 +6,7 @@ import type {
 } from '@/shared/types/entities';
 import type { RunStatus } from '@/shared/types/agent';
 import { Role } from '@/shared/entities/Message';
-import { WorkspaceService } from '@/server/shared/infrastructure/workspace.service';
+import { WorkspaceService } from '@/server/infrastructure/workspace/workspace.service';
 import {
   MESSAGE_REPOSITORY,
   CONVERSATION_REPOSITORY,
@@ -19,7 +19,7 @@ import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/
 import {
   TRANSACTION_PORT,
   type TransactionPort,
-} from '@/server/shared/ports/transaction/transaction.port';
+} from '@/server/infrastructure/database/transaction.port';
 import {
   createActivationMessages,
   createTurnMessages,
@@ -164,6 +164,45 @@ export class ChatService {
 
   getConversationMessages(conversationId: string): Promise<Message[]> {
     return this.messageRepo.findByConversationId(conversationId);
+  }
+
+  /** steering 出队：按 assistantMessageId 找 (user, assistant) 消息对——turn 已在排队时持久化。 */
+  async listPendingTurns(
+    conversationId: string,
+    assistantIds: string[],
+  ): Promise<{
+    turns: Array<{ userMessage: Message; assistantMessage: Message }>;
+    workDir: string;
+  }> {
+    const [messages, workDir] = await Promise.all([
+      this.messageRepo.findByConversationId(conversationId),
+      this.getConversationWorkspace(conversationId),
+    ]);
+    const turns: Array<{ userMessage: Message; assistantMessage: Message }> =
+      [];
+    for (const id of assistantIds) {
+      const idx = messages.findIndex(m => m.id === id);
+      if (idx < 1) continue;
+      const assistant = messages[idx]!;
+      // user 消息紧邻其前（appendMessage 的顺序保证）
+      const user = messages[idx - 1]!;
+      if (user.role === Role.USER) {
+        turns.push({ userMessage: user, assistantMessage: assistant });
+      }
+    }
+    return { turns, workDir };
+  }
+
+  /** workspace 路径（steering 出队发起 TurnInitiated 用；无 workspace 返回会话工作目录）。 */
+  private async getConversationWorkspace(
+    conversationId: string,
+  ): Promise<string> {
+    const conv = await this.convRepo.findById(conversationId);
+    if (conv?.workspacePath) {
+      await fs.mkdir(conv.workspacePath, { recursive: true });
+      return conv.workspacePath;
+    }
+    return this.workspaceService.getWorkDir(conversationId);
   }
 
   /** 按消息 id 批量删除（retry 截断用）：保留目标之前的历史，含目标本身 + 其后消息。 */

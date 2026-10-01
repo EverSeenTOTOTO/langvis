@@ -5,6 +5,16 @@ import { AwaitingInputProjection, ReActStep } from './render';
 
 // ─── 领域事件 ───
 
+// 错误分类码——error/tool_error 事件的可选分类，客户端据此映射文案与重试提示。 稳定契约：新增只追加不重命名。
+export type RunErrorCode =
+  | 'rate_limited'
+  | 'auth'
+  | 'provider'
+  | 'timeout'
+  | 'context_overflow'
+  | 'parse'
+  | 'internal';
+
 // Agent 运行过程中的全部事实。 纯业务语义，不含传输/执行元数据。
 export type RunEvent =
   | { type: 'start' }
@@ -28,10 +38,11 @@ export type RunEvent =
       callId: string;
       toolName: string;
       error: string;
+      code?: RunErrorCode;
     }
   | { type: 'final' }
   | { type: 'cancelled'; reason: string }
-  | { type: 'error'; error: string }
+  | { type: 'error'; error: string; code?: RunErrorCode }
   | { type: 'audio'; filePath: string; voice?: string }
   | { type: 'loop_usage'; used: number; total: number }
   | { type: 'hook'; hookId: string; summary: string; data?: unknown };
@@ -57,6 +68,7 @@ export interface HookRecord {
 export type StreamFrame =
   | { type: 'connected' }
   | { type: 'session_replaced' }
+  | { type: 'queued'; content: string; assistantMessageId: string }
   | {
       type: 'run_events';
       messageId: string;

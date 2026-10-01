@@ -5,7 +5,7 @@ import { ToolIds } from '@/shared/constants';
 import type { RunEvent } from '@/shared/types/events';
 import type { ToolCallContext } from '../domain/port/tool-call-context.port';
 import AskUserTool from '../implementations/tools/AskUser';
-import { WorkspaceLocalStore } from '@/server/shared/infrastructure/workspace-local-store';
+import { WorkspaceLocalStore } from '@/server/infrastructure/workspace/workspace-local-store';
 import { Inject } from '@nestjs/common';
 import {
   AUTHORIZATION_PORT,

@@ -3,6 +3,7 @@ import { CompleteTurnHandler } from '@/server/modules/conversation/application/e
 import type { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import { RunCompleted } from '@/server/modules/agent/contracts';
+import type { EventBus } from '@nestjs/cqrs';
 import type { EnrichedEvent } from '@/shared/types/events';
 import type { Message } from '@/shared/types/entities';
 import { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
@@ -45,7 +46,12 @@ function setup(
   const chatService = {
     persistAssistantContent: vi.fn().mockResolvedValue(persistResult),
   } as unknown as ChatService;
-  const handler = new CompleteTurnHandler(sessionManager, chatService);
+  const eventBus = { publish: vi.fn() } as unknown as EventBus;
+  const handler = new CompleteTurnHandler(
+    sessionManager,
+    chatService,
+    eventBus,
+  );
   return { handler, sessionManager, chatService, ctx };
 }
 
@@ -130,7 +136,9 @@ describe('CompleteTurnHandler — turn-end 触发适配器（线性屏障）', (
     const chatService = {
       persistAssistantContent: vi.fn().mockRejectedValue(new Error('boom')),
     } as unknown as ChatService;
-    const handler = new CompleteTurnHandler(sessionManager, chatService);
+    const handler = new CompleteTurnHandler(sessionManager, chatService, {
+      publish: vi.fn(),
+    } as unknown as EventBus);
 
     await expect(handler.handle(event)).resolves.toBeUndefined();
     expect(sessionManager.endMaintenance).toHaveBeenCalledWith(conversationId);

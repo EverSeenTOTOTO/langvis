@@ -5,7 +5,7 @@ import type {
 } from '../../domain/port/agent-run.repository.port';
 import { AgentRunConcurrentModificationError } from '../../domain/errors';
 import type { EnrichedEvent } from '@/shared/types/events';
-import { DatabaseService } from '@/server/shared/infrastructure/database.service';
+import { DatabaseService } from '@/server/infrastructure/database/database.service';
 import { AgentRunEntity } from '@/shared/entities/AgentRun';
 import { Inject } from '@nestjs/common';
 import {

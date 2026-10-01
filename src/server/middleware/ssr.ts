@@ -3,7 +3,7 @@ import { Express, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import { AuthService } from '@/server/shared/infrastructure/auth.service';
+import { AuthService } from '@/server/modules/user/infrastructure/auth.service';
 import { isEmpty } from 'lodash-es';
 
 const configFile = path.join(process.cwd(), `config/vite.common.ts`);
@@ -46,8 +46,8 @@ function rejectProbe(req: Request, res: Response) {
   res.status(404).end('Not Found');
 }
 
-// ssr
-export default async (app: Express, authService: AuthService) => {
+/** SSR catch-all 挂载（must be last）。dev 起 vite middlewareMode，prod 预载 render。 */
+export const mountSsr = async (app: Express, authService: AuthService) => {
   if (!isProd) {
     const vite = await createViteServer({
       configFile: configFile,

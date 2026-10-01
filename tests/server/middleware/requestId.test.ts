@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Request, Response } from 'express';
 
-// 捕获 bindRequestId 注册的两段中间件，直接驱动（不起真实 server）。
+// 捕获 mountRequestId 注册的两段中间件，直接驱动（不起真实 server）。
 // 保留 tsyringe 真实导出与容器原型方法，仅 Proxy 覆盖 container.resolve。
 vi.mock('tsyringe', async importOriginal => {
   const actual = await importOriginal<any>();
@@ -31,9 +31,7 @@ vi.mock('@/server/utils/logger', () => {
 async function setup(env: 'production' | 'development') {
   vi.resetModules();
   vi.stubEnv('NODE_ENV', env);
-  const { default: bindRequestId } = await import(
-    '@/server/middleware/requestId'
-  );
+  const { mountRequestId } = await import('@/server/middleware/requestId');
   const loggerMod = await import('@/server/utils/logger');
   const logInfo = (
     loggerMod as unknown as {
@@ -49,7 +47,7 @@ async function setup(env: 'production' | 'development') {
     },
   } as any;
 
-  await bindRequestId(mockApp, {
+  mountRequestId(mockApp, {
     getSessionId: vi.fn().mockResolvedValue(null),
   } as never);
   return { uses, logInfo };

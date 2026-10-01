@@ -6,7 +6,7 @@ import { ConversationGroupEntity } from '@/shared/entities/ConversationGroup';
 import { UNGROUPED_GROUP_NAME } from '@/shared/constants';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
 import { Inject } from '@nestjs/common';
-import { DatabaseService } from '@/server/shared/infrastructure/database.service';
+import { DatabaseService } from '@/server/infrastructure/database/database.service';
 
 export class ConversationRepository implements ConversationRepositoryPort {
   constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}

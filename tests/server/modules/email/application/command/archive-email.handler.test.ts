@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ArchiveEmailHandler } from '@/server/modules/email/application/command/archive-email.handler';
 import type { EmailService } from '@/server/modules/email/application/service/email.service';
-import type { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import type { ProviderService } from '@/server/infrastructure/provider.service';
 import type { CommandBus, EventBus } from '@nestjs/cqrs';
 import { CreateConversationCommand } from '@/server/modules/conversation/contracts';
 import { ArchiveEmailCommand } from '@/server/modules/email/contracts';

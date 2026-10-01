@@ -7,7 +7,7 @@ import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-ca
 import type {
   SpeechToTextInput,
   SpeechToTextOutput,
-} from '@/server/shared/ports/llm/llm.types';
+} from '@/server/infrastructure/llm/llm.types';
 
 // 向后兼容：历史代码自本工具导入这两个类型，re-export 内核定义。
 export type { SpeechToTextInput, SpeechToTextOutput };

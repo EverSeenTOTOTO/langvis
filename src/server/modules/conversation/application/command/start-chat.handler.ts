@@ -5,7 +5,7 @@ import { SessionManager } from '../service/session-manager';
 import { StartChatCommand, TurnInitiated } from '../../contracts';
 import { projectToLlmMessages } from '../service/history-projection';
 import { runConvTransforms } from '../transforms';
-import { TraceContext } from '@/server/middleware/trace-context';
+import { TraceContext } from '@/server/trace-context';
 import Logger from '@/server/utils/logger';
 
 @CommandHandler(StartChatCommand)
@@ -24,6 +24,29 @@ export class StartChatHandler {
   async execute(command: StartChatCommand): Promise<{ assistantId: string }> {
     const { conversationId, userMessage, userId, assistantId } = command;
     if (TraceContext.get()) TraceContext.update({ conversationId });
+
+    // steering（排队语义）：活跃 run 期间不并发——持久化 turn 只发 queued 帧，
+    // 本轮 RunCompleted 后 CompleteTurnHandler 出队自动发起（drainQueuedTurn）。
+    if (this.sessionManager.hasActiveRuns(conversationId)) {
+      const queued = await this.chatService.startTurn({
+        conversationId,
+        userId,
+        userMessage,
+        assistantId,
+      });
+      const queuedId = queued.assistantMessage.id;
+      this.sessionManager.enqueueTurn(conversationId, queuedId);
+      this.sessionManager.sendFrame(conversationId, {
+        type: 'queued',
+        content: userMessage.content,
+        assistantMessageId: queuedId,
+      });
+      this.logger.info(`Turn queued (active run in flight)`, {
+        chatId: conversationId,
+        assistantId: queuedId,
+      });
+      return { assistantId: queuedId };
+    }
 
     // 持久化 + 归属校验 在 ChatService.startTurn。
     const turn = await this.chatService.startTurn({

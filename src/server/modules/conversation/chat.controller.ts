@@ -9,8 +9,8 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { SSEServerTransport } from '@/server/shared/infrastructure/transport';
-import { AuthService } from '@/server/shared/infrastructure/auth.service';
+import { SSEServerTransport } from '@/server/modules/conversation/infrastructure/transport';
+import { AuthService } from '@/server/modules/user/infrastructure/auth.service';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import {
   CancelChatRequestDto,

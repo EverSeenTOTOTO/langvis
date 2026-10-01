@@ -14,7 +14,7 @@ import type { Request } from 'express';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { EmailService } from './application/service/email.service';
 import { CommandBus } from '@nestjs/cqrs';
-import { AuthService } from '@/server/shared/infrastructure/auth.service';
+import { AuthService } from '@/server/modules/user/infrastructure/auth.service';
 import { ArchiveEmailCommand, ProcessInboundCommand } from './contracts';
 import { ListEmailsRequestDto } from '@/shared/dto/controller';
 import { DtoValidationPipe } from '@/server/pipes/dto-validation.pipe';

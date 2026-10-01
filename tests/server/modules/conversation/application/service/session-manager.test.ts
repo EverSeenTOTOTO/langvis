@@ -3,7 +3,7 @@ import { SessionManager } from '@/server/modules/conversation/application/servic
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { EventBus } from '@nestjs/cqrs';
 import { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
-import type { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import type { ProviderService } from '@/server/infrastructure/provider.service';
 import { Transport } from '@/shared/transport';
 import type { StreamFrame } from '@/shared/types/events';
 import type { CancelRun } from '@/server/modules/agent/contracts';

@@ -1,7 +1,7 @@
 import { Inject } from '@nestjs/common';
 import { User, UserEntity } from '@/shared/entities/User';
 import type { UserRepositoryPort } from '../../domain/port/user.repository.port';
-import { DatabaseService } from '@/server/shared/infrastructure/database.service';
+import { DatabaseService } from '@/server/infrastructure/database/database.service';
 
 export class UserRepository implements UserRepositoryPort {
   constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}

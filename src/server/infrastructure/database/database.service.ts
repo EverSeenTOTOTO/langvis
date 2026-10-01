@@ -5,7 +5,7 @@ import {
   runInTransaction,
 } from 'typeorm-transactional';
 import logger from '@/server/utils/logger';
-import type { TransactionPort } from '@/server/shared/ports/transaction/transaction.port';
+import type { TransactionPort } from '@/server/infrastructure/database/transaction.port';
 import { buildDataSourceOptions } from './datasource-options';
 
 export class DatabaseService

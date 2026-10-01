@@ -7,7 +7,7 @@ import { ConversationUpdateCommand } from '../../contracts';
 import { ConversationNotFoundError } from '../../domain/errors';
 import { ChatService } from '../service/chat.service';
 import { SessionManager } from '../service/session-manager';
-import { TraceContext } from '@/server/middleware/trace-context';
+import { TraceContext } from '@/server/trace-context';
 
 @CommandHandler(ConversationUpdateCommand)
 export class ConversationUpdateHandler {

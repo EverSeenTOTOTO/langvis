@@ -1,4 +1,4 @@
-import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
+import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
 import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
 import type { AuthorizationPort } from './authorization.port';
 import type { AgentRun } from '../model/agent-run.entity';

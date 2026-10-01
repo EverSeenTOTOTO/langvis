@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
-import { SSEServerTransport } from '@/server/shared/infrastructure/transport/SSEServerTransport';
+import { SSEServerTransport } from '@/server/modules/conversation/infrastructure/transport/SSEServerTransport';
 
 /** Minimal Express Response stand-in capturing written SSE chunks. */
 function mockResponse() {

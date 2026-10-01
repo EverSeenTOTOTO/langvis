@@ -1,7 +1,7 @@
 import type { RunConfigVO } from '../model/run-config.vo';
 import type { AgentRun } from '../model/agent-run.entity';
 import type { RunEvent } from '@/shared/types/events';
-import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
+import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
 import type { CachePort } from './cache.port';
 import type { AuthorizationPort } from './authorization.port';
 import type { HookPlan } from '../model/hook';

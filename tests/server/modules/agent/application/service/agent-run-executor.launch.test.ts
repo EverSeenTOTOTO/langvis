@@ -13,7 +13,7 @@ import type { Logger } from '@/server/utils/logger';
 import type { AgentRunRepositoryPort } from '@/server/modules/agent/domain/port/agent-run.repository.port';
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { AuthorizationPort } from '@/server/modules/agent/domain/port/authorization.port';
-import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
+import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
 import type { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 import type { ToolConfig } from '@/shared/types';

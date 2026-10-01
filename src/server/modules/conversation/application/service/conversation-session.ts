@@ -21,6 +21,9 @@ export class ConversationSession {
   private maintenance:
     | { promise: Promise<void>; resolve: () => void }
     | undefined;
+  // steering 排队：活跃 run 期间到达的 assistantMessageId（turn 已持久化），
+  // 本轮 RunCompleted 后按 FIFO 出队发起。
+  private readonly queuedTurnIds: string[] = [];
 
   constructor(
     readonly conversationId: string,
@@ -127,6 +130,19 @@ export class ConversationSession {
     this.activeRuns.delete(messageId);
   }
 
+  enqueueTurn(assistantMessageId: string): void {
+    this.queuedTurnIds.push(assistantMessageId);
+  }
+
+  /** FIFO 出队一个排队的 turn（无排队返回 undefined）。 */
+  dequeueTurn(): string | undefined {
+    return this.queuedTurnIds.shift();
+  }
+
+  get queuedTurnCount(): number {
+    return this.queuedTurnIds.length;
+  }
+
   activateContext(
     messages: Message[],
     runtimeConfig: ConversationConfig,
@@ -180,6 +196,7 @@ export class ConversationSession {
     this.connection?.dispose();
     this.connection = undefined;
     this.activeRuns.clear();
+    this.queuedTurnIds.length = 0;
     this.messages = undefined;
     this.runtimeConfig = undefined;
     this.transforms = undefined;

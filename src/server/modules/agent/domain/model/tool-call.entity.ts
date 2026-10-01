@@ -4,9 +4,10 @@ import type {
   ToolRunResult,
 } from '../port/agent-run-context.port';
 import type { ToolCallContext } from '../port/tool-call-context.port';
-import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
+import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
 import { Entity } from '@/server/shared/ddd';
 import type { Tool } from './tool.base';
+import { classifyError } from '@/server/utils/error-code';
 
 /** ToolCall — 一次工具调用的完整业务流程（聚合内实体）。 */
 export class ToolCall extends Entity<string> {
@@ -95,6 +96,7 @@ export class ToolCall extends Entity<string> {
         callId: this.id,
         toolName: this.toolName,
         error: errMsg,
+        code: classifyError(error),
       };
     }
 

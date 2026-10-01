@@ -10,7 +10,7 @@ import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { AUTH_PORT } from '@/server/modules/user/user.di-tokens';
 import type { AuthPort } from '@/server/modules/user/domain/port/auth.port';
-import { TraceContext } from '@/server/middleware/trace-context';
+import { TraceContext } from '@/server/trace-context';
 
 export const IS_PUBLIC_KEY = 'isPublic';
 /** 标记免鉴权端点（inbound webhook、公开媒体流）。 */

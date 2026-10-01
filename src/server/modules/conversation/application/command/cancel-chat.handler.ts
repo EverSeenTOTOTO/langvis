@@ -3,7 +3,7 @@ import { CommandHandler } from '@nestjs/cqrs';
 import { SessionManager } from '../service/session-manager';
 import { CancelChatCommand } from '../../contracts';
 import { NoActiveRunError, SessionNotFoundError } from '../../domain/errors';
-import { TraceContext } from '@/server/middleware/trace-context';
+import { TraceContext } from '@/server/trace-context';
 
 @CommandHandler(CancelChatCommand)
 export class CancelChatHandler {

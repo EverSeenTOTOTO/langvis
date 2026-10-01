@@ -13,7 +13,7 @@ import {
 } from '@/server/modules/conversation/domain/model/conv-transform';
 import { projectToLlmMessages } from '@/server/modules/conversation/application/service/history-projection';
 import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
-import { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import { ProviderService } from '@/server/infrastructure/provider.service';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
 import type { StreamFrame, EnrichedEvent } from '@/shared/types/events';

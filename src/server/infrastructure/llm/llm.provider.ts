@@ -7,16 +7,16 @@ import type {
 } from 'openai/resources/chat/completions';
 import logger from '@/server/utils/logger';
 import { traceGen, traceSync } from '@/server/otel';
-import { ProviderService } from '@/server/shared/infrastructure/provider.service';
-import { stripThinking } from '@/server/shared/llm-text';
+import { ProviderService } from '@/server/infrastructure/provider.service';
+import { stripThinking } from '@/server/utils/llm-text';
 import type { ModelDefinition, ModelType } from '@/shared/types/provider';
-import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
+import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
 import type {
   TextToSpeechInput,
   TextToSpeechOutput,
   SpeechToTextInput,
   SpeechToTextOutput,
-} from '@/server/shared/ports/llm/llm.types';
+} from '@/server/infrastructure/llm/llm.types';
 import { Inject } from '@nestjs/common';
 import { Role, type LlmMessage, type Message } from '@/shared/types/entities';
 

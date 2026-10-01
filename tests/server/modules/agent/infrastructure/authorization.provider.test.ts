@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
-import { WorkspaceLocalStore } from '@/server/shared/infrastructure/workspace-local-store';
+import { WorkspaceLocalStore } from '@/server/infrastructure/workspace/workspace-local-store';
 import { AuthorizationProvider } from '@/server/modules/agent/infrastructure/authorization.provider';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';

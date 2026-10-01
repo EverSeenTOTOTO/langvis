@@ -1,6 +1,6 @@
 import { typeormAdapter } from '@hedystia/better-auth-typeorm';
 import { betterAuth } from 'better-auth';
-import { DatabaseService } from './database.service';
+import { DatabaseService } from '@/server/infrastructure/database/database.service';
 import { Inject } from '@nestjs/common';
 import type { AuthPort } from '@/server/modules/user/domain/port/auth.port';
 

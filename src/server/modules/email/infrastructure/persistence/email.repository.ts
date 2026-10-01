@@ -4,7 +4,7 @@ import type {
   EmailListResponse,
   EmailRepositoryPort,
 } from '../../domain/port/email.repository.port';
-import { DatabaseService } from '@/server/shared/infrastructure/database.service';
+import { DatabaseService } from '@/server/infrastructure/database/database.service';
 import { Inject } from '@nestjs/common';
 import {
   Between,

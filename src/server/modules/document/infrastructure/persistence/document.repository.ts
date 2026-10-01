@@ -8,7 +8,7 @@ import { DocumentCategory, DocumentEntity } from '@/shared/entities/Document';
 import { DocumentChunkEntity } from '@/shared/entities/DocumentChunk';
 import { Between, LessThanOrEqual, Like, MoreThanOrEqual } from 'typeorm';
 import type { DocumentRepositoryPort } from '../../domain/port/document.repository.port';
-import { DatabaseService } from '@/server/shared/infrastructure/database.service';
+import { DatabaseService } from '@/server/infrastructure/database/database.service';
 
 export class DocumentRepository implements DocumentRepositoryPort {
   constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}

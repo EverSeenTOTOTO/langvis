@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { generateId } from '@/shared/utils';
 import Logger from '@/server/utils/logger';
-import { WorkspaceLocalStore } from '@/server/shared/infrastructure/workspace-local-store';
+import { WorkspaceLocalStore } from '@/server/infrastructure/workspace/workspace-local-store';
 import { Inject } from '@nestjs/common';
 import {
   type CachePort,

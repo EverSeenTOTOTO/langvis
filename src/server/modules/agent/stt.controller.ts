@@ -1,6 +1,6 @@
 import { Body, Controller, Inject, Post } from '@nestjs/common';
-import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
-import { LLM_PORT } from '@/server/shared/ports/llm/llm.tokens';
+import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
+import { LLM_PORT } from '@/server/infrastructure/llm/llm.tokens';
 import type {
   SpeechToTextRequestDto,
   SpeechToTextResponse,

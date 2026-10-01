@@ -7,7 +7,7 @@ import { wrapUntrusted } from '@/shared/utils';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
-import { WorkspaceService } from '@/server/shared/infrastructure/workspace.service';
+import { WorkspaceService } from '@/server/infrastructure/workspace/workspace.service';
 import { Prompt } from '@/server/shared/prompt';
 import type {
   DocumentMetadataExtractInput,

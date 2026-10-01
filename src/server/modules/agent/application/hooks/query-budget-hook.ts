@@ -7,7 +7,7 @@ import {
 } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import { estimateTokens } from '@/server/utils/estimateTokens';
-import { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import { ProviderService } from '@/server/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
 import { responseUser } from '../service/react-message';
 

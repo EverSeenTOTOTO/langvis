@@ -4,7 +4,7 @@ import type { Conversation } from '@/shared/types/entities';
 import { CONVERSATION_REPOSITORY } from '../../conversation.di-tokens';
 import type { ConversationRepositoryPort } from '../../domain/port/conversation.repository.port';
 import { CreateConversationCommand } from '../../contracts';
-import { WorkspaceService } from '@/server/shared/infrastructure/workspace.service';
+import { WorkspaceService } from '@/server/infrastructure/workspace/workspace.service';
 
 // 会话创建统一入口，取代各调用方直连 convRepo.create。workspacePath 未传时由 WorkspaceService 生成临时路径。
 @CommandHandler(CreateConversationCommand)

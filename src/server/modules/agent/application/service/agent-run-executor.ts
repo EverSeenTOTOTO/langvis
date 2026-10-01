@@ -15,10 +15,10 @@ import {
 } from '@/server/modules/agent/domain/errors';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';
-import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
-import { LLM_PORT } from '@/server/shared/ports/llm/llm.tokens';
+import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
+import { LLM_PORT } from '@/server/infrastructure/llm/llm.tokens';
 import { generateId } from '@/shared/utils';
-import { TraceContext } from '@/server/middleware/trace-context';
+import { TraceContext } from '@/server/trace-context';
 import type { LlmMessage } from '@/shared/types/entities';
 import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
 import { HookPlan } from '@/server/modules/agent/domain/model/hook';
@@ -39,6 +39,7 @@ import {
 import type { AuthorizationPort } from '@/server/modules/agent/domain/port/authorization.port';
 import { Inject } from '@nestjs/common';
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
+import { classifyError } from '@/server/utils/error-code';
 
 /** 终态乐观锁提交的最大重试次数。commit 每次重读最新版本，重试几乎必然成功。 */
 const FINALIZE_MAX_RETRIES = 2;
@@ -233,7 +234,10 @@ export class AgentRunExecutor {
               message: (err as Error)?.message ?? String(err),
             });
             this.logger.error(`Run ${chalk.cyan(run.runId)} failed: ${err}`);
-            yield run.fail((err as Error)?.message ?? String(err));
+            yield run.fail(
+              (err as Error)?.message ?? String(err),
+              classifyError(err),
+            );
           } finally {
             span.setAttribute('run.status', run.currentStatus);
             span.setAttribute('run.iterations', tracker.iterations);

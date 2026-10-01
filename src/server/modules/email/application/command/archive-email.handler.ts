@@ -1,6 +1,6 @@
 import { Inject } from '@nestjs/common';
 import { CommandBus, CommandHandler, EventBus } from '@nestjs/cqrs';
-import { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import { ProviderService } from '@/server/infrastructure/provider.service';
 import type { Conversation } from '@/shared/types/entities';
 import { EmailService } from '../service/email.service';
 import { CreateConversationCommand } from '@/server/modules/conversation/contracts';

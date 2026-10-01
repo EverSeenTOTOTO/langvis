@@ -3,7 +3,7 @@ import type { Duplex } from 'node:stream';
 import path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import pty from '@lydell/node-pty';
-import { AuthService } from '@/server/shared/infrastructure/auth.service';
+import { AuthService } from '@/server/modules/user/infrastructure/auth.service';
 import Logger from '@/server/utils/logger';
 
 const logger = Logger.child({ source: 'TerminalServer' });

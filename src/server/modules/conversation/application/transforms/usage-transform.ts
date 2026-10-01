@@ -14,7 +14,7 @@ import {
   estimateTokens,
   type ContextUsage,
 } from '@/server/utils/estimateTokens';
-import { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import { ProviderService } from '@/server/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
 
 /** 有效历史用量：最新压缩摘要 C + 其后 turn（与 compact-transform 同口径）。 */

@@ -1,9 +1,9 @@
 import { Express, Request } from 'express';
 import { generateId } from '@/shared/utils';
-import { AuthService } from '@/server/shared/infrastructure/auth.service';
+import { AuthService } from '@/server/modules/user/infrastructure/auth.service';
 import Logger from '../utils/logger';
 import { isProd } from '../utils/env';
-import { TraceContext } from '@/server/middleware/trace-context';
+import { TraceContext } from '@/server/trace-context';
 
 // prod 落日志的 header 白名单——剔除 cookie/authorization 等凭据；dev 保留全量便于调试。
 const SAFE_HEADERS = ['user-agent', 'content-type', 'accept', 'x-request-id'];
@@ -21,7 +21,7 @@ declare global {
   }
 }
 
-export default async (app: Express, authService: AuthService) => {
+export const mountRequestId = (app: Express, authService: AuthService) => {
   app.use(async (req, res, next) => {
     const existingID = req.id ?? req.headers['x-request-id'];
     const requestId = existingID ? (existingID as string) : generateId('req');

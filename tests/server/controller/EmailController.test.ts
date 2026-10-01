@@ -44,7 +44,7 @@ vi.mock('@/server/shared/ddd', async importOriginal => {
   };
 });
 
-vi.mock('@/server/shared/infrastructure/auth.service', () => ({
+vi.mock('@/server/modules/user/infrastructure/auth.service', () => ({
   AuthService: class {
     getUserId = mockAuthService.getUserId;
   },

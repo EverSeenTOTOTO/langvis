@@ -13,9 +13,9 @@ import {
 } from '@/server/modules/conversation/application/service/history-projection';
 import { fold } from '@/server/shared/compaction';
 import { Prompt } from '@/server/shared/prompt';
-import { LLM_PORT } from '@/server/shared/ports/llm/llm.tokens';
-import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
-import { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import { LLM_PORT } from '@/server/infrastructure/llm/llm.tokens';
+import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
+import { ProviderService } from '@/server/infrastructure/provider.service';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import Logger from '@/server/utils/logger';
 

@@ -8,7 +8,7 @@ import type { RunEvent } from '@/shared/types/events';
 import type {
   TextToSpeechInput,
   TextToSpeechOutput,
-} from '@/server/shared/ports/llm/llm.types';
+} from '@/server/infrastructure/llm/llm.types';
 
 // 向后兼容：历史代码自本工具导入这两个类型，re-export 内核定义。
 export type { TextToSpeechInput, TextToSpeechOutput };

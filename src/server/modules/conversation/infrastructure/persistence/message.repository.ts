@@ -2,7 +2,7 @@ import type { Message } from '@/shared/types/entities';
 import type { MessageAttachment } from '@/shared/types/entities';
 import { MessageEntity, Role } from '@/shared/entities/Message';
 import type { MessageRepositoryPort } from '../../domain/port/message.repository.port';
-import { DatabaseService } from '@/server/shared/infrastructure/database.service';
+import { DatabaseService } from '@/server/infrastructure/database/database.service';
 import { Inject } from '@nestjs/common';
 import { In } from 'typeorm';
 

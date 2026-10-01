@@ -7,6 +7,12 @@ import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { BashInput, BashOutput } from './config';
 import { DirectBash, runChild, type BashBackend } from './bash-backend';
+import {
+  drainBackgroundOutput,
+  getBackgroundTask,
+  killBackgroundTask,
+  registerBackgroundTask,
+} from './background-registry';
 import { classifyBashCommand } from './classifier';
 
 const DEFAULT_TIMEOUT = 60;
@@ -67,7 +73,40 @@ export default class BashTool extends Tool<BashOutput> {
   ): AsyncGenerator<RunEvent, BashOutput, void> {
     ctx.signal.throwIfAborted();
 
-    const { command, timeout } = ctx.input as unknown as BashInput;
+    const { command, timeout, background, wait, kill } =
+      ctx.input as unknown as BashInput;
+
+    // ── 后台任务控制面：wait / kill 与执行面共用一次 bash 调用的入口 ──
+    if (wait?.taskId) {
+      const task = getBackgroundTask(wait.taskId);
+      if (!task || task.conversationId !== ctx.conversationId) {
+        throw new Error(`background task not found: ${wait.taskId}`);
+      }
+      const output = drainBackgroundOutput(task, wait.tail);
+      return {
+        exitCode: 0,
+        stdout: output,
+        stderr: '',
+        background: {
+          taskId: task.taskId,
+          running: task.exitCode === null,
+          exitCode: task.exitCode,
+        },
+      };
+    }
+    if (kill?.taskId) {
+      const task = getBackgroundTask(kill.taskId);
+      if (!task || task.conversationId !== ctx.conversationId) {
+        throw new Error(`background task not found: ${kill.taskId}`);
+      }
+      killBackgroundTask(task);
+      return {
+        exitCode: 0,
+        stdout: `killed ${task.taskId}`,
+        stderr: '',
+        background: { taskId: task.taskId, running: false, exitCode: null },
+      };
+    }
     const workDir = ctx.workDir;
     const suggestedTimeout = Math.min(
       Math.max(timeout ?? DEFAULT_TIMEOUT, 1),
@@ -101,7 +140,24 @@ export default class BashTool extends Tool<BashOutput> {
 
     ctx.signal.throwIfAborted();
 
-    return yield* runChild(backend.spawn(command, workDir), {
+    const handle = backend.spawn(command, workDir);
+
+    // 后台模式：注册即返回，不随 run abort 传播（会话级生命周期）
+    if (background) {
+      const task = registerBackgroundTask({
+        conversationId: ctx.conversationId,
+        command,
+        child: handle.child,
+      });
+      return {
+        exitCode: 0,
+        stdout: `background task started: ${task.taskId}\nuse bash {wait:{taskId:"${task.taskId}"}} to drain output`,
+        stderr: '',
+        background: { taskId: task.taskId, running: true, exitCode: null },
+      };
+    }
+
+    return yield* runChild(handle, {
       timeoutSec: userTimeout,
       signal: ctx.signal,
       callId: ctx.callId,

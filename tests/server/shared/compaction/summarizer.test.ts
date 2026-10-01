@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fold } from '@/server/shared/compaction';
 import { Prompt } from '@/server/shared/prompt';
-import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
+import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
 import type { LlmMessage } from '@/shared/types/entities';
 
 const tpl = Prompt.empty()

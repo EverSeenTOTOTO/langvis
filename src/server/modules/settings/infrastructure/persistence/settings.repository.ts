@@ -1,7 +1,7 @@
 import { Inject } from '@nestjs/common';
 import { Settings, SettingsEntity } from '@/shared/entities/Settings';
 import type { SettingsRepositoryPort } from '../../domain/port/settings.repository.port';
-import { DatabaseService } from '@/server/shared/infrastructure/database.service';
+import { DatabaseService } from '@/server/infrastructure/database/database.service';
 
 export class SettingsRepository implements SettingsRepositoryPort {
   constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}

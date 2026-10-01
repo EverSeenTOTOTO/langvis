@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { CqrsModule } from '@nestjs/cqrs';
-import { InfraModule } from './infra.module';
+import { InfraModule } from './infrastructure/infra.module';
 import { UserModule } from './modules/user/user.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { DocumentModule } from './modules/document/document.module';

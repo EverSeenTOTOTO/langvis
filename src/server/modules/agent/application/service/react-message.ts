@@ -1,6 +1,6 @@
 import { ToolIds } from '@/shared/constants';
 import { Role } from '@/shared/entities/Message';
-import { stripThinking } from '@/server/shared/llm-text';
+import { stripThinking } from '@/server/utils/llm-text';
 import type {
   AgentRunContext,
   ParsedAction,

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { VectorIndexInitializer } from '@/server/shared/infrastructure/vector-index-initializer';
+import { VectorIndexInitializer } from '@/server/infrastructure/database/vector-index-initializer';
 import { EMBEDDING_HNSW_INDEX_NAME } from '@/shared/entities/DocumentChunk';
-import type { DatabaseService } from '@/server/shared/infrastructure/database.service';
+import type { DatabaseService } from '@/server/infrastructure/database/database.service';
 
 function makeMockDb(): DatabaseService {
   return {

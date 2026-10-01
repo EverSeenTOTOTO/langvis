@@ -7,7 +7,7 @@ import { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
-import { DatabaseService } from '@/server/shared/infrastructure/database.service';
+import { DatabaseService } from '@/server/infrastructure/database/database.service';
 import type { DocumentSearchInput, DocumentSearchOutput } from './config';
 import { config } from './config';
 

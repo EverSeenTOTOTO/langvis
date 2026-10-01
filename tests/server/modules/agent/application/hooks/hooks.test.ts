@@ -8,8 +8,8 @@ import { MaxIterationsHook } from '@/server/modules/agent/application/hooks/max-
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { serializeAction } from '@/server/modules/agent/application/service/react-message';
-import { ProviderService } from '@/server/shared/infrastructure/provider.service';
-import type { LlmProvider } from '@/server/shared/infrastructure/llm.provider';
+import { ProviderService } from '@/server/infrastructure/provider.service';
+import type { LlmProvider } from '@/server/infrastructure/llm/llm.provider';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import type { LlmMessage } from '@/shared/types/entities';

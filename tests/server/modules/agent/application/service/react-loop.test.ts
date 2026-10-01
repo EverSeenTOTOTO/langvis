@@ -20,9 +20,9 @@ import { QueryBudgetHook } from '@/server/modules/agent/application/hooks/query-
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import { SkillService } from '@/server/modules/agent/application/service/skill.service';
-import { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import { ProviderService } from '@/server/infrastructure/provider.service';
 import { ToolIds } from '@/shared/constants';
-import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
+import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
 import type {
   AgentRunContext,
   ToolExecutor,

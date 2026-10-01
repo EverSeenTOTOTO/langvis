@@ -4,7 +4,7 @@ import path from 'node:path';
 import dotenv from 'dotenv';
 import { initializeTransactionalContext } from 'typeorm-transactional';
 import { afterAll, describe, expect, it } from 'vitest';
-import { DatabaseService } from '@/server/shared/infrastructure/database.service';
+import { DatabaseService } from '@/server/infrastructure/database/database.service';
 import { UserEntity } from '@/shared/entities/User';
 
 dotenv.config({

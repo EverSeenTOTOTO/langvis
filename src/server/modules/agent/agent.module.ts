@@ -21,8 +21,8 @@ import {
 import { AgentRunRepository } from './infrastructure/persistence/agent-run.repository';
 import { CacheProvider } from './infrastructure/cache.provider';
 import { AuthorizationProvider } from './infrastructure/authorization.provider';
-import { DatabaseService } from '@/server/shared/infrastructure/database.service';
-import { WorkspaceService } from '@/server/shared/infrastructure/workspace.service';
+import { DatabaseService } from '@/server/infrastructure/database/database.service';
+import { WorkspaceService } from '@/server/infrastructure/workspace/workspace.service';
 
 // 工具构造依赖接线表（createTool 经 useFactory 定参注入，esbuild 无 paramtypes 故显式）
 const TOOL_DEPS: Partial<Record<string, InjectionToken[]>> = {

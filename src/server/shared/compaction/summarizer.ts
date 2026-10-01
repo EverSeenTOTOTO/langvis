@@ -1,6 +1,6 @@
 import Logger from '@/server/utils/logger';
 import type { LlmMessage } from '@/shared/types/entities';
-import type { LlmPort } from '@/server/shared/ports/llm/llm.port';
+import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
 import { Prompt } from '@/server/shared/prompt';
 
 export interface FoldOptions {

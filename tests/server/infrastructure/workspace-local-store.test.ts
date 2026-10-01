@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { WorkspaceLocalStore } from '@/server/shared/infrastructure/workspace-local-store';
+import { WorkspaceLocalStore } from '@/server/infrastructure/workspace/workspace-local-store';
 
 describe('WorkspaceLocalStore', () => {
   let store: WorkspaceLocalStore;

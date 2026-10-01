@@ -57,7 +57,7 @@ vi.mock('@lydell/node-pty', () => {
 });
 
 import pty from '@lydell/node-pty';
-import { AuthService } from '@/server/shared/infrastructure/auth.service';
+import { AuthService } from '@/server/modules/user/infrastructure/auth.service';
 import { attachTerminalServer } from '@/server/terminal/terminal.server';
 
 const mockedPty = vi.mocked(pty.spawn);

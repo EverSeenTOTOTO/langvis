@@ -1,5 +1,9 @@
 import { RunConfigVO } from './run-config.vo';
-import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
+import type {
+  EnrichedEvent,
+  RunEvent,
+  RunErrorCode,
+} from '@/shared/types/events';
 import { RunAlreadyCompletedError } from '../errors';
 import { AggregateRoot } from '@/server/shared/ddd';
 import type { RunStatus } from '@/shared/types/agent';
@@ -59,11 +63,11 @@ export class AgentRun extends AggregateRoot<string> {
     return this.record({ type: 'final' });
   }
 
-  fail(error: string): EnrichedEvent {
+  fail(error: string, code?: RunErrorCode): EnrichedEvent {
     if (this.#terminated) throw new RunAlreadyCompletedError(this.id);
     this.#terminated = true;
     this.status = 'failed';
-    return this.record({ type: 'error', error });
+    return this.record({ type: 'error', error, ...(code ? { code } : {}) });
   }
 
   cancel(reason: string): EnrichedEvent | null {

@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { beforeEach, afterAll, describe, expect, it } from 'vitest';
-import { WorkspaceService } from '@/server/shared/infrastructure/workspace.service';
+import { WorkspaceService } from '@/server/infrastructure/workspace/workspace.service';
 
 describe('WorkspaceService', () => {
   let service: WorkspaceService;

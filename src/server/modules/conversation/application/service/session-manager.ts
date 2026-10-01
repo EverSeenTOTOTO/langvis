@@ -10,9 +10,10 @@ import type { ConvTransformPlan } from '@/server/modules/conversation/domain/mod
 import { CONV_TRANSFORM_PLAN } from '../transforms';
 import { computeContextUsage } from '../transforms/usage-transform';
 import type { Message } from '@/shared/types/entities';
-import { ProviderService } from '@/server/shared/infrastructure/provider.service';
+import { ProviderService } from '@/server/infrastructure/provider.service';
 import { Inject, OnApplicationShutdown } from '@nestjs/common';
 import Logger from '@/server/utils/logger';
+import { disposeConversationTasks } from '@/server/modules/agent/implementations/tools/Bash/background-registry';
 
 export interface ChatState {
   conversationId: string;
@@ -54,6 +55,7 @@ export class SessionManager implements OnApplicationShutdown {
       this.sessions.delete(conversationId);
       session.dispose(); // 连接 idle 自释放路径下 connection 已 undefined，此处 no-op
     }
+    disposeConversationTasks(conversationId); // 后台 bash 任务随会话清理，不留孤儿进程
     this.startedAt.delete(conversationId);
     this.logger.debug(`Chat disposed`, { chatId: conversationId });
   }
@@ -134,6 +136,21 @@ export class SessionManager implements OnApplicationShutdown {
 
   sendFrame(conversationId: string, frame: StreamFrame): boolean {
     return this.sessions.get(conversationId)?.sendFrame(frame) ?? false;
+  }
+
+  /** steering：该会话是否有活跃 run（决定新消息排队还是直发）。 */
+  hasActiveRuns(conversationId: string): boolean {
+    const session = this.sessions.get(conversationId);
+    return !!session && !session.hasNoRuns;
+  }
+
+  enqueueTurn(conversationId: string, assistantMessageId: string): void {
+    this.sessions.get(conversationId)?.enqueueTurn(assistantMessageId);
+  }
+
+  /** 出队一个排队 turn（无则 undefined）。 */
+  dequeueTurn(conversationId: string): string | undefined {
+    return this.sessions.get(conversationId)?.dequeueTurn();
   }
 
   /** RunStarted：登记活跃 run（创建事件缓冲）。须在首条 RunEvent 前同步完成。 */
