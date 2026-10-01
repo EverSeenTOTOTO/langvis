@@ -102,7 +102,6 @@ const TerminalCanvas = () => {
         height: 'calc(100vh - 64px - 24px)',
         padding: '16px',
         background: '#14161f',
-        borderRadius: 8,
       }}
     />
   );
