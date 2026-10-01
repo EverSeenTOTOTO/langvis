@@ -183,6 +183,47 @@ export class ConversationController {
     return this.queryBus.execute(new GetMessagesQuery(id));
   }
 
+  /** checkpoint 列表（rewind UI 数据面）：key=assistantMessage.id → 映射 turn 的 user 消息预览。 */
+  @Get(':id/checkpoints')
+  async listCheckpoints(@Param('id') id: string, @Req() req: Request) {
+    const userId = requireUserId(req);
+    const conversation = await this.convRepo.findById(id, userId);
+    if (!conversation) {
+      throw new HttpException({ error: 'Conversation not found' }, 404);
+    }
+
+    const workspacePath = (conversation as { workspacePath?: string | null })
+      .workspacePath;
+    if (!workspacePath) return { checkpoints: [] };
+
+    const snapshots = await this.checkpoint.list(workspacePath);
+    if (snapshots.length === 0) return { checkpoints: [] };
+
+    const messages = await this.messageRepo.findByConversationId(id);
+    const order = new Map(messages.map((m, i) => [m.id, i]));
+    const checkpoints = snapshots
+      .flatMap(({ key }) => {
+        const idx = order.get(key);
+        if (idx === undefined) return [];
+        let userPreview = '';
+        for (let i = idx - 1; i >= 0; i--) {
+          if (messages[i].role === Role.USER) {
+            userPreview = messages[i].content;
+            break;
+          }
+        }
+        return [
+          {
+            messageId: key,
+            createdAt: new Date(messages[idx].createdAt).toISOString(),
+            userPreview: userPreview.slice(0, 120),
+          },
+        ];
+      })
+      .sort((a, b) => order.get(b.messageId)! - order.get(a.messageId)!);
+    return { checkpoints };
+  }
+
   @Delete(':id/messages')
   @HttpCode(204)
   async batchDeleteMessagesInConversation(

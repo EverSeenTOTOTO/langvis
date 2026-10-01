@@ -27,6 +27,8 @@ import { AgentService } from './agent.service';
 import { restoreReactMessage } from './react-message';
 import { runReactLoop } from './react-loop';
 import { ToolLatencyTracker } from './tool-latency-tracker';
+import { collectConversationFeed } from '@/server/modules/agent/implementations/tools/Bash/background-registry';
+import { Role } from '@/shared/entities/Message';
 import Logger from '@/server/utils/logger';
 import { traceGen } from '@/server/otel';
 import { SpanStatusCode } from '@opentelemetry/api';
@@ -98,6 +100,13 @@ export class AgentRunExecutor {
 
     const run = new AgentRun(params.runId, config);
 
+    const messages = params.seed.map(restoreReactMessage);
+    // 后台任务未读输出注入（每个主 run 开始一次性；子 agent 不感知会话后台任务）
+    if (!params.parentSignal) {
+      const feed = collectConversationFeed(params.conversationId);
+      if (feed) messages.push({ role: Role.USER, content: feed });
+    }
+
     const ctx: AgentRunContext = {
       run,
       config,
@@ -108,7 +117,7 @@ export class AgentRunExecutor {
       llm: this.llm,
       cache: this.cache,
       auth: this.auth,
-      messages: params.seed.map(restoreReactMessage),
+      messages,
       base: params.seed.length,
       // per-run 瞬态：TRANSIENT providers 经 ModuleRef.resolve 每次 promise 新建
       hooks: new HookPlan(await this.resolveHooks()),
