@@ -71,7 +71,6 @@ describe('classifyBashCommand', () => {
 
   describe('sensitive — 危险展开一律 exec-cmd', () => {
     const metaCases = [
-      'rg foo | head',
       'rg foo > out.txt',
       'rg foo & ls',
       'echo $(date)',
@@ -88,6 +87,150 @@ describe('classifyBashCommand', () => {
         expect(p.resource.startsWith('bash:')).toBe(true);
       });
     }
+  });
+
+  describe('safe — 管道两侧全只读即放行', () => {
+    const pipeCases = [
+      'rg foo | head',
+      'cat ./a | grep b | wc -l',
+      'cat ./a | sort | uniq',
+      'git log --oneline | head -5',
+      'echo hello | wc -c',
+    ];
+    for (const cmd of pipeCases) {
+      it(`pipe: ${cmd}`, () => {
+        expect(classifyBashCommand(cmd, PWD).kind).toBe('safe');
+      });
+    }
+
+    it('pipe: 任一侧写/exec → sensitive', () => {
+      const p = classifyBashCommand('cat ./a | npm run x', PWD);
+      expect(p.kind).toBe('sensitive');
+    });
+  });
+
+  describe('git — 只读子命令', () => {
+    const safeGit = [
+      'git status',
+      'git status --porcelain',
+      'git log --oneline -5',
+      'git diff',
+      'git diff --cached',
+      'git show HEAD',
+      'git show HEAD:src/a.ts',
+      'git branch',
+      'git branch -a',
+      'git -C sub status',
+      `git -C ${PWD} log`,
+    ];
+    for (const cmd of safeGit) {
+      it(`git safe: ${cmd}`, () => {
+        expect(classifyBashCommand(cmd, PWD).kind).toBe('safe');
+      });
+    }
+
+    const sensitiveGit = [
+      'git commit -m x',
+      'git add ./a',
+      'git push',
+      'git branch -D feat',
+      'git -c user.name=x status',
+      'git config user.name',
+      'git diff --no-index /etc/a /etc/b',
+    ];
+    for (const cmd of sensitiveGit) {
+      it(`git sensitive: ${cmd}`, () => {
+        const p = classifyBashCommand(cmd, PWD);
+        expect(p.kind).toBe('sensitive');
+        if (p.kind !== 'sensitive') return;
+        // --no-index 比较界外文件 → read-path（读越界，语义正确）
+        expect(p.action === 'exec-cmd' || p.action === 'read-path').toBe(true);
+      });
+    }
+  });
+
+  describe('变量引用 — 折中判定', () => {
+    it('可求值变量代入后过包含检查：$PWD 界内 → safe', () => {
+      expect(classifyBashCommand('cat $PWD/a.txt', PWD).kind).toBe('safe');
+    });
+
+    it('$HOME 展开越出 workDir → read-path sensitive', () => {
+      const p = classifyBashCommand('ls $HOME', PWD);
+      expect(p.kind).toBe('sensitive');
+      if (p.kind !== 'sensitive') return;
+      expect(p.action).toBe('read-path');
+      expect(p.resource).toBe(os.homedir());
+    });
+
+    it('未知变量 → sensitive（无法静态判界）', () => {
+      const p = classifyBashCommand('rg pattern $TARGET_DIR', PWD);
+      expect(p.kind).toBe('sensitive');
+      if (p.kind !== 'sensitive') return;
+      expect(p.action).toBe('exec-cmd');
+    });
+
+    it('echo/printf 的变量 → safe（只写 stdout）', () => {
+      expect(classifyBashCommand('echo $ANY_VAR', PWD).kind).toBe('safe');
+      expect(classifyBashCommand('printf "%s" $X', PWD).kind).toBe('safe');
+    });
+
+    it('良性非路径变量（LANG/TERM 等）→ safe', () => {
+      expect(classifyBashCommand('cat file_$LANG', PWD).kind).toBe('safe');
+    });
+
+    it('单引号内 $ 字面化 → 不做变量分析', () => {
+      expect(classifyBashCommand("rg '$pattern' .", PWD).kind).toBe('safe');
+    });
+
+    it('${NAME} 形态照常求值', () => {
+      expect(classifyBashCommand('cat ${PWD}/a.txt', PWD).kind).toBe('safe');
+    });
+  });
+
+  describe('敏感路径黑名单 — 命中即 exec-cmd（auto 档也问）', () => {
+    const sensitiveCases = [
+      'cat ~/.ssh/id_rsa',
+      'ls ~/.ssh',
+      `cat ${os.homedir()}/.aws/credentials`,
+      'cat .env',
+      'cat ./.env.local',
+      'cat config/credentials.json',
+      'cat server.pem',
+      'cat deploy.key',
+      'cat ./secrets/token.txt',
+    ];
+    for (const cmd of sensitiveCases) {
+      it(`sensitive path: ${cmd}`, () => {
+        const p = classifyBashCommand(cmd, PWD);
+        expect(p.kind).toBe('sensitive');
+        if (p.kind !== 'sensitive') return;
+        expect(p.action).toBe('exec-cmd');
+        expect(p.resource.startsWith('sensitive:')).toBe(true);
+        expect(p.prompt).toContain('敏感路径');
+      });
+    }
+
+    it('非敏感近形文件不误伤', () => {
+      expect(classifyBashCommand('cat .envelope.ts', PWD).kind).toBe('safe');
+      expect(classifyBashCommand('cat id_rsa.pub', PWD).kind).toBe('safe');
+      expect(classifyBashCommand('cat CredentialsProvider.tsx', PWD).kind).toBe(
+        'safe',
+      );
+    });
+  });
+
+  it('~user 形式无法展开 → sensitive（修绕过）', () => {
+    const p = classifyBashCommand('cat ~root/.ssh/id_rsa', PWD);
+    expect(p.kind).toBe('sensitive');
+    if (p.kind !== 'sensitive') return;
+    expect(p.action).toBe('exec-cmd');
+  });
+
+  it('find 写副作用 flag → sensitive', () => {
+    const p = classifyBashCommand('find . -delete', PWD);
+    expect(p.kind).toBe('sensitive');
+    if (p.kind !== 'sensitive') return;
+    expect(p.action).toBe('exec-cmd');
   });
 
   describe('safe — &&/||/; 链逐段判定，全段 safe 放行', () => {

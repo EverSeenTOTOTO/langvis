@@ -11,7 +11,11 @@
       "Bash(git add *)",
       "Read(//tmp/**)",
       "Bash(git commit *)",
-      "Bash(grep -E '\\(^|/\\)\\\\.env$')"
+      "Bash(grep -E '\\(^|/\\)\\\\.env$')",
+      "Bash(git log *)",
+      "Bash(git -C /home/everseen/repos/langvis status)",
+      "Bash(git -C /home/everseen/repos/langvis branch -a)",
+      "Bash(git -C /home/everseen/repos/langvis log --oneline)"
     ]
   }
 }

@@ -82,7 +82,7 @@ describe('AuthorizationProvider', () => {
     });
 
     const ret = (await collect(
-      provider.ensureApproved(makeCtx(workDir), 'read-path', '/etc', {
+      provider.ensureApproved(makeCtx(workDir), 'edit-path', '/tmp/a.ts', {
         prompt: 'p',
         formSchema: {},
       }),
@@ -90,7 +90,47 @@ describe('AuthorizationProvider', () => {
 
     expect(ret?.timeout).toBe(30);
     const grants = await store.readSection<string[]>(workDir, 'grants');
-    expect(grants).toContain('read-path:/etc');
+    expect(grants).toContain('edit-path:/tmp/a.ts');
+  });
+
+  it('exec-cmd allow 不落 grant（精确命令键复用弱）', async () => {
+    registerFakeAskUser({ submitted: true, data: { confirmed: true } });
+
+    await collect(
+      provider.ensureApproved(makeCtx(workDir), 'exec-cmd', 'bash:abc', {
+        prompt: 'p',
+        formSchema: {},
+      }),
+    );
+
+    expect(await store.readSection(workDir, 'grants')).toBeNull();
+  });
+
+  it('auto：edit-path 直放、exec-cmd 仍走确认', async () => {
+    const tracker = registerFakeAskUser({
+      submitted: true,
+      data: { confirmed: true },
+    });
+    const autoCtx = makeCtx(workDir, {
+      runtimeConfig: { approval: { mode: 'auto' } },
+    });
+
+    const edit = await collect(
+      provider.ensureApproved(autoCtx, 'edit-path', '/tmp/a.ts', {
+        prompt: 'p',
+        formSchema: {},
+      }),
+    );
+    expect(edit).toBeUndefined();
+    expect(tracker.calls).toBe(0);
+
+    await collect(
+      provider.ensureApproved(autoCtx, 'exec-cmd', 'bash:abc', {
+        prompt: 'p',
+        formSchema: {},
+      }),
+    );
+    expect(tracker.calls).toBe(1);
   });
 
   it('hasGrant 命中 → 直接 return（不调 AskUser、不改文件）', async () => {
@@ -172,7 +212,7 @@ describe('AuthorizationProvider', () => {
   it('grants 跨实例持久（文件即真相）', async () => {
     registerFakeAskUser({ submitted: true, data: { confirmed: true } });
     await collect(
-      provider.ensureApproved(makeCtx(workDir), 'read-path', '/etc', {
+      provider.ensureApproved(makeCtx(workDir), 'edit-path', '/tmp/a.ts', {
         prompt: 'p',
         formSchema: {},
       }),
@@ -188,7 +228,7 @@ describe('AuthorizationProvider', () => {
       makeModuleRef(),
     );
     const ret = await collect(
-      fresh.ensureApproved(makeCtx(workDir), 'read-path', '/etc', {
+      fresh.ensureApproved(makeCtx(workDir), 'edit-path', '/tmp/a.ts', {
         prompt: 'p',
         formSchema: {},
       }),

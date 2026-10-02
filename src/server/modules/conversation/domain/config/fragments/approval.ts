@@ -16,7 +16,7 @@ export const APPROVAL_FRAGMENT: ConfigFragment<'approval', ApprovalConfig> = {
     default: {},
     title: 'Approval',
     description:
-      '工具审批模式：default=写类确认；auto=只读直放+写类确认；yolo=全部直放（grants 仍然生效）',
+      '工具审批模式：default=写类确认；auto=文件读写直放（危险 Bash 仍确认）；yolo=全部直放（grants 仍然生效）',
     properties: {
       mode: {
         type: 'string',
@@ -24,7 +24,7 @@ export const APPROVAL_FRAGMENT: ConfigFragment<'approval', ApprovalConfig> = {
         default: 'default',
         nullable: true,
         description:
-          'default：Bash 分类器 safe/sensitive 现状；auto：read 类直放、写类走确认；yolo：全部直放',
+          'default：Bash 分类器 safe/sensitive 现状；auto：read-path/edit-path 直放、exec-cmd 走确认；yolo：全部直放',
       },
     },
     required: [],

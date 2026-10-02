@@ -12,6 +12,39 @@ function makeEnriched(event: Record<string, unknown>): EnrichedEvent {
 }
 
 describe('GetMessagesHandler', () => {
+  it('excludes system prompt and meta.kind scaffolding from the display read model', async () => {
+    const messages = [
+      {
+        id: 'sys',
+        role: Role.SYSTEM,
+        content: 'system prompt',
+        conversationId: 'conv_1',
+      },
+      {
+        id: 'ctx',
+        role: Role.USER,
+        content: '<session-context>…</session-context>',
+        meta: { kind: 'context' },
+        conversationId: 'conv_1',
+      },
+      { id: 'm1', role: Role.USER, content: 'hi', conversationId: 'conv_1' },
+    ];
+    const messageRepo = {
+      findByConversationId: vi.fn().mockResolvedValue(messages),
+    } as unknown as MessageRepositoryPort;
+
+    const handler = new GetMessagesHandler(
+      messageRepo,
+      {
+        findByIds: vi.fn().mockResolvedValue([]),
+      } as unknown as AgentRunRepositoryPort,
+      new RunViewCache(),
+    );
+    const result = await handler.execute(new GetMessagesQuery('conv_1'));
+
+    expect(result.map(m => m.id)).toEqual(['m1']);
+  });
+
   it('merges steps/status for assistant messages with an agent run', async () => {
     const messages = [
       { id: 'm1', role: Role.USER, content: 'hi', conversationId: 'conv_1' },

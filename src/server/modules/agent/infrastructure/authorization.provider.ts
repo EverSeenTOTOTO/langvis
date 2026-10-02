@@ -14,8 +14,8 @@ import {
   type EnsureApprovedOptions,
 } from '../domain/port/authorization.port';
 
-// 横切授权实现：session 持久 (action, resource) 决策。命中 grants 直放行；interactive 弹 AskUser，allow 追加写文件。
-// grants 真相源 = workDir 的 `.langvis/grants.json`（WorkspaceLocalStore section），跨 run 持久。
+// 横切授权实现：mode 短路（yolo 全放/auto 文件读写放）→ grants 命中直放 → interactive 弹 AskUser。
+// grant 只落 edit-path（路径键可复用）；真相源 = workDir 的 `.langvis/grants.json`，跨 run 持久。
 export class AuthorizationProvider implements AuthorizationPort {
   constructor(
     @Inject(WorkspaceLocalStore)
@@ -35,8 +35,8 @@ export class AuthorizationProvider implements AuthorizationPort {
     // yolo：全部直放（grants 语义保持——已有 grant 的照旧命中）
     if (mode === 'yolo') return;
 
-    // auto：read 类直放（写类继续走确认）
-    if (mode === 'auto' && action === 'read-path') return;
+    // auto：文件读写直放（exec-cmd 继续走确认）
+    if (mode === 'auto' && action !== 'exec-cmd') return;
 
     if (await this.hasGrant(ctx.workDir, key)) return;
 
@@ -64,7 +64,8 @@ export class AuthorizationProvider implements AuthorizationPort {
       );
     }
 
-    await this.addGrant(ctx.workDir, key);
+    // grant 只落 edit-path（路径键有复用价值）；exec-cmd 精确命令键复用弱，不持久
+    if (action === 'edit-path') await this.addGrant(ctx.workDir, key);
     return record;
   }
 
@@ -81,20 +82,9 @@ export class AuthorizationProvider implements AuthorizationPort {
     return grants.includes(key);
   }
 
-  /** 读 grants；缺文件时做一次性迁移（旧 config.json.grants → grants.json）。 */
+  /** 读 grants。 */
   private async readGrants(workDir: string): Promise<string[]> {
-    let grants = await this.store.readSection<string[]>(workDir, 'grants');
-    if (!grants) {
-      // 一次性迁移：旧 config.json 的 grants 段 → grants.json。
-      const legacy = (
-        await this.store.readSection<{ grants?: unknown }>(workDir, 'config')
-      )?.grants;
-      if (Array.isArray(legacy)) {
-        grants = legacy.filter((k): k is string => typeof k === 'string');
-        await this.store.writeSection(workDir, 'grants', grants);
-      }
-    }
-    return grants ?? [];
+    return (await this.store.readSection<string[]>(workDir, 'grants')) ?? [];
   }
 
   private async addGrant(workDir: string, key: string): Promise<void> {

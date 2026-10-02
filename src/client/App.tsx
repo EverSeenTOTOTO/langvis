@@ -9,6 +9,7 @@ import type { User } from '@/shared/types/entities';
 import { observer } from 'mobx-react-lite';
 import { Route, Routes } from 'react-router-dom';
 import ClientOnly from './components/ClientOnly';
+import PersistentTerminal from './components/PersistentTerminal';
 import ProtectedRoute from './components/ProtectedRoute';
 import useThemeClassname from './hooks/useThemeClassname';
 import NotFound from './pages/NotFound';
@@ -69,6 +70,10 @@ export const App = observer(
               })}
               <Route path="*" element={<NotFound />} />
             </Routes>
+            {/* 常驻终端层:首次进入 /terminal 后存活到页面关闭,路由切换仅切显隐 */}
+            <ClientOnly>
+              <PersistentTerminal />
+            </ClientOnly>
           </AntdApp>
         </StyleProvider>
       </ConfigProvider>
