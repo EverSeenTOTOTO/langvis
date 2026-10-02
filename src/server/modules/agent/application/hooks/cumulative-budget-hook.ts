@@ -13,7 +13,7 @@ import { responseUser } from '../service/react-message';
 const budgetMessage = (used: number, budget: number) =>
   `This turn exceeded its token budget (≈${used} / ${budget}). Stopping here — please rephrase or continue in a new turn.`;
 
-// 累计 token 用量兜底（cost 闸）。阈值 guard.maxTokenUsage；pendingAction 由 loop 解析，此处直读。
+// 累计 token 用量兜底（cost 闸）。阈值 guard.maxTokenUsage；pendingActions 由 loop 解析，此处直读。
 export class CumulativeBudgetHook implements Hook {
   readonly id = 'cumulative-budget';
   readonly phase: HookPhase = 'pre-action';
@@ -31,7 +31,7 @@ export class CumulativeBudgetHook implements Hook {
         `skip (run ${ctx.runId}): consumed ${this.consumed} <= budget ${budget}`,
       );
 
-    if (ctx.pendingAction?.tool === ToolIds.RESPONSE_USER) {
+    if (ctx.pendingActions?.some(a => a.tool === ToolIds.RESPONSE_USER)) {
       this.logger.info(
         `cumulative budget exceeded but model answered (run ${ctx.runId}): consumed=${this.consumed}; letting through`,
       );

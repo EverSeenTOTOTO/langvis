@@ -13,14 +13,11 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import 'reflect-metadata';
 import { initializeTransactionalContext } from 'typeorm-transactional';
-import { toNodeHandler } from 'better-auth/node';
 import { AppModule } from './app.module';
-import { AuthService } from './modules/user/infrastructure/auth.service';
-import { mountRequestId } from './middleware/requestId';
-import { mountSsr } from './middleware/ssr';
 import errorHandler from './middleware/errorHandler';
 import logger from './utils/logger';
-import { attachTerminalServer } from '@/server/terminal/terminal.server';
+import { TerminalServer } from '@/server/terminal/terminal.server';
+import { SsrMountService } from '@/server/middleware/ssr-mount.service';
 import { shutdownTracing } from './tracing';
 
 logger.info(
@@ -40,17 +37,31 @@ initializeTransactionalContext();
 export interface BootedApp {
   app: Express;
   nestApp: INestApplication;
-  authService: AuthService;
 }
 
-/** Nest 子应用（独立 express 实例）：init 即跑生命周期（DB 就绪/孤儿清扫/索引补建）。 */
-const initNestSubApp = async (): Promise<INestApplication> => {
+// Nest 即根应用：全部路由经 globalPrefix 落 /api，auth 透传/SSR 等原组合根挂载
+// 分别收编为 AuthProxyController（/api/auth/*）与 SsrMountService（post-init catch-all）。
+export const createServer = async (): Promise<BootedApp> => {
   const nestApp = await NestFactory.create(AppModule, new ExpressAdapter(), {
     logger: false,
     abortOnError: false, // init 异常默认 process.abort() 无输出，关掉以便排障
+    bodyParser: false, // 解析器自装（10mb limit），不用 Nest 默认 100kb
   });
+  nestApp.setGlobalPrefix('api');
+
+  const app = nestApp.getHttpAdapter().getInstance() as Express;
+
+  // express 标准件（无 DI，注册序先于 Nest 路由）：静态资源 + 解析器。
+  mountStatic(app);
+  mountParsers(app);
+
   await nestApp.init();
-  return nestApp;
+
+  // post-init（注册序在全部 /api 路由之后）：SSR catch-all + 兜底 error middleware。
+  await nestApp.get(SsrMountService, { strict: false }).mount(app);
+  app.use(errorHandler);
+
+  return { app, nestApp };
 };
 
 /** 静态资源：/assets immutable 长缓存（产物带内容 hash），dist 协商缓存，/upload 直取。 */
@@ -76,26 +87,6 @@ const mountParsers = (app: Express) => {
   app.use(compression());
 };
 
-// 组合根。挂载序即匹配序：requestId → better-auth → Nest(/api) → SSR → errorHandler。
-// Nest 以子应用挂 /api——终结 404 钉死在前缀内，非 /api 路径落 SSR catch-all。
-export const createServer = async (): Promise<BootedApp> => {
-  const app = express();
-
-  mountStatic(app);
-  mountParsers(app);
-
-  const nestApp = await initNestSubApp();
-  const authService = nestApp.get(AuthService, { strict: false });
-
-  mountRequestId(app, authService);
-  app.use('/api/auth', toNodeHandler(authService.handler));
-  app.use('/api', nestApp.getHttpAdapter().getInstance());
-  await mountSsr(app, authService);
-  app.use(errorHandler);
-
-  return { app, nestApp, authService };
-};
-
 // ── 进程入口（tsx watch / node dist/server.js）────────────────────────────
 // 被 e2e 测试 import 时不 listen、不挂信号钩子。
 const isMainModule =
@@ -109,12 +100,12 @@ async function startMain(): Promise<void> {
     throw new Error(`Invalid port: ${port}`);
   }
 
-  const { app, nestApp, authService } = await createServer();
-  const server = app.listen(port, () =>
+  const { nestApp } = await createServer();
+  const server = await nestApp.listen(port, () =>
     logger.info(`Server started at http://localhost:${port}`),
   );
 
-  attachTerminalServer(server, authService); // 终端托管：浏览器 ⇄ ws ⇄ PTY ⇄ CLI（upgrade 事件挂载）
+  nestApp.get(TerminalServer, { strict: false }).attach(server); // 终端托管：浏览器 ⇄ ws ⇄ PTY ⇄ CLI（upgrade 事件挂载；cwd 默认 /tmp/langvis-workspace 随机目录）
 
   const shutdown = () => {
     logger.info('Shutting down server...');

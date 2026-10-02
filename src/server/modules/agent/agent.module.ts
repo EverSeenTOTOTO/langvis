@@ -4,8 +4,10 @@ import { HumanInputController } from './human-input.controller';
 import { AgentController } from './agent.controller';
 import { SttController } from './stt.controller';
 import { AgentRunHandler } from './application/event/agent-run.handler';
+import { ConversationDisposedHandler } from './application/event/conversation-disposed.handler';
 import { CancelRunHandler } from './application/event/cancel-run.handler';
 import { AgentRunExecutor } from './application/service/agent-run-executor';
+import { BackgroundTaskRegistry } from './application/service/background-task-registry';
 import { AgentService } from './application/service/agent.service';
 import { SkillService } from './application/service/skill.service';
 import { ToolService } from './application/service/tool.service';
@@ -28,6 +30,7 @@ import { WorkspaceService } from '@/server/infrastructure/workspace/workspace.se
 // 工具构造依赖接线表（createTool 经 useFactory 定参注入，esbuild 无 paramtypes 故显式）
 const TOOL_DEPS: Partial<Record<string, InjectionToken[]>> = {
   [ToolIds.CALL_SUBAGENTS]: [AgentRunExecutor, AgentService],
+  [ToolIds.BASH]: [BackgroundTaskRegistry],
   [ToolIds.SKILL_CALL]: [SkillService],
   [ToolIds.LIST_TOOLS]: [ToolService, SkillService],
   [ToolIds.DOCUMENT_SEARCH]: [DatabaseService, ToolService],
@@ -50,6 +53,7 @@ const TOOL_DEPS: Partial<Record<string, InjectionToken[]>> = {
     ToolService,
     AgentService,
     AgentRunExecutor,
+    BackgroundTaskRegistry,
     // per-run 瞬态：executor 经 ModuleRef 每次 get 新建（跨 tick 私有状态内聚实例字段）
     ...HOOK_TYPES.map(T => ({
       provide: T,
@@ -73,6 +77,7 @@ const TOOL_DEPS: Partial<Record<string, InjectionToken[]>> = {
     }),
     AgentRunHandler,
     CancelRunHandler,
+    ConversationDisposedHandler,
   ],
   exports: [AGENT_RUN_REPOSITORY, ToolService, SkillService, AgentService],
 })

@@ -120,6 +120,14 @@ export class TurnInitiated {
   ) {}
 }
 
+// conv→agent：会话已释放（SSE 断开/idle 清扫）——agent 侧清理会话级运行态（如后台 bash 任务）。
+export class ConversationDisposed {
+  readonly type = 'conversation_disposed' as const;
+  readonly occurredAt = Date.now();
+
+  constructor(readonly aggregateId: string) {}
+}
+
 export interface TurnInitiatedPayload {
   conversationId: string;
   assistantMessage: Message;

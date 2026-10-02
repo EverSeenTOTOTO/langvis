@@ -127,6 +127,7 @@ describe('AgentRunExecutor.launch — 终态写冲突重试', () => {
       repo,
       agentServiceStub,
       moduleRef as never,
+      { collectConversationFeed: () => null } as never,
     );
 
     const events: EnrichedEvent[] = [];
@@ -149,6 +150,7 @@ describe('AgentRunExecutor.launch — 终态写冲突重试', () => {
       repo,
       agentServiceStub,
       moduleRef as never,
+      { collectConversationFeed: () => null } as never,
     );
     executor.checkpointEvery = 1;
 

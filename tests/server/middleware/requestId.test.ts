@@ -1,90 +1,62 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { Request, Response } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 
-// 捕获 mountRequestId 注册的两段中间件，直接驱动（不起真实 server）。
-// 保留 tsyringe 真实导出与容器原型方法，仅 Proxy 覆盖 container.resolve。
-vi.mock('tsyringe', async importOriginal => {
-  const actual = await importOriginal<any>();
-  return {
-    ...actual,
-    container: new Proxy(actual.container, {
-      get(target, prop, receiver) {
-        if (prop === 'resolve') {
-          return () => ({ getSessionId: () => Promise.resolve(null) });
-        }
-        return Reflect.get(target, prop, receiver);
-      },
-    }),
-  };
-});
+import type { AuthService } from '@/server/modules/user/infrastructure/auth.service';
 
-vi.mock('@/server/utils/logger', () => {
-  const logInfo = vi.fn();
-  return {
-    default: {
-      child: () => ({ info: logInfo, warn: vi.fn(), error: vi.fn() }),
-    },
-    __logInfo: logInfo,
-  };
-});
+const { logInfo } = vi.hoisted(() => ({ logInfo: vi.fn() }));
 
-async function setup(env: 'production' | 'development') {
-  vi.resetModules();
-  vi.stubEnv('NODE_ENV', env);
-  const { mountRequestId } = await import('@/server/middleware/requestId');
-  const loggerMod = await import('@/server/utils/logger');
-  const logInfo = (
-    loggerMod as unknown as {
-      __logInfo: ReturnType<typeof vi.fn>;
-    }
-  ).__logInfo;
+vi.mock('@/server/utils/logger', () => ({
+  default: {
+    child: () => ({ info: logInfo, warn: vi.fn(), error: vi.fn() }),
+  },
+}));
 
-  const uses: Array<{ path?: string; fn: any }> = [];
-  const mockApp = {
-    use: (pathOrFn: any, fn?: any) => {
-      if (typeof pathOrFn === 'string') uses.push({ path: pathOrFn, fn });
-      else uses.push({ fn: pathOrFn });
-    },
-  } as any;
+const makeAuthService = (): AuthService =>
+  ({ getSessionId: vi.fn().mockResolvedValue(null) }) as unknown as AuthService;
 
-  mountRequestId(mockApp, {
-    getSessionId: vi.fn().mockResolvedValue(null),
-  } as never);
-  return { uses, logInfo };
-}
-
-function fire(
-  uses: Array<{ path?: string; fn: any }>,
+/** 驱动 Nest 中间件一次（请求上下文 + 访问日志都包在 use 里）。每次重求值 isProd。 */
+async function fire(
   headers: Record<string, string>,
-): Promise<void> {
+): Promise<{ req: Request; res: Response }> {
+  vi.resetModules();
+  const { RequestIdMiddleware: Middleware } = await import(
+    '@/server/middleware/requestId'
+  );
   const req = {
     headers,
     method: 'GET',
     originalUrl: '/api/test',
   } as unknown as Request;
   const res = { setHeader: vi.fn(), on: vi.fn() } as unknown as Response;
-  // uses[0]：设 req.log（async，await getSessionId）；uses[1]：/api/* logger，记 -> 帧 headers。
-  return new Promise<void>(resolve => {
-    uses[0].fn(req, res, () => {
-      uses[1].fn(req, res, () => resolve());
-    });
+  return new Promise(resolve => {
+    new Middleware(makeAuthService()).use(req, res, (() =>
+      resolve({ req, res })) as NextFunction);
   });
 }
 
-describe('requestId（-> 帧 headers 脱敏）', () => {
+describe('RequestIdMiddleware（请求上下文 + -> 帧 headers 脱敏）', () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => vi.unstubAllEnvs());
 
+  it('装配请求上下文：req.id/req.log/X-Request-Id 头，透传既有 x-request-id', async () => {
+    const { req, res } = await fire({
+      'x-request-id': 'req_existing',
+    });
+    expect(req.id).toBe('req_existing');
+    expect(req.log).toBeDefined();
+    expect(res.setHeader).toHaveBeenCalledWith('X-Request-Id', 'req_existing');
+  });
+
   it('prod：headers 白名单，cookie/authorization 不落日志', async () => {
-    const { uses, logInfo } = await setup('production');
-    await fire(uses, {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.resetModules();
+    await fire({
       cookie: 'session=secret',
       authorization: 'Bearer token',
       'user-agent': 'curl/8',
       'content-type': 'application/json',
     });
 
-    // -> 帧：可读消息（箭头 + path）+ meta（type/method/url/headers）。
     const [msg, payload] = logInfo.mock.calls[0];
     expect(msg).toBe('-> GET /api/test');
     expect(payload.type).toBe('->');
@@ -97,15 +69,13 @@ describe('requestId（-> 帧 headers 脱敏）', () => {
   });
 
   it('dev：headers 全量保留（便于调试，含 cookie/authorization）', async () => {
-    const { uses, logInfo } = await setup('development');
-    await fire(uses, {
+    await fire({
       cookie: 'session=secret',
       authorization: 'Bearer token',
       'user-agent': 'curl/8',
     });
 
-    const [msg, payload] = logInfo.mock.calls[0];
-    expect(msg).toBe('-> GET /api/test');
+    const [, payload] = logInfo.mock.calls[0];
     expect(Object.keys(payload.headers)).toEqual(
       expect.arrayContaining(['cookie', 'authorization', 'user-agent']),
     );

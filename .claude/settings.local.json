@@ -15,7 +15,9 @@
       "Bash(git log *)",
       "Bash(git -C /home/everseen/repos/langvis status)",
       "Bash(git -C /home/everseen/repos/langvis branch -a)",
-      "Bash(git -C /home/everseen/repos/langvis log --oneline)"
+      "Bash(git -C /home/everseen/repos/langvis log --oneline)",
+      "Bash(git -C /home/everseen/repos/langvis show 693dfc6 --stat)",
+      "Bash(git -C /home/everseen/repos/langvis show f3398e4 --stat)"
     ]
   }
 }

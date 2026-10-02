@@ -28,11 +28,12 @@ export const config: ToolConfig<FileEditInput, FileEditOutput> = {
       old_string: {
         type: 'string',
         description:
-          'Exact text to find and replace. Must match the file content exactly.',
+          'The EXACT text to find — copy it verbatim from the file, including surrounding lines when needed to make it unique. Do not use omission placeholders like "(rest of ...)", "...", or "unchanged code".',
       },
       new_string: {
         type: 'string',
-        description: 'Replacement text.',
+        description:
+          'The replacement text, provided in full. Do not use omission placeholders — write out the complete replacement.',
       },
     },
     required: ['path', 'old_string', 'new_string'],

@@ -25,6 +25,7 @@ export interface CallSubagentsOutput {
 
 export const config: ToolConfig<CallSubagentsInput, CallSubagentsOutput> = {
   name: 'call_subagents',
+  concurrency: 'parallel',
   description:
     '并发派生多个子 agent 处理可拆分的独立子任务。每个子 agent 将拥有独立、隔离的 ReAct 循环：以 brief 为背景、query 为任务自行完成。**等全部子 agent 结束（allSettled，成功或失败各自独立）后返回**，收集各自的最终回复。仅当任务能拆成彼此独立、适合并行隔离执行的子任务时使用；不要用于有依赖顺序的步骤。',
   inputSchema: {

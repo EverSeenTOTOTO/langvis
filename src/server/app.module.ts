@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { CqrsModule } from '@nestjs/cqrs';
 import { InfraModule } from './infrastructure/infra.module';
@@ -9,6 +9,7 @@ import { EmailModule } from './modules/email/email.module';
 import { FileModule } from './modules/file/file.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
 import { AgentModule } from './modules/agent/agent.module';
+import { RequestIdMiddleware } from './middleware/requestId';
 
 // Nest 根模块。InfraModule 排首位：其 providers 先 init、最后 destroy（DB 池最后关）。
 @Module({
@@ -25,4 +26,8 @@ import { AgentModule } from './modules/agent/agent.module';
     AgentModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}

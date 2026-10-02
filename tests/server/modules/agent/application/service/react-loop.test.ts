@@ -17,11 +17,12 @@ import { MicroCompactStage } from '@/server/modules/agent/application/stages/mic
 import { WindowCheckStage } from '@/server/modules/agent/application/stages/window-check-stage';
 import { RunFoldStage } from '@/server/modules/agent/application/stages/run-fold-stage';
 import { StagePlan } from '@/server/shared/context';
+import { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';
 import { ToolHintHook } from '@/server/modules/agent/application/hooks/tool-hint-hook';
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import { SkillService } from '@/server/modules/agent/application/service/skill.service';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import { ToolIds } from '@/shared/constants';
 import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
 import type {
@@ -42,7 +43,7 @@ describe('parseResponse', () => {
       parseResponse(
         '<tool_call><tool>datetime_get</tool><input></input></tool_call>',
       ),
-    ).toEqual({ thought: undefined, tool: 'datetime_get', input: {} });
+    ).toEqual([{ thought: undefined, tool: 'datetime_get', input: {} }]);
   });
 
   it('parses a fenced ```xml block', () => {
@@ -50,7 +51,7 @@ describe('parseResponse', () => {
       parseResponse(
         '```xml\n<tool_call><tool>datetime_get</tool><input></input></tool_call>\n```',
       ),
-    ).toEqual({ thought: undefined, tool: 'datetime_get', input: {} });
+    ).toEqual([{ thought: undefined, tool: 'datetime_get', input: {} }]);
   });
 
   it('preserves an optional thought + params', () => {
@@ -58,17 +59,19 @@ describe('parseResponse', () => {
       parseResponse(
         '<tool_call><thought>let me check</thought><tool>book</tool><input><id>f4</id><pax>Bob</pax></input></tool_call>',
       ),
-    ).toEqual({
-      thought: 'let me check',
-      tool: 'book',
-      input: { id: 'f4', pax: 'Bob' },
-    });
+    ).toEqual([
+      {
+        thought: 'let me check',
+        tool: 'book',
+        input: { id: 'f4', pax: 'Bob' },
+      },
+    ]);
   });
 
   it('takes quotes / backslashes in values literally (no escaping needed)', () => {
     const parsed = parseResponse(
       '<tool_call><tool>response_user</tool><input><message>He said "hi" \\d</message></input></tool_call>',
-    );
+    )[0]!;
     expect((parsed.input as { message: string }).message).toBe(
       'He said "hi" \\d',
     );
@@ -77,7 +80,7 @@ describe('parseResponse', () => {
   it('decodes XML entities & CDATA in values', () => {
     const parsed = parseResponse(
       '<tool_call><tool>bash</tool><input><command><![CDATA[a < b && c > d]]></command></input></tool_call>',
-    );
+    )[0]!;
     expect((parsed.input as { command: string }).command).toBe(
       'a < b && c > d',
     );
@@ -87,7 +90,7 @@ describe('parseResponse', () => {
   it('tolerates <think> remnants and prose before the tool call', () => {
     const parsed = parseResponse(
       'me.<think>reasoning…</think><tool_call><tool>response_user</tool><input><message>hi</message></input></tool_call>',
-    );
+    )[0]!;
     expect(parsed.tool).toBe('response_user');
     expect((parsed.input as { message: string }).message).toBe('hi');
   });
@@ -100,6 +103,50 @@ describe('parseResponse', () => {
     expect(() =>
       parseResponse('<tool_call><tool>x</tool></tool_call>'),
     ).toThrow();
+  });
+
+  it('多 <tool_call> 块 → 动作数组（并发批）', () => {
+    const parsed = parseResponse(
+      '<tool_call><tool>web_fetch</tool><input><url>a</url></input></tool_call>\n<tool_call><tool>document_search</tool><input><query>q</query></input></tool_call>',
+    );
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0]).toEqual({
+      thought: undefined,
+      tool: 'web_fetch',
+      input: { url: 'a' },
+    });
+    expect(parsed[1]).toEqual({
+      thought: undefined,
+      tool: 'document_search',
+      input: { query: 'q' },
+    });
+  });
+
+  it('批级游离 thought（首块之前）挂到首个动作；各块自有 thought 优先', () => {
+    const parsed = parseResponse(
+      '<thought>fetch both docs</thought>\n<tool_call><tool>web_fetch</tool><input><url>a</url></input></tool_call>\n<tool_call><thought>own</thought><tool>document_search</tool><input><query>q</query></input></tool_call>',
+    );
+    expect(parsed[0]!.thought).toBe('fetch both docs');
+    expect(parsed[1]!.thought).toBe('own');
+  });
+
+  it('控制流工具混入多块响应 → parse error', () => {
+    expect(() =>
+      parseResponse(
+        '<tool_call><tool>web_fetch</tool><input><url>a</url></input></tool_call>\n<tool_call><tool>response_user</tool><input><message>hi</message></input></tool_call>',
+      ),
+    ).toThrow(/control-flow/);
+    expect(() =>
+      parseResponse(
+        '<tool_call><tool>response_user</tool><input><message>hi</message></input></tool_call>',
+      ),
+    ).not.toThrow();
+  });
+
+  it('无 tool_call 包裹的裸 tool/input 仍按单动作解析（legacy 兼容）', () => {
+    expect(parseResponse('<tool>x</tool><input><a>1</a></input>')).toEqual([
+      { thought: undefined, tool: 'x', input: { a: 1 } },
+    ]);
   });
 });
 
@@ -230,6 +277,7 @@ interface BuildCtxOptions {
   controller?: AbortController;
   hooks?: HookPlan;
   stages?: import('@/server/shared/context').StagePlan;
+  toolSet?: ToolSet;
 }
 interface BuiltCtx {
   ctx: AgentRunContext;
@@ -243,7 +291,7 @@ interface BuiltCtx {
 const providerServiceMock = {
   resolveContextSize: () => 128_000,
   resolveChatModel: () => ({ id: undefined, contextSize: 128_000 }),
-} as unknown as ProviderService;
+} as unknown as ModelRegistryService;
 const toolServiceMock = {
   getAllToolInfo: async () => [],
   getCachedToolIds: () => [],
@@ -295,6 +343,7 @@ function buildCtx(opts: BuildCtxOptions): BuiltCtx {
     base: seed.length,
     hooks: opts.hooks ?? new HookPlan(buildHooks()),
     stages: opts.stages ?? new StagePlan(buildStages()),
+    toolSet: opts.toolSet,
     interactive: true,
   };
   return { ctx, run, calls, runTool: fakeExecuteTool(opts.handler) };
@@ -462,16 +511,42 @@ describe('runReactLoop', () => {
     });
   });
 
-  describe('NoResponse', () => {
-    it('throws when the model returns empty content', async () => {
+  describe('EmptyResponseNudge', () => {
+    it('空响应追加 nudge observation 驱动重试，恢复后正常完成', async () => {
+      const { ctx, calls, runTool } = buildCtx({
+        responses: ['', responseUser('ok')],
+        handler: okHandler,
+      });
+
+      const events = await collect(runReactLoop(ctx, runTool));
+
+      expect(calls).toHaveLength(2);
+      expect(calls[1].messages.some(m => m.content.includes('[System]'))).toBe(
+        true,
+      );
+      expect(events.some(e => e.type === 'tool_call')).toBe(true);
+    });
+
+    it('连续 2 次空响应仍可救回；第 3 次空才判定模型故障 throw', async () => {
       const { ctx, runTool } = buildCtx({
-        responses: [''],
+        responses: ['', '', responseUser('ok')],
+        handler: okHandler,
+      });
+
+      const events = await collect(runReactLoop(ctx, runTool));
+      expect(events.some(e => e.type === 'tool_result')).toBe(true);
+    });
+
+    it('连续 3 次空响应 throw No response from model', async () => {
+      const { ctx, calls, runTool } = buildCtx({
+        responses: ['', '', ''],
         handler: okHandler,
       });
 
       await expect(collect(runReactLoop(ctx, runTool))).rejects.toThrow(
         'No response from model',
       );
+      expect(calls).toHaveLength(3);
     });
   });
 
@@ -593,6 +668,143 @@ describe('runReactLoop', () => {
     // process-summary 折叠已迁至 conv 侧 ProcessSummaryTransform（turn-end）；
     // react-loop 不再在 loop-exit 折叠 processSummary。相关断言见 conv transform 测试。
     it.todo('（已迁出）process-summary 不再在 react-loop 内折叠');
+  });
+
+  describe('ParallelBatch', () => {
+    /** 批调度测试用工具集：web_fetch/document_search 声明 parallel，bash 未声明（serial）。 */
+    const batchToolSet = () =>
+      ToolSet.of([
+        { id: 'web_fetch', mode: 'listed', concurrency: 'parallel' },
+        { id: 'document_search', mode: 'listed', concurrency: 'parallel' },
+        { id: 'bash', mode: 'listed' },
+      ]);
+
+    /** 受控 ToolExecutor：记录 start/end 日志；fetchTotal>1 时 web_fetch 等全部启动后才完成（制造重叠窗口）。 */
+    const controlledExecutor = (
+      log: string[],
+      fetchTotal = 0,
+    ): ToolExecutor => {
+      let release: (() => void) | undefined;
+      const allStarted = new Promise<void>(r => {
+        release = r;
+      });
+      let fetchStarted = 0;
+      return (name, args) =>
+        (async function* () {
+          const id = args.id ?? 'x';
+          log.push(`start:${name}:${id}`);
+          if (name === 'web_fetch' && fetchTotal > 1) {
+            fetchStarted++;
+            if (fetchStarted === fetchTotal) release?.();
+            else await allStarted;
+          }
+          yield {
+            type: 'tool_call',
+            callId: `tc_${name}_${id}`,
+            toolName: name,
+            toolArgs: args,
+          };
+          log.push(`end:${name}:${id}`);
+          return { status: 'completed', observation: `obs-${id}` };
+        })();
+    };
+
+    const batch = (actions: Array<[string, Record<string, unknown>]>): string =>
+      actions.map(([tool, input]) => call(tool, input)).join('\n');
+
+    it('parallel 段内并发重叠执行；Observation 按发射序回灌', async () => {
+      const log: string[] = [];
+      const { ctx, calls } = buildCtx({
+        toolSet: batchToolSet(),
+        responses: [
+          batch([
+            ['web_fetch', { id: 'a' }],
+            ['web_fetch', { id: 'b' }],
+          ]),
+          responseUser('done'),
+        ],
+        handler: okHandler,
+      });
+      const events = await collect(
+        runReactLoop(ctx, controlledExecutor(log, 2)),
+      );
+
+      // 重叠证明：两个 start 都先于任一 end（排除终态 response_user 调用）
+      const batchLog = log.filter(l => !l.includes('response_user'));
+      const starts = batchLog.filter(l => l.startsWith('start:'));
+      const firstEnd = batchLog.findIndex(l => l.startsWith('end:'));
+      expect(starts).toHaveLength(2);
+      expect(
+        batchLog.slice(0, firstEnd).filter(l => l.startsWith('start:')),
+      ).toHaveLength(2);
+
+      // 事件流包含两个批内 tool_call（另加终态 response_user 一次）
+      expect(events.filter(e => e.type === 'tool_call')).toHaveLength(3);
+
+      // Observation 按发射序（a → b），且相邻于 assistant 报文
+      const msgs = calls[1].messages;
+      expect(msgs[1].role).toBe('assistant');
+      expect(msgs[2].content).toBe('Observation: obs-a\n');
+      expect(msgs[3].content).toBe('Observation: obs-b\n');
+    });
+
+    it('serial 工具是栅栏：排干在飞行批后独自执行，后续 parallel 再放行', async () => {
+      const log: string[] = [];
+      const { ctx } = buildCtx({
+        toolSet: batchToolSet(),
+        responses: [
+          batch([
+            ['web_fetch', { id: 'a' }],
+            ['bash', { id: 'x' }],
+            ['document_search', { id: 'b' }],
+          ]),
+          responseUser('done'),
+        ],
+        handler: okHandler,
+      });
+      await collect(runReactLoop(ctx, controlledExecutor(log)));
+
+      // 发射序执行：fetch a 完成 → bash 独自跑 → search b（排除终态 response_user 调用）
+      expect(log.filter(l => !l.includes('response_user'))).toEqual([
+        'start:web_fetch:a',
+        'end:web_fetch:a',
+        'start:bash:x',
+        'end:bash:x',
+        'start:document_search:b',
+        'end:document_search:b',
+      ]);
+      // Observation 仍按发射序回灌
+      const observations = ctx.messages.filter(
+        m => m.role === 'user' && m.content.startsWith('Observation:'),
+      );
+      expect(observations.map(o => o.content)).toEqual([
+        'Observation: obs-a\n',
+        'Observation: obs-x\n',
+        'Observation: obs-b\n',
+      ]);
+    });
+
+    it('批内含控制流工具在 parse 层被拒 → parse-error 路径回灌', async () => {
+      const { ctx, calls, runTool } = buildCtx({
+        responses: [
+          batch([
+            ['web_fetch', { id: 'a' }],
+            [ToolIds.RESPONSE_USER, { message: 'hi' }],
+          ]),
+          responseUser('done'),
+        ],
+        handler: okHandler,
+      });
+
+      const events = await collect(runReactLoop(ctx, runTool));
+
+      expect(
+        calls[1].messages.some(m =>
+          m.content.includes('Error parsing response'),
+        ),
+      ).toBe(true);
+      expect(events.filter(e => e.type === 'tool_call')).toHaveLength(1); // 仅恢复后的 response_user
+    });
   });
 
   describe('HookPipeline', () => {

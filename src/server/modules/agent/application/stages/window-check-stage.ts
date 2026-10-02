@@ -6,7 +6,7 @@ import type {
   StageEvent,
 } from '@/server/shared/context';
 import { estimateTokens } from '@/server/utils/estimateTokens';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import Logger from '@/server/utils/logger';
 
 /** 不可恢复超窗时向用户解释的消息（与兄弟 stop hook 的文案风格一致）。 */
@@ -21,14 +21,14 @@ export class WindowCheckStage implements ContextStage {
   private readonly logger = Logger.child({ source: 'WindowCheckStage' });
 
   constructor(
-    @Inject(ProviderService)
-    private readonly providerService: ProviderService,
+    @Inject(ModelRegistryService)
+    private readonly modelRegistry: ModelRegistryService,
   ) {}
 
   async *apply(target: StageTarget): AsyncGenerator<StageEvent, void> {
     if (target.kind !== 'run') return;
     const ctx = target;
-    const contextSize = this.providerService.resolveContextSize(
+    const contextSize = this.modelRegistry.resolveContextSize(
       ctx.runtimeConfig,
     );
     if (!contextSize)

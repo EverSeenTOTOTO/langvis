@@ -26,14 +26,17 @@ export class StuckHook implements Hook {
     if (!guard)
       return this.logger.debug(`skip (run ${ctx.runId}): guard config off`);
 
-    const action = ctx.pendingAction;
-    if (!action)
+    const actions = ctx.pendingActions;
+    if (!actions?.length)
       return this.logger.debug(`skip (run ${ctx.runId}): no pending action`);
-    if (action.tool === ToolIds.RESPONSE_USER)
+    if (actions.some(a => a.tool === ToolIds.RESPONSE_USER))
       return this.logger.debug(
         `skip (run ${ctx.runId}): terminal response_user tick`,
       );
-    const sig = `${action.tool}:${JSON.stringify(action.input)}`;
+    // 多动作批取联合签名：整批完全相同才算重复（多块响应可含不同工具组合）
+    const sig = actions
+      .map(a => `${a.tool}:${JSON.stringify(a.input)}`)
+      .join('|');
 
     if (this.seen.has(sig)) this.streak++;
     else {
@@ -42,7 +45,7 @@ export class StuckHook implements Hook {
     }
     if (this.streak < guard.stuckThreshold)
       return this.logger.debug(
-        `skip (run ${ctx.runId}): streak ${this.streak} < threshold ${guard.stuckThreshold} (${action.tool})`,
+        `skip (run ${ctx.runId}): streak ${this.streak} < threshold ${guard.stuckThreshold} (${actions[0]!.tool})`,
       );
 
     this.logger.warn(

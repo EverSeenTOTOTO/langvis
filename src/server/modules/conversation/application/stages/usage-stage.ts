@@ -13,7 +13,7 @@ import {
   estimateTokens,
   type ContextUsage,
 } from '@/server/utils/estimateTokens';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import Logger from '@/server/utils/logger';
 
 /** 有效历史用量：最新压缩摘要 C + 其后 turn（与 compact-transform 同口径）。 */
@@ -36,14 +36,14 @@ export class UsageStage implements ContextStage {
   private readonly logger = Logger.child({ source: 'UsageStage' });
 
   constructor(
-    @Inject(ProviderService)
-    private readonly providerService: ProviderService,
+    @Inject(ModelRegistryService)
+    private readonly modelRegistry: ModelRegistryService,
   ) {}
 
   async *apply(target: StageTarget): AsyncGenerator<StageEvent, void> {
     if (target.kind !== 'conv') return;
     const ctx = target;
-    const total = this.providerService.resolveContextSize(ctx.runtimeConfig);
+    const total = this.modelRegistry.resolveContextSize(ctx.runtimeConfig);
     const { used } = computeContextUsage(ctx.messages, total);
     this.logger.debug(
       `conversation_usage (conv ${ctx.conversationId}): used=${used} total=${total}`,

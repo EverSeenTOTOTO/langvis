@@ -7,6 +7,7 @@ import type {
 } from './llm.types';
 
 // LlmPort — LLM 单一内核契约（LlmProvider 对外表面）。各方法 per-call 传 modelId，缺省由实现回退该 type 默认模型。
+// 传输重试在实现内部屏蔽（llm-retry），调用方只看到最终结果或最后错误。
 export interface LlmPort {
   chat(
     modelId: string | undefined,

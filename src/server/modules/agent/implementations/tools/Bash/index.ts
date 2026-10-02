@@ -1,3 +1,4 @@
+import { Inject } from '@nestjs/common';
 import { tool } from '@/server/modules/agent/application/tools/register-tool';
 import type { Logger } from '@/server/utils/logger';
 import { ToolIds } from '@/shared/constants';
@@ -5,14 +6,9 @@ import type { ToolConfig } from '@/shared/types';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { Tool } from '@/server/modules/agent/domain/model/tool.base';
+import { BackgroundTaskRegistry } from '@/server/modules/agent/application/service/background-task-registry';
 import type { BashInput, BashOutput } from './config';
 import { DirectBash, runChild, type BashBackend } from './bash-backend';
-import {
-  drainBackgroundOutput,
-  getBackgroundTask,
-  killBackgroundTask,
-  registerBackgroundTask,
-} from './background-registry';
 import { classifyBashCommand } from './classifier';
 
 const DEFAULT_TIMEOUT = 60;
@@ -52,6 +48,13 @@ export default class BashTool extends Tool<BashOutput> {
   readonly config!: ToolConfig;
   protected readonly logger!: Logger;
 
+  constructor(
+    @Inject(BackgroundTaskRegistry)
+    private readonly backgroundTasks: BackgroundTaskRegistry,
+  ) {
+    super();
+  }
+
   describe(
     input: Record<string, unknown>,
     output?: unknown,
@@ -78,11 +81,11 @@ export default class BashTool extends Tool<BashOutput> {
 
     // ── 后台任务控制面：wait / kill 与执行面共用一次 bash 调用的入口 ──
     if (wait?.taskId) {
-      const task = getBackgroundTask(wait.taskId);
+      const task = this.backgroundTasks.get(wait.taskId);
       if (!task || task.conversationId !== ctx.conversationId) {
         throw new Error(`background task not found: ${wait.taskId}`);
       }
-      const output = drainBackgroundOutput(task, wait.tail);
+      const output = this.backgroundTasks.drain(task, wait.tail);
       return {
         exitCode: 0,
         stdout: output,
@@ -95,11 +98,11 @@ export default class BashTool extends Tool<BashOutput> {
       };
     }
     if (kill?.taskId) {
-      const task = getBackgroundTask(kill.taskId);
+      const task = this.backgroundTasks.get(kill.taskId);
       if (!task || task.conversationId !== ctx.conversationId) {
         throw new Error(`background task not found: ${kill.taskId}`);
       }
-      killBackgroundTask(task);
+      this.backgroundTasks.kill(task);
       return {
         exitCode: 0,
         stdout: `killed ${task.taskId}`,
@@ -144,7 +147,7 @@ export default class BashTool extends Tool<BashOutput> {
 
     // 后台模式：注册即返回，不随 run abort 传播（会话级生命周期）
     if (background) {
-      const task = registerBackgroundTask({
+      const task = this.backgroundTasks.register({
         conversationId: ctx.conversationId,
         command,
         child: handle.child,

@@ -3,7 +3,7 @@ import { SessionManager } from '@/server/modules/conversation/application/servic
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { EventBus } from '@nestjs/cqrs';
 import { StagePlan } from '@/server/shared/context';
-import type { ProviderService } from '@/server/infrastructure/provider.service';
+import type { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import { Transport } from '@/shared/transport';
 import type { StreamFrame } from '@/shared/types/events';
 import type { CancelRun } from '@/server/modules/agent/contracts';
@@ -44,7 +44,7 @@ function makeManager(activeMessages: unknown[] = []): {
   const chat = makeMockChat(activeMessages);
   const provider = {
     resolveContextSize: vi.fn().mockReturnValue(8000),
-  } as unknown as ProviderService;
+  } as unknown as ModelRegistryService;
   const manager = new SessionManager(
     chat,
     {
@@ -202,7 +202,7 @@ describe('SessionManager.onShutdown（关停先 abort 活跃 run 再关池）', 
     } as unknown as ChatService;
     const provider = {
       resolveContextSize: vi.fn().mockReturnValue(8000),
-    } as unknown as ProviderService;
+    } as unknown as ModelRegistryService;
     const dispatchFn = vi.fn(dispatch);
     const manager = new SessionManager(
       chat,
@@ -224,9 +224,10 @@ describe('SessionManager.onShutdown（关停先 abort 活跃 run 再关池）', 
   }
 
   it('跨会话所有活跃 run 都派发 CancelRun，等终态落库后关 SSE', async () => {
-    // mock publish 模拟 run 同步 finalize——事件对象携带 conversationId+messageId。
+    // mock publish 模拟 run 同步 finalize——CancelRun 携带 payload；其他事件（如 ConversationDisposed）忽略。
     const { manager, dispatch } = makeManagerWithDispatch((evt: never) => {
       const payload = (evt as CancelRun).payload;
+      if (!payload) return;
       manager.finalizeRun(payload.conversationId, payload.messageId);
     });
     await registerRun(manager, 'conv_1', 'msg_1', 'run_1');
@@ -235,8 +236,10 @@ describe('SessionManager.onShutdown（关停先 abort 活跃 run 再关池）', 
     await manager.onApplicationShutdown();
 
     const cancelled = dispatch.mock.calls
-      .map(([evt]) => (evt as CancelRun).payload.runId)
-      .filter(id => id.startsWith('run_'));
+      .map(([evt]) => (evt as CancelRun).payload?.runId)
+      .filter(
+        (id): id is string => typeof id === 'string' && id.startsWith('run_'),
+      );
     expect(cancelled).toEqual(expect.arrayContaining(['run_1', 'run_2']));
     expect(manager.hasSession('conv_1')).toBe(false);
     expect(manager.hasSession('conv_2')).toBe(false);

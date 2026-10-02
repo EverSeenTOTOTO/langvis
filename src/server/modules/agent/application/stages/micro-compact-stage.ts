@@ -7,7 +7,7 @@ import type {
   StageTarget,
   StageEvent,
 } from '@/server/shared/context';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import Logger from '@/server/utils/logger';
 import {
   OBSERVATION_PREFIX,
@@ -31,8 +31,8 @@ export class MicroCompactStage implements ContextStage {
   private readonly logger = Logger.child({ source: 'MicroCompactStage' });
 
   constructor(
-    @Inject(ProviderService)
-    private readonly providerService: ProviderService,
+    @Inject(ModelRegistryService)
+    private readonly modelRegistry: ModelRegistryService,
   ) {}
 
   async *apply(target: StageTarget): AsyncGenerator<StageEvent, void> {
@@ -99,7 +99,7 @@ export class MicroCompactStage implements ContextStage {
     ctx.messages = messages;
 
     const contextSize =
-      this.providerService.resolveContextSize(ctx.runtimeConfig) ?? 0;
+      this.modelRegistry.resolveContextSize(ctx.runtimeConfig) ?? 0;
     this.logger.info(
       `micro-compacted (run ${ctx.runId}): dropped ${drop.length} aged stub(s) (steps ${steps})`,
       { dropped: drop.length, steps },

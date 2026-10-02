@@ -63,7 +63,13 @@ export class ChatService {
       params.conversationId,
       params.userId,
     );
-    const messages = createActivationMessages({ ...params, workDir });
+    const environment =
+      await this.workspaceService.environmentSnapshot(workDir);
+    const messages = createActivationMessages({
+      ...params,
+      workDir,
+      environment,
+    });
     await this.messageRepo.batchCreate(params.conversationId, messages);
   }
 

@@ -9,7 +9,7 @@ import { ReconstructStage } from '@/server/modules/conversation/application/stag
 import { StagePlan } from '@/server/shared/context';
 import { projectToLlmMessages } from '@/server/modules/conversation/application/service/history-projection';
 import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
 import type { StreamFrame, EnrichedEvent } from '@/shared/types/events';
@@ -52,10 +52,10 @@ function makeCtx(
   };
 }
 
-function mockProvider(contextSize: number): ProviderService {
+function mockProvider(contextSize: number): ModelRegistryService {
   return {
     resolveContextSize: () => contextSize,
-  } as unknown as ProviderService;
+  } as unknown as ModelRegistryService;
 }
 
 async function collect(gen: AsyncGenerator<any, any, any>) {

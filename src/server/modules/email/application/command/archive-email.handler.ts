@@ -1,6 +1,6 @@
 import { Inject } from '@nestjs/common';
 import { CommandBus, CommandHandler, EventBus } from '@nestjs/cqrs';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import type { Conversation } from '@/shared/types/entities';
 import { EmailService } from '../service/email.service';
 import { CreateConversationCommand } from '@/server/modules/conversation/contracts';
@@ -19,8 +19,8 @@ export class ArchiveEmailHandler {
     private readonly emailService: EmailService,
     @Inject(CommandBus)
     private readonly commandBus: CommandBus,
-    @Inject(ProviderService)
-    private readonly providerService: ProviderService,
+    @Inject(ModelRegistryService)
+    private readonly modelRegistry: ModelRegistryService,
     @Inject(EventBus)
     private readonly eventBus: EventBus,
   ) {}
@@ -36,7 +36,7 @@ export class ArchiveEmailHandler {
     await this.emailService.markArchived(emailId);
 
     // 同步建会话以返回 id 给调用方；重活（缓存 body + 起 run）经 EmailArchived 事件异步做。
-    const defaultModel = this.providerService.getDefaultModel('chat');
+    const defaultModel = this.modelRegistry.getDefaultModel('chat');
     const conversation = await this.commandBus.execute<Conversation>(
       new CreateConversationCommand(
         `归档邮件: ${email.subject}`,

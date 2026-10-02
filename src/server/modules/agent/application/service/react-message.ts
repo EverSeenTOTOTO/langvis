@@ -14,11 +14,51 @@ import type { RunEvent } from '@/shared/types/events';
 export const PARSE_ERROR_OBSERVATION_PREFIX =
   'Observation: Error parsing response: ';
 
-export function parseResponse(content: string): ParsedAction {
+// 空响应 nudge：追加到对话末尾（不动 system/前缀，保前缀缓存），驱动模型立即产出工具调用或最终答复
+export const EMPTY_RESPONSE_NUDGE =
+  'Observation: [System] Your previous response was empty. Provide a tool call now (or answer via response_user).';
+
+// 控制流工具：改变 run 终态或协调态（应答/提问/换绑工具集），不参与多块并发
+const CONTROL_FLOW_TOOLS = new Set<string>([
+  ToolIds.RESPONSE_USER,
+  ToolIds.ASK_USER,
+  ToolIds.LIST_TOOLS,
+  ToolIds.SKILL_CALL,
+]);
+
+/** 解析 ReAct 响应为动作数组：多个 <tool_call> 块 = 并发批；无包裹的裸 tool/input 按单动作兼容。 */
+export function parseResponse(content: string): ParsedAction[] {
   const text = stripThinking(content);
 
-  const toolRaw = tagContent(text, 'tool');
-  const inputRaw = tagContent(text, 'input');
+  const blocks = [...text.matchAll(/<tool_call>([\s\S]*?)<\/tool_call>/gi)].map(
+    m => m[1]!,
+  );
+  const actions = blocks.length ? blocks.map(parseBlock) : [parseBlock(text)];
+
+  // 首块前的游离 <thought>（批级计划性思考）挂到首个无 thought 的动作上
+  const firstBlockAt = text.indexOf('<tool_call>');
+  const leadThought =
+    firstBlockAt >= 0
+      ? tagContent(text.slice(0, firstBlockAt), 'thought')
+      : null;
+  if (leadThought !== null && actions[0]?.thought === undefined) {
+    actions[0] = {
+      ...actions[0]!,
+      thought: decodeXml(leadThought).trim() || undefined,
+    };
+  }
+
+  if (actions.length > 1 && actions.some(a => CONTROL_FLOW_TOOLS.has(a.tool))) {
+    throw new Error(
+      'Invalid response: control-flow tools (response_user/ask_user/skill_call/list_tools) must be the only action in a response',
+    );
+  }
+  return actions;
+}
+
+function parseBlock(block: string): ParsedAction {
+  const toolRaw = tagContent(block, 'tool');
+  const inputRaw = tagContent(block, 'input');
   const tool = toolRaw ? toolRaw.trim() : '';
   const input = inputRaw !== null ? parseInput(inputRaw) : null;
 
@@ -28,7 +68,7 @@ export function parseResponse(content: string): ParsedAction {
     );
   }
 
-  const thoughtRaw = tagContent(text, 'thought');
+  const thoughtRaw = tagContent(block, 'thought');
   return {
     thought: thoughtRaw !== null ? decodeXml(thoughtRaw).trim() : undefined,
     tool,

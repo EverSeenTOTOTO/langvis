@@ -3,6 +3,7 @@ import type { RunEvent } from '@/shared/types/events';
 import type { AuthorizationPort } from '@/server/modules/agent/domain/port/authorization.port';
 import type { ToolCallContext } from '@/server/modules/agent/domain/port/tool-call-context.port';
 import type { BashOutput } from '@/server/modules/agent/implementations/tools/Bash/config';
+import { BackgroundTaskRegistry } from '@/server/modules/agent/application/service/background-task-registry';
 
 type RunChildOpts = { timeoutSec: number; signal: AbortSignal; callId: string };
 
@@ -64,7 +65,8 @@ function stubEnsureApproved(
 }
 
 async function run(ctx: ToolCallContext): Promise<void> {
-  const gen = new BashTool().call(ctx);
+  const registry = new BackgroundTaskRegistry();
+  const gen = new BashTool(registry).call(ctx);
   let r = await gen.next();
   while (!r.done) r = await gen.next();
 }

@@ -26,6 +26,7 @@ export interface ContentChunkOutput {
 
 export const config: ToolConfig<ContentChunkInput, ContentChunkOutput> = {
   name: 'ContentChunk Tool',
+  concurrency: 'parallel',
   description:
     'Split document content into chunks using different strategies (paragraph or fixed).',
   inputSchema: {

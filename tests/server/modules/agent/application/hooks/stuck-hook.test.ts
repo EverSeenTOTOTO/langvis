@@ -27,7 +27,7 @@ async function collect(
   return { events, ret };
 }
 
-/** 每次 apply = 一个 tick；hook 直读 loop 挂的 ctx.pendingAction，guard 仅 stuckThreshold 生效。 */
+/** 每次 apply = 一个 tick；hook 直读 loop 挂的 ctx.pendingActions，guard 仅 stuckThreshold 生效。 */
 function ctxWith(
   action: ParsedAction | undefined,
   stuckThreshold: number,
@@ -47,7 +47,7 @@ function ctxWith(
     runId: 'run_test',
     messages: [],
     config,
-    pendingAction: action,
+    pendingActions: action ? [action] : undefined,
   } as unknown as AgentRunContext;
 }
 

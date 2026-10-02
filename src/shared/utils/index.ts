@@ -20,6 +20,15 @@ export const sleep = (ms: number): Promise<void> => {
 export const wrapUntrusted = (content: string): string =>
   `<untrusted_content>\n${content}\n</untrusted_content>`;
 
+/** prompt 注入用的长格式日期（en-US，与 BASE_PROMPT 语言一致）。 */
+export const formatToday = (): string =>
+  new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
 export const safeJsonParse = <T>(o: unknown, fallback?: T): T | null => {
   try {
     return JSON.parse(String(o)) as T;

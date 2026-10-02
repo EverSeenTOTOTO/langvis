@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LlmProvider } from '@/server/infrastructure/llm/llm.provider';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import type { ProviderDefinition } from '@/shared/types/provider';
 
 vi.mock('fs/promises', () => ({
@@ -18,10 +18,10 @@ vi.mock('path', async importOriginal => {
   };
 });
 
-function mockProviderService(
+function mockModelRegistry(
   provider: Partial<ProviderDefinition> = {},
   modelEndpoint?: string,
-): ProviderService {
+): ModelRegistryService {
   const fullProvider: ProviderDefinition = {
     id: '302',
     name: '302AI',
@@ -42,7 +42,7 @@ function mockProviderService(
     getProvider: vi.fn().mockReturnValue(fullProvider),
     getModel: vi.fn().mockReturnValue(fullProvider.models[0]),
     getDefaultModel: vi.fn().mockReturnValue(fullProvider.models[0]),
-  } as unknown as ProviderService;
+  } as unknown as ModelRegistryService;
 }
 
 const sampleApiResponse = {
@@ -54,12 +54,12 @@ const sampleApiResponse = {
 
 describe('LlmProvider.stt', () => {
   let llmService: LlmProvider;
-  let providerService: ProviderService;
+  let modelRegistry: ModelRegistryService;
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    providerService = mockProviderService();
-    llmService = new LlmProvider(providerService);
+    modelRegistry = mockModelRegistry();
+    llmService = new LlmProvider(modelRegistry);
   });
 
   it('should send multipart/form-data with correct fields', async () => {
@@ -163,15 +163,15 @@ describe('LlmProvider.stt', () => {
   });
 
   it('should throw when provider is not found', async () => {
-    const badProviderService = {
+    const badModelRegistry = {
       getProvider: vi.fn().mockReturnValue(undefined),
       getModel: vi.fn().mockReturnValue(undefined),
       getDefaultModel: vi
         .fn()
         .mockReturnValue({ id: '302:whisper-v3-turbo', type: 'stt' }),
-    } as unknown as ProviderService;
+    } as unknown as ModelRegistryService;
 
-    const service = new LlmProvider(badProviderService);
+    const service = new LlmProvider(badModelRegistry);
 
     await expect(
       service.stt(
@@ -186,8 +186,8 @@ describe('LlmProvider.stt', () => {
   });
 
   it('should use model endpoint override when defined', async () => {
-    providerService = mockProviderService({}, '/custom/stt');
-    llmService = new LlmProvider(providerService);
+    modelRegistry = mockModelRegistry({}, '/custom/stt');
+    llmService = new LlmProvider(modelRegistry);
 
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
@@ -221,13 +221,13 @@ describe('LlmProvider.embed', () => {
       apiKey: 'test-key',
       models: [{ id: '302:emb', type: 'embedding' }],
     };
-    const providerService = {
+    const modelRegistry = {
       getProvider: vi.fn().mockReturnValue(provider),
       // undefined → endpoint defaults to '/embeddings'
       getModel: vi.fn().mockReturnValue(undefined),
       getDefaultModel: vi.fn().mockReturnValue(provider.models[0]),
-    } as unknown as ProviderService;
-    llmService = new LlmProvider(providerService);
+    } as unknown as ModelRegistryService;
+    llmService = new LlmProvider(modelRegistry);
   });
 
   it('batches by EMBED_BATCH_SIZE (32) and concatenates results in input order', async () => {

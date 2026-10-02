@@ -4,7 +4,7 @@ import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { LlmProvider } from '@/server/infrastructure/llm/llm.provider';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import type { LlmMessage } from '@/shared/types/entities';
 import { serializeAction } from '@/server/modules/agent/application/service/react-message';
 
@@ -42,7 +42,7 @@ function makeCtx(opts: {
   llm?: LlmProvider;
 }): {
   ctx: AgentRunContext;
-  providerService: ProviderService;
+  modelRegistry: ModelRegistryService;
   llm: LlmProvider;
 } {
   const contextSize = opts.contextSize ?? 10;
@@ -50,9 +50,9 @@ function makeCtx(opts: {
     tools: [],
     runtimeConfig: { model: {}, context: { runFold: COMPACTION } },
   });
-  const providerService = {
+  const modelRegistry = {
     resolveContextSize: () => contextSize,
-  } as unknown as ProviderService;
+  } as unknown as ModelRegistryService;
   const llm = opts.llm ?? mockLlm();
   const seed = opts.seed;
   let messages = seed;
@@ -71,7 +71,7 @@ function makeCtx(opts: {
       config,
       signal: new AbortController().signal,
     } as unknown as AgentRunContext,
-    providerService,
+    modelRegistry,
     llm,
   };
 }
@@ -88,33 +88,33 @@ async function collect(gen: AsyncGenerator<any, any, any>) {
 
 describe('RunFoldStage（自持压缩逻辑，经 ctx.messages 读写缝）', () => {
   it('loop 步骤 ≤ keepRecent 时不动（无事件）', async () => {
-    const { ctx, providerService, llm } = makeCtx({
+    const { ctx, modelRegistry, llm } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       loopSteps: ['s0', 's1', 's2', 's3'], // = keepRecent
     });
     const before = ctx.messages.length;
     const { events } = await collect(
-      new RunFoldStage(providerService, llm).apply(targetOf(ctx)),
+      new RunFoldStage(modelRegistry, llm).apply(targetOf(ctx)),
     );
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(before);
   });
 
   it('未超阈时不动', async () => {
-    const { ctx, providerService, llm } = makeCtx({
+    const { ctx, modelRegistry, llm } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       contextSize: 1_000_000,
       loopSteps: ['s0', 's1', 's2', 's3', 's4', 's5'],
     });
     const { events } = await collect(
-      new RunFoldStage(providerService, llm).apply(targetOf(ctx)),
+      new RunFoldStage(modelRegistry, llm).apply(targetOf(ctx)),
     );
     expect(events).toHaveLength(0);
     expect(llm.chatContent).not.toHaveBeenCalled();
   });
 
   it('超阈且步骤足够时折叠较早步骤、保留近期 keepRecent', async () => {
-    const { ctx, providerService, llm } = makeCtx({
+    const { ctx, modelRegistry, llm } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       contextSize: 10, // 阈值 8 token，几条消息即超
       loopSteps: Array.from({ length: 6 }, (_, i) => `observation step ${i}`),
@@ -122,7 +122,7 @@ describe('RunFoldStage（自持压缩逻辑，经 ctx.messages 读写缝）', ()
     });
 
     const { events } = await collect(
-      new RunFoldStage(providerService, llm).apply(targetOf(ctx)),
+      new RunFoldStage(modelRegistry, llm).apply(targetOf(ctx)),
     );
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ type: 'hook', hookId: 'run-fold' });
@@ -141,7 +141,7 @@ describe('RunFoldStage（自持压缩逻辑，经 ctx.messages 读写缝）', ()
       role: 'user' as const,
       content: 'Observation: ## AVAILABLE TOOLS MARKER\n- bash: run commands',
     };
-    const { ctx, providerService, llm } = makeCtx({
+    const { ctx, modelRegistry, llm } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       contextSize: 10,
       llm: mockLlm('THE RECAP'),
@@ -164,7 +164,7 @@ describe('RunFoldStage（自持压缩逻辑，经 ctx.messages 读写缝）', ()
     });
 
     const { events } = await collect(
-      new RunFoldStage(providerService, llm).apply(targetOf(ctx)),
+      new RunFoldStage(modelRegistry, llm).apply(targetOf(ctx)),
     );
     expect(events).toHaveLength(1);
     // [sys, recap, 配对 action, pinnedObs, keepRecent(4)] = 8——对保真且相邻（i-1 配对不变式）
@@ -190,7 +190,7 @@ describe('RunFoldStage（自持压缩逻辑，经 ctx.messages 读写缝）', ()
       role: 'user' as const,
       content: 'Observation: SKILL BODY MARKER gf skill instructions',
     };
-    const { ctx, providerService, llm } = makeCtx({
+    const { ctx, modelRegistry, llm } = makeCtx({
       seed: [
         { role: 'system', content: 'sys' },
         { role: 'assistant', content: action },
@@ -201,7 +201,7 @@ describe('RunFoldStage（自持压缩逻辑，经 ctx.messages 读写缝）', ()
     });
 
     const { events } = await collect(
-      new RunFoldStage(providerService, llm).apply(targetOf(ctx)),
+      new RunFoldStage(modelRegistry, llm).apply(targetOf(ctx)),
     );
     expect(events).toHaveLength(1);
     // [sys, action(seed 原样), recap, pinnedObs, keepRecent(4)] = 8
@@ -212,7 +212,7 @@ describe('RunFoldStage（自持压缩逻辑，经 ctx.messages 读写缝）', ()
   });
 
   it('older 区全为 pinned 对 → 无可折叠，整体跳过', async () => {
-    const { ctx, providerService } = makeCtx({
+    const { ctx, modelRegistry } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       contextSize: 10,
       loopSteps: [
@@ -238,14 +238,14 @@ describe('RunFoldStage（自持压缩逻辑，经 ctx.messages 读写缝）', ()
     });
     const before = ctx.messages.length;
     const { events } = await collect(
-      new RunFoldStage(providerService, mockLlm()).apply(targetOf(ctx)),
+      new RunFoldStage(modelRegistry, mockLlm()).apply(targetOf(ctx)),
     );
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(before);
   });
 
   it('折叠返回空时回退不动', async () => {
-    const { ctx, providerService, llm } = makeCtx({
+    const { ctx, modelRegistry, llm } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       contextSize: 10,
       loopSteps: ['s0', 's1', 's2', 's3', 's4', 's5'],
@@ -253,7 +253,7 @@ describe('RunFoldStage（自持压缩逻辑，经 ctx.messages 读写缝）', ()
     });
     const before = ctx.messages.length;
     const { events } = await collect(
-      new RunFoldStage(providerService, llm).apply(targetOf(ctx)),
+      new RunFoldStage(modelRegistry, llm).apply(targetOf(ctx)),
     );
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(before);

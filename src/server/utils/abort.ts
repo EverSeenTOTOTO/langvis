@@ -36,3 +36,19 @@ export function createTimeoutController(
 
   return [controller, cleanup];
 }
+
+/** 可中止的延时：到时 resolve；signal 先 abort 则 reject（reason）。 */
+export function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    function onAbort() {
+      clearTimeout(timer);
+      reject(signal.reason ?? new Error('aborted'));
+    }
+    if (signal.aborted) return onAbort();
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}

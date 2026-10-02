@@ -54,7 +54,7 @@ function ctxWith(
     runId: 'run_test',
     messages: messages,
     config,
-    pendingAction,
+    pendingActions: pendingAction ? [pendingAction] : undefined,
   } as unknown as AgentRunContext;
 }
 

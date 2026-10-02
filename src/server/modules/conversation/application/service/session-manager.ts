@@ -4,16 +4,16 @@ import type { Transport } from '@/shared/transport';
 import { EventBus } from '@nestjs/cqrs';
 import { ChatService } from './chat.service';
 import { ConversationSession } from './conversation-session';
+import { ConversationDisposed } from '../../contracts';
 import type { ConversationContext } from '../../domain/model/conv-transform';
 import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
 import type { StagePlan } from '@/server/shared/context';
 import { CONTEXT_STAGES } from '../stages';
 import { computeContextUsage } from '../stages/usage-stage';
 import type { Message } from '@/shared/types/entities';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import { Inject, OnApplicationShutdown } from '@nestjs/common';
 import Logger from '@/server/utils/logger';
-import { disposeConversationTasks } from '@/server/modules/agent/implementations/tools/Bash/background-registry';
 
 export interface ChatState {
   conversationId: string;
@@ -32,8 +32,8 @@ export class SessionManager implements OnApplicationShutdown {
     private convService: ChatService,
     @Inject(EventBus)
     private eventBus: EventBus,
-    @Inject(ProviderService)
-    private providerService: ProviderService,
+    @Inject(ModelRegistryService)
+    private modelRegistry: ModelRegistryService,
     @Inject(CONTEXT_STAGES)
     private readonly stagePlan: StagePlan,
   ) {}
@@ -56,7 +56,8 @@ export class SessionManager implements OnApplicationShutdown {
       session.dispose(); // 连接 idle 自释放路径下 connection 已 undefined，此处 no-op
     }
     this.startingTurns.delete(conversationId);
-    disposeConversationTasks(conversationId); // 后台 bash 任务随会话清理，不留孤儿进程
+    // 会话级运行态（后台 bash 任务）归 agent 域——经领域事件通知清理，不直接触达其实现
+    this.eventBus.publish(new ConversationDisposed(conversationId));
     this.startedAt.delete(conversationId);
     this.logger.debug(`Chat disposed`, { chatId: conversationId });
   }
@@ -311,7 +312,7 @@ export class SessionManager implements OnApplicationShutdown {
     // 配置更新不算相位、不触发 UsageTransform；模型切换时立即重推用量，客户端 usage 栏即时刷新。
     if (!session.hasCtx() || !session.hasConnection) return;
     const ctx = session.getCtx();
-    const total = this.providerService.resolveContextSize(runtimeConfig);
+    const total = this.modelRegistry.resolveContextSize(runtimeConfig);
     const { used } = computeContextUsage(ctx.messages, total);
     session.sendFrame({ type: 'conversation_usage', used, total });
   }

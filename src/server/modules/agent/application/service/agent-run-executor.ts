@@ -17,7 +17,7 @@ import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import type { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';
 import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
 import { LLM_PORT } from '@/server/infrastructure/llm/llm.tokens';
-import { generateId } from '@/shared/utils';
+import { generateId, formatToday } from '@/shared/utils';
 import { TraceContext } from '@/server/trace-context';
 import type { LlmMessage } from '@/shared/types/entities';
 import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
@@ -29,7 +29,7 @@ import { AgentService } from './agent.service';
 import { restoreReactMessage } from './react-message';
 import { runReactLoop } from './react-loop';
 import { ToolLatencyTracker } from './tool-latency-tracker';
-import { collectConversationFeed } from '@/server/modules/agent/implementations/tools/Bash/background-registry';
+import { BackgroundTaskRegistry } from './background-task-registry';
 import { Role } from '@/shared/entities/Message';
 import Logger from '@/server/utils/logger';
 import { traceGen } from '@/server/otel';
@@ -84,6 +84,8 @@ export class AgentRunExecutor {
     private readonly agentRunRepo: AgentRunRepositoryPort,
     @Inject(AgentService) private readonly agentService: AgentService,
     @Inject(ModuleRef) private readonly moduleRef: ModuleRef,
+    @Inject(BackgroundTaskRegistry)
+    private readonly backgroundTasks: BackgroundTaskRegistry,
   ) {}
 
   async createRun(params: LaunchParams): Promise<{
@@ -103,9 +105,16 @@ export class AgentRunExecutor {
     const run = new AgentRun(params.runId, config);
 
     const messages = params.seed.map(restoreReactMessage);
+    // 每 run 现算的 ephemeral 日期行（不落库）：长会话里 session-context 的激活日期会过期。
+    messages.splice(1, 0, {
+      role: Role.USER,
+      content: `<today>${formatToday()}</today>`,
+    });
     // 后台任务未读输出注入（每个主 run 开始一次性；子 agent 不感知会话后台任务）
     if (!params.parentSignal) {
-      const feed = collectConversationFeed(params.conversationId);
+      const feed = this.backgroundTasks.collectConversationFeed(
+        params.conversationId,
+      );
       if (feed) messages.push({ role: Role.USER, content: feed });
     }
 
@@ -120,10 +129,11 @@ export class AgentRunExecutor {
       cache: this.cache,
       auth: this.auth,
       messages,
-      base: params.seed.length,
+      base: params.seed.length + 1,
       // per-run 瞬态：TRANSIENT providers 经 ModuleRef.resolve 每次 promise 新建
       hooks: new HookPlan(await this.resolveHooks()),
       stages: new StagePlan(await this.resolveStages()),
+      toolSet: params.toolSet,
       interactive: params.interactive,
     };
 

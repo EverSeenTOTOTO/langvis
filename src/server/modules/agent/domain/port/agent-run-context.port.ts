@@ -5,6 +5,7 @@ import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
 import type { CachePort } from './cache.port';
 import type { AuthorizationPort } from './authorization.port';
 import type { HookPlan } from '../model/hook';
+import type { ToolSet } from '../model/tool-set.vo';
 import type { StagePlan } from '@/server/shared/context';
 import type { LlmMessage } from '@/shared/types/entities';
 
@@ -20,7 +21,7 @@ export type ToolExecutor = (
   args: Record<string, unknown>,
 ) => AsyncGenerator<RunEvent, ToolRunResult, void>;
 
-/** 解析出的 ReAct 动作。loop 权威解析一次后挂到 ctx.pendingAction，pre-action hook 直接读、不再各自 parse。 */
+/** 解析出的 ReAct 动作。loop 权威解析一次后挂到 ctx.pendingActions，pre-action hook 直接读、不再各自 parse。 */
 export interface ParsedAction {
   thought?: string;
   tool: string;
@@ -43,8 +44,10 @@ export interface AgentRunContext {
   readonly base: number;
   readonly hooks?: HookPlan;
   readonly stages?: StagePlan;
+  /** 该 run 的有界工具集（含并发声明——loop 批调度据此分级 parallel/serial）。 */
+  readonly toolSet?: ToolSet;
   // 本 tick 权威解析出的动作：loop 解析后赋值，hook 据此拦截而不各自 re-parse。
-  pendingAction?: ParsedAction;
+  pendingActions?: readonly ParsedAction[];
   /** 是否允许 HITL。conv run = true；子 agent = false。ToolCall 经 ToolCallContext 透传给工具。 */
   readonly interactive: boolean;
 }

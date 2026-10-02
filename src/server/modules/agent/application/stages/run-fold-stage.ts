@@ -9,7 +9,7 @@ import { fold } from '@/server/shared/compaction';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import { LLM_PORT } from '@/server/infrastructure/llm/llm.tokens';
 import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import Logger from '@/server/utils/logger';
 import { isPinnedObservation } from '@/server/modules/agent/domain/offload/pin';
 import type { LlmMessage } from '@/shared/types/entities';
@@ -21,8 +21,8 @@ export class RunFoldStage implements ContextStage {
   private readonly logger = Logger.child({ source: 'RunFoldStage' });
 
   constructor(
-    @Inject(ProviderService)
-    private readonly providerService: ProviderService,
+    @Inject(ModelRegistryService)
+    private readonly modelRegistry: ModelRegistryService,
     @Inject(LLM_PORT) private readonly llm: LlmPort,
   ) {}
 
@@ -32,7 +32,7 @@ export class RunFoldStage implements ContextStage {
     const compaction = ctx.runtimeConfig.context?.runFold;
     if (!compaction)
       return this.logger.debug(`skip (run ${ctx.runId}): runFold config off`);
-    const contextSize = this.providerService.resolveContextSize(
+    const contextSize = this.modelRegistry.resolveContextSize(
       ctx.runtimeConfig,
     );
     if (!contextSize)

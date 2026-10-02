@@ -20,6 +20,7 @@ export const config: ToolConfig<
   DocumentMetadataExtractOutput
 > = {
   name: 'Meta Extract Tool',
+  concurrency: 'parallel',
   description: 'Extract structured metadata from document content.',
   inputSchema: {
     type: 'object',

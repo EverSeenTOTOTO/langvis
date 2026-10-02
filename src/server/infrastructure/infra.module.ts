@@ -3,9 +3,11 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { DatabaseService } from './database/database.service';
 import { AuthService } from '../modules/user/infrastructure/auth.service';
 import { LlmProvider } from './llm/llm.provider';
-import { ProviderService } from './provider.service';
+import { ModelRegistryService } from './model-registry.service';
 import { WorkspaceService } from './workspace/workspace.service';
 import { WorkspaceLocalStore } from './workspace/workspace-local-store';
+import { TerminalServer } from '../terminal/terminal.server';
+import { SsrMountService } from '../middleware/ssr-mount.service';
 import { VectorIndexInitializer } from './database/vector-index-initializer';
 import { TRANSACTION_PORT } from './database/transaction.port';
 import { LLM_PORT } from './llm/llm.tokens';
@@ -25,9 +27,11 @@ import { AuthGuard } from '../guards/auth.guard';
     { provide: AUTH_PORT, useExisting: AuthService },
     LlmProvider,
     { provide: LLM_PORT, useExisting: LlmProvider },
-    ProviderService,
+    ModelRegistryService,
     WorkspaceLocalStore,
     WorkspaceService,
+    TerminalServer,
+    SsrMountService,
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
@@ -36,10 +40,12 @@ import { AuthGuard } from '../guards/auth.guard';
     TRANSACTION_PORT,
     AUTH_PORT,
     LLM_PORT,
-    ProviderService,
+    ModelRegistryService,
     WorkspaceService,
     WorkspaceLocalStore,
     AuthService,
+    TerminalServer,
+    SsrMountService,
   ],
 })
 export class InfraModule {}

@@ -16,6 +16,7 @@ export interface LinksExtractOutput {
 
 export const config: ToolConfig<LinksExtractInput, LinksExtractOutput> = {
   name: 'Extract Links Tool',
+  concurrency: 'parallel',
   untrustedOutput: true,
   description:
     'Extract HTTP/HTTPS links from text or HTML content. Returns a list of URLs with their anchor text and surrounding context.',

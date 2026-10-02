@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ArchiveEmailHandler } from '@/server/modules/email/application/command/archive-email.handler';
 import type { EmailService } from '@/server/modules/email/application/service/email.service';
-import type { ProviderService } from '@/server/infrastructure/provider.service';
+import type { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import type { CommandBus, EventBus } from '@nestjs/cqrs';
 import { CreateConversationCommand } from '@/server/modules/conversation/contracts';
 import { ArchiveEmailCommand } from '@/server/modules/email/contracts';
@@ -35,21 +35,21 @@ function makeDeps(email: typeof defaultEmail | null = defaultEmail) {
   const commandBus = {
     execute: vi.fn().mockResolvedValue({ id: 'conv_1' }),
   } as unknown as CommandBus;
-  const providerService = {
+  const modelRegistry = {
     getDefaultModel: vi.fn().mockReturnValue({ id: 'model_1' }),
-  } as unknown as ProviderService;
+  } as unknown as ModelRegistryService;
   const eventBus = { publish: vi.fn() } as unknown as EventBus;
-  return { emailService, commandBus, providerService, eventBus };
+  return { emailService, commandBus, modelRegistry, eventBus };
 }
 
 describe('ArchiveEmailHandler', () => {
   it('throws EmailNotFoundError when email missing (no conversation created)', async () => {
-    const { emailService, commandBus, providerService, eventBus } =
+    const { emailService, commandBus, modelRegistry, eventBus } =
       makeDeps(null);
     const handler = new ArchiveEmailHandler(
       emailService,
       commandBus,
-      providerService,
+      modelRegistry,
       eventBus,
     );
 
@@ -62,11 +62,11 @@ describe('ArchiveEmailHandler', () => {
   });
 
   it('creates conversation via CreateConversationCommand (no repo reach), dispatches EmailArchived, returns both ids', async () => {
-    const { emailService, commandBus, providerService, eventBus } = makeDeps();
+    const { emailService, commandBus, modelRegistry, eventBus } = makeDeps();
     const handler = new ArchiveEmailHandler(
       emailService,
       commandBus,
-      providerService,
+      modelRegistry,
       eventBus,
     );
 

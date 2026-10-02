@@ -6,7 +6,7 @@ import { StuckHook } from '@/server/modules/agent/application/hooks/stuck-hook';
 import { MaxIterationsHook } from '@/server/modules/agent/application/hooks/max-iterations-hook';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import type { LlmProvider } from '@/server/infrastructure/llm/llm.provider';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { RunEvent } from '@/shared/types/events';
@@ -35,7 +35,7 @@ function makeCtx(opts: {
   llm?: LlmProvider;
 }): {
   ctx: AgentRunContext;
-  providerService: ProviderService;
+  modelRegistry: ModelRegistryService;
   llm: LlmProvider;
 } {
   const contextSize = opts.contextSize ?? 10;
@@ -43,9 +43,9 @@ function makeCtx(opts: {
     tools: [],
     runtimeConfig: { model: {}, context: { runFold: COMPACTION } },
   });
-  const providerService = {
+  const modelRegistry = {
     resolveContextSize: () => contextSize,
-  } as unknown as ProviderService;
+  } as unknown as ModelRegistryService;
   const llm = opts.llm ?? mockLlm();
   const seed = opts.seed;
   let messages = seed;
@@ -64,7 +64,7 @@ function makeCtx(opts: {
       config,
       signal: new AbortController().signal,
     } as unknown as AgentRunContext,
-    providerService,
+    modelRegistry,
     llm,
   };
 }
@@ -86,11 +86,11 @@ describe('agent hook 清单（HOOK_TYPES 发现 + 直接构造即新实例）', 
 
 describe('LoopUsageHook（post-observation 遥测：yield loop_usage）', () => {
   it('从 ctx.messages + 派生 contextSize 算用量并发 loop_usage', async () => {
-    const { ctx, providerService } = makeCtx({
+    const { ctx, modelRegistry } = makeCtx({
       seed: [{ role: 'system', content: 'sys' }],
       loopSteps: ['a', 'b'],
     });
-    const events = await collect(new LoopUsageHook(providerService).apply(ctx));
+    const events = await collect(new LoopUsageHook(modelRegistry).apply(ctx));
     expect(events).toHaveLength(1);
     const usage = events[0] as Extract<RunEvent, { type: 'loop_usage' }>;
     expect(usage.type).toBe('loop_usage');

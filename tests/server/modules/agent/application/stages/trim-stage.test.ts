@@ -330,7 +330,7 @@ describe('TrimStage（assistant 桩：长推理整条 dump，保留 {tool,input:
     expect(events).toHaveLength(1);
     expect(ctx.cache.offload).toHaveBeenCalledTimes(1);
     const stub = ctx.messages[0]!.content;
-    const parsed = parseResponse(stub);
+    const parsed = parseResponse(stub)[0]!;
     expect(parsed.tool).toBe('document_store');
     expect(parsed.input).toEqual({ _offloaded: 'sem__fc_test' });
     expect(parsed.thought).toContain('[offloaded to file');

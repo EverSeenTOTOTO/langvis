@@ -6,7 +6,7 @@ import type {
   StageEvent,
 } from '@/server/shared/context';
 import { estimateTokens } from '@/server/utils/estimateTokens';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import Logger from '@/server/utils/logger';
 import { classifyRecallParsed } from '@/server/modules/agent/domain/offload/offload-recall';
 import { isPinnedObservation } from '@/server/modules/agent/domain/offload/pin';
@@ -35,8 +35,8 @@ export class TrimStage implements ContextStage {
   private readonly logger = Logger.child({ source: 'TrimStage' });
 
   constructor(
-    @Inject(ProviderService)
-    private readonly providerService: ProviderService,
+    @Inject(ModelRegistryService)
+    private readonly modelRegistry: ModelRegistryService,
   ) {}
 
   async *apply(target: StageTarget): AsyncGenerator<StageEvent, void> {
@@ -71,7 +71,7 @@ export class TrimStage implements ContextStage {
     };
 
     const contextSize =
-      this.providerService.resolveContextSize(ctx.runtimeConfig) ?? 0;
+      this.modelRegistry.resolveContextSize(ctx.runtimeConfig) ?? 0;
     let stubbed = 0;
     let totalBytes = 0;
 

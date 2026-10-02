@@ -21,12 +21,18 @@ vi.mock('@lydell/node-pty', () => {
       (
         file: string,
         args: string[],
-        opts: { env: Record<string, string>; cols: number; rows: number },
+        opts: {
+          env: Record<string, string>;
+          cols: number;
+          rows: number;
+          cwd: string;
+        },
       ) => {
         const rec = {
           file,
           args,
           env: opts.env,
+          cwd: opts.cwd,
           cols: opts.cols,
           rows: opts.rows,
           written: [] as string[],
@@ -58,13 +64,14 @@ vi.mock('@lydell/node-pty', () => {
 
 import pty from '@lydell/node-pty';
 import { AuthService } from '@/server/modules/user/infrastructure/auth.service';
-import { attachTerminalServer } from '@/server/terminal/terminal.server';
+import { TerminalServer } from '@/server/terminal/terminal.server';
+import type { WorkspaceService } from '@/server/infrastructure/workspace/workspace.service';
 
 const mockedPty = vi.mocked(pty.spawn);
 const spawns = (pty as unknown as { __spawns: Array<Record<string, unknown>> })
   .__spawns;
 
-// authService 经 attachTerminalServer 显式传入；每个用例构造自己的实例
+// authService 经构造注入 TerminalServer；每个用例构造自己的实例
 let authService: AuthService;
 function fakeAuth(user: { id: string } | null): void {
   authService = {
@@ -78,10 +85,13 @@ function startServer(): Promise<{
   close: () => Promise<void>;
 }> {
   return new Promise(resolve => {
+    const workspaceService = {
+      generateEphemeralPath: () => '/tmp/langvis-workspace/ws_test',
+    } as unknown as WorkspaceService;
     const server = http.createServer((_req, res) => {
       res.writeHead(404).end();
     });
-    attachTerminalServer(server, authService);
+    new TerminalServer(authService, workspaceService).attach(server);
     server.listen(0, '127.0.0.1', () => {
       const addr = server.address() as { port: number };
       resolve({
@@ -113,6 +123,26 @@ describe('terminal.server（PTY 托管）', () => {
     await failure;
     expect(spawns).toHaveLength(0);
     await close();
+  });
+
+  it('PTY cwd 默认走 /tmp/langvis-workspace 随机目录（ephemeral 复用）；LANGVIS_CLI_CWD 覆盖', async () => {
+    fakeAuth({ id: 'user_1' });
+    const { port, close } = await startServer();
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/terminal/ws`);
+    await new Promise<void>(res => ws.on('open', res));
+    expect(spawns[0]!['cwd']).toBe('/tmp/langvis-workspace/ws_test');
+    ws.close();
+    await close();
+
+    spawns.length = 0;
+    process.env.LANGVIS_CLI_CWD = '/custom/cwd';
+    const second = await startServer();
+    const ws2 = new WebSocket(`ws://127.0.0.1:${second.port}/api/terminal/ws`);
+    await new Promise<void>(res => ws2.on('open', res));
+    expect(spawns[0]!['cwd']).toBe('/custom/cwd');
+    ws2.close();
+    delete process.env.LANGVIS_CLI_CWD;
+    await second.close();
   });
 
   it('认证通过：spawn CLI 并注入会话 env；输入直传、resize 走控制帧、断开即杀', async () => {

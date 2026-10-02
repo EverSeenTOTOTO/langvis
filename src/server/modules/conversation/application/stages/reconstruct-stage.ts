@@ -12,7 +12,7 @@ import {
   toLlmMessages,
   RECONSTRUCTED_HEAD_CHARS,
 } from '@/server/modules/conversation/application/service/history-projection';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import Logger from '@/server/utils/logger';
 
@@ -26,14 +26,14 @@ export class ReconstructStage implements ContextStage {
   constructor(
     @Inject(MESSAGE_REPOSITORY)
     private readonly messageRepo: MessageRepositoryPort,
-    @Inject(ProviderService)
-    private readonly providerService: ProviderService,
+    @Inject(ModelRegistryService)
+    private readonly modelRegistry: ModelRegistryService,
   ) {}
 
   async *apply(target: StageTarget): AsyncGenerator<StageEvent, void> {
     if (target.kind !== 'conv') return;
     const ctx = target;
-    const contextSize = this.providerService.resolveContextSize(
+    const contextSize = this.modelRegistry.resolveContextSize(
       ctx.runtimeConfig,
     );
     if (!contextSize) {

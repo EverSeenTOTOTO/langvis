@@ -30,6 +30,7 @@ export type WebFetchOutput = WebFetchOutputConcise | WebFetchOutputDetailed;
 
 export const config: ToolConfig<WebFetchInput, WebFetchOutput> = {
   name: 'web_fetch',
+  concurrency: 'parallel',
   untrustedOutput: true,
   description:
     'Fetch and extract main content from a web page URL; choose concise (default) or detailed output via response_format.',

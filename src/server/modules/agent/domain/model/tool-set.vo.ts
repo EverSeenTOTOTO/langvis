@@ -4,6 +4,8 @@ export type ToolMode = 'inline' | 'listed';
 export interface ToolMember {
   id: string;
   mode: ToolMode;
+  /** 并发声明（来自 ToolConfig）：parallel = 只读可并发；缺省 serial = 写/协调工具，批执行时是栅栏。 */
+  concurrency?: 'parallel' | 'serial';
 }
 
 export class ToolSet {
@@ -28,6 +30,11 @@ export class ToolSet {
 
   has(id: string): boolean {
     return this.members.some(m => m.id === id);
+  }
+
+  /** 是否可与其他 parallel 工具同批并发执行（缺省声明 = serial）。 */
+  isParallel(id: string): boolean {
+    return this.members.some(m => m.id === id && m.concurrency === 'parallel');
   }
 
   /** 全部成员 id（inline 在前、listed 在后，保持构造顺序）。 */

@@ -25,6 +25,7 @@ export interface PdfExtractOutput {
 
 export const config: ToolConfig<PdfExtractInput, PdfExtractOutput> = {
   name: 'pdf_extract',
+  concurrency: 'parallel',
   description:
     'Extract text from PDF files. Text-layer PDFs are read via pdftotext; scanned/image-only PDFs yield no text and are flagged for OCR. Accepts absolute, ~-prefixed, relative, or glob paths.',
   untrustedOutput: true,

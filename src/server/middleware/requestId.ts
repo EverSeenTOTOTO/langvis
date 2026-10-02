@@ -1,4 +1,5 @@
-import { Express, Request } from 'express';
+import { Request, Response, NextFunction } from 'express';
+import { Inject, Injectable, NestMiddleware } from '@nestjs/common';
 import { generateId } from '@/shared/utils';
 import { AuthService } from '@/server/modules/user/infrastructure/auth.service';
 import Logger from '../utils/logger';
@@ -21,60 +22,78 @@ declare global {
   }
 }
 
-export const mountRequestId = (app: Express, authService: AuthService) => {
-  app.use(async (req, res, next) => {
-    const existingID = req.id ?? req.headers['x-request-id'];
-    const requestId = existingID ? (existingID as string) : generateId('req');
-    req.id = requestId;
+/** 请求上下文装配：req.id / req.log / X-Request-Id 头（API 与 SSR 共用）。 */
+async function applyRequestContext(
+  req: Request,
+  res: Response,
+  authService: AuthService,
+): Promise<string> {
+  const existingID = req.id ?? req.headers['x-request-id'];
+  const requestId = existingID ? (existingID as string) : generateId('req');
+  req.id = requestId;
 
-    const loggerMeta: Record<string, string> = { requestId };
+  const loggerMeta: Record<string, string> = { requestId };
+  const sessionId = await authService
+    .getSessionId(req.headers.cookie ?? '')
+    .catch(() => null);
+  if (sessionId) {
+    loggerMeta.sessionId = sessionId;
+  }
+  req.log = Logger.child(loggerMeta);
+  res.setHeader('X-Request-Id', requestId);
+  return requestId;
+}
 
-    // Try to get sessionId if available
-    const sessionId = await authService
-      .getSessionId(req.headers.cookie ?? '')
-      .catch(() => null);
-    if (sessionId) {
-      loggerMeta.sessionId = sessionId;
-    }
-
-    req.log = Logger.child(loggerMeta);
-    res.setHeader('X-Request-Id', requestId);
-
+/** SSR 侧请求上下文中间件（post-init 路由不经 Nest middleware，单独套用）。 */
+export const ssrRequestContext =
+  (authService: AuthService) =>
+  async (req: Request, res: Response, next: NextFunction) => {
+    const requestId = await applyRequestContext(req, res, authService);
     // server span / http 指标 / 日志 trace 关联均由 tracing.ts 的官方插桩接管
     //（HttpInstrumentation 的 span 在此处已 active，TraceContext 顺流而下）。
     TraceContext.run({ requestId }, next);
+  };
+
+/** /api 访问日志：进出各一条（prod header 白名单，不落凭据）。 */
+function accessLog(req: Request, res: Response, next: NextFunction): void {
+  const headers = isProd
+    ? Object.fromEntries(
+        SAFE_HEADERS.filter(k => req.headers[k] != null).map(k => [
+          k,
+          req.headers[k],
+        ]),
+      )
+    : req.headers;
+
+  req.log.info(`-> ${req.method} ${req.originalUrl}`, {
+    type: '->',
+    method: req.method,
+    url: req.originalUrl,
+    ip: clientIp(req),
+    headers,
   });
 
-  app.use('/api', (req, res, next) => {
-    // prod 白名单 headers（不落 cookie/authorization）；dev 全量保留。
-    const headers = isProd
-      ? Object.fromEntries(
-          SAFE_HEADERS.filter(k => req.headers[k] != null).map(k => [
-            k,
-            req.headers[k],
-          ]),
-        )
-      : req.headers;
-
-    req.log.info(`-> ${req.method} ${req.originalUrl}`, {
-      type: '->',
+  res.on('finish', () => {
+    req.log.info(`<- ${res.statusCode} ${req.method} ${req.originalUrl}`, {
+      type: '<-',
       method: req.method,
       url: req.originalUrl,
       ip: clientIp(req),
-      headers,
+      statusCode: res.statusCode,
+      statusMessage: res.statusMessage,
     });
-
-    res.on('finish', () => {
-      req.log.info(`<- ${res.statusCode} ${req.method} ${req.originalUrl}`, {
-        type: '<-',
-        method: req.method,
-        url: req.originalUrl,
-        ip: clientIp(req),
-        statusCode: res.statusCode,
-        statusMessage: res.statusMessage,
-      });
-    });
-
-    next();
   });
-};
+
+  next();
+}
+
+/** Nest 全局中间件：请求上下文 + 访问日志（覆盖全部 /api 路由，含 auth 透传）。 */
+@Injectable()
+export class RequestIdMiddleware implements NestMiddleware {
+  constructor(@Inject(AuthService) private readonly authService: AuthService) {}
+
+  async use(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const requestId = await applyRequestContext(req, res, this.authService);
+    TraceContext.run({ requestId }, () => accessLog(req, res, next));
+  }
+}

@@ -61,8 +61,16 @@ export class AgentService {
       id => !inlineSet.has(id) && !excludeSet.has(id),
     );
     const members: ToolMember[] = [
-      ...inlineIds.map(id => ({ id, mode: 'inline' as const })),
-      ...listedIds.map(id => ({ id, mode: 'listed' as const })),
+      ...inlineIds.map(id => ({
+        id,
+        mode: 'inline' as const,
+        concurrency: this.toolService.resolve(id)?.config.concurrency,
+      })),
+      ...listedIds.map(id => ({
+        id,
+        mode: 'listed' as const,
+        concurrency: this.toolService.resolve(id)?.config.concurrency,
+      })),
     ];
     const skillIds = this.skillService
       .getCachedSkillIds()

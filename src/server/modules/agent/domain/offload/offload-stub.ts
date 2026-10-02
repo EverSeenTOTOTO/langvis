@@ -43,7 +43,7 @@ export function candidateBody(msg: LlmMessage): Candidate | null {
     // 仅当可解析为 ReAct 报文时才作候选——不可解析的 assistant（如自由文本）不动。
     try {
       const parsed = parseResponse(msg.content);
-      return { kind: 'assistant', body: msg.content, parsed };
+      return { kind: 'assistant', body: msg.content, parsed: parsed[0]! };
     } catch {
       return null;
     }
@@ -120,7 +120,7 @@ export function parseAssistantAt(
   const m = messages[i];
   if (!m || m.role !== 'assistant') return null;
   try {
-    return parseResponse(m.content);
+    return parseResponse(m.content)[0] ?? null;
   } catch {
     return null;
   }

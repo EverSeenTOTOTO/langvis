@@ -29,8 +29,14 @@ export interface BashOutput {
 
 export const config = {
   name: 'bash',
-  description:
-    'Execute a shell command in the workspace directory. Read-only commands confined to the workspace run without confirmation; anything else (writes, execution, out-of-workspace paths, shell metacharacters) requires user approval. In sub-agent runs only already-approved commands run — the rest fail fast. Prefer modern CLI tools: use `rg` instead of `grep`, `fd` instead of `find`, `lsd` instead of `ls`, `bat` instead of `cat`.',
+  description: [
+    'Execute a shell command in the workspace directory. Read-only commands confined to the workspace run without confirmation; anything else (writes, execution, out-of-workspace paths, shell metacharacters) requires user approval. In sub-agent runs only already-approved commands run — the rest fail fast.',
+    'Efficiency: prefer quiet flags (`npm install --silent`, `curl -s`) and disable pagers (`git --no-pager`, `PAGER=cat`) — interactive pagers hang the non-interactive shell and noisy output wastes context.',
+    'Non-interactive shell: commands that wait for input (e.g. `vim`, `ssh`, prompts) will hang until timeout. Pass `-y`/`--yes`/`--force` flags where available; avoid interactive TUIs entirely.',
+    'Timeout kills the process — a timedOut result means "too slow", not "failed": for long tasks (servers, watchers, builds) use background:true and poll with wait instead.',
+    'stdout/stderr are truncated at 1MB. When truncated, re-run with a narrower command (e.g. `sed -n` line ranges, `rg -m` match caps) instead of repeating the full output.',
+    'Prefer dedicated tools over shell when they fit: file edits go through edit_file; prefer `rg` instead of `grep`, `fd` instead of `find`, `lsd` instead of `ls`, `bat` instead of `cat`.',
+  ].join('\n'),
   untrustedOutput: true,
   inputSchema: {
     type: 'object',

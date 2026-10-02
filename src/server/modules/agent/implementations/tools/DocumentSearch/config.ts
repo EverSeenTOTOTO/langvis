@@ -24,6 +24,7 @@ export interface DocumentSearchOutput {
 
 export const config: ToolConfig<DocumentSearchInput, DocumentSearchOutput> = {
   name: 'DocumentSearch Tool',
+  concurrency: 'parallel',
   untrustedOutput: true,
   description:
     'Semantic search for document chunks based on query text using vector similarity.',

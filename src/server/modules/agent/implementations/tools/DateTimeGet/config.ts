@@ -10,6 +10,7 @@ export const config: ToolConfig<
   }
 > = {
   name: 'DateTime Tool',
+  concurrency: 'parallel',
   description:
     'Get the current date and time, optionally in a given timezone and format.',
   inputSchema: {

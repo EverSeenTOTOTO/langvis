@@ -7,6 +7,8 @@ export function createActivationMessages(params: {
   userId: string;
   workDir: string;
   systemPrompt: string;
+  /** 环境快照（日期/平台/git 概要/目录树）；缺省回退仅 workDir。 */
+  environment?: string;
 }): Message[] {
   const baseTime = Date.now();
   let index = 0;
@@ -22,10 +24,12 @@ export function createActivationMessages(params: {
     conversationId: params.conversationId,
   });
 
+  const contextBody =
+    params.environment ?? `Workspace Directory: ${params.workDir}`;
   messages.push({
     id: generateId('msg'),
     role: Role.USER,
-    content: `<session-context>\nUser ID: ${params.userId}\nWorkspace Directory: ${params.workDir}\n</session-context>`,
+    content: `<session-context>\nUser ID: ${params.userId}\n${contextBody}\n</session-context>`,
     attachments: null,
     meta: { kind: 'context' },
     createdAt: new Date(baseTime + index++),

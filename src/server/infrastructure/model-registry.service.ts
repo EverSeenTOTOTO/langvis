@@ -22,7 +22,7 @@ function resolveEnvVars(value: string): string {
   });
 }
 
-export class ProviderService {
+export class ModelRegistryService {
   private providers: Map<string, ProviderDefinition> = new Map();
   private models: Map<string, ModelDefinition> = new Map();
 

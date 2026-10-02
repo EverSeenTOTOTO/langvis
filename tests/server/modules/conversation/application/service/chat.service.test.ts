@@ -41,6 +41,9 @@ function makeMockAgentRunRepo(): AgentRunRepositoryPort {
 function makeMockWorkspace(): WorkspaceService {
   return {
     getWorkDir: vi.fn().mockResolvedValue('/tmp/workdir'),
+    environmentSnapshot: vi
+      .fn()
+      .mockResolvedValue("Today's date: Friday, October 2, 2026"),
   } as unknown as WorkspaceService;
 }
 
@@ -111,6 +114,15 @@ describe('ChatService', () => {
             meta: { kind: 'context' },
           }),
         ]),
+      );
+      const contextMessage = (
+        messageRepo.batchCreate as any
+      ).mock.calls[0][1].find((m: any) => m.meta?.kind === 'context');
+      expect(contextMessage.content).toContain(
+        '<session-context>\nUser ID: user_1',
+      );
+      expect(contextMessage.content).toContain(
+        "Today's date: Friday, October 2, 2026",
       );
     });
 

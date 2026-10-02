@@ -3,7 +3,7 @@ import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-r
 import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
 import type { RunEvent } from '@/shared/types/events';
 import { estimateTokens } from '@/server/utils/estimateTokens';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import Logger from '@/server/utils/logger';
 
 export class LoopUsageHook implements Hook {
@@ -12,13 +12,13 @@ export class LoopUsageHook implements Hook {
   private readonly logger = Logger.child({ source: 'LoopUsageHook' });
 
   constructor(
-    @Inject(ProviderService)
-    private readonly providerService: ProviderService,
+    @Inject(ModelRegistryService)
+    private readonly modelRegistry: ModelRegistryService,
   ) {}
 
   async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
     const used = estimateTokens(ctx.messages);
-    const total = this.providerService.resolveContextSize(
+    const total = this.modelRegistry.resolveContextSize(
       ctx.config.runtimeConfig,
     );
     this.logger.debug(

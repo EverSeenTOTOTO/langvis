@@ -7,7 +7,7 @@ import type {
 } from 'openai/resources/chat/completions';
 import logger from '@/server/utils/logger';
 import { traceGen, traceSync } from '@/server/otel';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import { stripThinking } from '@/server/utils/llm-text';
 import type { ModelDefinition, ModelType } from '@/shared/types/provider';
 import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
@@ -19,6 +19,11 @@ import type {
 } from '@/server/infrastructure/llm/llm.types';
 import { Inject } from '@nestjs/common';
 import { Role, type LlmMessage, type Message } from '@/shared/types/entities';
+import {
+  LLM_STREAM_MAX_RETRIES,
+  withRetry,
+  withStreamRetry,
+} from '@/server/infrastructure/llm/llm-retry';
 
 /** Embedding API 单次批量上限——超过则自动分批串行拼接，对调用方透明。 */
 const EMBED_BATCH_SIZE = Number(process.env.EMBED_BATCH_SIZE) || 32;
@@ -129,14 +134,15 @@ export class LlmProvider implements LlmPort {
   private clientCache = new Map<string, OpenAI>();
 
   constructor(
-    @Inject(ProviderService) private readonly providerService: ProviderService,
+    @Inject(ModelRegistryService)
+    private readonly modelRegistry: ModelRegistryService,
   ) {}
 
   private getOrCreateClient(providerId: string): OpenAI {
     const cached = this.clientCache.get(providerId);
     if (cached) return cached;
 
-    const provider = this.providerService.getProvider(providerId);
+    const provider = this.modelRegistry.getProvider(providerId);
     if (!provider) {
       throw new Error(`Provider not found: ${providerId}`);
     }
@@ -167,14 +173,14 @@ export class LlmProvider implements LlmPort {
 
   private resolveModel(modelId: string | undefined, type: ModelType): string {
     if (modelId) return modelId;
-    const model = this.providerService.getDefaultModel(type);
+    const model = this.modelRegistry.getDefaultModel(type);
     if (!model) throw new Error(`No ${type} model available`);
     return model.id;
   }
 
   /** 某 type 的默认模型（委托 registry）*/
   getDefaultModel(type: ModelType): ModelDefinition | undefined {
-    return this.providerService.getDefaultModel(type);
+    return this.modelRegistry.getDefaultModel(type);
   }
 
   async *chat(
@@ -187,7 +193,7 @@ export class LlmProvider implements LlmPort {
     const modelCode = this.resolveModelCode(resolved);
     const client = this.getOrCreateClient(providerId);
 
-    const modelDef = this.providerService.getModel(resolved);
+    const modelDef = this.modelRegistry.getModel(resolved);
     const defaults = modelDef?.defaults;
     const defaultParams = {
       temperature: defaults?.temperature,
@@ -200,54 +206,74 @@ export class LlmProvider implements LlmPort {
 
     logLLMRequest(resolved, data, defaultParams.temperature, messages);
 
-    return yield* traceGen(
-      'gen_ai.chat',
-      {
-        'gen_ai.request.model': resolved,
-        'gen_ai.provider': providerId,
-        'gen_ai.request.message_count': messages.length,
-      },
-      span =>
-        (async function* () {
-          const response = await client.chat.completions.create(
-            {
-              model: modelCode,
-              ...defaultParams,
-              ...data,
-              messages,
-              stream: true as const,
-            },
-            { signal },
-          );
+    // 单次尝试的完整流式调用（create + 消费）；首 delta 前失败可重试
+    const makeAttempt = () =>
+      traceGen(
+        'gen_ai.chat',
+        {
+          'gen_ai.request.model': resolved,
+          'gen_ai.provider': providerId,
+          'gen_ai.request.message_count': messages.length,
+        },
+        span =>
+          (async function* () {
+            const response = await client.chat.completions.create(
+              {
+                model: modelCode,
+                ...defaultParams,
+                ...data,
+                messages,
+                stream: true as const,
+              },
+              { signal },
+            );
 
-          let content = '';
+            let content = '';
 
-          for await (const chunk of response) {
-            const choice = chunk?.choices?.[0];
-            const delta = choice?.delta?.content;
-            const finishReason = choice?.finish_reason;
+            for await (const chunk of response) {
+              const choice = chunk?.choices?.[0];
+              const delta = choice?.delta?.content;
+              const finishReason = choice?.finish_reason;
 
-            if (delta) {
-              content += delta;
-              yield delta;
-            }
+              if (delta) {
+                content += delta;
+                yield delta;
+              }
 
-            if (finishReason) {
-              span.setAttribute('gen_ai.response.finish_reason', finishReason);
-              if (finishReason === 'content_filter') {
-                throw new Error(
-                  'Content filter triggered - response incomplete.',
+              if (finishReason) {
+                span.setAttribute(
+                  'gen_ai.response.finish_reason',
+                  finishReason,
                 );
+                if (finishReason === 'content_filter') {
+                  throw new Error(
+                    'Content filter triggered - response incomplete.',
+                  );
+                }
+                if (finishReason === 'length') {
+                  logger.warn('LLM stream truncated: max_tokens limit reached');
+                }
+                break;
               }
-              if (finishReason === 'length') {
-                logger.warn('LLM stream truncated: max_tokens limit reached');
-              }
-              break;
             }
-          }
 
-          return content;
-        })(),
+            return content;
+          })(),
+      );
+
+    return yield* withStreamRetry(
+      makeAttempt,
+      signal,
+      (attempt, err, delay) => {
+        const apiError = err as APIError;
+        logger.warn(`LLM stream retry ${attempt}/${LLM_STREAM_MAX_RETRIES}`, {
+          model: resolved,
+          provider: providerId,
+          status: apiError?.status ?? 'unknown',
+          delayMs: delay,
+          error: apiError?.error ?? apiError?.message ?? String(err),
+        });
+      },
     );
   }
 
@@ -261,7 +287,7 @@ export class LlmProvider implements LlmPort {
     const modelCode = this.resolveModelCode(resolved);
     const client = this.getOrCreateClient(providerId);
 
-    const modelDef = this.providerService.getModel(resolved);
+    const modelDef = this.modelRegistry.getModel(resolved);
     const defaults = modelDef?.defaults;
     const defaultParams = {
       temperature: defaults?.temperature,
@@ -275,58 +301,77 @@ export class LlmProvider implements LlmPort {
     logLLMRequest(resolved, data, defaultParams.temperature, messages);
 
     const startedAt = Date.now();
-    return traceSync(
-      'gen_ai.chat',
-      {
-        'gen_ai.request.model': resolved,
-        'gen_ai.provider': providerId,
-        'gen_ai.request.message_count': messages.length,
-      },
-      async span => {
-        try {
-          const response = await client.chat.completions.create(
-            {
-              model: modelCode,
-              ...defaultParams,
-              ...data,
-              messages,
-              stream: false,
-            },
-            { signal },
-          );
+    return withRetry(
+      () =>
+        traceSync(
+          'gen_ai.chat',
+          {
+            'gen_ai.request.model': resolved,
+            'gen_ai.provider': providerId,
+            'gen_ai.request.message_count': messages.length,
+          },
+          async span => {
+            try {
+              const response = await client.chat.completions.create(
+                {
+                  model: modelCode,
+                  ...defaultParams,
+                  ...data,
+                  messages,
+                  stream: false,
+                },
+                { signal },
+              );
 
-          const content = response.choices[0]?.message?.content ?? '';
-          const finishReason = response.choices[0]?.finish_reason;
+              const content = response.choices[0]?.message?.content ?? '';
+              const finishReason = response.choices[0]?.finish_reason;
 
-          span.setAttribute(
-            'gen_ai.response.finish_reason',
-            finishReason ?? 'none',
-          );
-          span.setAttribute('gen_ai.response.content_length', content.length);
+              span.setAttribute(
+                'gen_ai.response.finish_reason',
+                finishReason ?? 'none',
+              );
+              span.setAttribute(
+                'gen_ai.response.content_length',
+                content.length,
+              );
 
-          if (finishReason === 'content_filter') {
-            throw new Error('Content filter triggered - response incomplete.');
-          }
-          if (finishReason === 'length') {
-            logger.warn('LLM response truncated: max_tokens limit reached');
-          }
+              if (finishReason === 'content_filter') {
+                throw new Error(
+                  'Content filter triggered - response incomplete.',
+                );
+              }
+              if (finishReason === 'length') {
+                logger.warn('LLM response truncated: max_tokens limit reached');
+              }
 
-          logger.info('LLM call done', {
-            model: resolved,
-            durationMs: Date.now() - startedAt,
-          });
-          return stripThinking(content);
-        } catch (err) {
-          const apiError = err as APIError;
-          logger.error('LLM call failed', {
-            model: resolved,
-            provider: providerId,
-            status: apiError?.status ?? 'unknown',
-            durationMs: Date.now() - startedAt,
-            error: apiError?.error ?? apiError?.message ?? String(err),
-          });
-          throw err;
-        }
+              logger.info('LLM call done', {
+                model: resolved,
+                durationMs: Date.now() - startedAt,
+              });
+              return stripThinking(content);
+            } catch (err) {
+              const apiError = err as APIError;
+              logger.error('LLM call failed', {
+                model: resolved,
+                provider: providerId,
+                status: apiError?.status ?? 'unknown',
+                durationMs: Date.now() - startedAt,
+                error: apiError?.error ?? apiError?.message ?? String(err),
+              });
+              throw err;
+            }
+          },
+        ),
+      signal,
+      (attempt, err, delay) => {
+        const apiError = err as APIError;
+        logger.warn(`LLM retry ${attempt}/${LLM_STREAM_MAX_RETRIES}`, {
+          model: resolved,
+          provider: providerId,
+          status: apiError?.status ?? 'unknown',
+          delayMs: delay,
+          error: apiError?.error ?? apiError?.message ?? String(err),
+        });
       },
     );
   }
@@ -339,10 +384,10 @@ export class LlmProvider implements LlmPort {
     const resolved = this.resolveModel(modelId, 'embedding');
     const providerId = this.resolveProviderId(resolved);
     const modelCode = this.resolveModelCode(resolved);
-    const provider = this.providerService.getProvider(providerId);
+    const provider = this.modelRegistry.getProvider(providerId);
     if (!provider) throw new Error(`Provider not found: ${providerId}`);
 
-    const model = this.providerService.getModel(resolved);
+    const model = this.modelRegistry.getModel(resolved);
     const endpoint = model?.endpoint ?? '/embeddings';
     const url = `${provider.baseUrl}${endpoint}`;
     const headers = {
@@ -382,10 +427,10 @@ export class LlmProvider implements LlmPort {
   ): Promise<TextToSpeechOutput> {
     const resolved = this.resolveModel(modelId, 'tts');
     const providerId = this.resolveProviderId(resolved);
-    const provider = this.providerService.getProvider(providerId);
+    const provider = this.modelRegistry.getProvider(providerId);
     if (!provider) throw new Error(`Provider not found: ${providerId}`);
 
-    const model = this.providerService.getModel(resolved);
+    const model = this.modelRegistry.getModel(resolved);
     const endpoint = model?.endpoint ?? '/tts';
     const url = `${provider.baseUrl.replace(/\/v1$/, '')}${endpoint}`;
 
@@ -454,10 +499,10 @@ export class LlmProvider implements LlmPort {
     const resolved = this.resolveModel(modelId, 'stt');
     const providerId = this.resolveProviderId(resolved);
     const modelCode = this.resolveModelCode(resolved);
-    const provider = this.providerService.getProvider(providerId);
+    const provider = this.modelRegistry.getProvider(providerId);
     if (!provider) throw new Error(`Provider not found: ${providerId}`);
 
-    const model = this.providerService.getModel(resolved);
+    const model = this.modelRegistry.getModel(resolved);
     const endpoint = model?.endpoint ?? '/audio/transcriptions';
     const url = `${provider.baseUrl}${endpoint}`;
 

@@ -15,7 +15,7 @@ import {
 import { fold } from '@/server/shared/compaction';
 import { LLM_PORT } from '@/server/infrastructure/llm/llm.tokens';
 import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
-import { ProviderService } from '@/server/infrastructure/provider.service';
+import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import Logger from '@/server/utils/logger';
 
@@ -28,8 +28,8 @@ export class ConvFoldStage implements ContextStage {
   constructor(
     @Inject(MESSAGE_REPOSITORY)
     private readonly messageRepo: MessageRepositoryPort,
-    @Inject(ProviderService)
-    private readonly providerService: ProviderService,
+    @Inject(ModelRegistryService)
+    private readonly modelRegistry: ModelRegistryService,
     @Inject(LLM_PORT) private readonly llm: LlmPort,
   ) {}
 
@@ -37,7 +37,7 @@ export class ConvFoldStage implements ContextStage {
     if (target.kind !== 'conv') return;
     const ctx = target;
 
-    const contextSize = this.providerService.resolveContextSize(
+    const contextSize = this.modelRegistry.resolveContextSize(
       ctx.runtimeConfig,
     );
     if (!contextSize) {
