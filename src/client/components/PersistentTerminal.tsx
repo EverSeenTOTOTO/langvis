@@ -65,6 +65,10 @@ const TerminalCanvas = () => {
           fit = new FitAddon();
           term.loadAddon(fit);
           term.open(containerRef.current);
+          // CLI 经 OSC 0/2 设置的窗口标题 → 浏览器标签页标题(dynamicWindowTitle 链路终点)
+          term.onTitleChange((title: string) => {
+            document.title = title;
+          });
           term.onData((data: string) => {
             if (wsRef.current?.readyState === WebSocket.OPEN) {
               wsRef.current.send(data);
@@ -180,6 +184,7 @@ const TerminalCanvas = () => {
 export default function PersistentTerminal() {
   const { pathname } = useLocation();
   const [everVisited, setEverVisited] = useState(booted);
+  const [keyboardOwned, setKeyboardOwned] = useState(false);
   const visible = pathname === '/terminal' || pathname.startsWith('/terminal/');
 
   useEffect(() => {
@@ -188,6 +193,57 @@ export default function PersistentTerminal() {
       setEverVisited(true);
     }
   }, [visible]);
+
+  // 全屏退出（含长按 Esc）时同步释放键盘锁
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        (
+          navigator as { keyboard?: { unlock?: () => void } }
+        ).keyboard?.unlock?.();
+        setKeyboardOwned(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () =>
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  // ctrl+w/t/n 等浏览器保留键只有 Keyboard Lock API（需全屏）才能捕获；
+  // 锁定后按键正常送达页面，由 xterm 译成终端序列（ctrl+w → 删词）。
+  const toggleKeyboardLock = async () => {
+    const kb = (
+      navigator as {
+        keyboard?: {
+          lock?: (keys: string[]) => Promise<void>;
+          unlock?: () => void;
+        };
+      }
+    ).keyboard;
+    if (keyboardOwned) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        /* ignore */
+      }
+      kb?.unlock?.();
+      setKeyboardOwned(false);
+      return;
+    }
+    try {
+      await document.documentElement.requestFullscreen();
+      await kb?.lock?.(['KeyW', 'KeyT', 'KeyN', 'KeyR']);
+      setKeyboardOwned(true);
+    } catch {
+      setKeyboardOwned(false);
+    }
+  };
+
+  const keyboardLockSupported =
+    typeof navigator !== 'undefined' &&
+    'keyboard' in navigator &&
+    typeof (navigator as { keyboard?: { lock?: unknown } }).keyboard?.lock ===
+      'function';
 
   if (!everVisited) return null;
 
@@ -206,6 +262,20 @@ export default function PersistentTerminal() {
       }}
     >
       <TerminalCanvas />
+      {keyboardLockSupported && (
+        <Button
+          size="small"
+          onClick={() => void toggleKeyboardLock()}
+          style={{ position: 'absolute', top: 16, right: 24, zIndex: 10 }}
+          title={
+            keyboardOwned
+              ? '已捕获浏览器快捷键（长按 Esc 退出全屏）'
+              : '全屏并捕获浏览器快捷键（ctrl+w 删词等直达终端）'
+          }
+        >
+          {keyboardOwned ? '⌨ 键盘已捕获' : '⌨ 捕获快捷键'}
+        </Button>
+      )}
     </div>
   );
 }
