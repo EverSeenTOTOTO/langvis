@@ -34,4 +34,9 @@ export interface MessageRepositoryPort {
   update(messageId: string, partial: Partial<Message>): Promise<Message | null>;
 
   deleteAfter(conversationId: string, afterMessageId: string): Promise<boolean>;
+
+  /** 批量会话统计（/resume 列表）：消息数 + 最近一条对话 user 消息预览。 */
+  statsForConversations(
+    conversationIds: string[],
+  ): Promise<Map<string, { count: number; lastUserMessage: string | null }>>;
 }

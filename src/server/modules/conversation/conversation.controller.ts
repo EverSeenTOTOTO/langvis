@@ -150,7 +150,7 @@ export class ConversationController {
   }
 
   // steps/status 读模型组装在 GetMessagesHandler；controller 只做 HTTP 适配。
-  /** rewind：截断该 user 消息起的会话（纯对话回退，不动文件——文件交给 git）。 */
+  // rewind：截断该 user 消息起的会话（纯对话回退，不动文件——文件交给 git）。 会话锁内执行——与 turn 发起/出队互斥，防截断窗口内新 turn 落库被误删。
   @Post(':id/rewind/:messageId')
   async rewind(
     @Req() req: Request,
@@ -163,27 +163,29 @@ export class ConversationController {
       throw new HttpException({ error: 'Conversation not found' }, 404);
     }
 
-    if (this.sessionManager.hasActiveRuns(id)) {
-      throw new HttpException(
-        { error: 'Run in flight — wait or cancel before rewinding' },
-        409,
+    return this.sessionManager.withConversationLock(id, async () => {
+      if (this.sessionManager.hasActiveRuns(id)) {
+        throw new HttpException(
+          { error: 'Run in flight — wait or cancel before rewinding' },
+          409,
+        );
+      }
+
+      const messages = await this.messageRepo.findByConversationId(id);
+      const idx = messages.findIndex(
+        m => m.id === messageId && m.role === Role.USER,
       );
-    }
+      if (idx === -1) {
+        throw new HttpException({ error: 'No such turn' }, 404);
+      }
+      const doomed = messages.slice(idx).map(m => m.id);
+      await this.messageRepo.batchDeleteInConversation(id, doomed);
 
-    const messages = await this.messageRepo.findByConversationId(id);
-    const idx = messages.findIndex(
-      m => m.id === messageId && m.role === Role.USER,
-    );
-    if (idx === -1) {
-      throw new HttpException({ error: 'No such turn' }, 404);
-    }
-    const doomed = messages.slice(idx).map(m => m.id);
-    await this.messageRepo.batchDeleteInConversation(id, doomed);
+      // 逐出内存会话——下一 turn 从 DB 重建上下文；后台 bash 任务一并清理
+      this.sessionManager.disposeChat(id);
 
-    // 逐出内存会话——下一 turn 从 DB 重建上下文；后台 bash 任务一并清理
-    this.sessionManager.disposeChat(id);
-
-    return { id, messageId, restored: true, deletedMessages: doomed.length };
+      return { id, messageId, restored: true, deletedMessages: doomed.length };
+    });
   }
 
   @Get(':id/messages')

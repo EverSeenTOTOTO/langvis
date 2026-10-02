@@ -114,4 +114,46 @@ export class MessageRepository implements MessageRepositoryPort {
       .execute();
     return true;
   }
+
+  async statsForConversations(
+    conversationIds: string[],
+  ): Promise<Map<string, { count: number; lastUserMessage: string | null }>> {
+    const result = new Map<
+      string,
+      { count: number; lastUserMessage: string | null }
+    >();
+    if (conversationIds.length === 0) return result;
+    const repo = this.db.getRepository(MessageEntity);
+
+    const countRows = await repo
+      .createQueryBuilder('m')
+      .select('m.conversationId', 'cid')
+      .addSelect('COUNT(*)', 'n')
+      .where('m.conversationId IN (:...ids)', { ids: conversationIds })
+      .groupBy('m.conversationId')
+      .getRawMany();
+    for (const row of countRows) {
+      result.set(row.cid, {
+        count: Number(row.n),
+        lastUserMessage: null,
+      });
+    }
+
+    // DISTINCT ON 取每会话最近一条 user 消息（排除 meta.kind 脚手架）。
+    // 列名用引号包 camelCase——TypeORM 默认列名=属性名。
+    const latestRows: Array<{ cid: string; content: string | null }> =
+      await repo.query(
+        `SELECT DISTINCT ON ("conversationId") "conversationId" AS cid, content
+         FROM messages
+         WHERE "conversationId" = ANY($1) AND role = $2 AND (meta->>'kind') IS NULL
+         ORDER BY "conversationId", "createdAt" DESC`,
+        [conversationIds, Role.USER],
+      );
+    for (const row of latestRows) {
+      const stat = result.get(row.cid) ?? { count: 0, lastUserMessage: null };
+      stat.lastUserMessage = row.content?.slice(0, 60) ?? null;
+      result.set(row.cid, stat);
+    }
+    return result;
+  }
 }
