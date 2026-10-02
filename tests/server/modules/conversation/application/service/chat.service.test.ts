@@ -18,7 +18,11 @@ function makeMockMessageRepo(): MessageRepositoryPort {
     save: vi.fn().mockResolvedValue({} as any),
     batchDeleteInConversation: vi.fn().mockResolvedValue(undefined),
     update: vi.fn().mockResolvedValue(null),
-    deleteAfter: vi.fn().mockResolvedValue(false),
+    deleteAfter: vi.fn(),
+    statsForConversations: vi
+      .fn()
+      .mockResolvedValue(new Map())
+      .mockResolvedValue(false),
   };
 }
 

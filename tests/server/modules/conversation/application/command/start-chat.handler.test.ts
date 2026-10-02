@@ -30,6 +30,9 @@ function makeSessionManager(seed: Message[] = []) {
     sendFrame: vi.fn(),
     hasActiveRuns: vi.fn().mockReturnValue(false),
     enqueueTurn: vi.fn(),
+    withConversationLock: (_id: string, fn: () => Promise<unknown>) => fn(),
+    markTurnStarting: vi.fn(),
+    unmarkTurnStarting: vi.fn(),
   } as unknown as SessionManager & { ctx: typeof ctx };
 }
 

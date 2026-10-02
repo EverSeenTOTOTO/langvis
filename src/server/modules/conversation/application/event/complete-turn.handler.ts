@@ -67,41 +67,53 @@ export class CompleteTurnHandler {
     }
   }
 
-  /** steering 出队：本轮结束后 FIFO 发起下一个排队 turn（turn 已持久化，只补 ctx 投影与 TurnInitiated）。 */
+  // steering 出队:FIFO 发起下一个排队 turn(已持久化,补 ctx 投影与 TurnInitiated)。会话锁内执行。
   private async drainQueuedTurn(conversationId: string): Promise<void> {
-    const assistantId = this.sessionManager.dequeueTurn(conversationId);
-    if (!assistantId) return;
+    await this.sessionManager.withConversationLock(conversationId, async () => {
+      const assistantId = this.sessionManager.dequeueTurn(conversationId);
+      if (!assistantId) return;
 
-    const ctx = this.sessionManager.getCtx(conversationId);
-    const { turns, workDir } = await this.chatService.listPendingTurns(
-      conversationId,
-      [assistantId],
-    );
-    if (turns.length === 0) {
-      this.logger.warn(`queued turn missing persisted pair`, {
+      const ctx = this.sessionManager.getCtx(conversationId);
+      const { turns, workDir } = await this.chatService.listPendingTurns(
+        conversationId,
+        [assistantId],
+      );
+      if (turns.length === 0) {
+        this.logger.warn(`queued turn missing persisted pair`, {
+          chatId: conversationId,
+          assistantId,
+        });
+        return;
+      }
+      for (const turn of turns) ctx.messages.push(turn.userMessage);
+
+      for await (const frame of runConvTransforms(ctx, 'turn-start')) {
+        if (frame) this.sessionManager.sendFrame(conversationId, frame);
+      }
+
+      const assistantMessage = turns[0]!.assistantMessage;
+      this.sessionManager.markTurnStarting(conversationId, assistantMessage.id);
+      try {
+        this.eventBus.publish(
+          new TurnInitiated(conversationId, {
+            conversationId,
+            assistantMessage,
+            runtimeConfig: ctx.runtimeConfig,
+            effectiveHistory: projectToLlmMessages(ctx.messages),
+            workDir,
+          }),
+        );
+      } catch (err) {
+        this.sessionManager.unmarkTurnStarting(
+          conversationId,
+          assistantMessage.id,
+        );
+        throw err;
+      }
+      this.logger.info(`Drained queued turn`, {
         chatId: conversationId,
         assistantId,
       });
-      return;
-    }
-    for (const turn of turns) ctx.messages.push(turn.userMessage);
-
-    for await (const frame of runConvTransforms(ctx, 'turn-start')) {
-      if (frame) this.sessionManager.sendFrame(conversationId, frame);
-    }
-
-    this.eventBus.publish(
-      new TurnInitiated(conversationId, {
-        conversationId,
-        assistantMessage: turns[0]!.assistantMessage,
-        runtimeConfig: ctx.runtimeConfig,
-        effectiveHistory: projectToLlmMessages(ctx.messages),
-        workDir,
-      }),
-    );
-    this.logger.info(`Drained queued turn`, {
-      chatId: conversationId,
-      assistantId,
     });
   }
 }

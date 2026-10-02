@@ -59,6 +59,60 @@ function makeManager(activeMessages: unknown[] = []): {
 describe('SessionManager', () => {
   const conversationId = 'conv_1';
 
+  describe('withConversationLock / markTurnStarting（check-then-act 竞态互斥）', () => {
+    it('并发获取按到达顺序串行执行', async () => {
+      const { manager } = makeManager();
+      const order: number[] = [];
+      const gate1 = (() => {
+        let resolve!: () => void;
+        const p = new Promise<void>(r => (resolve = r));
+        return { p, resolve };
+      })();
+
+      const first = manager
+        .withConversationLock(conversationId, async () => {
+          order.push(1);
+          await gate1.p;
+        })
+        .then(() => order.push(3));
+      const second = manager
+        .withConversationLock(conversationId, async () => {
+          order.push(2);
+        })
+        .then(() => order.push(4));
+
+      await new Promise(r => setTimeout(r, 10));
+      gate1.resolve();
+      await Promise.all([first, second]);
+      expect(order).toEqual([1, 2, 3, 4]);
+    });
+
+    it('前序失败不阻塞后续获取', async () => {
+      const { manager } = makeManager();
+      const first = manager.withConversationLock(conversationId, async () => {
+        throw new Error('boom');
+      });
+      await expect(first).rejects.toThrow('boom');
+      const ran = await manager.withConversationLock(
+        conversationId,
+        async () => 'ok',
+      );
+      expect(ran).toBe('ok');
+    });
+
+    it('markTurnStarting 让 hasActiveRuns 在 RunStarted 前的窗口内为真；registerRun 接管后清标记', () => {
+      const { manager } = makeManager();
+      expect(manager.hasActiveRuns(conversationId)).toBe(false);
+      manager.markTurnStarting(conversationId, 'msg_a');
+      expect(manager.hasActiveRuns(conversationId)).toBe(true);
+      manager.registerRun(conversationId, 'msg_a', 'run_1');
+      // run 已登记（session 内活跃），标记已清
+      expect(manager.hasActiveRuns(conversationId)).toBe(true);
+      manager.finalizeRun(conversationId, 'msg_a');
+      expect(manager.hasActiveRuns(conversationId)).toBe(false);
+    });
+  });
+
   describe('initSession（连接生命周期——孤儿对账已移至启动期 OrphanRunReconciler）', () => {
     it('新会话：attach 传输(发 connected 握手) 并登记进程内会话状态，不对账孤儿、不重放 run_view', async () => {
       const { manager, chat } = makeManager([

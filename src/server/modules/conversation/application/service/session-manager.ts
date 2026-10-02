@@ -55,6 +55,7 @@ export class SessionManager implements OnApplicationShutdown {
       this.sessions.delete(conversationId);
       session.dispose(); // 连接 idle 自释放路径下 connection 已 undefined，此处 no-op
     }
+    this.startingTurns.delete(conversationId);
     disposeConversationTasks(conversationId); // 后台 bash 任务随会话清理，不留孤儿进程
     this.startedAt.delete(conversationId);
     this.logger.debug(`Chat disposed`, { chatId: conversationId });
@@ -138,10 +139,50 @@ export class SessionManager implements OnApplicationShutdown {
     return this.sessions.get(conversationId)?.sendFrame(frame) ?? false;
   }
 
-  /** steering：该会话是否有活跃 run（决定新消息排队还是直发）。 */
+  /** steering：该会话是否有活跃 run（决定新消息排队还是直发；含已持久化未登记的发起中 turn）。 */
   hasActiveRuns(conversationId: string): boolean {
     const session = this.sessions.get(conversationId);
-    return !!session && !session.hasNoRuns;
+    return (
+      (!!session && !session.hasNoRuns) ||
+      (this.startingTurns.get(conversationId)?.size ?? 0) > 0
+    );
+  }
+
+  // ─── 会话级互斥与 turn 发起登记：check-then-act 竞态的内存侧互斥 ───
+  // turn 发起/出队与 rewind 截断共用，串行化「hasActiveRuns 判定 → 持久化」窗口。非重入，禁止嵌套获取。
+  private readonly conversationLocks = new Map<string, Promise<void>>();
+
+  async withConversationLock<T>(
+    conversationId: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const prev =
+      this.conversationLocks.get(conversationId) ?? Promise.resolve();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => (release = resolve));
+    this.conversationLocks.set(conversationId, gate);
+    try {
+      await prev;
+      return await fn();
+    } finally {
+      release();
+      if (this.conversationLocks.get(conversationId) === gate) {
+        this.conversationLocks.delete(conversationId);
+      }
+    }
+  }
+
+  /** 已持久化、RunStarted 登记前的 turn——窗口期内 rewind/并发发起可见。 */
+  private readonly startingTurns = new Map<string, Set<string>>();
+
+  markTurnStarting(conversationId: string, messageId: string): void {
+    const set = this.startingTurns.get(conversationId) ?? new Set<string>();
+    set.add(messageId);
+    this.startingTurns.set(conversationId, set);
+  }
+
+  unmarkTurnStarting(conversationId: string, messageId: string): void {
+    this.startingTurns.get(conversationId)?.delete(messageId);
   }
 
   enqueueTurn(conversationId: string, assistantMessageId: string): void {
@@ -155,6 +196,7 @@ export class SessionManager implements OnApplicationShutdown {
 
   /** RunStarted：登记活跃 run（创建事件缓冲）。须在首条 RunEvent 前同步完成。 */
   registerRun(conversationId: string, messageId: string, runId: string): void {
+    this.startingTurns.get(conversationId)?.delete(messageId);
     this.getOrCreate(conversationId).registerRun(messageId, runId);
   }
 
@@ -196,6 +238,8 @@ export class SessionManager implements OnApplicationShutdown {
   }
 
   finalizeRun(conversationId: string, messageId: string): void {
+    // 兜底：run 从未登记（启动即失败）时清掉发起中标记，防 hasActiveRuns 卡死
+    this.startingTurns.get(conversationId)?.delete(messageId);
     const session = this.sessions.get(conversationId);
     if (!session) return;
     session.removeRun(messageId);

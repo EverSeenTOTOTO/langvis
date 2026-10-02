@@ -42,6 +42,9 @@ function setup(
     beginMaintenance: vi.fn(),
     endMaintenance: vi.fn(),
     finalizeRun: vi.fn(),
+    withConversationLock: (_id: string, fn: () => Promise<unknown>) => fn(),
+    markTurnStarting: vi.fn(),
+    unmarkTurnStarting: vi.fn(),
   } as unknown as SessionManager;
   const chatService = {
     persistAssistantContent: vi.fn().mockResolvedValue(persistResult),
