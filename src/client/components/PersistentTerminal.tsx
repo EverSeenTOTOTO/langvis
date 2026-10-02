@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Button, Typography } from 'antd';
+import '@xterm/xterm/css/xterm.css';
 
 const { Text } = Typography;
 
 // 常驻终端层:首次进入 /terminal 后永不卸载,路由切换仅切显隐——切走再回来
-// 零冷启动(WS/PTY/CLI 全程存活)。链路:ghostty-web ⇄ ws ⇄ 服务端 PTY ⇄ langvis CLI。
+// 零冷启动(WS/PTY/CLI 全程存活)。链路:xterm ⇄ ws ⇄ 服务端 PTY ⇄ langvis CLI。
 
 let booted = false;
 
@@ -45,9 +46,10 @@ const TerminalCanvas = () => {
 
     const connect = async () => {
       try {
-        const { init, Terminal, FitAddon } = await import('ghostty-web');
-        if (disposed) return;
-        await init();
+        const [{ Terminal }, { FitAddon }] = await Promise.all([
+          import('@xterm/xterm'),
+          import('@xterm/addon-fit'),
+        ]);
         if (disposed) return;
 
         if (!term) {
@@ -56,7 +58,9 @@ const TerminalCanvas = () => {
             theme: {
               background: '#14161f',
               foreground: '#c8cad8',
+              cursor: '#c8cad8',
             },
+            allowProposedApi: true,
           });
           fit = new FitAddon();
           term.loadAddon(fit);
