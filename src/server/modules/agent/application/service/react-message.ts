@@ -35,19 +35,6 @@ export function parseResponse(content: string): ParsedAction[] {
   );
   const actions = blocks.length ? blocks.map(parseBlock) : [parseBlock(text)];
 
-  // 首块前的游离 <thought>（批级计划性思考）挂到首个无 thought 的动作上
-  const firstBlockAt = text.indexOf('<tool_call>');
-  const leadThought =
-    firstBlockAt >= 0
-      ? tagContent(text.slice(0, firstBlockAt), 'thought')
-      : null;
-  if (leadThought !== null && actions[0]?.thought === undefined) {
-    actions[0] = {
-      ...actions[0]!,
-      thought: decodeXml(leadThought).trim() || undefined,
-    };
-  }
-
   if (actions.length > 1 && actions.some(a => CONTROL_FLOW_TOOLS.has(a.tool))) {
     throw new Error(
       'Invalid response: control-flow tools (response_user/ask_user/skill_call/list_tools) must be the only action in a response',
@@ -67,13 +54,7 @@ function parseBlock(block: string): ParsedAction {
       'Invalid response: missing or invalid top-level `tool`/`input`',
     );
   }
-
-  const thoughtRaw = tagContent(block, 'thought');
-  return {
-    thought: thoughtRaw !== null ? decodeXml(thoughtRaw).trim() : undefined,
-    tool,
-    input,
-  };
+  return { tool, input };
 }
 
 // XML 工具调用信封的序列化/反序列化——parse 与 serialize 同源维护 wire format。
@@ -132,14 +113,10 @@ function parseValue(text: string): unknown {
 
 /** ParsedAction → XML 工具调用信封（与 parseResponse 互逆；offload 桩 / 合成 response_user / 历史还原共用）。 */
 export function serializeAction(action: {
-  thought?: string;
   tool: string;
   input: Record<string, unknown>;
 }): string {
   const lines: string[] = ['<tool_call>'];
-  if (action.thought != null) {
-    lines.push(`  <thought>${escapeXmlText(action.thought)}</thought>`);
-  }
   lines.push(`  <tool>${escapeXmlText(action.tool)}</tool>`, '  <input>');
   for (const [k, v] of Object.entries(action.input)) {
     // 字符串取字面文本（引号/反斜杠不转义）；非字符串 JSON 化，使 number/bool/对象可逆。
@@ -167,13 +144,12 @@ export async function* responseUser(
   });
 }
 
-/** assistant 文本 → response_user XML；LlmMessage.summary（源自 message.meta.summary）注入为 thought。 */
+/** assistant 文本 → response_user XML（思维链归原生 reasoning 通道，信封不带 thought）。 */
 export function restoreReactMessage(m: LlmMessage): LlmMessage {
   return m.role === 'assistant'
     ? {
         role: 'assistant' as const,
         content: serializeAction({
-          ...(m.summary ? { thought: m.summary } : {}),
           tool: ToolIds.RESPONSE_USER,
           input: { message: m.content },
         }),
@@ -182,16 +158,9 @@ export function restoreReactMessage(m: LlmMessage): LlmMessage {
 }
 
 // ── 流式信封切分（react-loop 边流边发；与 parseResponse 同源维护 wire format）──
-// thought 闭合即发；response_user 的 <message> 实体感知增量 → text_chunk；其余只缓冲。
+// response_user 的 <message> 实体感知增量 → text_chunk；其余只缓冲。思维链不经信封（原生 reasoning 走 react-loop 直发）。
 
-const KNOWN_TAGS = [
-  '<thought>',
-  '</thought>',
-  '<tool>',
-  '</tool>',
-  '<message>',
-  '</message>',
-];
+const KNOWN_TAGS = ['<tool>', '</tool>', '<message>', '</message>'];
 
 const ENTITIES: Record<string, string> = {
   '&lt;': '<',
@@ -243,9 +212,8 @@ function decodeEntities(text: string, final: boolean): [string, string] {
 }
 
 export class ReActStreamSplitter {
-  private mode: 'scan' | 'thought' | 'tool' | 'message' = 'scan';
+  private mode: 'scan' | 'tool' | 'message' = 'scan';
   private pending = '';
-  private thoughtBuf = '';
   private toolBuf = '';
   private toolName = '';
   private inCdata = false;
@@ -278,8 +246,7 @@ export class ReActStreamSplitter {
         const tag = KNOWN_TAGS.find(t => rest.startsWith(t));
         if (tag) {
           this.pending = rest.slice(tag.length);
-          if (tag === '<thought>') this.mode = 'thought';
-          else if (tag === '<tool>') this.mode = 'tool';
+          if (tag === '<tool>') this.mode = 'tool';
           else if (tag === '<message>' && this.toolName === 'response_user') {
             this.mode = 'message';
           }
@@ -296,35 +263,23 @@ export class ReActStreamSplitter {
         continue;
       }
 
-      if (this.mode === 'thought' || this.mode === 'tool') {
-        const isThought = this.mode === 'thought';
-        const close = isThought ? '</thought>' : '</tool>';
+      if (this.mode === 'tool') {
+        const close = '</tool>';
         const idx = this.pending.indexOf(close);
         if (idx >= 0) {
-          const body =
-            (isThought ? this.thoughtBuf : this.toolBuf) +
-            this.pending.slice(0, idx);
+          const body = this.toolBuf + this.pending.slice(0, idx);
           this.pending = this.pending.slice(idx + close.length);
           this.mode = 'scan';
-          if (isThought) {
-            this.thoughtBuf = '';
-            const content = decodeXml(body).trim();
-            if (content) events.push({ type: 'thought', content });
-          } else {
-            this.toolBuf = '';
-            this.toolName = body.trim();
-          }
+          this.toolBuf = '';
+          this.toolName = body.trim();
           continue;
         }
         const hold = overlappingSuffix(this.pending, close);
-        if (isThought)
-          this.thoughtBuf += this.pending.slice(0, -hold.length || undefined);
-        else this.toolBuf += this.pending.slice(0, -hold.length || undefined);
+        this.toolBuf += this.pending.slice(0, -hold.length || undefined);
         this.pending = hold;
         if (final && !hold) {
           // 未闭合：残余并入缓冲后丢弃（信封已坏，parse 阶段兜底）
-          if (isThought) this.thoughtBuf = '';
-          else this.toolBuf = '';
+          this.toolBuf = '';
           this.pending = '';
         }
         break;

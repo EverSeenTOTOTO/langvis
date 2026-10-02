@@ -46,7 +46,7 @@ describe('parseResponse', () => {
       parseResponse(
         '<tool_call><tool>datetime_get</tool><input></input></tool_call>',
       ),
-    ).toEqual([{ thought: undefined, tool: 'datetime_get', input: {} }]);
+    ).toEqual([{ tool: 'datetime_get', input: {} }]);
   });
 
   it('parses a fenced ```xml block', () => {
@@ -54,21 +54,15 @@ describe('parseResponse', () => {
       parseResponse(
         '```xml\n<tool_call><tool>datetime_get</tool><input></input></tool_call>\n```',
       ),
-    ).toEqual([{ thought: undefined, tool: 'datetime_get', input: {} }]);
+    ).toEqual([{ tool: 'datetime_get', input: {} }]);
   });
 
-  it('preserves an optional thought + params', () => {
+  it('preserves params (thought 字段已随原生思维链移除)', () => {
     expect(
       parseResponse(
-        '<tool_call><thought>let me check</thought><tool>book</tool><input><id>f4</id><pax>Bob</pax></input></tool_call>',
+        '<tool_call><tool>book</tool><input><id>f4</id><pax>Bob</pax></input></tool_call>',
       ),
-    ).toEqual([
-      {
-        thought: 'let me check',
-        tool: 'book',
-        input: { id: 'f4', pax: 'Bob' },
-      },
-    ]);
+    ).toEqual([{ tool: 'book', input: { id: 'f4', pax: 'Bob' } }]);
   });
 
   it('takes quotes / backslashes in values literally (no escaping needed)', () => {
@@ -125,14 +119,6 @@ describe('parseResponse', () => {
     });
   });
 
-  it('批级游离 thought（首块之前）挂到首个动作；各块自有 thought 优先', () => {
-    const parsed = parseResponse(
-      '<thought>fetch both docs</thought>\n<tool_call><tool>web_fetch</tool><input><url>a</url></input></tool_call>\n<tool_call><thought>own</thought><tool>document_search</tool><input><query>q</query></input></tool_call>',
-    );
-    expect(parsed[0]!.thought).toBe('fetch both docs');
-    expect(parsed[1]!.thought).toBe('own');
-  });
-
   it('控制流工具混入多块响应 → parse error', () => {
     expect(() =>
       parseResponse(
@@ -148,7 +134,7 @@ describe('parseResponse', () => {
 
   it('无 tool_call 包裹的裸 tool/input 仍按单动作解析（legacy 兼容）', () => {
     expect(parseResponse('<tool>x</tool><input><a>1</a></input>')).toEqual([
-      { thought: undefined, tool: 'x', input: { a: 1 } },
+      { tool: 'x', input: { a: 1 } },
     ]);
   });
 });
@@ -159,12 +145,8 @@ describe('parseResponse', () => {
 const SUMMARY_STUB = '<summarized turn>';
 
 /** Build a single ReAct tool-call XML string the scripted LLM will "reply" with. */
-const call = (
-  tool: string,
-  input: Record<string, unknown> = {},
-  thought?: string,
-): string =>
-  serializeAction(thought ? { thought, tool, input } : { tool, input });
+const call = (tool: string, input: Record<string, unknown> = {}): string =>
+  serializeAction({ tool, input });
 
 const responseUser = (message: string): string =>
   call(ToolIds.RESPONSE_USER, { message });
@@ -466,24 +448,6 @@ describe('runReactLoop', () => {
       const assistantMsg = ctx.messages.find(m => m.role === 'assistant');
       expect(assistantMsg?.content).toContain('t1');
       expect(assistantMsg?.content).not.toContain('思考第');
-    });
-  });
-
-  describe('Thought', () => {
-    it('yields a thought event before the matching tool_call', async () => {
-      const { ctx, runTool } = buildCtx({
-        responses: [call('t1', {}, 'let me think'), responseUser('ok')],
-        handler: okHandler,
-      });
-
-      const events = await collect(runReactLoop(ctx, runTool));
-      const firstCallIdx = events.findIndex(e => e.type === 'tool_call');
-
-      expect(events[0]).toMatchObject({
-        type: 'thought',
-        content: 'let me think',
-      });
-      expect(events[firstCallIdx - 1].type).toBe('thought');
     });
   });
 

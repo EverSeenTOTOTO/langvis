@@ -19,13 +19,7 @@ const textOf = (events: RunEvent[]) =>
     .map(e => (e as { content: string }).content)
     .join('');
 
-const thoughts = (events: RunEvent[]) =>
-  events
-    .filter(e => e.type === 'thought')
-    .map(e => (e as { content: string }).content);
-
 const RESPONSE_ENVELOPE = `<tool_call>
-  <thought>先思考一下</thought>
   <tool>response_user</tool>
   <input>
     <message>你好，世界！</message>
@@ -33,7 +27,6 @@ const RESPONSE_ENVELOPE = `<tool_call>
 </tool_call>`;
 
 const BASH_ENVELOPE = `<tool_call>
-  <thought>查一下</thought>
   <tool>bash</tool>
   <input>
     <command>ls -la</command>
@@ -41,22 +34,19 @@ const BASH_ENVELOPE = `<tool_call>
 </tool_call>`;
 
 describe('ReActStreamSplitter（流式信封切分）', () => {
-  it('thought 在闭合时整体发出；response_user 的 message 增量发 text_chunk', () => {
+  it('response_user 的 message 增量发 text_chunk', () => {
     const events = feed(RESPONSE_ENVELOPE);
-    expect(thoughts(events)).toEqual(['先思考一下']);
     expect(textOf(events)).toBe('你好，世界！');
   });
 
   it('非 response_user 工具的参数不产 text_chunk（message 门控按 tool 名）', () => {
     const events = feed(BASH_ENVELOPE);
-    expect(thoughts(events)).toEqual(['查一下']);
     expect(textOf(events)).toBe('');
   });
 
   it('任意切块边界下结果一致（标签/实体/多字节跨块）', () => {
     for (const size of [1, 2, 5, 17, 1000]) {
       const events = feed(RESPONSE_ENVELOPE, size);
-      expect(thoughts(events), `chunk=${size}`).toEqual(['先思考一下']);
       expect(textOf(events), `chunk=${size}`).toBe('你好，世界！');
     }
   });
@@ -77,12 +67,11 @@ describe('ReActStreamSplitter（流式信封切分）', () => {
     }
   });
 
-  it('无 thought 时只发 text_chunk；未闭合 message 在 flush 冲刷', () => {
+  it('未闭合 message 在 flush 冲刷', () => {
     const events = feed(
       `<tool_call><tool>response_user</tool><input><message>没有闭合的消息`,
     );
     expect(textOf(events)).toBe('没有闭合的消息');
-    expect(thoughts(events)).toEqual([]);
   });
 
   it('字面 < （模型未转义）按字面输出且不误判结束', () => {

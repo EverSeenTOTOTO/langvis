@@ -24,7 +24,7 @@ function makeExecutor(): AgentRunExecutor {
 }
 
 describe('restoreReactMessage', () => {
-  it('assistant + summary → 注入 thought 的 response_user XML（parseResponse 可还原）', () => {
+  it('assistant（含 summary）→ 纯 response_user XML——summary 不再注入 thought', () => {
     const m = restoreReactMessage({
       role: 'assistant',
       content: 'hello',
@@ -32,21 +32,17 @@ describe('restoreReactMessage', () => {
     });
     expect(m.role).toBe('assistant');
     expect(parseResponse(m.content)[0]).toEqual({
-      thought: 'did X then Y',
       tool: 'response_user',
       input: { message: 'hello' },
     });
   });
 
-  it('assistant 无 summary → 无 thought 标签（parsed.thought 为 undefined）', () => {
+  it('assistant 无 summary → 同形（信封统一无 thought）', () => {
     const m = restoreReactMessage({ role: 'assistant', content: 'hi' });
-    const parsed = parseResponse(m.content)[0]!;
-    expect(parsed).toEqual({
-      thought: undefined,
+    expect(parseResponse(m.content)[0]).toEqual({
       tool: 'response_user',
       input: { message: 'hi' },
     });
-    expect(parsed.thought).toBeUndefined();
   });
 
   it('非 assistant 原样透传（role+content）', () => {
@@ -71,7 +67,6 @@ describe('restoreReactMessage', () => {
     expect(out[0]).toEqual({ role: 'system', content: 'sys' });
     expect(out[1]).toEqual({ role: 'user', content: 'q' });
     expect(parseResponse(out[2]!.content)[0]).toEqual({
-      thought: 'S',
       tool: 'response_user',
       input: { message: 'a' },
     });

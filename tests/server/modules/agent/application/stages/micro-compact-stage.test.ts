@@ -217,9 +217,11 @@ describe('MicroCompactStage（pre-LLM 步数驱动有损丢桩：steps ≥ 阈�
     const stubbedAssistant: LlmMessage = {
       role: 'assistant',
       content: serializeAction({
-        thought: '[offloaded to file fc_8a4e9674] size=600B.',
         tool: 'search',
-        input: { _offloaded: 'fc_8a4e9674' },
+        input: {
+          _offloaded: 'fc_8a4e9674',
+          _offloadedNote: '[offloaded to file fc_8a4e9674] size=600B.',
+        },
       }),
     };
     const ctx = makeCtx(

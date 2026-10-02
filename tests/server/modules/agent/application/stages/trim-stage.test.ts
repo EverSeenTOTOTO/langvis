@@ -299,18 +299,14 @@ describe('TrimStage（pre-LLM age 驱动无损桩：aged + non-pinned + 非近�
   });
 });
 
-describe('TrimStage（assistant 桩：长推理整条 dump，保留 {tool,input:{_offloaded},thought} 结构）', () => {
+describe('TrimStage（assistant 桩：长报文整条 dump，保留 {tool,input:{_offloaded,_offloadedNote}} 结构）', () => {
   function bigAssistant(
     tool: string,
     input: Record<string, unknown>,
   ): LlmMessage {
     return {
       role: 'assistant',
-      content: serializeAction({
-        thought: 'x'.repeat(8000),
-        tool,
-        input,
-      }),
+      content: serializeAction({ tool, input }),
     };
   }
 
@@ -318,7 +314,9 @@ describe('TrimStage（assistant 桩：长推理整条 dump，保留 {tool,input:
     // [bigA0, a1, obs, a2, obs] len=5 keepRecent=4 → 处理 i=0；bigA0 age=2≥2、body≥2000 → 桩。
     const ctx = makeCtx(
       [
-        bigAssistant('document_store', { document: { rawContent: 'big' } }),
+        bigAssistant('document_store', {
+          document: { rawContent: 'big'.repeat(2000) },
+        }),
         assistant('search', { q: 'a' }),
         obs('ok'),
         assistant('search', { q: 'b' }),
@@ -332,8 +330,8 @@ describe('TrimStage（assistant 桩：长推理整条 dump，保留 {tool,input:
     const stub = ctx.messages[0]!.content;
     const parsed = parseResponse(stub)[0]!;
     expect(parsed.tool).toBe('document_store');
-    expect(parsed.input).toEqual({ _offloaded: 'sem__fc_test' });
-    expect(parsed.thought).toContain('[offloaded to file');
+    expect(parsed.input).toMatchObject({ _offloaded: 'sem__fc_test' });
+    expect(String(parsed.input._offloadedNote)).toContain('[offloaded to file');
   });
 
   it('不可解析的 assistant（自由文本）→ 不桩', async () => {

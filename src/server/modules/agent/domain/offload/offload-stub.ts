@@ -76,11 +76,10 @@ export function stubContent(
   if (candidate.kind === 'bare') {
     return `${candidate.body.slice(0, HEAD_KEEP)}\n${marker}`;
   }
-  // assistant：整条报文一次性落盘，thought+input 同注一文件，tool 取已解析的 parsed.tool 原样保留。
+  // assistant：整条报文一次性落盘，标记随 _offloadedNote 注入 input（信封已无 thought 字段），tool 原样保留。
   return serializeAction({
-    thought: marker,
     tool: candidate.parsed.tool,
-    input: { _offloaded: fn },
+    input: { _offloaded: fn, _offloadedNote: marker },
   });
 }
 

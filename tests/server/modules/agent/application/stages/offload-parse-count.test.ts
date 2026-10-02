@@ -103,9 +103,8 @@ describe('trim parseResponse 调用计数（每候选一次：candidateBody 一�
         {
           role: 'assistant',
           content: serializeAction({
-            thought: body(8000),
             tool: 'document_store',
-            input: { document: 'big' },
+            input: { document: body(8000) },
           }),
         },
         {

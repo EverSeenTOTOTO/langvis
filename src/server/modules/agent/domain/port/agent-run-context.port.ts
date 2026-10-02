@@ -23,7 +23,6 @@ export type ToolExecutor = (
 
 /** 解析出的 ReAct 动作。loop 权威解析一次后挂到 ctx.pendingActions，pre-action hook 直接读、不再各自 parse。 */
 export interface ParsedAction {
-  thought?: string;
   tool: string;
   input: Record<string, unknown>;
 }
