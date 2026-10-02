@@ -22,7 +22,9 @@ import { TraceContext } from '@/server/trace-context';
 import type { LlmMessage } from '@/shared/types/entities';
 import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
 import { HookPlan } from '@/server/modules/agent/domain/model/hook';
+import { StagePlan, type ContextStage } from '@/server/shared/context';
 import { HOOK_TYPES } from '@/server/modules/agent/application/hooks/registry';
+import { STAGE_TYPES } from '@/server/modules/agent/application/stages';
 import { AgentService } from './agent.service';
 import { restoreReactMessage } from './react-message';
 import { runReactLoop } from './react-loop';
@@ -121,6 +123,7 @@ export class AgentRunExecutor {
       base: params.seed.length,
       // per-run 瞬态：TRANSIENT providers 经 ModuleRef.resolve 每次 promise 新建
       hooks: new HookPlan(await this.resolveHooks()),
+      stages: new StagePlan(await this.resolveStages()),
       interactive: params.interactive,
     };
 
@@ -289,6 +292,11 @@ export class AgentRunExecutor {
   /** per-run 瞬态 hooks：resolve 对 TRANSIENT 每次新建（get 不支持 scoped provider）。 */
   private resolveHooks(): Promise<Hook[]> {
     return Promise.all(HOOK_TYPES.map(T => this.moduleRef.resolve(T)));
+  }
+
+  /** per-run 瞬态 context stages（同 TRANSIENT 语义）。 */
+  private resolveStages(): Promise<ContextStage[]> {
+    return Promise.all(STAGE_TYPES.map(T => this.moduleRef.resolve(T)));
   }
 
   private executeTool(

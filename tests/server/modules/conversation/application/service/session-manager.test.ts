@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { SessionManager } from '@/server/modules/conversation/application/service/session-manager';
 import type { ChatService } from '@/server/modules/conversation/application/service/chat.service';
 import type { EventBus } from '@nestjs/cqrs';
-import { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
+import { StagePlan } from '@/server/shared/context';
 import type { ProviderService } from '@/server/infrastructure/provider.service';
 import { Transport } from '@/shared/transport';
 import type { StreamFrame } from '@/shared/types/events';
@@ -51,7 +51,7 @@ function makeManager(activeMessages: unknown[] = []): {
       publish: vi.fn(),
     } as unknown as EventBus,
     provider,
-    new ConvTransformPlan([]),
+    new StagePlan([]),
   );
   return { manager, chat };
 }
@@ -208,7 +208,7 @@ describe('SessionManager.onShutdown（关停先 abort 活跃 run 再关池）', 
       chat,
       { publish: dispatchFn } as unknown as EventBus,
       provider,
-      new ConvTransformPlan([]),
+      new StagePlan([]),
     );
     return { manager, dispatch: dispatchFn };
   }

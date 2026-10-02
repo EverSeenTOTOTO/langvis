@@ -21,7 +21,7 @@ const stubSessionManager = {
     conversationId: 'conv_1',
     messages: { toArray: () => [] },
     config: { contextSize: 8000, runtimeConfig: {} },
-    transforms: { forPhase: () => [] },
+    stages: { forPhase: () => [] },
   })),
   sendFrame: vi.fn(),
 } as unknown as SessionManager;

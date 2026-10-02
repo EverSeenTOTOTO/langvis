@@ -5,12 +5,12 @@ import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-r
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
-import { TrimHook } from '@/server/modules/agent/application/hooks/trim-hook';
+import { TrimStage } from '@/server/modules/agent/application/stages/trim-stage';
 import {
   parseResponse,
   serializeAction,
 } from '@/server/modules/agent/application/service/react-message';
-import type { OffloadConfig } from '@/server/modules/conversation/domain/config/fragments/offload';
+import type { ContextConfig } from '@/server/shared/context';
 
 // estimateTokens 用内容字符数代理（确定性、可控）。
 vi.mock('@/server/utils/estimateTokens', () => ({
@@ -19,7 +19,7 @@ vi.mock('@/server/utils/estimateTokens', () => ({
 }));
 
 async function collect(
-  gen: AsyncGenerator<RunEvent, void>,
+  gen: AsyncGenerator<any, any, any>,
 ): Promise<{ events: RunEvent[]; ret: LoopSignal | undefined }> {
   const events: RunEvent[] = [];
   let ret: LoopSignal | undefined;
@@ -43,7 +43,7 @@ function body(n: number): string {
 
 function makeCtx(
   messages: LlmMessage[],
-  opts: { offload: OffloadConfig | undefined; base?: number },
+  opts: { context: ContextConfig | undefined; base?: number },
 ): AgentRunContext {
   const cache: CachePort = {
     offload: vi.fn(async (_w: string, _v: unknown, hint?: string) => ({
@@ -55,7 +55,7 @@ function makeCtx(
   };
   const config = RunConfigVO.of({
     tools: [],
-    runtimeConfig: { model: {}, offload: opts.offload },
+    runtimeConfig: { model: {}, context: opts.context },
   });
   return {
     runId: 'run_test',
@@ -68,9 +68,9 @@ function makeCtx(
 }
 
 // trimAge=2、keepRecent=4：目标须其后 ≥2 assistant 且出末 4 窗口（index < len-4）。
-const CFG = (): OffloadConfig => ({ trimAge: 2, keepRecent: 4 });
-function makeHook(contextSize = 8192): TrimHook {
-  return new TrimHook({ resolveContextSize: () => contextSize } as never);
+const CFG = (): ContextConfig => ({ trim: { age: 2, keepRecent: 4 } });
+function makeHook(contextSize = 8192): TrimStage {
+  return new TrimStage({ resolveContextSize: () => contextSize } as never);
 }
 function obs(b: string): LlmMessage {
   return { role: 'user', content: `Observation: ${b}` };
@@ -85,12 +85,26 @@ function sys(b: string): LlmMessage {
   return { role: 'system', content: b };
 }
 // age(i) = i 之后的 assistant 数。
+function targetOf(
+  ctx: Record<string, any>,
+): import('@/server/shared/context').RunTarget {
+  return {
+    kind: 'run',
+    runId: ctx.runId,
+    signal: ctx.signal,
+    messages: ctx.messages,
+    base: ctx.base,
+    runtimeConfig: ctx.config?.runtimeConfig ?? ctx.runtimeConfig,
+    workDir: ctx.workDir,
+    cache: ctx.cache,
+  };
+}
 
-describe('TrimHook（pre-LLM age 驱动无损桩：aged + non-pinned + 非近窗口 → 落盘 + hint 桩）', () => {
+describe('TrimStage（pre-LLM age 驱动无损桩：aged + non-pinned + 非近窗口 → 落盘 + hint 桩）', () => {
   it('fragment 缺失 → next，不动 messages', async () => {
-    const ctx = makeCtx([obs(body(8000))], { offload: undefined });
+    const ctx = makeCtx([obs(body(8000))], { context: undefined });
     const before = ctx.messages.length;
-    const { events, ret } = await collect(makeHook().apply(ctx));
+    const { events, ret } = await collect(makeHook().apply(targetOf(ctx)));
     expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(before);
@@ -100,9 +114,9 @@ describe('TrimHook（pre-LLM age 驱动无损桩：aged + non-pinned + 非近窗
     // obs0 其后仅 1 assistant → age=1 < 2；keepRecent=1 让 obs0 出窗、其余填充不干扰。
     const ctx = makeCtx(
       [obs(body(8000)), assistant('search', { q: 'a' }), obs('ok'), obs('ok')],
-      { offload: { trimAge: 2, keepRecent: 1 } },
+      { context: { trim: { age: 2, keepRecent: 1 } } },
     );
-    const { events, ret } = await collect(makeHook().apply(ctx));
+    const { events, ret } = await collect(makeHook().apply(targetOf(ctx)));
     expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
     expect(ctx.cache.offload).not.toHaveBeenCalled();
@@ -120,9 +134,9 @@ describe('TrimHook（pre-LLM age 驱动无损桩：aged + non-pinned + 非近窗
         assistant('search', { q: 'c' }),
         obs('ok'),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(1);
     expect(ctx.cache.offload).toHaveBeenCalledTimes(1);
     const stubbed = ctx.messages[1]!;
@@ -143,9 +157,9 @@ describe('TrimHook（pre-LLM age 驱动无损桩：aged + non-pinned + 非近窗
         assistant('search', { q: 'b' }),
         obs('ok'),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(0);
     expect(ctx.cache.offload).not.toHaveBeenCalled();
     expect(ctx.messages[0]!.content).toBe('Observation: small result');
@@ -161,9 +175,9 @@ describe('TrimHook（pre-LLM age 驱动无损桩：aged + non-pinned + 非近窗
         assistant('s', { q: 'b' }),
         obs(body(8000)),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(1);
     expect(ctx.messages[0]!.content).toContain('[offloaded to file'); // 窗口外桩
     expect(ctx.messages[2]!.content).toBe(`Observation: ${body(8000)}`); // 末 4 内保真
@@ -181,9 +195,9 @@ describe('TrimHook（pre-LLM age 驱动无损桩：aged + non-pinned + 非近窗
         assistant('s', { q: 'b' }),
         obs('ok'),
       ],
-      { offload: CFG(), base: 1 },
+      { context: CFG(), base: 1 },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(ctx.messages[0]!.content).toBe('SEED PREFIX'); // seed 完好
     expect(events).toHaveLength(1);
     expect(ctx.messages[1]!.content).toContain('[offloaded to file'); // loop 区 aged obs 桩
@@ -202,9 +216,9 @@ describe('TrimHook（pre-LLM age 驱动无损桩：aged + non-pinned + 非近窗
         assistant('search', { q: 'b' }),
         obs('ok'),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(1);
     expect(ctx.messages[0]!.content).toContain('[offloaded to file'); // 普通照桩
     expect(ctx.messages[2]!.content).toBe(`Observation: ${body(8000)}`); // pinned 驻留
@@ -222,9 +236,9 @@ describe('TrimHook（pre-LLM age 驱动无损桩：aged + non-pinned + 非近窗
         assistant('search', { q: 'b' }),
         obs('ok'),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(1);
     expect(ctx.messages[1]!.content).toContain('[offloaded to file'); // 非 pin → 桩
   });
@@ -240,9 +254,9 @@ describe('TrimHook（pre-LLM age 驱动无损桩：aged + non-pinned + 非近窗
         assistant('search', { q: 'b' }),
         obs('ok'),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(0); // 唯一出窗候选是 recall echo → 无可桩
     expect(ctx.cache.offload).not.toHaveBeenCalled();
     expect(ctx.messages[1]!.content).toBe(`Observation: ${body(8000)}`);
@@ -258,9 +272,9 @@ describe('TrimHook（pre-LLM age 驱动无损桩：aged + non-pinned + 非近窗
         assistant('search', { q: 'b' }),
         obs('ok'),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(0);
     expect(ctx.cache.offload).not.toHaveBeenCalled();
   });
@@ -275,9 +289,9 @@ describe('TrimHook（pre-LLM age 驱动无损桩：aged + non-pinned + 非近窗
         assistant('search', { q: 'b' }),
         obs('ok'),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(1);
     const stub = ctx.messages[0]!.content;
     expect(stub).toContain('[offloaded to file');
@@ -285,7 +299,7 @@ describe('TrimHook（pre-LLM age 驱动无损桩：aged + non-pinned + 非近窗
   });
 });
 
-describe('TrimHook（assistant 桩：长推理整条 dump，保留 {tool,input:{_offloaded},thought} 结构）', () => {
+describe('TrimStage（assistant 桩：长推理整条 dump，保留 {tool,input:{_offloaded},thought} 结构）', () => {
   function bigAssistant(
     tool: string,
     input: Record<string, unknown>,
@@ -310,9 +324,9 @@ describe('TrimHook（assistant 桩：长推理整条 dump，保留 {tool,input:{
         assistant('search', { q: 'b' }),
         obs('ok'),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(1);
     expect(ctx.cache.offload).toHaveBeenCalledTimes(1);
     const stub = ctx.messages[0]!.content;
@@ -331,9 +345,9 @@ describe('TrimHook（assistant 桩：长推理整条 dump，保留 {tool,input:{
         assistant('search', { q: 'b' }),
         obs('ok'),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(0);
     expect(ctx.cache.offload).not.toHaveBeenCalled();
   });

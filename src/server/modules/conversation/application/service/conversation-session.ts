@@ -5,10 +5,8 @@ import { ActiveRun } from './active-run';
 import type { Message } from '@/shared/types/entities';
 import Logger from '@/server/utils/logger';
 import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
-import {
-  ConvTransformPlan,
-  type ConversationContext,
-} from '../../domain/model/conv-transform';
+import type { ConversationContext } from '../../domain/model/conv-transform';
+import type { StagePlan } from '@/server/shared/context';
 
 const logger = Logger.child({ source: 'ConversationSession' });
 
@@ -17,7 +15,7 @@ export class ConversationSession {
   private readonly activeRuns = new Map<string, ActiveRun>();
   private messages: Message[] | undefined;
   private runtimeConfig: ConversationConfig | undefined;
-  private transforms: ConvTransformPlan | undefined;
+  private stages: StagePlan | undefined;
   private maintenance:
     | { promise: Promise<void>; resolve: () => void }
     | undefined;
@@ -146,11 +144,11 @@ export class ConversationSession {
   activateContext(
     messages: Message[],
     runtimeConfig: ConversationConfig,
-    transforms: ConvTransformPlan,
+    stages: StagePlan,
   ): void {
     this.messages = messages;
     this.runtimeConfig = runtimeConfig;
-    this.transforms = transforms;
+    this.stages = stages;
   }
 
   updateRuntimeConfig(runtimeConfig: ConversationConfig): void {
@@ -162,9 +160,9 @@ export class ConversationSession {
     return this.runtimeConfig !== undefined;
   }
 
-  /** session 即 ctx：返回 this 经窄接口 ConversationContext（转换只够到 messages/runtimeConfig/transforms）。 */
+  /** session 即 ctx：返回 this 经窄接口 ConversationContext（stage 只够到 messages/runtimeConfig/stages）。 */
   getCtx(): ConversationContext {
-    if (!this.runtimeConfig || !this.messages || !this.transforms) {
+    if (!this.runtimeConfig || !this.messages || !this.stages) {
       throw new Error(
         `ConversationContext: ${this.conversationId} not activated (activateContext missing)`,
       );
@@ -199,6 +197,6 @@ export class ConversationSession {
     this.queuedTurnIds.length = 0;
     this.messages = undefined;
     this.runtimeConfig = undefined;
-    this.transforms = undefined;
+    this.stages = undefined;
   }
 }

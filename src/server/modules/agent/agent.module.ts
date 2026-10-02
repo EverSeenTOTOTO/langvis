@@ -10,6 +10,7 @@ import { AgentService } from './application/service/agent.service';
 import { SkillService } from './application/service/skill.service';
 import { ToolService } from './application/service/tool.service';
 import { HOOK_TYPES } from './application/hooks/registry';
+import { STAGE_TYPES } from './application/stages';
 import { createTool, toolIdOf } from './application/tools/register-tool';
 import { TOOL_REGISTRY } from './implementations/tools/registry';
 import { ToolIds } from '@/shared/constants';
@@ -51,6 +52,11 @@ const TOOL_DEPS: Partial<Record<string, InjectionToken[]>> = {
     AgentRunExecutor,
     // per-run 瞬态：executor 经 ModuleRef 每次 get 新建（跨 tick 私有状态内聚实例字段）
     ...HOOK_TYPES.map(T => ({
+      provide: T,
+      useClass: T,
+      scope: Scope.TRANSIENT,
+    })),
+    ...STAGE_TYPES.map(T => ({
       provide: T,
       useClass: T,
       scope: Scope.TRANSIENT,

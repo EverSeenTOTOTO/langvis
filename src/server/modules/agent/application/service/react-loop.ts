@@ -16,6 +16,7 @@ import {
   ContinueTick,
   StopLoop,
 } from '@/server/modules/agent/domain/model/hook';
+import { runStagePlan, type ContextPhase } from '@/server/shared/context';
 import Logger from '@/server/utils/logger';
 import { traceGen } from '@/server/otel';
 
@@ -36,6 +37,26 @@ async function* exitLoop(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
   yield* applyHooks(ctx, 'loop-exit');
 }
 
+/** 上下文相位（pre-llm/post-observation）：stage 阶梯先跑，残余 hooks 随后。 */
+async function* applyStages(
+  ctx: AgentRunContext,
+  phase: ContextPhase,
+): AsyncGenerator<RunEvent, void, void> {
+  if (!ctx.stages) return;
+  for await (const ev of runStagePlan(ctx.stages, phase, {
+    kind: 'run',
+    runId: ctx.runId,
+    signal: ctx.signal,
+    messages: ctx.messages,
+    base: ctx.base,
+    runtimeConfig: ctx.config.runtimeConfig,
+    workDir: ctx.workDir,
+    cache: ctx.cache,
+  })) {
+    if (ev && ev.type !== undefined) yield ev as RunEvent;
+  }
+}
+
 export async function* runReactLoop(
   ctx: AgentRunContext,
   runTool: ToolExecutor,
@@ -45,6 +66,7 @@ export async function* runReactLoop(
   for (;;) {
     ctx.signal.throwIfAborted();
     try {
+      yield* applyStages(ctx, 'pre-llm');
       yield* applyHooks(ctx, 'pre-llm');
 
       // 流式消费：边流边发 thought / response_user 的 message（text_chunk），
@@ -106,6 +128,7 @@ export async function* runReactLoop(
         role: Role.USER,
         content: `Observation: ${result.observation}\n`,
       });
+      yield* applyStages(ctx, 'post-observation');
       yield* applyHooks(ctx, 'post-observation');
     } catch (e) {
       // hook 经 sentinel 表态：ContinueTick→下一轮，StopLoop→退出（接 loop-exit）；其余上抛。

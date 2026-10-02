@@ -3,7 +3,7 @@ import { EventBus, EventsHandler } from '@nestjs/cqrs';
 import { RunCompleted } from '@/server/modules/agent/contracts';
 import { SessionManager } from '../service/session-manager';
 import { ChatService } from '../service/chat.service';
-import { runConvTransforms } from '../transforms';
+import { convStages } from '@/server/shared/context';
 import { TurnInitiated } from '../../contracts';
 import { projectToLlmMessages } from '../service/history-projection';
 import { ChatService as Svc } from '../service/chat.service';
@@ -48,7 +48,7 @@ export class CompleteTurnHandler {
       this.sessionManager.flushRunView(conversationId, messageId);
       // turn-end transform（process-summary 烘焙 meta.summary → compact 折叠历史 → usage 量压缩后用量）。
       // runCtx 透传本次 RunCompleted 的 run 标识，供 per-run transform（如 process-summary）取 events。
-      for await (const frame of runConvTransforms(ctx, 'turn-end', {
+      for await (const frame of convStages(ctx, 'turn-end', {
         messageId,
         runId: agentRunId,
       })) {
@@ -87,7 +87,7 @@ export class CompleteTurnHandler {
       }
       for (const turn of turns) ctx.messages.push(turn.userMessage);
 
-      for await (const frame of runConvTransforms(ctx, 'turn-start')) {
+      for await (const frame of convStages(ctx, 'turn-start')) {
         if (frame) this.sessionManager.sendFrame(conversationId, frame);
       }
 

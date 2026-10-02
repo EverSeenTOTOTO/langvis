@@ -6,9 +6,9 @@ import { ChatService } from './chat.service';
 import { ConversationSession } from './conversation-session';
 import type { ConversationContext } from '../../domain/model/conv-transform';
 import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
-import type { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
-import { CONV_TRANSFORM_PLAN } from '../transforms';
-import { computeContextUsage } from '../transforms/usage-transform';
+import type { StagePlan } from '@/server/shared/context';
+import { CONTEXT_STAGES } from '../stages';
+import { computeContextUsage } from '../stages/usage-stage';
 import type { Message } from '@/shared/types/entities';
 import { ProviderService } from '@/server/infrastructure/provider.service';
 import { Inject, OnApplicationShutdown } from '@nestjs/common';
@@ -34,8 +34,8 @@ export class SessionManager implements OnApplicationShutdown {
     private eventBus: EventBus,
     @Inject(ProviderService)
     private providerService: ProviderService,
-    @Inject(CONV_TRANSFORM_PLAN)
-    private readonly transformPlan: ConvTransformPlan,
+    @Inject(CONTEXT_STAGES)
+    private readonly stagePlan: StagePlan,
   ) {}
 
   private getOrCreate(conversationId: string): ConversationSession {
@@ -287,7 +287,7 @@ export class SessionManager implements OnApplicationShutdown {
     await this.reconcileOrphanedRuns(conversationId, 'cancelled', reason);
   }
 
-  /** 会话上下文激活：messages 上 session + 解析 transform 管道（全局单例，跨会话不变）。 */
+  /** 会话上下文激活：messages 上 session + 解析 stage 管道（全局单例，跨会话不变）。 */
   activateContext(
     conversationId: string,
     messages: Message[],
@@ -296,7 +296,7 @@ export class SessionManager implements OnApplicationShutdown {
     this.getOrCreate(conversationId).activateContext(
       messages,
       runtimeConfig,
-      this.transformPlan,
+      this.stagePlan,
     );
   }
 

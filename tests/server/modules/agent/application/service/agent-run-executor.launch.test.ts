@@ -18,12 +18,13 @@ import type { AgentService } from '@/server/modules/agent/application/service/ag
 import type { EnrichedEvent, RunEvent } from '@/shared/types/events';
 import type { ToolConfig } from '@/shared/types';
 
-import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
+import type { ContextStage } from '@/server/shared/context';
+import type { Hook } from '@/server/modules/agent/domain/model/hook';
 
 /** 无操作 hook：防止 resolveAll 因未注册 token 而抛。 */
-class NoopHook implements Hook {
+class NoopHook implements Hook, ContextStage {
   readonly id = 'noop';
-  readonly phase: HookPhase = 'pre-llm';
+  readonly phase = 'pre-llm' as const;
   apply(): AsyncGenerator<RunEvent, void> {
     return (async function* () {})();
   }
@@ -111,7 +112,7 @@ describe('AgentRunExecutor.launch — 终态写冲突重试', () => {
       if (token === ToolIds.RESPONSE_USER) return new StubResponseUserTool();
       return new NoopHook();
     },
-    resolve: async (T: new () => NoopHook) => new T(),
+    resolve: async () => new NoopHook(),
   };
   beforeEach(() => {
     // NoopHook/Stub 经 moduleRef.get 按次构造

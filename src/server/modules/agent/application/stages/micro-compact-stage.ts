@@ -1,11 +1,13 @@
 import { Inject } from '@nestjs/common';
 import { ToolIds } from '@/shared/constants';
-import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { ParsedAction } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
-import type { RunEvent } from '@/shared/types/events';
+import type { LlmMessage } from '@/shared/types/entities';
+import type {
+  ContextStage,
+  StageTarget,
+  StageEvent,
+} from '@/server/shared/context';
 import { ProviderService } from '@/server/infrastructure/provider.service';
-import type { OffloadConfig } from '@/server/modules/conversation/domain/config/fragments/offload';
 import Logger from '@/server/utils/logger';
 import {
   OBSERVATION_PREFIX,
@@ -23,25 +25,29 @@ const DEFAULT_KEEP_RECENT = 4;
 
 // 微压缩（pre-LLM）：步数驱动的有损清理。run 步数达 compactStepThreshold 后，满 compactAge 个 tick 且未被后续 bash 回取
 // 的 observation 桩有损丢弃——长 run 下盘上内容已不再被引用，主动清除旧工具结果以减负。assistant 桩/seed/近窗口不动；磁盘文件不删（CachePort 仅写端）。
-export class MicroCompactHook implements Hook {
+export class MicroCompactStage implements ContextStage {
   readonly id = 'micro-compact';
-  readonly phase: HookPhase = 'pre-llm';
-  private readonly logger = Logger.child({ source: 'MicroCompactHook' });
+  readonly phase = 'pre-llm' as const;
+  private readonly logger = Logger.child({ source: 'MicroCompactStage' });
 
   constructor(
     @Inject(ProviderService)
     private readonly providerService: ProviderService,
   ) {}
 
-  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
-    const cfg = ctx.config.runtimeConfig.offload as OffloadConfig | undefined;
-    if (!cfg)
-      return this.logger.debug(`skip (run ${ctx.runId}): offload config off`);
+  async *apply(target: StageTarget): AsyncGenerator<StageEvent, void> {
+    if (target.kind !== 'run') return;
+    const ctx = target;
+    const micro = ctx.runtimeConfig.context?.microCompact;
+    if (!micro)
+      return this.logger.debug(
+        `skip (run ${ctx.runId}): microCompact config off`,
+      );
 
-    const stepThreshold =
-      cfg.compactStepThreshold ?? DEFAULT_COMPACT_STEP_THRESHOLD;
-    const compactAge = cfg.compactAge ?? DEFAULT_COMPACT_AGE;
-    const keepRecent = cfg.keepRecent ?? DEFAULT_KEEP_RECENT;
+    const stepThreshold = micro.stepThreshold ?? DEFAULT_COMPACT_STEP_THRESHOLD;
+    const compactAge = micro.age ?? DEFAULT_COMPACT_AGE;
+    const keepRecent =
+      ctx.runtimeConfig.context?.trim?.keepRecent ?? DEFAULT_KEEP_RECENT;
 
     const messages = ctx.messages;
     const len = messages.length;
@@ -93,7 +99,7 @@ export class MicroCompactHook implements Hook {
     ctx.messages = messages;
 
     const contextSize =
-      this.providerService.resolveContextSize(ctx.config.runtimeConfig) ?? 0;
+      this.providerService.resolveContextSize(ctx.runtimeConfig) ?? 0;
     this.logger.info(
       `micro-compacted (run ${ctx.runId}): dropped ${drop.length} aged stub(s) (steps ${steps})`,
       { dropped: drop.length, steps },
@@ -113,7 +119,7 @@ export class MicroCompactHook implements Hook {
 
 // 该 stub 之后是否有 bash 命令引用其 fc 句柄（回取）——被回取过的桩仍可能在用，保留。
 function isRecalledLater(
-  messages: AgentRunContext['messages'],
+  messages: LlmMessage[],
   i: number,
   fcId: string,
 ): boolean {

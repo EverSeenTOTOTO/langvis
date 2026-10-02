@@ -3,10 +3,10 @@ import { Role } from '@/shared/entities/Message';
 import { MESSAGE_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
 import type {
-  ConversationContext,
-  ConvPhase,
-  ConvTransform,
-} from '@/server/modules/conversation/domain/model/conv-transform';
+  ContextStage,
+  StageTarget,
+  StageEvent,
+} from '@/server/shared/context';
 import {
   findLatestCompactionSummary,
   toLlmMessages,
@@ -18,10 +18,10 @@ import Logger from '@/server/utils/logger';
 
 // 选择性重构（turn-end）：低阈、保细节、非破坏。effective 超 contextSize×reconstructThreshold 时，把 tail 内较早的长 USER 消息打
 // meta.reconstructed 标记并落库——投影/折叠读取时按标记只取头部（原正文留库不改、UI 仍全文）。落库故过刷新/重启（与 agent 运行时消息不同）。
-export class ReconstructTransform implements ConvTransform {
+export class ReconstructStage implements ContextStage {
   readonly id = 'reconstruct';
-  readonly phase: ConvPhase = 'turn-end';
-  private readonly logger = Logger.child({ source: 'ReconstructTransform' });
+  readonly phase = 'turn-end' as const;
+  private readonly logger = Logger.child({ source: 'ReconstructStage' });
 
   constructor(
     @Inject(MESSAGE_REPOSITORY)
@@ -30,7 +30,9 @@ export class ReconstructTransform implements ConvTransform {
     private readonly providerService: ProviderService,
   ) {}
 
-  async *apply(ctx: ConversationContext): AsyncGenerator<void> {
+  async *apply(target: StageTarget): AsyncGenerator<StageEvent, void> {
+    if (target.kind !== 'conv') return;
+    const ctx = target;
     const contextSize = this.providerService.resolveContextSize(
       ctx.runtimeConfig,
     );
@@ -40,14 +42,12 @@ export class ReconstructTransform implements ConvTransform {
       );
       return;
     }
-    const compaction = ctx.runtimeConfig.history;
-    if (!compaction) {
-      this.logger.debug(
-        `history compaction off, skipped (conv ${ctx.conversationId})`,
-      );
+    const convFold = ctx.runtimeConfig.context?.convFold;
+    if (!convFold) {
+      this.logger.debug(`convFold off, skipped (conv ${ctx.conversationId})`);
       return;
     }
-    const threshold = compaction.reconstructThreshold;
+    const threshold = convFold.reconstructThreshold;
     if (threshold === undefined) return;
 
     const history = ctx.messages;
@@ -67,7 +67,7 @@ export class ReconstructTransform implements ConvTransform {
       return;
     }
 
-    const keepRecent = compaction.reconstructKeepRecent ?? 0;
+    const keepRecent = convFold.reconstructKeepRecent ?? 0;
     const lastMutable = history.length - keepRecent;
     let flagged = 0;
     // 仅打标 tail 内、近窗口之前的长 USER 消息（用户提问/正文最长；assistant 动作短不碰）。

@@ -4,7 +4,7 @@ import { ChatService } from '../service/chat.service';
 import { SessionManager } from '../service/session-manager';
 import { StartChatCommand, TurnInitiated } from '../../contracts';
 import { projectToLlmMessages } from '../service/history-projection';
-import { runConvTransforms } from '../transforms';
+import { convStages } from '@/server/shared/context';
 import { expandMentions } from '../service/file-mention';
 import { TraceContext } from '@/server/trace-context';
 import { WorkspaceService } from '@/server/infrastructure/workspace/workspace.service';
@@ -102,7 +102,7 @@ export class StartChatHandler {
 
           // turn-start transform：本相位当前仅 summary-bake 类无（process-summary 在 turn-end 烘 meta.summary）；
           // projectToLlmMessages 读 msg.meta.summary 透传至 agent 种子作 thought。
-          for await (const frame of runConvTransforms(ctx, 'turn-start')) {
+          for await (const frame of convStages(ctx, 'turn-start')) {
             if (frame) this.sessionManager.sendFrame(conversationId, frame);
           }
           const effectiveHistory = projectToLlmMessages(ctx.messages);

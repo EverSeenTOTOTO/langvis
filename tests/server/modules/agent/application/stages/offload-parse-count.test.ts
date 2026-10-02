@@ -4,9 +4,9 @@ import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-r
 import type { CachePort } from '@/server/modules/agent/domain/port/cache.port';
 import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
-import { TrimHook } from '@/server/modules/agent/application/hooks/trim-hook';
+import { TrimStage } from '@/server/modules/agent/application/stages/trim-stage';
 import { serializeAction } from '@/server/modules/agent/application/service/react-message';
-import type { OffloadConfig } from '@/server/modules/conversation/domain/config/fragments/offload';
+import type { ContextConfig } from '@/server/shared/context';
 
 // 计数 parseResponse 调用——验证「每候选一次」契约（candidateBody 一次性解析，hint/stub/classifyRecall 复用，不重复 parse）。
 let parseCalls = 0;
@@ -33,7 +33,7 @@ vi.mock('@/server/utils/estimateTokens', () => ({
 }));
 
 async function collect(
-  gen: AsyncGenerator<RunEvent, void>,
+  gen: AsyncGenerator<any, any, any>,
 ): Promise<{ events: RunEvent[] }> {
   const events: RunEvent[] = [];
   for (;;) {
@@ -48,9 +48,24 @@ function body(n: number): string {
   return 'x'.repeat(n);
 }
 
+function targetOf(
+  ctx: Record<string, any>,
+): import('@/server/shared/context').RunTarget {
+  return {
+    kind: 'run',
+    runId: ctx.runId,
+    signal: ctx.signal,
+    messages: ctx.messages,
+    base: ctx.base,
+    runtimeConfig: ctx.config?.runtimeConfig ?? ctx.runtimeConfig,
+    workDir: ctx.workDir,
+    cache: ctx.cache,
+  };
+}
+
 function makeCtx(
   messages: LlmMessage[],
-  opts: { offload: OffloadConfig | undefined },
+  opts: { context: ContextConfig | undefined },
 ): AgentRunContext {
   const cache: CachePort = {
     offload: vi.fn(async (_w: string, _v: unknown, hint?: string) => ({
@@ -62,7 +77,7 @@ function makeCtx(
   };
   const config = RunConfigVO.of({
     tools: [],
-    runtimeConfig: { model: {}, offload: opts.offload },
+    runtimeConfig: { model: {}, context: opts.context },
   });
   return {
     runId: 'run_test',
@@ -74,9 +89,9 @@ function makeCtx(
   } as unknown as AgentRunContext;
 }
 
-const CFG = (): OffloadConfig => ({ trimAge: 2, keepRecent: 4 });
-function trimHook(contextSize: number): TrimHook {
-  return new TrimHook({ resolveContextSize: () => contextSize } as never);
+const CFG = (): ContextConfig => ({ trim: { age: 2, keepRecent: 4 } });
+function trimHook(contextSize: number): TrimStage {
+  return new TrimStage({ resolveContextSize: () => contextSize } as never);
 }
 
 describe('trim parseResponse 调用计数（每候选一次：candidateBody 一次性解析，下游复用）', () => {
@@ -104,9 +119,9 @@ describe('trim parseResponse 调用计数（每候选一次：candidateBody 一�
         },
         { role: 'user', content: 'Observation: ok' },
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    await collect(trimHook(8192).apply(ctx));
+    await collect(trimHook(8192).apply(targetOf(ctx)));
     expect(ctx.cache.offload).toHaveBeenCalled(); // 确实桩了
     expect(parseCalls).toBe(1);
   });
@@ -132,9 +147,9 @@ describe('trim parseResponse 调用计数（每候选一次：candidateBody 一�
         },
         { role: 'user', content: 'Observation: ok' },
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    await collect(trimHook(8192).apply(ctx));
+    await collect(trimHook(8192).apply(targetOf(ctx)));
     expect(ctx.cache.offload).toHaveBeenCalled(); // 确实桩了
     expect(parseCalls).toBe(1); // 配对 assistant 一次，observation 本身不 parse
   });

@@ -8,15 +8,16 @@ import { runReactLoop } from '@/server/modules/agent/application/service/react-l
 import { AgentRun } from '@/server/modules/agent/domain/model/agent-run.entity';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
 import { HookPlan, type Hook } from '@/server/modules/agent/domain/model/hook';
-import { CompactionHook } from '@/server/modules/agent/application/hooks/compaction-hook';
 import { LoopUsageHook } from '@/server/modules/agent/application/hooks/loop-usage-hook';
 import { CumulativeBudgetHook } from '@/server/modules/agent/application/hooks/cumulative-budget-hook';
 import { StuckHook } from '@/server/modules/agent/application/hooks/stuck-hook';
 import { MaxIterationsHook } from '@/server/modules/agent/application/hooks/max-iterations-hook';
+import { TrimStage } from '@/server/modules/agent/application/stages/trim-stage';
+import { MicroCompactStage } from '@/server/modules/agent/application/stages/micro-compact-stage';
+import { WindowCheckStage } from '@/server/modules/agent/application/stages/window-check-stage';
+import { RunFoldStage } from '@/server/modules/agent/application/stages/run-fold-stage';
+import { StagePlan } from '@/server/shared/context';
 import { ToolHintHook } from '@/server/modules/agent/application/hooks/tool-hint-hook';
-import { TrimHook } from '@/server/modules/agent/application/hooks/trim-hook';
-import { MicroCompactHook } from '@/server/modules/agent/application/hooks/micro-compact-hook';
-import { QueryBudgetHook } from '@/server/modules/agent/application/hooks/query-budget-hook';
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import { SkillService } from '@/server/modules/agent/application/service/skill.service';
@@ -228,6 +229,7 @@ interface BuildCtxOptions {
   seed?: LlmMessage[];
   controller?: AbortController;
   hooks?: HookPlan;
+  stages?: import('@/server/shared/context').StagePlan;
 }
 interface BuiltCtx {
   ctx: AgentRunContext;
@@ -254,14 +256,16 @@ const skillServiceMock = {
 } as unknown as SkillService;
 const buildHooks = () => [
   new ToolHintHook(toolServiceMock, skillServiceMock),
-  new TrimHook(providerServiceMock),
-  new MicroCompactHook(providerServiceMock),
-  new QueryBudgetHook(providerServiceMock),
-  new CompactionHook(providerServiceMock, summaryStubLlm() as never),
   new LoopUsageHook(providerServiceMock),
   new CumulativeBudgetHook(),
   new StuckHook(),
   new MaxIterationsHook(),
+];
+const buildStages = () => [
+  new TrimStage(providerServiceMock),
+  new MicroCompactStage(providerServiceMock),
+  new WindowCheckStage(providerServiceMock),
+  new RunFoldStage(providerServiceMock, summaryStubLlm() as never),
 ];
 
 // Assemble a real `AgentRunContext` (real `AgentRun`/`RunConfigVO`) with scripted LLM,
@@ -272,7 +276,7 @@ function buildCtx(opts: BuildCtxOptions): BuiltCtx {
     tools: [],
     runtimeConfig: {
       model: {},
-      loop: { threshold: 0.8, windowSize: 10, keepRecent: 4 },
+      context: { runFold: { threshold: 0.8, windowSize: 10, keepRecent: 4 } },
     },
   });
   const run = new AgentRun('run_1', config);
@@ -290,6 +294,7 @@ function buildCtx(opts: BuildCtxOptions): BuiltCtx {
     messages: seed,
     base: seed.length,
     hooks: opts.hooks ?? new HookPlan(buildHooks()),
+    stages: opts.stages ?? new StagePlan(buildStages()),
     interactive: true,
   };
   return { ctx, run, calls, runTool: fakeExecuteTool(opts.handler) };

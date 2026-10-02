@@ -4,7 +4,7 @@ import { ChatService } from '../service/chat.service';
 import { SessionManager } from '../service/session-manager';
 import { AgentService } from '@/server/modules/agent/application/service/agent.service';
 import { ConversationActivateCommand } from '../../contracts';
-import { runConvTransforms } from '../transforms';
+import { convStages } from '@/server/shared/context';
 import { TraceContext } from '@/server/trace-context';
 
 @CommandHandler(ConversationActivateCommand)
@@ -54,7 +54,7 @@ export class ConversationActivateHandler {
 
     // activated-phase transform（usage 基线等）。激活先于任何 turn，无需屏障。
     const ctx = this.sessionManager.getCtx(conversationId);
-    for await (const frame of runConvTransforms(ctx, 'activated')) {
+    for await (const frame of convStages(ctx, 'activated')) {
       if (frame) this.sessionManager.sendFrame(conversationId, frame);
     }
   }

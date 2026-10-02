@@ -9,7 +9,7 @@ import { StartChatCommand } from '@/server/modules/conversation/contracts';
 import { ConversationNotFoundError } from '@/server/modules/conversation/domain/errors';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
-import { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
+import { StagePlan } from '@/server/shared/context';
 
 const stubEventBus = { publish: vi.fn() } as unknown as EventBus;
 const stubWorkspace = {
@@ -21,7 +21,7 @@ function makeSessionManager(seed: Message[] = []) {
     conversationId: 'conv_1',
     messages: seed,
     config: { contextSize: 8000, runtimeConfig: {} },
-    transforms: new ConvTransformPlan(),
+    stages: new StagePlan(),
   };
   return {
     ctx,

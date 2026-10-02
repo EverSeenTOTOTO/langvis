@@ -1,10 +1,9 @@
 import { Inject } from '@nestjs/common';
-import type { StreamFrame } from '@/shared/types/events';
 import type {
-  ConversationContext,
-  ConvPhase,
-  ConvTransform,
-} from '@/server/modules/conversation/domain/model/conv-transform';
+  ContextStage,
+  StageTarget,
+  StageEvent,
+} from '@/server/shared/context';
 import {
   findLatestCompactionSummary,
   toLlmMessages,
@@ -31,17 +30,19 @@ export function computeContextUsage(
   };
 }
 
-export class UsageTransform implements ConvTransform {
+export class UsageStage implements ContextStage {
   readonly id = 'usage';
-  readonly phase: ConvPhase[] = ['activated', 'turn-end'];
-  private readonly logger = Logger.child({ source: 'UsageTransform' });
+  readonly phase = ['activated', 'turn-end'] as const;
+  private readonly logger = Logger.child({ source: 'UsageStage' });
 
   constructor(
     @Inject(ProviderService)
     private readonly providerService: ProviderService,
   ) {}
 
-  async *apply(ctx: ConversationContext): AsyncGenerator<StreamFrame | void> {
+  async *apply(target: StageTarget): AsyncGenerator<StageEvent, void> {
+    if (target.kind !== 'conv') return;
+    const ctx = target;
     const total = this.providerService.resolveContextSize(ctx.runtimeConfig);
     const { used } = computeContextUsage(ctx.messages, total);
     this.logger.debug(

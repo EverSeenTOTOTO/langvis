@@ -17,6 +17,13 @@ import { RunStartedHandler } from './application/event/run-started.handler';
 import { RunEventHandler } from './application/event/run-event.handler';
 import { CompleteTurnHandler } from './application/event/complete-turn.handler';
 import { ChatService } from './application/service/chat.service';
+import {
+  BakeSummaryStage,
+  ReconstructStage,
+  ConvFoldStage,
+  UsageStage,
+  CONTEXT_STAGES,
+} from './application/stages';
 import { SessionManager } from './application/service/session-manager';
 import { RunViewCache } from './application/service/run-view-cache';
 import { OrphanRunReconciler } from './application/service/orphan-run-reconciler';
@@ -27,12 +34,7 @@ import {
   CONVERSATION_REPOSITORY,
 } from './conversation.di-tokens';
 import { AgentModule } from '@/server/modules/agent/agent.module';
-import { ConvTransformPlan } from './domain/model/conv-transform';
-import { CONV_TRANSFORM_PLAN } from './application/transforms';
-import { ProcessSummaryTransform } from './application/transforms/process-summary-transform';
-import { ReconstructTransform } from './application/transforms/reconstruct-transform';
-import { SummarizeTransform } from './application/transforms/summarize-transform';
-import { UsageTransform } from './application/transforms/usage-transform';
+import { StagePlan } from '@/server/shared/context';
 
 @Module({
   imports: [CqrsModule, AgentModule],
@@ -50,25 +52,19 @@ import { UsageTransform } from './application/transforms/usage-transform';
     SessionManager,
     RunViewCache,
     OrphanRunReconciler,
-    ProcessSummaryTransform,
-    ReconstructTransform,
-    SummarizeTransform,
-    UsageTransform,
+    BakeSummaryStage,
+    ReconstructStage,
+    ConvFoldStage,
+    UsageStage,
     {
-      provide: CONV_TRANSFORM_PLAN,
+      provide: CONTEXT_STAGES,
       useFactory: (
-        processSummary: ProcessSummaryTransform,
-        reconstruct: ReconstructTransform,
-        summarize: SummarizeTransform,
-        usage: UsageTransform,
-      ) =>
-        new ConvTransformPlan([processSummary, reconstruct, summarize, usage]),
-      inject: [
-        ProcessSummaryTransform,
-        ReconstructTransform,
-        SummarizeTransform,
-        UsageTransform,
-      ],
+        bake: BakeSummaryStage,
+        reconstruct: ReconstructStage,
+        convFold: ConvFoldStage,
+        usage: UsageStage,
+      ) => new StagePlan([bake, reconstruct, convFold, usage]),
+      inject: [BakeSummaryStage, ReconstructStage, ConvFoldStage, UsageStage],
     },
     ConversationActivateHandler,
     CreateConversationHandler,

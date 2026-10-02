@@ -1,13 +1,12 @@
 import { Inject } from '@nestjs/common';
-import type { StreamFrame, EnrichedEvent } from '@/shared/types/events';
+import type { EnrichedEvent } from '@/shared/types/events';
 import { MESSAGE_REPOSITORY } from '@/server/modules/conversation/conversation.di-tokens';
 import type { MessageRepositoryPort } from '@/server/modules/conversation/domain/port/message.repository.port';
 import type {
-  ConversationContext,
-  ConvPhase,
-  ConvTransform,
-  RunCtx,
-} from '@/server/modules/conversation/domain/model/conv-transform';
+  ContextStage,
+  StageTarget,
+  StageEvent,
+} from '@/server/shared/context';
 import { ToolService } from '@/server/modules/agent/application/service/tool.service';
 import type { Tool } from '@/server/modules/agent/domain/model/tool.base';
 import { ToolIds } from '@/shared/constants';
@@ -15,10 +14,10 @@ import Logger from '@/server/utils/logger';
 
 // turn-end 把本 run 的工具调用轨迹拼成确定性过程摘要，写入 assistant 消息 meta.summary，
 // 供下轮透传为 seed thought。不调模型：每个工具经自身 describe 自述，未实现则走通用模板回退。
-export class ProcessSummaryTransform implements ConvTransform {
-  readonly id = 'process-summary';
-  readonly phase: ConvPhase = 'turn-end';
-  private readonly logger = Logger.child({ source: 'ProcessSummaryTransform' });
+export class BakeSummaryStage implements ContextStage {
+  readonly id = 'bake-summary';
+  readonly phase = 'turn-end' as const;
+  private readonly logger = Logger.child({ source: 'BakeSummaryStage' });
 
   constructor(
     @Inject(MESSAGE_REPOSITORY)
@@ -27,15 +26,15 @@ export class ProcessSummaryTransform implements ConvTransform {
     private readonly toolService: ToolService,
   ) {}
 
-  async *apply(
-    ctx: ConversationContext,
-    runCtx?: RunCtx,
-  ): AsyncGenerator<StreamFrame | void> {
+  async *apply(target: StageTarget): AsyncGenerator<StageEvent, void> {
+    if (target.kind !== 'conv') return;
+    const ctx = target;
+    const runCtx = ctx.runCtx;
     if (!runCtx) return;
-    const compaction = ctx.runtimeConfig.loop;
-    if (!compaction) {
+    const runFold = ctx.runtimeConfig.context?.runFold;
+    if (!runFold) {
       this.logger.debug(
-        `process summary off (no loop config), skipped (msg ${runCtx.messageId})`,
+        `process summary off (no runFold config), skipped (msg ${runCtx.messageId})`,
       );
       return;
     }
@@ -72,7 +71,7 @@ export class ProcessSummaryTransform implements ConvTransform {
 
   /** 取该消息现有 meta（合并写、不覆盖既有键）；消息不存在则空对象。 */
   private async fetchMeta(
-    ctx: ConversationContext,
+    ctx: { messages: { id: string; meta?: Record<string, unknown> | null }[] },
     messageId: string,
   ): Promise<Record<string, unknown>> {
     const msg = ctx.messages.find(m => m.id === messageId);

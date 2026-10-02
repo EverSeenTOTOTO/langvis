@@ -6,7 +6,7 @@ import { RunCompleted } from '@/server/modules/agent/contracts';
 import type { EventBus } from '@nestjs/cqrs';
 import type { EnrichedEvent } from '@/shared/types/events';
 import type { Message } from '@/shared/types/entities';
-import { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
+import { StagePlan } from '@/server/shared/context';
 
 function ev(p: { type: string } & Record<string, unknown>): EnrichedEvent {
   return { runId: 'run_1', seq: 0, at: 0, ...p } as EnrichedEvent;
@@ -23,7 +23,7 @@ function makeCtx() {
     conversationId: 'conv_1',
     messages: [],
     config: { contextSize: 4096, runtimeConfig: {} },
-    transforms: new ConvTransformPlan(),
+    stages: new StagePlan(),
   };
 }
 

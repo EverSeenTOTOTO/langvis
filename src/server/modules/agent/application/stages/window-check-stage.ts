@@ -1,15 +1,13 @@
 import { Inject } from '@nestjs/common';
-import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import {
-  StopLoop,
-  type Hook,
-  type HookPhase,
-} from '@/server/modules/agent/domain/model/hook';
-import type { RunEvent } from '@/shared/types/events';
+import { StopLoop } from '@/server/modules/agent/domain/model/hook';
+import type {
+  ContextStage,
+  StageTarget,
+  StageEvent,
+} from '@/server/shared/context';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import { ProviderService } from '@/server/infrastructure/provider.service';
 import Logger from '@/server/utils/logger';
-import { responseUser } from '../service/react-message';
 
 /** 不可恢复超窗时向用户解释的消息（与兄弟 stop hook 的文案风格一致）。 */
 const overflowMessage = (reason: string) =>
@@ -17,22 +15,21 @@ const overflowMessage = (reason: string) =>
 
 // 整体上下文 fail-fast（pre-LLM）：只以整体上下文为视角，不做单条 query 体积限制 / 截断 / 收窄。
 // 裁剪与微压缩已先跑；若全量仍超窗 → 无可恢复（再 drop 任何单条也无济于事）→ 先解释再 StopLoop。
-export class QueryBudgetHook implements Hook {
-  readonly id = 'query-budget';
-  readonly phase: HookPhase = 'pre-llm';
-  private readonly logger = Logger.child({ source: 'QueryBudgetHook' });
+export class WindowCheckStage implements ContextStage {
+  readonly id = 'window-check';
+  readonly phase = 'pre-llm' as const;
+  private readonly logger = Logger.child({ source: 'WindowCheckStage' });
 
   constructor(
     @Inject(ProviderService)
     private readonly providerService: ProviderService,
   ) {}
 
-  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
-    const guard = ctx.config.runtimeConfig.guard;
-    if (!guard)
-      return this.logger.debug(`skip (run ${ctx.runId}): guard config off`);
+  async *apply(target: StageTarget): AsyncGenerator<StageEvent, void> {
+    if (target.kind !== 'run') return;
+    const ctx = target;
     const contextSize = this.providerService.resolveContextSize(
-      ctx.config.runtimeConfig,
+      ctx.runtimeConfig,
     );
     if (!contextSize)
       return this.logger.debug(
@@ -65,7 +62,8 @@ export class QueryBudgetHook implements Hook {
       data: { usage: { used, total: contextSize } },
     };
     // 与兄弟 stop hook 一致：先发一条可见的解释消息再终止，避免前端只见空消息。
-    yield* responseUser(ctx, overflowMessage(reason));
+    yield { type: 'text_chunk', content: overflowMessage(reason) };
+    ctx.messages.push({ role: 'assistant', content: overflowMessage(reason) });
     throw new StopLoop();
   }
 }

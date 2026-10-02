@@ -4,7 +4,7 @@ import { Transport } from '@/shared/transport';
 import { Role } from '@/shared/entities/Message';
 import type { Message } from '@/shared/types/entities';
 import type { StreamFrame, EnrichedEvent } from '@/shared/types/events';
-import { ConvTransformPlan } from '@/server/modules/conversation/domain/model/conv-transform';
+import { StagePlan } from '@/server/shared/context';
 
 class MockTransport extends Transport<StreamFrame> {
   isConnected = true;
@@ -55,7 +55,7 @@ describe('ConversationSession —— 会话上下文（messages/config/transform
     s.activateContext(
       [msg(Role.SYSTEM, 'sys'), msg(Role.USER, 'q1'), msg(Role.ASSIST, 'a1')],
       CONFIG,
-      new ConvTransformPlan(),
+      new StagePlan(),
     );
     const ctx = s.getCtx();
     expect(ctx.messages.some(m => m.content === 'q1')).toBe(true);
@@ -64,11 +64,7 @@ describe('ConversationSession —— 会话上下文（messages/config/transform
 
   it('append 经 ctx.messages 反映', () => {
     const s = makeSession();
-    s.activateContext(
-      [msg(Role.SYSTEM, 'sys')],
-      CONFIG,
-      new ConvTransformPlan(),
-    );
+    s.activateContext([msg(Role.SYSTEM, 'sys')], CONFIG, new StagePlan());
     const ctx = s.getCtx();
     ctx.messages.push(msg(Role.USER, 'q2'));
     expect(ctx.messages.some(m => m.content === 'q2')).toBe(true);
@@ -81,11 +77,7 @@ describe('ConversationSession —— 会话上下文（messages/config/transform
 
   it('dispose 后 getCtx 抛错（上下文随会话释放）', () => {
     const s = makeSession();
-    s.activateContext(
-      [msg(Role.SYSTEM, 'sys')],
-      CONFIG,
-      new ConvTransformPlan(),
-    );
+    s.activateContext([msg(Role.SYSTEM, 'sys')], CONFIG, new StagePlan());
     s.dispose();
     expect(() => s.getCtx()).toThrow();
   });
@@ -94,11 +86,7 @@ describe('ConversationSession —— 会话上下文（messages/config/transform
   // （模型/contextSize/contextUsage 跟着刷新）。修前：改配置后下一轮仍用旧 runtimeConfig。
   it('updateRuntimeConfig：已激活会话热更缓存（下一轮 getCtx 取到新配置）', () => {
     const s = makeSession();
-    s.activateContext(
-      [msg(Role.SYSTEM, 'sys')],
-      CONFIG,
-      new ConvTransformPlan(),
-    );
+    s.activateContext([msg(Role.SYSTEM, 'sys')], CONFIG, new StagePlan());
     const next = { model: { modelId: 'm2' } };
     s.updateRuntimeConfig(next);
     expect(s.getCtx().runtimeConfig).toBe(next);

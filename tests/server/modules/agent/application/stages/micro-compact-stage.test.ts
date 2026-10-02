@@ -4,12 +4,12 @@ import type { LlmMessage } from '@/shared/types/entities';
 import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { RunEvent } from '@/shared/types/events';
 import { RunConfigVO } from '@/server/modules/agent/domain/model/run-config.vo';
-import { MicroCompactHook } from '@/server/modules/agent/application/hooks/micro-compact-hook';
+import { MicroCompactStage } from '@/server/modules/agent/application/stages/micro-compact-stage';
 import { serializeAction } from '@/server/modules/agent/application/service/react-message';
-import type { OffloadConfig } from '@/server/modules/conversation/domain/config/fragments/offload';
+import type { ContextConfig } from '@/server/shared/context';
 
 async function collect(
-  gen: AsyncGenerator<RunEvent, void>,
+  gen: AsyncGenerator<any, any, any>,
 ): Promise<{ events: RunEvent[]; ret: LoopSignal | undefined }> {
   const events: RunEvent[] = [];
   let ret: LoopSignal | undefined;
@@ -28,11 +28,11 @@ async function collect(
 
 function makeCtx(
   messages: LlmMessage[],
-  opts: { offload: OffloadConfig | undefined; base?: number },
+  opts: { context: ContextConfig | undefined; base?: number },
 ): AgentRunContext {
   const config = RunConfigVO.of({
     tools: [],
-    runtimeConfig: { model: {}, offload: opts.offload },
+    runtimeConfig: { model: {}, context: opts.context },
   });
   return {
     runId: 'run_test',
@@ -57,23 +57,37 @@ function assistant(tool: string, input: Record<string, unknown>): LlmMessage {
 }
 
 // 测试用小阈值：compactStepThreshold=3、compactAge=2、keepRecent=2。
-const CFG = (): OffloadConfig => ({
-  compactStepThreshold: 3,
-  compactAge: 2,
-  keepRecent: 2,
+const CFG = (): ContextConfig => ({
+  microCompact: { stepThreshold: 3, age: 2 },
+  trim: { keepRecent: 2 },
 });
-function makeHook(): MicroCompactHook {
-  return new MicroCompactHook({ resolveContextSize: () => 8192 } as never);
+function targetOf(
+  ctx: Record<string, any>,
+): import('@/server/shared/context').RunTarget {
+  return {
+    kind: 'run',
+    runId: ctx.runId,
+    signal: ctx.signal,
+    messages: ctx.messages,
+    base: ctx.base,
+    runtimeConfig: ctx.config?.runtimeConfig ?? ctx.runtimeConfig,
+    workDir: ctx.workDir,
+    cache: ctx.cache,
+  };
+}
+
+function makeHook(): MicroCompactStage {
+  return new MicroCompactStage({ resolveContextSize: () => 8192 } as never);
 }
 // age(i) = i 之后的 assistant 数。
 
-describe('MicroCompactHook（pre-LLM 步数驱动有损丢桩：steps ≥ 阈值后丢 aged 旧 observation 桩）', () => {
+describe('MicroCompactStage（pre-LLM 步数驱动有损丢桩：steps ≥ 阈值后丢 aged 旧 observation 桩）', () => {
   it('fragment 缺失 → next，不动 messages', async () => {
     const ctx = makeCtx([obs('x'), assistant('s', {}), obs('y')], {
-      offload: undefined,
+      context: undefined,
     });
     const before = ctx.messages.length;
-    const { events, ret } = await collect(makeHook().apply(ctx));
+    const { events, ret } = await collect(makeHook().apply(targetOf(ctx)));
     expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(before);
@@ -83,9 +97,9 @@ describe('MicroCompactHook（pre-LLM 步数驱动有损丢桩：steps ≥ 阈值
     // 仅 2 个 observation < 阈值 3 → 跳过。
     const ctx = makeCtx(
       [stubObs('fc_8a4e9674'), assistant('s', {}), stubObs('fc_8a4e9675')],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events, ret } = await collect(makeHook().apply(ctx));
+    const { events, ret } = await collect(makeHook().apply(targetOf(ctx)));
     expect(ret).toBeUndefined();
     expect(events).toHaveLength(0);
     expect(ctx.messages.length).toBe(3); // 未丢
@@ -101,9 +115,9 @@ describe('MicroCompactHook（pre-LLM 步数驱动有损丢桩：steps ≥ 阈值
         assistant('s', {}),
         obs('tail'),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(1);
     expect(events[0]!.type).toBe('hook');
     if (events[0]!.type === 'hook')
@@ -125,9 +139,14 @@ describe('MicroCompactHook（pre-LLM 步数驱动有损丢桩：steps ≥ 阈值
         stubObs('fc_8a4e9675'),
         stubObs('fc_8a4e9676'),
       ],
-      { offload: { compactStepThreshold: 3, compactAge: 2, keepRecent: 0 } },
+      {
+        context: {
+          microCompact: { stepThreshold: 3, age: 2 },
+          trim: { keepRecent: 0 },
+        },
+      },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(0); // 无 aged stub 可丢
     expect(ctx.messages.length).toBe(4);
   });
@@ -143,9 +162,9 @@ describe('MicroCompactHook（pre-LLM 步数驱动有损丢桩：steps ≥ 阈值
         assistant('s', {}),
         stubObs('fc_8a4e9676'),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(1);
     expect(ctx.messages.length).toBe(4); // 丢 stub0
     expect(
@@ -167,9 +186,9 @@ describe('MicroCompactHook（pre-LLM 步数驱动有损丢桩：steps ≥ 阈值
         assistant('bash', { command: 'cat fc_8a4e9674' }),
         obs('tail'),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(0); // stub0 被回取保留、stub2 age 不够 → 无可丢
     expect(
       ctx.messages.find(m => m.content.includes('fc_8a4e9674')),
@@ -186,9 +205,9 @@ describe('MicroCompactHook（pre-LLM 步数驱动有损丢桩：steps ≥ 阈值
         assistant('s', {}),
         obs('tail'),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(0); // 无桩可丢
     expect(ctx.messages.length).toBe(5);
   });
@@ -211,9 +230,9 @@ describe('MicroCompactHook（pre-LLM 步数驱动有损丢桩：steps ≥ 阈值
         assistant('s', {}),
         obs('tail'),
       ],
-      { offload: CFG() },
+      { context: CFG() },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     expect(events).toHaveLength(0); // assistant 桩不被丢
     expect(ctx.messages[0]).toBe(stubbedAssistant);
   });
@@ -228,9 +247,9 @@ describe('MicroCompactHook（pre-LLM 步数驱动有损丢桩：steps ≥ 阈值
         assistant('s', {}),
         obs('tail'),
       ],
-      { offload: CFG(), base: 1 },
+      { context: CFG(), base: 1 },
     );
-    const { events } = await collect(makeHook().apply(ctx));
+    const { events } = await collect(makeHook().apply(targetOf(ctx)));
     // seed stub0 age=2≥2、出窗，但 base=1 → i 从 1 起，seed@0 不碰 → 保留；loop 区无桩 → 无可丢。
     expect(events).toHaveLength(0);
     expect(

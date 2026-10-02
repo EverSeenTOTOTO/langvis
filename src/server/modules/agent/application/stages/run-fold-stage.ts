@@ -1,8 +1,11 @@
 import { Inject } from '@nestjs/common';
-import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
-import type { RunEvent } from '@/shared/types/events';
-import { fold, PROCESS_SUMMARY_PROMPT } from '@/server/shared/compaction';
+import type {
+  ContextStage,
+  StageTarget,
+  StageEvent,
+} from '@/server/shared/context';
+import { SNAPSHOT_PROMPT } from '@/server/shared/context';
+import { fold } from '@/server/shared/compaction';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import { LLM_PORT } from '@/server/infrastructure/llm/llm.tokens';
 import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
@@ -11,11 +14,11 @@ import Logger from '@/server/utils/logger';
 import { isPinnedObservation } from '@/server/modules/agent/domain/offload/pin';
 import type { LlmMessage } from '@/shared/types/entities';
 
-/** loop 内压缩：折叠 turn 动作轨迹为过程摘要（仅记工作，不复述最终答案） */
-export class CompactionHook implements Hook {
-  readonly id = 'compaction';
-  readonly phase: HookPhase = 'post-observation';
-  private readonly logger = Logger.child({ source: 'CompactionHook' });
+/** run 域折叠：loop 动作轨迹 → 结构化状态快照（瞬态，run 结束即弃；快照链式续接）。 */
+export class RunFoldStage implements ContextStage {
+  readonly id = 'run-fold';
+  readonly phase = 'post-observation' as const;
+  private readonly logger = Logger.child({ source: 'RunFoldStage' });
 
   constructor(
     @Inject(ProviderService)
@@ -23,12 +26,14 @@ export class CompactionHook implements Hook {
     @Inject(LLM_PORT) private readonly llm: LlmPort,
   ) {}
 
-  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
-    const compaction = ctx.config.runtimeConfig.loop;
+  async *apply(target: StageTarget): AsyncGenerator<StageEvent, void> {
+    if (target.kind !== 'run') return;
+    const ctx = target;
+    const compaction = ctx.runtimeConfig.context?.runFold;
     if (!compaction)
-      return this.logger.debug(`skip (run ${ctx.runId}): loop compaction off`);
+      return this.logger.debug(`skip (run ${ctx.runId}): runFold config off`);
     const contextSize = this.providerService.resolveContextSize(
-      ctx.config.runtimeConfig,
+      ctx.runtimeConfig,
     );
     if (!contextSize)
       return this.logger.debug(
@@ -79,9 +84,8 @@ export class CompactionHook implements Hook {
         messages: foldable,
         windowSize: compaction.windowSize,
         signal: ctx.signal,
-        prompt: PROCESS_SUMMARY_PROMPT,
-        modelId:
-          compaction.compactModelId ?? ctx.config.runtimeConfig.model?.modelId,
+        prompt: SNAPSHOT_PROMPT,
+        modelId: compaction.modelId ?? ctx.runtimeConfig.model?.modelId,
       });
       if (!recap) {
         this.logger.warn(
@@ -90,7 +94,8 @@ export class CompactionHook implements Hook {
         return;
       }
 
-      ctx.messages = [
+      // 原地 splice(而非重绑定)——调用方持有的 messages 引用保持可见
+      const folded: LlmMessage[] = [
         ...list.slice(0, base),
         {
           role: 'user',
@@ -99,6 +104,7 @@ export class CompactionHook implements Hook {
         ...pinned,
         ...recent,
       ];
+      ctx.messages.splice(0, ctx.messages.length, ...folded);
 
       const afterTokens = estimateTokens(ctx.messages);
       this.logger.info(

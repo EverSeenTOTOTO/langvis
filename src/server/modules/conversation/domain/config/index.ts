@@ -1,17 +1,13 @@
 import type { JSONSchemaType } from 'ajv';
 import type { ComposeConfig } from './config-fragment';
+import { CONTEXT_FRAGMENT } from '@/server/shared/context';
 import { MODEL_FRAGMENT } from './fragments/model';
-import { LOOP_FRAGMENT } from './fragments/loop';
-import { HISTORY_FRAGMENT } from './fragments/history';
 import { GUARD_FRAGMENT } from './fragments/guard';
-import { OFFLOAD_FRAGMENT } from './fragments/offload';
 import { APPROVAL_FRAGMENT } from './fragments/approval';
 
 const FRAGMENTS = [
   MODEL_FRAGMENT,
-  LOOP_FRAGMENT,
-  HISTORY_FRAGMENT,
-  OFFLOAD_FRAGMENT,
+  CONTEXT_FRAGMENT,
   GUARD_FRAGMENT,
   APPROVAL_FRAGMENT,
 ] as const;

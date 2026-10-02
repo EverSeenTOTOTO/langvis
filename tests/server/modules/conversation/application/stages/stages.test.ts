@@ -1,16 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { TRANSFORM_TYPES } from '@/server/modules/conversation/application/transforms';
-import { UsageTransform } from '@/server/modules/conversation/application/transforms/usage-transform';
+import { UsageStage } from '@/server/modules/conversation/application/stages/usage-stage';
 import {
-  ProcessSummaryTransform,
+  BakeSummaryStage,
   buildProcessSummary,
-} from '@/server/modules/conversation/application/transforms/process-summary-transform';
-import { SummarizeTransform } from '@/server/modules/conversation/application/transforms/summarize-transform';
-import { ReconstructTransform } from '@/server/modules/conversation/application/transforms/reconstruct-transform';
-import {
-  ConvTransformPlan,
-  type ConversationContext,
-} from '@/server/modules/conversation/domain/model/conv-transform';
+} from '@/server/modules/conversation/application/stages/bake-summary-stage';
+import { ConvFoldStage } from '@/server/modules/conversation/application/stages/conv-fold-stage';
+import { ReconstructStage } from '@/server/modules/conversation/application/stages/reconstruct-stage';
+import { StagePlan } from '@/server/shared/context';
 import { projectToLlmMessages } from '@/server/modules/conversation/application/service/history-projection';
 import type { ConversationConfig } from '@/server/modules/conversation/domain/config';
 import { ProviderService } from '@/server/infrastructure/provider.service';
@@ -46,12 +42,12 @@ function makeMessage(
 function makeCtx(
   messages: Message[],
   runEvents: Record<string, readonly EnrichedEvent[]> = {},
-): ConversationContext {
+): import('@/server/shared/context').ConvTarget {
   return {
+    kind: 'conv',
     conversationId: 'conv_test',
     messages: messages,
-    runtimeConfig: { history: COMPACTION },
-    transforms: new ConvTransformPlan(),
+    runtimeConfig: { context: { convFold: COMPACTION } },
     getRunEvents: (messageId: string) => runEvents[messageId],
   };
 }
@@ -62,29 +58,29 @@ function mockProvider(contextSize: number): ProviderService {
   } as unknown as ProviderService;
 }
 
-async function collect(gen: AsyncGenerator<StreamFrame | void>) {
-  const out: (StreamFrame | void)[] = [];
+async function collect(gen: AsyncGenerator<any, any, any>) {
+  const out: any[] = [];
   for await (const e of gen) out.push(e);
   return out;
 }
 
-describe('conv transform 清单（TRANSFORM_TYPES 显式发现）', () => {
+describe('conv transform 清单（CONTEXT_STAGES 显式发现）', () => {
   const buildTransforms = () => [
-    new ProcessSummaryTransform(
+    new BakeSummaryStage(
       {
         batchCreate: vi.fn(),
         update: vi.fn(),
       } as unknown as MessageRepositoryPort,
       { getAllToolInfo: async () => [] } as never,
     ),
-    new ReconstructTransform(
+    new ReconstructStage(
       {
         batchCreate: vi.fn(),
         update: vi.fn(),
       } as unknown as MessageRepositoryPort,
       mockProvider(8000),
     ),
-    new SummarizeTransform(
+    new ConvFoldStage(
       {
         batchCreate: vi.fn(),
         update: vi.fn(),
@@ -92,37 +88,36 @@ describe('conv transform 清单（TRANSFORM_TYPES 显式发现）', () => {
       mockProvider(8000),
       { chatContent: vi.fn(async () => 'S') } as never,
     ),
-    new UsageTransform(mockProvider(8000)),
+    new UsageStage(mockProvider(8000)),
   ];
 
-  it('TRANSFORM_TYPES 覆盖四个 transform', () => {
-    expect(TRANSFORM_TYPES.some(T => T === UsageTransform)).toBe(true);
-    expect(TRANSFORM_TYPES.some(T => T === ProcessSummaryTransform)).toBe(true);
-    expect(TRANSFORM_TYPES.some(T => T === ReconstructTransform)).toBe(true);
-    expect(TRANSFORM_TYPES.some(T => T === SummarizeTransform)).toBe(true);
+  it('清单覆盖四个 stage', () => {
+    const registered = buildTransforms().map(s => s.constructor);
+    expect(registered).toContain(UsageStage);
+    expect(registered).toContain(BakeSummaryStage);
+    expect(registered).toContain(ReconstructStage);
+    expect(registered).toContain(ConvFoldStage);
   });
 
   it('相位分桶：process-summary+reconstruct+summarize+usage 进 turn-end，usage 进 activated', () => {
-    const plan = new ConvTransformPlan(buildTransforms() as never);
+    const plan = new StagePlan(buildTransforms() as never);
     const ids = (ts: readonly { id: string }[]) => ts.map(t => t.id);
     expect(ids(plan.forPhase('activated'))).toEqual(['usage']);
     expect(ids(plan.forPhase('turn-start'))).toEqual([]);
     // 导入序即运行序：烘 summary 列 → 选择性截断胖用户消息 → 折叠全对话为 C → 量压缩后用量
     expect(ids(plan.forPhase('turn-end'))).toEqual([
-      'process-summary',
+      'bake-summary',
       'reconstruct',
-      'summarize',
+      'conv-fold',
       'usage',
     ]);
   });
 });
 
-describe('UsageTransform', () => {
+describe('UsageStage', () => {
   it('从 ctx.messages + 派生 contextSize 算用量并 yield conversation_usage', async () => {
     const ctx = makeCtx([makeMessage(Role.USER, 'hello world question')]);
-    const events = await collect(
-      new UsageTransform(mockProvider(8000)).apply(ctx),
-    );
+    const events = await collect(new UsageStage(mockProvider(8000)).apply(ctx));
     expect(events).toHaveLength(1);
     const usage = events[0] as Extract<
       StreamFrame,
@@ -143,13 +138,15 @@ function ev(p: { type: string } & Record<string, unknown>): EnrichedEvent {
 function loopCtx(
   messages: Message[],
   runEvents: Record<string, readonly EnrichedEvent[]>,
-  runtimeConfig: ConversationConfig = { loop: LOOP_COMPACTION },
-): ConversationContext {
+  runtimeConfig: ConversationConfig = {
+    context: { runFold: LOOP_COMPACTION },
+  } as ConversationConfig,
+): import('@/server/shared/context').ConvTarget {
   return {
+    kind: 'conv',
     conversationId: 'conv_test',
     messages: messages,
     runtimeConfig,
-    transforms: new ConvTransformPlan(),
     getRunEvents: (messageId: string) => runEvents[messageId],
   };
 }
@@ -162,7 +159,7 @@ function toolServiceWith(tools: Record<string, Tool>): ToolService {
   } as unknown as ToolService;
 }
 
-describe('ProcessSummaryTransform', () => {
+describe('BakeSummaryStage', () => {
   it('buildProcessSummary：按 callId 配对，有 describe 自述，否则走通用回退', () => {
     const describeFn = vi.fn(
       (input: { cmd?: unknown }, _output: unknown, error: string) =>
@@ -286,9 +283,12 @@ describe('ProcessSummaryTransform', () => {
       { msg_1: events as readonly EnrichedEvent[] },
     );
     await collect(
-      new ProcessSummaryTransform(messageRepo, toolService).apply(ctx, {
-        messageId: 'msg_1',
-        runId: 'run_1',
+      new BakeSummaryStage(messageRepo, toolService).apply({
+        ...ctx,
+        runCtx: {
+          messageId: 'msg_1',
+          runId: 'run_1',
+        },
       }),
     );
     expect(foldMock).not.toHaveBeenCalled();
@@ -304,9 +304,7 @@ describe('ProcessSummaryTransform', () => {
     const toolService = toolServiceWith({});
     const messageRepo = { update: vi.fn() } as unknown as MessageRepositoryPort;
     const ctx = loopCtx([makeMessage(Role.ASSIST, 'a')], {});
-    await collect(
-      new ProcessSummaryTransform(messageRepo, toolService).apply(ctx),
-    );
+    await collect(new BakeSummaryStage(messageRepo, toolService).apply(ctx));
     expect(messageRepo.update).not.toHaveBeenCalled();
   });
 
@@ -319,9 +317,12 @@ describe('ProcessSummaryTransform', () => {
       ] as readonly EnrichedEvent[],
     });
     await collect(
-      new ProcessSummaryTransform(messageRepo, toolService).apply(ctx, {
-        messageId: 'msg_1',
-        runId: 'run_1',
+      new BakeSummaryStage(messageRepo, toolService).apply({
+        ...ctx,
+        runCtx: {
+          messageId: 'msg_1',
+          runId: 'run_1',
+        },
       }),
     );
     expect(messageRepo.update).not.toHaveBeenCalled();
@@ -341,9 +342,12 @@ describe('ProcessSummaryTransform', () => {
       {},
     );
     await collect(
-      new ProcessSummaryTransform(messageRepo, toolService).apply(ctx, {
-        messageId: 'msg_1',
-        runId: 'run_1',
+      new BakeSummaryStage(messageRepo, toolService).apply({
+        ...ctx,
+        runCtx: {
+          messageId: 'msg_1',
+          runId: 'run_1',
+        },
       }),
     );
     expect(messageRepo.update).not.toHaveBeenCalled();
@@ -354,16 +358,19 @@ describe('ProcessSummaryTransform', () => {
     const messageRepo = { update: vi.fn() } as unknown as MessageRepositoryPort;
     const ctx = loopCtx([makeMessage(Role.ASSIST, 'a', { id: 'msg_1' })], {});
     await collect(
-      new ProcessSummaryTransform(messageRepo, toolService).apply(ctx, {
-        messageId: 'msg_1',
-        runId: 'run_1',
+      new BakeSummaryStage(messageRepo, toolService).apply({
+        ...ctx,
+        runCtx: {
+          messageId: 'msg_1',
+          runId: 'run_1',
+        },
       }),
     );
     expect(messageRepo.update).not.toHaveBeenCalled();
   });
 });
 
-describe('SummarizeTransform', () => {
+describe('ConvFoldStage', () => {
   beforeEach(() => {
     foldMock.mockReset();
   });
@@ -379,7 +386,7 @@ describe('SummarizeTransform', () => {
     ]);
     const before = ctx.messages.length;
     await collect(
-      new SummarizeTransform(messageRepo, mockProvider(1_000_000), {
+      new ConvFoldStage(messageRepo, mockProvider(1_000_000), {
         chatContent: vi.fn(async () => 'S'),
       } as never).apply(ctx),
     );
@@ -408,7 +415,7 @@ describe('SummarizeTransform', () => {
     ]);
 
     const events = await collect(
-      new SummarizeTransform(messageRepo, mockProvider(10), {
+      new ConvFoldStage(messageRepo, mockProvider(10), {
         chatContent: vi.fn(async () => 'S'),
       } as never).apply(ctx),
     );
@@ -432,7 +439,7 @@ describe('SummarizeTransform', () => {
       makeMessage(Role.ASSIST, 'a one'),
     ]);
     await collect(
-      new SummarizeTransform(messageRepo, mockProvider(10), {
+      new ConvFoldStage(messageRepo, mockProvider(10), {
         chatContent: vi.fn(async () => 'S'),
       } as never).apply(ctx),
     );
@@ -441,7 +448,7 @@ describe('SummarizeTransform', () => {
   });
 });
 
-describe('ReconstructTransform（选择性重构：低阈、保细节、打 meta.reconstructed 标记落库，投影读取时截头部，原正文不改）', () => {
+describe('ReconstructStage（选择性重构：低阈、保细节、打 meta.reconstructed 标记落库，投影读取时截头部，原正文不改）', () => {
   function mockRepo() {
     return {
       update: vi.fn(async (_id: string, partial: any) => partial),
@@ -450,19 +457,27 @@ describe('ReconstructTransform（选择性重构：低阈、保细节、打 meta
 
   it('未超 reconstructThreshold → 不动（不标记、不 update）', async () => {
     // history 带 reconstructThreshold=0.5；contextSize 大到 used ≤ limit → 跳过。
-    const ctx: ConversationContext = {
+    const ctx: Record<string, any> = {
       conversationId: 'conv_test',
       messages: [makeMessage(Role.USER, 'q'), makeMessage(Role.ASSIST, 'a')],
       runtimeConfig: {
-        history: { reconstructThreshold: 0.5, threshold: 0.99, windowSize: 10 },
+        context: {
+          convFold: {
+            reconstructThreshold: 0.5,
+            threshold: 0.99,
+            windowSize: 10,
+          },
+        },
       },
-      transforms: new ConvTransformPlan(),
+      transforms: new StagePlan(),
       getRunEvents: () => undefined,
-    } as unknown as ConversationContext;
+    } as unknown as Record<string, any>;
     const before = ctx.messages.length;
     const repo = mockRepo();
     await collect(
-      new ReconstructTransform(repo, mockProvider(1_000_000)).apply(ctx),
+      new ReconstructStage(repo, mockProvider(1_000_000)).apply(
+        ctx as import('@/server/shared/context').StageTarget,
+      ),
     );
     expect(ctx.messages.length).toBe(before);
     expect(ctx.messages[0]!.meta?.reconstructed).toBeUndefined();
@@ -473,7 +488,7 @@ describe('ReconstructTransform（选择性重构：低阈、保细节、打 meta
     // history 带 reconstructThreshold=0.5 + keepRecent=1；长用户消息在 tail 首位、出窗 → 标记。
     const longBody = 'y'.repeat(10_000);
     const longMsg = makeMessage(Role.USER, longBody, { id: 'msg_long' });
-    const ctx: ConversationContext = {
+    const ctx: Record<string, any> = {
       conversationId: 'conv_test',
       messages: [
         longMsg,
@@ -481,18 +496,25 @@ describe('ReconstructTransform（选择性重构：低阈、保细节、打 meta
         makeMessage(Role.USER, 'q2', { id: 'msg_q2' }),
       ],
       runtimeConfig: {
-        history: {
-          reconstructThreshold: 0.5,
-          reconstructKeepRecent: 1,
-          threshold: 0.99,
-          windowSize: 10,
+        context: {
+          convFold: {
+            reconstructThreshold: 0.5,
+            reconstructKeepRecent: 1,
+            threshold: 0.99,
+            windowSize: 10,
+          },
         },
       },
-      transforms: new ConvTransformPlan(),
+      stages: new StagePlan(),
       getRunEvents: () => undefined,
-    } as unknown as ConversationContext;
+    } as unknown as Record<string, any>;
     const repo = mockRepo();
-    await collect(new ReconstructTransform(repo, mockProvider(10)).apply(ctx));
+    await collect(
+      new ReconstructStage(repo, mockProvider(10)).apply({
+        ...ctx,
+        kind: 'conv',
+      } as import('@/server/shared/context').StageTarget),
+    );
     // 原正文不动（非破坏）；打了标记；落库 update。
     expect(ctx.messages[0]!.content).toBe(longBody);
     expect(ctx.messages[0]!.meta?.reconstructed).toBe(true);
@@ -517,7 +539,12 @@ describe('ReconstructTransform（选择性重构：低阈、保细节、打 meta
     ]);
     const before = ctx.messages[0]!.content;
     const repo = mockRepo();
-    await collect(new ReconstructTransform(repo, mockProvider(10)).apply(ctx));
+    await collect(
+      new ReconstructStage(repo, mockProvider(10)).apply({
+        ...ctx,
+        kind: 'conv',
+      } as import('@/server/shared/context').StageTarget),
+    );
     expect(ctx.messages[0]!.content).toBe(before); // 未动
     expect(ctx.messages[0]!.meta?.reconstructed).toBeUndefined();
     expect(repo.update).not.toHaveBeenCalled();
@@ -525,7 +552,7 @@ describe('ReconstructTransform（选择性重构：低阈、保细节、打 meta
 
   it('已标记的消息不重复标记（幂等）', async () => {
     const longBody = 'y'.repeat(10_000);
-    const ctx: ConversationContext = {
+    const ctx: Record<string, any> = {
       conversationId: 'conv_test',
       messages: [
         makeMessage(Role.USER, longBody, {
@@ -536,18 +563,25 @@ describe('ReconstructTransform（选择性重构：低阈、保细节、打 meta
         makeMessage(Role.USER, 'q2', { id: 'msg_q2' }),
       ],
       runtimeConfig: {
-        history: {
-          reconstructThreshold: 0.5,
-          reconstructKeepRecent: 1,
-          threshold: 0.99,
-          windowSize: 10,
+        context: {
+          convFold: {
+            reconstructThreshold: 0.5,
+            reconstructKeepRecent: 1,
+            threshold: 0.99,
+            windowSize: 10,
+          },
         },
       },
-      transforms: new ConvTransformPlan(),
+      stages: new StagePlan(),
       getRunEvents: () => undefined,
-    } as unknown as ConversationContext;
+    } as unknown as Record<string, any>;
     const repo = mockRepo();
-    await collect(new ReconstructTransform(repo, mockProvider(10)).apply(ctx));
+    await collect(
+      new ReconstructStage(repo, mockProvider(10)).apply({
+        ...ctx,
+        kind: 'conv',
+      } as import('@/server/shared/context').StageTarget),
+    );
     expect(repo.update).not.toHaveBeenCalled(); // 已标记 → 不重复 update
   });
 });

@@ -1,11 +1,12 @@
 import { Inject } from '@nestjs/common';
-import type { AgentRunContext } from '@/server/modules/agent/domain/port/agent-run-context.port';
 import type { ParsedAction } from '@/server/modules/agent/domain/port/agent-run-context.port';
-import type { Hook, HookPhase } from '@/server/modules/agent/domain/model/hook';
-import type { RunEvent } from '@/shared/types/events';
+import type {
+  ContextStage,
+  StageTarget,
+  StageEvent,
+} from '@/server/shared/context';
 import { estimateTokens } from '@/server/utils/estimateTokens';
 import { ProviderService } from '@/server/infrastructure/provider.service';
-import type { OffloadConfig } from '@/server/modules/conversation/domain/config/fragments/offload';
 import Logger from '@/server/utils/logger';
 import { classifyRecallParsed } from '@/server/modules/agent/domain/offload/offload-recall';
 import { isPinnedObservation } from '@/server/modules/agent/domain/offload/pin';
@@ -28,23 +29,25 @@ const DEFAULT_KEEP_RECENT = 4;
 
 // 裁剪（pre-LLM）：age 驱动的无损桩化。低价值 aged 结果满 trimAge 个 tick 即落盘 + 替换为 hint 文本标记，
 // 读端经 rg/sed 回取。与体积无关，按年龄裁剪。pinned 驻留；recall 句柄副本跳过；近窗口与短正文不动。
-export class TrimHook implements Hook {
+export class TrimStage implements ContextStage {
   readonly id = 'trim';
-  readonly phase: HookPhase = 'pre-llm';
-  private readonly logger = Logger.child({ source: 'TrimHook' });
+  readonly phase = 'pre-llm' as const;
+  private readonly logger = Logger.child({ source: 'TrimStage' });
 
   constructor(
     @Inject(ProviderService)
     private readonly providerService: ProviderService,
   ) {}
 
-  async *apply(ctx: AgentRunContext): AsyncGenerator<RunEvent, void> {
-    const cfg = ctx.config.runtimeConfig.offload as OffloadConfig | undefined;
-    if (!cfg)
-      return this.logger.debug(`skip (run ${ctx.runId}): offload config off`);
+  async *apply(target: StageTarget): AsyncGenerator<StageEvent, void> {
+    if (target.kind !== 'run') return;
+    const ctx = target;
+    const trim = ctx.runtimeConfig.context?.trim;
+    if (!trim)
+      return this.logger.debug(`skip (run ${ctx.runId}): trim config off`);
 
-    const trimAge = cfg.trimAge ?? DEFAULT_TRIM_AGE;
-    const keepRecent = cfg.keepRecent ?? DEFAULT_KEEP_RECENT;
+    const trimAge = trim.age ?? DEFAULT_TRIM_AGE;
+    const keepRecent = trim.keepRecent ?? DEFAULT_KEEP_RECENT;
 
     const messages = ctx.messages;
     const len = messages.length;
@@ -68,7 +71,7 @@ export class TrimHook implements Hook {
     };
 
     const contextSize =
-      this.providerService.resolveContextSize(ctx.config.runtimeConfig) ?? 0;
+      this.providerService.resolveContextSize(ctx.runtimeConfig) ?? 0;
     let stubbed = 0;
     let totalBytes = 0;
 

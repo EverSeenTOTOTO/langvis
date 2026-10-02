@@ -5,6 +5,7 @@ import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
 import type { CachePort } from './cache.port';
 import type { AuthorizationPort } from './authorization.port';
 import type { HookPlan } from '../model/hook';
+import type { StagePlan } from '@/server/shared/context';
 import type { LlmMessage } from '@/shared/types/entities';
 
 /** 工具执行结果：observation 供模型回灌；status 作终态判定（如 response_user 失败不退出）。 */
@@ -41,6 +42,7 @@ export interface AgentRunContext {
   messages: LlmMessage[];
   readonly base: number;
   readonly hooks?: HookPlan;
+  readonly stages?: StagePlan;
   // 本 tick 权威解析出的动作：loop 解析后赋值，hook 据此拦截而不各自 re-parse。
   pendingAction?: ParsedAction;
   /** 是否允许 HITL。conv run = true；子 agent = false。ToolCall 经 ToolCallContext 透传给工具。 */
