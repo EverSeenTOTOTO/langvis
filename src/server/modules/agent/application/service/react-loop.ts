@@ -149,11 +149,11 @@ export async function* runReactLoop(
       yield* applyStages(ctx, 'pre-llm');
       yield* applyHooks(ctx, 'pre-llm');
 
-      // 流式消费：边流边发 thought / response_user 的 message（text_chunk），
-      // 全文聚合后照旧走 parseResponse（action 解析仍在流结束进行）。
+      // 流式消费：正文 delta 边流边发（thought / response_user 的 text_chunk），
+      // 原生思维链分片直发 thought 事件（不进 content，信封解析不受污染）。
       const splitter = new ReActStreamSplitter();
       let content = '';
-      for await (const delta of ctx.llm.chat(
+      for await (const chunk of ctx.llm.chat(
         model.modelId,
         {
           messages: ctx.messages,
@@ -162,8 +162,12 @@ export async function* runReactLoop(
         },
         ctx.signal,
       )) {
-        content += delta;
-        for (const ev of splitter.push(delta)) yield ev;
+        if (typeof chunk === 'string') {
+          content += chunk;
+          for (const ev of splitter.push(chunk)) yield ev;
+        } else {
+          yield { type: 'thought', content: chunk.reasoning };
+        }
       }
       for (const ev of splitter.flush()) yield ev;
       if (!content) {

@@ -1,3 +1,4 @@
+import type { LlmStreamChunk } from '@/server/infrastructure/llm/llm.port';
 import { describe, it, expect, vi, afterAll } from 'vitest';
 import {
   backoffDelayMs,
@@ -47,7 +48,7 @@ describe('withStreamRetry', () => {
         yield 'llo';
         return 'hello';
       })();
-    const out: string[] = [];
+    const out: LlmStreamChunk[] = [];
     let ret = '';
     const iter = withStreamRetry(makeAttempt, new AbortController().signal);
     for (;;) {
@@ -72,7 +73,7 @@ describe('withStreamRetry', () => {
         throw httpError(500);
       })();
     const iter = withStreamRetry(make, new AbortController().signal);
-    const chunks: string[] = [];
+    const chunks: LlmStreamChunk[] = [];
     await expect(
       (async () => {
         for (;;) {

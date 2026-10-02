@@ -10,7 +10,10 @@ import { traceGen, traceSync } from '@/server/otel';
 import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import { stripThinking } from '@/server/utils/llm-text';
 import type { ModelDefinition, ModelType } from '@/shared/types/provider';
-import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
+import type {
+  LlmPort,
+  LlmStreamChunk,
+} from '@/server/infrastructure/llm/llm.port';
 import type {
   TextToSpeechInput,
   TextToSpeechOutput,
@@ -187,7 +190,7 @@ export class LlmProvider implements LlmPort {
     modelId: string | undefined,
     data: Partial<ChatCompletionCreateParams>,
     signal: AbortSignal,
-  ): AsyncGenerator<string, string, void> {
+  ): AsyncGenerator<LlmStreamChunk, string, void> {
     const resolved = this.resolveModel(modelId, 'chat');
     const providerId = this.resolveProviderId(resolved);
     const modelCode = this.resolveModelCode(resolved);
@@ -208,7 +211,7 @@ export class LlmProvider implements LlmPort {
 
     // 单次尝试的完整流式调用（create + 消费）；首 delta 前失败可重试
     const makeAttempt = () =>
-      traceGen(
+      traceGen<LlmStreamChunk, string>(
         'gen_ai.chat',
         {
           'gen_ai.request.model': resolved,
@@ -232,12 +235,22 @@ export class LlmProvider implements LlmPort {
 
             for await (const chunk of response) {
               const choice = chunk?.choices?.[0];
-              const delta = choice?.delta?.content;
               const finishReason = choice?.finish_reason;
+              const delta = choice?.delta as
+                | {
+                    content?: string;
+                    reasoning_content?: string;
+                    reasoning?: string;
+                  }
+                | undefined;
 
-              if (delta) {
-                content += delta;
-                yield delta;
+              // 原生思维链（reasoning_content / reasoning）单独成道，不进 content（信封解析不受污染）
+              const reasoning = delta?.reasoning_content ?? delta?.reasoning;
+              if (reasoning) yield { reasoning };
+
+              if (delta?.content) {
+                content += delta.content;
+                yield delta.content;
               }
 
               if (finishReason) {

@@ -1,5 +1,6 @@
 import type { APIError } from 'openai';
 import { abortableDelay } from '@/server/utils/abort';
+import type { LlmStreamChunk } from './llm.port';
 
 // LLM 调用传输层重试：仅限「流式产出首个 delta 之前」的失败——已吐过内容就无法透明重放。
 // 指数退避 1s/2s/4s，全程尊重 abort signal。
@@ -22,10 +23,10 @@ export function isRetryableLlmError(err: unknown): boolean {
 
 // 流式调用重试包装：makeAttempt 每次重建完整调用（create + 消费）。 首个 delta 产出后的失败不可重放，直接上抛；每次重试经 onRetry 通知调用方记录遥测。
 export async function* withStreamRetry<R>(
-  makeAttempt: () => AsyncGenerator<string, R, void>,
+  makeAttempt: () => AsyncGenerator<LlmStreamChunk, R, void>,
   signal: AbortSignal,
   onRetry?: (attempt: number, err: unknown, delayMs: number) => void,
-): AsyncGenerator<string, R, void> {
+): AsyncGenerator<LlmStreamChunk, R, void> {
   for (let attempt = 0; ; attempt++) {
     let produced = false;
     const iterator = makeAttempt()[Symbol.asyncIterator]();

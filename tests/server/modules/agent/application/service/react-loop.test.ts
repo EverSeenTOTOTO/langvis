@@ -24,7 +24,10 @@ import { ToolService } from '@/server/modules/agent/application/service/tool.ser
 import { SkillService } from '@/server/modules/agent/application/service/skill.service';
 import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import { ToolIds } from '@/shared/constants';
-import type { LlmPort } from '@/server/infrastructure/llm/llm.port';
+import type {
+  LlmPort,
+  LlmStreamChunk,
+} from '@/server/infrastructure/llm/llm.port';
 import type {
   AgentRunContext,
   ToolExecutor,
@@ -182,20 +185,26 @@ interface ScriptedLlm {
 }
 
 /** Fake `LlmPort` that replays a scripted list of response strings, one per call（chat 流式单块返回）. */
-function scriptedLlm(responses: string[]): ScriptedLlm {
+/** Scripted 回复：每个元素可拆多分片（正文 string / 原生思维链 {reasoning}）。 */
+function scriptedLlm(responses: Array<string | LlmStreamChunk[]>): ScriptedLlm {
   let i = 0;
   const calls: { messages: LlmMessage[] }[] = [];
   const chat = vi.fn(
     (
       _modelId: unknown,
       data: { messages?: LlmMessage[] },
-    ): AsyncGenerator<string, string, void> => {
+    ): AsyncGenerator<LlmStreamChunk, string, void> => {
       calls.push({ messages: data.messages ?? [] });
       if (i >= responses.length) throw new Error('script exhausted');
       const body = responses[i++] ?? '';
+      const chunks = Array.isArray(body) ? body : [body];
       return (async function* () {
-        yield body;
-        return body;
+        let content = '';
+        for (const c of chunks) {
+          yield c;
+          if (typeof c === 'string') content += c;
+        }
+        return content;
       })();
     },
   );
@@ -271,7 +280,7 @@ function fakeExecuteTool(handler: ToolHandler): ToolExecutor {
 }
 
 interface BuildCtxOptions {
-  responses: string[];
+  responses: Array<string | LlmStreamChunk[]>;
   handler: ToolHandler;
   seed?: LlmMessage[];
   controller?: AbortController;
@@ -428,6 +437,35 @@ describe('runReactLoop', () => {
       await collect(runReactLoop(ctx, runTool));
 
       expect(received).toEqual({ key: 'value', count: 42 });
+    });
+  });
+
+  describe('NativeReasoning', () => {
+    it('reasoning 分片直发 thought 事件，不混入 content/信封', async () => {
+      const { ctx, runTool } = buildCtx({
+        responses: [
+          [
+            { reasoning: '思考第' },
+            { reasoning: '一部分' },
+            call('t1'),
+          ] as LlmStreamChunk[],
+          responseUser('done'),
+        ],
+        handler: okHandler,
+      });
+
+      const events = await collect(runReactLoop(ctx, runTool));
+      const thoughts = events.filter(e => e.type === 'thought') as Extract<
+        RunEvent,
+        { type: 'thought' }
+      >[];
+
+      expect(thoughts.map(t => t.content)).toEqual(['思考第', '一部分']);
+      // 信封解析不受污染：t1 正常执行、assistant 报文只含 tool_call
+      expect(events.some(e => e.type === 'tool_call')).toBe(true);
+      const assistantMsg = ctx.messages.find(m => m.role === 'assistant');
+      expect(assistantMsg?.content).toContain('t1');
+      expect(assistantMsg?.content).not.toContain('思考第');
     });
   });
 

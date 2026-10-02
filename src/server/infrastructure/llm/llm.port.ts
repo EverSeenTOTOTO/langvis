@@ -8,12 +8,20 @@ import type {
 
 // LlmPort — LLM 单一内核契约（LlmProvider 对外表面）。各方法 per-call 传 modelId，缺省由实现回退该 type 默认模型。
 // 传输重试在实现内部屏蔽（llm-retry），调用方只看到最终结果或最后错误。
+
+/** 原生思维链流式分片（qwen/deepseek 的 reasoning_content / OpenAI 风格 reasoning）。 */
+export interface LlmReasoningChunk {
+  reasoning: string;
+}
+
+export type LlmStreamChunk = string | LlmReasoningChunk;
+
 export interface LlmPort {
   chat(
     modelId: string | undefined,
     data: Partial<ChatCompletionCreateParams>,
     signal: AbortSignal,
-  ): AsyncGenerator<string, string, void>;
+  ): AsyncGenerator<LlmStreamChunk, string, void>;
 
   chatContent(
     modelId: string | undefined,
