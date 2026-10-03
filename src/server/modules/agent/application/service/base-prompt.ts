@@ -27,7 +27,7 @@ export const BASE_PROMPT = Prompt.empty()
 \`\`\`
 
 Rules:
-- \`<tool>\` and \`<input>\` are required.
+- \`<tool>\` is required. \`<input>\` carries the parameters — empty (\`<input></input>\`) or omitted for no-parameter tools.
 - Each input parameter is a child element of \`<input>\` (e.g. \`<message>…</message>\`, \`<command>…</command>\`).
 - Text content is taken literally: you do NOT need to escape quotes or backslashes in values. Only escape \`<\` as \`&lt;\` and \`&\` as \`&amp;\` when they appear in text (or wrap raw text in \`<![CDATA[ … ]]>\`).
 - There is no separate "final answer" shape — to answer the user you call the \`response_user\` tool with the reply in \`<message>\`.

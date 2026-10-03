@@ -46,7 +46,15 @@ export default class DateTimeGetTool extends Tool<DateTimeGetOutput> {
     let date = dayjs();
 
     if (timezone) {
-      date = date.tz(timezone);
+      try {
+        date = date.tz(timezone);
+      } catch {
+        // 错误消息自带默认时区的当前时间——模型无需再发起一轮补救调用
+        const localNow = format ? dayjs().format(format) : dayjs().format();
+        throw new Error(
+          `Invalid IANA timezone '${timezone}'. Current time in the server default timezone (${dayjs.tz.guess()}): ${localNow}`,
+        );
+      }
     }
 
     const result = format ? date.format(format) : date.format();

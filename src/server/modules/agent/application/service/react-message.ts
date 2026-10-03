@@ -47,12 +47,12 @@ function parseBlock(block: string): ParsedAction {
   const toolRaw = tagContent(block, 'tool');
   const inputRaw = tagContent(block, 'input');
   const tool = toolRaw ? toolRaw.trim() : '';
-  const input = inputRaw !== null ? parseInput(inputRaw) : null;
+  // 零参调用可省 <input>（无参工具的自然写法）——缺失视作 {}；
+  // 必参工具缺参由下游 ajv 给出更精确的报错。
+  const input = inputRaw !== null ? parseInput(inputRaw) : {};
 
-  if (!tool || !input) {
-    throw new Error(
-      'Invalid response: missing or invalid top-level `tool`/`input`',
-    );
+  if (!tool) {
+    throw new Error('Invalid response: missing or invalid top-level `tool`');
   }
   return { tool, input };
 }

@@ -12,7 +12,7 @@ export const config: ToolConfig<
   name: 'DateTime Tool',
   concurrency: 'parallel',
   description:
-    'Get the current date and time, optionally in a given timezone and format.',
+    'Get the current date and time, optionally in a given timezone and format. Defaults to the server local timezone.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -20,7 +20,7 @@ export const config: ToolConfig<
         type: 'string',
         nullable: true,
         description:
-          'IANA timezone name (e.g., "America/New_York", "Asia/Shanghai"). Defaults to UTC.',
+          'IANA timezone name (e.g., "America/New_York", "Asia/Shanghai"). Omit for the server local timezone.',
       },
       format: {
         type: 'string',

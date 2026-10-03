@@ -93,9 +93,12 @@ describe('parseResponse', () => {
     expect(() => parseResponse('just prose, no tags here')).toThrow();
   });
 
-  it('throws when tool/input is missing', () => {
+  it('缺 <input> 视作零参调用（无参工具的自然写法），缺 <tool> 仍报错', () => {
+    expect(
+      parseResponse('<tool_call><tool>datetime_get</tool></tool_call>'),
+    ).toEqual([{ tool: 'datetime_get', input: {} }]);
     expect(() =>
-      parseResponse('<tool_call><tool>x</tool></tool_call>'),
+      parseResponse('<tool_call><input><x>1</x></input></tool_call>'),
     ).toThrow();
   });
 
