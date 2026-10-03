@@ -24,12 +24,13 @@ const cliEntry = () =>
 function extractSessionCookie(req: IncomingMessage): string | undefined {
   const cookie = req.headers.cookie;
   if (!cookie) return undefined;
-  // includes 而非 startsWith：https baseURL 下 better-auth 发 __Secure- 前缀 cookie
+  // includes 匹配 + 条件补 Secure 属性：服务端 secure 模式只认 __Secure- 前缀名（不能剥），
+  // 而 CLI 的 tough-cookie 按 RFC6265bis 前缀规则拒存无 Secure 属性的 __Secure- 名（浏览器 Cookie 头不带属性）。
   const hit = cookie
     .split(';')
     .map(part => part.trim())
     .find(part => part.includes('better-auth.session_token='));
-  return hit;
+  return hit?.startsWith('__Secure-') ? `${hit}; Secure` : hit;
 }
 
 function resolveColsRows(req: IncomingMessage): {
