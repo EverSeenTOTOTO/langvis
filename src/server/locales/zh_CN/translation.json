@@ -125,5 +125,7 @@
   "Thought": "思考",
   "No matching skills": "无匹配技能",
   "Back Home": "返回首页",
-  "Sorry, the page you visited does not exist.": "抱歉，您访问的页面不存在。"
+  "Sorry, the page you visited does not exist.": "抱歉，您访问的页面不存在。",
+  "Fullscreen terminal": "全屏终端",
+  "Exit fullscreen": "退出全屏"
 }

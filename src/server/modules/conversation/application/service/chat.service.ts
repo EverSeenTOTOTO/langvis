@@ -74,13 +74,19 @@ export class ChatService {
   }
 
   /** workDir = conversation.workspacePath(CLI cwd / web 临时路径);null 老会话回退 /tmp 现算。 */
+  // workspacePath 每会话不可变——进程内缓存命中零 DB 往返（远程隧道 RTT 可观）。老会话 null 走 legacy 不缓存。
+  private readonly workDirCache = new Map<string, string>();
+
   async resolveWorkDir(
     conversationId: string,
     userId: string,
   ): Promise<string> {
+    const cached = this.workDirCache.get(conversationId);
+    if (cached) return cached;
     const conv = await this.convRepo.findById(conversationId, userId);
     if (conv?.workspacePath) {
       await fs.mkdir(conv.workspacePath, { recursive: true });
+      this.workDirCache.set(conversationId, conv.workspacePath);
       return conv.workspacePath;
     }
     return this.workspaceService.getWorkDir(conversationId);
@@ -106,15 +112,10 @@ export class ChatService {
     };
     assistantId?: string;
   }): Promise<{
-    existingMessages: Message[];
     userMessage: Message;
     assistantId: string;
     assistantMessage: Message;
   }> {
-    const existingMessages = await this.messageRepo.findByConversationId(
-      params.conversationId,
-    );
-
     const { userMessage, assistantMessage } = createTurnMessages({
       conversationId: params.conversationId,
       userMessage: params.userMessage,
@@ -127,7 +128,6 @@ export class ChatService {
     ]);
 
     return {
-      existingMessages,
       userMessage,
       assistantId: assistantMessage.id,
       assistantMessage,

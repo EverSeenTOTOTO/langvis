@@ -84,11 +84,15 @@ export class StartChatHandler {
 
           const ctx = this.sessionManager.getCtx(conversationId);
           ctx.messages.push(turn.userMessage);
+          const workDir = await this.chatService.resolveWorkDir(
+            conversationId,
+            userId,
+          );
 
           // @file 引用展开（服务端模型）：注入进 LLM 上下文，消息原文保持 @token 不动
           const mentionExpansion = await expandMentions(
             userMessage.content,
-            await this.chatService.resolveWorkDir(conversationId, userId),
+            workDir,
             this.workspace,
           );
           if (mentionExpansion) {
@@ -106,10 +110,6 @@ export class StartChatHandler {
             if (frame) this.sessionManager.sendFrame(conversationId, frame);
           }
           const effectiveHistory = projectToLlmMessages(ctx.messages);
-          const workDir = await this.chatService.resolveWorkDir(
-            conversationId,
-            userId,
-          );
 
           this.eventBus.publish(
             new TurnInitiated(conversationId, {

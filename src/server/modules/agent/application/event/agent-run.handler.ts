@@ -32,19 +32,21 @@ export class AgentRunHandler {
       workDir,
     } = event.payload;
     const runId = generateId('run');
-    // effectiveHistory 即 agent 种子（createRun 经 restoreReactMessage 还原）；取 conv 默认 ToolSet（全集）。
-    const toolSet = this.agentService.buildToolSet();
-
-    this.eventBus.publish(
-      new RunStarted(conversationId, {
-        conversationId,
-        messageId: assistantMessage.id,
-        runId,
-      }),
-    );
-
     const startTime = Date.now();
+    // 全程 try/finally：RunStarted 前的失败（如 buildToolSet）也必须发 RunCompleted，
+    // 否则 conv 侧 startingTurns/activeRuns 永不清理（幻影活跃 run，后续消息全部死排队）。
     try {
+      // effectiveHistory 即 agent 种子（createRun 经 restoreReactMessage 还原）；取 conv 默认 ToolSet（全集）。
+      const toolSet = this.agentService.buildToolSet();
+
+      this.eventBus.publish(
+        new RunStarted(conversationId, {
+          conversationId,
+          messageId: assistantMessage.id,
+          runId,
+        }),
+      );
+
       for await (const enriched of this.executor.launch({
         runId,
         workDir,

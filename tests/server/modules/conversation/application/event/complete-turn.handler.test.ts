@@ -150,4 +150,34 @@ describe('CompleteTurnHandler — turn-end 触发适配器（线性屏障）', (
       messageId,
     );
   });
+
+  it('getCtx 抛错（session 无 ctx）仍 finalize——不留幻影活跃 run', async () => {
+    const sessionManager = {
+      awaitMaintenance: vi.fn().mockResolvedValue(undefined),
+      getRunEvents: vi.fn().mockReturnValue([ev({ type: 'final' })]),
+      getFinalContent: vi.fn().mockReturnValue('answer'),
+      getCtx: vi.fn(() => {
+        throw new Error('ConversationContext: conv_1 not activated');
+      }),
+      flushRunView: vi.fn(),
+      sendFrame: vi.fn(),
+      beginMaintenance: vi.fn(),
+      endMaintenance: vi.fn(),
+      finalizeRun: vi.fn(),
+      withConversationLock: (_id: string, fn: () => Promise<unknown>) => fn(),
+    } as unknown as SessionManager;
+    const handler = new CompleteTurnHandler(
+      sessionManager,
+      { persistAssistantContent: vi.fn() } as unknown as ChatService,
+      { publish: vi.fn() } as unknown as EventBus,
+    );
+
+    await expect(handler.handle(event)).resolves.toBeUndefined();
+    // 维护段未进入，但收尾恒执行——activeRuns/startingTurns 不卡死
+    expect(sessionManager.beginMaintenance).not.toHaveBeenCalled();
+    expect(sessionManager.finalizeRun).toHaveBeenCalledWith(
+      conversationId,
+      messageId,
+    );
+  });
 });

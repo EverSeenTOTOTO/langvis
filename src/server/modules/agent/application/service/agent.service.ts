@@ -7,10 +7,10 @@ import type { ConversationConfig } from '@/server/modules/conversation/domain/co
 import { BASE_PROMPT } from './base-prompt';
 import { ToolService } from './tool.service';
 import { SkillService } from './skill.service';
-import { Inject } from '@nestjs/common';
+import { Inject, type OnApplicationBootstrap } from '@nestjs/common';
 import { formatToolsToMarkdown } from '@/server/utils/formatTools';
 
-export class AgentService {
+export class AgentService implements OnApplicationBootstrap {
   private readonly inlineTools = [
     ToolIds.RESPONSE_USER,
     ToolIds.ASK_USER,
@@ -26,6 +26,12 @@ export class AgentService {
     @Inject(ToolService) private readonly toolService: ToolService,
     @Inject(SkillService) private readonly skillService: SkillService,
   ) {}
+
+  // 启动期预热：工具注册/skill 扫描/system prompt 渲染全是静态内容，
+  // 惰性到首次 activate 会占用首连接的关键路径。fire-and-forget 不阻塞启动。
+  onApplicationBootstrap(): void {
+    void this.getSystemPrompt();
+  }
 
   // 全局 conv agent 的 system prompt：内容固定，首次构建后 memoize（等价 buildSystemPrompt(buildToolSet())）。
   getSystemPrompt(): Promise<string> {

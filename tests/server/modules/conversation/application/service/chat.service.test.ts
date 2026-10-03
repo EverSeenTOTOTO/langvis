@@ -142,9 +142,7 @@ describe('ChatService', () => {
   });
 
   describe('appendMessage', () => {
-    it('creates user + assistant message pair', async () => {
-      (messageRepo.findByConversationId as any).mockResolvedValue([]);
-
+    it('creates user + assistant message pair（不再全量拉取历史）', async () => {
       const result = await service.appendMessage({
         conversationId: 'conv_1',
         userMessage: { role: Role.USER, content: 'Hello' },
@@ -152,6 +150,7 @@ describe('ChatService', () => {
       });
 
       expect(result.assistantId).toBe('msg_assist');
+      expect(messageRepo.findByConversationId).not.toHaveBeenCalled();
       expect(messageRepo.batchCreate).toHaveBeenCalledWith(
         'conv_1',
         expect.arrayContaining([
@@ -159,22 +158,6 @@ describe('ChatService', () => {
           expect.objectContaining({ role: Role.ASSIST }),
         ]),
       );
-    });
-
-    it('returns existing messages from repo', async () => {
-      const existingMessages = [
-        { id: 'msg_1', role: Role.SYSTEM, content: 'prompt' },
-      ];
-      (messageRepo.findByConversationId as any).mockResolvedValue(
-        existingMessages,
-      );
-
-      const result = await service.appendMessage({
-        conversationId: 'conv_1',
-        userMessage: { role: Role.USER, content: 'Hi' },
-      });
-
-      expect(result.existingMessages).toBe(existingMessages);
     });
   });
 

@@ -24,3 +24,22 @@ body,
     --menu-width: 256px;
   }
 }
+
+// 终端启动提示的呼吸点（PersistentTerminal 首条 PTY 输出前）
+.langvis-terminal-boot-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(200, 202, 216, 0.6);
+  animation: langvis-terminal-boot-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes langvis-terminal-boot-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}

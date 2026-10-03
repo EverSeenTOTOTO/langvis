@@ -19,7 +19,10 @@ export class AgentRunRepository implements AgentRunRepositoryPort {
 
   async save(agentRun: AgentRun): Promise<AgentRun> {
     const repo = this.db.getRepository(AgentRunEntity);
-    return await repo.save(agentRun as AgentRunEntity);
+    // 纯 INSERT：save() 对手写主键先 SELECT 探测存在再写（远程 DB 双往返）；
+    // 新 run 主键必不冲突，insert 一次往返完成。QueryDeepPartial 对 jsonb 列类型不兼容，double-cast。
+    await repo.insert(agentRun as unknown as Parameters<typeof repo.insert>[0]);
+    return agentRun;
   }
 
   async findById(runId: string): Promise<AgentRun | null> {

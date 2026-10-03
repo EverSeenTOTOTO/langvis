@@ -22,6 +22,9 @@ function makeFakeRepo() {
       // 每次读取返回脱离 store 的拷贝——模拟真实的「读时取当前版本，写时校验」。
       return row ? { ...row } : null;
     },
+    insert: async (entity: FakeRow): Promise<void> => {
+      store.set(entity.id, { ...entity, version: entity.version ?? 0 });
+    },
     save: async (entity: FakeRow): Promise<FakeRow> => {
       const existing = store.get(entity.id);
       if (existing) {

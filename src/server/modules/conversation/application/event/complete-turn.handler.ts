@@ -6,10 +6,10 @@ import { ChatService } from '../service/chat.service';
 import { convStages } from '@/server/shared/context';
 import { TurnInitiated } from '../../contracts';
 import { projectToLlmMessages } from '../service/history-projection';
-import { ChatService as Svc } from '../service/chat.service';
 import Logger from '@/server/utils/logger';
 
-// RunCompleted 订阅者，线性编排 turn-end；finalizeRun 恒执行，抛错也不漏 run。
+// RunCompleted 订阅者，线性编排 turn-end。finalizeRun + drainQueuedTurn 恒执行——
+// 任何一步抛错（含 ctx 缺失）也不许把 activeRuns/队列卡死。
 @EventsHandler(RunCompleted)
 export class CompleteTurnHandler {
   private readonly logger = Logger.child({ source: 'CompleteTurnHandler' });
@@ -18,50 +18,58 @@ export class CompleteTurnHandler {
     @Inject(SessionManager)
     private sessionManager: SessionManager,
     @Inject(ChatService)
-    private chatService: Svc,
+    private chatService: ChatService,
     @Inject(EventBus)
     private eventBus: EventBus,
   ) {}
 
   async handle(event: RunCompleted): Promise<void> {
     const { conversationId, messageId, agentRunId } = event.payload;
-    await this.sessionManager.awaitMaintenance(conversationId);
-
-    const events = this.sessionManager.getRunEvents(conversationId, messageId);
-    if (!events || events.length === 0) {
-      this.sessionManager.finalizeRun(conversationId, messageId);
-      return;
-    }
-
-    const ctx = this.sessionManager.getCtx(conversationId);
-
-    this.sessionManager.beginMaintenance(conversationId);
     try {
-      const content =
-        this.sessionManager.getFinalContent(conversationId, messageId) ?? '';
-      const assistant = await this.chatService.persistAssistantContent(
-        messageId,
-        content,
-      );
-      if (assistant) ctx.messages.push(assistant);
+      await this.sessionManager.awaitMaintenance(conversationId);
 
-      this.sessionManager.flushRunView(conversationId, messageId);
-      // turn-end transform（process-summary 烘焙 meta.summary → compact 折叠历史 → usage 量压缩后用量）。
-      // runCtx 透传本次 RunCompleted 的 run 标识，供 per-run transform（如 process-summary）取 events。
-      for await (const frame of convStages(ctx, 'turn-end', {
+      const events = this.sessionManager.getRunEvents(
+        conversationId,
         messageId,
-        runId: agentRunId,
-      })) {
-        if (frame) this.sessionManager.sendFrame(conversationId, frame);
+      );
+      if (!events || events.length === 0) return;
+
+      const ctx = this.sessionManager.getCtx(conversationId);
+
+      this.sessionManager.beginMaintenance(conversationId);
+      try {
+        const content =
+          this.sessionManager.getFinalContent(conversationId, messageId) ?? '';
+        const assistant = await this.chatService.persistAssistantContent(
+          messageId,
+          content,
+        );
+        if (assistant) ctx.messages.push(assistant);
+
+        this.sessionManager.flushRunView(conversationId, messageId);
+        // turn-end transform（process-summary 烘焙 meta.summary → compact 折叠历史 → usage 量压缩后用量）。
+        // runCtx 透传本次 RunCompleted 的 run 标识，供 per-run transform（如 process-summary）取 events。
+        for await (const frame of convStages(ctx, 'turn-end', {
+          messageId,
+          runId: agentRunId,
+        })) {
+          if (frame) this.sessionManager.sendFrame(conversationId, frame);
+        }
+      } catch (err) {
+        this.logger.warn(
+          `turn-end maintenance failed: ${(err as Error)?.message ?? err}`,
+        );
+      } finally {
+        this.sessionManager.endMaintenance(conversationId);
       }
     } catch (err) {
-      this.logger.warn(
-        `turn-end maintenance failed: ${(err as Error)?.message ?? err}`,
+      // awaitMaintenance/getRunEvents/getCtx 层的意外——不吞，但要先保证收尾
+      this.logger.error(
+        `turn completion aborted before maintenance: ${(err as Error)?.message ?? err}`,
       );
     } finally {
-      this.sessionManager.endMaintenance(conversationId);
       this.sessionManager.finalizeRun(conversationId, messageId);
-      this.drainQueuedTurn(conversationId).catch(err => {
+      await this.drainQueuedTurn(conversationId).catch(err => {
         this.logger.error(`drain queued turn failed: ${err}`);
       });
     }
@@ -70,10 +78,11 @@ export class CompleteTurnHandler {
   // steering 出队:FIFO 发起下一个排队 turn(已持久化,补 ctx 投影与 TurnInitiated)。会话锁内执行。
   private async drainQueuedTurn(conversationId: string): Promise<void> {
     await this.sessionManager.withConversationLock(conversationId, async () => {
+      // 先取 ctx 再出队——ctx 缺失时队列原位保留（可被后续 RunCompleted 重试），不丢 turn
+      const ctx = this.sessionManager.getCtx(conversationId);
       const assistantId = this.sessionManager.dequeueTurn(conversationId);
       if (!assistantId) return;
 
-      const ctx = this.sessionManager.getCtx(conversationId);
       const { turns, workDir } = await this.chatService.listPendingTurns(
         conversationId,
         [assistantId],

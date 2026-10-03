@@ -12,6 +12,10 @@
   .logo {
     margin: 0;
     cursor: pointer;
+    // antd Typography 自带 word-break:break-word——flex 收缩时 min-content 退化为单字宽，
+    // 表现为"一行一个字符"。logo 不收缩不换行，把收缩让给 nav/divider。
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
   .nav-links {

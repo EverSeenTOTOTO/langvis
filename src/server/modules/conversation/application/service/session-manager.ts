@@ -187,7 +187,8 @@ export class SessionManager implements OnApplicationShutdown {
   }
 
   enqueueTurn(conversationId: string, assistantMessageId: string): void {
-    this.sessions.get(conversationId)?.enqueueTurn(assistantMessageId);
+    // getOrCreate：session 尚未激活/已被释放时也落地队列——静默 no-op 会让排队 turn 永久蒸发
+    this.getOrCreate(conversationId).enqueueTurn(assistantMessageId);
   }
 
   /** 出队一个排队 turn（无则 undefined）。 */
