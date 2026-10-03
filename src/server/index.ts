@@ -87,10 +87,13 @@ const mountParsers = (app: Express) => {
   app.use(compression());
 };
 
-// ── 进程入口（tsx watch / node dist/server.js）────────────────────────────
-// 被 e2e 测试 import 时不 listen、不挂信号钩子。
+// ── 进程入口（tsx watch / node dist/server.js / pm2）──────────────────────
+// e2e 测试 import 时不 listen/挂信号钩子；pm2 fork ESM 的 argv[1] 非 server.js，须补比对 pm_exec_path
 const isMainModule =
-  !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+  (!!process.argv[1] &&
+    import.meta.url === pathToFileURL(process.argv[1]).href) ||
+  (!!process.env.pm_exec_path &&
+    import.meta.url === pathToFileURL(process.env.pm_exec_path).href);
 
 if (isMainModule) void startMain();
 
