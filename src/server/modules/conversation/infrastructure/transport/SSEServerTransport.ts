@@ -36,6 +36,9 @@ export class SSEServerTransport extends Transport<StreamFrame> {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
+      // 反代（nginx proxy_buffering on）下禁缓冲：否则流式帧滞留代理侧，
+      // HTTP/1.1 客户端（CLI 的 undici）连响应头都收不到，SSE 连接 30s 超时中止。
+      'X-Accel-Buffering': 'no',
     });
     // 注释行心跳：业务无帧时段（如非流式 LLM 调用）持续写字节，防止代理读超时断连。
     // 以 `:` 开头的行是 SSE 注释，原生 EventSource 会忽略，前端无需改动。
