@@ -69,7 +69,7 @@ export function matchFilter(
   });
 }
 
-/** ListToolsTool 与 ToolHintHook 共用的关键词检索。默认排除 list_tools 自身。 */
+/** ListTools keywords 模式的检索内核。默认排除 list_tools 自身。 */
 export async function retrieveRelevantTools(
   toolService: ToolService,
   skillService: SkillService,

@@ -30,6 +30,25 @@ export function formatSkillsToMarkdown(skills: SkillInfo[]): string {
     .join('\n---\n\n');
 }
 
+/** roster 单行：描述首行，超长截断——常驻名单以匹配信号优先，完整描述走 list_tools。 */
+function oneLine(description: string | undefined, max = 160): string {
+  const line = (description ?? '').split('\n')[0]!.trim();
+  return line.length > max ? `${line.slice(0, max)}…` : line;
+}
+
+/** system prompt 常驻 roster：listed 工具单行清单（inline 工具有全量文档，不进此列）。 */
+export function formatToolRoster(tools: Tool[]): string {
+  return tools
+    .map(t => `- \`${t.id}\` — ${oneLine(t.config.description)}`)
+    .join('\n');
+}
+
+export function formatSkillRoster(skills: SkillInfo[]): string {
+  return skills
+    .map(s => `- \`${s.id}\` — ${oneLine(s.description)}`)
+    .join('\n');
+}
+
 export function formatToolsToMarkdown(
   tools: Tool[],
   opts?: { detail?: boolean },
@@ -85,31 +104,78 @@ export function formatToolsToMarkdown(
     .join('\n---\n\n');
 }
 
+type PropSchema = SchemaProp & {
+  type?: string;
+  properties?: Record<string, unknown>;
+  required?: readonly string[];
+  items?: {
+    type?: string;
+    properties?: Record<string, unknown>;
+    required?: readonly string[];
+  };
+};
+
+const NESTED_DEPTH_LIMIT = 2;
+
+// schema 表：顶层参数 + 嵌套展开——object 属性（document.title）与 array-of-object
+// 元素（chunks[].content）递归成行，否则嵌套形状对模型完全不可见。
 function formatSchemaAsTable(
   properties: JSONSchemaObject['properties'],
   required?: readonly string[],
 ): string {
-  const rows: string[] = [];
-  const requiredSet = new Set(required ?? []);
-
-  rows.push('| Parameter | Required | Description |');
-  rows.push('|-----------|----------|-------------|');
+  const rows: string[] = [
+    '| Parameter | Required | Description |',
+    '|-----------|----------|-------------|',
+  ];
 
   if (typeof properties !== 'object' || properties === null) {
     return rows.join('\n');
   }
 
+  const walk = (
+    props: Record<string, unknown>,
+    req: Set<string>,
+    prefix: string,
+    depth: number,
+  ): void => {
+    if (depth > NESTED_DEPTH_LIMIT) return;
+    for (const [key, raw] of Object.entries(props)) {
+      const prop = raw as PropSchema;
+      const name = `${prefix}${key}`;
+      rows.push(
+        `| ${name} | ${req.has(key) ? 'Yes' : 'No'} | ${prop.description ?? ''} |`,
+      );
+      if (prop.type === 'object' && prop.properties) {
+        walk(
+          prop.properties,
+          new Set(prop.required ?? []),
+          `${name}.`,
+          depth + 1,
+        );
+      } else if (
+        prop.type === 'array' &&
+        prop.items?.type === 'object' &&
+        prop.items.properties
+      ) {
+        walk(
+          prop.items.properties,
+          new Set(prop.items.required ?? []),
+          `${name}[].`,
+          depth + 1,
+        );
+      }
+    }
+  };
+  walk(properties as Record<string, unknown>, new Set(required ?? []), '', 0);
+
   const entries = Object.entries(properties);
-
-  entries.forEach(([key, prop]) => {
-    const isRequired = requiredSet.has(key) ? 'Yes' : 'No';
-    const description = (prop as { description?: string }).description ?? '';
-    rows.push(`| ${key} | ${isRequired} | ${description} |`);
-  });
-
   const bullets = entries
     .map(([key, prop]) =>
-      formatConstraints(key, prop as SchemaProp, requiredSet.has(key)),
+      formatConstraints(
+        key,
+        prop as SchemaProp,
+        (required ?? []).includes(key),
+      ),
     )
     .filter((b): b is string => b !== null);
   if (bullets.length > 0) {

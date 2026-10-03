@@ -61,7 +61,7 @@ export default class CallSubagentsTool extends Tool<CallSubagentsOutput> {
       ToolIds.CALL_SUBAGENTS,
       ToolIds.ASK_USER,
     ]);
-    const basePrompt = this.agentService.buildSystemPrompt(
+    const basePrompt = await this.agentService.buildSystemPrompt(
       childToolSet,
       SUBAGENT_PROMPT,
     );

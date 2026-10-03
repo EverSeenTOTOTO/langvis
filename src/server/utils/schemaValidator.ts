@@ -41,37 +41,63 @@ export function parse<T = unknown>(
   return result.data;
 }
 
+// object/array 字段被模型传成字符串（fence/引号/双重编码）时按声明类型 JSON 还原；
+// 递归进入 object 属性与 array 元素（如 document.metadata、chunks[i]），ajv 二次校验兜底。
 export function coerceJsonStringFields(
   schema: unknown,
   data: Record<string, unknown>,
 ): Record<string, unknown> | null {
-  const props = (
-    schema as { properties?: Record<string, { type?: string }> } | null
-  )?.properties;
-  if (!props) return null;
-  let changed = false;
-  const out = { ...data };
-  for (const [key, prop] of Object.entries(props)) {
-    const want = prop?.type;
-    if (
-      (want === 'object' || want === 'array') &&
-      typeof out[key] === 'string'
-    ) {
-      const parsed = looseJsonParse(out[key]);
-      if (
-        parsed !== undefined &&
-        (want === 'array'
-          ? Array.isArray(parsed)
-          : parsed !== null &&
-            typeof parsed === 'object' &&
-            !Array.isArray(parsed))
-      ) {
-        out[key] = parsed;
+  const recovered = coerceValue(schema, data);
+  return recovered === data ? null : (recovered as Record<string, unknown>);
+}
+
+type LooseSchema = {
+  type?: string;
+  properties?: Record<string, unknown>;
+  items?: unknown;
+};
+
+function coerceValue(schema: unknown, value: unknown): unknown {
+  const s = schema as LooseSchema | null;
+  if (!s) return value;
+
+  if (
+    typeof value === 'string' &&
+    (s.type === 'object' || s.type === 'array')
+  ) {
+    const parsed = looseJsonParse(value);
+    if (parsed === undefined) return value;
+    if (s.type === 'array' ? !Array.isArray(parsed) : Array.isArray(parsed))
+      return value;
+    return coerceValue(s, parsed);
+  }
+
+  if (s.type === 'object' && isPlainObject(value) && s.properties) {
+    let changed = false;
+    const out = { ...value };
+    for (const [key, child] of Object.entries(out)) {
+      const next = coerceValue(s.properties[key], child);
+      if (next !== child) {
+        out[key] = next;
         changed = true;
       }
     }
+    return changed ? out : value;
   }
-  return changed ? out : null;
+
+  if (s.type === 'array' && Array.isArray(value) && s.items) {
+    const items = s.items as LooseSchema | LooseSchema[];
+    const out = value.map((el, i) =>
+      coerceValue(Array.isArray(items) ? items[i] : items, el),
+    );
+    return out.some((el, i) => el !== value[i]) ? out : value;
+  }
+
+  return value;
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
 function looseJsonParse(s: string): unknown {

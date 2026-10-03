@@ -8,7 +8,11 @@ import { BASE_PROMPT } from './base-prompt';
 import { ToolService } from './tool.service';
 import { SkillService } from './skill.service';
 import { Inject, type OnApplicationBootstrap } from '@nestjs/common';
-import { formatToolsToMarkdown } from '@/server/utils/formatTools';
+import {
+  formatToolsToMarkdown,
+  formatToolRoster,
+  formatSkillRoster,
+} from '@/server/utils/formatTools';
 
 export class AgentService implements OnApplicationBootstrap {
   private readonly inlineTools = [
@@ -41,7 +45,7 @@ export class AgentService implements OnApplicationBootstrap {
           this.toolService.initialize(),
           this.skillService.initialize(),
         ]);
-        return this.buildSystemPrompt(this.buildToolSet());
+        return await this.buildSystemPrompt(this.buildToolSet());
       })();
     }
     return this.cachedPrompt;
@@ -84,19 +88,45 @@ export class AgentService implements OnApplicationBootstrap {
     return ToolSet.of(members, skillIds);
   }
 
-  // 按 ToolSet 渲染 system prompt（per-run，conv 与子 agent 复用）
-  buildSystemPrompt(toolSet: ToolSet, base = BASE_PROMPT): string {
+  // 按 ToolSet 渲染 system prompt（per-run，conv 与子 agent 复用）。listed 工具与 skill
+  // 以单行 roster 常驻——ReAct 信封无原生 function calling，名单常驻 + list_tools 按需展开。
+  async buildSystemPrompt(
+    toolSet: ToolSet,
+    base = BASE_PROMPT,
+  ): Promise<string> {
+    const resolve = (id: string): Tool | undefined =>
+      this.toolService.resolve(id);
     const inlineTools = toolSet
       .inlineIds()
-      .map(id => this.toolService.resolve(id))
+      .map(resolve)
       .filter((t): t is Tool => t !== undefined);
+    const listedTools = toolSet
+      .listedIds()
+      .map(resolve)
+      .filter((t): t is Tool => t !== undefined);
+    const skillIds = new Set(toolSet.skillIds());
+    const skills = (await this.skillService.getAllSkillInfo()).filter(s =>
+      skillIds.has(s.id),
+    );
+
+    const toolsSection = [
+      formatToolsToMarkdown(inlineTools, { detail: true }),
+      listedTools.length > 0
+        ? `Other available tools (one line each — full parameters via \`list_tools tool=<id>\`):\n\n${formatToolRoster(listedTools)}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+    const skillsText = base.get('Skills')?.content ?? '';
+    const skillsSection =
+      skills.length > 0
+        ? `${skillsText}\n\nAvailable skills (load via \`skill_call\` with the id):\n\n${formatSkillRoster(skills)}`
+        : skillsText;
 
     return base
-      .insertBefore(
-        'Skills',
-        'Tools',
-        formatToolsToMarkdown(inlineTools, { detail: true }),
-      )
+      .insertBefore('Skills', 'Tools', toolsSection)
+      .with('Skills', skillsSection)
       .build();
   }
 }

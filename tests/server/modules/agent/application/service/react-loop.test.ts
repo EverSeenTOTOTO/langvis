@@ -18,10 +18,7 @@ import { WindowCheckStage } from '@/server/modules/agent/application/stages/wind
 import { RunFoldStage } from '@/server/modules/agent/application/stages/run-fold-stage';
 import { StagePlan } from '@/server/shared/context';
 import { ToolSet } from '@/server/modules/agent/domain/model/tool-set.vo';
-import { ToolHintHook } from '@/server/modules/agent/application/hooks/tool-hint-hook';
 import { ToolNotFoundError } from '@/server/modules/agent/domain/errors';
-import { ToolService } from '@/server/modules/agent/application/service/tool.service';
-import { SkillService } from '@/server/modules/agent/application/service/skill.service';
 import { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import { ToolIds } from '@/shared/constants';
 import type {
@@ -277,24 +274,13 @@ interface BuiltCtx {
   runTool: ToolExecutor;
 }
 
-// hooks 依赖 mock（原容器注册语义）：contextSize 大值抑制 mid-loop 压缩；
-// Tool/Skill 空集让 ToolHintHook no-op。直接构造真实 hook 链（依赖经构造注入）。
+// hooks 依赖 mock（原容器注册语义）：contextSize 大值抑制 mid-loop 压缩。
+// 直接构造真实 hook 链（依赖经构造注入）。
 const providerServiceMock = {
   resolveContextSize: () => 128_000,
   resolveChatModel: () => ({ id: undefined, contextSize: 128_000 }),
 } as unknown as ModelRegistryService;
-const toolServiceMock = {
-  getAllToolInfo: async () => [],
-  getCachedToolIds: () => [],
-  initialize: async () => {},
-} as unknown as ToolService;
-const skillServiceMock = {
-  getAllSkillInfo: async () => [],
-  getCachedSkillIds: () => [],
-  initialize: async () => {},
-} as unknown as SkillService;
 const buildHooks = () => [
-  new ToolHintHook(toolServiceMock, skillServiceMock),
   new LoopUsageHook(providerServiceMock),
   new CumulativeBudgetHook(),
   new StuckHook(),

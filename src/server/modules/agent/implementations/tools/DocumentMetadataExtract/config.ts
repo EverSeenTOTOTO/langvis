@@ -1,7 +1,8 @@
 import { ToolConfig } from '@/shared/types';
 
 export interface DocumentMetadataExtractInput {
-  content: string;
+  /** 与 rawFile 二选一：inline 正文或盘上 offload 件（schema 表达不了 XOR，运行时校验）。 */
+  content?: string;
   rawFile?: string;
   sourceUrl?: string;
   sourceType?: string;
@@ -27,7 +28,9 @@ export const config: ToolConfig<
     properties: {
       content: {
         type: 'string',
-        description: 'The document content to analyze',
+        nullable: true,
+        description:
+          'The document content to analyze (inline text). Provide either this or `rawFile`.',
       },
       rawFile: {
         type: 'string',
@@ -46,7 +49,6 @@ export const config: ToolConfig<
         description: 'The source type (web, file, text)',
       },
     },
-    required: ['content'],
   },
   outputSchema: {
     type: 'object',

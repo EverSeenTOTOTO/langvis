@@ -117,4 +117,55 @@ describe('formatToolsToMarkdown', () => {
       expect(md).not.toContain('- **note**');
     });
   });
+
+  describe('嵌套 schema 展开（object 属性与 array-of-object 元素）', () => {
+    const nested = makeTool({
+      id: 'nested_tool',
+      config: {
+        description: 'Nested schema tool.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            document: {
+              type: 'object',
+              properties: {
+                title: { type: 'string', description: '文档标题' },
+                metadata: { type: 'object' },
+              },
+              required: ['title'],
+            },
+            chunks: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  content: { type: 'string', description: 'chunk text' },
+                  index: { type: 'number' },
+                },
+                required: ['content', 'index'],
+              },
+            },
+          },
+          required: ['document'],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: { ok: { type: 'boolean' } },
+          required: ['ok'],
+        },
+      },
+    });
+    const md = formatToolsToMarkdown([nested], { detail: true });
+
+    it('object 属性递归为 document.* 行（required 跟随嵌套声明）', () => {
+      expect(md).toContain('| document | Yes |  |');
+      expect(md).toContain('| document.title | Yes | 文档标题 |');
+      expect(md).toContain('| document.metadata | No |  |');
+    });
+
+    it('array-of-object 递归为 chunks[].* 行', () => {
+      expect(md).toContain('| chunks[].content | Yes | chunk text |');
+      expect(md).toContain('| chunks[].index | Yes |  |');
+    });
+  });
 });

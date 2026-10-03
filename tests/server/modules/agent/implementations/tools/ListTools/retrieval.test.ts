@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   tokenizeQuery,
   matchFilter,
-} from '@/server/modules/agent/application/service/tool-retrieval';
+} from '@/server/modules/agent/implementations/tools/ListTools/retrieval';
 
 describe('tokenizeQuery', () => {
   it('保留整个空白 token（向后兼容）', () => {

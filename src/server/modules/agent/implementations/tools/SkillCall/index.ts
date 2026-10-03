@@ -28,8 +28,11 @@ export default class SkillCallTool extends Tool<SkillCallOutput> {
     const content = await this.skillService.getSkillContent(skillId);
 
     if (!content) {
+      const available = (await this.skillService.getAllSkillInfo())
+        .map(s => s.id)
+        .join(', ');
       return {
-        content: `Skill '${skillId}' not found. Use list_tools to see available skills.`,
+        content: `Skill '${skillId}' not found. Available skills: ${available}`,
       };
     }
 

@@ -41,6 +41,13 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
   ): AsyncGenerator<RunEvent, DocumentStoreOutput, void> {
     const data = ctx.input as unknown as DocumentStoreInput;
 
+    // rawContent 与 rawFile 二选一：都不带时明确报错，而非静默存空文档。
+    if (!data.document.rawFile && !data.document.rawContent) {
+      throw new Error(
+        'Invalid input: either `document.rawContent` (inline text) or `document.rawFile` (filename in workDir) is required.',
+      );
+    }
+
     // rawFile（盘上 offload 件）优先于 rawContent：DocumentStore 自读全文，
     // 下游 ContentChunk/EmbeddingGenerate 收到的已是解析后的字符串，二者无需感知文件。
     const rawContent = data.document.rawFile
@@ -62,7 +69,9 @@ export default class DocumentStoreTool extends Tool<DocumentStoreOutput> {
     const embedTool = this.toolService.resolve(ToolIds.EMBEDDING_GENERATE)!;
     const embedOut = yield* embedTool.call({
       ...ctx,
-      input: { chunks: chunks.map(c => c.content) },
+      input: {
+        chunks: chunks.map(c => ({ content: c.content, index: c.index })),
+      },
     });
     const embeddings = (embedOut as { embeddings: number[][] }).embeddings;
 

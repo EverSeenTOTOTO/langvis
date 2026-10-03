@@ -63,10 +63,17 @@ export default class DocumentMetadataExtractTool extends Tool<DocumentMetadataEx
     const data = ctx.input as unknown as DocumentMetadataExtractInput;
     const { sourceUrl, sourceType } = data;
 
+    // content 与 rawFile 二选一（schema 表达不了 XOR）：都不带时明确报错，而非静默分析空串。
+    if (!data.rawFile && !data.content) {
+      throw new Error(
+        'Invalid input: either `content` (inline text) or `rawFile` (filename in workDir) is required.',
+      );
+    }
+
     // rawFile（盘上 offload 件）优先于 content：工具自读全文，避免大块原文回流上下文。
     const content = data.rawFile
       ? await this.readWorkFile(ctx.workDir, data.rawFile)
-      : data.content;
+      : (data.content ?? '');
 
     const truncatedContent =
       content.length > 8000 ? content.slice(0, 8000) : content;
