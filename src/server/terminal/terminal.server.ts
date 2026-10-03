@@ -106,7 +106,16 @@ export class TerminalServer implements OnApplicationShutdown {
         return;
       }
 
-      const cwd = process.env.LANGVIS_CLI_CWD ?? (await this.resolveCwd());
+      let cwd: string;
+      try {
+        cwd = await this.resolveCwd();
+      } catch (err) {
+        // cwd 备置失败（如 LANGVIS_CLI_CWD 指向不可创建路径）不能静默挂起 upgrade
+        logger.error(`Failed to prepare CLI cwd: ${(err as Error).message}`);
+        socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+        socket.destroy();
+        return;
+      }
 
       wss.handleUpgrade(req, socket, head, ws => {
         this.handleConnection(ws, req, cwd);
@@ -116,9 +125,12 @@ export class TerminalServer implements OnApplicationShutdown {
     logger.info(`Terminal ws ready at ${TERMINAL_WS_PATH}`);
   }
 
+  // LANGVIS_CLI_CWD = 固定工作区（进程重启不换新，终端重连即 resume 同一会话）；
+  // 缺省 = /tmp/langvis-workspace 下随机目录（每进程一个，重启换新）。
   private resolveCwd(): Promise<string> {
     return (this.defaultCliCwd ??= (async () => {
-      const dir = this.workspaceService.generateEphemeralPath();
+      const configured = process.env.LANGVIS_CLI_CWD;
+      const dir = configured ?? this.workspaceService.generateEphemeralPath();
       await fs.mkdir(dir, { recursive: true });
       return dir;
     })());

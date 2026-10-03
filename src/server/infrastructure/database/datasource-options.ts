@@ -24,6 +24,8 @@ export function buildDataSourceOptions(): DataSourceOptions {
     username: process.env.VITE_PG_USERNAME,
     password: process.env.VITE_PG_PASSWORD,
     database: process.env.VITE_PG_DATABASE,
+    // 快速失败：DB 不可达时 pg 默认无 connect timeout，会静默挂到内核 TCP 超时（分钟级）
+    connectTimeoutMS: 10_000,
     synchronize: false,
     logging: false,
     entities: [

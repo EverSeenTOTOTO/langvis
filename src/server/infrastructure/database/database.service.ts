@@ -24,7 +24,10 @@ export class DatabaseService
     if (this._dataSource?.isInitialized) return;
 
     const start = Date.now();
-    logger.debug('Initializing PostgreSQL connection...');
+    // info 级 + 带目标地址：DB 不可达时 prod 日志能看到卡点（连不上要等 connectTimeoutMS）
+    logger.info(
+      `Connecting to PostgreSQL (${process.env.VITE_PG_HOST}:${process.env.VITE_PG_PORT}/${process.env.VITE_PG_DATABASE})...`,
+    );
 
     // 注册进 typeorm-transactional：getRepository 经其原型补丁感知
     // runInTransaction 建立的 ALS 事务 mgr（事务外回落默认 repo，行为不变）。

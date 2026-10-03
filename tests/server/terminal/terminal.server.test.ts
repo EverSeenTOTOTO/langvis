@@ -135,11 +135,12 @@ describe('terminal.server（PTY 托管）', () => {
     await close();
 
     spawns.length = 0;
-    process.env.LANGVIS_CLI_CWD = '/custom/cwd';
+    // 覆盖路径须可创建(resolveCwd 会 mkdir)——用 /tmp 下路径而非根下不可写路径
+    process.env.LANGVIS_CLI_CWD = '/tmp/langvis-cli-cwd-test';
     const second = await startServer();
     const ws2 = new WebSocket(`ws://127.0.0.1:${second.port}/api/terminal/ws`);
     await new Promise<void>(res => ws2.on('open', res));
-    expect(spawns[0]!['cwd']).toBe('/custom/cwd');
+    expect(spawns[0]!['cwd']).toBe('/tmp/langvis-cli-cwd-test');
     ws2.close();
     delete process.env.LANGVIS_CLI_CWD;
     await second.close();
