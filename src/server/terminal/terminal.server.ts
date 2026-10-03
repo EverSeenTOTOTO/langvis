@@ -188,7 +188,12 @@ export class TerminalServer implements OnApplicationShutdown {
       const text = data.toString();
       if (isResizeFrame(text)) {
         const frame = JSON.parse(text) as { cols: number; rows: number };
-        proc.resize(frame.cols, frame.rows);
+        try {
+          proc.resize(frame.cols, frame.rows);
+        } catch {
+          // PTY 已退出（master fd 关闭，ioctl 抛 EBADF）：会话随 onExit 清理，
+          // 吞掉即可——冒泡成 uncaughtException 会崩整个服务进程（曾连带掐死在飞的 LLM 请求）。
+        }
         return;
       }
       proc.write(text);
