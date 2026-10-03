@@ -105,9 +105,15 @@ async function startMain(): Promise<void> {
     logger.info(`Server started at http://localhost:${port}`),
   );
 
-  nestApp.get(TerminalServer, { strict: false }).attach(server); // 终端托管：浏览器 ⇄ ws ⇄ PTY ⇄ CLI（upgrade 事件挂载；cwd 默认 /tmp/langvis-workspace 随机目录）
+  const terminal = nestApp.get(TerminalServer, { strict: false });
+  terminal.attach(server); // 终端托管：浏览器 ⇄ ws ⇄ PTY ⇄ CLI（upgrade 事件挂载；cwd 默认 /tmp/langvis-workspace 随机目录）
 
+  let shuttingDown = false;
   const shutdown = () => {
+    // tsx watch 的 relaySignal 会向本进程再转发同一信号（ms 级重复投递）：
+    // once 注册会让第二发落到无 handler 的进程上（默认行为=立即终止），必须吸收。
+    if (shuttingDown) return;
+    shuttingDown = true;
     logger.info('Shutting down server...');
     // 5s 强退兜底覆盖整个关停链：nestApp.close() 会被 SSE/终端 WS 长连接
     // 卡住不 resolve（tsx watch 热重载因此失效——旧进程占端口，新进程 EADDRINUSE）。
@@ -115,7 +121,12 @@ async function startMain(): Promise<void> {
       logger.warn('Forcing exit after timeout');
       process.exit(1);
     }, 5000).unref();
-    // 先斩活跃连接，close 链才可能在连接自然结束前走完
+    // 先停听再斩活跃连接：客户端断线自动重连会瞬间回连新 socket，
+    // 只斩不停听则 nestApp.close() 内部的 server.close() 永远等不到连接排干。
+    server.close();
+    // 终端 ws 是 upgraded 连接，closeAllConnections 不追踪——不先终结它们，
+    // nestApp.close() 的 dispose()（先于 shutdown 钩子）会永远等不排干，钩子全饿死。
+    terminal.closeAll();
     server.closeAllConnections();
     // Nest 拥有全部实例：close() 触发 onApplicationShutdown（app 层先停、DB 池最后）
     nestApp
@@ -127,8 +138,8 @@ async function startMain(): Promise<void> {
         gracefulClose(server, 1);
       });
   };
-  process.once('SIGINT', shutdown);
-  process.once('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 
   // 进程级兜底：未 catch 的 rejection/exception 在 Node≥15 默认静默崩进程——
   // 此处记日志后硬退，使崩溃有痕可溯（状态已不确定，不走 graceful）。

@@ -32,9 +32,11 @@ lint:
 clean:
 	-rm -r ${DIST}
 
+# dev 链禁用 pnpm exec：pnpm 收到 SIGINT 会向 tsx 再转发一发，
+# tsx watch 在 kill 飞行中收到第二发会直接 SIGKILL 子进程，graceful shutdown 即死。
 .PHONY: dev
 dev:
-	NODE_ENV=development pnpm exec tsx watch src/server/index.ts
+	NODE_ENV=development ./node_modules/.bin/tsx watch src/server/index.ts
 
 .PHONY: build
 build: clean

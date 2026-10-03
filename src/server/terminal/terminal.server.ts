@@ -2,9 +2,9 @@ import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
 import { WebSocketServer, type WebSocket } from 'ws';
-import pty from '@lydell/node-pty';
+import pty, { type IPty } from '@lydell/node-pty';
 import { AuthService } from '@/server/modules/user/infrastructure/auth.service';
 import { WorkspaceService } from '@/server/infrastructure/workspace/workspace.service';
 import Logger from '@/server/utils/logger';
@@ -69,10 +69,14 @@ function isResizeFrame(data: unknown): data is { cols: number; rows: number } {
 // 终端托管：浏览器终端画布 ⇄ ws ⇄ PTY ⇄ langvis CLI。
 // 挂在 http upgrade 事件上（express 中间件不覆盖 upgrade，鉴权手动做）；组合根只 attach(httpServer)。
 @Injectable()
-export class TerminalServer {
+export class TerminalServer implements OnApplicationShutdown {
   // PTY 默认工作区：/tmp/langvis-workspace 下随机目录（generateEphemeralPath 同源），
   // 每服务进程一个（刷新复用、重启换新）；LANGVIS_CLI_CWD 显式覆盖时优先。
   private defaultCliCwd: Promise<string> | undefined;
+
+  // 活跃 ws ⇄ PTY 会话表：upgraded socket 不被 httpServer.closeAllConnections 追踪，
+  // 关停须从这里主动终结，否则 adapter 的 server.close() 永远等不到排干。
+  private readonly sessions = new Map<WebSocket, IPty>();
 
   constructor(
     @Inject(AuthService)
@@ -149,12 +153,14 @@ export class TerminalServer {
       env,
     });
     logger.info(`PTY session started (pid ${proc.pid})`);
+    this.sessions.set(ws, proc);
 
     proc.onData(data => {
       if (ws.readyState === ws.OPEN) ws.send(data);
     });
     proc.onExit(({ exitCode }) => {
       logger.info(`PTY exited (${exitCode})`);
+      this.sessions.delete(ws);
       ws.close();
     });
 
@@ -168,10 +174,27 @@ export class TerminalServer {
       proc.write(text);
     });
     ws.on('close', () => {
+      this.sessions.delete(ws);
       proc.kill();
     });
     ws.on('error', () => {
+      this.sessions.delete(ws);
       proc.kill();
     });
+  }
+
+  /** 终结全部会话：杀 PTY + 摧毁 ws socket（触发各自既有的清理路径）。 */
+  closeAll(): void {
+    for (const [ws, proc] of this.sessions) {
+      proc.kill();
+      ws.terminate();
+    }
+    this.sessions.clear();
+  }
+
+  // Nest 12 的 dispose()（adapter close 等连接排干）先于 shutdown 钩子执行，
+  // 有存活 ws 时本钩子永远轮不到——真正的收口在组合根关停入口的显式 closeAll()。
+  onApplicationShutdown(): void {
+    this.closeAll();
   }
 }
