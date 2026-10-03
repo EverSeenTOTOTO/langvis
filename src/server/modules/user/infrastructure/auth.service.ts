@@ -15,6 +15,12 @@ export class AuthService implements AuthPort {
         enabled: true,
       },
       trustHost: true,
+      // 反代场景 Origin(https 公网) 与进程本地 host 不同：仅靠 BETTER_AUTH_URL
+      // 派生信任列表时浏览器带 cookie 的 POST 会被 CSRF 校验 403(INVALID_ORIGIN)。
+      trustedOrigins: (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? '')
+        .split(',')
+        .map(origin => origin.trim())
+        .filter(Boolean),
     });
   }
 

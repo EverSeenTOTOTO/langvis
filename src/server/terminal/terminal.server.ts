@@ -24,10 +24,11 @@ const cliEntry = () =>
 function extractSessionCookie(req: IncomingMessage): string | undefined {
   const cookie = req.headers.cookie;
   if (!cookie) return undefined;
+  // includes 而非 startsWith：https baseURL 下 better-auth 发 __Secure- 前缀 cookie
   const hit = cookie
     .split(';')
     .map(part => part.trim())
-    .find(part => part.startsWith('better-auth.session_token='));
+    .find(part => part.includes('better-auth.session_token='));
   return hit;
 }
 
@@ -143,10 +144,16 @@ export class TerminalServer implements OnApplicationShutdown {
     cwd: string,
   ): void {
     const { cols, rows } = resolveColsRows(req);
+    // CLI 的 serverBase 须与浏览器同协议：https 下 cookie 带 Secure 标志，
+    // tough-cookie 拒向 http URL 存取 Secure cookie → CLI 裸奔 401 login required。
+    const forwardedProto = req.headers['x-forwarded-proto'];
+    const proto = Array.isArray(forwardedProto)
+      ? forwardedProto[0]
+      : forwardedProto;
     const origin =
       process.env.LANGVIS_SERVER_URL ??
       (req.headers.host
-        ? `http://${req.headers.host}`
+        ? `${proto ?? 'http'}://${req.headers.host}`
         : 'http://localhost:3000');
 
     const env: Record<string, string> = {
