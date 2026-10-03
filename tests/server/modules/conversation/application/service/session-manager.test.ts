@@ -5,7 +5,7 @@ import type { EventBus } from '@nestjs/cqrs';
 import { StagePlan } from '@/server/shared/context';
 import type { ModelRegistryService } from '@/server/infrastructure/model-registry.service';
 import { Transport } from '@/shared/transport';
-import type { StreamFrame } from '@/shared/types/events';
+import type { EnrichedEvent, StreamFrame } from '@/shared/types/events';
 import type { CancelRun } from '@/server/modules/agent/contracts';
 
 /** 记录所有 send 帧的最小 Transport 实现。 */
@@ -110,6 +110,41 @@ describe('SessionManager', () => {
       expect(manager.hasActiveRuns(conversationId)).toBe(true);
       manager.finalizeRun(conversationId, 'msg_a');
       expect(manager.hasActiveRuns(conversationId)).toBe(false);
+    });
+  });
+
+  describe('取消路径的帧契约（客户端靠 cancelled 事件出 agent_end 清 UI）', () => {
+    it('在飞 run 取消：cancelled 事件入缓冲，finalizeRun flush 以 run_events 下发', async () => {
+      const { manager } = makeManager([]);
+      const transport = new FakeTransport();
+      await manager.initSession(conversationId, transport);
+
+      manager.markTurnStarting(conversationId, 'msg_a');
+      manager.registerRun(conversationId, 'msg_a', 'run_1');
+      manager.handleRunEvent(conversationId, 'msg_a', {
+        type: 'tool_call',
+        callId: 'tc_1',
+        toolName: 'embedding_generate',
+        toolArgs: {},
+        at: 1,
+      } as EnrichedEvent);
+      // CancelRunHandler 回流的 cancelled 事件（abort 后 run 自身不再产出事件）
+      manager.handleRunEvent(conversationId, 'msg_a', {
+        type: 'cancelled',
+        reason: 'user cancelled',
+        at: 2,
+      } as EnrichedEvent);
+
+      manager.finalizeRun(conversationId, 'msg_a');
+
+      const eventsFrame = transport.sent.find(f => f.type === 'run_events') as
+        | Extract<StreamFrame, { type: 'run_events' }>
+        | undefined;
+      expect(eventsFrame?.events.map(e => e.type)).toContain('cancelled');
+      const viewFrame = transport.sent.find(f => f.type === 'run_view') as
+        | Extract<StreamFrame, { type: 'run_view' }>
+        | undefined;
+      expect(viewFrame?.status).toBe('cancelled');
     });
   });
 
